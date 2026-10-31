@@ -1,0 +1,37 @@
+"""The git-stack plugin's button: `git stack clean`.
+
+The repo must be one git has branches in, i.e. one of `[git] repos`.
+"""
+
+from pathlib import Path
+
+from ...graph import Graph
+from ...plugin import ActionError, Context
+from ...shell import git
+from .config import GitStackConfig
+from .panels import ICED_BRANCH, repo_dirs
+
+STACK_CLEAN_TIMEOUT_SECONDS = 600
+"""`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
+
+
+def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """`git stack clean -d local`: untrack merged branches in every stack and delete them.
+
+    Refused while the repo has iced branches, since clean touches every stack (the skill's
+    rule).
+    """
+    if fields["repo"] not in repo_dirs(graph):
+        raise ActionError(f"{fields['repo']} is not a configured repo")
+    repo = Path(fields["repo"])
+    iced = sorted(
+        str(e.attrs.get("stack") or e.ref.id)
+        for e in graph.of_kind(ICED_BRANCH)
+        if Path(str(e.attrs.get("repo_dir", ""))).expanduser() == repo
+    )
+    if iced:
+        names = ", ".join(dict.fromkeys(iced))
+        raise ActionError(f"{repo} has iced stacks ({names}); clean per stack instead")
+    out = git(repo, "stack", "clean", "-d", "local", timeout=STACK_CLEAN_TIMEOUT_SECONDS)
+    deleted = sum(1 for line in out.splitlines() if "deleted" in line.lower())
+    return f"ran git stack clean -d local in {repo}" + (f", {deleted} deleted" if deleted else "")

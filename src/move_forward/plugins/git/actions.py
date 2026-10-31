@@ -1,4 +1,4 @@
-"""The git plugin's buttons: delete, push and WIP-commit branches, and `git stack clean`.
+"""The git plugin's buttons: delete, push and WIP-commit branches.
 
 Every action checks its repo is one of the configured checkouts and returns a one-line
 notice for the page. Nothing here ever forces a push, resets, or stashes.
@@ -11,10 +11,8 @@ from ...plugin import ActionError, Context
 from ...shell import CommandError, git
 from . import client
 from .config import GitConfig
-from .panels import ICED_BRANCH, TARGET_SEPARATOR
+from .panels import TARGET_SEPARATOR
 
-STACK_CLEAN_TIMEOUT_SECONDS = 600
-"""`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
 WIP_MESSAGE = "WIP"
 
 
@@ -99,23 +97,3 @@ def wip_commit(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) ->
         raise ActionError(f"{worktree} has no modified tracked files")
     git(worktree, "commit", "--all", "--quiet", "-m", WIP_MESSAGE)
     return f"committed {modified} files as {WIP_MESSAGE} in {worktree}"
-
-
-def stack_clean(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """`git stack clean -d local`: untrack merged branches in every stack and delete them.
-
-    Refused while the repo has iced branches, since clean touches every stack (the skill's
-    rule).
-    """
-    repo = repo_path(ctx.config, fields["repo"])
-    iced = sorted(
-        str(e.attrs.get("stack") or e.ref.id)
-        for e in graph.of_kind(ICED_BRANCH)
-        if Path(str(e.attrs.get("repo_dir", ""))).expanduser() == repo
-    )
-    if iced:
-        names = ", ".join(dict.fromkeys(iced))
-        raise ActionError(f"{repo} has iced stacks ({names}); clean per stack instead")
-    out = git(repo, "stack", "clean", "-d", "local", timeout=STACK_CLEAN_TIMEOUT_SECONDS)
-    deleted = sum(1 for line in out.splitlines() if "deleted" in line.lower())
-    return f"ran git stack clean -d local in {repo}" + (f", {deleted} deleted" if deleted else "")

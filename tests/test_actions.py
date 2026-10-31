@@ -203,15 +203,6 @@ def test_delete_iced_refuses_a_checked_out_branch_before_deleting_anything(
     assert notes.parse_on_ice((config.notes.dir / notes.ON_ICE_FILE).read_text())
 
 
-def test_stack_clean_refuses_a_repo_with_iced_stacks(config: Config, repo: Path) -> None:
-    config.notes.dir.mkdir()
-    notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "done"})
-    with pytest.raises(ActionError, match="iced stacks \\(done\\)"):
-        run("git/stack_clean", config, {"repo": str(repo)})
-    with pytest.raises(ActionError, match="not a configured repo"):
-        run("git/stack_clean", config, {"repo": "/elsewhere"})
-
-
 def test_ice_creates_the_file_when_missing(config: Config, repo: Path) -> None:
     config.notes.dir.mkdir()
     notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "done"})

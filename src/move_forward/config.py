@@ -13,6 +13,7 @@ from pydantic import Field, field_validator, model_validator
 from . import registry
 from .db import DEFAULT_KEEP_BACKUPS
 from .plugins.git.config import GitConfig
+from .plugins.git_stack.config import GitStackConfig
 from .plugins.github.config import GitHubConfig
 from .plugins.jira.config import JiraConfig
 from .plugins.notes.config import NotesConfig
@@ -64,6 +65,7 @@ class Config(Strict):
     the notes, and old pings from the database, by a daily job."""
     github: GitHubConfig | None = None
     git: GitConfig | None = None
+    git_stack: GitStackConfig | None = None
     jira: JiraConfig | None = None
     slack: SlackConfig | None = None
     notes: NotesConfig = Field(default_factory=NotesConfig)

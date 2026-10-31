@@ -14,8 +14,8 @@ All state lives in one SQLite database.
 
 ## Setup
 
-Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (the
-Stacks panel is empty without it).
+Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (for
+the `git_stack` plugin).
 
 ```sh
 ~/src/move-forward/dev-install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
@@ -64,7 +64,8 @@ fails to load without it, saying which (e.g. "[git_stack] needs [git]").
 | Plugin | Section | Fetches | Panels |
 | --- | --- | --- | --- |
 | `github` | `[github]` | my open, merged and closed PRs, review requests, PRs I reviewed, my teams' PRs (with `gh`) | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
-| `git` | `[git]` | each repo's worktrees, branches, `git stack info` | Local work, Stacks, Cleanup |
+| `git` | `[git]` | each repo's worktrees and branches | Local work, Cleanup |
+| `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in each of git's repos | Stacks |
 | `jira` | `[jira]` | my open tickets | Jira transitions, What next |
 | `slack` | `[slack]` | nothing; reads my PRs from the graph and the reviewer map | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
 | `notes` | `[notes]`, optional: always on | the skill's notes, from markdown | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket |
@@ -89,6 +90,10 @@ with `git worktree list`. `my_branch_prefixes` marks branches as yours (without
 it every local branch is), `ignored_worktree_globs` leaves worktrees out, and
 `commit_history_days` says how far back your commits count towards the
 directories you work in.
+
+`[git_stack]` has no settings: it turns on
+[git-stack](https://github.com/benekastah/git-stack) for `[git]`'s repos. `mfd
+init` adds it when git-stack is installed; add it by hand to an older config.
 
 `[slack]` turns on review pings. `workspace_url` makes the ping page link to
 channels and people, `ping_first` and `ping_follow_up` are the messages, and
@@ -136,11 +141,10 @@ Only Act now starts expanded; each panel inside a group collapses too.
 - **Local work**: dirty worktrees, unpushed and never-pushed branches, with
   buttons: WIP commit (tracked files only), Push (never forced; sets the
   upstream for a new branch), Put on ice.
-- **Stacks**: `git stack info` statuses other than up-to-date, and tracked
-  branches with no PR, with a button per repo that runs `git stack clean -d
-  local` for its merged branches (not offered while the repo has iced stacks,
-  since clean touches every stack). The panel only appears when a repo has
-  tracked stacks, so without git-stack it's absent.
+- **Stacks** (git_stack): `git stack info` statuses other than up-to-date, and
+  tracked branches with no PR, with a button per repo that runs `git stack
+  clean -d local` for its merged branches (not offered while the repo has iced
+  stacks, since clean touches every stack).
 - **Requested from my teams**: PRs waiting on any of my `teams`, ranked by how
   many files CODEOWNERS gives those teams (required first) and how many are in
   directories I commit to.
@@ -219,7 +223,7 @@ error status):
 | `/actions/notes/delete_iced` | `branch` | Deletes an iced stack's local branches and thaws it. |
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. |
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
-| `/actions/git/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
+| `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
 | `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 
 `entry` is a work-notes entry's title exactly as its `##` line has it; `text`

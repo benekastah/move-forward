@@ -71,5 +71,4 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             "delete_branches": actions.delete_branches,
             "push_branch": actions.push_branch,
             "wip_commit": actions.wip_commit,
-            "stack_clean": actions.stack_clean,
         }

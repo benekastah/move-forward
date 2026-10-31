@@ -2,12 +2,13 @@
 
 Every question has a default guessed from the machine (the current repo's GitHub remote,
 `gh`'s idea of my teams, git's user.email), so pressing Enter through the questions gives
-a working config on a typical setup. The answers are validated as a `Config` before the
-file is written.
+a working config on a typical setup. `[git_stack]` is on when git-stack is installed. The
+answers are validated as a `Config` before the file is written.
 """
 
 import json
 import re
+import shutil
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
@@ -107,6 +108,11 @@ def guess_email() -> str:
     return _quiet(["git", "config", "user.email"])
 
 
+def guess_git_stack() -> bool:
+    """Whether git-stack is installed, i.e. `git stack` would run."""
+    return shutil.which("git-stack") is not None
+
+
 def _toml_value(value: object) -> str:
     """TOML for a string, int, or list of strings (JSON's quoting is valid TOML)."""
     return json.dumps(value)
@@ -125,6 +131,7 @@ def render_config(
     slack_teams: dict[str, object],
     jira: dict[str, object] | None,
     notes: dict[str, object] | None = None,
+    git_stack: bool = False,
 ) -> str:
     """The config file: a section per plugin, with the optional settings as comments."""
     lines = ["# move-forward configuration. Paths may start with ~.", ""]
@@ -132,6 +139,10 @@ def render_config(
     text = "\n".join(lines) + "\n" + OPTIONAL_SETTINGS
     text += _table("github", github, OPTIONAL_GITHUB_SETTINGS)
     text += _table("git", git, OPTIONAL_GIT_SETTINGS)
+    if git_stack:
+        text += "\n[git_stack]                           # stacks from git-stack; no settings\n"
+    else:
+        text += "\n# [git_stack]                         # uncomment if you use git-stack\n"
     if slack:
         text += _table("slack", slack, OPTIONAL_SLACK_SETTINGS)
     else:
@@ -336,6 +347,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         channels,
         {"site": site} if site else None,
         {"dir": notes_dir} if notes_dir != str(DEFAULT_NOTES_DIR) else None,
+        guess_git_stack(),
     )
     Config.model_validate(tomllib.loads(text))  # a bad answer fails here, before writing
     return text

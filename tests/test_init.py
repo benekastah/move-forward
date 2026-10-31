@@ -40,6 +40,7 @@ def no_machine_guesses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(init, "guess_teams", guess_teams)
     monkeypatch.setattr(init, "org_team_examples", org_team_examples)
     monkeypatch.setattr(init, "guess_email", lambda: "jane@acme.com")
+    monkeypatch.setattr(init, "guess_git_stack", lambda: False)
 
 
 def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: None) -> None:
@@ -54,10 +55,19 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
     assert loaded.notes.dir == DEFAULT_NOTES_DIR.expanduser()
     assert loaded.git.repos == [tmp_path / "app"]
     assert loaded.git.my_branch_prefixes == [] and loaded.port == config.DEFAULT_PORT
-    assert loaded.jira is None
+    assert loaded.jira is None and loaded.git_stack is None
     text = path.read_text()
     assert "# prune_days = 90" in text and "# [jira]" in text and "# [slack]" in text
-    assert "# [notes]" in text and "Jira" not in message
+    assert "# [notes]" in text and "# [git_stack]" in text and "Jira" not in message
+
+
+def test_init_turns_on_git_stack_when_it_is_installed(
+    tmp_path: Path, no_machine_guesses: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(init, "guess_git_stack", lambda: True)
+    path = tmp_path / "config.toml"
+    init.init(path, scripted({}), cwd=tmp_path)
+    assert config.load(path).git_stack is not None
 
 
 def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses: None) -> None:
