@@ -1,21 +1,9 @@
 # To do
 
 What's left of the plugin rearchitecture (`plugin_rearchitecture.md` has the design).
-Steps 1–4 are done: core, github, git, jira, slack and notes are plugins. Each step below is
-its own stacked branch, with core changes in a branch of their own ahead of the plugin
-change that needs them (see `AGENTS.md`).
-
-## 4b. git-stack plugin
-
-- `[git_stack]`, no keys of its own. In `after_collect` it runs `git stack info` in each
-  repo from git's `repo` entities, storing a `git_stack` snapshot part.
-- Moves from git: the Stacks panel, the `stack_clean` action, and the git-stack calls in
-  git's collector.
-- Owns whole-stack icing: notes' `ice` stops shelling out to `git stack show-stack`, and
-  git's "Put on ice" button stops posting to `notes/ice` (an item action instead).
-- Publishes `stack_parent` (and status) on `branch` entities; `docs/entities.md` gains it.
-- Core: plugins gain `requires` (e.g. `["git"]`), checked when the config loads:
-  "[git_stack] needs [git]". Composition, not inheritance: no warning for git + github.
+Steps 1–4b are done: core, github, git, git_stack, jira, slack and notes are plugins. Each
+step below is its own stacked branch, with core changes in a branch of their own ahead of
+the plugin change that needs them (see `AGENTS.md`).
 
 ## 5. Notes in SQLite
 
