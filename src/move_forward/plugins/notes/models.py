@@ -1,0 +1,90 @@
+"""The notes plugin's data, as its tables hold it."""
+
+from datetime import date
+from typing import Literal
+
+from pydantic import Field
+
+from ...domain import Model
+
+Size = Literal["quick", "big"]
+
+
+class Link(Model):
+    """Something an entry or todo is about: a PR by URL, a ticket by key."""
+
+    kind: str
+    """A graph kind, e.g. "pr" or "ticket"."""
+    ref: str
+    """The entity's id in that kind."""
+
+
+class Todo(Model):
+    id: int
+    text: str
+    size: Size | None = None
+    done_on: date | None = None
+    """None while it's open."""
+    links: list[Link] = Field(default_factory=list)
+
+
+class Declined(Model):
+    """Something offered and turned down for the day, e.g. "don't nudge today"."""
+
+    on: date
+    text: str
+
+
+class Entry(Model):
+    """A piece of work in the notes: what it is, where, and what's left to do."""
+
+    id: int
+    title: str
+    status: str | None = None
+    where: str | None = None
+    """Where the work lives, as written, e.g. "engineering <PR URL>"."""
+    blocked_on: str | None = None
+    updated_on: date | None = None
+    todos: list[Todo] = Field(default_factory=list)
+    conditions: list[str] = Field(default_factory=list)
+    """What must happen before its PRs merge."""
+    declined: list[Declined] = Field(default_factory=list)
+    lines: list[str] = Field(default_factory=list)
+    """Lines the notes don't model, kept as written."""
+    links: list[Link] = Field(default_factory=list)
+
+    @property
+    def open_todos(self) -> list[Todo]:
+        return [t for t in self.todos if t.done_on is None]
+
+
+class IcedItem(Model):
+    """One thing an act of icing covers: today, a branch."""
+
+    kind: str
+    """A graph kind; "branch" for now."""
+    ref_id: str
+    """The entity's id, e.g. `<repo dir>\\t<branch>`."""
+    sha: str | None = None
+    """For a branch, its commit when iced, to restore it from."""
+
+
+class Ice(Model):
+    """One act of icing: a stack of branches (or, later, an entry, ticket or PR)."""
+
+    id: int
+    title: str
+    """e.g. the stack's bottom branch."""
+    iced_on: date
+    note: str | None = None
+    items: list[IcedItem]
+    """In order: a stack's bottom branch first."""
+
+
+class Section(Model):
+    """A part of `work-notes.md` that isn't a piece of work, kept as written: the text
+    before the first entry, or a section like "Reviews requested of me"."""
+
+    heading: str | None
+    """None for the text before the first `##` heading."""
+    body: str

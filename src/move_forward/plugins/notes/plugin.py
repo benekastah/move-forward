@@ -4,6 +4,8 @@ The work notes and stacks on ice are still parsed from the skill's markdown into
 on every refresh; this plugin reads them from there.
 """
 
+from typing import ClassVar
+
 from pydantic import BaseModel
 
 from ...graph import Entity, Graph
@@ -13,6 +15,7 @@ from ...repositories import IcedStackRepository, WorkItemRepository
 from . import actions
 from .config import NotesConfig
 from .panels import Builder, entities
+from .repository import MIGRATIONS
 
 
 def _builder(ctx: Context[NotesConfig], graph: Graph) -> Builder:
@@ -32,6 +35,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     name = "notes"
     title = "Notes"
     config_model = NotesConfig
+    migrations: ClassVar[list[str]] = MIGRATIONS
 
     def entities(self, ctx: Context[NotesConfig], snapshot: BaseModel | None) -> list[Entity]:
         return entities(WorkItemRepository(ctx.db).all(), IcedStackRepository(ctx.db).all())
