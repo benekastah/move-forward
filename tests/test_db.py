@@ -102,6 +102,7 @@ def test_a_backup_is_taken_once_before_pending_migrations(tmp_path: Path) -> Non
     copy = sqlite3.connect(backup)
     assert copy.execute("SELECT count(*) FROM work_items").fetchone() == (1,)
     assert copy.execute("SELECT name FROM sqlite_master WHERE name = 'kv'").fetchall() == []
+    assert copy.execute("PRAGMA journal_mode").fetchone() == ("delete",)  # one file, no -wal
     copy.close()
 
     db.migrate("p", [CREATE_A])  # a plugin's migration in the same run: no second copy

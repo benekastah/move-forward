@@ -25,6 +25,8 @@ BACKUPS_DIR = "backups"
 BACKUP_TIME_FORMAT = "%Y%m%dT%H%M%S.%fZ"
 """Sorts by time as text, so the oldest backups sort first."""
 DEFAULT_KEEP_BACKUPS = 10
+SQLITE_SIDE_FILES = ("-wal", "-shm", "-journal")
+"""Files SQLite keeps beside a database; they belong to it, they aren't backups of their own."""
 BUSY_TIMEOUT_SECONDS = 10
 """How long a write waits for another process's (e.g. `mfd notes` while the server runs)."""
 
@@ -193,12 +195,24 @@ class Database:
         copy = sqlite3.connect(target)
         try:
             self._conn.backup(copy)
+            # The copy inherits WAL mode; a rollback journal keeps it one self-contained file
+            # (no -wal and -shm beside it once something opens it), which is what a backup is.
+            (mode,) = copy.execute("PRAGMA journal_mode = DELETE").fetchone()
         finally:
             copy.close()
+        if mode == "delete":  # everything is in the file now; SQLite can leave an empty -shm
+            for suffix in SQLITE_SIDE_FILES:
+                target.with_name(target.name + suffix).unlink(missing_ok=True)
         log.info("backed up %s to %s before migrating", self._path, target)
-        old = sorted(backups.glob(f"{self._path.name}.*"))[: -self._keep_backups]
-        for path in old:
+        copies = sorted(
+            path
+            for path in backups.glob(f"{self._path.name}.*")
+            if not path.name.endswith(SQLITE_SIDE_FILES)
+        )
+        for path in copies[: -self._keep_backups]:
             path.unlink()
+            for suffix in SQLITE_SIDE_FILES:
+                path.with_name(path.name + suffix).unlink(missing_ok=True)
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection]:
