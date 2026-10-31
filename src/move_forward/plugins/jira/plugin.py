@@ -65,7 +65,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                     links=[
                         Link(text=f"#{p.attrs.get('number')}", url=p.url or p.ref.id) for p in prs
                     ],
-                    subject=ticket_ref(issue.key),
+                    subjects=[ticket_ref(issue.key)],
                 )
             )
     return Panel(
@@ -101,7 +101,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                 subtitle=f"{issue.status} · {issue.priority or ''} · {age(now, issue.created)} old",
                 badges=[why],
                 rank=rank,
-                subject=ticket_ref(issue.key),
+                subjects=[ticket_ref(issue.key)],
             )
         )
     return Panel(

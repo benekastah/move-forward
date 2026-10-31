@@ -177,7 +177,7 @@ class Pinger:
                     subtitle=f"{pr.attrs.get('repo')}#{pr.attrs.get('number')}",
                     details=details,
                     rank=-since.timestamp(),
-                    subject=pr.ref,
+                    subjects=[pr.ref],
                 )
             )
         return Panel(
