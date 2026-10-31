@@ -125,15 +125,108 @@ def render_config(
     return text
 
 
-def _ask_list(prompt: Prompt, question: str, default: list[str]) -> list[str]:
-    answer = prompt(question, ", ".join(default))
-    if not answer:
-        return default
+Check = Callable[[str], str]
+"""Normalises an answer, or raises ValueError saying what's wrong with it."""
+
+MAX_RETRIES = 5
+
+
+def _ask(prompt: Prompt, question: str, default: str, check: Check | None = None) -> str:
+    """Ask until the answer passes `check`; a bad answer prints why and asks again."""
+    for _ in range(MAX_RETRIES):
+        answer = prompt(question, default) or default
+        if check is None:
+            return answer
+        try:
+            return check(answer)
+        except ValueError as e:
+            print(f"  {e}; try again")
+    raise ValueError(f"no usable answer for: {question}")
+
+
+def _ask_list(
+    prompt: Prompt, question: str, default: list[str], check: Check | None = None
+) -> list[str]:
+    """A comma-separated answer; each item goes through `check`."""
+
+    def check_all(answer: str) -> str:
+        parts = [part.strip() for part in answer.split(",") if part.strip()]
+        return ", ".join(check(part) if check else part for part in parts)
+
+    answer = _ask(prompt, question, ", ".join(default), check_all)
     return [part.strip() for part in answer.split(",") if part.strip()]
 
 
-def _ask(prompt: Prompt, question: str, default: str) -> str:
-    return prompt(question, default) or default
+def _required(what: str) -> Check:
+    def check(answer: str) -> str:
+        if not answer.strip():
+            raise ValueError(f"{what} is required")
+        return answer.strip()
+
+    return check
+
+
+def _word(what: str) -> Check:
+    """A GitHub org or team slug: letters, digits, `-`, `_`, `.`."""
+
+    def check(answer: str) -> str:
+        answer = answer.strip()
+        if not answer:
+            raise ValueError(f"{what} is required")
+        if not re.fullmatch(r"[\w.-]+", answer):
+            raise ValueError(f"{answer!r} isn't a {what}: use letters, digits, - and _")
+        return answer
+
+    return check
+
+
+def _url(answer: str) -> str:
+    answer = answer.strip().rstrip("/")
+    if answer and not re.fullmatch(r"https?://[^\s/]+(/[^\s]*)?", answer):
+        raise ValueError(f"{answer!r} isn't a URL starting with https://")
+    return answer
+
+
+def _domain(answer: str) -> str:
+    answer = answer.strip()
+    if answer and not re.fullmatch(r"[\w-]+(\.[\w-]+)+", answer):
+        raise ValueError(f"{answer!r} isn't a domain like acme.com")
+    return answer
+
+
+def _email(answer: str) -> str:
+    answer = answer.strip()
+    if "@" not in answer or " " in answer:
+        raise ValueError(f"{answer!r} isn't an email address")
+    return answer
+
+
+def _channel(answer: str) -> str:
+    answer = answer.strip()
+    if answer and " " in answer:
+        raise ValueError(f"{answer!r} isn't a channel name (e.g. #team-a)")
+    return answer
+
+
+def _path(answer: str) -> str:
+    answer = answer.strip()
+    if not answer:
+        raise ValueError("a path is required")
+    if not Path(answer).expanduser().is_dir():
+        raise ValueError(f"{answer} isn't a directory")
+    return answer
+
+
+def _branch_prefix(answer: str) -> str:
+    if " " in answer.strip():
+        raise ValueError(f"{answer!r} has a space; a branch prefix is like jane/")
+    return answer.strip()
+
+
+def _port(answer: str) -> str:
+    if not answer.isdigit() or not 1 <= int(answer) <= 65535:
+        raise ValueError(f"{answer!r} isn't a port number (1-65535)")
+    return answer
 
 
 def interview(prompt: Prompt, cwd: Path) -> str:
@@ -143,12 +236,18 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         "Examples are in parentheses. Where a value could be guessed from this machine"
         " (git, gh), it's in brackets and Enter keeps it.\n"
     )
-    org = _ask(prompt, "GitHub organization, as in github.com/<org> (e.g. acme)", org_guess)
+    org = _ask(
+        prompt,
+        "GitHub organization, as in github.com/<org> (e.g. acme)",
+        org_guess,
+        _word("GitHub organization"),
+    )
     slugs = _ask_list(
         prompt,
         "GitHub team slugs you review for, comma-separated; leave out org-wide teams"
         f" (e.g. {', '.join(org_team_examples(org) or ['team-a', 'team-b'])})",
         guess_teams(org),
+        _word("team slug"),
     )
     teams: list[dict[str, object]] = []
     for slug in slugs:
@@ -156,37 +255,46 @@ def interview(prompt: Prompt, cwd: Path) -> str:
             prompt,
             f"Slack channel for review pings to {slug} (e.g. #team-{slug}; blank for none)",
             "",
+            _channel,
         )
         teams.append({"github_slug": slug, **({"slack_channel": channel} if channel else {})})
     repos = _ask_list(
         prompt,
         "Main checkouts of the repos you work in, comma-separated (e.g. ~/src/app, ~/src/infra)",
         [str(repo)] if repo else [],
+        _path,
     )
     email = guess_email()
     domain = email.rsplit("@", 1)[1] if "@" in email else ""
     slack = _ask(
         prompt,
-        "Slack workspace URL, for ping links (e.g. https://acme.slack.com; blank for none)",
+        "Slack workspace URL, for ping links; it's under the workspace name in Slack's menu"
+        " (e.g. https://acme.slack.com; blank for none)",
         "",
+        _url,
     )
     email_domain = _ask(
-        prompt, "Work email domain, to find reviewers' emails (e.g. acme.com)", domain
+        prompt, "Work email domain, to find reviewers' emails (e.g. acme.com)", domain, _domain
     )
     prefixes = _ask_list(
         prompt,
         "Prefixes of your branch names (e.g. jane/; blank: every local branch counts as yours)",
         [],
+        _branch_prefix,
     )
     notes_dir = _ask(
         prompt,
         "Directory for the notes, i.e. the move-forward skill's work-notes.md and on-ice.md"
         " (e.g. ~/notes/move-forward; created if missing)",
         "",
+        _required("a notes directory"),
     )
-    if not notes_dir:
-        raise ValueError("a notes directory is required")
-    port = _ask(prompt, "Port for the local server (e.g. 8765)", str(config_module.DEFAULT_PORT))
+    port = _ask(
+        prompt,
+        "Port for the local server (e.g. 8765)",
+        str(config_module.DEFAULT_PORT),
+        _port,
+    )
     answers: dict[str, object] = {"org": org, "repos": repos, "notes_dir": notes_dir}
     if slack:
         answers["slack_workspace_url"] = slack
@@ -197,9 +305,11 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     if port != str(config_module.DEFAULT_PORT):
         answers["port"] = int(port)
     jira: dict[str, object] | None = None
-    site = _ask(prompt, "Jira site URL (e.g. https://acme.atlassian.net; blank to skip Jira)", "")
+    site = _ask(
+        prompt, "Jira site URL (e.g. https://acme.atlassian.net; blank to skip Jira)", "", _url
+    )
     if site:
-        jira_email = _ask(prompt, "Jira account email (e.g. jane@acme.com)", email)
+        jira_email = _ask(prompt, "Jira account email (e.g. jane@acme.com)", email, _email)
         jira = {"site": site, "email": jira_email}
     text = render_config(answers, teams, jira)
     Config.model_validate(tomllib.loads(text))  # a bad answer fails here, before writing

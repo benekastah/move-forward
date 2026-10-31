@@ -6,19 +6,28 @@ import pytest
 from move_forward_dashboard import config, init
 
 
-def scripted(answers: dict[str, str]) -> init.Prompt:
-    """A prompt answering by a word of the question; anything unlisted takes the default."""
+def scripted(answers: dict[str, str | list[str]]) -> init.Prompt:
+    """A prompt answering by a word of the question; anything unlisted takes the default.
+
+    A list of answers is given one per asking, so a test can answer badly and then well.
+    """
+    queues = {word: list(a) if isinstance(a, list) else [a] for word, a in answers.items()}
 
     def prompt(question: str, _default: str) -> str:
-        return next((a for word, a in answers.items() if word in question), "")
+        for word, queue in queues.items():
+            if word in question:
+                return queue.pop(0) if len(queue) > 1 else queue[0]
+        return ""
 
     return prompt
 
 
 @pytest.fixture
-def no_machine_guesses(monkeypatch: pytest.MonkeyPatch) -> None:
+def no_machine_guesses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    (tmp_path / "app").mkdir()
+
     def guess_repo(_cwd: Path) -> tuple[Path | None, str]:
-        return Path("/src/app"), "acme"
+        return tmp_path / "app", "acme"
 
     def guess_teams(org: str) -> list[str]:
         return ["core"] if org == "acme" else []
@@ -34,7 +43,7 @@ def no_machine_guesses(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: None) -> None:
     path = tmp_path / "cfg" / "config.toml"
-    with pytest.raises(ValueError, match="notes directory"):
+    with pytest.raises(ValueError, match="no usable answer for: Directory for the notes"):
         init.init(path, scripted({}), cwd=tmp_path)  # the only question with no guess
     message = init.init(path, scripted({"notes": "~/notes"}), cwd=tmp_path)
     assert message.startswith(f"wrote {path}")
@@ -42,7 +51,7 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
     assert loaded.org == "acme" and loaded.team_slugs == ["core"]
     assert loaded.teams[0].slack_channel is None
     assert loaded.notes_dir == Path("~/notes").expanduser()
-    assert loaded.repos == [Path("/src/app")]
+    assert loaded.repos == [tmp_path / "app"]
     assert loaded.email_domain == "acme.com" and loaded.slack_workspace_url == ""
     assert loaded.my_branch_prefixes == [] and loaded.port == config.DEFAULT_PORT
     assert loaded.jira is None
@@ -52,6 +61,8 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
 
 def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses: None) -> None:
     path = tmp_path / "config.toml"
+    (tmp_path / "x").mkdir()
+    (tmp_path / "y").mkdir()
     message = init.init(
         path,
         scripted(
@@ -60,7 +71,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
                 "team slugs": "a, b ,",
                 "pings to a": "#team-a",
                 "notes": "~/notes",
-                "checkouts": "~/x, ~/y",
+                "checkouts": f"{tmp_path}/x, {tmp_path}/y",
                 "workspace URL": "https://o.slack.com",
                 "Prefixes": "jane/",
                 "Port": "9000",
@@ -73,7 +84,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     assert loaded.org == "other" and loaded.team_slugs == ["a", "b"]
     assert [t.slack_channel for t in loaded.teams] == ["#team-a", None]
     assert loaded.notes_dir == Path("~/notes").expanduser()
-    assert loaded.repos == [Path("~/x").expanduser(), Path("~/y").expanduser()]
+    assert loaded.repos == [tmp_path / "x", tmp_path / "y"]
     assert loaded.slack_workspace_url == "https://o.slack.com"
     assert loaded.my_branch_prefixes == ["jane/"] and loaded.port == 9000
     assert loaded.jira is not None
@@ -82,11 +93,46 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     assert "# status_closed" in path.read_text()
 
 
-def test_bad_answers_fail_before_writing(tmp_path: Path, no_machine_guesses: None) -> None:
+def test_bad_answers_are_asked_again_with_the_reason(
+    tmp_path: Path, no_machine_guesses: None, capsys: pytest.CaptureFixture[str]
+) -> None:
     path = tmp_path / "config.toml"
-    with pytest.raises(ValueError):
-        init.init(path, scripted({"Port": "lots"}), cwd=tmp_path)
+    init.init(
+        path,
+        scripted(
+            {
+                "organization": ["acme corp", "acme"],
+                "Port": ["lots", "70000", "9000"],
+                "workspace URL": ["acme.slack.com", "https://acme.slack.com"],
+                "notes": "~/notes",
+            }
+        ),
+        cwd=tmp_path,
+    )
+    out = capsys.readouterr().out
+    assert "'acme corp' isn't a GitHub organization" in out
+    assert "'lots' isn't a port number" in out and "'70000' isn't a port number" in out
+    assert "'acme.slack.com' isn't a URL starting with https://" in out
+    loaded = config.load(path)
+    assert loaded.org == "acme" and loaded.port == 9000
+    assert loaded.slack_workspace_url == "https://acme.slack.com"
+
+
+def test_giving_up_after_repeated_bad_answers(tmp_path: Path, no_machine_guesses: None) -> None:
+    path = tmp_path / "config.toml"
+    with pytest.raises(ValueError, match="no usable answer"):
+        init.init(path, scripted({"Port": "lots", "notes": "~/notes"}), cwd=tmp_path)
     assert not path.exists()
+
+
+def test_repo_paths_must_exist(tmp_path: Path, no_machine_guesses: None) -> None:
+    path = tmp_path / "config.toml"
+    init.init(
+        path,
+        scripted({"checkouts": [f"{tmp_path}/nope", f"{tmp_path}/app"], "notes": "~/notes"}),
+        cwd=tmp_path,
+    )
+    assert config.load(path).repos == [tmp_path / "app"]
 
 
 def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> None:
