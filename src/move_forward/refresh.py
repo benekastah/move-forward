@@ -55,13 +55,24 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
             pool.submit(_collect, db, e, now)
     if shell.stopping():
         return
-    prune_if_due(config, db, now)
     graph, _ = _graph(db, plugins)
+    prune_if_due(config, db, now, lambda: _prune_plugins(plugins, graph))
     for e in plugins:
         try:
             e.plugin.after_collect(e.ctx, graph)
         except Exception:
             log.exception("%s: after_collect failed", e.name)
+
+
+def _prune_plugins(plugins: list[Enabled], graph: Graph) -> list[str]:
+    """Every plugin's daily prune, each failing on its own; what they did, by plugin."""
+    notices: list[str] = []
+    for e in plugins:
+        try:
+            notices += [f"{e.name}: {notice}" for notice in e.plugin.prune(e.ctx, graph)]
+        except Exception:
+            log.exception("%s: prune failed", e.name)
+    return notices
 
 
 def _team_channels(config: Config, known: dict[str, TeamChannel]) -> dict[str, TeamChannel]:

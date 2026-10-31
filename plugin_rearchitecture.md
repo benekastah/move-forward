@@ -640,4 +640,4 @@ Raised while building, not yet scheduled:
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
   separators) and written into `on-ice.md`.
 - **CI.** After Windows: GitHub Actions running `check.sh`'s checks, and the tests on
-  Linux and Windows.
+  Linux, macOS and Windows (runners are free for this public repo).

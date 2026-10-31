@@ -142,8 +142,15 @@ def prune(
     return notices
 
 
-def prune_if_due(config: Config, db: Database, now: datetime) -> None:
-    """Run `prune` if it hasn't run for a day. A failure is logged and retried the next day."""
+def _no_plugins() -> list[str]:
+    return []
+
+
+def prune_if_due(
+    config: Config, db: Database, now: datetime, plugins: Callable[[], list[str]] = _no_plugins
+) -> None:
+    """Run `prune`, then `plugins` (the plugins' prunes), if they haven't run for a day. A
+    failure is logged and retried the next day."""
     meta = KvRepository(db, CORE)
     last = meta.get(LAST_PRUNE_KEY)
     if last and datetime.fromisoformat(last) + PRUNE_EVERY > now:
@@ -154,3 +161,5 @@ def prune_if_due(config: Config, db: Database, now: datetime) -> None:
             log.info("prune: %s", notice)
     except Exception:
         log.exception("prune failed")
+    for notice in plugins():
+        log.info("prune: %s", notice)

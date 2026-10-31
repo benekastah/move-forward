@@ -117,3 +117,18 @@ def test_prune_deletes_old_pings_and_runs_once_a_day(tmp_path: Path) -> None:
     assert len(pings.all()) == 1  # not due yet
     prune.prune_if_due(config, db, NOW + timedelta(hours=25))
     assert pings.all() == []
+
+
+def test_plugins_prune_with_the_daily_run(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    (tmp_path / notes.WORK_NOTES_FILE).unlink()
+    db = Database(":memory:")
+    runs: list[datetime] = []
+
+    def plugins() -> list[str]:
+        runs.append(NOW)
+        return []
+
+    prune.prune_if_due(config, db, NOW, plugins)
+    prune.prune_if_due(config, db, NOW + timedelta(hours=1), plugins)
+    assert len(runs) == 1
