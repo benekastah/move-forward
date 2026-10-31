@@ -1,15 +1,12 @@
-"""Local git collector: worktrees, branches, git-stack status and the directories I work in."""
+"""Local git collector: worktrees, branches and the directories I work in."""
 
 import fnmatch
-import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
-
-from ...domain import Branch, LocalRepo, LocalSnapshot, StackBranch, Worktree
+from ...domain import Branch, LocalRepo, LocalSnapshot, Worktree
 from ...shell import CommandError, git
 
 _GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
@@ -18,18 +15,6 @@ _FOR_EACH_REF_FORMAT = (
     "%(refname:short)%09%(upstream:short)%09%(upstream:track)%09%(committerdate:iso-strict)"
 )
 FALLBACK_DEFAULT_BRANCH = "main"
-
-
-class RawStackBranch(BaseModel):
-    """One entry of `git stack info --json`."""
-
-    model_config = ConfigDict(extra="ignore", frozen=True)
-
-    name: str
-    parent: str | None = None
-    status: str | None = None
-    current: bool = False
-    group: str | None = None
 
 
 def parse_worktrees(porcelain: str) -> list[tuple[str, str | None]]:
@@ -96,18 +81,6 @@ def _default_branch(repo: Path) -> str:
     return ref.removeprefix("origin/")
 
 
-def _stack(repo: Path) -> list[StackBranch]:
-    try:
-        out = git(repo, "stack", "info", "--json", "--offline")
-    except (CommandError, FileNotFoundError):
-        return []
-    raw = [RawStackBranch.model_validate(entry) for entry in json.loads(out)]
-    return [
-        StackBranch(name=b.name, parent=b.parent, status=b.status, current=b.current, group=b.group)
-        for b in raw
-    ]
-
-
 def _my_dirs(repo: Path, default_branch: str, email: str, since_days: int) -> list[str]:
     """Directories with commits of mine on the default branch within `since_days`."""
     out = git(
@@ -167,7 +140,6 @@ def collect_repo(
         default_branch=default_branch,
         worktrees=worktrees,
         branches=with_counts,
-        stack=_stack(repo),
         my_dirs=_my_dirs(repo, default_branch, email, commit_history_days),
     )
 

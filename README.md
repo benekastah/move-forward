@@ -14,8 +14,8 @@ All state lives in one SQLite database.
 
 ## Setup
 
-Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (the
-Stacks panel is empty without it).
+Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (for
+the `git_stack` plugin).
 
 ```sh
 ~/src/move-forward/dev-install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
@@ -31,7 +31,9 @@ example without asking; `--force` replaces an existing file.
 
 The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
-`db_path`, `db_backups`, the refresh intervals and `prune_days`. Everything about a tool is
+`db_path`, `db_backups`, `refresh_seconds` (how often the background loop
+refreshes), `refresh_on_load_seconds` (a page load refreshes data older than
+this) and `prune_days`. Everything about a tool is
 in that tool's plugin section; see [Plugins](#plugins).
 
 Teams are named once, at the top level. A plugin that has its own idea of a
@@ -43,8 +45,8 @@ that the top-level `teams` doesn't have is an error.
 ### Jira
 
 Add a `[jira]` section with `site`; requests log in as the top-level `email`
-with an API token. Either export
-`JIRA_API_TOKEN` or store a token in the macOS keychain:
+with an API token. Either export `JIRA_API_TOKEN` (or the variable `token_env`
+names) or store a token in the macOS keychain under `keychain_service`:
 
 ```sh
 security add-generic-password -s move-forward-jira -a me@example.com -w <token>
@@ -57,17 +59,19 @@ Create the token at https://id.atlassian.com/manage-profile/security/api-tokens.
 Each external tool is a plugin, enabled by its section in the config: leave a
 section out and the plugin, its panels and its fetching are off. Plugins learn
 about each other's data only through a shared graph of entities (PRs,
-tickets, branches, ...), listed in [docs/entities.md](docs/entities.md). A
+tickets, branches, ...), listed in [docs/entities.md](docs/entities.md);
+[docs/plugins.md](docs/plugins.md) draws who publishes and reads what. A
 plugin built on another's entities needs that plugin's section too; the config
 fails to load without it, saying which (e.g. "[git_stack] needs [git]").
 
 | Plugin | Section | Fetches | Panels |
 | --- | --- | --- | --- |
 | `github` | `[github]` | my open, merged and closed PRs, review requests, PRs I reviewed, my teams' PRs (with `gh`) | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
-| `git` | `[git]` | each repo's worktrees, branches, `git stack info` | Local work, Stacks, Cleanup |
+| `git` | `[git]` | each repo's worktrees and branches | Local work, Cleanup |
+| `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in each of git's repos | Stacks |
 | `jira` | `[jira]` | my open tickets | Jira transitions, What next |
 | `slack` | `[slack]` | nothing; reads my PRs from the graph and the reviewer map | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
-| `notes` | `[notes]`, optional: always on | the skill's notes, from markdown | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket |
+| `notes` | `[notes]`, optional: always on | the skill's notes, from markdown | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket, and Put on ice on every item about a local branch |
 
 `[notes] dir` is where `work-notes.md`, `on-ice.md` and `reviewer-map.md`
 live: the move-forward skill's notes, which the dashboard reads on every
@@ -75,7 +79,8 @@ refresh and writes todos and icing to (default `~/.config/move-forward/notes`;
 any directory works without the skill). The smallest config, `email` alone,
 is a todo list.
 
-`[github]` needs `org`. Its conventions that differ between organisations are
+`[github]` needs `org`. `history_days` says how far back my merged and closed
+PRs are fetched. Its conventions that differ between organisations are
 off by default: `review_checks` (CI checks that really report review status),
 `required_owner_marker` (a CODEOWNERS comment such as `#required`),
 `ticket_link_prefix` (the PR body line that links the ticket, e.g. `Link`) and
@@ -90,16 +95,29 @@ it every local branch is), `ignored_worktree_globs` leaves worktrees out, and
 `commit_history_days` says how far back your commits count towards the
 directories you work in.
 
+`[git_stack]` has no settings: it turns on
+[git-stack](https://github.com/benekastah/git-stack) for `[git]`'s repos. `mfd
+init` adds it when git-stack is installed; add it by hand to an older config.
+
 `[slack]` turns on review pings. `workspace_url` makes the ping page link to
 channels and people, `ping_first` and `ping_follow_up` are the messages, and
 `[slack.teams]` the channel each team's pings go to (winning over the reviewer
 map). Its page is `/ping?pr=<PR URL>`, and its one action
 `/actions/slack/mark_sent`.
 
-`[jira]` needs `site`; the workflow status names, the escalation label prefix
-and levels, and the issue types that count as incidents or bugs are settings.
+`[jira]` needs `site`. `token_env` and `keychain_service` say where its token
+is (see [Jira](#jira)). `status_in_progress`, `status_in_review` and
+`status_closed` are the workflow's status names, for Jira transitions.
+`escalation_label_prefix` (e.g. `escalated-to-`) and `escalation_levels`
+(what follows it, lowest first) rank escalated incidents and bugs in What
+next, and `incident_types` and `bug_types` are the issue types (lower-case
+substrings) that count as each. `[jira.teams]` isn't used yet.
 
 ## Commands
+
+Every command takes `-c`/`--config <path>` (default
+`~/.config/move-forward/config.toml`) and `-v`/`--verbose` (debug logging),
+before the command's name.
 
 | Command | Does |
 | --- | --- |
@@ -135,12 +153,11 @@ Only Act now starts expanded; each panel inside a group collapses too.
 - **Ready to merge** and **Held by merge conditions** (from the work notes).
 - **Local work**: dirty worktrees, unpushed and never-pushed branches, with
   buttons: WIP commit (tracked files only), Push (never forced; sets the
-  upstream for a new branch), Put on ice.
-- **Stacks**: `git stack info` statuses other than up-to-date, and tracked
-  branches with no PR, with a button per repo that runs `git stack clean -d
-  local` for its merged branches (not offered while the repo has iced stacks,
-  since clean touches every stack). The panel only appears when a repo has
-  tracked stacks, so without git-stack it's absent.
+  upstream for a new branch), and notes' Put on ice.
+- **Stacks** (git_stack): `git stack info` statuses other than up-to-date, and
+  tracked branches with no PR, with a button per repo that runs `git stack
+  clean -d local` for its merged branches (not offered while the repo has iced
+  stacks, since clean touches every stack).
 - **Requested from my teams**: PRs waiting on any of my `teams`, ranked by how
   many files CODEOWNERS gives those teams (required first) and how many are in
   directories I commit to.
@@ -214,12 +231,12 @@ error status):
 | `/actions/notes/todo_link` | `entry`, `text`, `input` (Jira key or URL) | Appends the ticket's or PR's URL to the todo. |
 | `/actions/git/push_branch` | `repo`, `branch` | `git push` (sets the upstream if missing; never forces). |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`. |
-| `/actions/notes/ice` | `repo`, `branch` | Puts the branch's stack on ice. |
+| `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack when git_stack knows it. |
 | `/actions/notes/thaw` | `branch` | Takes a stack off ice. |
 | `/actions/notes/delete_iced` | `branch` | Deletes an iced stack's local branches and thaws it. |
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. |
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
-| `/actions/git/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
+| `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
 | `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 
 `entry` is a work-notes entry's title exactly as its `##` line has it; `text`
@@ -249,8 +266,10 @@ Jira; without Jira, entries with ticket keys are kept.
 plugin's name (kept when a refresh fails, with the error alongside), the work notes, iced stacks and
 reviewer map imported from the skill's `.md` files on every refresh, emails
 looked up from commits, and pings marked as sent. The skill's files stay the
-source of truth for the notes. The dashboard writes only `on-ice.md`, when a
-button puts a stack on ice or thaws one, in the skill's own format.
+source of truth for the notes. The dashboard writes back to them in the
+skill's own format: `work-notes.md` when a todo is added, done, undone,
+deleted or linked (and the daily clean-up), `on-ice.md` when a stack is put
+on ice, thawed or deleted.
 
 The schema is built by migrations: core and each plugin own a list, applied in
 order at start-up and counted in `schema_versions`, so an older database

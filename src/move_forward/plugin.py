@@ -88,6 +88,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     never edit one that has shipped. Tables are prefixed with `name`."""
     snapshot_model: ClassVar[type[BaseModel] | None] = None
     """S, or None when the plugin fetches nothing and `collect` is never called."""
+    collects_after_graph: ClassVar[bool] = False
+    """Whether the snapshot comes from `collect_after` instead of `collect`."""
 
     # Refresh
 
@@ -95,6 +97,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Fetch the plugin's snapshot. Runs in parallel with other plugins' and may raise;
         the error is shown and the last good snapshot kept."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
+
+    def collect_after(self, ctx: Context[C], graph: Graph) -> S:
+        """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
+        repos git found. Runs once their snapshots are stored, in parallel with other
+        `collect_after`s, and fails like `collect`."""
+        raise NotImplementedError(f"{self.name} collects after the graph but has no collect_after")
 
     def after_collect(self, ctx: Context[C], graph: Graph) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.

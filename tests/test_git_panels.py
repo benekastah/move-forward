@@ -10,17 +10,27 @@ from conftest import (
     panel,
     pr,
     snapshot,
+    stored,
     titles,
 )
 
+from move_forward import refresh
 from move_forward.domain import (
     IcedBranch,
     IcedStack,
-    StackBranch,
     Worktree,
 )
+from move_forward.registry import enabled
 
 build = dashboard
+
+
+def test_branches_are_published_with_their_checkout() -> None:
+    config, db = stored(local=local_snapshot(branches=[local_branch("me/a", ahead=2)]))
+    graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
+    branch = graph.get("branch", "/src/widgets\tme/a")
+    assert branch is not None
+    assert branch.attrs["repo_dir"] == "/src/widgets" and branch.attrs["ahead"] == 2
 
 
 # Local
@@ -69,51 +79,15 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
     assert [a.name for a in items["me/iced: 1 commits, never pushed"].actions] == [
         "git/push_branch"
     ]
+    assert [a.name for a in items["me/new: 2 commits, never pushed"].actions] == [
+        "git/push_branch",
+        "notes/ice",
+    ]
     dirty = items["me/APP-1-branch: 2 modified, 1 untracked"].actions
     assert [(a.name, a.fields) for a in dirty if a.name != "notes/todo_add"] == [
         ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
         ("notes/ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
     ]
-
-
-def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
-    local = local_snapshot(
-        stack=[
-            StackBranch(name="main"),
-            StackBranch(name="me/APP-1-branch", parent="main", status="up-to-date"),
-            StackBranch(name="me/APP-2-branch", parent="me/APP-1-branch", status="needs-restack"),
-            StackBranch(name="me/APP-3-branch", parent="main", status="merged"),
-            StackBranch(name="me/no-pr", parent="main", status="up-to-date"),
-        ]
-    )
-    dashboard = build(github=snapshot(mine=[pr(1), pr(2)]), local=local)
-    assert sorted(titles(dashboard, "stacks")) == [
-        "me/APP-2-branch: needs-restack",
-        "me/APP-3-branch: merged",
-        "me/no-pr: tracked, no PR",
-    ]
-    clean = panel(dashboard, "stacks").actions
-    assert [(a.name, a.fields, a.label) for a in clean] == [
-        ("git/stack_clean", {"repo": "/src/widgets"}, "Clean 1 merged in widgets")
-    ]
-    assert clean[0].confirm is not None
-
-
-def test_stack_clean_is_not_offered_while_the_repo_has_iced_stacks() -> None:
-    local = local_snapshot(stack=[StackBranch(name="me/old", parent="main", status="merged")])
-    dashboard = build(
-        local=local,
-        iced_stacks=[
-            IcedStack(
-                bottom_branch="me/x",
-                repo_dir="/src/widgets",
-                branches=[IcedBranch(name="me/x", sha="1")],
-            )
-        ],
-    )
-    stacks = panel(dashboard, "stacks")
-    assert stacks.actions == []
-    assert "1 merged stack branches not cleaned" in titles(dashboard, "stacks")
 
 
 def test_cleanup_lists_merged_and_gone_branches() -> None:
@@ -157,12 +131,3 @@ def test_branch_prefixes_limit_cleanup_and_local_work_to_my_branches() -> None:
         "theirs/merged-by-me: PR merged 1d ago",
     ]
     assert titles(dashboard, "local_work") == ["me/unpushed: 3 commits, never pushed"]
-
-
-def test_stacks_panel_only_exists_with_git_stack_data() -> None:
-    assert build().find_panel("stacks") is None
-    assert build(local=local_snapshot()).find_panel("stacks") is None
-    assert (
-        build(local=local_snapshot(stack=[StackBranch(name="main")])).find_panel("stacks")
-        is not None
-    )

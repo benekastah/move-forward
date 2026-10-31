@@ -43,8 +43,8 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         return [builder.todos(), builder.iced()]
 
     def item_actions(self, ctx: Context[NotesConfig], item: Item, graph: Graph) -> list[Action]:
-        action = _builder(ctx, graph).add_todo(item)
-        return [action] if action else []
+        builder = _builder(ctx, graph)
+        return [a for a in (builder.put_on_ice(item), builder.add_todo(item)) if a]
 
     def actions(self) -> dict[str, ActionHandler]:
         return {name: _handler(action) for name, action in actions.ACTIONS.items()}

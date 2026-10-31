@@ -51,13 +51,32 @@ def _tilde(path: Path) -> str:
     return "~/" + str(path.relative_to(home)) if path.is_relative_to(home) else str(path)
 
 
-def _stack_branches(repo: Path, branch: str) -> list[str]:
-    """The branch's whole git-stack stack, bottom first, or just the branch."""
-    try:
-        branches = git(repo, "stack", "show-stack", branch).split()
-    except (CommandError, FileNotFoundError):
+def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
+    """The branch's whole stack, bottom first, from the `stack_parent` git-stack puts on
+    branches; just the branch when it isn't in a stack (or git-stack isn't on)."""
+    prefix = f"{repo}{TARGET_SEPARATOR}"
+    parents = {
+        e.ref.id.removeprefix(prefix): parent
+        for e in graph.of_kind(BRANCH)
+        if e.ref.id.startswith(prefix) and isinstance(parent := e.attrs.get("stack_parent"), str)
+    }
+    if branch not in parents:
         return [branch]
-    return branches or [branch]
+    bottom, seen = branch, {branch}
+    while parents[bottom] in parents and parents[bottom] not in seen:  # up to the root
+        bottom = parents[bottom]
+        seen.add(bottom)
+    children: dict[str, list[str]] = {}
+    for name, parent in parents.items():
+        children.setdefault(parent, []).append(name)
+    stack: list[str] = []
+    pending = [bottom]
+    while pending:
+        name = pending.pop()
+        if name not in stack:
+            stack.append(name)
+            pending += reversed(children.get(name, []))
+    return stack
 
 
 def ice(notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | None = None) -> str:
@@ -68,7 +87,7 @@ def ice(notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | 
         raise ActionError(f"{branch} doesn't exist in {repo}")
     path = notes.dir / ON_ICE_FILE
     text = path.read_text() if path.exists() else "# Stacks on ice\n"
-    branches = _stack_branches(repo, branch)
+    branches = _stack_branches(graph, repo, branch)
     if any(re.search(rf"^  - {re.escape(b)} ", text, re.MULTILINE) for b in branches):
         raise ActionError(f"{branch} is already on ice")
     lines = [

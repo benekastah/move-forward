@@ -61,12 +61,17 @@ class Item(Model):
     draft: bool = False
     """A draft PR; drafts sort after everything else whatever their rank."""
     actions: list[Action] = Field(default_factory=list)
-    subject: Ref | None = None
-    """The entity the item is about, e.g. a PR; other plugins add their buttons by it."""
+    subjects: list[Ref] = Field(default_factory=list)
+    """The entities the item is about, the main one first, e.g. a PR and its branch; other
+    plugins add their buttons by them."""
     parts: list["Item"] = Field(default_factory=list)
     """Pieces focus mode shows one at a time instead of this item, e.g. a work item's todos.
 
     The dashboard shows this item as is, so the parts should also appear in `details`."""
+
+    def subject(self, kind: str) -> Ref | None:
+        """The item's subject of `kind`, e.g. "pr", if it has one."""
+        return next((r for r in self.subjects if r.kind == kind), None)
 
 
 class Panel(Model):

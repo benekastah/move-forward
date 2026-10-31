@@ -66,7 +66,7 @@ def test_sections_carry_keys_for_the_open_state_script() -> None:
     assert "<details class='panel empty' data-key='needs_reviewer'>" in html
     assert "details[data-key]" in html and "'?open=' + open" in html
     assert "if (open === saved) return;" in html
-    # No git-stack data, so the Stacks panel is absent and its group still renders.
+    # No [git_stack], so the Stacks panel is absent and git's group still renders.
     assert "data-key='stacks'" not in html and "data-key='git'" in html
 
 

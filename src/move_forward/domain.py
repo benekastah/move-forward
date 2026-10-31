@@ -135,6 +135,24 @@ class Branch(Model):
     """Commits not on the default branch; only computed for recent branches with no upstream."""
 
 
+class LocalRepo(Model):
+    dir: str
+    github_repo: str | None = None
+    """owner/name of the origin remote, if it is on GitHub."""
+    default_branch: str
+    worktrees: list[Worktree]
+    branches: list[Branch]
+    my_dirs: list[str] = []
+    """Directories I committed to within `commit_history_days`."""
+
+
+class LocalSnapshot(Model):
+    repos: list[LocalRepo]
+
+
+# git-stack
+
+
 class StackBranch(Model):
     """One entry of `git stack info --json`."""
 
@@ -145,20 +163,14 @@ class StackBranch(Model):
     group: str | None = None
 
 
-class LocalRepo(Model):
+class StackRepo(Model):
     dir: str
-    github_repo: str | None = None
-    """owner/name of the origin remote, if it is on GitHub."""
-    default_branch: str
-    worktrees: list[Worktree]
-    branches: list[Branch]
-    stack: list[StackBranch] = []
-    my_dirs: list[str] = []
-    """Directories I committed to within `commit_history_days`."""
+    branches: list[StackBranch]
+    """Every branch git-stack tracks in the repo, and the roots they're on."""
 
 
-class LocalSnapshot(Model):
-    repos: list[LocalRepo]
+class GitStackSnapshot(Model):
+    repos: list[StackRepo]
 
 
 # Jira
