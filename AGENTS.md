@@ -1,8 +1,8 @@
 # Working on move-forward
 
 Notes for agents (and people) changing this repo. The README says what the
-dashboard does; `docs/entities.md` is the contract between plugins;
-`plugin_rearchitecture.md` is the plan the code is being moved towards.
+dashboard does; `docs/entities.md` is the contract between plugins, and
+`docs/plugins.md` draws how the plugins use each other's entities.
 
 ## Shape of the code
 
@@ -14,9 +14,8 @@ dashboard does; `docs/entities.md` is the contract between plugins;
   functions from its snapshot and the graph to panels), `plugin.py` (the
   `Plugin` subclass), and `actions.py` if it has buttons.
 - Plugins never import each other or read each other's config, snapshots or
-  tables. What one needs from another goes through the graph. A new entity
-  kind or attribute, or a change to what one means, updates
-  `docs/entities.md` in the same commit.
+  tables. What one needs from another goes through the graph. A plugin that's
+  built on another declares it in `requires`.
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database
   reads beyond what the plugin passes in. Everything slow happens in
   `collect` or `after_collect`, or in `collect_after` for a plugin that
@@ -28,9 +27,21 @@ dashboard does; `docs/entities.md` is the contract between plugins;
   changes a plugin. If a plugin needs something new from core (a hook, a
   `Context` field, a graph method), land that first, on its own, with its own
   tests, and stack the plugin PR on it (`git stack branch`).
-- **Update the README as you go**, in the same commit as the change: new or
-  changed panels, config keys, commands and HTTP endpoints. The available
-  plugins table and the API section must match the code.
+- **Keep the docs up to date as you code**, in the same commit as the change,
+  not in a docs pass afterwards:
+  - the README: panels, config keys, commands, command-line options and HTTP
+    endpoints. The available plugins table and the API section must match the
+    code.
+  - `docs/entities.md`: a new entity kind or attribute, or a change to what
+    one means or who publishes it.
+  - `docs/plugins.md`: a change to what a plugin publishes or reads, its item
+    actions, its `requires`, or the phase it collects in.
+  - this file, when the shape of the code or a rule here changes, e.g. a new
+    plugin hook.
+  - docstrings and comments on the code you touch.
+
+  Before committing, look for docs the change made untrue: search the docs
+  and docstrings for the names you renamed, moved or removed.
 - **Every config key appears in four places**: its model (with a docstring),
   the README, `mfd init`'s rendered config (as a commented default, see
   `init.py`) and `mfd init --example` (`cli.py`). Config models reject unknown
