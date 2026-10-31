@@ -163,8 +163,10 @@ def test_invalid_ping_form_is_rejected(client: HTTPConnection, app: server.App) 
 
 
 def test_page_load_refreshes_stale_data_in_the_background(
-    client: HTTPConnection, app: server.App
+    client: HTTPConnection, app: server.App, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Seconds since boot: a machine that just started has a small monotonic clock.
+    monkeypatch.setattr(server.time, "monotonic", lambda: 5.0)
     get(client, "/").read()
     assert app._wake.is_set()  # pyright: ignore[reportPrivateUsage]
     app.refresh_now()

@@ -56,8 +56,8 @@ class App:
         self._refresh_lock = threading.Lock()
         self._wake = threading.Event()
         self.refreshing = False
-        self.last_refresh: float = 0
-        """`time.monotonic()` when the last refresh started; 0 before the first."""
+        self.last_refresh: float | None = None
+        """`time.monotonic()` when the last refresh started; None before the first."""
 
     def refresh_now(self) -> bool:
         """Refresh unless one is already running; returns whether this call did it."""
@@ -78,9 +78,11 @@ class App:
 
     def refresh_if_stale(self) -> None:
         """Start a background refresh if the last one began over `refresh_on_load_seconds` ago."""
+        if self.refreshing:
+            return
         if (
-            not self.refreshing
-            and time.monotonic() - self.last_refresh >= self.config.refresh_on_load_seconds
+            self.last_refresh is None
+            or time.monotonic() - self.last_refresh >= self.config.refresh_on_load_seconds
         ):
             self.request_refresh()
 
