@@ -63,6 +63,9 @@ change that needs them (see `AGENTS.md`).
 
 ## Follow-ups
 
+- **Typed entity schemas.** Shared kinds as typed models in core, private kinds declared
+  by their plugin and namespaced, typed reads for consumers, `docs/entities.md` checked
+  against the models. `entity_schemas.md` has the plan.
 - **Which branches are mine.** Signals for git, besides `my_branch_prefixes`: my commits
   ahead of the default branch (limited to recently active branches), a PR of mine from the
   branch in any state, git-stack tracking it, a reflog saying I created it from a local
