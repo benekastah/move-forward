@@ -11,7 +11,7 @@ from move_forward import cli
 from move_forward.db import Database
 from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.models import Link
-from move_forward.plugins.notes.repository import NotesRepository
+from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 from move_forward.repositories import PingRepository, ReviewerRepository
 
 TODAY = date(2026, 10, 31)
@@ -133,3 +133,16 @@ def test_mfd_notes_import_then_export(
     )
     assert cli.main(["-c", str(config), "notes", "export", str(out)]) == 1
     assert cli.main(["-c", str(config), "notes", "export", str(out), "--force"]) == 0
+
+
+def test_a_branch_in_two_stacks_on_ice_imports_with_the_first(tmp_path: Path) -> None:
+    db = Database(tmp_path / "d.db")
+    db.migrate("notes", MIGRATIONS)
+    text = ON_ICE + "\n## me/again (~/src/widgets)\n- Branches:\n  - me/top 999\n  - me/new 1\n"
+    ices, _ = markdown.read_on_ice(text, TODAY)
+    NotesRepository(db).replace_all([], ices, [])
+    stored = {
+        i.title: [item.ref_id.partition("\t")[2] for item in i.items]
+        for i in NotesRepository(db).ices()
+    }
+    assert stored["me/bottom"] == ["me/bottom", "me/top"] and stored["me/again"] == ["me/new"]

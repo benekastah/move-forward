@@ -321,8 +321,9 @@ class NotesRepository:
                     "INSERT INTO notes_ice (title, iced_on, note) VALUES (?, ?, ?)",
                     (ice.title, ice.iced_on.isoformat(), ice.note),
                 )
+                # A branch in two stacks stays with the first: something is on ice once.
                 conn.executemany(
-                    "INSERT INTO notes_iced VALUES (?, ?, ?, ?, ?)",
+                    "INSERT OR IGNORE INTO notes_iced VALUES (?, ?, ?, ?, ?)",
                     [
                         (cursor.lastrowid, i, item.kind, item.ref_id, item.sha)
                         for i, item in enumerate(ice.items)
