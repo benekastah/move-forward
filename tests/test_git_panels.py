@@ -10,17 +10,28 @@ from conftest import (
     panel,
     pr,
     snapshot,
+    stored,
     titles,
 )
 
+from move_forward import refresh
 from move_forward.domain import (
     IcedBranch,
     IcedStack,
     StackBranch,
     Worktree,
 )
+from move_forward.registry import enabled
 
 build = dashboard
+
+
+def test_branches_are_published_with_their_checkout() -> None:
+    config, db = stored(local=local_snapshot(branches=[local_branch("me/a", ahead=2)]))
+    graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
+    branch = graph.get("branch", "/src/widgets\tme/a")
+    assert branch is not None
+    assert branch.attrs["repo_dir"] == "/src/widgets" and branch.attrs["ahead"] == 2
 
 
 # Local
