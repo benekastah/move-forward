@@ -43,3 +43,22 @@ def test_get_and_of_kind() -> None:
     assert graph.get("ticket", "APP-1") is not None
     assert graph.get("ticket", "APP-2") is None
     assert _ids(graph.of_kind("pr")) == [PR.id, OTHER_PR.id]
+
+
+def test_two_plugins_entities_for_one_ref_merge_with_the_first_winning() -> None:
+    person = Ref(kind="person", id="alice")
+    graph = Graph(
+        [
+            Entity(ref=person, title="alice", attrs={"email": "a@x", "me": False}),
+            Entity(
+                ref=person,
+                title="Alice",
+                url="https://slack/a",
+                attrs={"slack_id": "U1", "me": True},
+            ),
+        ]
+    )
+    merged = graph.get("person", "alice")
+    assert merged is not None and merged.title == "alice" and merged.url == "https://slack/a"
+    assert merged.attrs == {"email": "a@x", "me": False, "slack_id": "U1"}
+    assert len(graph.of_kind("person")) == 1

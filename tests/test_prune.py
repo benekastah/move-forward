@@ -2,9 +2,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from move_forward_dashboard import notes, prune
-from move_forward_dashboard.config import Config, GitHubConfig, JiraConfig
+from move_forward_dashboard.config import Config
 from move_forward_dashboard.db import CORE, Database
 from move_forward_dashboard.domain import Ping
+from move_forward_dashboard.plugins.github.config import GitHubConfig
+from move_forward_dashboard.plugins.jira.config import JiraConfig
 from move_forward_dashboard.repositories import KvRepository, PingRepository
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
@@ -49,7 +51,6 @@ def _config(tmp_path: Path, jira: bool = True) -> Config:
     return Config(
         email="me@x",
         github=GitHubConfig(org="acme"),
-        repos=[],
         notes_dir=tmp_path,
         jira=JiraConfig(site="https://j") if jira else None,
     )

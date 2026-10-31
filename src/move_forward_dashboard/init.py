@@ -14,6 +14,7 @@ from pathlib import Path
 
 from . import config as config_module
 from .config import Config
+from .plugins.jira.config import DEFAULT_JIRA_KEYCHAIN_SERVICE, DEFAULT_JIRA_TOKEN_ENV
 from .shell import CommandError, run
 
 Prompt = Callable[[str, str], str]
@@ -24,13 +25,9 @@ GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 OPTIONAL_SETTINGS = """\
 # Optional settings, with their defaults. Uncomment to change.
 # notes_dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
-# email_domains = []                     # reviewers' email domains, if not just your email's
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # refresh_seconds = 300                  # background refresh when nobody loads the page
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
-# commit_history_days = 180              # commit history for "paths I work on" and reviewers
-# stale_review_hours = 24                # a review request this old can be nudged
-# ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # prune_days = 90                        # clear work finished this long ago from the notes
 """
 OPTIONAL_GITHUB_SETTINGS = """\
@@ -39,15 +36,19 @@ OPTIONAL_GITHUB_SETTINGS = """\
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners, e.g. "#required"
 # ticket_link_prefix = ""                # PR body line that links the ticket, e.g. "Link"
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
+# email_domains = []                     # reviewers' email domains, if not just your email's
+# stale_review_hours = 24                # a review request this old can be nudged
+# reviewer_history_days = 180            # commit history for reviewer suggestions
+# [github.teams]                         # a team's slug, where it isn't the team's name
+# web = "web-reviewers"
+"""
+OPTIONAL_GIT_SETTINGS = """\
+# ignored_worktree_globs = ["*/.claude/worktrees/*"]
+# commit_history_days = 180              # commit history for "directories I work in"
 """
 OPTIONAL_SLACK_SETTINGS = """\
 # ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 # ping_follow_up = "Gentle bump on this review request"
-"""
-TEAM_COMMENT = """\
-# One [teams.<slug>] table per GitHub team or review group you review for. Optional per team:
-# slack_channel = "#team-a"              # where review pings for the team go
-# jira_team_id = "..."                   # the team's id in Jira's team field (unused yet)
 """
 OPTIONAL_JIRA_SETTINGS = """\
 # token_env = "JIRA_API_TOKEN"            # else the macOS keychain item for your email
@@ -59,6 +60,8 @@ OPTIONAL_JIRA_SETTINGS = """\
 # escalation_levels = []                  # what follows it, lowest first, e.g. ["manager", "director", "vp"]
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
+# [jira.teams]                            # a team's id in Jira's team field (unused yet)
+# core = "12345"
 """
 
 
@@ -116,15 +119,17 @@ def _table(name: str, values: dict[str, object], optional: str = "") -> str:
 def render_config(
     answers: dict[str, object],
     github: dict[str, object],
+    git: dict[str, object],
     slack: dict[str, object] | None,
-    teams: dict[str, dict[str, object]],
+    slack_teams: dict[str, object],
     jira: dict[str, object] | None,
 ) -> str:
-    """The config file: a section per service, with the optional settings as comments."""
+    """The config file: a section per plugin, with the optional settings as comments."""
     lines = ["# move-forward-dashboard configuration. Paths may start with ~.", ""]
     lines += [f"{key} = {_toml_value(value)}" for key, value in answers.items()]
     text = "\n".join(lines) + "\n" + OPTIONAL_SETTINGS
     text += _table("github", github, OPTIONAL_GITHUB_SETTINGS)
+    text += _table("git", git, OPTIONAL_GIT_SETTINGS)
     if slack:
         text += _table("slack", slack, OPTIONAL_SLACK_SETTINGS)
     else:
@@ -132,9 +137,8 @@ def render_config(
             "\n# [slack]                               # uncomment to link review pings\n"
             '# workspace_url = "https://example.slack.com"\n' + OPTIONAL_SLACK_SETTINGS
         )
-    text += "\n" + TEAM_COMMENT
-    for slug, settings in teams.items():
-        text += _table(f"teams.{slug}", settings)
+    if slack_teams:
+        text += _table("slack.teams", slack_teams)
     if jira:
         text += _table("jira", jira, OPTIONAL_JIRA_SETTINGS)
     else:
@@ -263,7 +267,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         guess_teams(org),
         _word("team slug"),
     )
-    teams: dict[str, dict[str, object]] = {}
+    channels: dict[str, object] = {}
     for slug in slugs:
         channel = _ask(
             prompt,
@@ -271,7 +275,8 @@ def interview(prompt: Prompt, cwd: Path) -> str:
             "",
             _channel,
         )
-        teams[slug] = {"slack_channel": channel} if channel else {}
+        if channel:
+            channels[slug] = channel
     repos = _ask_list(
         prompt,
         "Main checkout of each repo you work in, comma-separated; other worktrees are found"
@@ -305,11 +310,12 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         str(config_module.DEFAULT_PORT),
         _port,
     )
-    answers: dict[str, object] = {"email": email, "repos": repos}
+    answers: dict[str, object] = {"email": email, "teams": slugs}
     if notes_dir != str(config_module.DEFAULT_NOTES_DIR):
         answers["notes_dir"] = notes_dir
+    git: dict[str, object] = {"repos": repos}
     if prefixes:
-        answers["my_branch_prefixes"] = prefixes
+        git["my_branch_prefixes"] = prefixes
     if port != str(config_module.DEFAULT_PORT):
         answers["port"] = int(port)
     site = _ask(
@@ -318,8 +324,9 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     text = render_config(
         answers,
         {"org": org},
+        git,
         {"workspace_url": slack} if slack else None,
-        teams,
+        channels,
         {"site": site} if site else None,
     )
     Config.model_validate(tomllib.loads(text))  # a bad answer fails here, before writing
@@ -333,11 +340,11 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
     path.write_text(text)
     next_steps = f"wrote {path}\nrun `mfd serve --open` to start"
     if "\n[jira]\n" in text:
-        service = config_module.DEFAULT_JIRA_KEYCHAIN_SERVICE
+        service = DEFAULT_JIRA_KEYCHAIN_SERVICE
         next_steps += (
             "\n\nFor Jira, create an API token at"
             " https://id.atlassian.com/manage-profile/security/api-tokens, then either"
-            f" export {config_module.DEFAULT_JIRA_TOKEN_ENV} or store it in the keychain:\n"
+            f" export {DEFAULT_JIRA_TOKEN_ENV} or store it in the keychain:\n"
             f"  security add-generic-password -s {service} -a <jira email> -w <token>"
         )
     return next_steps

@@ -1,20 +1,14 @@
 import re
 from urllib.parse import quote
 
-from conftest import ME, NOW, pr, snapshot
+from conftest import ME, NOW, dashboard, pr, snapshot
 
 from move_forward_dashboard import panels, render
 
 
 def _dashboard() -> panels.Dashboard:
-    return panels.build(
-        panels.Inputs(
-            now=NOW,
-            login=ME,
-            my_teams=["core"],
-            github=snapshot(mine=[pr(1, title="Fix <script> & stuff", requested_users=["alice"])]),
-            sources={"github": panels.SourceStatus(fetched_at=NOW, error=None)},
-        )
+    return dashboard(
+        github=snapshot(mine=[pr(1, title="Fix <script> & stuff", requested_users=["alice"])])
     )
 
 
@@ -136,15 +130,10 @@ def test_focus_categories_page_lists_counts_and_links_non_empty_ones() -> None:
 
 
 def test_focus_page_steps_through_items() -> None:
-    dashboard = panels.build(
-        panels.Inputs(
-            now=NOW,
-            login=ME,
-            my_teams=["core"],
-            github=snapshot(mine=[pr(1, requested_users=["alice"]), pr(2, merge_state="DIRTY")]),
-        )
+    built = dashboard(
+        github=snapshot(mine=[pr(1, requested_users=["alice"]), pr(2, merge_state="DIRTY")])
     )
-    first = render.focus_page(dashboard, panels.FOCUS_ALL, 0)
+    first = render.focus_page(built, panels.FOCUS_ALL, 0)
     assert first is not None
     assert "<h2>Merge conflicts</h2>" in first and pr(2).title in first
     assert pr(1).title not in first
@@ -153,16 +142,16 @@ def test_focus_page_steps_through_items() -> None:
     assert "<a class='button secondary next' href='/focus?cat=all&amp;i=1'>" in first
     assert "ArrowLeft" in first and "data-reload" not in first
 
-    last = render.focus_page(dashboard, panels.FOCUS_ALL, 99)  # clamps to the last item
+    last = render.focus_page(built, panels.FOCUS_ALL, 99)  # clamps to the last item
     assert last is not None
     assert "<h2>Nudge reviewers</h2>" in last and "3 of 3" in last
     assert "<a class='button secondary prev' href='/focus?cat=all&amp;i=1'>" in last
     assert "disabled next" in last
     assert "/ping?pr=" + quote(pr(1).url, safe="") in last
 
-    empty = render.focus_page(dashboard, "feedback", 0)
+    empty = render.focus_page(built, "feedback", 0)
     assert empty is not None and "Nothing here" in empty
-    assert render.focus_page(dashboard, "nope", 0) is None
+    assert render.focus_page(built, "nope", 0) is None
 
 
 def test_focus_page_actions_come_back_to_it() -> None:
@@ -194,10 +183,8 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
         todos=[Todo(text="a", size="quick"), Todo(text="b", size="big")],
         text="APP-2",
     )
-    dashboard = panels.build(
-        panels.Inputs(now=NOW, login=ME, my_teams=["core"], work_items=[entry])
-    )
-    html = render.focus_page(dashboard, "todos", 0)
+    built = dashboard(work_items=[entry])
+    html = render.focus_page(built, "todos", 0)
     assert html is not None
     assert (
         "<label class='check'><input type='checkbox' onchange='this.form.requestSubmit()'> Done"
@@ -208,8 +195,8 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
     assert "1 of 2" in html
 
     # `a` was ticked off: it stays on the page, ticked, and Next goes to what is now item 0.
-    done = dashboard.done_todo("APP-2", "a")
-    html = render.focus_page(dashboard, "todos", 0, done=done)
+    done = built.done_todo("APP-2", "a")
+    html = render.focus_page(built, "todos", 0, done=done)
     assert html is not None
     assert "<input type='checkbox' checked onchange" in html and "/actions/todo_undone?" in html
     assert "<span class='badge'>done</span>" in html
@@ -218,7 +205,7 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
     assert "Delete todo" not in html
 
     # Ticking the last item off leaves nothing else, but still shows the done one.
-    empty = panels.build(panels.Inputs(now=NOW, login=ME, my_teams=["core"]))
+    empty = dashboard()
     html = render.focus_page(empty, "todos", 0, done=done)
     assert html is not None and "Nothing here" not in html and "done · 0 to go" in html
     assert "disabled next" in html

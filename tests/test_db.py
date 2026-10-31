@@ -66,3 +66,15 @@ def test_kv_is_namespaced_by_owner() -> None:
     KvRepository(db, "a").set("k", "2")
     assert KvRepository(db, "a").get("k") == "2"
     assert KvRepository(db, "b").get("k") is None
+
+
+def test_snapshots_are_renamed_after_their_plugins(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(V1_SCHEMA)
+    conn.execute("INSERT INTO snapshots VALUES ('local', '2026-10-30', '{}', NULL)")
+    conn.execute("INSERT INTO snapshots VALUES ('derived', '2026-10-30', '{}', NULL)")
+    conn.commit()
+    conn.close()
+    sources = {row["source"] for row in Database(path).query("SELECT source FROM snapshots")}
+    assert sources == {"git", "github.derived"}

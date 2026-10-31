@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from move_forward_dashboard import local
+from move_forward_dashboard.plugins.git import client as local
 from move_forward_dashboard.shell import git
 
 WORKTREES = """\

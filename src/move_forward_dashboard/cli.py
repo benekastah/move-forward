@@ -13,20 +13,16 @@ from .refresh import build_dashboard, refresh
 from .server import serve
 
 EXAMPLE_CONFIG = """\
-# move-forward-dashboard configuration. Paths may start with ~.
+# move-forward-dashboard configuration. Paths may start with ~. A plugin is enabled by its
+# section: leave one out to turn the plugin off.
 
 email = "me@example.com"              # Jira logs in with it; its domain finds reviewers' emails
-repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are found from them
+teams = ["my-team"]                   # the teams I'm on or review for, by name
 # notes_dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
-# email_domains = []                     # reviewers' email domains, if not just your email's
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # port = 8765
 # refresh_seconds = 300                  # background refresh when nobody loads the page
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
-# commit_history_days = 180
-# stale_review_hours = 24
-# ignored_worktree_globs = ["*/.claude/worktrees/*"]
-# my_branch_prefixes = ["me/"]            # else every local branch counts as mine
 # prune_days = 90                         # clear work finished this long ago from the notes
 
 [github]
@@ -36,15 +32,26 @@ org = "example-org"
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners
 # ticket_link_prefix = ""                # PR body line that links the ticket, e.g. "Link"
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
+# email_domains = []                     # reviewers' email domains, if not just your email's
+# stale_review_hours = 24
+# reviewer_history_days = 180
+
+# [github.teams]                        # a team's slug, where it isn't the team's name
+# my-team = "my-team-reviewers"
+
+[git]
+repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are found from them
+# my_branch_prefixes = ["me/"]            # else every local branch counts as mine
+# ignored_worktree_globs = ["*/.claude/worktrees/*"]
+# commit_history_days = 180
 
 [slack]
 workspace_url = "https://example.slack.com"
 # ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 # ping_follow_up = "Gentle bump on this review request"
 
-[teams.my-team]                       # one per GitHub team or review group I review for
-# slack_channel = "#team-my-team"       # where review pings for the team go
-# jira_team_id = "..."                  # the team's id in Jira's team field (unused yet)
+[slack.teams]                         # where review pings to a team go
+my-team = "#team-my-team"
 
 # [jira]
 # site = "https://example.atlassian.net"

@@ -81,7 +81,13 @@ CREATE TABLE layout (
 );
 """
 
-CORE_MIGRATIONS = [V1_SCHEMA, _V2_KV_AND_LAYOUT]
+_V3_PLUGIN_SOURCES = """
+UPDATE snapshots SET source = 'git' WHERE source = 'local';
+UPDATE snapshots SET source = 'github.derived' WHERE source = 'derived';
+"""
+"""Snapshots are named after the plugin that stores them."""
+
+CORE_MIGRATIONS = [V1_SCHEMA, _V2_KV_AND_LAYOUT, _V3_PLUGIN_SOURCES]
 
 _SCHEMA_VERSIONS = """
 CREATE TABLE IF NOT EXISTS schema_versions (

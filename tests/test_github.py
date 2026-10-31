@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from move_forward_dashboard import github
+from move_forward_dashboard.plugins.github import client as github
 
 RAW_PR: dict[str, object] = {
     "number": 7,

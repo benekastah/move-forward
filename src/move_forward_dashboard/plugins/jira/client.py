@@ -8,9 +8,9 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ...domain import JiraIssue, JiraSnapshot
+from ...shell import CommandError, run
 from .config import JiraConfig
-from .domain import JiraIssue, JiraSnapshot
-from .shell import CommandError, run
 
 SEARCH_PATH = "/rest/api/3/search/jql"
 PAGE_SIZE = 100

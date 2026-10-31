@@ -3,12 +3,13 @@
 Core and every plugin build these; `render` turns them into HTML.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import Field
 
 from .domain import Model
+from .graph import Ref
 
 PrState = Literal["open", "merged", "closed"]
 
@@ -53,6 +54,8 @@ class Item(Model):
     draft: bool = False
     """A draft PR; drafts sort after everything else whatever their rank."""
     actions: list[Action] = Field(default_factory=list)
+    subject: Ref | None = None
+    """The entity the item is about, e.g. a PR; other plugins add their buttons by it."""
     parts: list["Item"] = Field(default_factory=list)
     """Pieces focus mode shows one at a time instead of this item, e.g. a work item's todos.
 
@@ -81,3 +84,17 @@ class Group(Model):
     panel_keys: list[str]
     open: bool = False
     """Expanded when the page loads; the rest start collapsed."""
+
+
+def age(now: datetime, then: datetime | None) -> str:
+    """How long ago `then` was, as "5m", "3h" or "2d"; "?" when unknown."""
+    if then is None:
+        return "?"
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=UTC)
+    seconds = (now - then).total_seconds()
+    if seconds < 3600:
+        return f"{int(seconds // 60)}m"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)}h"
+    return f"{int(seconds // 86400)}d"

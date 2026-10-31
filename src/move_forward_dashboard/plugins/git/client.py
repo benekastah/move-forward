@@ -9,8 +9,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from .domain import Branch, LocalRepo, LocalSnapshot, StackBranch, Worktree
-from .shell import CommandError, git
+from ...domain import Branch, LocalRepo, LocalSnapshot, StackBranch, Worktree
+from ...shell import CommandError, git
 
 _GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
 _TRACK_RE = re.compile(r"ahead (\d+)|behind (\d+)|(gone)")

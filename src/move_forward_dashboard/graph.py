@@ -40,6 +40,19 @@ def _no_url(kind: str, id: str) -> str | None:
     return None
 
 
+def _merge(first: Entity, second: Entity) -> Entity:
+    """One entity from two plugins' views of it, e.g. a person GitHub and Slack both know.
+    The first plugin's fields win; refs and attributes are combined."""
+    return first.model_copy(
+        update={
+            "url": first.url or second.url,
+            "state": first.state or second.state,
+            "refs": [*first.refs, *(r for r in second.refs if r not in first.refs)],
+            "attrs": {**second.attrs, **first.attrs},
+        }
+    )
+
+
 class Graph:
     """Every enabled plugin's entities, indexed by ref and by the refs pointing at them."""
 
@@ -48,13 +61,15 @@ class Graph:
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
         self._url_for = url_for
+        merged: dict[Ref, Entity] = {}
         for entity in entities:
-            if entity.ref in self._by_ref:
-                raise ValueError(f"two entities for {entity.ref.kind} {entity.ref.id}")
-            self._by_ref[entity.ref] = entity
-            self._by_kind[entity.ref.kind].append(entity)
-            for ref in entity.refs:
-                self._pointing_at[ref].append(entity)
+            first = merged.get(entity.ref)
+            merged[entity.ref] = _merge(first, entity) if first else entity
+        for ref, entity in merged.items():
+            self._by_ref[ref] = entity
+            self._by_kind[ref.kind].append(entity)
+            for target in entity.refs:
+                self._pointing_at[target].append(entity)
 
     def get(self, kind: str, id: str) -> Entity | None:
         return self._by_ref.get(Ref(kind=kind, id=id))

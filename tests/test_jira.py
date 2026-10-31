@@ -2,9 +2,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from move_forward_dashboard import jira
-from move_forward_dashboard.config import JiraConfig
 from move_forward_dashboard.domain import JiraIssue
+from move_forward_dashboard.plugins.jira import client as jira
+from move_forward_dashboard.plugins.jira.config import JiraConfig
 
 RAW: dict[str, object] = {
     "key": "APP-1",

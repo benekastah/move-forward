@@ -10,12 +10,13 @@ import re
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 
-from . import github, jira
 from .actions import entry_bounds, left_to_do
 from .config import Config
 from .db import CORE, Database
 from .notes import WORK_NOTES_FILE
 from .panels import JIRA_KEY_RE, PR_URL_RE
+from .plugins.github import client as github
+from .plugins.jira import client as jira
 from .repositories import KvRepository, PingRepository
 
 log = logging.getLogger(__name__)

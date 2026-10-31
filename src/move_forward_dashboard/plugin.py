@@ -8,6 +8,8 @@ what it uses.
 """
 
 import argparse
+import logging
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -15,11 +17,13 @@ from typing import Any, ClassVar, Protocol
 
 from pydantic import BaseModel
 
-from .config import TeamConfig
+from . import shell
 from .db import Database
 from .graph import Entity, Graph
 from .page import Action, Item, Panel
-from .repositories import KvRepository
+from .repositories import KvRepository, SnapshotRepository
+
+log = logging.getLogger(__name__)
 
 Check = Callable[[str], str]
 """Validates an answer: returns it (possibly normalised) or raises ValueError with the reason."""
@@ -40,8 +44,9 @@ class Context[C: BaseModel]:
     """The plugin's `[name]` section."""
     email: str
     """My work email."""
-    teams: dict[str, TeamConfig]
-    """The teams I review for, by slug; `[teams.<slug>]`."""
+    teams: list[str]
+    """The names of the teams I'm on or review for; the plugin maps them to its tool's own
+    names in its section's `teams` table."""
     prune_days: int
     """Work finished this long ago is cleared by `prune`."""
     now: datetime
@@ -53,9 +58,13 @@ class Context[C: BaseModel]:
 
 PageHandler = Callable[[Context[Any], Graph, dict[str, list[str]]], str | None]
 """Renders a page from the query parameters; None means not found."""
-ActionHandler = Callable[[Context[Any], dict[str, str]], str]
+ActionHandler = Callable[[Context[Any], Graph, dict[str, str]], str]
 """Runs a button's action with its form fields; returns the notice for the page and raises
-`actions.ActionError` with the reason when it can't."""
+`ActionError` with the reason when it can't."""
+
+
+class ActionError(Exception):
+    """Something the user needs to know; shown on the page, not a crash."""
 
 
 class Plugin[C: BaseModel, S: BaseModel]:
@@ -132,3 +141,22 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns
         what was done, one line each."""
         return []
+
+
+def collect_into[T: BaseModel](
+    db: Database, source: str, now: datetime, collector: Callable[[], T]
+) -> T | None:
+    """Run a collector and store its result as the `source` snapshot, or its error next to
+    the last good result. Returns the result, or None if it failed."""
+    snapshots = SnapshotRepository(db)
+    try:
+        result = collector()
+    except Exception as e:  # noqa: BLE001 - one failing source must not stop the others
+        if shell.stopping():
+            return None  # ctrl-c interrupted the commands; nothing to record
+        log.warning("%s failed: %s", source, e)
+        log.debug("%s", traceback.format_exc())
+        snapshots.save_error(source, now, f"{type(e).__name__}: {e}")
+        return None
+    snapshots.save(source, now, result)
+    return result

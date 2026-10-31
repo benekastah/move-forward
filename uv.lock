@@ -42,7 +42,7 @@ wheels = [
 ]
 
 [[package]]
-name = "move-forward-dashboard"
+name = "move-forward"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

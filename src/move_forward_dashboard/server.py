@@ -16,7 +16,8 @@ from . import actions, render, shell
 from .config import Config
 from .db import Database
 from .domain import Ping
-from .refresh import build_dashboard, refresh
+from .plugin import ActionError
+from .refresh import build_dashboard, refresh, run_action
 from .repositories import PingRepository
 
 log = logging.getLogger(__name__)
@@ -100,8 +101,11 @@ class App:
         Returns the notice for the page and whether the action succeeded.
         """
         try:
-            notice = actions.run(name, self.config, fields)
-        except actions.ActionError as e:
+            if "/" in name:
+                notice = run_action(self.config, self.db, name, fields)
+            else:
+                notice = actions.run(name, self.config, fields)
+        except ActionError as e:
             return f"failed: {e}", False
         self.request_refresh()
         return notice, True

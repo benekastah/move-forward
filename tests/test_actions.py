@@ -3,8 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from move_forward_dashboard import actions, notes
-from move_forward_dashboard.config import Config, GitHubConfig, JiraConfig, TeamConfig
+from move_forward_dashboard import actions, notes, refresh
+from move_forward_dashboard.config import Config
+from move_forward_dashboard.db import Database
+from move_forward_dashboard.plugins.git.config import GitConfig
+from move_forward_dashboard.plugins.github.config import GitHubConfig
+from move_forward_dashboard.plugins.jira.config import JiraConfig
+from move_forward_dashboard.repositories import NotesImportRepository
 from move_forward_dashboard.shell import git
 
 
@@ -48,14 +53,23 @@ def config(repo: Path, tmp_path: Path) -> Config:
     return Config(
         email="me@acme.com",
         github=GitHubConfig(org="acme"),
-        teams={"core": TeamConfig()},
-        repos=[repo],
+        teams=["core"],
+        git=GitConfig(repos=[repo]),
         notes_dir=tmp_path / "notes",
     )
 
 
+def run(name: str, config: Config, fields: dict[str, str]) -> str:
+    """Run an action as the server does: a plugin's over the notes as imported, else a legacy one."""
+    if "/" not in name:
+        return actions.run(name, config, fields)
+    db = Database(":memory:")
+    NotesImportRepository(db).replace(notes.load(config.notes_dir))
+    return refresh.run_action(config, db, name, fields)
+
+
 def test_delete_branch(config: Config, repo: Path) -> None:
-    assert actions.run("delete_branch", config, {"repo": str(repo), "branch": "done"}).startswith(
+    assert run("git/delete_branch", config, {"repo": str(repo), "branch": "done"}).startswith(
         "deleted done"
     )
     assert "done" not in git(repo, "branch", "--list", "done")
@@ -63,43 +77,43 @@ def test_delete_branch(config: Config, repo: Path) -> None:
 
 def test_delete_refuses_checked_out_missing_and_unknown_repo(config: Config, repo: Path) -> None:
     with pytest.raises(actions.ActionError, match="checked out"):
-        actions.run("delete_branch", config, {"repo": str(repo), "branch": "main"})
+        run("git/delete_branch", config, {"repo": str(repo), "branch": "main"})
     with pytest.raises(actions.ActionError, match="doesn't exist"):
-        actions.run("delete_branch", config, {"repo": str(repo), "branch": "nope"})
+        run("git/delete_branch", config, {"repo": str(repo), "branch": "nope"})
     with pytest.raises(actions.ActionError, match="not a configured repo"):
-        actions.run("delete_branch", config, {"repo": "/elsewhere", "branch": "done"})
+        run("git/delete_branch", config, {"repo": "/elsewhere", "branch": "done"})
     with pytest.raises(actions.ActionError, match="missing field"):
-        actions.run("delete_branch", config, {"repo": str(repo)})
+        run("git/delete_branch", config, {"repo": str(repo)})
     with pytest.raises(actions.ActionError, match="unknown action"):
-        actions.run("rm_rf", config, {})
+        run("git/rm_rf", config, {})
 
 
 def test_delete_branches_continues_past_failures(config: Config, repo: Path) -> None:
     targets = "\n".join([f"{repo}\tdone", f"{repo}\tmain", f"{repo}\tnope", "", "/elsewhere\tx"])
-    notice = actions.run("delete_branches", config, {"targets": targets})
+    notice = run("git/delete_branches", config, {"targets": targets})
     assert notice.startswith("deleted 1 branches; failed: main: ")
     assert "nope: " in notice and "x: " in notice
     assert git(repo, "branch", "--list", "done") == ""
 
 
 def test_push_sets_upstream_then_pushes_plainly(config: Config, repo: Path) -> None:
-    assert actions.run("push_branch", config, {"repo": str(repo), "branch": "wip"}) == "pushed wip"
+    assert run("git/push_branch", config, {"repo": str(repo), "branch": "wip"}) == "pushed wip"
     assert git(repo, "rev-parse", "--abbrev-ref", "wip@{upstream}").strip() == "origin/wip"
     git(repo, "switch", "-q", "wip")
     _commit(repo, "c.txt")
-    actions.run("push_branch", config, {"repo": str(repo), "branch": "wip"})
+    run("git/push_branch", config, {"repo": str(repo), "branch": "wip"})
     assert git(repo, "rev-parse", "wip") == git(repo, "rev-parse", "origin/wip")
 
 
 def test_wip_commit_takes_tracked_files_only(config: Config, repo: Path) -> None:
     (repo / "a.txt").write_text("changed")
     (repo / "new.txt").write_text("untracked")
-    notice = actions.run("wip_commit", config, {"repo": str(repo), "worktree": str(repo)})
+    notice = run("git/wip_commit", config, {"repo": str(repo), "worktree": str(repo)})
     assert notice.startswith("committed 1 files as WIP")
     assert git(repo, "log", "-1", "--format=%s").strip() == "WIP"
     assert git(repo, "status", "--porcelain").strip() == "?? new.txt"
     with pytest.raises(actions.ActionError, match="no modified"):
-        actions.run("wip_commit", config, {"repo": str(repo), "worktree": str(repo)})
+        run("git/wip_commit", config, {"repo": str(repo), "worktree": str(repo)})
 
 
 def test_ice_appends_an_entry_the_notes_parser_reads_and_thaw_removes_it(
@@ -122,25 +136,25 @@ def test_ice_appends_an_entry_the_notes_parser_reads_and_thaw_removes_it(
     with pytest.raises(actions.ActionError, match="already on ice"):
         actions.ice(config, {"repo": str(repo), "branch": "wip"})
 
-    assert actions.run("thaw", config, {"branch": "wip"}) == "thawed wip"
+    assert run("thaw", config, {"branch": "wip"}) == "thawed wip"
     text = (config.notes_dir / notes.ON_ICE_FILE).read_text()
     assert [s.bottom_branch for s in notes.parse_on_ice(text)] == ["other"]
     assert "Last asked: 2026-10-30" in text
     with pytest.raises(actions.ActionError, match="not on ice"):
-        actions.run("thaw", config, {"branch": "wip"})
+        run("thaw", config, {"branch": "wip"})
 
 
 def test_delete_iced_removes_branches_and_the_entry(config: Config, repo: Path) -> None:
     config.notes_dir.mkdir()
     actions.ice(config, {"repo": str(repo), "branch": "wip"})
     actions.ice(config, {"repo": str(repo), "branch": "done"})
-    notice = actions.run("delete_iced", config, {"branch": "wip"})
+    notice = run("delete_iced", config, {"branch": "wip"})
     assert notice == "deleted 1 branches of wip and took it off ice"
     assert git(repo, "branch", "--list", "wip") == ""
     text = (config.notes_dir / notes.ON_ICE_FILE).read_text()
     assert [s.bottom_branch for s in notes.parse_on_ice(text)] == ["done"]
     with pytest.raises(actions.ActionError, match="not on ice"):
-        actions.run("delete_iced", config, {"branch": "wip"})
+        run("delete_iced", config, {"branch": "wip"})
 
 
 def test_delete_iced_refuses_a_checked_out_branch_before_deleting_anything(
@@ -150,7 +164,7 @@ def test_delete_iced_refuses_a_checked_out_branch_before_deleting_anything(
     git(repo, "switch", "-q", "wip")
     actions.ice(config, {"repo": str(repo), "branch": "wip"})
     with pytest.raises(actions.ActionError, match="checked out"):
-        actions.run("delete_iced", config, {"branch": "wip"})
+        run("delete_iced", config, {"branch": "wip"})
     assert notes.parse_on_ice((config.notes_dir / notes.ON_ICE_FILE).read_text())
 
 
@@ -158,9 +172,9 @@ def test_stack_clean_refuses_a_repo_with_iced_stacks(config: Config, repo: Path)
     config.notes_dir.mkdir()
     actions.ice(config, {"repo": str(repo), "branch": "done"})
     with pytest.raises(actions.ActionError, match="iced stacks \\(done\\)"):
-        actions.run("stack_clean", config, {"repo": str(repo)})
+        run("git/stack_clean", config, {"repo": str(repo)})
     with pytest.raises(actions.ActionError, match="not a configured repo"):
-        actions.run("stack_clean", config, {"repo": "/elsewhere"})
+        run("git/stack_clean", config, {"repo": "/elsewhere"})
 
 
 def test_ice_creates_the_file_when_missing(config: Config, repo: Path) -> None:
@@ -257,9 +271,7 @@ def test_todo_done_on_the_last_todo_and_undone_recreates_left_to_do(
 
 
 def test_todo_delete_and_errors(config: Config, work_notes: Path) -> None:
-    notice = actions.run(
-        "todo_delete", config, {"entry": "APP-1 Fix the widget", "text": "no size here"}
-    )
+    notice = run("todo_delete", config, {"entry": "APP-1 Fix the widget", "text": "no size here"})
     assert notice == "dropped: no size here"
     assert _todos(work_notes, "APP-1 Fix the widget") == [
         "[quick] reply to the thread",
@@ -267,14 +279,12 @@ def test_todo_delete_and_errors(config: Config, work_notes: Path) -> None:
     ]
     assert "no size here" not in work_notes.read_text()
     with pytest.raises(actions.ActionError, match="no open todo"):
-        actions.run(
-            "todo_delete", config, {"entry": "APP-1 Fix the widget", "text": "no size here"}
-        )
+        run("todo_delete", config, {"entry": "APP-1 Fix the widget", "text": "no size here"})
     with pytest.raises(actions.ActionError, match="no work-notes entry"):
-        actions.run("todo_done", config, {"entry": "APP-9", "text": "x"})
+        run("todo_done", config, {"entry": "APP-9", "text": "x"})
     # Text is matched literally, so regex characters in a todo are fine.
     work_notes.write_text(work_notes.read_text().replace("get it merged", "fix a.b (c) [d]"))
-    actions.run("todo_done", config, {"entry": "APP-1 Fix the widget", "text": "fix a.b (c) [d]"})
+    run("todo_done", config, {"entry": "APP-1 Fix the widget", "text": "fix a.b (c) [d]"})
     assert _todos(work_notes, "APP-1 Fix the widget") == ["[quick] reply to the thread"]
 
 
@@ -288,7 +298,7 @@ def test_redirect_params_keep_a_ticked_todo_on_the_page() -> None:
 def test_todo_link_appends_a_jira_or_pr_url(config: Config, work_notes: Path) -> None:
     fields = {"entry": "APP-1 Fix the widget", "text": "get it merged", "input": " APP-9 "}
     with pytest.raises(actions.ActionError, match="no \\[jira\\] site"):
-        actions.run("todo_link", config, fields)
+        run("todo_link", config, fields)
     config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
     assert (
         actions.todo_link(config, fields, today=date(2026, 10, 31))
@@ -316,17 +326,17 @@ def test_todo_add_appends_under_left_to_do_or_creates_it(config: Config, work_no
     assert (
         actions.todo_add(config, {"entry": entry, "input": " write docs "}) == "added: write docs"
     )
-    assert actions.run("todo_add", config, {"entry": entry, "text": "ship it", "size": "quick"})
+    assert run("todo_add", config, {"entry": entry, "text": "ship it", "size": "quick"})
     assert _todos(work_notes, entry)[-2:] == ["[None] write docs", "[quick] ship it"]
     work_notes.write_text(
         work_notes.read_text().replace("- Left to do:\n  - [quick] only one\n", "")
     )
-    actions.run("todo_add", config, {"entry": "APP-2 Other", "text": "fresh", "size": "big"})
+    run("todo_add", config, {"entry": "APP-2 Other", "text": "fresh", "size": "big"})
     assert _todos(work_notes, "APP-2 Other") == ["[big] fresh"]
     with pytest.raises(actions.ActionError, match="empty"):
-        actions.run("todo_add", config, {"entry": entry, "input": "  "})
+        run("todo_add", config, {"entry": entry, "input": "  "})
     with pytest.raises(actions.ActionError, match="size must be"):
-        actions.run("todo_add", config, {"entry": entry, "text": "x", "size": "huge"})
+        run("todo_add", config, {"entry": entry, "text": "x", "size": "huge"})
 
 
 def test_todo_add_can_create_the_entry(config: Config, work_notes: Path) -> None:
@@ -337,7 +347,7 @@ def test_todo_add_can_create_the_entry(config: Config, work_notes: Path) -> None
         "where": "https://github.com/acme/widgets/pull/9",
     }
     with pytest.raises(actions.ActionError, match="no work-notes entry"):
-        actions.run("todo_add", config, {k: v for k, v in fields.items() if k != "create"})
+        run("todo_add", config, {k: v for k, v in fields.items() if k != "create"})
     assert actions.todo_add(config, fields, today=date(2026, 10, 31)) == "added: start"
     assert work_notes.read_text().endswith(
         "\n## APP-7 New thing\n- Status: inferred\n- Where: https://github.com/acme/widgets/pull/9\n"

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from move_forward_dashboard import codeowners
+from move_forward_dashboard.plugins.github import codeowners
 
 FILE = """\
 # comment

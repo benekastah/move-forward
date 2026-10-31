@@ -1,8 +1,8 @@
-"""The actions the page's buttons run: branch cleanup, pushes, WIP commits, icing and thawing.
+"""The actions of the panels that aren't a plugin's yet: todos, icing and thawing.
 
 Every action takes the form fields of its button, checks them against the config (a repo must
-be one of the configured checkouts) and returns a one-line notice for the page. Nothing here
-ever forces a push, resets, or stashes.
+be one of the configured checkouts) and returns a one-line notice for the page. Plugins' actions
+are in their packages and posted to `/actions/<plugin>/<action>`.
 """
 
 import contextlib
@@ -11,105 +11,20 @@ from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
-from . import local
 from .config import Config
 from .domain import IcedStack
 from .notes import ON_ICE_FILE, WORK_NOTES_FILE, parse_on_ice
+from .plugin import ActionError
+from .plugins.git.actions import branch_exists, checked_out_in, repo_path
 from .shell import CommandError, git
 
-STACK_CLEAN_TIMEOUT_SECONDS = 600
-"""`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
-TARGET_SEPARATOR = "\t"
-"""Joins a repo dir and a branch in the `targets` field of a bulk action, one per line."""
-WIP_MESSAGE = "WIP"
 ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
 
 
-class ActionError(Exception):
-    """Something the user needs to know; shown on the page, not a crash."""
-
-
 def _repo(config: Config, repo_dir: str) -> Path:
-    path = Path(repo_dir)
-    if path not in config.repos:
-        raise ActionError(f"{repo_dir} is not a configured repo")
-    return path
-
-
-def _branch_exists(repo: Path, branch: str) -> bool:
-    try:
-        git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
-    except CommandError:
-        return False
-    return True
-
-
-def _checked_out_in(repo: Path, branch: str) -> str | None:
-    for path, checked_out in local.parse_worktrees(git(repo, "worktree", "list", "--porcelain")):
-        if checked_out == branch:
-            return path
-    return None
-
-
-def delete_branch(config: Config, fields: dict[str, str]) -> str:
-    repo = _repo(config, fields["repo"])
-    branch = fields["branch"]
-    if not _branch_exists(repo, branch):
-        raise ActionError(f"{branch} doesn't exist in {repo}")
-    if worktree := _checked_out_in(repo, branch):
-        raise ActionError(f"{branch} is checked out in {worktree}; switch it away first")
-    git(repo, "branch", "-D", branch)
-    return f"deleted {branch} in {repo}"
-
-
-def delete_branches(config: Config, fields: dict[str, str]) -> str:
-    """Delete every `<repo>\\t<branch>` line of `targets`; one failure doesn't stop the rest."""
-    done: list[str] = []
-    failed: list[str] = []
-    for line in fields.get("targets", "").splitlines():
-        repo_dir, _, branch = line.partition(TARGET_SEPARATOR)
-        if not branch:
-            continue
-        try:
-            delete_branch(config, {"repo": repo_dir, "branch": branch})
-            done.append(branch)
-        except (ActionError, CommandError) as e:
-            failed.append(f"{branch}: {e}")
-    notice = f"deleted {len(done)} branches"
-    if failed:
-        notice += "; failed: " + "; ".join(failed)
-    return notice
-
-
-def push_branch(config: Config, fields: dict[str, str]) -> str:
-    """Push a branch, setting its upstream if it has none. Never forces."""
-    repo = _repo(config, fields["repo"])
-    branch = fields["branch"]
-    if not _branch_exists(repo, branch):
-        raise ActionError(f"{branch} doesn't exist in {repo}")
-    try:
-        git(repo, "rev-parse", "--verify", "--quiet", f"{branch}@{{upstream}}")
-        has_upstream = True
-    except CommandError:
-        has_upstream = False
-    if has_upstream:
-        git(repo, "push", "origin", f"{branch}:{branch}")
-    else:
-        git(repo, "push", "--set-upstream", "origin", branch)
-    return f"pushed {branch}"
-
-
-def wip_commit(config: Config, fields: dict[str, str]) -> str:
-    """Commit the modified tracked files of a worktree as "WIP". Untracked files are left."""
-    _repo(config, fields["repo"])
-    worktree = Path(fields["worktree"])
-    if not (worktree / ".git").exists():
-        raise ActionError(f"{worktree} is not a worktree")
-    modified, _ = local.parse_status(git(worktree, "status", "--porcelain"))
-    if not modified:
-        raise ActionError(f"{worktree} has no modified tracked files")
-    git(worktree, "commit", "--all", "--quiet", "-m", WIP_MESSAGE)
-    return f"committed {modified} files as {WIP_MESSAGE} in {worktree}"
+    if config.git is None:
+        raise ActionError("no [git] section, so no repos to act on")
+    return repo_path(config.git, repo_dir)
 
 
 def _tilde(path: Path) -> str:
@@ -130,7 +45,7 @@ def ice(config: Config, fields: dict[str, str], today: date | None = None) -> st
     """Append the branch's stack to on-ice.md, as the move-forward skill records it."""
     repo = _repo(config, fields["repo"])
     branch = fields["branch"]
-    if not _branch_exists(repo, branch):
+    if not branch_exists(repo, branch):
         raise ActionError(f"{branch} doesn't exist in {repo}")
     path = config.notes_dir / ON_ICE_FILE
     text = path.read_text() if path.exists() else "# Stacks on ice\n"
@@ -155,21 +70,6 @@ def _iced_stacks(config: Config) -> list[IcedStack]:
     return parse_on_ice(path.read_text()) if path.exists() else []
 
 
-def stack_clean(config: Config, fields: dict[str, str]) -> str:
-    """`git stack clean -d local`: untrack merged branches in every stack and delete them.
-
-    Refused while the repo has iced stacks, since clean touches every stack (the skill's rule).
-    """
-    repo = _repo(config, fields["repo"])
-    iced = [s for s in _iced_stacks(config) if Path(s.repo_dir).expanduser() == repo]
-    if iced:
-        names = ", ".join(s.bottom_branch for s in iced)
-        raise ActionError(f"{repo} has iced stacks ({names}); clean per stack instead")
-    out = git(repo, "stack", "clean", "-d", "local", timeout=STACK_CLEAN_TIMEOUT_SECONDS)
-    deleted = sum(1 for line in out.splitlines() if "deleted" in line.lower())
-    return f"ran git stack clean -d local in {repo}" + (f", {deleted} deleted" if deleted else "")
-
-
 def delete_iced(config: Config, fields: dict[str, str]) -> str:
     """Delete an iced stack's local branches and drop it from on-ice.md.
 
@@ -182,9 +82,9 @@ def delete_iced(config: Config, fields: dict[str, str]) -> str:
         raise ActionError(f"{bottom} is not on ice")
     repo = _repo(config, str(Path(stack.repo_dir).expanduser()))
     names = [b.name for b in stack.branches]
-    existing = [name for name in names if _branch_exists(repo, name)]
+    existing = [name for name in names if branch_exists(repo, name)]
     for name in existing:
-        if worktree := _checked_out_in(repo, name):
+        if worktree := checked_out_in(repo, name):
             raise ActionError(f"{name} is checked out in {worktree}; switch it away first")
     if existing:
         # Not tracked by git-stack, or git-stack isn't installed: nothing to untrack.
@@ -421,13 +321,8 @@ ACTIONS: dict[str, Callable[[Config, dict[str, str]], str]] = {
     "todo_delete": todo_delete,
     "todo_link": todo_link,
     "todo_add": todo_add,
-    "delete_branch": delete_branch,
-    "delete_branches": delete_branches,
-    "push_branch": push_branch,
-    "wip_commit": wip_commit,
     "ice": ice,
     "thaw": thaw,
-    "stack_clean": stack_clean,
     "delete_iced": delete_iced,
 }
 

@@ -618,3 +618,19 @@ Each step is its own commit (or a few), with `./check.sh` green and the page wor
   entry-level note, and `export` lets you compare before deleting the files.
 - **The skill and the dashboard drift.** The CLI's JSON output is the contract; the
   skill change lands in the same week as step 5.
+
+## Follow-ups
+
+Raised while building, not yet scheduled:
+
+- **Which branches are mine.** `my_branch_prefixes` is a hint, not the test. Stronger
+  signals, for the git plugin: my commits ahead of the default branch (`git rev-list
+  --count --author=<my emails> origin/<default>..<branch>`, limited to recently active
+  branches), a PR of mine from the branch in any state (open, draft, merged, closed),
+  git-stack tracking it, a reflog that says I created it from a local branch, and being
+  checked out in one of my worktrees. All commits ahead by others and no PR of mine is a
+  review checkout: not mine, whatever its prefix.
+- **Host-qualified repo ids.** `repo` ids are GitHub `owner/name`, from a GitHub-only
+  remote regex. A second code host (Bitbucket, GitLab) needs ids like
+  `github.com/acme/widgets` so they can't collide, and `git` parsing any host. A shared
+  base for code-host plugins (PR panels over a normalized PR) can wait for that second host.

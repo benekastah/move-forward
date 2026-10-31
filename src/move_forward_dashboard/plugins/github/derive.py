@@ -1,21 +1,33 @@
-"""Derived data that needs several sources: CODEOWNERS scores and reviewer suggestions."""
+"""Derived data that needs local checkouts: CODEOWNERS scores and reviewer suggestions."""
 
 from collections import Counter
 from pathlib import Path
 
-from . import codeowners
-from .domain import (
+from pydantic import Field
+
+from ...domain import (
     DerivedSnapshot,
     GitHubSnapshot,
-    LocalRepo,
-    LocalSnapshot,
+    Model,
     ReviewerSuggestion,
     ReviewerUser,
     TeamPrScore,
 )
-from .shell import CommandError, git
+from ...shell import CommandError, git
+from . import codeowners
 
 MAX_SUGGESTIONS = 5
+
+
+class Checkout(Model):
+    """A local checkout of a GitHub repo, from the graph's `repo` entities."""
+
+    github_repo: str
+    """owner/name."""
+    dir: str
+    default_branch: str
+    my_dirs: list[str] = Field(default_factory=list)
+    """Directories I committed to recently."""
 
 
 def _in_my_dirs(path: str, my_dirs: list[str]) -> bool:
@@ -45,7 +57,7 @@ def team_score(
 
 
 def suggest_reviewers(
-    repo: LocalRepo,
+    repo: Checkout,
     files: list[str],
     since_days: int,
     users: dict[str, ReviewerUser],
@@ -83,14 +95,15 @@ def suggest_reviewers(
 
 def collect(
     github: GitHubSnapshot,
-    local: LocalSnapshot,
+    checkouts: list[Checkout],
     users: dict[str, ReviewerUser],
     org: str,
     teams: list[str],
     commit_history_days: int,
     required_owner_marker: str = "",
 ) -> DerivedSnapshot:
-    repos = {r.github_repo: r for r in local.repos if r.github_repo}
+    """`teams` are slugs, as PRs' requested teams have them."""
+    repos = {r.github_repo: r for r in checkouts}
     owners = {
         name: codeowners.load(Path(r.dir), required_owner_marker) for name, r in repos.items()
     }
