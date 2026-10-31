@@ -165,8 +165,10 @@ site = "https://acme.atlassian.net"
 
 The top-level model holds the core fields plus one optional field per built-in plugin, each
 typed with that plugin's `config_model`, so unknown keys are still errors and basedpyright
-still checks everything. `mfd init` asks the core questions, then for each plugin "Use
-GitHub? (y/n)" and that plugin's `init_questions`.
+still checks everything. `mfd init` asks the core questions, then which plugins to set up,
+as one list answer checked against the registry ("Plugins to set up (github, git, jira,
+slack)", defaulting to all of them; `notes` is always on and not offered), then each chosen
+plugin's `init_questions`. Plugins left out get no section, so they stay disabled.
 
 ### Worktrees
 
@@ -587,7 +589,7 @@ Each step is its own commit (or a few), with `./check.sh` green and the page wor
    table; focus mode follows the layout and gets an Act now category.
 7. **Worktrees**: fold a listed worktree into its main checkout; accept any worktree in
    actions.
-8. **Init and docs**: per-plugin init questions, README sections per plugin,
+8. **Init and docs**: choosing plugins in `mfd init`, per-plugin init questions, README sections per plugin,
    `docs/entities.md`, `docs/writing-a-plugin.md`.
 
 ## Risks
