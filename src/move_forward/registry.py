@@ -66,14 +66,21 @@ def unmet_requirements(config: "Config") -> list[str]:
     ]
 
 
+def migrate(config: "Config", db: Database) -> None:
+    """Apply the enabled plugins' migrations. Once, when `mfd` opens the database."""
+    for plugin in PLUGINS:
+        if getattr(config, plugin.name) is not None:
+            db.migrate(plugin.name, plugin.migrations)
+
+
 def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
-    """The plugins with a config section, their migrations applied."""
+    """The plugins with a config section, with their contexts. Their tables are there once
+    `migrate` has run."""
     result: list[Enabled] = []
     for plugin in PLUGINS:
         section: BaseModel | None = getattr(config, plugin.name)
         if section is None:
             continue
-        db.migrate(plugin.name, plugin.migrations)
         ctx = Context(
             config=section,
             email=config.email,

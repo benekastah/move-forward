@@ -108,3 +108,29 @@ def test_the_jira_site_must_be_https(tmp_path: Path) -> None:
     for site in ("http://j.atlassian.net", "j.atlassian.net"):
         with pytest.raises(ValidationError, match="must be an https:// URL"):
             _load(tmp_path, MINIMAL + f'\n[jira]\nsite = "{site}"\n')
+
+
+class _JiraWithTable(JiraPlugin):
+    migrations: ClassVar[list[str]] = ["CREATE TABLE jira_seen (key TEXT PRIMARY KEY);"]
+
+
+def test_plugin_migrations_run_when_migrated_not_on_every_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plugins = [_JiraWithTable() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    loaded = _load(tmp_path, MINIMAL + '\n[jira]\nsite = "https://j"\n')
+    db = Database(":memory:")
+    calls: list[str] = []
+    real_migrate = db.migrate
+
+    def counting(owner: str, migrations: list[str]) -> int:
+        calls.append(owner)
+        return real_migrate(owner, migrations)
+
+    monkeypatch.setattr(db, "migrate", counting)
+    enabled(loaded, db, NOW)
+    assert calls == []
+    registry.migrate(loaded, db)
+    assert "jira" in calls
+    assert db.query("SELECT * FROM jira_seen") == []

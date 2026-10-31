@@ -23,8 +23,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 Small, independent fixes that shouldn't wait for the bigger steps:
 
-- **Migrations run on every page load.** `registry.enabled` calls `db.migrate` for every
-  plugin on each request. Migrating once at start-up (and in `mfd check`) is enough.
 - **slack's `mark_sent` takes any `target`.** It should accept only `user:<login>` or
   `team:<name>`, like the ping page produces.
 

@@ -10,7 +10,7 @@ from . import config as config_module
 from . import init, reload
 from .db import Database
 from .refresh import build_dashboard, refresh
-from .registry import enabled_names
+from .registry import enabled_names, migrate
 from .server import serve
 
 EXAMPLE_CONFIG = """\
@@ -144,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     config = config_module.load(config_path)
     db = Database(config.db_path, config.db_backups)
+    migrate(config, db)
 
     if args.command == "refresh":
         refresh(config, db)

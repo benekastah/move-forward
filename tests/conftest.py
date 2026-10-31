@@ -31,7 +31,7 @@ from move_forward.panels import Dashboard
 from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
 from move_forward.refresh import build_dashboard, stored_graph
-from move_forward.registry import enabled
+from move_forward.registry import enabled, migrate
 from move_forward.repositories import NotesImportRepository, SnapshotRepository
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
@@ -182,6 +182,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             **({"jira": jira} if enable_jira else {}),
         }
     )
+    migrate(config, db)
     return config, db
 
 
