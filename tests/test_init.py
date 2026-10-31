@@ -116,6 +116,7 @@ def test_bad_answers_are_asked_again_with_the_reason(
                 "organization": ["acme corp", "acme"],
                 "Port": ["lots", "70000", "9000"],
                 "workspace URL": ["acme.slack.com", "https://acme.slack.com"],
+                "Jira site": ["http://acme.atlassian.net", "https://acme.atlassian.net"],
             }
         ),
         cwd=tmp_path,
@@ -124,9 +125,11 @@ def test_bad_answers_are_asked_again_with_the_reason(
     assert "'acme corp' isn't a GitHub organization" in out
     assert "'lots' isn't a port number" in out and "'70000' isn't a port number" in out
     assert "'acme.slack.com' isn't a URL starting with https://" in out
+    assert "'http://acme.atlassian.net' must start with https://" in out
     loaded = config.load(path)
     assert loaded.github is not None and loaded.github.org == "acme" and loaded.port == 9000
     assert loaded.slack is not None and loaded.slack.workspace_url == "https://acme.slack.com"
+    assert loaded.jira is not None and loaded.jira.site == "https://acme.atlassian.net"
 
 
 def test_giving_up_after_repeated_bad_answers(tmp_path: Path, no_machine_guesses: None) -> None:

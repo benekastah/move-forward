@@ -105,7 +105,7 @@ channels and people, `ping_first` and `ping_follow_up` are the messages, and
 map). Its page is `/ping?pr=<PR URL>`, and its one action
 `/actions/slack/mark_sent`.
 
-`[jira]` needs `site`. `token_env` and `keychain_service` say where its token
+`[jira]` needs `site`, an `https://` URL (the requests carry your token). `token_env` and `keychain_service` say where its token
 is (see [Jira](#jira)). `status_in_progress`, `status_in_review` and
 `status_closed` are the workflow's status names, for Jira transitions.
 `escalation_label_prefix` (e.g. `escalated-to-`) and `escalation_levels`

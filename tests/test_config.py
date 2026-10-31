@@ -102,3 +102,9 @@ def test_a_plugin_needs_the_plugins_it_requires(
         _load(tmp_path, MINIMAL + jira)
     loaded = _load(tmp_path, MINIMAL + jira + "\n[git]\nrepos = []\n")
     assert loaded.jira is not None
+
+
+def test_the_jira_site_must_be_https(tmp_path: Path) -> None:
+    for site in ("http://j.atlassian.net", "j.atlassian.net"):
+        with pytest.raises(ValidationError, match="must be an https:// URL"):
+            _load(tmp_path, MINIMAL + f'\n[jira]\nsite = "{site}"\n')

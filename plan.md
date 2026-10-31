@@ -23,8 +23,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 Small, independent fixes that shouldn't wait for the bigger steps:
 
-- **Jira `site` must be `https://`.** The token goes in a Basic auth header to `site`, and
-  the config accepts `http://`.
 - **Iced branches across repos.** `iced_branch` ids are bare branch names. A stack iced in
   one repo hides a same-named branch's PR in every other repo from github and slack, gives
   it the iced badge in git, and stops it being iced again. Checks should match the repo too,

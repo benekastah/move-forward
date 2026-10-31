@@ -1,6 +1,8 @@
 """`[jira]`."""
 
-from pydantic import Field
+from urllib.parse import urlsplit
+
+from pydantic import Field, field_validator
 
 from ...strict import Strict
 
@@ -21,7 +23,7 @@ class JiraConfig(Strict):
     """
 
     site: str
-    """e.g. https://example.atlassian.net"""
+    """e.g. https://example.atlassian.net. Must be `https://`: requests carry the API token."""
     token_env: str = DEFAULT_JIRA_TOKEN_ENV
     """The environment variable holding the API token."""
     keychain_service: str = DEFAULT_JIRA_KEYCHAIN_SERVICE
@@ -44,3 +46,13 @@ class JiraConfig(Strict):
     teams: dict[str, str] = Field(default_factory=dict)
     """A team's id in Jira's team field, by its name in the top-level `teams`; unused for
     now, kept for ticket creation."""
+
+    @field_validator("site")
+    @classmethod
+    def _https(cls, value: str) -> str:
+        url = urlsplit(value)
+        if url.scheme != "https" or not url.netloc:
+            raise ValueError(
+                f"{value!r} must be an https:// URL, since requests carry the API token"
+            )
+        return value

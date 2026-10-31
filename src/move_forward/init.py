@@ -231,6 +231,14 @@ def _url(answer: str) -> str:
     return answer
 
 
+def _https_url(answer: str) -> str:
+    """A URL that must be `https://` (blank for none), e.g. one we send a token to."""
+    answer = _url(answer)
+    if answer and not answer.startswith("https://"):
+        raise ValueError(f"{answer!r} must start with https://")
+    return answer
+
+
 def _email(answer: str) -> str:
     answer = answer.strip()
     if "@" not in answer or " " in answer:
@@ -337,7 +345,10 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     if port != str(config_module.DEFAULT_PORT):
         answers["port"] = int(port)
     site = _ask(
-        prompt, "Jira site URL (e.g. https://acme.atlassian.net; blank to skip Jira)", "", _url
+        prompt,
+        "Jira site URL (e.g. https://acme.atlassian.net; blank to skip Jira)",
+        "",
+        _https_url,
     )
     text = render_config(
         answers,
