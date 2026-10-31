@@ -11,6 +11,7 @@ from move_forward.domain import (
     Branch,
     Check,
     GitHubSnapshot,
+    GitStackSnapshot,
     JiraIssue,
     JiraSnapshot,
     LocalRepo,
@@ -18,6 +19,8 @@ from move_forward.domain import (
     Notes,
     PullRequest,
     Review,
+    StackBranch,
+    StackRepo,
     Thread,
     TimelineEvent,
     Todo,
@@ -115,15 +118,20 @@ SLACK_OVERRIDES = (
 
 def stored(**overrides: object) -> tuple[Config, Database]:
     """A config and a database holding stored snapshots and notes. Overrides name a snapshot
-    (`github`, `local`, `jira`, `derived`), notes (`work_items`, `iced_stacks`, `users`,
-    `teams`, `pings`) or a setting of a plugin's section. github and git are always on; jira
-    and slack when an override is about them."""
+    (`github`, `local`, `stacks`, `jira`, `derived`), notes (`work_items`, `iced_stacks`,
+    `users`, `teams`, `pings`) or a setting of a plugin's section. github and git are always
+    on; git_stack, jira and slack when an override is about them."""
     o = dict(overrides)
     enable_slack = any(key in o for key in SLACK_OVERRIDES)
     o.pop("slack", None)
     db = Database(":memory:")
     snapshots = SnapshotRepository(db)
-    for source, key in (("github", "github"), ("git", "local"), ("jira", "jira")):
+    for source, key in (
+        ("github", "github"),
+        ("git", "local"),
+        ("git_stack", "stacks"),
+        ("jira", "jira"),
+    ):
         if (value := o.pop(key, None)) is not None:
             snapshots.save(source, NOW, cast(BaseModel, value))
     if (derived := o.pop("derived", None)) is not None:
@@ -156,6 +164,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             jira[key] = o.pop(key)
     if (statuses := o.pop("jira_statuses", None)) is not None:
         jira.update({f"status_{k}": v for k, v in cast(dict[str, str], statuses).items()})
+    enable_git_stack = snapshots.get("git_stack", GitStackSnapshot) is not None
     enable_jira = bool(jira) or snapshots.get("jira", JiraSnapshot) is not None
     if enable_jira:
         jira.setdefault("site", "https://jira")
@@ -168,6 +177,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             "teams": teams,
             "github": github,
             "git": git,
+            **({"git_stack": {}} if enable_git_stack else {}),
             **({"slack": slack} if enable_slack else {}),
             **({"jira": jira} if enable_jira else {}),
         }
@@ -226,6 +236,10 @@ def local_snapshot(**overrides: object) -> LocalSnapshot:
     }
     fields.update(overrides)
     return LocalSnapshot(repos=[LocalRepo.model_validate(fields)])
+
+
+def stacks(*branches: StackBranch, dir: str = "/src/widgets") -> GitStackSnapshot:
+    return GitStackSnapshot(repos=[StackRepo(dir=dir, branches=list(branches))])
 
 
 def local_branch(name: str, **overrides: object) -> Branch:

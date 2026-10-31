@@ -10,6 +10,7 @@ from .db import Database
 from .graph import Entity, Graph
 from .plugin import Context, Plugin
 from .plugins.git.plugin import GitPlugin
+from .plugins.git_stack.plugin import GitStackPlugin
 from .plugins.github.plugin import GitHubPlugin
 from .plugins.jira.plugin import JiraPlugin
 from .plugins.notes.plugin import NotesPlugin
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 PLUGINS: list[Plugin[Any, Any]] = [
     GitHubPlugin(),
     GitPlugin(),
+    GitStackPlugin(),
     JiraPlugin(),
     SlackPlugin(),
     NotesPlugin(),

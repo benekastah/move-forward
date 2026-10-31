@@ -25,7 +25,7 @@ APP-1 is related to every PR whose branch, title or body mentions APP-1.
 | `pr` | github | the PR's URL | `open`, `merged` or `closed` | `ticket` keys from its branch, title and body |
 | `person` | github (me), slack (the reviewer map) | GitHub login | | |
 | `repo` | git | GitHub `owner/name` | | |
-| `branch` | git | `<repo dir>\t<branch>` | | its `repo` |
+| `branch` | git, git_stack | `<repo dir>\t<branch>` | | its `repo` |
 | `ticket` | jira | the issue key, e.g. `APP-1` | the issue's status | |
 | `entry` | notes | the entry's title | | the `pr` URLs and `ticket` keys it names |
 | `iced_branch` | notes | the branch's name | | |
@@ -81,8 +81,15 @@ On my open PRs only:
 | --- | --- | --- |
 | `ahead`, `behind` | int | commits ahead of and behind its upstream |
 | `gone` | bool | its upstream was deleted |
-| `repo_dir` | string | the checkout it's in |
+| `repo_dir` | string | the checkout it's in (git) |
 | `checked_out_in` | string or null | the worktree it's checked out in |
+
+On branches git-stack tracks (git_stack):
+
+| Attribute | Type | Meaning |
+| --- | --- | --- |
+| `stack_parent` | string | the branch it's built on |
+| `stack_status` | string or null | git-stack's status, e.g. `up-to-date`, `needs-restack`, `merged` |
 
 ### `ticket`
 

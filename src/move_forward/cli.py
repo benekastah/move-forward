@@ -46,6 +46,8 @@ repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are foun
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # commit_history_days = 180
 
+[git_stack]                           # stacks from git-stack, in [git]'s repos; no settings
+
 [slack]
 workspace_url = "https://example.slack.com"
 # ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"

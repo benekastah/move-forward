@@ -11,6 +11,7 @@ from conftest import (
     pings,
     pr,
     snapshot,
+    stacks,
     titles,
     work_item,
 )
@@ -51,7 +52,8 @@ def test_todos_put_close_outs_first_and_blocked_last() -> None:
 def test_every_panel_is_in_exactly_one_group() -> None:
     dashboard = build(
         slack=True,
-        local=local_snapshot(stack=[StackBranch(name="main")]),
+        local=local_snapshot(),
+        stacks=stacks(StackBranch(name="main")),
         jira=JiraSnapshot(issues=[]),
     )
     grouped = [key for group in dashboard.groups for key in group.panel_keys]
@@ -75,10 +77,10 @@ def test_focus_order_covers_every_panel_in_the_skills_order() -> None:
                     default_branch="main",
                     worktrees=[],
                     branches=[],
-                    stack=[StackBranch(name="main")],
                 )
             ]
-        )
+        ),
+        stacks=stacks(StackBranch(name="main"), dir=REPO),
     )
     assert {p.key for p in dashboard.panels} <= set(panels.FOCUS_ORDER)
     assert len(set(panels.FOCUS_ORDER)) == len(panels.FOCUS_ORDER)

@@ -1,11 +1,10 @@
-"""The git plugin's panels: local work, git-stack stacks, and branches to clean up.
+"""The git plugin's panels: local work and branches to clean up.
 
 Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from the graph's
 `pr` entities, matched by their `repo` and `head`.
 """
 
 from datetime import datetime
-from pathlib import Path
 
 from ...domain import LocalSnapshot
 from ...graph import Entity, Graph, Ref
@@ -38,11 +37,7 @@ class Builder:
             if pr.attrs.get("mine"):
                 key = (str(pr.attrs.get("repo")), str(pr.attrs.get("head")))
                 self.prs_by_branch.setdefault(key, []).append(pr)
-        iced = graph.of_kind(ICED_BRANCH)
-        self.iced_branches = {e.ref.id for e in iced}
-        self.iced_repo_dirs = {
-            str(Path(str(e.attrs.get("repo_dir", ""))).expanduser()) for e in iced
-        }
+        self.iced_branches = {e.ref.id for e in graph.of_kind(ICED_BRANCH)}
 
     def _pr(self, repo: str | None, branch: str, state: str) -> Entity | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
@@ -122,71 +117,6 @@ class Builder:
             items=items,
         )
 
-    def uses_git_stack(self) -> bool:
-        """Whether any repo has tracked stacks; without them the Stacks panel is left out."""
-        return bool(self.local) and any(repo.stack for repo in self.local.repos)
-
-    def stacks(self) -> Panel:
-        items: list[Item] = []
-        actions: list[Action] = []
-        for repo in self.local.repos if self.local else []:
-            merged = [b.name for b in repo.stack if b.status == "merged"]
-            if merged and repo.dir in self.iced_repo_dirs:
-                items.append(
-                    Item(
-                        title=f"{len(merged)} merged stack branches not cleaned",
-                        subtitle=repo.dir,
-                        details=["this repo has iced stacks, so `git stack clean` is left to you"],
-                        rank=-1,
-                    )
-                )
-            elif merged:
-                actions.append(
-                    action(
-                        "stack_clean",
-                        f"Clean {len(merged)} merged in {Path(repo.dir).name}",
-                        {"repo": repo.dir},
-                        confirm=f"Run `git stack clean -d local` in {repo.dir}? It fetches,"
-                        " fast-forwards main, untracks merged branches and deletes them locally.",
-                    )
-                )
-            for b in repo.stack:
-                if b.status in (None, "up-to-date"):
-                    continue
-                pr = self._pr(repo.github_repo, b.name, "open")
-                badges = ["iced"] if b.name in self.iced_branches else []
-                items.append(
-                    Item(
-                        title=f"{b.name}: {b.status}",
-                        url=pr.url if pr else None,
-                        subtitle=f"{repo.dir} · on {b.parent}",
-                        badges=badges,
-                        rank=0 if badges else 1,
-                        subject=pr.ref if pr else None,
-                    )
-                )
-            for b in repo.stack:
-                if b.parent is None or b.status == "merged" or b.name in self.iced_branches:
-                    continue
-                if not (
-                    self._pr(repo.github_repo, b.name, "open")
-                    or self._pr(repo.github_repo, b.name, "merged")
-                ):
-                    items.append(
-                        Item(
-                            title=f"{b.name}: tracked, no PR",
-                            subtitle=f"{repo.dir} · on {b.parent}",
-                            rank=0.5,
-                        )
-                    )
-        return Panel(
-            key="stacks",
-            title="Stacks",
-            description="git-stack branches that need a restack, were merged, or have no PR.",
-            items=items,
-            actions=actions,
-        )
-
     def cleanup(self) -> Panel:
         items: list[Item] = []
         targets: list[str] = []
@@ -242,11 +172,7 @@ class Builder:
         )
 
     def panels(self) -> list[Panel]:
-        return [
-            self.local_work(),
-            *([self.stacks()] if self.uses_git_stack() else []),
-            self.cleanup(),
-        ]
+        return [self.local_work(), self.cleanup()]
 
 
 def branch_ref(repo_dir: str, branch: str) -> Ref:

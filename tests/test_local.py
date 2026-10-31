@@ -92,4 +92,3 @@ def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
     feature = next(b for b in result.branches if b.name == "feature")
     assert feature.upstream is None and feature.ahead_of_default == 1
     assert result.my_dirs == ["src"]
-    assert result.stack == []
