@@ -63,8 +63,11 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 ### 5c. slack and github tables
 
 - slack gets its own tables (`slack_contacts`, `slack_team_channels`, `slack_pings`) and
-  github `github_people`; the reviewer-map import and core's `reviewer_users`,
-  `team_channels` and `pings` tables go (a core migration copies their rows).
+  github `github_people`, and the reviewer-map import goes. Each plugin's first migration
+  copies its rows from core's `reviewer_users`, `team_channels` or `pings` when that table
+  exists (see AGENTS.md: plugin migrations don't depend on order). Core drops those
+  tables in a later migration, once the copies have shipped; a plugin enabled after that
+  starts empty.
 
 ### 5d. Prune without the clients
 

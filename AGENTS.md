@@ -54,6 +54,12 @@ is what's left to build.
   scripts applied in order and counted in `schema_versions`. Never edit one
   that has been committed to `main`; add a new one. A plugin's tables are
   prefixed with its name.
+- **Plugin migrations don't depend on order.** A plugin can be enabled at any
+  time, before or after any other, so its migrations touch only its own tables
+  and never assume another plugin's migrations have run, or haven't. Data
+  moving out of core into a plugin is copied by the plugin's own migration,
+  from core's table if it's still there; core never writes into a plugin's
+  tables.
 - **Add tests** with every change, and make sure they would fail without it.
   Panel tests build the page as core does (`conftest.dashboard(...)`) and
   assert on panel contents; plugin contract tests assert on the entities a
