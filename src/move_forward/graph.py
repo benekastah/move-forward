@@ -41,7 +41,7 @@ def _no_url(kind: str, id: str) -> str | None:
 
 
 def _merge(first: Entity, second: Entity) -> Entity:
-    """One entity from two plugins' views of it, e.g. a person GitHub and Slack both know.
+    """One entity from two plugins' views of it, e.g. a branch git and git_stack both know.
     The first plugin's fields win; refs and attributes are combined."""
     return first.model_copy(
         update={
