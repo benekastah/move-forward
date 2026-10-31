@@ -2,7 +2,8 @@
 
 Notes for agents (and people) changing this repo. The README says what the
 dashboard does; `docs/entities.md` is the contract between plugins, and
-`docs/plugins.md` draws how the plugins use each other's entities.
+`docs/plugins.md` draws how the plugins use each other's entities; `plan.md`
+is what's left to build.
 
 ## Shape of the code
 
@@ -39,6 +40,8 @@ dashboard does; `docs/entities.md` is the contract between plugins, and
   - this file, when the shape of the code or a rule here changes, e.g. a new
     plugin hook.
   - docstrings and comments on the code you touch.
+  - `plan.md`: remove what the change finishes, whether a step, a bullet or a
+    design section, and delete the file once nothing is left.
 
   Before committing, look for docs the change made untrue: search the docs
   and docstrings for the names you renamed, moved or removed.
