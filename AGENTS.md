@@ -19,7 +19,8 @@ dashboard does; `docs/entities.md` is the contract between plugins;
   `docs/entities.md` in the same commit.
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database
   reads beyond what the plugin passes in. Everything slow happens in
-  `collect` or `after_collect`.
+  `collect` or `after_collect`, or in `collect_after` for a plugin that
+  needs other plugins' entities to know what to fetch.
 
 ## Rules for changes
 
