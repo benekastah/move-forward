@@ -79,6 +79,10 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
     assert [a.name for a in items["me/iced: 1 commits, never pushed"].actions] == [
         "git/push_branch"
     ]
+    assert [a.name for a in items["me/new: 2 commits, never pushed"].actions] == [
+        "git/push_branch",
+        "notes/ice",
+    ]
     dirty = items["me/APP-1-branch: 2 modified, 1 untracked"].actions
     assert [(a.name, a.fields) for a in dirty if a.name != "notes/todo_add"] == [
         ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
