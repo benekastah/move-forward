@@ -19,63 +19,121 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
 
-### 5. Notes in SQLite
+### 4c. Fixes from the code review
 
+Small, independent fixes that shouldn't wait for the bigger steps:
+
+- **Jira `site` must be `https://`.** The token goes in a Basic auth header to `site`, and
+  the config accepts `http://`.
+- **Iced branches across repos.** `iced_branch` ids are bare branch names. A stack iced in
+  one repo hides a same-named branch's PR in every other repo from github and slack, gives
+  it the iced badge in git, and stops it being iced again. Checks should match the repo too,
+  until icing anything (5f) replaces them.
+- **Migrations run on every page load.** `registry.enabled` calls `db.migrate` for every
+  plugin on each request. Migrating once at start-up (and in `mfd check`) is enough.
+- **slack's `mark_sent` takes any `target`.** It should accept only `user:<login>` or
+  `team:<name>`, like the ping page produces.
+
+### 4d. CI
+
+- GitHub Actions running `check.sh`'s checks on Linux, on every push and pull request,
+  before the steps below add migrations and touch every plugin. macOS and Windows runners
+  come with the Windows follow-up.
+
+### 5a. Notes tables and import
+
+- Core, first: the database opens with `PRAGMA foreign_keys = ON` (the planned tables rely
+  on `ON DELETE CASCADE`, which SQLite ignores without it), in WAL mode with a busy
+  timeout, since `mfd notes` will write while the server runs, from another process.
 - The notes tables (`notes_entries`, `notes_links`, `notes_todos`, `notes_todo_links`,
-  `notes_conditions`, `notes_declined`, `notes_ice`, `notes_iced`) as the
-  notes plugin's migrations.
+  `notes_conditions`, `notes_declined`, `notes_ice`, `notes_iced`) as the notes plugin's
+  migrations.
 - `mfd notes import <dir>` / `export <dir>`; lines the importer doesn't understand are kept
   as entry-level notes.
+- `[notes] dir` is dropped; core no longer imports markdown on every refresh, and core's
+  `work_items` and `iced_stacks` tables go.
+- notes stops running git: today `delete_iced` deletes branches and untracks them from
+  git-stack itself, and `ice` reads shas. Deleting branches is git's action and untracking
+  is git_stack's; they offer them on the On ice item, by its subjects, as item actions.
+  notes only records and thaws.
+
+### 5b. Notes CLI and the skill
+
 - The `mfd notes ...` CLI (list, show, add-entry, set, link, todo add/done/undone/delete/
   link, condition, decline, ice, thaw), JSON with `--json`, working without the server.
+- Core, first: an action's result can carry redirect parameters.
 - Todos addressed by id in `/actions/notes/...`; core stops knowing `notes/todo_done` by
-  name and stops building the done todo with notes' `todo_actions` (an action result can
-  carry redirect parameters instead).
-- slack gets its own tables (`slack_contacts`, `slack_team_channels`, `slack_pings`) and
-  github `github_people`; the reviewer-map import and core's `work_items`, `iced_stacks`,
-  `reviewer_users`, `team_channels`, `pings` tables go (a core migration copies their rows).
-- `[notes] dir` is dropped; core no longer imports markdown on every refresh.
-- The daily notes prune asks the graph instead of calling the GitHub and Jira clients;
-  needs a core lookup hook for PRs and tickets older than the snapshots.
+  name, and `panels.py` stops importing notes' `todo_actions` to build the done todo.
 - The move-forward skill's SKILL.md switches from editing the markdown to the CLI, in the
   skill's repository, the same week.
 
-### 5b. Plugin tables instead of JSON
+### 5c. slack and github tables
+
+- slack gets its own tables (`slack_contacts`, `slack_team_channels`, `slack_pings`) and
+  github `github_people`; the reviewer-map import and core's `reviewer_users`,
+  `team_channels` and `pings` tables go (a core migration copies their rows).
+
+### 5d. Prune without the clients
+
+- Core, first: a lookup hook, so a plugin can ask the plugin that owns a kind about an
+  entity older than its fetched data (a PR merged months ago, a resolved ticket).
+- The daily notes prune moves into notes and asks through that hook, instead of core's
+  `prune.py` calling the GitHub and Jira clients.
+
+### 5e. Plugin tables instead of JSON
 
 - Core: `store` and `load` hooks on `Plugin`, with JSON defaults, called by `refresh` and
   `Enabled.snapshot` in place of writing `snapshots.payload` directly.
 - One branch per plugin, moving its fetched data into its own tables: github (including
-  what was the `github.derived` snapshot), git, git_stack, jira.
+  what was the `github.derived` snapshot), git, git_stack, jira. Each migration copies the
+  stored JSON snapshot into the new tables, so the page isn't empty until the next refresh.
+- Each plugin's models move from core's `domain.py` into the plugin (`models.py`), next to
+  its tables. Core's `domain.py` keeps only `Model`.
 - Core: once no plugin uses the JSON defaults, they go, and `snapshots` becomes
   `collections` (status only), with a migration.
 
-### 5c. Plugin-owned, typed entity kinds
+### 5f. Plugin-owned, typed entity kinds
 
 - Core: kind models declared by plugins and registered with core, validation when the
   graph is built, and typed reads for consumers (`graph.of_kind(kind, View)`).
 - One branch per plugin: declare its kinds, namespaced (`github.pr`, `git.branch`, ...),
   and read others' kinds through views.
+- Consumers stop parsing entity ids: today git_stack and notes split `<repo dir>\t<branch>`
+  themselves. A kind publishes the parts as attributes (`git.branch` has `repo_dir` and
+  `name`), and the id stays opaque.
 - git_stack publishes `git_stack.stack_branch` instead of adding attributes to git's
   branches, and the graph stops merging refs from two plugins.
-- Linking kinds: `jira.ticket` and `notes.entry` declare themselves linking, and
-  `Graph.related` follows any linking kind instead of `ticket` by name.
-- Icing anything: entries, tickets, PRs and branches, through `notes.iced` (see Icing
-  anything). The notes tables from step 5 start out this way, so only the item action and
-  the consumers' checks move here, plus a notes migration renaming the kinds stored in
-  `notes_iced` and `notes_links` to their namespaced names.
+- Linking kinds and mentions (see Units of work): `jira.ticket` and `notes.entry` declare
+  themselves linking, github publishes the keys a PR mentions instead of refs to
+  `ticket`, and `Graph.related` follows any linking kind instead of `ticket` by name.
+- Icing anything, with hiding in core (see Icing anything): `notes.iced` declares that it
+  hides what it covers, core leaves those items out of panels and Act now, and the
+  consumers' own ice checks go. A notes migration renames the kinds stored in `notes_iced`
+  and `notes_links` to their namespaced names.
+- Core: `item_actions` is called once per item, and slack rebuilds every ping and notes
+  rereads its tables on each call. Plugins get a `prepare_item_actions(ctx, graph)` hook
+  that does that work once per page and returns the per-item function.
 - `docs/entities.md` generated from the kind models, or checked against them by a test.
 
-### 6. Layout and Act now
+### 6. Layout
 
 - `priority` on panels; the `layout` table (already migrated) with drag and drop on group
   and panel summaries, `POST /layout`, and Reset layout in the footer.
 - Panel keys namespaced as `<plugin>.<panel>`.
-- The `act_now` hook, `Item.signals`, the ranking with weights under `[act_now]`,
-  diversity per plugin and per subject, merging across tools through the graph, and an
-  explanation on every item.
+- Core stops knowing panels by name: `ACT_NOW` and `FOCUS_ORDER` in `panels.py` give way to
+  each panel's `priority` and the layout.
+- Focus mode follows the layout.
+
+### 6b. Act now
+
+- A first version: the `act_now` hook, `Item.signals` with `effort`, `closes`, `waiting`,
+  `blocked` and `verb` only, the ranking, diversity per plugin and per subject, and an
+  explanation on every item. `importance`, `due` and merging across tools through the
+  graph come after.
+- `Plugin.act_now` fallback from panels marked `actionable`.
+- `[act_now]` (`size`, `per_plugin`, `weights`), in all four places a config key goes.
 - The `act_now_feedback` table: snooze, dismiss, pin.
-- `BasePlugin.act_now` fallback from panels marked `actionable`.
-- Focus mode follows the layout and gets an Act now category.
+- Focus mode gets an Act now category.
 
 ### 7. Worktrees
 
@@ -106,25 +164,28 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
   separators) and written into `on-ice.md`.
-- **CI.** After Windows: GitHub Actions running `check.sh`'s checks, and the tests on
-  Linux, macOS and Windows (runners are free for this public repo).
+- **Config sections from the registry.** `Config` lists a field per built-in plugin, and
+  its teams check names slack, github and jira. The check could cover every section with a
+  `teams` table instead.
+- **CI on macOS and Windows.** After Windows: the tests on macOS and Windows runners too
+  (free for this public repo); Linux CI comes in step 4d.
 - **Icing and git-stack groups.** Putting a stack on ice walks the stack's parents only;
   git_stack doesn't publish groups, so a group's other stacks aren't iced with it.
 
 ## Design for the remaining steps
 
-### Plugins, with their tables and kinds after step 5c
+### Plugins, with their tables and kinds after step 5f
 
 Built in, in the package (`move_forward/plugins/<name>/`):
 
-| Plugin | Config section | Fetches | Own tables | Publishes | Panels |
-| --- | --- | --- | --- | --- | --- |
-| `github` | `[github]` | open, requested, reviewed, team, merged and closed PRs; derived team scores and reviewer suggestions | `github_prs` and its child tables, `github_team_members`, `github_reviewer_suggestions`, `github_team_scores`, `github_people` | `github.pr`, `github.person` | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
-| `git` | `[git]` | local repos: worktrees, branches, my dirs | `git_repos`, `git_worktrees`, `git_branches`, `git_my_dirs` | `git.repo`, `git.branch` | Local work, Cleanup |
-| `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in git's checkouts | `git_stack_branches` | `git_stack.stack_branch` | Stacks |
-| `jira` | `[jira]` | my open tickets | `jira_issues`, `jira_issue_labels`, `jira_issue_blockers` | `jira.ticket` | Jira transitions, What next |
-| `slack` | `[slack]` | nothing | `slack_contacts`, `slack_team_channels`, `slack_pings` | nothing | Nudge reviewers; the ping page |
-| `notes` | `[notes]`, always on | nothing | `notes_entries`, `notes_links`, `notes_todos`, `notes_todo_links`, `notes_conditions`, `notes_declined`, `notes_ice`, `notes_iced` | `notes.entry`, `notes.iced` | Todos, On ice |
+| Plugin | Config section | Fetches | Fetched tables | Kept tables | Publishes | Panels |
+| --- | --- | --- | --- | --- | --- | --- |
+| `github` | `[github]` | open, requested, reviewed, team, merged and closed PRs; derived team scores and reviewer suggestions | `github_prs` and its child tables, `github_team_members`, `github_reviewer_suggestions`, `github_team_scores` | `github_people` | `github.pr`, `github.person` | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
+| `git` | `[git]` | local repos: worktrees, branches, my dirs | `git_repos`, `git_worktrees`, `git_branches`, `git_my_dirs` | none | `git.repo`, `git.branch` | Local work, Cleanup |
+| `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in git's checkouts | `git_stack_branches` | none | `git_stack.stack_branch` | Stacks |
+| `jira` | `[jira]` | my open tickets | `jira_issues`, `jira_issue_labels`, `jira_issue_blockers` | none | `jira.ticket` | Jira transitions, What next |
+| `slack` | `[slack]` | nothing | none | `slack_contacts`, `slack_team_channels`, `slack_pings` | nothing | Nudge reviewers; the ping page |
+| `notes` | `[notes]`, always on | nothing | none | `notes_entries`, `notes_links`, `notes_todos`, `notes_todo_links`, `notes_conditions`, `notes_declined`, `notes_ice`, `notes_iced` | `notes.entry`, `notes.iced` | Todos, On ice |
 
 A plugin is enabled when its config section exists. `notes` is always enabled (with
 defaults), so the smallest setup is a config with just `email` and no sections: a todo
@@ -223,7 +284,9 @@ class Signals(Model):
     """What to do, as a short imperative: "Reply to 2 threads", "Merge", "Send the quote"."""
 ```
 
-A plugin fills in what it knows and leaves the rest at the defaults. Nothing in it is
+A plugin fills in what it knows and leaves the rest at the defaults. The first version
+(step 6b) has only `effort`, `closes`, `waiting`, `blocked` and `verb`; `importance`,
+`waiting_since` and `due` come after, once the first version's ranking has been lived with. Nothing in it is
 specific to software: "effort", "closes", "who's waiting" and "due" mean the same for a
 PR, a ticket, an email thread or a sales opportunity.
 
@@ -261,7 +324,9 @@ score = 3 * closes?                        # finishing beats starting
       - 100 * blocked                      # out
 ```
 
-The weights are a starting point, in config under `[act_now]`, not code:
+The weights are a starting point, in config under `[act_now]`, not code. Like every
+config key, they go in the model, the README, `mfd init`'s rendered config and
+`mfd init --example`:
 
 ```toml
 [act_now]
@@ -285,8 +350,12 @@ Then:
 #### Feedback from the person using it
 
 - **Snooze** an item until tomorrow or a date; **dismiss** it for good. Stored in the
-  core's `act_now_feedback` table, keyed by the item's subject and verb, so a changed item
-  (new commits, a new reply) comes back.
+  core's `act_now_feedback` table, keyed by the item's main subject (its namespaced kind
+  and id) and verb. A changed item comes back: `Item.fingerprint` is a string the
+  plugin sets from what would make the item worth another look (github: the head sha and
+  the count of reviews and comments; jira: the status and `updated`), defaulting to a hash
+  of the item's title, badges and details. Feedback whose fingerprint no longer matches is
+  ignored.
 - **Pin** an item to keep it at the top until it's done.
 - Optionally later: count which items get acted on from the list versus skipped, and
   nudge the weights. Not needed for a first version; the explanations plus config weights
@@ -324,7 +393,7 @@ CREATE TABLE act_now_feedback (
     verb TEXT NOT NULL,
     action TEXT NOT NULL CHECK (action IN ('snooze', 'dismiss', 'pin')),
     until TEXT,                        -- for snooze
-    fingerprint TEXT NOT NULL,         -- the item's state when snoozed or dismissed
+    fingerprint TEXT NOT NULL,         -- Item.fingerprint when snoozed or dismissed
     created_at TEXT NOT NULL,
     PRIMARY KEY (subject_kind, subject_id, verb)
 );
@@ -339,7 +408,7 @@ an "Act now" category that walks the same list.
 Plugins will fill in signals unevenly, especially third-party ones. A fallback keeps the
 panel useful:
 
-- `BasePlugin.act_now` by default nominates every item in the plugin's panels marked
+- `Plugin.act_now` by default nominates every item in the plugin's panels marked
   `actionable` (today's urgent panels), with the panel's default effort and verb for items
   that carry no signals of their own.
 - Items in non-actionable panels never appear unless the plugin nominates them itself.
@@ -364,7 +433,7 @@ panel useful:
 
 - **JSON in the database.** Every plugin's snapshot is one JSON blob in `snapshots.payload`
   (`github`, `github.derived`, `git`, `git_stack`, `jira`). So are core's `work_items` and
-  `iced_stacks` rows, which step 5 replaces. Nothing can be filtered or indexed in SQL. The
+  `iced_stacks` rows, which step 5a replaces. Nothing can be filtered or indexed in SQL. The
   schema exists only as the pydantic models, and a stored blob that no longer fits its
   model fails when it's read.
 - **Untyped entities.** The graph is built in memory on every page load and never stored.
@@ -375,8 +444,9 @@ panel useful:
 - **Shared kinds and core tables.** Two plugins can publish the same ref and the graph
   merges them: git_stack adds `stack_parent` to git's `branch`. Some data still bypasses
   the graph through core's tables: github and slack share core's reviewer table, which
-  github writes looked-up emails to (until step 5 splits it into `github_people` and
-  `slack_contacts`). Core knows two kinds by name: `ticket` (`Graph.related`) and `person` (finding `me`).
+  github writes looked-up emails to (until step 5c splits it into `github_people` and
+  `slack_contacts`). Core knows two kinds by name: `ticket` (`Graph.related`) and
+  `person` (finding `me`).
 
 #### Principles
 
@@ -410,10 +480,19 @@ Today `Graph.related` treats `ticket` specially: a PR and a work entry that name
 related through it. That only helps people who use Jira, and core knows the kind by name.
 The generalization is to let a plugin declare a kind as **linking** on its kind model:
 
-- `jira.ticket` links what names its key: PRs by branch, title or body; entries by title.
+- `jira.ticket` links what mentions its key: PRs by branch, title or body; entries by
+  title.
 - `notes.entry` links what it lists: its PRs, tickets and branches (from `notes_links`),
   and its todos' links. notes is always on, so every setup has a unit of work, Jira or
   not. An entry can wrap a ticket, or stand alone for work with no ticket.
+
+Mentions need an owner once kinds are namespaced: github shouldn't point at `jira.ticket`
+by name, and jira can't see PRs when it publishes. So a publisher records what an entity
+mentions as plain text, `mentions` (github: the keys in a PR's branch, title and body), and
+a linking kind declares the pattern of its ids (`jira.ticket`: `[A-Z][A-Z0-9]+-\d+`).
+Core, building the graph, links an entity to every linking entity whose id it mentions,
+and to linking entities that don't exist yet, so `url_for` still makes ticket links
+without Jira's data.
 
 `related(ref, kind)` then follows any linking kind, not just `ticket`: entities are related
 when one points at the other, or when both are linked by the same ticket or entry. Core
@@ -436,13 +515,13 @@ notes owns icing. It can ice any entity, not just branches:
   the stack can be restored after it's deleted.
 
 ```sql
-CREATE TABLE notes_ice (               -- one act of icing
+CREATE TABLE notes_ice (               -- kept: one act of icing
     id INTEGER PRIMARY KEY,
     title TEXT NOT NULL,               -- e.g. "APP-12 Fix the widget" or a stack's bottom branch
     iced_on TEXT NOT NULL,
     note TEXT
 );
-CREATE TABLE notes_iced (              -- what one act of icing covers
+CREATE TABLE notes_iced (              -- kept: what one act of icing covers
     ice_id INTEGER NOT NULL REFERENCES notes_ice ON DELETE CASCADE,
     kind TEXT NOT NULL,                -- e.g. "jira.ticket", "notes.entry", "github.pr", "git.branch"
     ref_id TEXT NOT NULL,
@@ -454,9 +533,14 @@ CREATE TABLE notes_iced (              -- what one act of icing covers
 
 notes publishes a `notes.iced` entity per act of icing, pointing at everything it covers.
 For an iced entry, that includes what the entry links, which notes knows from its own
-tables. A consumer asks whether its subject is iced with `graph.related(subject,
-"notes.iced")`, whatever the subject's kind. An iced ticket reaches its PRs because the
-ticket is a linking kind. This replaces `notes.iced_branch` and the branch-name lookups.
+tables. An iced ticket reaches its PRs because the ticket is a linking kind.
+
+Plugins don't check for ice themselves. The `notes.iced` kind model declares that it
+**hides** what it covers, and core, building the page, leaves out of every panel and of
+Act now any item whose subject is hidden: covered directly, or linked to something covered.
+The On ice panel is the exception; it shows them. So github, git, git_stack and slack stop
+knowing about notes at all, and Act now's `blocked` needn't carry "on ice". This replaces
+`notes.iced_branch` and every branch-name lookup.
 
 Put on ice becomes an item action on any item whose subject notes can ice: entries,
 tickets, PRs and branches. The On ice panel lists acts of icing, with Thaw, and Delete for
@@ -490,7 +574,16 @@ becomes `collections (source, fetched_at, error)`: status only.
 ### Schema
 
 All tables are created by migrations. Core owns `schema_versions` and applies each
-plugin's `migrations` in order at start-up, recording how many ran.
+plugin's `migrations` in order at start-up, recording how many ran. Foreign keys are on
+(`PRAGMA foreign_keys = ON`), so the `ON DELETE CASCADE`s below take effect.
+
+Every plugin table is one of two sorts, and its comment in the sketches says which:
+
+- **Fetched** (`-- fetched`): what `collect` brings back, replaced wholesale by `store` on
+  every successful collect. Never pruned; a refresh drops what's gone.
+- **Kept** (`-- kept`): what only the dashboard knows (notes, pings sent, looked-up
+  emails). Survives refreshes, is copied when a migration reshapes it, and is cleared by
+  the plugin's `prune`.
 
 #### Core
 
@@ -499,7 +592,7 @@ CREATE TABLE schema_versions (
     plugin TEXT PRIMARY KEY,           -- "core" or a plugin name
     version INTEGER NOT NULL           -- migrations applied so far
 );
-CREATE TABLE collections (             -- was snapshots; status only after step 5b
+CREATE TABLE collections (             -- was snapshots; status only after step 5e
     source TEXT PRIMARY KEY,           -- plugin name, or "<plugin>.<part>"
     fetched_at TEXT NOT NULL,          -- of the last good collect
     error TEXT                         -- the last collect's error, if it failed
@@ -527,7 +620,7 @@ collect (see Data model). Core keeps no plugin data.
 #### notes
 
 ```sql
-CREATE TABLE notes_entries (
+CREATE TABLE notes_entries (  -- kept
     id INTEGER PRIMARY KEY,
     title TEXT NOT NULL UNIQUE,        -- "APP-1 Fix the widget", or a PR URL and title
     status TEXT,
@@ -538,13 +631,13 @@ CREATE TABLE notes_entries (
     checked_on TEXT,                   -- the skill's check-in dates
     asked_done_on TEXT
 );
-CREATE TABLE notes_links (             -- what an entry is about: its "Where"
+CREATE TABLE notes_links (             -- kept: what an entry is about: its "Where"
     entry_id INTEGER NOT NULL REFERENCES notes_entries ON DELETE CASCADE,
     kind TEXT NOT NULL,                -- "pr", "ticket", "branch", "repo"
     ref TEXT NOT NULL,                 -- URL, key, "<dir>\t<branch>", path
     PRIMARY KEY (entry_id, kind, ref)
 );
-CREATE TABLE notes_todos (
+CREATE TABLE notes_todos (  -- kept
     id INTEGER PRIMARY KEY,
     entry_id INTEGER NOT NULL REFERENCES notes_entries ON DELETE CASCADE,
     position INTEGER NOT NULL,
@@ -553,20 +646,20 @@ CREATE TABLE notes_todos (
     done_on TEXT,                      -- NULL while open
     created_at TEXT NOT NULL
 );
-CREATE TABLE notes_todo_links (        -- PRs and tickets one todo is about
+CREATE TABLE notes_todo_links (        -- kept: PRs and tickets one todo is about
     todo_id INTEGER NOT NULL REFERENCES notes_todos ON DELETE CASCADE,
     kind TEXT NOT NULL,
     ref TEXT NOT NULL,
     PRIMARY KEY (todo_id, kind, ref)
 );
-CREATE TABLE notes_conditions (        -- merge conditions
+CREATE TABLE notes_conditions (        -- kept: merge conditions
     id INTEGER PRIMARY KEY,
     entry_id INTEGER NOT NULL REFERENCES notes_entries ON DELETE CASCADE,
     pr_url TEXT,                       -- NULL: applies to all the entry's PRs
     text TEXT NOT NULL,
     created_on TEXT NOT NULL
 );
-CREATE TABLE notes_declined (          -- "don't offer this again today"
+CREATE TABLE notes_declined (          -- kept: "don't offer this again today"
     id INTEGER PRIMARY KEY,
     entry_id INTEGER REFERENCES notes_entries ON DELETE CASCADE,
     on_date TEXT NOT NULL,
@@ -583,17 +676,17 @@ Icing has its own tables, `notes_ice` and `notes_iced` (see Icing anything).
 #### slack
 
 ```sql
-CREATE TABLE slack_contacts (          -- the reviewer map's users
+CREATE TABLE slack_contacts (          -- kept: the reviewer map's users
     login TEXT PRIMARY KEY,
     slack_id TEXT,
     source TEXT NOT NULL               -- "import", "dashboard"
 );
-CREATE TABLE slack_team_channels (     -- the reviewer map's teams; [slack.teams] wins
+CREATE TABLE slack_team_channels (     -- kept: the reviewer map's teams; [slack.teams] wins
     team TEXT PRIMARY KEY,
     channel_name TEXT,
     channel_id TEXT
 );
-CREATE TABLE slack_pings (             -- unchanged apart from the name
+CREATE TABLE slack_pings (             -- kept: unchanged apart from the name
     id INTEGER PRIMARY KEY,
     pr_url TEXT NOT NULL,
     target TEXT NOT NULL,              -- "user:<login>" or "team:<slug>"
@@ -608,7 +701,7 @@ CREATE INDEX slack_pings_pr_url ON slack_pings (pr_url);
 #### github
 
 ```sql
-CREATE TABLE github_people (           -- commit emails looked up or imported
+CREATE TABLE github_people (           -- kept: commit emails looked up or imported
     login TEXT PRIMARY KEY,
     email TEXT,
     source TEXT NOT NULL               -- "lookup", "import"
@@ -618,7 +711,7 @@ CREATE TABLE github_people (           -- commit emails looked up or imported
 Tables for what github fetches, replacing its `snapshots` JSON:
 
 ```sql
-CREATE TABLE github_prs (
+CREATE TABLE github_prs (  -- fetched
     url TEXT PRIMARY KEY,
     number INTEGER NOT NULL,
     repo TEXT NOT NULL,                -- owner/name
@@ -643,37 +736,37 @@ CREATE TABLE github_prs (
     rollup_state TEXT,
     in_merge_queue INTEGER NOT NULL
 );
-CREATE TABLE github_pr_lists (         -- why it was fetched; a PR can be in several
+CREATE TABLE github_pr_lists (         -- fetched: why it was fetched; a PR can be in several
     pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
     list TEXT NOT NULL CHECK (list IN ('mine', 'direct_requests', 'reviewed_by_me',
         'team_requests', 'merged_recent', 'closed_recent')),
     PRIMARY KEY (pr_url, list)
 );
-CREATE TABLE github_pr_labels (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
+CREATE TABLE github_pr_labels (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
     label TEXT NOT NULL, PRIMARY KEY (pr_url, label));
-CREATE TABLE github_pr_requests (      -- requested reviewers
+CREATE TABLE github_pr_requests (      -- fetched: requested reviewers
     pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
     kind TEXT NOT NULL CHECK (kind IN ('user', 'team')),
     name TEXT NOT NULL,                -- login or team slug
     PRIMARY KEY (pr_url, kind, name)
 );
-CREATE TABLE github_pr_reviews (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
+CREATE TABLE github_pr_reviews (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
     author TEXT, state TEXT NOT NULL, submitted_at TEXT);
-CREATE TABLE github_pr_threads (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
+CREATE TABLE github_pr_threads (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
     resolved INTEGER NOT NULL, outdated INTEGER NOT NULL, path TEXT, author TEXT,
     body TEXT NOT NULL, url TEXT, created_at TEXT);
-CREATE TABLE github_pr_checks (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
+CREATE TABLE github_pr_checks (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
     name TEXT NOT NULL, state TEXT NOT NULL, url TEXT);
-CREATE TABLE github_pr_events (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
+CREATE TABLE github_pr_events (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
     type TEXT NOT NULL, at TEXT NOT NULL, actor TEXT,
     reviewer_kind TEXT CHECK (reviewer_kind IN ('user', 'team')), reviewer TEXT, reason TEXT);
-CREATE TABLE github_pr_files (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
+CREATE TABLE github_pr_files (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
     path TEXT NOT NULL, PRIMARY KEY (pr_url, path));
-CREATE TABLE github_team_members (login TEXT PRIMARY KEY);
-CREATE TABLE github_reviewer_suggestions (   -- was the github.derived snapshot
+CREATE TABLE github_team_members (login TEXT PRIMARY KEY);  -- fetched
+CREATE TABLE github_reviewer_suggestions (   -- fetched: was the github.derived snapshot
     pr_url TEXT NOT NULL, login TEXT NOT NULL, commits INTEGER NOT NULL,
     PRIMARY KEY (pr_url, login));
-CREATE TABLE github_team_scores (
+CREATE TABLE github_team_scores (  -- fetched
     pr_url TEXT PRIMARY KEY, owned_files INTEGER NOT NULL, required_files INTEGER NOT NULL,
     my_files INTEGER NOT NULL);
 ```
@@ -683,19 +776,19 @@ My login goes in `kv` (`github`, `login`).
 #### git
 
 ```sql
-CREATE TABLE git_repos (
+CREATE TABLE git_repos (  -- fetched
     dir TEXT PRIMARY KEY,              -- the main checkout
     github_repo TEXT,
     default_branch TEXT NOT NULL
 );
-CREATE TABLE git_worktrees (
+CREATE TABLE git_worktrees (  -- fetched
     path TEXT PRIMARY KEY,
     repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,
     branch TEXT,                       -- NULL when detached
     modified INTEGER NOT NULL,
     untracked INTEGER NOT NULL
 );
-CREATE TABLE git_branches (
+CREATE TABLE git_branches (  -- fetched
     repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,
     name TEXT NOT NULL,
     upstream TEXT,
@@ -706,14 +799,14 @@ CREATE TABLE git_branches (
     ahead_of_default INTEGER,
     PRIMARY KEY (repo_dir, name)
 );
-CREATE TABLE git_my_dirs (repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,
+CREATE TABLE git_my_dirs (repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,  -- fetched
     path TEXT NOT NULL, PRIMARY KEY (repo_dir, path));
 ```
 
 #### git_stack
 
 ```sql
-CREATE TABLE git_stack_branches (
+CREATE TABLE git_stack_branches (  -- fetched
     repo_dir TEXT NOT NULL,
     name TEXT NOT NULL,
     parent TEXT,                       -- NULL for a root
@@ -727,7 +820,7 @@ CREATE TABLE git_stack_branches (
 #### jira
 
 ```sql
-CREATE TABLE jira_issues (
+CREATE TABLE jira_issues (  -- fetched
     key TEXT PRIMARY KEY,
     summary TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -740,9 +833,9 @@ CREATE TABLE jira_issues (
     resolved TEXT,
     url TEXT NOT NULL
 );
-CREATE TABLE jira_issue_labels (key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,
+CREATE TABLE jira_issue_labels (key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,  -- fetched
     label TEXT NOT NULL, PRIMARY KEY (key, label));
-CREATE TABLE jira_issue_blockers (key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,
+CREATE TABLE jira_issue_blockers (key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,  -- fetched
     blocker TEXT NOT NULL, PRIMARY KEY (key, blocker));
 ```
 
@@ -787,4 +880,4 @@ top-level setting.
   `Done` history formats). The importer keeps any line it doesn't understand as an
   entry-level note, and `export` lets you compare before deleting the files.
 - **The skill and the dashboard drift.** The CLI's JSON output is the contract; the
-  skill change lands in the same week as step 5.
+  skill change lands in the same week as step 5b.
