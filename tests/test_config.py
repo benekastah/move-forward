@@ -1,13 +1,15 @@
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from conftest import NOW
 from pydantic import ValidationError
 
-from move_forward import config
+from move_forward import config, registry
 from move_forward.db import Database
 from move_forward.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS
 from move_forward.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV
+from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.slack.config import DEFAULT_PING_FIRST, DEFAULT_PING_FOLLOW_UP
 from move_forward.registry import enabled
 
@@ -84,3 +86,19 @@ def test_naming_settings_have_defaults_and_load(tmp_path: Path) -> None:
 def test_only_plugins_with_a_section_are_enabled(tmp_path: Path) -> None:
     loaded = _load(tmp_path, MINIMAL + "\n[git]\nrepos = []\n")
     assert [e.name for e in enabled(loaded, Database(":memory:"), NOW)] == ["git", "notes"]
+
+
+class _JiraOnGit(JiraPlugin):
+    requires: ClassVar[list[str]] = ["git"]
+
+
+def test_a_plugin_needs_the_plugins_it_requires(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plugins = [_JiraOnGit() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    jira = '\n[jira]\nsite = "https://j"\n'
+    with pytest.raises(ValidationError, match=r"\[jira\] needs \[git\]"):
+        _load(tmp_path, MINIMAL + jira)
+    loaded = _load(tmp_path, MINIMAL + jira + "\n[git]\nrepos = []\n")
+    assert loaded.jira is not None

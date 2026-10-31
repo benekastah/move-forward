@@ -2,11 +2,10 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from .config import Config
 from .db import Database
 from .graph import Entity, Graph
 from .plugin import Context, Plugin
@@ -16,6 +15,10 @@ from .plugins.jira.plugin import JiraPlugin
 from .plugins.notes.plugin import NotesPlugin
 from .plugins.slack.plugin import SlackPlugin
 from .repositories import KvRepository, SnapshotRepository
+
+if TYPE_CHECKING:
+    # Only for annotations: `Config` checks `unmet_requirements` as it loads.
+    from .config import Config
 
 PLUGINS: list[Plugin[Any, Any]] = [
     GitHubPlugin(),
@@ -43,12 +46,25 @@ class Enabled:
         return SnapshotRepository(self.ctx.db).get(self.name, model) if model else None
 
 
-def enabled_names(config: Config) -> list[str]:
+def enabled_names(config: "Config") -> list[str]:
     """The plugins the config enables, in page order, without touching the database."""
     return [p.name for p in PLUGINS if getattr(config, p.name) is not None]
 
 
-def enabled(config: Config, db: Database, now: datetime) -> list[Enabled]:
+def unmet_requirements(config: "Config") -> list[str]:
+    """What the enabled plugins need that the config doesn't enable, e.g. "[git_stack] needs
+    [git]"."""
+    names = enabled_names(config)
+    return [
+        f"[{p.name}] needs [{required}]"
+        for p in PLUGINS
+        if p.name in names
+        for required in p.requires
+        if required not in names
+    ]
+
+
+def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
     """The plugins with a config section, their migrations applied."""
     result: list[Enabled] = []
     for plugin in PLUGINS:

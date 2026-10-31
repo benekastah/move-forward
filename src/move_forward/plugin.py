@@ -79,6 +79,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """e.g. "GitHub": the heading of the plugin's group on the page."""
     config_model: ClassVar[type[BaseModel]]
     """The model of the `[name]` section: C."""
+    requires: ClassVar[list[str]] = []
+    """Plugins whose entities this one is built on, e.g. `["git"]`; the config must enable
+    them too."""
 
     migrations: ClassVar[list[str]] = []
     """SQL scripts creating and changing the plugin's tables, applied in order. Append to it;

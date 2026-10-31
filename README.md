@@ -57,7 +57,9 @@ Create the token at https://id.atlassian.com/manage-profile/security/api-tokens.
 Each external tool is a plugin, enabled by its section in the config: leave a
 section out and the plugin, its panels and its fetching are off. Plugins learn
 about each other's data only through a shared graph of entities (PRs,
-tickets, branches, ...), listed in [docs/entities.md](docs/entities.md).
+tickets, branches, ...), listed in [docs/entities.md](docs/entities.md). A
+plugin built on another's entities needs that plugin's section too; the config
+fails to load without it, saying which (e.g. "[git_stack] needs [git]").
 
 | Plugin | Section | Fetches | Panels |
 | --- | --- | --- | --- |
