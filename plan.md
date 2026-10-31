@@ -19,14 +19,6 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
 
-### 4e. Authentication
-
-- A secret token in a file only my account can read; the server refuses requests without
-  it (see Authentication). `mfd open` opens the page signed in, and `mfd serve --open`
-  uses it.
-- The README's API section and examples show sending the token, and the move-forward skill
-  reads it the same way.
-
 ### 5a. Notes tables and import
 
 - Core, first: the database opens with `PRAGMA foreign_keys = ON` (the planned tables rely
@@ -53,6 +45,8 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   name, and `panels.py` stops importing notes' `todo_actions` to build the done todo.
 - The move-forward skill's SKILL.md switches from editing the markdown to the CLI, in the
   skill's repository, the same week.
+- The skill sends the dashboard's token (`Authorization: Bearer`, from the `token` file)
+  wherever it calls the HTTP API.
 
 ### 5c. slack and github tables
 
@@ -198,36 +192,6 @@ it, so worktrees made or removed since (e.g. a second checkout at `~/src/app2`) 
 without a config change. A path in `repos` that turns out to be a worktree of another
 listed repo is folded into that repo, so listing both doesn't double up. Actions accept any
 worktree of a configured repo, not only the listed path.
-
-### Authentication
-
-The server listens on `127.0.0.1` only, and refuses requests from other sites and hosts
-(`Host` and `Origin` checks). Any program or other user on the same machine can still
-connect to the port, read every page and run every action. On a single-user laptop that
-matters little, but on a shared machine, or with an untrusted local process, it lets anyone
-local delete branches or read my PRs, tickets and notes. TLS wouldn't help: it hides
-traffic on a network, and loopback traffic never leaves the machine. What's missing is
-knowing who's asking.
-
-- **The token.** On first start the server creates `token` next to the database
-  (`~/.local/share/move-forward/token`), 32 random bytes from `secrets`, written with mode
-  `0600` so only my account can read it. It persists across restarts and reloads; deleting
-  the file makes a new one, which signs everything out.
-- **Browsers.** `mfd open` (and `mfd serve --open`) opens `/login?token=<token>`. The
-  server checks it, sets a cookie holding it (`HttpOnly`, `SameSite=Strict`, `Path=/`), and
-  redirects to `/` so the token doesn't stay in the address bar or history. Without a valid
-  cookie a page answers `401` with a line saying to run `mfd open`.
-- **Scripts and the skill.** `Authorization: Bearer <token>`, read from the file. The README's
-  `curl` example becomes `curl -H "Authorization: Bearer $(cat <token file>)" ...`.
-- **Checking it.** Every request but the static files and `/login`, with
-  `hmac.compare_digest` so the comparison doesn't leak timing. The `Host` and `Origin`
-  checks stay: `SameSite=Strict` keeps the cookie off other sites' requests, and the checks
-  cover browsers that don't honour it.
-- **No config.** There's nothing to set, so no new key; `db_path` decides where the token
-  lives.
-
-Open question: a Unix socket with file permissions would do the same without a token, but
-browsers can't connect to one, so it could only serve scripts.
 
 ### Page layout and ordering
 

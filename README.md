@@ -121,7 +121,8 @@ before the command's name.
 
 | Command | Does |
 | --- | --- |
-| `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`. |
+| `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`; `--open` opens it signed in, like `mfd open`. |
+| `mfd open [--port N]` | Open the running dashboard in a browser, signed in (see [API](#api)). |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard or the config file changes (`--open` isn't repeated on restart). The new code and config are checked first, with `mfd check` in a separate process; if that fails, the error is logged, the running server carries on, and the next change tries again. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
@@ -204,10 +205,19 @@ Buttons on a focused item come back to the same item afterwards.
 Everything the page does goes through plain HTTP on `127.0.0.1:<port>`, so a
 script (or Claude) can drive it. `mfd dump` prints the same data as JSON.
 
-Requests must name the server as `127.0.0.1:<port>` or `localhost:<port>` in
-their `Host` header, and a POST that carries an `Origin` header must come from
-one of those. So other web pages open in the browser can't use the dashboard's
-buttons, while scripts like `curl`, which send no `Origin`, work as before.
+Every request but `/login` and the static files must carry the dashboard's
+token, so other programs and users on the machine can't read the page or press
+its buttons. The token is in `token` next to the database
+(`~/.local/share/move-forward/token`), made on first start and readable only by
+you. Scripts send it as `Authorization: Bearer <token>`. Browsers get it as a
+cookie: `mfd open` visits `/login?token=<token>`, which sets the cookie and
+goes to the dashboard. A request without the token gets `401 Unauthorized`;
+delete the file to make a new token, which signs every browser out.
+
+Requests must also name the server as `127.0.0.1:<port>` or `localhost:<port>`
+in their `Host` header, and a POST that carries an `Origin` header must come
+from one of those. So other web pages open in the browser can't use the
+dashboard's buttons, while scripts like `curl`, which send no `Origin`, work.
 Anything else gets `403 Forbidden`.
 
 Pages (GET, HTML):
@@ -253,6 +263,7 @@ example:
 
 ```sh
 curl -s -o /dev/null -w '%{redirect_url}\n' -X POST http://127.0.0.1:8765/actions/notes/todo_done \
+  -H "Authorization: Bearer $(cat ~/.local/share/move-forward/token)" \
   --data-urlencode 'entry=APP-1 Fix the widget' --data-urlencode 'text=reply to the thread'
 ```
 
@@ -271,7 +282,8 @@ Jira; without Jira, entries with ticket keys are kept.
 `dashboard.db` holds each plugin's latest snapshot as JSON, under the
 plugin's name (kept when a refresh fails, with the error alongside), the work notes, iced stacks and
 reviewer map imported from the skill's `.md` files on every refresh, emails
-looked up from commits, and pings marked as sent. The skill's files stay the
+looked up from commits, and pings marked as sent. The server's token sits next
+to it, in `token`. The skill's files stay the
 source of truth for the notes. The dashboard writes back to them in the
 skill's own format: `work-notes.md` when a todo is added, done, undone,
 deleted or linked (and the daily clean-up), `on-ice.md` when a stack is put

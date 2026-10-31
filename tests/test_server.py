@@ -41,7 +41,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
         refreshed.append(True)
 
     monkeypatch.setattr(server, "refresh", fake_refresh)
-    instance = server.App(config, db)
+    instance = server.App(config, db, TOKEN)
     instance.refreshed = refreshed  # type: ignore[attr-defined]
     return instance
 
@@ -57,20 +57,30 @@ def client(app: server.App) -> Iterator[HTTPConnection]:
     httpd.shutdown()
 
 
-def get(client: HTTPConnection, path: str) -> HTTPResponse:
-    client.request("GET", path)
+TOKEN = "s3cret"
+SIGNED_IN = {"Authorization": f"Bearer {TOKEN}"}
+
+
+def get(client: HTTPConnection, path: str, headers: dict[str, str] | None = None) -> HTTPResponse:
+    """A GET with the token, unless `headers` says otherwise."""
+    client.request("GET", path, headers=SIGNED_IN if headers is None else headers)
     return client.getresponse()
 
 
 def post(
     client: HTTPConnection, path: str, form: dict[str, str], headers: dict[str, str] | None = None
 ) -> HTTPResponse:
+    """A form POST with the token, plus `headers`."""
     body = urlencode(form)
     client.request(
         "POST",
         path,
         body=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded", **(headers or {})},
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            **SIGNED_IN,
+            **(headers or {}),
+        },
     )
     return client.getresponse()
 
@@ -294,8 +304,39 @@ def test_ctrl_c_shuts_down_quietly(
 
     monkeypatch.setattr(server.threading.Thread, "start", no_start)
     with caplog.at_level("INFO"):
-        server.serve(app.config, app.db, 1)
+        server.serve(app.config, app.db, TOKEN, 1)
     assert closed == [True] and "shutting down on ctrl-c" in caplog.text
     assert server.shell.stopping()
     with pytest.raises(server.shell.CommandError, match="shutting down"):
         server.shell.run(["true"])
+
+
+def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: server.App) -> None:
+    for headers in ({}, {"Authorization": "Bearer wrong"}, {"Cookie": "move_forward_token=wrong"}):
+        response = get(client, "/", headers)
+        assert response.status == 401 and "mfd open" in response.read().decode()
+    response = post(client, "/actions/slack/mark_sent", SENT, {"Authorization": "Bearer wrong"})
+    assert response.status == 401
+    response.read()
+    assert PingRepository(app.db).all() == []
+
+
+def test_static_files_need_no_token(client: HTTPConnection) -> None:
+    response = get(client, "/style.css", {})
+    assert response.status == 200
+    response.read()
+
+
+def test_login_signs_the_browser_in_with_a_cookie(client: HTTPConnection) -> None:
+    response = get(client, "/login?token=wrong", {})
+    assert response.status == 401 and "Set-Cookie" not in response.headers
+    response.read()
+    response = get(client, f"/login?token={TOKEN}", {})
+    assert response.status == 303 and response.getheader("Location") == "/"
+    cookie = response.getheader("Set-Cookie") or ""
+    assert cookie.startswith(f"move_forward_token={TOKEN};")
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+    response.read()
+    response = get(client, "/", {"Cookie": cookie.split(";")[0]})
+    assert response.status == 200
+    response.read()

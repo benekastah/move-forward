@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from . import render, shell
+from . import auth, render, shell
 from .config import Config
 from .db import Database
 from .plugin import ActionError
@@ -25,6 +25,8 @@ STATIC_FILES = {
 }
 """Served paths to the file in `STATIC_DIR` and its content type."""
 MAX_BODY_BYTES = 64 * 1024
+LOGIN_PATH = "/login"
+NOT_SIGNED_IN = "<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
 LOCAL_HOSTS = ("127.0.0.1", "localhost")
 """Names the page is served under. A request naming any other host is refused, which stops a
 web page from reaching the server through a DNS name it controls (DNS rebinding)."""
@@ -50,9 +52,11 @@ def _from_this_dashboard(host: str | None, origin: str | None, port: int) -> boo
 class App:
     """Shared state for the request handlers: config, database and the refresh loop."""
 
-    def __init__(self, config: Config, db: Database):
+    def __init__(self, config: Config, db: Database, token: str):
         self.config = config
         self.db = db
+        self.token = token
+        """What every request but `/login` and the static files must carry; see `auth`."""
         self._refresh_lock = threading.Lock()
         self._wake = threading.Event()
         self.refreshing = False
@@ -216,10 +220,40 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             self._html(HTTPStatus.FORBIDDEN, "<p>Forbidden: not from this dashboard.</p>")
             return True
 
+        def _refuse_strangers(self) -> bool:
+            """Answer 401 to a request without the token; returns whether it did."""
+            given = auth.from_request(self.headers.get("Authorization"), self.headers.get("Cookie"))
+            if auth.matches(app.token, given):
+                return False
+            self._html(HTTPStatus.UNAUTHORIZED, NOT_SIGNED_IN)
+            return True
+
+        def _login(self, query: str) -> None:
+            """Sign the browser in with the token from `mfd open`, then go to the dashboard, so
+            the token doesn't stay in the address bar."""
+            given = parse_qs(query).get("token", [None])[0]
+            if not auth.matches(app.token, given):
+                self._html(HTTPStatus.UNAUTHORIZED, NOT_SIGNED_IN)
+                return
+            self.send_response(HTTPStatus.SEE_OTHER)
+            self.send_header("Set-Cookie", auth.set_cookie(app.token))
+            self.send_header("Location", "/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
         def do_GET(self) -> None:
             if self._refuse_other_sites(check_origin=False):
                 return
             url = urlsplit(self.path)
+            if url.path in STATIC_FILES:
+                name, content_type = STATIC_FILES[url.path]
+                self._send(HTTPStatus.OK, (STATIC_DIR / name).read_text(), content_type)
+                return
+            if url.path == LOGIN_PATH:
+                self._login(url.query)
+                return
+            if self._refuse_strangers():
+                return
             if url.path == "/":
                 notice = parse_qs(url.query).get("notice", [""])[0]
                 self._html(HTTPStatus.OK, app.dashboard_page(notice, _open_keys(url.query)))
@@ -239,9 +273,6 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     self._html(HTTPStatus.OK, page)
             elif (page := app.plugin_page(url.path, url.query)) is not None:
                 self._html(HTTPStatus.OK, page)
-            elif url.path in STATIC_FILES:
-                name, content_type = STATIC_FILES[url.path]
-                self._send(HTTPStatus.OK, (STATIC_DIR / name).read_text(), content_type)
             else:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
 
@@ -250,7 +281,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             return self.rfile.read(min(length, MAX_BODY_BYTES))
 
         def do_POST(self) -> None:
-            if self._refuse_other_sites(check_origin=True):
+            if self._refuse_other_sites(check_origin=True) or self._refuse_strangers():
                 return
             url = urlsplit(self.path)
             if url.path == "/refresh":
@@ -268,9 +299,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def serve(config: Config, db: Database, port: int | None = None) -> None:
+def serve(config: Config, db: Database, token: str, port: int | None = None) -> None:
     """Serve forever on localhost, refreshing in the background."""
-    app = App(config, db)
+    app = App(config, db, token)
     threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", port or config.port), make_handler(app))
     log.info("serving on http://127.0.0.1:%d", server.server_port)

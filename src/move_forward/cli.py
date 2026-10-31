@@ -6,8 +6,8 @@ import sys
 import webbrowser
 from pathlib import Path
 
+from . import auth, init, reload
 from . import config as config_module
-from . import init, reload
 from .db import Database
 from .refresh import build_dashboard, refresh
 from .registry import enabled_names, migrate
@@ -87,13 +87,17 @@ def _parser() -> argparse.ArgumentParser:
 
     serve_parser = commands.add_parser("serve", help="refresh in the background and serve the page")
     serve_parser.add_argument("--port", type=int, help="override the configured port")
-    serve_parser.add_argument("--open", action="store_true", help="open the page in a browser")
+    serve_parser.add_argument(
+        "--open", action="store_true", help="open the page in a browser, signed in"
+    )
     serve_parser.add_argument(
         "--reload",
         action="store_true",
         help="development: restart when the dashboard's source files change",
     )
 
+    open_parser = commands.add_parser("open", help="open the running dashboard, signed in")
+    open_parser.add_argument("--port", type=int, help="override the configured port")
     commands.add_parser("refresh", help="refresh every source once and exit")
     commands.add_parser(
         "check", help="load the config and every plugin, and exit; fails with what's wrong"
@@ -105,6 +109,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     init_parser.add_argument("--force", action="store_true", help="overwrite an existing config")
     return parser
+
+
+def _open(url: str) -> None:
+    """Open the dashboard in a browser; print the URL when there's no browser to open."""
+    if not webbrowser.open(url):
+        print(f"open {url} in a browser to sign in")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -143,6 +153,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{config_path}: ok; plugins: {', '.join(enabled_names(checked))}")
         return 0
     config = config_module.load(config_path)
+    token = auth.load_or_create(auth.token_path(config.db_path))
+    if args.command == "open":
+        _open(auth.login_url(args.port or config.port, token))
+        return 0
     db = Database(config.db_path, config.db_backups)
     migrate(config, db)
 
@@ -158,10 +172,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         port = args.port or config.port
         if args.open:
-            webbrowser.open(f"http://127.0.0.1:{port}/")
+            _open(auth.login_url(port, token))
         if args.reload:
             reload.start(config_path)
-        serve(config, db, port)
+        serve(config, db, token, port)
     return 0
 
 
