@@ -4,8 +4,9 @@ import logging
 import threading
 import time
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
+from typing import cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from . import render, shell
@@ -24,6 +25,26 @@ STATIC_FILES = {
 }
 """Served paths to the file in `STATIC_DIR` and its content type."""
 MAX_BODY_BYTES = 64 * 1024
+LOCAL_HOSTS = ("127.0.0.1", "localhost")
+"""Names the page is served under. A request naming any other host is refused, which stops a
+web page from reaching the server through a DNS name it controls (DNS rebinding)."""
+
+
+def _allowed_hosts(port: int) -> set[str]:
+    return {f"{host}:{port}" for host in LOCAL_HOSTS}
+
+
+def _from_this_dashboard(host: str | None, origin: str | None, port: int) -> bool:
+    """Whether a request may be served: it names this server as its `Host`, and a browser
+    sending it from another page (its `Origin`) isn't sending it from someone else's site.
+
+    Browsers send `Origin` with every POST, so a form on another site can't use the
+    dashboard's buttons. Requests without one (curl, scripts) are allowed.
+    """
+    allowed = _allowed_hosts(port)
+    if host not in allowed:
+        return False
+    return origin is None or origin in {f"http://{h}" for h in allowed}
 
 
 class App:
@@ -184,7 +205,18 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Length", "0")
             self.end_headers()
 
+        def _refuse_other_sites(self, check_origin: bool) -> bool:
+            """Answer 403 to a request from another site; returns whether it did."""
+            origin = self.headers.get("Origin") if check_origin else None
+            port = cast(HTTPServer, self.server).server_port
+            if _from_this_dashboard(self.headers.get("Host"), origin, port):
+                return False
+            self._html(HTTPStatus.FORBIDDEN, "<p>Forbidden: not from this dashboard.</p>")
+            return True
+
         def do_GET(self) -> None:
+            if self._refuse_other_sites(check_origin=False):
+                return
             url = urlsplit(self.path)
             if url.path == "/":
                 notice = parse_qs(url.query).get("notice", [""])[0]
@@ -216,6 +248,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             return self.rfile.read(min(length, MAX_BODY_BYTES))
 
         def do_POST(self) -> None:
+            if self._refuse_other_sites(check_origin=True):
+                return
             url = urlsplit(self.path)
             if url.path == "/refresh":
                 app.request_refresh()

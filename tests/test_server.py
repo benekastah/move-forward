@@ -62,13 +62,15 @@ def get(client: HTTPConnection, path: str) -> HTTPResponse:
     return client.getresponse()
 
 
-def post(client: HTTPConnection, path: str, form: dict[str, str]) -> HTTPResponse:
+def post(
+    client: HTTPConnection, path: str, form: dict[str, str], headers: dict[str, str] | None = None
+) -> HTTPResponse:
     body = urlencode(form)
     client.request(
         "POST",
         path,
         body=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        headers={"Content-Type": "application/x-www-form-urlencoded", **(headers or {})},
     )
     return client.getresponse()
 
@@ -115,6 +117,37 @@ def test_mark_as_sent_records_a_ping_and_redirects(client: HTTPConnection, app: 
     # The next page shows the follow-up.
     body = get(client, "/ping?pr=" + quote(pr(1).url, safe="")).read().decode()
     assert "Gentle bump" in body
+
+
+SENT = {"pr_url": pr(1).url, "target": "user:alice", "kind": "first"}
+
+
+def test_a_post_from_another_site_is_refused(client: HTTPConnection, app: server.App) -> None:
+    response = post(client, "/actions/slack/mark_sent", SENT, {"Origin": "https://evil.example"})
+    assert response.status == 403
+    response.read()
+    response = post(client, "/actions/slack/mark_sent", SENT, {"Origin": "null"})
+    assert response.status == 403
+    response.read()
+    assert PingRepository(app.db).all() == []
+
+
+def test_a_post_from_the_dashboard_itself_is_served(
+    client: HTTPConnection, app: server.App
+) -> None:
+    origin = f"http://localhost:{client.port}"
+    response = post(client, "/actions/slack/mark_sent", SENT, {"Origin": origin})
+    assert response.status == 303
+    assert len(PingRepository(app.db).all()) == 1
+
+
+def test_a_request_naming_another_host_is_refused(client: HTTPConnection) -> None:
+    client.putrequest("GET", "/", skip_host=True)
+    client.putheader("Host", f"rebound.example:{client.port}")
+    client.endheaders()
+    response = client.getresponse()
+    assert response.status == 403
+    response.read()
 
 
 def test_invalid_ping_form_is_rejected(client: HTTPConnection, app: server.App) -> None:

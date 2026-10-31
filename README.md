@@ -204,6 +204,12 @@ Buttons on a focused item come back to the same item afterwards.
 Everything the page does goes through plain HTTP on `127.0.0.1:<port>`, so a
 script (or Claude) can drive it. `mfd dump` prints the same data as JSON.
 
+Requests must name the server as `127.0.0.1:<port>` or `localhost:<port>` in
+their `Host` header, and a POST that carries an `Origin` header must come from
+one of those. So other web pages open in the browser can't use the dashboard's
+buttons, while scripts like `curl`, which send no `Origin`, work as before.
+Anything else gets `403 Forbidden`.
+
 Pages (GET, HTML):
 
 | Path | Shows |
