@@ -37,6 +37,9 @@ def test_an_empty_token_file_gets_a_new_token(tmp_path: Path) -> None:
 def test_a_request_carries_the_token_as_a_bearer_header_or_a_cookie() -> None:
     assert auth.from_request("Bearer abc", None) == "abc"
     assert auth.from_request(None, "x=1; move_forward_token=abc") == "abc"
+    # Other apps' cookies on localhost, however malformed, don't hide ours.
+    assert auth.from_request(None, "k(=1; move_forward_token=abc") == "abc"
+    assert auth.from_request(None, 'a=1; b; x="open; move_forward_token=abc') == "abc"
     assert auth.from_request("Basic abc", None) is None
     assert auth.from_request(None, None) is None
     assert auth.matches("abc", "abc") and not auth.matches("abc", "abd")

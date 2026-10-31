@@ -10,7 +10,6 @@ import logging
 import os
 import secrets
 import stat
-from http.cookies import SimpleCookie
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -59,11 +58,12 @@ def from_request(authorization: str | None, cookie: str | None) -> str | None:
     """The token a request carries: its `Authorization: Bearer` header, else its cookie."""
     if authorization and authorization.startswith(BEARER):
         return authorization[len(BEARER) :].strip()
-    if cookie:
-        jar = SimpleCookie()
-        jar.load(cookie)
-        if COOKIE in jar:
-            return jar[COOKIE].value
+    for part in (cookie or "").split(";"):
+        # Parsed by hand: other apps on localhost share our cookies, and `SimpleCookie`
+        # drops the whole header (or raises) over one malformed cookie of theirs.
+        name, _, value = part.strip().partition("=")
+        if name == COOKIE:
+            return value.strip()
     return None
 
 
