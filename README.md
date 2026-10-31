@@ -34,7 +34,7 @@ The top level of the config says who you are and how the dashboard runs:
 (where `work-notes.md`, `on-ice.md` and `reviewer-map.md` live: the
 move-forward skill's notes, which the dashboard reads on every refresh and
 writes todos and icing to; any directory works without the skill), `port`,
-`db_path`, the refresh intervals and `prune_days`. Everything about a tool is
+`db_path`, `db_backups`, the refresh intervals and `prune_days`. Everything about a tool is
 in that tool's plugin section; see [Plugins](#plugins).
 
 Teams are named once, at the top level. A plugin that has its own idea of a
@@ -246,7 +246,11 @@ button puts a stack on ice or thaws one, in the skill's own format.
 
 The schema is built by migrations: core and each plugin own a list, applied in
 order at start-up and counted in `schema_versions`, so an older database
-upgrades in place.
+upgrades in place. Before the first migration that would change an existing
+database, it's copied to `backups/dashboard.db.<UTC time>` next to it (with
+SQLite's backup API, so the copy is consistent); the newest `db_backups` (10)
+copies are kept, and `db_backups = 0` turns this off. To roll back, stop the
+server and copy a backup over `dashboard.db`.
 
 ## Development
 

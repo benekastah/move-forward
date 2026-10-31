@@ -10,6 +10,7 @@ from typing import cast
 
 from pydantic import Field, field_validator, model_validator
 
+from .db import DEFAULT_KEEP_BACKUPS
 from .plugins.git.config import GitConfig
 from .plugins.github.config import GitHubConfig
 from .plugins.jira.config import JiraConfig
@@ -65,6 +66,9 @@ class Config(Strict):
     """The directory of work-notes.md, on-ice.md and reviewer-map.md: the move-forward skill's
     notes, which the dashboard reads on every refresh and writes todos and icing to."""
     db_path: Path = DEFAULT_DB_PATH
+    db_backups: int = DEFAULT_KEEP_BACKUPS
+    """How many copies of the database to keep in `backups/` next to it. One is taken before
+    migrations change the database; the oldest go first. 0 takes none."""
     port: int = DEFAULT_PORT
     refresh_seconds: int = DEFAULT_REFRESH_SECONDS
     """How often the background loop refreshes when nobody loads the page."""

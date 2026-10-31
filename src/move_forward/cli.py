@@ -20,6 +20,7 @@ email = "me@example.com"              # Jira logs in with it; its domain finds r
 teams = ["my-team"]                   # the teams I'm on or review for, by name
 # notes_dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
 # db_path = "~/.local/share/move-forward/dashboard.db"
+# db_backups = 10                        # copies kept in backups/, taken before migrations
 # port = 8765
 # refresh_seconds = 300                  # background refresh when nobody loads the page
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
@@ -126,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"no config at {config_path}; run `mfd init` first", file=sys.stderr)
         return 1
     config = config_module.load(config_path)
-    db = Database(config.db_path)
+    db = Database(config.db_path, config.db_backups)
 
     if args.command == "refresh":
         refresh(config, db)

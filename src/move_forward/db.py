@@ -5,17 +5,26 @@ each have run is kept in `schema_versions`, so a migration runs once per databas
 ones are appended, never edited.
 """
 
+import logging
 import re
 import sqlite3
 import threading
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 CORE = "core"
 """The `schema_versions` key of core's own migrations."""
 OWNER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 """What a migrations owner may be called; owner names are written into SQL."""
+BACKUPS_DIR = "backups"
+"""Next to the database: copies taken before migrations, `<db name>.<UTC time>`."""
+BACKUP_TIME_FORMAT = "%Y%m%dT%H%M%S.%fZ"
+"""Sorts by time as text, so the oldest backups sort first."""
+DEFAULT_KEEP_BACKUPS = 10
 
 V1_SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -102,9 +111,14 @@ Params = tuple[object, ...]
 class Database:
     """One SQLite connection, shared between threads under a lock."""
 
-    def __init__(self, path: Path | str):
-        if path != ":memory:":
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, path: Path | str, keep_backups: int = DEFAULT_KEEP_BACKUPS):
+        """`keep_backups`: how many copies taken before migrations to keep; 0 takes none."""
+        self._path = None if path == ":memory:" else Path(path)
+        if self._path:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._keep_backups = keep_backups
+        self._backed_up = not (self._path and self._path.exists() and self._path.stat().st_size)
+        """Whether there's no need for a backup: one was taken, or there's nothing to lose."""
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
@@ -130,6 +144,8 @@ class Database:
                     f"the database has {done} {owner} migrations but this version knows"
                     f" {len(migrations)}; upgrade the dashboard"
                 )
+            if done < len(migrations):
+                self._backup()
             for version, sql in enumerate(migrations[done:], start=done + 1):
                 # executescript commits any open transaction first, so the script carries
                 # its own, which records the version together with the change.
@@ -143,6 +159,26 @@ class Database:
                         self._conn.rollback()
                     raise
             return len(migrations) - done
+
+    def _backup(self) -> None:
+        """Copy the database into `BACKUPS_DIR` before its first migration in this process,
+        then delete all but the newest `keep_backups` copies. Call with the lock held."""
+        if self._backed_up or self._path is None or self._keep_backups <= 0:
+            return
+        self._backed_up = True
+        backups = self._path.parent / BACKUPS_DIR
+        backups.mkdir(exist_ok=True)
+        stamp = datetime.now(UTC).strftime(BACKUP_TIME_FORMAT)
+        target = backups / f"{self._path.name}.{stamp}"
+        copy = sqlite3.connect(target)
+        try:
+            self._conn.backup(copy)
+        finally:
+            copy.close()
+        log.info("backed up %s to %s before migrating", self._path, target)
+        old = sorted(backups.glob(f"{self._path.name}.*"))[: -self._keep_backups]
+        for path in old:
+            path.unlink()
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection]:

@@ -26,6 +26,7 @@ OPTIONAL_SETTINGS = """\
 # Optional settings, with their defaults. Uncomment to change.
 # notes_dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
 # db_path = "~/.local/share/move-forward/dashboard.db"
+# db_backups = 10                        # copies kept in backups/, taken before migrations
 # refresh_seconds = 300                  # background refresh when nobody loads the page
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                        # clear work finished this long ago from the notes
