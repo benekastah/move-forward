@@ -48,9 +48,13 @@ dashboard does; `docs/entities.md` is the contract between plugins;
   reached through their CLIs (`gh`, `git`) or the standard library.
 - **Nothing destructive without a confirm.** Buttons that delete or rewrite
   set `confirm`, never force-push, reset or stash.
-- **Keep the package importable after every save.** People run
-  `mfd serve --reload`, which restarts on each change; a half-moved import
-  takes the page down until the next save.
+- **Every save must leave working code.** People run `mfd serve --reload`,
+  which restarts on each change. Each file you write must be syntactically
+  valid, and every import in the package must still resolve: when moving or
+  renaming something, update its importers in the same edit, or add the new
+  name before removing the old one. The reloader checks with `mfd check`
+  before restarting and waits out a failure, but until the code is fixed the
+  page runs the old code.
 
 ## Before committing
 

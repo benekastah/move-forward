@@ -43,6 +43,11 @@ class Enabled:
         return SnapshotRepository(self.ctx.db).get(self.name, model) if model else None
 
 
+def enabled_names(config: Config) -> list[str]:
+    """The plugins the config enables, in page order, without touching the database."""
+    return [p.name for p in PLUGINS if getattr(config, p.name) is not None]
+
+
 def enabled(config: Config, db: Database, now: datetime) -> list[Enabled]:
     """The plugins with a config section, their migrations applied."""
     result: list[Enabled] = []

@@ -73,5 +73,61 @@ def test_watch_restarts_once_a_change_compiles(
 
     monkeypatch.setattr(reload.time, "sleep", sleep)
     with pytest.raises(Restarted):
-        reload.watch(restart, tmp_path)
+        reload.watch(restart, tmp_path, check=lambda: True)
     assert polls > 6
+
+
+def test_a_change_that_fails_the_check_is_waited_out_and_the_config_is_watched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A source change fails the check (say, a bad import); then the config changes, the check
+    passes, and the server restarts."""
+    source, config = tmp_path / "pkg" / "a.py", tmp_path / "config.toml"
+    source.parent.mkdir()
+    source.write_text("x = 1\n")
+    config.write_text("")
+    polls = 0
+    checks: list[bool] = []
+
+    def sleep(_: float) -> None:
+        nonlocal polls
+        polls += 1
+        if polls == 2:
+            os.utime(source, (1, 1))
+        elif polls == 6:
+            os.utime(config, (2, 2))
+        elif polls > 20:
+            pytest.fail("never restarted")
+
+    def check() -> bool:
+        checks.append(polls >= 6)
+        return checks[-1]
+
+    def restart() -> None:
+        raise Restarted
+
+    monkeypatch.setattr(reload.time, "sleep", sleep)
+    with pytest.raises(Restarted):
+        reload.watch(restart, tmp_path / "pkg", extra=[config], check=check)
+    assert checks == [False, True]
+
+
+def test_check_command_keeps_the_global_options() -> None:
+    argv = ["/x/bin/mfd", "-c", "cfg.toml", "-v", "serve", "--reload", "--port", "1"]
+    assert reload.check_command(argv) == [
+        sys.executable,
+        "-m",
+        "move_forward.cli",
+        "-c",
+        "cfg.toml",
+        "-v",
+        "check",
+    ]
+
+
+def test_passes_check_runs_mfd_check_in_a_fresh_process(tmp_path: Path) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text('email = "me@x"\n')
+    assert reload.passes_check(["mfd", "-c", str(config), "serve"])
+    config.write_text('email = "me@x"\nrepos = []\n')
+    assert not reload.passes_check(["mfd", "-c", str(config), "serve"])

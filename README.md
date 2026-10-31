@@ -102,7 +102,8 @@ and levels, and the issue types that count as incidents or bugs are settings.
 | Command | Does |
 | --- | --- |
 | `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`. |
-| `mfd serve --reload` | Development: also restart when a source file of the dashboard changes (`--open` isn't repeated on restart). |
+| `mfd serve --reload` | Development: also restart when a source file of the dashboard or the config file changes (`--open` isn't repeated on restart). The new code and config are checked first, with `mfd check` in a separate process; if that fails, the error is logged, the running server carries on, and the next change tries again. |
+| `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |

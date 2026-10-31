@@ -1,13 +1,16 @@
 """Restart the server when its source changes: `mfd serve --reload`, for development.
 
-A thread polls the modification times of the package's files. When one changes, the
-changed Python files are compiled first (a syntax error is logged and waited out, rather
-than killing the server), then the process replaces itself with the same command.
+A thread polls the modification times of the package's files and the config file. When one
+changes, the changed Python files are compiled, then `mfd check` runs in a separate process
+to import every module and load the config. Only if both pass does the process replace
+itself with the same command; otherwise the error is logged, the running server carries on,
+and the next change tries again.
 """
 
 import logging
 import os
 import py_compile
+import subprocess
 import sys
 import threading
 import time
@@ -23,6 +26,9 @@ SETTLE_SECONDS = 0.3
 """Editors write several files in a row; wait for the burst to finish before restarting."""
 ONE_SHOT_FLAGS = {"--open"}
 """Flags that should act once, not again on every restart."""
+SERVE_COMMAND = "serve"
+CHECK_COMMAND = "check"
+CHECK_TIMEOUT_SECONDS = 60
 
 
 def watched_files(root: Path = PACKAGE_DIR) -> list[Path]:
@@ -34,9 +40,11 @@ def snapshot(files: list[Path]) -> dict[Path, float]:
     return {p: p.stat().st_mtime if p.exists() else -1 for p in files}
 
 
-def changed(before: dict[Path, float], root: Path = PACKAGE_DIR) -> list[Path]:
-    """Files added, removed or modified since `before`."""
-    now = snapshot(watched_files(root))
+def changed(
+    before: dict[Path, float], root: Path = PACKAGE_DIR, extra: list[Path] | None = None
+) -> list[Path]:
+    """Files added, removed or modified since `before`; `extra` are watched besides `root`'s."""
+    now = snapshot(watched_files(root) + (extra or []))
     return sorted(p for p in before.keys() | now.keys() if before.get(p, -1) != now.get(p, -1))
 
 
@@ -60,6 +68,33 @@ def restart_command(argv: list[str]) -> list[str]:
     ]
 
 
+def check_command(argv: list[str]) -> list[str]:
+    """`mfd check` with the same global options (e.g. `-c <config>`) as `argv`'s `serve`."""
+    command = restart_command(argv)
+    return command[: command.index(SERVE_COMMAND)] + [CHECK_COMMAND]
+
+
+def passes_check(argv: list[str] | None = None) -> bool:
+    """Whether the code as it is now imports and loads the config, in a fresh process; the
+    error is logged when not."""
+    try:
+        result = subprocess.run(
+            check_command(argv or sys.argv),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=CHECK_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        log.error("not reloading: `mfd check` took over %ds", CHECK_TIMEOUT_SECONDS)
+        return False
+    if result.returncode != 0:
+        lines = (result.stderr or result.stdout).strip().splitlines()
+        log.error("not reloading, the new code fails:\n%s", "\n".join(lines[-15:]))
+        return False
+    return True
+
+
 def restart() -> None:
     command = restart_command(sys.argv)
     log.info("restarting: %s", " ".join(command))
@@ -68,22 +103,31 @@ def restart() -> None:
     os.execv(command[0], command)
 
 
-def watch(restart: Callable[[], None] = restart, root: Path = PACKAGE_DIR) -> None:
-    """Poll until a change compiles, then call `restart` (which normally doesn't return)."""
-    before = snapshot(watched_files(root))
+def watch(
+    restart: Callable[[], None] = restart,
+    root: Path = PACKAGE_DIR,
+    extra: list[Path] | None = None,
+    check: Callable[[], bool] = passes_check,
+) -> None:
+    """Poll until a change compiles and passes `check`, then call `restart` (which normally
+    doesn't return). A change that fails is waited out until the next one."""
+    extra = extra or []
+    before = snapshot(watched_files(root) + extra)
     while True:
         time.sleep(POLL_SECONDS)
-        files = changed(before, root)
+        files = changed(before, root, extra)
         if not files:
             continue
         time.sleep(SETTLE_SECONDS)
-        files = changed(before, root)
-        before = snapshot(watched_files(root))
-        if compiles(files):
+        files = changed(before, root, extra)
+        before = snapshot(watched_files(root) + extra)
+        if compiles(files) and check():
             log.info("changed: %s", ", ".join(p.name for p in files))
             restart()
 
 
-def start() -> None:
-    """Watch in a daemon thread."""
-    threading.Thread(target=watch, name="reload", daemon=True).start()
+def start(config_path: Path) -> None:
+    """Watch the package and `config_path` in a daemon thread."""
+    threading.Thread(
+        target=watch, kwargs={"extra": [config_path]}, name="reload", daemon=True
+    ).start()

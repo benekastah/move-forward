@@ -10,6 +10,7 @@ from . import config as config_module
 from . import init, reload
 from .db import Database
 from .refresh import build_dashboard, refresh
+from .registry import enabled_names
 from .server import serve
 
 EXAMPLE_CONFIG = """\
@@ -92,6 +93,9 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     commands.add_parser("refresh", help="refresh every source once and exit")
+    commands.add_parser(
+        "check", help="load the config and every plugin, and exit; fails with what's wrong"
+    )
     commands.add_parser("dump", help="print the dashboard as JSON from what is stored")
     init_parser = commands.add_parser("init", help="ask for each setting and write the config")
     init_parser.add_argument(
@@ -128,6 +132,14 @@ def main(argv: list[str] | None = None) -> int:
     if not config_path.exists():
         print(f"no config at {config_path}; run `mfd init` first", file=sys.stderr)
         return 1
+    if args.command == "check":
+        try:
+            checked = config_module.load(config_path)
+        except (OSError, ValueError) as e:  # tomllib and pydantic errors are ValueErrors
+            print(f"{config_path}: {e}", file=sys.stderr)
+            return 1
+        print(f"{config_path}: ok; plugins: {', '.join(enabled_names(checked))}")
+        return 0
     config = config_module.load(config_path)
     db = Database(config.db_path, config.db_backups)
 
@@ -145,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.open:
             webbrowser.open(f"http://127.0.0.1:{port}/")
         if args.reload:
-            reload.start()
+            reload.start(config_path)
         serve(config, db, port)
     return 0
 
