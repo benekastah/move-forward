@@ -51,6 +51,7 @@ class Plugin[C: BaseModel, S: BaseModel](Protocol):
     # Page
     def panels(self, ctx: Context[C], snapshot: S | None, graph: Graph) -> list[Panel]: ...
     def item_actions(self, ctx: Context[C], item: Item, graph: Graph) -> list[Action]: ...
+    def act_now(self, ctx: Context[C], snapshot: S | None, graph: Graph) -> list[Item]: ...
     def pages(self) -> dict[str, PageHandler]: ...          # e.g. "/ping"
 
     # Writing
@@ -177,15 +178,15 @@ worktree of a configured repo, not only the listed path.
 
 ## Page layout and ordering
 
-The page has one collapsible group per enabled plugin, holding its panels, plus the
-cross-plugin **Act now** group at the top, holding panels their plugins mark urgent
-(today: Reviews for me, Feedback, CI failures, Merge conflicts).
+The page has one collapsible group per enabled plugin, holding its panels, below
+**Act now**: a single ranked panel that core builds from what each plugin nominates through
+its `act_now` hook (see `act_now.md`). Act now is core, not a plugin; each plugin decides
+what of its own belongs there.
 
 Order is configured by **drag and drop** on the page:
 
 - Each group summary and each panel summary gets a drag handle. Dragging a group reorders
-  groups; dragging a panel reorders it within its group, or moves it into or out of Act
-  now. A small script (HTML5 drag and drop, about 60 lines) posts the new order to
+  groups (Act now stays first); dragging a panel reorders it within its group. A small script (HTML5 drag and drop, about 60 lines) posts the new order to
   `POST /layout` and the server stores it.
 - The stored layout is the order of everything on the page and in focus mode's "All".
   Defaults come from each panel's `priority` (the skill's step order), so a fresh install

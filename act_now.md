@@ -114,7 +114,7 @@ Then:
 ## Feedback from the person using it
 
 - **Snooze** an item until tomorrow or a date; **dismiss** it for good. Stored in the
-  `act_now` plugin's own table, keyed by the item's subject and verb, so a changed item
+  core's `act_now_feedback` table, keyed by the item's subject and verb, so a changed item
   (new commits, a new reply) comes back.
 - **Pin** an item to keep it at the top until it's done.
 - Optionally later: count which items get acted on from the list versus skipped, and
@@ -123,9 +123,28 @@ Then:
 
 ## Where it lives
 
-As a plugin like the others, `act_now`, always on, with no collector. Its `panels` reads
-every other plugin's panels (core hands them over after building them) and their items'
-signals, and returns one panel at the top of the page. It owns one table:
+In core, not in a plugin. Each plugin decides what of its own it nominates, through one
+hook in the plugin protocol:
+
+```python
+def act_now(self, ctx: Context[C], snapshot: S | None, graph: Graph) -> list[Item]:
+    """This plugin's candidates for Act now, each with `signals` filled in."""
+```
+
+The plugin knows its tool best: which of its items are actionable, how long they take,
+what they close and how important they are. Core knows nothing about any tool; it only
+combines the nominations. Core then:
+
+1. collects every enabled plugin's nominations,
+2. drops blocked items and ones the person snoozed or dismissed,
+3. merges nominations about the same subject, or about subjects the graph links (a PR and
+   its ticket), into one item with all their actions,
+4. scores, caps per plugin, and keeps the top `size`,
+5. renders the result as the first panel on the page and as focus mode's "Act now".
+
+A nominated item is usually also in one of the plugin's own panels; nominating doesn't move
+it. A plugin that implements no `act_now` contributes nothing, and the fallback below lets
+it opt in cheaply. Core owns one table for the person's feedback:
 
 ```sql
 CREATE TABLE act_now_feedback (
@@ -140,7 +159,7 @@ CREATE TABLE act_now_feedback (
 );
 ```
 
-This replaces the fixed "Act now" group in the layout plan: the urgent panels go back to
+The urgent panels of today (Reviews for me, Feedback, CI failures, Merge conflicts) go back to
 their plugins' groups, and the top of the page is this one ranked panel. Focus mode gets
 an "Act now" category that walks the same list.
 
@@ -149,11 +168,12 @@ an "Act now" category that walks the same list.
 Plugins will fill in signals unevenly, especially third-party ones. A fallback keeps the
 panel useful:
 
-- Each plugin can mark panels as `actionable` (today's urgent panels) with a default
-  effort and verb for their items. An item without signals inherits them.
-- Items in non-actionable panels never appear.
+- `BasePlugin.act_now` by default nominates every item in the plugin's panels marked
+  `actionable` (today's urgent panels), with the panel's default effort and verb for items
+  that carry no signals of their own.
+- Items in non-actionable panels never appear unless the plugin nominates them itself.
 - So a minimal plugin gets into Act now by setting two fields on a panel, and a careful
-  plugin ranks better by filling in per-item signals.
+  plugin overrides `act_now` to nominate precisely and rank better.
 
 ## Open questions
 
