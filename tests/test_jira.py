@@ -1,4 +1,7 @@
+import threading
+import urllib.request
 from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
@@ -91,3 +94,43 @@ def test_resolved_at_builds_a_key_query(monkeypatch: pytest.MonkeyPatch) -> None
     assert seen == ["key in (APP-1, APP-2) AND statusCategory = Done"]
     assert list(resolved) == ["APP-2"] and resolved["APP-2"].year == 2026
     assert jira.resolved_at(config, "me@x", [], "t") == {} and len(seen) == 1
+
+
+def test_the_token_is_never_sent_to_a_site_that_isnt_https(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def no_request(*_: object, **__: object) -> None:
+        raise AssertionError("a request was made")
+
+    monkeypatch.setattr(jira._opener, "open", no_request)  # pyright: ignore[reportPrivateUsage]
+    unvalidated = JiraConfig.model_construct(site="http://j.atlassian.net")
+    with pytest.raises(RuntimeError, match="isn't https"):
+        jira.search(unvalidated, "me@x", "jql", "token")
+
+
+class _Redirect(BaseHTTPRequestHandler):
+    def do_POST(self) -> None:
+        self.send_response(302)
+        self.send_header("Location", "http://127.0.0.1:9/steal")  # plain http, nothing listening
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+def test_redirects_are_not_followed_with_the_token() -> None:
+    httpd = HTTPServer(("127.0.0.1", 0), _Redirect)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{httpd.server_port}/rest",
+        data=b"{}",
+        headers={"Authorization": "Basic secret"},
+        method="POST",
+    )
+    try:
+        with pytest.raises(RuntimeError, match="not following it"):
+            jira._opener.open(request, timeout=5)  # pyright: ignore[reportPrivateUsage]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
