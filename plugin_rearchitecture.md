@@ -140,13 +140,15 @@ on. `Action` gains `href` for link buttons such as Ping.
 email = "jane@acme.com"
 # db_path, port, refresh_seconds, refresh_on_load_seconds, prune_days
 
-[teams.core]                  # identity shared by plugins; github and slack read it
-slack_channel = "#team-core"
+teams = ["core", "web"]       # the teams I belong to or review for, by name
 
 [github]
 org = "acme"
 # history_days, review_checks, required_owner_marker, ticket_link_prefix,
-# placeholder_labels, email_domains, stale_review_hours
+# placeholder_labels, email_domains, stale_review_hours, reviewer_history_days
+
+[github.teams]                # a team's slug, where it isn't the team's name
+web = "web-reviewers"
 
 [git]
 repos = ["~/src/app"]         # main checkouts; worktrees are found with `git worktree list`
@@ -156,12 +158,24 @@ repos = ["~/src/app"]         # main checkouts; worktrees are found with `git wo
 workspace_url = "https://acme.slack.com"
 # ping_first, ping_follow_up
 
+[slack.teams]                 # where review pings to a team go
+core = "#team-core"
+
 [jira]
 site = "https://acme.atlassian.net"
 # token_env, keychain_service, status_*, escalation_*, incident_types, bug_types
 
+[jira.teams]                  # a team's id in Jira's team field
+core = "12345"
+
 [notes]                       # optional; defaults are fine
 ```
+
+Teams are named in core and nothing else: each plugin that has its own idea of a team maps
+the names to it in a `teams` table of its section, with a default where one makes sense (a
+GitHub slug defaults to the name). A name a plugin's `teams` table has but the top-level
+`teams` list doesn't is an error, so a typo doesn't silently drop a team. Plugins see only
+the names, through `Context`, and their own mapping.
 
 The top-level model holds the core fields plus one optional field per built-in plugin, each
 typed with that plugin's `config_model`, so unknown keys are still errors and basedpyright
@@ -504,7 +518,7 @@ CREATE TABLE slack_contacts (          -- the reviewer map's users
     slack_id TEXT,
     source TEXT NOT NULL               -- "import", "dashboard"
 );
-CREATE TABLE slack_team_channels (     -- the reviewer map's teams; [teams.x].slack_channel wins
+CREATE TABLE slack_team_channels (     -- the reviewer map's teams; [slack.teams] wins
     team TEXT PRIMARY KEY,
     channel_name TEXT,
     channel_id TEXT
