@@ -125,3 +125,25 @@ class Builder:
             items=items,
             actions=actions,
         )
+
+
+def untrack_iced_action(item: Item, graph: Graph) -> Action | None:
+    """An Untrack button for an item about iced branches, i.e. notes' On ice item, when
+    git-stack still tracks some of them. An `iced_branch`'s id is its branch's."""
+    tracked = [
+        ref.id
+        for ref in item.subjects
+        if ref.kind == ICED_BRANCH
+        and (e := graph.get(BRANCH, ref.id)) is not None
+        and e.attrs.get("stack_parent")
+    ]
+    if not tracked:
+        return None
+    return Action(
+        name="git_stack/untrack",
+        label="Untrack",
+        fields={"targets": "\n".join(tracked)},
+        confirm="Stop git-stack tracking "
+        + ", ".join(ref_id.partition(BRANCH_ID_SEPARATOR)[2] for ref_id in tracked)
+        + "? The branches themselves are left alone.",
+    )

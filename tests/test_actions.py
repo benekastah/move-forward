@@ -174,10 +174,6 @@ def _ice(config: Config, repo: Path, branch: str) -> str:
     return run("notes/ice", config, {"repo": str(repo), "branch": branch})
 
 
-def _ice_id(config: Config, title: str) -> str:
-    return str(next(i.id for i in _notes(config).ices() if i.title == title))
-
-
 def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     config: Config, repo: Path
 ) -> None:
@@ -199,23 +195,39 @@ def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
         run("notes/thaw", config, {"ice": "wip"})
 
 
-def test_delete_iced_removes_branches_and_takes_them_off_ice(config: Config, repo: Path) -> None:
+def test_iced_branches_are_deleted_together_by_git_and_stay_on_ice(
+    config: Config, repo: Path
+) -> None:
     _ice(config, repo, "wip")
     _ice(config, repo, "done")
-    notice = run("notes/delete_iced", config, {"ice": _ice_id(config, "wip")})
-    assert notice == "deleted 1 branches of wip and took it off ice"
-    assert git(repo, "branch", "--list", "wip") == ""
-    assert [i.title for i in _notes(config).ices()] == ["done"]
+    targets = f"{repo}\twip\n{repo}\tdone"
+    assert run("git/delete_together", config, {"targets": targets}) == "deleted wip, done"
+    assert git(repo, "branch", "--list", "wip", "done") == ""
+    assert [i.title for i in _notes(config).ices()] == ["wip", "done"]
 
 
-def test_delete_iced_refuses_a_checked_out_branch_before_deleting_anything(
+def test_deleting_together_checks_every_branch_before_deleting_any(
     config: Config, repo: Path
 ) -> None:
     git(repo, "switch", "-q", "wip")
-    _ice(config, repo, "wip")
+    targets = f"{repo}\tdone\n{repo}\twip"
     with pytest.raises(ActionError, match="checked out"):
-        run("notes/delete_iced", config, {"ice": _ice_id(config, "wip")})
-    assert _notes(config).ices()
+        run("git/delete_together", config, {"targets": targets})
+    assert git(repo, "branch", "--list", "done").strip() == "done"
+    with pytest.raises(ActionError, match="not a configured repo"):
+        run("git/delete_together", config, {"targets": "/elsewhere\tdone"})
+
+
+def test_an_iced_branch_with_commits_since_it_was_iced_isnt_deleted(
+    config: Config, repo: Path
+) -> None:
+    _ice(config, repo, "done")
+    git(repo, "switch", "-q", "done")
+    _commit(repo, "later.txt")
+    git(repo, "switch", "-q", "main")
+    with pytest.raises(ActionError, match="commits since it was iced"):
+        run("git/delete_branch", config, {"repo": str(repo), "branch": "done"})
+    assert git(repo, "branch", "--list", "done").strip() == "done"
 
 
 def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -> None:

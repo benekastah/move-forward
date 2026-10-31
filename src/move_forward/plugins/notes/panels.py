@@ -306,8 +306,6 @@ class Builder:
         for ice in self.ices:
             branches = [item.ref_id.partition(BRANCH_ID_SEPARATOR) for item in ice.items]
             repo_dir = branches[0][0] if branches else "?"
-            names = ", ".join(name for _, _, name in branches)
-            fields = {"ice": str(ice.id)}
             items.append(
                 Item(
                     title=ice.title,
@@ -315,14 +313,13 @@ class Builder:
                     details=[ice.note] if ice.note else [],
                     badges=[f"{len(ice.items)} branches"],
                     actions=[
-                        Action(name="notes/thaw", label="Reopen", fields=fields),
-                        Action(
-                            name="notes/delete_iced",
-                            label="Delete the work",
-                            fields=fields,
-                            confirm=f"Delete the local branches {names} in {repo_dir} and take"
-                            " them off ice? Remote branches and PRs are not touched.",
-                        ),
+                        Action(name="notes/thaw", label="Reopen", fields={"ice": str(ice.id)})
+                    ],
+                    # git and git_stack add deleting and untracking the branches by these.
+                    subjects=[
+                        Ref(kind=ICED_BRANCH, id=item.ref_id)
+                        for item in ice.items
+                        if item.kind == BRANCH
                     ],
                 )
             )

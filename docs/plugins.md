@@ -75,11 +75,14 @@ flowchart TB
         prItems["items about a pr<br/>(github, git, git_stack, slack)"]
         ticketItems["items about a ticket<br/>(jira)"]
         branchItems["items about a branch<br/>(git's Local work)"]
+        icedItems["items about iced branches<br/>(notes' On ice)"]
     end
     slack([slack]) -- "Ping / Bump link" --> prItems
     notes([notes]) -- "Add todo" --> prItems
     notes -- "Add todo" --> ticketItems
     notes -- "Put on ice" --> branchItems
+    git -- "Delete branches" --> icedItems
+    git_stack -- "Untrack" --> icedItems
 
     github -. "url_for(pr)" .-> urls{{graph.url_for}}
     jira -. "url_for(ticket)" .-> urls

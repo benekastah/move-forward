@@ -135,3 +135,15 @@ def test_a_branch_iced_in_another_repo_is_not_iced_here() -> None:
     [item] = panel(build(local=local, iced_stacks=[elsewhere]), "local_work").items
     assert "iced" not in item.badges
     assert "notes/ice" in [a.name for a in item.actions]
+
+
+def test_git_offers_to_delete_iced_branches_on_the_on_ice_item_only() -> None:
+    local = local_snapshot(branches=[local_branch("main"), local_branch("me/x", ahead=1)])
+    built = build(local=local, iced_stacks=[iced("me/x"), iced("me/gone")])
+    on_ice = {item.title: item for item in panel(built, "iced").items}
+    [delete] = [a for a in on_ice["me/x"].actions if a.name == "git/delete_together"]
+    assert delete.fields == {"targets": "/src/widgets\tme/x"} and delete.confirm
+    # A branch git no longer has can't be deleted again.
+    assert [a.name for a in on_ice["me/gone"].actions] == ["notes/thaw"]
+    [local_work] = panel(built, "local_work").items
+    assert "git/delete_together" not in [a.name for a in local_work.actions]

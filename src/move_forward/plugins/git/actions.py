@@ -11,7 +11,7 @@ from ...plugin import ActionError, Context
 from ...shell import CommandError, git
 from . import client
 from .config import GitConfig
-from .panels import TARGET_SEPARATOR
+from .panels import ICED_BRANCH, TARGET_SEPARATOR, branch_ref
 
 WIP_MESSAGE = "WIP"
 
@@ -38,15 +38,42 @@ def checked_out_in(repo: Path, branch: str) -> str | None:
     return None
 
 
-def delete_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
-    repo = repo_path(ctx.config, fields["repo"])
-    branch = fields["branch"]
+def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
+    """Raise unless the branch can go: it exists, isn't checked out, and if it's on ice, has
+    no commits since it was iced (they'd be lost with it)."""
     if not branch_exists(repo, branch):
         raise ActionError(f"{branch} doesn't exist in {repo}")
     if worktree := checked_out_in(repo, branch):
         raise ActionError(f"{branch} is checked out in {worktree}; switch it away first")
+    iced = graph.get(ICED_BRANCH, branch_ref(str(repo), branch).id)
+    iced_sha = iced.attrs.get("sha") if iced else None
+    if isinstance(iced_sha, str) and git(repo, "rev-parse", branch).strip() != iced_sha:
+        raise ActionError(f"{branch} has commits since it was iced; thaw it, or ice it again")
+
+
+def delete_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
+    repo = repo_path(ctx.config, fields["repo"])
+    branch = fields["branch"]
+    _check_deletable(graph, repo, branch)
     git(repo, "branch", "-D", branch)
     return f"deleted {branch} in {repo}"
+
+
+def delete_together(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Delete every `<repo>\t<branch>` line of `targets`, or none: each is checked first, so
+    one that can't go stops it before anything is deleted. For a stack on ice."""
+    targets: list[tuple[Path, str]] = []
+    for line in fields.get("targets", "").splitlines():
+        repo_dir, _, branch = line.partition(TARGET_SEPARATOR)
+        if branch:
+            targets.append((repo_path(ctx.config, repo_dir), branch))
+    if not targets:
+        raise ActionError("no branches to delete")
+    for repo, branch in targets:
+        _check_deletable(graph, repo, branch)
+    for repo, branch in targets:
+        git(repo, "branch", "-D", branch)
+    return f"deleted {', '.join(branch for _, branch in targets)}"
 
 
 def delete_branches(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:

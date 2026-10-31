@@ -14,6 +14,7 @@ from .config import GitConfig
 TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
 PR = "pr"
+BRANCH = "branch"
 ICED_BRANCH = "iced_branch"
 
 
@@ -169,4 +170,22 @@ class Builder:
 
 
 def branch_ref(repo_dir: str, branch: str) -> Ref:
-    return Ref(kind="branch", id=f"{repo_dir}{TARGET_SEPARATOR}{branch}")
+    return Ref(kind=BRANCH, id=f"{repo_dir}{TARGET_SEPARATOR}{branch}")
+
+
+def delete_iced_action(item: Item, graph: Graph) -> Action | None:
+    """A Delete branches button for an item about iced branches, i.e. notes' On ice item: the
+    ones still here, all or none, each checked for commits since it was iced. An
+    `iced_branch`'s id is its branch's."""
+    iced = [ref for ref in item.subjects if ref.kind == ICED_BRANCH]
+    here = [ref.id for ref in iced if graph.get(BRANCH, ref.id) is not None]
+    if not here:
+        return None
+    names = ", ".join(ref_id.partition(TARGET_SEPARATOR)[2] for ref_id in here)
+    return action(
+        "delete_together",
+        "Delete branches",
+        {"targets": "\n".join(here)},
+        confirm=f"Delete the local branches {names}? Remote branches and PRs are not touched,"
+        " and they stay on ice with the commits they were iced at.",
+    )

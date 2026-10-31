@@ -1,4 +1,4 @@
-"""The git-stack plugin's button: `git stack clean`.
+"""The git-stack plugin's buttons: `git stack clean`, and untracking iced branches.
 
 The repo must be one git has branches in, i.e. one of `[git] repos`.
 """
@@ -9,7 +9,7 @@ from ...graph import Graph
 from ...plugin import ActionError, Context
 from ...shell import git
 from .config import GitStackConfig
-from .panels import ICED_BRANCH, repo_dirs
+from .panels import BRANCH_ID_SEPARATOR, ICED_BRANCH, repo_dirs
 
 STACK_CLEAN_TIMEOUT_SECONDS = 600
 """`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
@@ -35,3 +35,20 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
     out = git(repo, "stack", "clean", "-d", "local", timeout=STACK_CLEAN_TIMEOUT_SECONDS)
     deleted = sum(1 for line in out.splitlines() if "deleted" in line.lower())
     return f"ran git stack clean -d local in {repo}" + (f", {deleted} deleted" if deleted else "")
+
+
+def untrack(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """`git stack untrack` the `<repo>\t<branch>` lines of `targets`, repo by repo."""
+    by_repo: dict[str, list[str]] = {}
+    for line in fields.get("targets", "").splitlines():
+        repo_dir, _, branch = line.partition(BRANCH_ID_SEPARATOR)
+        if branch:
+            by_repo.setdefault(repo_dir, []).append(branch)
+    if not by_repo:
+        raise ActionError("no branches to untrack")
+    unknown = sorted(set(by_repo) - set(repo_dirs(graph)))
+    if unknown:
+        raise ActionError(f"{', '.join(unknown)} is not a configured repo")
+    for repo_dir, branches in by_repo.items():
+        git(Path(repo_dir), "stack", "untrack", *branches)
+    return "untracked " + ", ".join(b for branches in by_repo.values() for b in branches)

@@ -248,12 +248,9 @@ def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
     for key in ("conflicts", "feedback", "needs_reviewer", "metadata"):
         assert titles(dashboard, key) == []
     assert titles(dashboard, "iced") == [parked.head]
+    # Reopen is notes'; git adds Delete branches only for branches it still has.
     actions = panel(dashboard, "iced").items[0].actions
-    assert [(a.name, a.label) for a in actions] == [
-        ("notes/thaw", "Reopen"),
-        ("notes/delete_iced", "Delete the work"),
-    ]
-    assert actions[1].confirm is not None and parked.head in actions[1].confirm
+    assert [(a.name, a.label) for a in actions] == [("notes/thaw", "Reopen")]
 
 
 def test_a_pr_is_hidden_only_by_icing_in_its_own_repos_checkout() -> None:

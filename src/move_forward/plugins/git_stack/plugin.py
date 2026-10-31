@@ -5,11 +5,11 @@ from typing import ClassVar
 
 from ...domain import GitStackSnapshot
 from ...graph import Entity, Graph
-from ...page import Panel
+from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
 from . import actions, client
 from .config import GitStackConfig
-from .panels import Builder, entities, repo_dirs
+from .panels import Builder, entities, repo_dirs, untrack_iced_action
 
 
 class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
@@ -34,5 +34,9 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     ) -> list[Panel]:
         return [Builder(snapshot, graph).stacks()]
 
+    def item_actions(self, ctx: Context[GitStackConfig], item: Item, graph: Graph) -> list[Action]:
+        action = untrack_iced_action(item, graph)
+        return [action] if action else []
+
     def actions(self) -> dict[str, ActionHandler]:
-        return {"stack_clean": actions.stack_clean}
+        return {"stack_clean": actions.stack_clean, "untrack": actions.untrack}

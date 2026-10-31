@@ -2,11 +2,11 @@
 
 from ...domain import LocalSnapshot
 from ...graph import Entity, Graph, Ref
-from ...page import Panel
+from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
 from . import actions, client
 from .config import GitConfig
-from .panels import Builder, branch_ref
+from .panels import Builder, branch_ref, delete_iced_action
 
 REPO = "repo"
 
@@ -66,10 +66,15 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     ) -> list[Panel]:
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
 
+    def item_actions(self, ctx: Context[GitConfig], item: Item, graph: Graph) -> list[Action]:
+        action = delete_iced_action(item, graph)
+        return [action] if action else []
+
     def actions(self) -> dict[str, ActionHandler]:
         return {
             "delete_branch": actions.delete_branch,
             "delete_branches": actions.delete_branches,
+            "delete_together": actions.delete_together,
             "push_branch": actions.push_branch,
             "wip_commit": actions.wip_commit,
         }

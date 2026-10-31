@@ -1,16 +1,15 @@
 """The notes plugin's buttons: todos, icing and thawing, posted to `/actions/notes/<action>`.
+They only record: deleting or untracking iced branches is git's and git_stack's.
 
 Every action takes the form fields of its button and returns a one-line notice for the page.
 A todo is named by its entry's title and its text, as the page shows them. A repo must be
 one the graph has branches of, i.e. one of git's checkouts.
 """
 
-import contextlib
 from pathlib import Path
 
 from ...graph import Graph
 from ...plugin import ActionError, ActionHandler, Context
-from ...shell import CommandError, git
 from .config import NotesConfig
 from .markdown import JIRA_KEY_RE, links_in
 from .models import Entry, IcedItem, Link, Size, Todo
@@ -32,20 +31,6 @@ def _repo(graph: Graph, repo_dir: str) -> Path:
     if not any(b.ref.id.startswith(prefix) for b in graph.of_kind(BRANCH)):
         raise ActionError(f"{repo_dir} is not a configured repo")
     return Path(repo_dir)
-
-
-def branch_exists(repo: Path, branch: str) -> bool:
-    try:
-        git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
-    except CommandError:
-        return False
-    return True
-
-
-def checked_out_in(repo: Path, branch: str) -> str | None:
-    """The worktree the branch is checked out in, if any."""
-    path = git(repo, "for-each-ref", "--format=%(worktreepath)", f"refs/heads/{branch}")
-    return path.strip() or None
 
 
 def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
@@ -115,32 +100,6 @@ def thaw(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str
         raise ActionError("that stack is not on ice")
     notes.delete_ice(ice_id)
     return f"thawed {found.title}"
-
-
-def delete_iced(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """Delete an iced stack's local branches and take it off ice.
-
-    Checks every branch first, so a branch checked out in a worktree stops it before anything
-    is deleted. Remote branches and PRs are left alone.
-    """
-    notes = NotesRepository(ctx.db)
-    ice_id = _ice_id(fields)
-    found = next((i for i in notes.ices() if i.id == ice_id), None)
-    if found is None:
-        raise ActionError("that stack is not on ice")
-    branches = [item.ref_id.partition(TARGET_SEPARATOR) for item in found.items]
-    repo = _repo(graph, branches[0][0]) if branches else None
-    existing = [name for _, _, name in branches if repo and branch_exists(repo, name)]
-    if repo and existing:
-        for name in existing:
-            if worktree := checked_out_in(repo, name):
-                raise ActionError(f"{name} is checked out in {worktree}; switch it away first")
-        # Not tracked by git-stack, or git-stack isn't installed: nothing to untrack.
-        with contextlib.suppress(CommandError, FileNotFoundError):
-            git(repo, "stack", "untrack", *existing)
-        git(repo, "branch", "-D", *existing)
-    notes.delete_ice(ice_id)
-    return f"deleted {len(existing)} branches of {found.title} and took it off ice"
 
 
 # Todos
@@ -247,5 +206,4 @@ ACTIONS: dict[str, ActionHandler] = {
     "todo_add": todo_add,
     "ice": ice,
     "thaw": thaw,
-    "delete_iced": delete_iced,
 }

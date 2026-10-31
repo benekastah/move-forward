@@ -174,10 +174,12 @@ Only Act now starts expanded; each panel inside a group collapses too.
 - **Cleanup**: local branches whose PR merged or whose remote is gone, with a
   Delete button each and Delete all (`git branch -D`; a branch checked out in a
   worktree is refused).
-- **On ice**: stacks the skill parked, with Reopen (thaw) and Delete the work
-  (deletes the local branches after a confirmation, untracking them from
-  git-stack first; remote branches and PRs are untouched). Their PRs and
-  branches are left out of the other panels.
+- **On ice**: parked stacks, with Reopen (thaw). git adds Delete branches
+  (the local ones, all or none, after a confirmation; refused for a branch with
+  commits since it was iced; remote branches and PRs are untouched), and
+  git_stack adds Untrack while git-stack tracks them. The stack stays on ice
+  with the commits it was iced at until it's reopened. Their PRs and branches
+  are left out of the other panels.
 
 ## Focus mode
 
@@ -250,9 +252,10 @@ error status):
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`. |
 | `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack when git_stack knows it, recording each branch's commit. |
 | `/actions/notes/thaw` | `ice` (its id, as the On ice panel's buttons have it) | Takes a stack off ice. |
-| `/actions/notes/delete_iced` | `ice` | Deletes an iced stack's local branches and takes it off ice. |
-| `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. |
+| `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. Refused for a checked-out branch, or an iced one with commits since it was iced. |
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
+| `/actions/git/delete_together` | `targets` | Deletes all of them or, if any can't go, none. |
+| `/actions/git_stack/untrack` | `targets` | `git stack untrack` for each. |
 | `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
 | `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 

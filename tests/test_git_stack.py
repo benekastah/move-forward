@@ -126,3 +126,22 @@ def test_collects_in_the_repos_git_has_branches_in(monkeypatch: pytest.MonkeyPat
     collected = git_stack.plugin.collect_after(git_stack.ctx, graph)
     assert asked == [Path("/src/widgets")]
     assert [r.dir for r in collected.repos] == ["/src/widgets"]
+
+
+def test_git_stack_offers_to_untrack_iced_branches_it_tracks() -> None:
+    built = dashboard(
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/x")]),
+        stacks=stacks(StackBranch(name="main"), StackBranch(name="me/x", parent="main")),
+        iced_stacks=[iced("me/x")],
+    )
+    [item] = panel(built, "iced").items
+    [untrack] = [a for a in item.actions if a.name == "git_stack/untrack"]
+    assert untrack.fields == {"targets": "/src/widgets\tme/x"} and untrack.confirm
+    untracked = dashboard(local=local_snapshot(), stacks=stacks(), iced_stacks=[iced("me/x")])
+    assert "git_stack/untrack" not in [a.name for a in panel(untracked, "iced").items[0].actions]
+
+
+def test_untrack_refuses_unknown_repos() -> None:
+    config, db = stored(local=local_snapshot(branches=[local_branch("main")]), stacks=stacks())
+    with pytest.raises(ActionError, match="not a configured repo"):
+        refresh.run_action(config, db, "git_stack/untrack", {"targets": "/elsewhere\tme/x"})

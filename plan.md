@@ -19,15 +19,6 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
 
-### 5a. Notes tables and import
-
-The notes are in the notes plugin's tables, read once with `mfd notes import`. Left:
-
-- notes stops running git: today `delete_iced` deletes branches and untracks them from
-  git-stack itself, and `ice` reads shas. Deleting branches is git's action and untracking
-  is git_stack's; they offer them on the On ice item, by its subjects, as item actions.
-  notes only records and thaws.
-
 ### 5b. Notes CLI and the skill
 
 - The `mfd notes ...` CLI (list, show, add-entry, set, link, todo add/done/undone/delete/
