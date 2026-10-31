@@ -425,3 +425,14 @@ def test_todo_add_can_create_the_entry(config: Config, work_notes: Path) -> None
     )  # an existing entry isn't recreated
     assert work_notes.read_text().count("## APP-7 New thing") == 1
     assert _todos(work_notes, "APP-7 New thing") == ["[None] start", "[None] again"]
+
+
+def test_a_branch_iced_in_another_repo_can_be_iced_here(config: Config, repo: Path) -> None:
+    config.notes.dir.mkdir()
+    (config.notes.dir / notes.ON_ICE_FILE).write_text(
+        "# Stacks on ice\n\n## wip (~/elsewhere)\n- Iced: 2026-10-01\n- Branches:\n  - wip 1234\n"
+    )
+    notice = notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "wip"})
+    assert notice == "put wip on ice (1 branches)"
+    with pytest.raises(ActionError, match="already on ice"):
+        notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "wip"})

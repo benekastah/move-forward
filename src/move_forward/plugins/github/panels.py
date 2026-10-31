@@ -26,6 +26,19 @@ MERGE_QUEUE_LOOKBACK = timedelta(days=2)
 PR = "pr"
 ENTRY = "entry"
 ICED_BRANCH = "iced_branch"
+REPO = "repo"
+BRANCH_ID_SEPARATOR = "\t"
+"""Joins a repo dir and a branch name in an `iced_branch` entity's id."""
+
+
+def is_iced(graph: Graph, repo: str, head: str) -> bool:
+    """Whether a PR's branch is on ice: in the checkout of its repo that git knows, or, when
+    git knows no checkout of it, in any repo."""
+    checkout = graph.get(REPO, repo)
+    if checkout is not None:
+        iced_id = f"{checkout.attrs.get('dir')}{BRANCH_ID_SEPARATOR}{head}"
+        return graph.get(ICED_BRANCH, iced_id) is not None
+    return any(e.attrs.get("name") == head for e in graph.of_kind(ICED_BRANCH))
 
 
 def pr_ref(pr: PullRequest) -> Ref:
@@ -85,7 +98,7 @@ class Builder:
         self.mine: list[PullRequest] = snapshot.mine if snapshot else []
 
     def _iced(self, pr: PullRequest) -> bool:
-        return self.graph.get(ICED_BRANCH, pr.head) is not None
+        return is_iced(self.graph, pr.repo, pr.head)
 
     def _entry_attr(self, pr: PullRequest, attr: str) -> list[str]:
         """An attribute's values over the work entries about the PR or its tickets."""

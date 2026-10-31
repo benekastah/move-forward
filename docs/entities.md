@@ -29,7 +29,7 @@ APP-1 is related to every PR whose branch, title or body mentions APP-1.
 | `branch` | git, git_stack | `<repo dir>\t<branch>` | | its `repo` |
 | `ticket` | jira | the issue key, e.g. `APP-1` | the issue's status | |
 | `entry` | notes | the entry's title | | the `pr` URLs and `ticket` keys it names |
-| `iced_branch` | notes | the branch's name | | |
+| `iced_branch` | notes | `<repo dir>\t<branch>`, like `branch` | | |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
 answers for `pr` (the id is the URL), jira for `ticket` (from its `site`).
@@ -110,5 +110,6 @@ On branches git-stack tracks (git_stack):
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `repo_dir` | string | the repo, as `on-ice.md` writes it (may start with `~`) |
+| `repo_dir` | string | the repo's directory, with `~` expanded |
+| `name` | string | the branch's name |
 | `stack` | string | the bottom branch of the iced stack it belongs to |

@@ -23,10 +23,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 Small, independent fixes that shouldn't wait for the bigger steps:
 
-- **Iced branches across repos.** `iced_branch` ids are bare branch names. A stack iced in
-  one repo hides a same-named branch's PR in every other repo from github and slack, gives
-  it the iced badge in git, and stops it being iced again. Checks should match the repo too,
-  until icing anything (5f) replaces them.
 - **Migrations run on every page load.** `registry.enabled` calls `db.migrate` for every
   plugin on each request. Migrating once at start-up (and in `mfd check`) is enough.
 - **slack's `mark_sent` takes any `target`.** It should accept only `user:<login>` or

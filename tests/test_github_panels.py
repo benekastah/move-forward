@@ -8,6 +8,7 @@ from conftest import (
     approved_review,
     dashboard,
     event,
+    local_snapshot,
     panel,
     pr,
     snapshot,
@@ -259,3 +260,24 @@ def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
         ("notes/delete_iced", "Delete the work"),
     ]
     assert actions[1].confirm is not None and iced.head in actions[1].confirm
+
+
+def test_a_pr_is_hidden_only_by_icing_in_its_own_repos_checkout() -> None:
+    mine = pr(1, mergeable="CONFLICTING")
+
+    def iced_in(repo_dir: str) -> IcedStack:
+        return IcedStack(
+            bottom_branch=mine.head,
+            repo_dir=repo_dir,
+            branches=[IcedBranch(name=mine.head, sha="1")],
+        )
+
+    # git knows acme/widgets is checked out at /src/widgets.
+    here = build(
+        github=snapshot(mine=[mine]), local=local_snapshot(), iced_stacks=[iced_in("/src/widgets")]
+    )
+    assert titles(here, "conflicts") == []
+    elsewhere = build(
+        github=snapshot(mine=[mine]), local=local_snapshot(), iced_stacks=[iced_in("/src/other")]
+    )
+    assert titles(elsewhere, "conflicts") == [mine.title]

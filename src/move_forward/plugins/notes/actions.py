@@ -88,7 +88,13 @@ def ice(notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | 
     path = notes.dir / ON_ICE_FILE
     text = path.read_text() if path.exists() else "# Stacks on ice\n"
     branches = _stack_branches(graph, repo, branch)
-    if any(re.search(rf"^  - {re.escape(b)} ", text, re.MULTILINE) for b in branches):
+    iced_here = {
+        b.name
+        for stack in parse_on_ice(text)
+        if Path(stack.repo_dir).expanduser() == repo
+        for b in stack.branches
+    }
+    if iced_here.intersection(branches):
         raise ActionError(f"{branch} is already on ice")
     lines = [
         "",

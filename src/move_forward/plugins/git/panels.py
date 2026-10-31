@@ -86,7 +86,7 @@ class Builder:
                 if not reason:
                     continue
                 pr = self._pr(repo.github_repo, branch.name, "open")
-                iced = branch.name in self.iced_branches
+                iced = branch_ref(repo.dir, branch.name).id in self.iced_branches
                 actions = []
                 if not branch.behind:
                     actions.append(

@@ -4,6 +4,7 @@ branch. Pure functions; no I/O."""
 
 import re
 from datetime import datetime
+from pathlib import Path
 
 from ...domain import IcedStack, Todo, WorkItem
 from ...graph import Entity, Graph, Ref
@@ -172,12 +173,13 @@ def entities(work_items: list[WorkItem], iced_stacks: list[IcedStack]) -> list[E
             )
         )
     for stack in iced_stacks:
+        repo_dir = str(Path(stack.repo_dir).expanduser())
         for branch in stack.branches:
             result.append(
                 Entity(
-                    ref=Ref(kind=ICED_BRANCH, id=branch.name),
+                    ref=Ref(kind=ICED_BRANCH, id=f"{repo_dir}{BRANCH_ID_SEPARATOR}{branch.name}"),
                     title=branch.name,
-                    attrs={"repo_dir": stack.repo_dir, "stack": stack.bottom_branch},
+                    attrs={"repo_dir": repo_dir, "name": branch.name, "stack": stack.bottom_branch},
                 )
             )
     return result
@@ -233,9 +235,9 @@ class Builder:
         ref = item.subject(BRANCH)
         if ref is None or self.graph.get(BRANCH, ref.id) is None:
             return None
-        repo_dir, _, name = ref.id.partition(BRANCH_ID_SEPARATOR)
-        if self.graph.get(ICED_BRANCH, name) is not None:
+        if self.graph.get(ICED_BRANCH, ref.id) is not None:
             return None
+        repo_dir, _, name = ref.id.partition(BRANCH_ID_SEPARATOR)
         return Action(
             name="notes/ice", label="Put on ice", fields={"repo": repo_dir, "branch": name}
         )

@@ -27,7 +27,7 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
     iced = sorted(
         str(e.attrs.get("stack") or e.ref.id)
         for e in graph.of_kind(ICED_BRANCH)
-        if Path(str(e.attrs.get("repo_dir", ""))).expanduser() == repo
+        if Path(str(e.attrs.get("repo_dir", ""))) == repo
     )
     if iced:
         names = ", ".join(dict.fromkeys(iced))

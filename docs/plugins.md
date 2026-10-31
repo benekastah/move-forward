@@ -31,7 +31,7 @@ flowchart LR
     notes([notes]) -- publishes --> entry
     notes -- publishes --> iced
 
-    repo -. "checkouts: team PR scores, reviewer suggestions" .-> github
+    repo -. "checkouts: team PR scores, reviewer suggestions, iced checks" .-> github
     entry -. "merge conditions (Held)" .-> github
     iced -. "skip iced work" .-> github
     pr -. "a branch's PR" .-> git
@@ -43,6 +43,7 @@ flowchart LR
     pr -. "transitions (related)" .-> jira
     pr -. "pings, nudges" .-> slack([slack])
     iced -. "don't ping iced PRs" .-> slack
+    repo -. "a PR's checkout, for iced checks" .-> slack
     pr -. "todo link states" .-> notes
     ticket -. "Add todo titles" .-> notes
     branch -. "the stack to ice" .-> notes

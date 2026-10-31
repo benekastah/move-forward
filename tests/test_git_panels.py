@@ -56,7 +56,7 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
         iced_stacks=[
             IcedStack(
                 bottom_branch="me/iced",
-                repo_dir="x",
+                repo_dir="/src/widgets",
                 branches=[IcedBranch(name="me/iced", sha="1")],
             )
         ],
@@ -131,3 +131,13 @@ def test_branch_prefixes_limit_cleanup_and_local_work_to_my_branches() -> None:
         "theirs/merged-by-me: PR merged 1d ago",
     ]
     assert titles(dashboard, "local_work") == ["me/unpushed: 3 commits, never pushed"]
+
+
+def test_a_branch_iced_in_another_repo_is_not_iced_here() -> None:
+    local = local_snapshot(branches=[local_branch("main"), local_branch("me/x", ahead=1)])
+    elsewhere = IcedStack(
+        bottom_branch="me/x", repo_dir="/src/other", branches=[IcedBranch(name="me/x", sha="1")]
+    )
+    [item] = panel(build(local=local, iced_stacks=[elsewhere]), "local_work").items
+    assert "iced" not in item.badges
+    assert "notes/ice" in [a.name for a in item.actions]

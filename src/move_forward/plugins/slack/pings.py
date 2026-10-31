@@ -15,6 +15,9 @@ from .config import SlackConfig
 
 PR = "pr"
 ICED_BRANCH = "iced_branch"
+REPO = "repo"
+BRANCH_ID_SEPARATOR = "\t"
+"""Joins a repo dir and a branch name in an `iced_branch` entity's id."""
 
 
 class PingTarget(Model):
@@ -75,7 +78,14 @@ class Pinger:
         ]
 
     def _iced(self, pr: Entity) -> bool:
-        return self.graph.get(ICED_BRANCH, str(pr.attrs.get("head"))) is not None
+        """Whether the PR's branch is on ice: in the checkout of its repo that git knows, or,
+        when git knows no checkout of it, in any repo."""
+        head = str(pr.attrs.get("head"))
+        checkout = self.graph.get(REPO, str(pr.attrs.get("repo")))
+        if checkout is not None:
+            iced_id = f"{checkout.attrs.get('dir')}{BRANCH_ID_SEPARATOR}{head}"
+            return self.graph.get(ICED_BRANCH, iced_id) is not None
+        return any(e.attrs.get("name") == head for e in self.graph.of_kind(ICED_BRANCH))
 
     def _target(
         self,

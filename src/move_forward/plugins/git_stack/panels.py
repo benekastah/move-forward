@@ -57,9 +57,7 @@ class Builder:
                 self.my_prs.setdefault(key, []).append(pr)
         iced = graph.of_kind(ICED_BRANCH)
         self.iced_branches = {e.ref.id for e in iced}
-        self.iced_repo_dirs = {
-            str(Path(str(e.attrs.get("repo_dir", ""))).expanduser()) for e in iced
-        }
+        self.iced_repo_dirs = {str(e.attrs.get("repo_dir")) for e in iced}
 
     def _pr(self, repo_dir: str, branch: str, state: str) -> Entity | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
@@ -94,7 +92,7 @@ class Builder:
                 if b.status in (None, "up-to-date"):
                     continue
                 pr = self._pr(repo.dir, b.name, "open")
-                badges = ["iced"] if b.name in self.iced_branches else []
+                badges = ["iced"] if branch_ref(repo.dir, b.name).id in self.iced_branches else []
                 items.append(
                     Item(
                         title=f"{b.name}: {b.status}",
@@ -106,7 +104,11 @@ class Builder:
                     )
                 )
             for b in repo.branches:
-                if b.parent is None or b.status == "merged" or b.name in self.iced_branches:
+                if (
+                    b.parent is None
+                    or b.status == "merged"
+                    or branch_ref(repo.dir, b.name).id in self.iced_branches
+                ):
                     continue
                 if not (self._pr(repo.dir, b.name, "open") or self._pr(repo.dir, b.name, "merged")):
                     items.append(
