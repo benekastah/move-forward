@@ -19,13 +19,6 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
 
-### 4c. Fixes from the code review
-
-Small, independent fixes that shouldn't wait for the bigger steps:
-
-- **slack's `mark_sent` takes any `target`.** It should accept only `user:<login>` or
-  `team:<name>`, like the ping page produces.
-
 ### 4d. CI
 
 - GitHub Actions running `check.sh`'s checks on Linux, on every push and pull request,

@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from urllib.parse import quote
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ... import render
 from ...domain import Ping, TeamChannel
@@ -33,7 +33,7 @@ class PingForm(BaseModel):
     """Fields of the "mark as sent" form on the ping page."""
 
     pr_url: str
-    target: str
+    target: str = Field(pattern=r"^(user|team):\S+$")
     """`user:<login>` or `team:<name>`, as the ping targets name them."""
     kind: Literal["first", "follow-up"]
     message: str = ""

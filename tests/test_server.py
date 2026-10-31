@@ -155,6 +155,10 @@ def test_invalid_ping_form_is_rejected(client: HTTPConnection, app: server.App) 
         client, "/actions/slack/mark_sent", {"pr_url": "x", "target": "t", "kind": "later"}
     )
     assert response.status == 303 and "failed%3A+bad+ping" in (response.getheader("Location") or "")
+    for target in ("alice", "robot:alice", "user:"):
+        response = post(client, "/actions/slack/mark_sent", {**SENT, "target": target})
+        assert "failed%3A+bad+ping" in (response.getheader("Location") or ""), target
+        response.read()
     assert PingRepository(app.db).all() == []
 
 
