@@ -293,4 +293,6 @@ server and copy a backup over `dashboard.db`.
 ```
 
 `dev-install.sh` points the repo at `git_hooks/`: `pre-commit` formats and
-lint-fixes staged Python, `pre-push` runs `check.sh`.
+lint-fixes staged Python, `pre-push` runs `check.sh`. GitHub Actions runs
+`check.sh` on Linux for every push and pull request
+(`.github/workflows/check.yml`).

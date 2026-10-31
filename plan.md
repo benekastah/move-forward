@@ -19,12 +19,6 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
 
-### 4d. CI
-
-- GitHub Actions running `check.sh`'s checks on Linux, on every push and pull request,
-  before the steps below add migrations and touch every plugin. macOS and Windows runners
-  come with the Windows follow-up.
-
 ### 4e. Authentication
 
 - A secret token in a file only my account can read; the server refuses requests without
