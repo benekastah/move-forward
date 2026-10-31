@@ -598,6 +598,10 @@ Each step is its own commit (or a few), with `./check.sh` green and the page wor
    5, when the import goes away.
 4. **notes plugin, still on the markdown files**: todos, on ice, add-todo as an item
    action. The page now has a group per plugin plus Act now.
+4b. **git-stack plugin**: `[git_stack]` (no keys of its own) runs `git stack info` in each
+   repo from git's `repo` entities, in `after_collect`, and owns the Stacks panel, the
+   `stack_clean` action and whole-stack icing; it publishes `stack_parent` on `branch`
+   entities. Plugins gain `requires` (e.g. `["git"]`), checked when the config loads.
 5. **Notes in SQLite**: the notes tables, `mfd notes import/export`, the CLI, todo ids in
    the HTTP API, `notes_dir` removed from the config.
 6. **Layout and Act now**: `priority` on panels, the `layout` table, drag and drop,
