@@ -34,13 +34,14 @@ def test_parse_status_counts_modified_and_untracked() -> None:
 
 def test_parse_branches_tracks_ahead_behind_gone() -> None:
     out = (
-        "main\torigin/main\t\t2026-10-30T10:00:00+00:00\n"
+        "main\torigin/main\t\t2026-10-30T10:00:00+00:00\t" + "a" * 40 + "\n"
         "feat\torigin/feat\t[ahead 2, behind 1]\t2026-10-29T10:00:00+02:00\n"
         "old\torigin/old\t[gone]\t2026-09-01T10:00:00+00:00\n"
         "local-only\t\t\t2026-10-28T10:00:00+00:00\n"
     )
     branches = {b.name: b for b in local.parse_branches(out)}
     assert branches["main"].upstream == "origin/main" and branches["main"].ahead == 0
+    assert branches["main"].sha == "a" * 40 and branches["feat"].sha is None
     assert (branches["feat"].ahead, branches["feat"].behind) == (2, 1)
     assert branches["old"].gone is True
     assert branches["local-only"].upstream is None
@@ -91,4 +92,5 @@ def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
     assert [(w.branch, w.modified, w.untracked) for w in result.worktrees] == [("feature", 0, 1)]
     feature = next(b for b in result.branches if b.name == "feature")
     assert feature.upstream is None and feature.ahead_of_default == 1
+    assert feature.sha == git(repo, "rev-parse", "feature").strip()
     assert result.my_dirs == ["src"]

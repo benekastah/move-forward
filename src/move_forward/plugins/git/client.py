@@ -13,6 +13,7 @@ _GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$"
 _TRACK_RE = re.compile(r"ahead (\d+)|behind (\d+)|(gone)")
 _FOR_EACH_REF_FORMAT = (
     "%(refname:short)%09%(upstream:short)%09%(upstream:track)%09%(committerdate:iso-strict)"
+    "%09%(objectname)"
 )
 FALLBACK_DEFAULT_BRANCH = "main"
 
@@ -43,7 +44,7 @@ def parse_status(porcelain: str) -> tuple[int, int]:
 def parse_branches(for_each_ref: str) -> list[Branch]:
     branches: list[Branch] = []
     for line in for_each_ref.splitlines():
-        name, upstream, track, date = (line.split("\t") + ["", "", "", ""])[:4]
+        name, upstream, track, date, sha = (line.split("\t") + ["", "", "", "", ""])[:5]
         if not name or not date:
             continue
         ahead = behind = 0
@@ -58,6 +59,7 @@ def parse_branches(for_each_ref: str) -> list[Branch]:
         branches.append(
             Branch(
                 name=name,
+                sha=sha or None,
                 upstream=upstream or None,
                 ahead=ahead,
                 behind=behind,

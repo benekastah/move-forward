@@ -81,6 +81,7 @@ On my open PRs only:
 | `ahead`, `behind` | int | commits ahead of and behind its upstream |
 | `gone` | bool | its upstream was deleted |
 | `repo_dir` | string | the checkout it's in (git) |
+| `sha` | string or null | the commit it points at, as of the last refresh (git) |
 | `checked_out_in` | string or null | the worktree it's checked out in |
 
 On branches git-stack tracks (git_stack):

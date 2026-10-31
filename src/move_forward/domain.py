@@ -125,6 +125,8 @@ class Worktree(Model):
 
 class Branch(Model):
     name: str
+    sha: str | None = None
+    """The commit it points at."""
     upstream: str | None = None
     ahead: int = 0
     behind: int = 0

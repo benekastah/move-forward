@@ -51,6 +51,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                         refs=[repo_ref] if repo_ref else [],
                         attrs={
                             "repo_dir": repo.dir,
+                            "sha": branch.sha,
                             "ahead": branch.ahead,
                             "behind": branch.behind,
                             "gone": branch.gone,

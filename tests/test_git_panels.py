@@ -25,11 +25,14 @@ build = dashboard
 
 
 def test_branches_are_published_with_their_checkout() -> None:
-    config, db = stored(local=local_snapshot(branches=[local_branch("me/a", ahead=2)]))
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("me/a", ahead=2, sha="c0ffee")])
+    )
     graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
     branch = graph.get("branch", "/src/widgets\tme/a")
     assert branch is not None
     assert branch.attrs["repo_dir"] == "/src/widgets" and branch.attrs["ahead"] == 2
+    assert branch.attrs["sha"] == "c0ffee"
 
 
 # Local
