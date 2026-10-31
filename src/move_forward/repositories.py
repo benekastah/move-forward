@@ -107,6 +107,20 @@ class ReviewerRepository:
             (login, email, SOURCE_LOOKUP),
         )
 
+    def replace_imported(self, users: list[ReviewerUser], teams: list[TeamChannel]) -> None:
+        """Replace the users and teams imported from the reviewer map with these."""
+        with self._db.transaction() as conn:
+            conn.execute("DELETE FROM reviewer_users WHERE source = ?", (SOURCE_NOTES,))
+            conn.execute("DELETE FROM team_channels WHERE source = ?", (SOURCE_NOTES,))
+            conn.executemany(
+                "INSERT OR REPLACE INTO reviewer_users VALUES (?, ?, ?, ?)",
+                [(u.login, u.email, u.slack_id, SOURCE_NOTES) for u in users],
+            )
+            conn.executemany(
+                "INSERT OR REPLACE INTO team_channels VALUES (?, ?, ?, ?)",
+                [(t.slug, t.channel_name, t.channel_id, SOURCE_NOTES) for t in teams],
+            )
+
     def teams(self) -> dict[str, TeamChannel]:
         return {
             row["slug"]: TeamChannel(
@@ -133,6 +147,12 @@ class PingRepository:
 
     def add(self, ping: Ping) -> None:
         self._db.execute(_PING_INSERT, _ping_params(ping, SOURCE_DASHBOARD))
+
+    def replace_imported(self, pings: list[Ping]) -> None:
+        """Replace the nudges imported from the work notes with these."""
+        with self._db.transaction() as conn:
+            conn.execute("DELETE FROM pings WHERE source = ?", (SOURCE_NOTES,))
+            conn.executemany(_PING_INSERT, [_ping_params(p, SOURCE_NOTES) for p in pings])
 
     def delete_before(self, cutoff: datetime) -> int:
         """Delete pings sent before `cutoff`; returns how many."""

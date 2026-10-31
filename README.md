@@ -127,6 +127,8 @@ before the command's name.
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
+| `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md`, `on-ice.md` and `reviewer-map.md` from `<dir>` into the database. Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`; the reviewer map can be imported again any time. |
+| `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 
 ## Panels
