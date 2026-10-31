@@ -8,6 +8,7 @@ from move_forward import config
 from move_forward.db import Database
 from move_forward.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS
 from move_forward.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV
+from move_forward.plugins.slack.config import DEFAULT_PING_FIRST, DEFAULT_PING_FOLLOW_UP
 from move_forward.registry import enabled
 
 MINIMAL = 'email = "me@acme.com"\n'
@@ -31,16 +32,16 @@ def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
     assert loaded.notes_dir == Path("~/n").expanduser()
     assert loaded.github is not None and loaded.github.review_checks == []
     assert [loaded.github.slug(t) for t in loaded.teams] == ["core", "web-reviewers"]
-    assert loaded.slack.teams == {"core": "#team-core"}
-    assert loaded.slack.ping_first == config.DEFAULT_PING_FIRST
+    assert loaded.slack is not None and loaded.slack.teams == {"core": "#team-core"}
+    assert loaded.slack.ping_first == DEFAULT_PING_FIRST
     assert loaded.port == config.DEFAULT_PORT
     assert loaded.jira is not None and loaded.jira.token_env == DEFAULT_JIRA_TOKEN_ENV
 
 
 def test_a_config_with_no_sections_enables_no_plugins(tmp_path: Path) -> None:
     loaded = _load(tmp_path, MINIMAL)
-    assert (loaded.github, loaded.git, loaded.jira) == (None, None, None)
-    assert loaded.teams == [] and loaded.slack.workspace_url == ""
+    assert (loaded.github, loaded.git, loaded.jira, loaded.slack) == (None, None, None, None)
+    assert loaded.teams == []
     assert loaded.notes_dir == Path("~/.config/move-forward/notes").expanduser()
 
 
@@ -68,8 +69,9 @@ def test_naming_settings_have_defaults_and_load(tmp_path: Path) -> None:
         '[slack]\nping_first = "Look: {url}"\n\n'
         '[jira]\nsite = "https://j"\nstatus_closed = "Done"\nincident_types = ["sev"]\n',
     )
-    assert loaded.slack.ping_first == "Look: {url}" and loaded.prune_days == 30
-    assert loaded.slack.ping_follow_up == config.DEFAULT_PING_FOLLOW_UP
+    assert loaded.slack is not None and loaded.prune_days == 30
+    assert loaded.slack.ping_first == "Look: {url}"
+    assert loaded.slack.ping_follow_up == DEFAULT_PING_FOLLOW_UP
     assert loaded.github is not None
     assert loaded.github.placeholder_labels == DEFAULT_PLACEHOLDER_LABELS
     assert loaded.jira is not None

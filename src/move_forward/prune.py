@@ -17,7 +17,7 @@ from .notes import WORK_NOTES_FILE
 from .panels import JIRA_KEY_RE, PR_URL_RE
 from .plugins.github import client as github
 from .plugins.jira import client as jira
-from .repositories import KvRepository, PingRepository
+from .repositories import KvRepository
 
 log = logging.getLogger(__name__)
 
@@ -135,11 +135,7 @@ def prune(
     issues_resolved_at: IssuesResolvedAt | None = None,
 ) -> list[str]:
     """Prune the notes and the database once; returns what was done."""
-    notices = prune_notes(config, now, pr_closed_at, issues_resolved_at or _jira_lookup(config))
-    deleted = PingRepository(db).delete_before(now - timedelta(days=config.prune_days))
-    if deleted:
-        notices.append(f"deleted {deleted} old ping(s)")
-    return notices
+    return prune_notes(config, now, pr_closed_at, issues_resolved_at or _jira_lookup(config))
 
 
 def _no_plugins() -> list[str]:

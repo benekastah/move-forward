@@ -1,9 +1,9 @@
-"""Server-side HTML for the dashboard and the ping page. No JavaScript."""
+"""Server-side HTML for the dashboard and focus mode, and the frame of plugins' pages."""
 
-from datetime import datetime
 from html import escape
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 
+from .page import age
 from .panels import (
     FOCUS_ALL,
     Action,
@@ -12,21 +12,11 @@ from .panels import (
     Item,
     Link,
     Panel,
-    PingTarget,
-    PrPing,
-    age,
 )
 
 PAGE_RELOAD_SECONDS = 60
 REFRESHING_RELOAD_SECONDS = 10
 """Reload faster while a refresh runs, so the new data shows up soon after it lands."""
-COPY_SCRIPT = (
-    "function copyMessage(button) {"
-    " const text = button.closest('form').querySelector('textarea').value;"
-    " navigator.clipboard.writeText(text).then(() => { button.textContent = 'Copied';"
-    " setTimeout(() => { button.textContent = 'Copy'; }, 1500); }); }"
-)
-"""The ping page's copy button."""
 OPEN_SECTIONS_SCRIPT = (
     # The server renders each <details> open or closed from the `open` query parameter
     # (`?open=act,feedback`). This keeps that parameter current: one debounced
@@ -111,21 +101,6 @@ def _badge(text: str) -> str:
     return f"<span class='badge{' warn' if warn else ''}'>{_e(text)}</span>"
 
 
-def _ping_button(item: Item, pings: dict[str, PrPing]) -> str:
-    ping = pings.get(item.url or "")
-    if ping is None:
-        return ""
-    blocked = bool(ping.blockers)
-    follow_up = any(t.ping_kind == "follow-up" for t in ping.targets)
-    label = "Ping…" if blocked else ("Bump" if follow_up else "Ping")
-    title = "Not in order: " + ", ".join(ping.blockers) if blocked else "Send review pings"
-    href = "/ping?pr=" + quote(ping.pr_url, safe="")
-    return (
-        f"<a class='button ping{' blocked' if blocked else ''}' href='{href}'"
-        f" title='{_e(title)}'>{label}</a>"
-    )
-
-
 def _link_action(action: Action) -> str:
     title = f" title='{_e(action.title)}'" if action.title else ""
     return (
@@ -173,7 +148,7 @@ def _link(link: Link) -> str:
     return f"<a href='{_e(link.url)}'{cls} target='_blank' rel='noopener'>{_e(link.text)}</a>"
 
 
-def _item(item: Item, pings: dict[str, PrPing], back: str = "") -> str:
+def _item(item: Item, back: str = "") -> str:
     title = (
         f"<a href='{_e(item.url)}' target='_blank' rel='noopener'>{_e(item.title)}</a>"
         if item.url
@@ -181,7 +156,7 @@ def _item(item: Item, pings: dict[str, PrPing], back: str = "") -> str:
     )
     parts = [
         "<li class='item'><div class='item-head'>",
-        f"<div class='item-title'>{title}</div>{_ping_button(item, pings)}"
+        f"<div class='item-title'>{title}</div>"
         + "".join(_link_action(a) for a in item.actions if a.href is not None)
         + "</div>",
     ]
@@ -207,9 +182,9 @@ def _open(key: str, default: bool, open_keys: set[str] | None) -> str:
     return " open" if is_open else ""
 
 
-def _panel(panel: Panel, pings: dict[str, PrPing], open_keys: set[str] | None) -> str:
+def _panel(panel: Panel, open_keys: set[str] | None) -> str:
     open_attr = _open(panel.key, bool(panel.items), open_keys)
-    items = "".join(_item(item, pings) for item in panel.items)
+    items = "".join(_item(item) for item in panel.items)
     return (
         f"<details class='panel{'' if panel.items else ' empty'}' data-key='{_e(panel.key)}'"
         f"{open_attr}>"
@@ -227,7 +202,7 @@ def _group(group: Group, dashboard: Dashboard, open_keys: set[str] | None) -> st
         f"<details class='group' data-key='{_e(group.key)}'{_open(group.key, group.open, open_keys)}>"
         f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span></summary>"
         "<div class='panels'>"
-        + "".join(_panel(panel, dashboard.pings, open_keys) for panel in panels)
+        + "".join(_panel(panel, open_keys) for panel in panels)
         + "</div></details>"
     )
 
@@ -368,55 +343,6 @@ def focus_page(
         "</nav><article class='panel focus'>"
         f"<div class='focus-panel'><h2>{_e(panel_title)}</h2>"
         f"<span class='description'>{_e(description)}</span></div>"
-        f"<ul class='items'>{_item(item, dashboard.pings, here)}</ul></article>"
+        f"<ul class='items'>{_item(item, here)}</ul></article>"
         f"</main><script>{FOCUS_KEYS_SCRIPT}</script></body></html>"
-    )
-
-
-def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> str:
-    last = f" · last {age(now, target.last_ping)} ago" if target.last_ping else ""
-    open_link = (
-        f"<a class='button' href='{_e(target.slack_link)}' target='_blank' rel='noopener'>"
-        "Open Slack</a>"
-        if target.slack_link
-        else "<span class='target-note'>no Slack link known for this target</span>"
-    )
-    return (
-        "<section class='target'><form method='post' action='/pings'>"
-        f"<input type='hidden' name='pr_url' value='{_e(ping.pr_url)}'>"
-        f"<input type='hidden' name='target' value='{_e(target.kind)}:{_e(target.name)}'>"
-        f"<input type='hidden' name='kind' value='{_e(target.ping_kind)}'>"
-        f"<div class='target-head'><strong>{_e(target.destination)}</strong>"
-        f"<span class='target-kind'>{_e(target.ping_kind)}{_e(last)}</span></div>"
-        f"<textarea name='message' rows='2'>{_e(target.message)}</textarea>"
-        f"<div class='target-buttons'>{open_link}"
-        "<button type='button' class='secondary' onclick='copyMessage(this)'>Copy</button>"
-        "<button type='submit' class='secondary'>Mark as sent</button></div>"
-        "</form></section>"
-    )
-
-
-def ping_page(dashboard: Dashboard, pr_url: str) -> str | None:
-    """The ping page for one of my PRs, or None if the URL isn't one."""
-    ping = dashboard.pings.get(pr_url)
-    if ping is None:
-        return None
-    title = next((i.title for p in dashboard.panels for i in p.items if i.url == pr_url), pr_url)
-    blockers = (
-        "<ul class='blockers'>" + "".join(f"<li>{_e(b)}</li>" for b in ping.blockers) + "</ul>"
-        if ping.blockers
-        else ""
-    )
-    targets = "".join(_target_form(ping, t, dashboard.generated_at) for t in ping.targets)
-    if not targets:
-        targets = "<p>No reviewers are requested on this PR.</p>"
-    return (
-        _head(f"Ping: {title}", None) + f"<header><h1>{LOGO} / ping</h1></header>"
-        "<main class='single'><article class='panel padded'>"
-        f"<h2>{_e(title)}</h2>"
-        f"<p><a href='{_e(pr_url)}' target='_blank' rel='noopener'>{_e(pr_url)}</a></p>"
-        f"{blockers}{targets}"
-        "<p class='target-note'>Copy the message, paste it in Slack, then mark it as sent so the"
-        " next ping is a follow-up.</p>"
-        f"</article></main><script>{COPY_SCRIPT}</script></body></html>"
     )

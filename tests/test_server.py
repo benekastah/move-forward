@@ -13,6 +13,7 @@ from move_forward import server
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.slack.config import SlackConfig
 from move_forward.repositories import PingRepository, SnapshotRepository
 
 
@@ -22,6 +23,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
         email="me@acme.com",
         github=GitHubConfig(org="acme"),
         teams=["core"],
+        slack=SlackConfig(),
         notes_dir=tmp_path,
         db_path=tmp_path / "x.db",
     )
@@ -99,10 +101,13 @@ def test_ping_page_lists_targets(client: HTTPConnection) -> None:
 def test_mark_as_sent_records_a_ping_and_redirects(client: HTTPConnection, app: server.App) -> None:
     response = post(
         client,
-        "/pings",
+        "/actions/slack/mark_sent",
         {"pr_url": pr(1).url, "target": "user:alice", "kind": "first", "message": "hi <there>"},
     )
-    assert response.status == 303 and response.getheader("Location") == "/"
+    assert response.status == 303
+    assert response.getheader("Location") == "/?" + urlencode(
+        {"notice": "marked the first ping to alice as sent"}
+    )
     pings = PingRepository(app.db).all()
     assert [(p.target, p.kind, p.message) for p in pings] == [("user:alice", "first", "hi <there>")]
     # The next page shows the follow-up.
@@ -110,8 +115,12 @@ def test_mark_as_sent_records_a_ping_and_redirects(client: HTTPConnection, app: 
     assert "Gentle bump" in body
 
 
-def test_invalid_ping_form_is_rejected(client: HTTPConnection) -> None:
-    assert post(client, "/pings", {"pr_url": "x", "target": "t", "kind": "later"}).status == 400
+def test_invalid_ping_form_is_rejected(client: HTTPConnection, app: server.App) -> None:
+    response = post(
+        client, "/actions/slack/mark_sent", {"pr_url": "x", "target": "t", "kind": "later"}
+    )
+    assert response.status == 303 and "failed%3A+bad+ping" in (response.getheader("Location") or "")
+    assert PingRepository(app.db).all() == []
 
 
 def test_page_load_refreshes_stale_data_in_the_background(

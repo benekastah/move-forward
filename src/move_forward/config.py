@@ -14,6 +14,7 @@ from .db import DEFAULT_KEEP_BACKUPS
 from .plugins.git.config import GitConfig
 from .plugins.github.config import GitHubConfig
 from .plugins.jira.config import JiraConfig
+from .plugins.slack.config import SlackConfig
 from .strict import Strict
 
 BASE_DIR = Path("~/.config/move-forward")
@@ -24,8 +25,6 @@ DEFAULT_DB_PATH = Path("~/.local/share/move-forward/dashboard.db")
 DEFAULT_PORT = 8765
 DEFAULT_REFRESH_SECONDS = 300
 DEFAULT_REFRESH_ON_LOAD_SECONDS = 60
-DEFAULT_PING_FIRST = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
-DEFAULT_PING_FOLLOW_UP = "Gentle bump on this review request"
 DEFAULT_PRUNE_DAYS = 90
 
 MOVED_SETTINGS = {
@@ -38,19 +37,6 @@ MOVED_SETTINGS = {
 }
 """Top-level settings that moved into a plugin's section, to say so instead of just "extra
 input"."""
-
-
-class SlackConfig(Strict):
-    """`[slack]`: where review pings go. Optional; without it the ping page has no links."""
-
-    workspace_url: str = ""
-    """Base URL for Slack links, e.g. https://example.slack.com. Empty means no links."""
-    ping_first: str = DEFAULT_PING_FIRST
-    """The first review reminder; `{url}` is the PR."""
-    ping_follow_up: str = DEFAULT_PING_FOLLOW_UP
-    teams: dict[str, str] = Field(default_factory=dict)
-    """Where review pings to a team go, e.g. `#team-a`, by its name in the top-level `teams`.
-    Overrides the reviewer map."""
 
 
 class Config(Strict):
@@ -80,7 +66,7 @@ class Config(Strict):
     github: GitHubConfig | None = None
     git: GitConfig | None = None
     jira: JiraConfig | None = None
-    slack: SlackConfig = Field(default_factory=SlackConfig)
+    slack: SlackConfig | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -99,7 +85,9 @@ class Config(Strict):
 
     @model_validator(mode="after")
     def _known_teams(self) -> "Config":
-        sections: dict[str, dict[str, str]] = {"slack": self.slack.teams}
+        sections: dict[str, dict[str, str]] = {}
+        if self.slack:
+            sections["slack"] = self.slack.teams
         if self.github:
             sections["github"] = self.github.teams
         if self.jira:

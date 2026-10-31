@@ -25,7 +25,10 @@ from move_forward.domain import (
 )
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
-from move_forward.refresh import build_dashboard
+from move_forward.plugins.slack.pings import PrPing
+from move_forward.plugins.slack.plugin import pinger
+from move_forward.refresh import build_dashboard, stored_graph
+from move_forward.registry import enabled
 from move_forward.repositories import NotesImportRepository, SnapshotRepository
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
@@ -98,11 +101,26 @@ def snapshot(**overrides: object) -> GitHubSnapshot:
     return GitHubSnapshot.model_validate(fields)
 
 
-def dashboard(**overrides: object) -> Dashboard:
-    """The dashboard core builds from stored snapshots and notes, as `refresh.build_dashboard`
-    does. Overrides name a snapshot (`github`, `local`, `jira`, `derived`), notes (`work_items`,
-    `iced_stacks`, `users`, `teams`, `pings`) or a setting of a plugin's section."""
+SLACK_OVERRIDES = (
+    "slack",
+    "slack_workspace_url",
+    "ping_first",
+    "ping_follow_up",
+    "users",
+    "teams",
+    "pings",
+)
+"""Overrides that turn the slack plugin on; without one, there's no `[slack]`."""
+
+
+def stored(**overrides: object) -> tuple[Config, Database]:
+    """A config and a database holding stored snapshots and notes. Overrides name a snapshot
+    (`github`, `local`, `jira`, `derived`), notes (`work_items`, `iced_stacks`, `users`,
+    `teams`, `pings`) or a setting of a plugin's section. github and git are always on; jira
+    and slack when an override is about them."""
     o = dict(overrides)
+    enable_slack = any(key in o for key in SLACK_OVERRIDES)
+    o.pop("slack", None)
     db = Database(":memory:")
     snapshots = SnapshotRepository(db)
     for source, key in (("github", "github"), ("git", "local"), ("jira", "jira")):
@@ -150,11 +168,25 @@ def dashboard(**overrides: object) -> Dashboard:
             "teams": teams,
             "github": github,
             "git": git,
-            "slack": slack,
+            **({"slack": slack} if enable_slack else {}),
             **({"jira": jira} if enable_jira else {}),
         }
     )
-    return build_dashboard(config, db, NOW)
+    return config, db
+
+
+def dashboard(**overrides: object) -> Dashboard:
+    """The dashboard core builds from what `stored` stores, as `refresh.build_dashboard` does."""
+    return build_dashboard(*stored(**overrides), NOW)
+
+
+def pings(**overrides: object) -> dict[str, PrPing]:
+    """What the slack plugin would ping about, by PR URL, over what `stored` stores."""
+    config, db = stored(slack=True, **overrides)
+    plugins = enabled(config, db, NOW)
+    graph, _ = stored_graph(db, plugins)
+    slack = next(e for e in plugins if e.name == "slack")
+    return pinger(slack.ctx, graph).pings()
 
 
 def panel(dashboard: Dashboard, key: str) -> Panel:

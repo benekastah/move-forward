@@ -48,11 +48,10 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
     loaded = config.load(path)
     assert loaded.github is not None and loaded.git is not None
     assert loaded.github.org == "acme" and loaded.teams == ["core"]
-    assert loaded.slack.teams == {}
+    assert loaded.slack is None
     assert loaded.email == "jane@acme.com"
     assert loaded.notes_dir == config.DEFAULT_NOTES_DIR.expanduser()
     assert loaded.git.repos == [tmp_path / "app"]
-    assert loaded.slack.workspace_url == ""
     assert loaded.git.my_branch_prefixes == [] and loaded.port == config.DEFAULT_PORT
     assert loaded.jira is None
     text = path.read_text()
@@ -84,7 +83,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     loaded = config.load(path)
     assert loaded.github is not None and loaded.git is not None
     assert loaded.github.org == "other" and loaded.teams == ["a", "b"]
-    assert loaded.slack.teams == {"a": "#team-a"}
+    assert loaded.slack is not None and loaded.slack.teams == {"a": "#team-a"}
     assert loaded.email == "jane@other.com"
     assert loaded.notes_dir == config.DEFAULT_NOTES_DIR.expanduser()
     assert loaded.git.repos == [tmp_path / "x", tmp_path / "y"]
@@ -116,7 +115,7 @@ def test_bad_answers_are_asked_again_with_the_reason(
     assert "'acme.slack.com' isn't a URL starting with https://" in out
     loaded = config.load(path)
     assert loaded.github is not None and loaded.github.org == "acme" and loaded.port == 9000
-    assert loaded.slack.workspace_url == "https://acme.slack.com"
+    assert loaded.slack is not None and loaded.slack.workspace_url == "https://acme.slack.com"
 
 
 def test_giving_up_after_repeated_bad_answers(tmp_path: Path, no_machine_guesses: None) -> None:

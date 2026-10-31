@@ -13,9 +13,10 @@ from .plugin import Context, Plugin
 from .plugins.git.plugin import GitPlugin
 from .plugins.github.plugin import GitHubPlugin
 from .plugins.jira.plugin import JiraPlugin
+from .plugins.slack.plugin import SlackPlugin
 from .repositories import KvRepository, SnapshotRepository
 
-PLUGINS: list[Plugin[Any, Any]] = [GitHubPlugin(), GitPlugin(), JiraPlugin()]
+PLUGINS: list[Plugin[Any, Any]] = [GitHubPlugin(), GitPlugin(), JiraPlugin(), SlackPlugin()]
 """Every built-in plugin, in page order. Each one's name is a field of `Config`."""
 
 

@@ -67,9 +67,9 @@ tickets, branches, ...), listed in [docs/entities.md](docs/entities.md).
 | `github` | `[github]` | my open, merged and closed PRs, review requests, PRs I reviewed, my teams' PRs (with `gh`) | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
 | `git` | `[git]` | each repo's worktrees, branches, `git stack info` | Local work, Stacks, Cleanup |
 | `jira` | `[jira]` | my open tickets | Jira transitions, What next |
+| `slack` | `[slack]` | nothing; reads my PRs from the graph and the reviewer map | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
 
-The notes (todos, on ice) and review nudges with their Slack links aren't
-plugins yet; they're always on.
+The notes (todos, on ice) aren't a plugin yet; they're always on.
 
 `[github]` needs `org`. Its conventions that differ between organisations are
 off by default: `review_checks` (CI checks that really report review status),
@@ -86,8 +86,11 @@ it every local branch is), `ignored_worktree_globs` leaves worktrees out, and
 `commit_history_days` says how far back your commits count towards the
 directories you work in.
 
-`[slack]` (`workspace_url`, the ping message templates, `[slack.teams]`) makes
-the ping page link to channels and people.
+`[slack]` turns on review pings. `workspace_url` makes the ping page link to
+channels and people, `ping_first` and `ping_follow_up` are the messages, and
+`[slack.teams]` the channel each team's pings go to (winning over the reviewer
+map). Its page is `/ping?pr=<PR URL>`, and its one action
+`/actions/slack/mark_sent`.
 
 `[jira]` needs `site`; the workflow status names, the escalation label prefix
 and levels, and the issue types that count as incidents or bugs are settings.
@@ -121,8 +124,8 @@ panel inside a group collapses too.
 - **Needs a reviewer**: no person requested and no approval. PRs requesting
   one of my `teams` get recent committers to the PR's directories as
   suggestions for whom to assign instead.
-- **Nudge reviewers**: PRs in order (green, no conflicts, no open threads) with
-  no review activity for `stale_review_hours`. The ping button on any of my
+- **Nudge reviewers** (slack): PRs in order (green, no conflicts, no open threads) with
+  no review activity for `[github] stale_review_hours`. The Ping link on any of my
   PRs opens a page with one message per requested reviewer or team, a link to
   their Slack DM or channel, and "mark as sent", which makes the next ping a
   follow-up. Nudges the skill logged in `work-notes.md` count too.
@@ -188,9 +191,9 @@ Pages (GET, HTML):
 | `/` | The dashboard. `?open=act,feedback` sets the open sections; `?notice=…` shows a message. |
 | `/focus` | Focus mode's category list. |
 | `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act`, `my_prs`, `local`, `team`, `planning`, `parked`) or a panel key. `&done_entry=…&done_text=…` keeps a just-ticked todo on the page. |
-| `/ping?pr=<PR URL>` | The ping page for one of my PRs. |
+| `/ping?pr=<PR URL>` | slack: the ping page for one of my PRs. |
 
-Plugins can add pages of their own; each plugin's section below lists them.
+Plugins can add pages of their own; the [Plugins](#plugins) section lists them.
 
 Forms (POST, `application/x-www-form-urlencoded`). A plugin's buttons post to
 `/actions/<plugin>/<action>`; the rest are core's. Each answers `303 See Other`
@@ -201,7 +204,6 @@ error status):
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/refresh` | | Starts a background refresh. |
-| `/pings` | `pr_url`, `target` (`user:<login>` or `team:<slug>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent. |
 | `/actions/todo_add` | `entry`, `text` (or `input`), optional `size` (`quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds a todo under the entry's `Left to do`; with `create`, a missing entry is created first, with `where` as its `Where`. |
 | `/actions/todo_done` | `entry`, `text` | Moves the todo to a `Done <date>:` line; redirects with `done_entry`/`done_text`. |
 | `/actions/todo_undone` | `entry`, `text` | Moves a done todo back under `Left to do`. |
@@ -215,6 +217,7 @@ error status):
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. |
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
 | `/actions/git/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
+| `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 
 `entry` is a work-notes entry's title exactly as its `##` line has it; `text`
 is the todo's text without its `[quick]`/`[big]` marker, exactly as the

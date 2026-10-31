@@ -3,11 +3,9 @@ from pathlib import Path
 
 from move_forward import notes, prune
 from move_forward.config import Config
-from move_forward.db import CORE, Database
-from move_forward.domain import Ping
+from move_forward.db import Database
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira.config import JiraConfig
-from move_forward.repositories import KvRepository, PingRepository
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
 OLD = NOW - timedelta(days=100)
@@ -93,30 +91,6 @@ def test_entries_with_tickets_are_kept_without_jira(tmp_path: Path) -> None:
         "dropped 1 old Done line(s) from APP-2 done but still has a todo",
         "cleared entry No ticket, no PR, stale",
     ]
-
-
-def test_prune_deletes_old_pings_and_runs_once_a_day(tmp_path: Path) -> None:
-    config = _config(tmp_path)
-    db = Database(":memory:")
-    pings = PingRepository(db)
-    for when in (OLD, RECENT):
-        pings.add(Ping(pr_url=PR + "1", target="user:a", kind="first", message="", sent_at=when))
-    notices = prune.prune(config, db, NOW, pr_closed_at, issues_resolved_at)
-    assert notices[-1] == "deleted 1 old ping(s)"
-    assert [p.sent_at for p in pings.all()] == [RECENT]
-
-    db = Database(":memory:")
-    meta = KvRepository(db, CORE)
-    pings = PingRepository(db)
-    pings.add(Ping(pr_url=PR + "1", target="user:a", kind="first", message="", sent_at=OLD))
-    (tmp_path / notes.WORK_NOTES_FILE).unlink()  # nothing to look up: no network needed
-    prune.prune_if_due(config, db, NOW)
-    assert meta.get(prune.LAST_PRUNE_KEY) == NOW.isoformat() and pings.all() == []
-    pings.add(Ping(pr_url=PR + "1", target="user:a", kind="first", message="", sent_at=OLD))
-    prune.prune_if_due(config, db, NOW + timedelta(hours=23))
-    assert len(pings.all()) == 1  # not due yet
-    prune.prune_if_due(config, db, NOW + timedelta(hours=25))
-    assert pings.all() == []
 
 
 def test_plugins_prune_with_the_daily_run(tmp_path: Path) -> None:

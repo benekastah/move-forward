@@ -1,126 +1,30 @@
 """Core's panels and the Dashboard: todos, on ice, nudges, groups and focus mode."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from conftest import (
-    NOW,
     REPO,
-    approved_review,
     dashboard,
-    event,
     issue,
     local_snapshot,
     panel,
+    pings,
     pr,
     snapshot,
-    thread,
     titles,
     work_item,
 )
 
 from move_forward import panels
 from move_forward.domain import (
-    Check,
     JiraSnapshot,
     LocalRepo,
     LocalSnapshot,
-    Ping,
-    ReviewerUser,
     StackBranch,
-    TeamChannel,
     Todo,
 )
 
 build = dashboard
-
-
-# Pings and nudges
-
-
-def _teams() -> dict[str, TeamChannel]:
-    return {"web": TeamChannel(slug="web", channel_name="#team-web", channel_id="C1")}
-
-
-def _users() -> dict[str, ReviewerUser]:
-    return {"alice": ReviewerUser(login="alice", email="a@x", slack_id="U1")}
-
-
-def test_ping_targets_links_and_messages() -> None:
-    candidate = pr(1, requested_users=["alice", "bob"], requested_teams=["web", "unknown"])
-    dashboard = build(
-        github=snapshot(mine=[candidate]),
-        users=_users(),
-        teams=_teams(),
-        slack_workspace_url="https://acme.slack.com/",
-    )
-    ping = dashboard.pings[candidate.url]
-    assert ping.blockers == []
-    by_name = {t.name: t for t in ping.targets}
-    assert by_name["alice"].slack_link == "https://acme.slack.com/team/U1"
-    assert by_name["bob"].slack_link is None and by_name["bob"].destination == "bob (DM)"
-    assert by_name["web"].slack_link == "https://acme.slack.com/archives/C1"
-    assert by_name["web"].destination == "#team-web (C1)"
-    assert by_name["unknown"].destination == "team unknown"
-    assert by_name["alice"].message == panels.FIRST_PING.format(url=candidate.url)
-
-
-def test_follow_up_after_a_recorded_ping_and_skill_nudges_count_for_all_targets() -> None:
-    candidate = pr(1, requested_users=["alice"], requested_teams=["web"])
-    other = pr(2, requested_users=["alice"])
-    dashboard = build(
-        github=snapshot(mine=[candidate, other]),
-        pings=[
-            Ping(
-                pr_url=candidate.url,
-                target="user:alice",
-                kind="first",
-                sent_at=NOW - timedelta(days=1),
-            ),
-            Ping(pr_url=other.url, target="unknown (from work notes)", kind="first", sent_at=NOW),
-        ],
-    )
-    targets = {t.name: t for t in dashboard.pings[candidate.url].targets}
-    assert targets["alice"].ping_kind == "follow-up"
-    assert targets["alice"].message == panels.FOLLOW_UP_PING
-    assert targets["web"].ping_kind == "first"
-    assert dashboard.pings[other.url].targets[0].ping_kind == "follow-up"
-
-
-def test_nudge_blockers_and_staleness() -> None:
-    fresh = pr(
-        1,
-        requested_users=["alice"],
-        events=[event("ReviewRequestedEvent", NOW - timedelta(hours=2), reviewer="alice")],
-    )
-    stale = pr(
-        2,
-        requested_users=["alice"],
-        events=[event("ReviewRequestedEvent", NOW - timedelta(days=2), reviewer="alice")],
-    )
-    policy_only = pr(
-        3,
-        requested_teams=["web"],
-        checks=[Check(name="review-policy/owners", state="FAILURE")],
-    )
-    broken = pr(4, requested_users=["alice"], checks=[Check(name="tests", state="FAILURE")])
-    threads = pr(5, requested_users=["alice"], threads=[thread()])
-    approved = pr(6, requested_users=["alice"], reviews=[approved_review()])
-    nobody = pr(7)
-    draft = pr(8, is_draft=True, requested_users=["alice"])
-    dashboard = build(
-        github=snapshot(mine=[fresh, stale, policy_only, broken, threads, approved, nobody, draft]),
-        review_checks=["review-policy/owners"],
-    )
-    pings = dashboard.pings
-    assert pings[fresh.url].blockers == [] and not pings[fresh.url].stale
-    assert pings[stale.url].stale
-    assert pings[policy_only.url].blockers == []
-    assert pings[broken.url].blockers == ["failing checks"]
-    assert pings[threads.url].blockers == ["unresolved threads"]
-    assert pings[approved.url].blockers == ["already approved"]
-    assert pings[nobody.url].blockers == ["no reviewers requested"]
-    assert draft.url not in pings
-    assert sorted(titles(dashboard, "nudges")) == ["PR 2", "PR 3"]
 
 
 def test_todos_put_close_outs_first_and_blocked_last() -> None:
@@ -145,19 +49,13 @@ def test_todos_put_close_outs_first_and_blocked_last() -> None:
 
 def test_every_panel_is_in_exactly_one_group() -> None:
     dashboard = build(
-        local=local_snapshot(stack=[StackBranch(name="main")]), jira=JiraSnapshot(issues=[])
+        slack=True,
+        local=local_snapshot(stack=[StackBranch(name="main")]),
+        jira=JiraSnapshot(issues=[]),
     )
     grouped = [key for group in dashboard.groups for key in group.panel_keys]
     assert sorted(grouped) == sorted(p.key for p in dashboard.panels)
     assert dashboard.panel("feedback").key == "feedback"
-
-
-def test_age() -> None:
-    assert panels.age(NOW, NOW - timedelta(minutes=5)) == "5m"
-    assert panels.age(NOW, NOW - timedelta(hours=5)) == "5h"
-    assert panels.age(NOW, NOW - timedelta(days=5)) == "5d"
-    assert panels.age(NOW, None) == "?"
-    assert panels.age(NOW, datetime(2026, 10, 29, 12)) == "1d"  # naive counts as UTC
 
 
 def test_build_with_nothing_stored() -> None:
@@ -189,10 +87,11 @@ def test_focus_order_covers_every_panel_in_the_skills_order() -> None:
 
 def test_focus_items_by_category() -> None:
     dashboard = build(
+        slack=True,
         github=snapshot(
             mine=[pr(1, requested_users=["alice"]), pr(2, merge_state="DIRTY")],
             direct_requests=[pr(3, author="bob")],
-        )
+        ),
     )
     everything = dashboard.focus_items(panels.FOCUS_ALL)
     assert everything is not None
@@ -374,27 +273,28 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
 
 
 def test_naming_settings_drive_pings_labels_and_jira() -> None:
-    dashboard = build(
-        github=snapshot(
+    settings: dict[str, object] = {
+        "github": snapshot(
             mine=[pr(1, requested_users=["alice"], labels=["needs-team"], head="me/XY-1")]
         ),
-        jira=JiraSnapshot(
+        "jira": JiraSnapshot(
             issues=[
                 issue("XY-1", status="Doing"),
                 issue("XY-2", type="Outage", labels=["esc:vp"]),
                 issue("XY-3", type="Defect"),
             ]
         ),
-        ping_first="Please look at {url}",
-        ping_follow_up="Bump!",
-        placeholder_labels=["needs-team"],
-        jira_statuses={"in_progress": "Doing", "in_review": "Checking", "closed": "Shipped"},
-        escalation_label_prefix="esc:",
-        escalation_levels=["lead", "vp"],
-        incident_types=["outage"],
-        bug_types=["defect"],
-    )
-    [target] = dashboard.pings[pr(1).url].targets
+        "ping_first": "Please look at {url}",
+        "ping_follow_up": "Bump!",
+        "placeholder_labels": ["needs-team"],
+        "jira_statuses": {"in_progress": "Doing", "in_review": "Checking", "closed": "Shipped"},
+        "escalation_label_prefix": "esc:",
+        "escalation_levels": ["lead", "vp"],
+        "incident_types": ["outage"],
+        "bug_types": ["defect"],
+    }
+    dashboard = build(**settings)
+    [target] = pings(**settings)[pr(1).url].targets
     assert target.message == f"Please look at {pr(1).url}"
     assert titles(dashboard, "metadata") == [pr(1).title]
     assert "needs-team" in panel(dashboard, "metadata").items[0].details[0]

@@ -250,9 +250,8 @@ def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
             )
         ],
     )
-    for key in ("conflicts", "feedback", "nudges", "needs_reviewer", "metadata"):
+    for key in ("conflicts", "feedback", "needs_reviewer", "metadata"):
         assert titles(dashboard, key) == []
-    assert iced.url not in dashboard.pings
     assert titles(dashboard, "iced") == [iced.head]
     actions = panel(dashboard, "iced").items[0].actions
     assert [(a.name, a.label) for a in actions] == [

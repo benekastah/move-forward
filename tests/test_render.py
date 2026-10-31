@@ -8,7 +8,8 @@ from move_forward import panels, render
 
 def _dashboard() -> panels.Dashboard:
     return dashboard(
-        github=snapshot(mine=[pr(1, title="Fix <script> & stuff", requested_users=["alice"])])
+        slack=True,
+        github=snapshot(mine=[pr(1, title="Fix <script> & stuff", requested_users=["alice"])]),
     )
 
 
@@ -67,8 +68,6 @@ def test_sections_carry_keys_for_the_open_state_script() -> None:
     assert "if (open === saved) return;" in html
     # No git-stack data, so the Stacks panel is absent and its group still renders.
     assert "data-key='stacks'" not in html and "data-key='local'" in html
-    ping = render.ping_page(_dashboard(), pr(1).url)
-    assert ping is not None and "data-reload" not in ping
 
 
 def test_actions_render_as_forms_with_hidden_fields() -> None:
@@ -98,7 +97,6 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
             )
         ],
         groups=[panels.Group(key="g", title="G", panel_keys=["cleanup"], open=True)],
-        pings={},
         sources={},
     )
     html = render.dashboard_page(dashboard, refreshing=False, notice="deleted 1 <branch>")
@@ -107,15 +105,6 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
     assert "<input type='hidden' name='branch' value='a&#x27;b'>" in html
     assert "<form method='post' action='/actions/delete_branches' class='action'>" in html
     assert "<span class='notice'>deleted 1 &lt;branch&gt;</span>" in html
-
-
-def test_ping_page_has_a_form_per_target() -> None:
-    html = render.ping_page(_dashboard(), pr(1).url)
-    assert html is not None
-    assert html.count("<form method='post' action='/pings'>") == 1
-    assert "name='target' value='user:alice'" in html
-    assert panels.FIRST_PING.format(url=pr(1).url) in html
-    assert render.ping_page(_dashboard(), "https://nope") is None
 
 
 def test_focus_categories_page_lists_counts_and_links_non_empty_ones() -> None:
@@ -131,7 +120,8 @@ def test_focus_categories_page_lists_counts_and_links_non_empty_ones() -> None:
 
 def test_focus_page_steps_through_items() -> None:
     built = dashboard(
-        github=snapshot(mine=[pr(1, requested_users=["alice"]), pr(2, merge_state="DIRTY")])
+        slack=True,
+        github=snapshot(mine=[pr(1, requested_users=["alice"]), pr(2, merge_state="DIRTY")]),
     )
     first = render.focus_page(built, panels.FOCUS_ALL, 0)
     assert first is not None
@@ -162,7 +152,6 @@ def test_focus_page_actions_come_back_to_it() -> None:
         generated_at=NOW,
         login=ME,
         panels=[panels.Panel(key="cleanup", title="Cleanup", description="", items=[item])],
-        pings={},
         sources={},
     )
     html = render.focus_page(dashboard, "cleanup", 0, notice="done")
@@ -227,7 +216,6 @@ def test_strong_links_get_a_class() -> None:
         generated_at=NOW,
         login=ME,
         panels=[panels.Panel(key="todos", title="T", description="", items=[item])],
-        pings={},
         sources={},
     )
     html = render.focus_page(dashboard, "todos", 0)
@@ -252,7 +240,6 @@ def test_actions_with_an_input_render_a_text_field() -> None:
         generated_at=NOW,
         login=ME,
         panels=[panels.Panel(key="todos", title="T", description="", items=[item])],
-        pings={},
         sources={},
     )
     html = render.focus_page(dashboard, "todos", 0)

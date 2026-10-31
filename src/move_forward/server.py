@@ -3,22 +3,16 @@
 import logging
 import threading
 import time
-from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Literal
 from urllib.parse import parse_qs, urlencode, urlsplit
-
-from pydantic import BaseModel, ValidationError
 
 from . import actions, render, shell
 from .config import Config
 from .db import Database
-from .domain import Ping
 from .plugin import ActionError
 from .refresh import build_dashboard, plugin_page, refresh, run_action
-from .repositories import PingRepository
 
 log = logging.getLogger(__name__)
 
@@ -30,16 +24,6 @@ STATIC_FILES = {
 }
 """Served paths to the file in `STATIC_DIR` and its content type."""
 MAX_BODY_BYTES = 64 * 1024
-
-
-class PingForm(BaseModel):
-    """Fields of the "mark as sent" form on the ping page."""
-
-    pr_url: str
-    target: str
-    """`user:<login>` or `team:<slug>`, as the ping targets name them."""
-    kind: Literal["first", "follow-up"]
-    message: str = ""
 
 
 class App:
@@ -114,9 +98,6 @@ class App:
         """An enabled plugin's page; None when there's none at `path`."""
         return plugin_page(self.config, self.db, path, parse_qs(query, keep_blank_values=True))
 
-    def ping_page(self, pr_url: str) -> str | None:
-        return render.ping_page(build_dashboard(self.config, self.db), pr_url)
-
     def focus_page(
         self, category: str, index: int, notice: str = "", done: tuple[str, str] | None = None
     ) -> str | None:
@@ -130,17 +111,6 @@ class App:
             return render.focus_categories_page(dashboard)
         done_item = dashboard.done_todo(*done) if done else None
         return render.focus_page(dashboard, category, index, notice, done_item)
-
-    def record_ping(self, form: PingForm) -> None:
-        PingRepository(self.db).add(
-            Ping(
-                pr_url=form.pr_url,
-                target=form.target,
-                kind=form.kind,
-                message=form.message,
-                sent_at=datetime.now(UTC),
-            )
-        )
 
 
 def _open_keys(query: str) -> set[str] | None:
@@ -208,13 +178,6 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if url.path == "/":
                 notice = parse_qs(url.query).get("notice", [""])[0]
                 self._html(HTTPStatus.OK, app.dashboard_page(notice, _open_keys(url.query)))
-            elif url.path == "/ping":
-                pr_url = parse_qs(url.query).get("pr", [""])[0]
-                page = app.ping_page(pr_url)
-                if page is None:
-                    self._html(HTTPStatus.NOT_FOUND, "<p>Not one of my open PRs.</p>")
-                else:
-                    self._html(HTTPStatus.OK, page)
             elif url.path == "/focus":
                 params = parse_qs(url.query, keep_blank_values=True)
                 category = params.get("cat", [""])[0]
@@ -246,14 +209,6 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if url.path == "/refresh":
                 app.request_refresh()
                 self._redirect(_back_to_page(url.query))
-            elif url.path == "/pings":
-                try:
-                    form = PingForm.model_validate(_form_fields(self._read_body()))
-                except ValidationError as e:
-                    self._html(HTTPStatus.BAD_REQUEST, f"<pre>{e}</pre>")
-                    return
-                app.record_ping(form)
-                self._redirect("/")
             elif url.path.startswith("/actions/"):
                 name = url.path[len("/actions/") :]
                 fields = _form_fields(self._read_body())

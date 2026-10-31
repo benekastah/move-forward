@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from . import notes, panels, shell
 from .config import Config
 from .db import Database
-from .domain import TeamChannel
 from .graph import Graph
 from .page import Action, Item
 from .plugin import ActionError, collect_into
@@ -19,7 +18,6 @@ from .registry import Enabled, build_graph, enabled
 from .repositories import (
     IcedStackRepository,
     NotesImportRepository,
-    PingRepository,
     ReviewerRepository,
     SnapshotRepository,
     WorkItemRepository,
@@ -31,7 +29,7 @@ log = logging.getLogger(__name__)
 PERSON = "person"
 
 
-def _graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str, BaseModel | None]]:
+def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str, BaseModel | None]]:
     """The graph over what's stored, with the snapshots it was built from."""
     snapshots = {e.name: e.snapshot() for e in plugins}
     legacy = panels.entities(
@@ -55,7 +53,7 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
             pool.submit(_collect, db, e, now)
     if shell.stopping():
         return
-    graph, _ = _graph(db, plugins)
+    graph, _ = stored_graph(db, plugins)
     prune_if_due(config, db, now, lambda: _prune_plugins(plugins, graph))
     for e in plugins:
         try:
@@ -75,22 +73,11 @@ def _prune_plugins(plugins: list[Enabled], graph: Graph) -> list[str]:
     return notices
 
 
-def _team_channels(config: Config, known: dict[str, TeamChannel]) -> dict[str, TeamChannel]:
-    """The reviewer map's team channels, with `[slack.teams]` winning by name."""
-    teams = dict(known)
-    for name, channel in config.slack.teams.items():
-        current = teams.get(name)
-        teams[name] = TeamChannel(
-            slug=name, channel_name=channel, channel_id=current.channel_id if current else None
-        )
-    return teams
-
-
 def build_dashboard(config: Config, db: Database, now: datetime | None = None) -> panels.Dashboard:
     """The dashboard from whatever is stored; cheap, no network."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
-    graph, snapshots = _graph(db, plugins)
+    graph, snapshots = stored_graph(db, plugins)
     plugin_panels = [
         panel for e in plugins for panel in e.plugin.panels(e.ctx, snapshots[e.name], graph)
     ]
@@ -100,10 +87,6 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         graph=graph,
         work_items=WorkItemRepository(db).all(),
         iced_stacks=IcedStackRepository(db).all(),
-        users=ReviewerRepository(db).users(),
-        teams=_team_channels(config, ReviewerRepository(db).teams()),
-        pings=PingRepository(db).all(),
-        slack=config.slack,
     )
     sources = {
         source: panels.SourceStatus(fetched_at=row.fetched_at, error=row.error)
@@ -122,7 +105,7 @@ def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[s
     plugins = enabled(config, db, datetime.now(UTC))
     for e in plugins:
         if handler := e.plugin.pages().get(path):
-            graph, _ = _graph(db, plugins)
+            graph, _ = stored_graph(db, plugins)
             return handler(e.ctx, graph, query)
     return None
 
@@ -135,7 +118,7 @@ def run_action(config: Config, db: Database, name: str, fields: dict[str, str]) 
     handler = e.plugin.actions().get(action_name) if e else None
     if e is None or handler is None:
         raise ActionError(f"unknown action {name}")
-    graph, _ = _graph(db, plugins)
+    graph, _ = stored_graph(db, plugins)
     try:
         return handler(e.ctx, graph, fields)
     except KeyError as err:

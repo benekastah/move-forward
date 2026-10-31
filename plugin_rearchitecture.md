@@ -593,7 +593,9 @@ Each step is its own commit (or a few), with `./check.sh` green and the page wor
    replaces top-level `repos`. Panel tests move with their plugin, with a shared helper
    that builds a graph from fixtures.
 3. **slack plugin**: pings, reviewer contacts, the ping page, the Nudge panel and the
-   ping button as an item action.
+   ping button as an item action. Until step 5 it reads the reviewer map and pings from
+   core's tables, which the notes import fills; its own `slack_*` tables arrive with step
+   5, when the import goes away.
 4. **notes plugin, still on the markdown files**: todos, on ice, add-todo as an item
    action. The page now has a group per plugin plus Act now.
 5. **Notes in SQLite**: the notes tables, `mfd notes import/export`, the CLI, todo ids in
