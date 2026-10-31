@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from move_forward_dashboard import notes, prune
-from move_forward_dashboard.config import Config, JiraConfig
+from move_forward_dashboard.config import Config, GitHubConfig, JiraConfig
 from move_forward_dashboard.db import Database
 from move_forward_dashboard.domain import Ping
 from move_forward_dashboard.repositories import MetaRepository, PingRepository
@@ -47,11 +47,11 @@ WORK_NOTES = f"""\
 def _config(tmp_path: Path, jira: bool = True) -> Config:
     (tmp_path / notes.WORK_NOTES_FILE).write_text(WORK_NOTES)
     return Config(
-        org="acme",
-        teams=[],
+        email="me@x",
+        github=GitHubConfig(org="acme"),
         repos=[],
         notes_dir=tmp_path,
-        jira=JiraConfig(site="https://j", email="me@x") if jira else None,
+        jira=JiraConfig(site="https://j") if jira else None,
     )
 
 

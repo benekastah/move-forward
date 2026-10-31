@@ -15,38 +15,41 @@ from .server import serve
 EXAMPLE_CONFIG = """\
 # move-forward-dashboard configuration. Paths may start with ~.
 
-org = "example-org"
-repos = ["~/src/app", "~/src/infra"]
-notes_dir = "~/notes/move-forward"    # work-notes.md, on-ice.md, reviewer-map.md live here
-# db_path = "~/.local/share/move-forward-dashboard/dashboard.db"
+email = "me@example.com"              # Jira logs in with it; its domain finds reviewers' emails
+repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are found from them
+# notes_dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
+# email_domains = []                     # reviewers' email domains, if not just your email's
+# db_path = "~/.local/share/move-forward/dashboard.db"
 # port = 8765
 # refresh_seconds = 300                  # background refresh when nobody loads the page
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
-slack_workspace_url = "https://example.slack.com"
-email_domain = "example.com"
-# history_days = 14
 # commit_history_days = 180
 # stale_review_hours = 24
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
+# my_branch_prefixes = ["me/"]            # else every local branch counts as mine
+# prune_days = 90                         # clear work finished this long ago from the notes
+
+[github]
+org = "example-org"
+# history_days = 14
 # review_checks = []                     # checks that report review status, not CI
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners
 # ticket_link_prefix = ""                # PR body line that links the ticket, e.g. "Link"
-# my_branch_prefixes = ["me/"]            # else every local branch counts as mine
+# placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
+
+[slack]
+workspace_url = "https://example.slack.com"
 # ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 # ping_follow_up = "Gentle bump on this review request"
-# placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
-# prune_days = 90                         # clear work finished this long ago from the notes
 
-[[teams]]                             # one per GitHub team or review group I review for
-github_slug = "my-team"
+[teams.my-team]                       # one per GitHub team or review group I review for
 # slack_channel = "#team-my-team"       # where review pings for the team go
 # jira_team_id = "..."                  # the team's id in Jira's team field (unused yet)
 
 # [jira]
 # site = "https://example.atlassian.net"
-# email = "me@example.com"
-# token_env = "JIRA_API_TOKEN"            # else the macOS keychain item below
-# keychain_service = "move-forward-dashboard-jira"
+# token_env = "JIRA_API_TOKEN"            # else the macOS keychain item for my email
+# keychain_service = "move-forward-jira"
 # status_in_progress = "In Progress"      # workflow names the transitions panel uses
 # status_in_review = "In Review"
 # status_closed = "Closed"

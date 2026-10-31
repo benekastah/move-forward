@@ -89,8 +89,8 @@ class RawSearchResponse(_Raw):
     next_page_token: str | None = Field(default=None, alias="nextPageToken")
 
 
-def token(config: JiraConfig) -> str:
-    """The API token from the configured env var, else the macOS keychain."""
+def token(config: JiraConfig, email: str) -> str:
+    """The API token from the configured env var, else the macOS keychain item for `email`."""
     if value := os.environ.get(config.token_env):
         return value
     try:
@@ -101,14 +101,14 @@ def token(config: JiraConfig) -> str:
                 "-s",
                 config.keychain_service,
                 "-a",
-                config.email,
+                email,
                 "-w",
             ]
         ).strip()
     except (CommandError, FileNotFoundError) as e:
         raise RuntimeError(
             f"no Jira token: set ${config.token_env} or run `security add-generic-password"
-            f" -s {config.keychain_service} -a {config.email} -w <token>`"
+            f" -s {config.keychain_service} -a {email} -w <token>`"
         ) from e
 
 
@@ -138,8 +138,8 @@ def to_issue(raw: RawIssue, site: str) -> JiraIssue:
     )
 
 
-def search(config: JiraConfig, jql: str, api_token: str) -> list[JiraIssue]:
-    auth = base64.b64encode(f"{config.email}:{api_token}".encode()).decode()
+def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[JiraIssue]:
+    auth = base64.b64encode(f"{email}:{api_token}".encode()).decode()
     issues: list[JiraIssue] = []
     next_token: str | None = None
     while True:
@@ -164,13 +164,15 @@ def search(config: JiraConfig, jql: str, api_token: str) -> list[JiraIssue]:
         next_token = page.next_page_token
 
 
-def resolved_at(config: JiraConfig, keys: list[str], api_token: str) -> dict[str, datetime]:
+def resolved_at(
+    config: JiraConfig, email: str, keys: list[str], api_token: str
+) -> dict[str, datetime]:
     """When each of `keys` was resolved; tickets that aren't resolved are left out."""
     if not keys:
         return {}
     jql = f"key in ({', '.join(keys)}) AND statusCategory = Done"
-    return {i.key: i.resolved for i in search(config, jql, api_token) if i.resolved}
+    return {i.key: i.resolved for i in search(config, email, jql, api_token) if i.resolved}
 
 
-def collect(config: JiraConfig) -> JiraSnapshot:
-    return JiraSnapshot(issues=search(config, MY_OPEN_ISSUES_JQL, token(config)))
+def collect(config: JiraConfig, email: str) -> JiraSnapshot:
+    return JiraSnapshot(issues=search(config, email, MY_OPEN_ISSUES_JQL, token(config, email)))

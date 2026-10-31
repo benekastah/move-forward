@@ -10,7 +10,7 @@ import pytest
 from conftest import ME, pr, snapshot
 
 from move_forward_dashboard import server
-from move_forward_dashboard.config import Config, TeamConfig
+from move_forward_dashboard.config import Config, GitHubConfig, TeamConfig
 from move_forward_dashboard.db import Database
 from move_forward_dashboard.repositories import PingRepository, SnapshotRepository
 
@@ -18,8 +18,9 @@ from move_forward_dashboard.repositories import PingRepository, SnapshotReposito
 @pytest.fixture
 def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
     config = Config(
-        org="acme",
-        teams=[TeamConfig(github_slug="core")],
+        email="me@acme.com",
+        github=GitHubConfig(org="acme"),
+        teams={"core": TeamConfig()},
         repos=[],
         notes_dir=tmp_path,
         db_path=tmp_path / "x.db",

@@ -28,7 +28,7 @@ case ":$PATH:" in
     *) echo "warning: $bin_dir isn't on your PATH; add it in your shell's startup file" >&2 ;;
 esac
 
-config="${XDG_CONFIG_HOME:-$HOME/.config}/move-forward-dashboard/config.toml"
+config="${XDG_CONFIG_HOME:-$HOME/.config}/move-forward/config.toml"
 if [ -e "$config" ]; then
     echo "config: $config"
 elif [ -t 0 ]; then

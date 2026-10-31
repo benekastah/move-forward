@@ -119,7 +119,9 @@ def _jira_lookup(config: Config) -> IssuesResolvedAt | None:
     jira_config = config.jira
 
     def lookup(keys: list[str]) -> dict[str, datetime]:
-        return jira.resolved_at(jira_config, keys, jira.token(jira_config))
+        return jira.resolved_at(
+            jira_config, config.email, keys, jira.token(jira_config, config.email)
+        )
 
     return lookup
 

@@ -49,7 +49,7 @@ def _collect[T: BaseModel](
 
 def _lookup_emails(config: Config, db: Database, gh: GitHubSnapshot) -> None:
     """Cache the commit email of every requested reviewer we don't know yet."""
-    if not config.email_domain:
+    if not config.reviewer_email_domains:
         return
     reviewers = ReviewerRepository(db)
     known = reviewers.users()
@@ -58,7 +58,7 @@ def _lookup_emails(config: Config, db: Database, gh: GitHubSnapshot) -> None:
             if login in known:
                 continue
             try:
-                email = github.commit_email(pr.repo, login, config.email_domain)
+                email = github.commit_email(pr.repo, login, config.reviewer_email_domains)
             except Exception as e:  # noqa: BLE001
                 log.warning("email lookup for %s failed: %s", login, e)
                 continue
@@ -78,7 +78,9 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
             snapshots,
             SOURCE_GITHUB,
             now,
-            lambda: github.collect(config.org, config.team_slugs, config.history_days, now),
+            lambda: github.collect(
+                config.github.org, config.team_slugs, config.github.history_days, now
+            ),
         )
         local_future = pool.submit(
             _collect,
@@ -91,7 +93,13 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
         )
         if config.jira is not None:
             jira_config = config.jira
-            pool.submit(_collect, snapshots, SOURCE_JIRA, now, lambda: jira.collect(jira_config))
+            pool.submit(
+                _collect,
+                snapshots,
+                SOURCE_JIRA,
+                now,
+                lambda: jira.collect(jira_config, config.email),
+            )
     gh = gh_future.result()
     local_snapshot = local_future.result()
     if not shell.stopping():
@@ -108,10 +116,10 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
                 github_snapshot,
                 local_result,
                 ReviewerRepository(db).users(),
-                config.org,
+                config.github.org,
                 config.team_slugs,
                 config.commit_history_days,
-                config.required_owner_marker,
+                config.github.required_owner_marker,
             ),
         )
 
@@ -119,11 +127,11 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
 def _team_channels(config: Config, known: dict[str, TeamChannel]) -> dict[str, TeamChannel]:
     """The reviewer map's team channels, with the config's `slack_channel` winning by name."""
     teams = dict(known)
-    for team in config.teams:
+    for slug, team in config.teams.items():
         if team.slack_channel:
-            current = teams.get(team.github_slug)
-            teams[team.github_slug] = TeamChannel(
-                slug=team.github_slug,
+            current = teams.get(slug)
+            teams[slug] = TeamChannel(
+                slug=slug,
                 channel_name=team.slack_channel,
                 channel_id=current.channel_id if current else None,
             )
@@ -152,15 +160,15 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
             source: panels.SourceStatus(fetched_at=row.fetched_at, error=row.error)
             for source, row in snapshots.all().items()
         },
-        slack_workspace_url=config.slack_workspace_url,
+        slack_workspace_url=config.slack.workspace_url,
         jira_site=config.jira.site if config.jira else "",
         stale_review_hours=config.stale_review_hours,
-        review_checks=config.review_checks,
+        review_checks=config.github.review_checks,
         my_branch_prefixes=config.my_branch_prefixes,
-        ping_first=config.ping_first,
-        ping_follow_up=config.ping_follow_up,
-        placeholder_labels=config.placeholder_labels,
-        ticket_link_prefix=config.ticket_link_prefix,
+        ping_first=config.slack.ping_first,
+        ping_follow_up=config.slack.ping_follow_up,
+        placeholder_labels=config.github.placeholder_labels,
+        ticket_link_prefix=config.github.ticket_link_prefix,
     )
     if config.jira:
         inputs = inputs.model_copy(

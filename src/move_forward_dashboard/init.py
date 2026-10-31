@@ -22,32 +22,36 @@ Prompt = Callable[[str, str], str]
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 
 OPTIONAL_SETTINGS = """\
-
 # Optional settings, with their defaults. Uncomment to change.
-# db_path = "~/.local/share/move-forward-dashboard/dashboard.db"
+# notes_dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
+# email_domains = []                     # reviewers' email domains, if not just your email's
+# db_path = "~/.local/share/move-forward/dashboard.db"
 # refresh_seconds = 300                  # background refresh when nobody loads the page
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
-# history_days = 14                      # how far back merged and closed PRs are fetched
 # commit_history_days = 180              # commit history for "paths I work on" and reviewers
 # stale_review_hours = 24                # a review request this old can be nudged
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
+# prune_days = 90                        # clear work finished this long ago from the notes
+"""
+OPTIONAL_GITHUB_SETTINGS = """\
+# history_days = 14                      # how far back merged and closed PRs are fetched
 # review_checks = []                     # checks that report review status, not CI, e.g. ["review-policy"]
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners, e.g. "#required"
 # ticket_link_prefix = ""                # PR body line that links the ticket, e.g. "Link"
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
+"""
+OPTIONAL_SLACK_SETTINGS = """\
 # ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 # ping_follow_up = "Gentle bump on this review request"
-# prune_days = 90                        # clear work finished this long ago from the notes
 """
 TEAM_COMMENT = """\
-# One [[teams]] table per GitHub team or review group you review for. Optional per team:
+# One [teams.<slug>] table per GitHub team or review group you review for. Optional per team:
 # slack_channel = "#team-a"              # where review pings for the team go
 # jira_team_id = "..."                   # the team's id in Jira's team field (unused yet)
 """
-
 OPTIONAL_JIRA_SETTINGS = """\
-# token_env = "JIRA_API_TOKEN"            # else the macOS keychain item below
-# keychain_service = "move-forward-dashboard-jira"
+# token_env = "JIRA_API_TOKEN"            # else the macOS keychain item for your email
+# keychain_service = "move-forward-jira"
 # status_in_progress = "In Progress"      # workflow names the transitions panel uses
 # status_in_review = "In Review"
 # status_closed = "Closed"
@@ -104,23 +108,39 @@ def _toml_value(value: object) -> str:
     return json.dumps(value)
 
 
+def _table(name: str, values: dict[str, object], optional: str = "") -> str:
+    body = "".join(f"{k} = {_toml_value(v)}\n" for k, v in values.items())
+    return f"\n[{name}]\n{body}{optional}"
+
+
 def render_config(
-    answers: dict[str, object], teams: list[dict[str, object]], jira: dict[str, object] | None
+    answers: dict[str, object],
+    github: dict[str, object],
+    slack: dict[str, object] | None,
+    teams: dict[str, dict[str, object]],
+    jira: dict[str, object] | None,
 ) -> str:
-    """The config file: the answered settings, then the optional ones as comments."""
+    """The config file: a section per service, with the optional settings as comments."""
     lines = ["# move-forward-dashboard configuration. Paths may start with ~.", ""]
     lines += [f"{key} = {_toml_value(value)}" for key, value in answers.items()]
-    text = "\n".join(lines) + "\n" + OPTIONAL_SETTINGS + "\n" + TEAM_COMMENT
-    for team in teams:
-        text += "\n[[teams]]\n" + "".join(f"{k} = {_toml_value(v)}\n" for k, v in team.items())
+    text = "\n".join(lines) + "\n" + OPTIONAL_SETTINGS
+    text += _table("github", github, OPTIONAL_GITHUB_SETTINGS)
+    if slack:
+        text += _table("slack", slack, OPTIONAL_SLACK_SETTINGS)
+    else:
+        text += (
+            "\n# [slack]                               # uncomment to link review pings\n"
+            '# workspace_url = "https://example.slack.com"\n' + OPTIONAL_SLACK_SETTINGS
+        )
+    text += "\n" + TEAM_COMMENT
+    for slug, settings in teams.items():
+        text += _table(f"teams.{slug}", settings)
     if jira:
-        text += "\n[jira]\n" + "".join(f"{k} = {_toml_value(v)}\n" for k, v in jira.items())
-        text += OPTIONAL_JIRA_SETTINGS
+        text += _table("jira", jira, OPTIONAL_JIRA_SETTINGS)
     else:
         text += (
             "\n# [jira]                                # uncomment to show tickets\n"
-            '# site = "https://example.atlassian.net"\n# email = "me@example.com"\n'
-            + OPTIONAL_JIRA_SETTINGS
+            '# site = "https://example.atlassian.net"\n' + OPTIONAL_JIRA_SETTINGS
         )
     return text
 
@@ -187,13 +207,6 @@ def _url(answer: str) -> str:
     return answer
 
 
-def _domain(answer: str) -> str:
-    answer = answer.strip()
-    if answer and not re.fullmatch(r"[\w-]+(\.[\w-]+)+", answer):
-        raise ValueError(f"{answer!r} isn't a domain like acme.com")
-    return answer
-
-
 def _email(answer: str) -> str:
     answer = answer.strip()
     if "@" not in answer or " " in answer:
@@ -236,6 +249,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         "Examples are in parentheses. Where a value could be guessed from this machine"
         " (git, gh), it's in brackets and Enter keeps it.\n"
     )
+    email = _ask(prompt, "Your work email (e.g. jane@acme.com)", guess_email(), _email)
     org = _ask(
         prompt,
         "GitHub organization, as in github.com/<org> (e.g. acme)",
@@ -249,7 +263,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         guess_teams(org),
         _word("team slug"),
     )
-    teams: list[dict[str, object]] = []
+    teams: dict[str, dict[str, object]] = {}
     for slug in slugs:
         channel = _ask(
             prompt,
@@ -257,24 +271,20 @@ def interview(prompt: Prompt, cwd: Path) -> str:
             "",
             _channel,
         )
-        teams.append({"github_slug": slug, **({"slack_channel": channel} if channel else {})})
+        teams[slug] = {"slack_channel": channel} if channel else {}
     repos = _ask_list(
         prompt,
-        "Main checkouts of the repos you work in, comma-separated (e.g. ~/src/app, ~/src/infra)",
+        "Main checkout of each repo you work in, comma-separated; other worktrees are found"
+        " from it (e.g. ~/src/app, ~/src/infra)",
         [str(repo)] if repo else [],
         _path,
     )
-    email = guess_email()
-    domain = email.rsplit("@", 1)[1] if "@" in email else ""
     slack = _ask(
         prompt,
         "Slack workspace URL, for ping links; it's under the workspace name in Slack's menu"
         " (e.g. https://acme.slack.com; blank for none)",
         "",
         _url,
-    )
-    email_domain = _ask(
-        prompt, "Work email domain, to find reviewers' emails (e.g. acme.com)", domain, _domain
     )
     prefixes = _ask_list(
         prompt,
@@ -285,8 +295,8 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     notes_dir = _ask(
         prompt,
         "Directory for the notes, i.e. the move-forward skill's work-notes.md and on-ice.md"
-        " (e.g. ~/notes/move-forward; created if missing)",
-        "",
+        " (created if missing)",
+        str(config_module.DEFAULT_NOTES_DIR),
         _required("a notes directory"),
     )
     port = _ask(
@@ -295,23 +305,23 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         str(config_module.DEFAULT_PORT),
         _port,
     )
-    answers: dict[str, object] = {"org": org, "repos": repos, "notes_dir": notes_dir}
-    if slack:
-        answers["slack_workspace_url"] = slack
-    if email_domain:
-        answers["email_domain"] = email_domain
+    answers: dict[str, object] = {"email": email, "repos": repos}
+    if notes_dir != str(config_module.DEFAULT_NOTES_DIR):
+        answers["notes_dir"] = notes_dir
     if prefixes:
         answers["my_branch_prefixes"] = prefixes
     if port != str(config_module.DEFAULT_PORT):
         answers["port"] = int(port)
-    jira: dict[str, object] | None = None
     site = _ask(
         prompt, "Jira site URL (e.g. https://acme.atlassian.net; blank to skip Jira)", "", _url
     )
-    if site:
-        jira_email = _ask(prompt, "Jira account email (e.g. jane@acme.com)", email, _email)
-        jira = {"site": site, "email": jira_email}
-    text = render_config(answers, teams, jira)
+    text = render_config(
+        answers,
+        {"org": org},
+        {"workspace_url": slack} if slack else None,
+        teams,
+        {"site": site} if site else None,
+    )
     Config.model_validate(tomllib.loads(text))  # a bad answer fails here, before writing
     return text
 
@@ -322,7 +332,7 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
     next_steps = f"wrote {path}\nrun `mfd serve --open` to start"
-    if "[jira]\nsite" in text:
+    if "\n[jira]\n" in text:
         service = config_module.DEFAULT_JIRA_KEYCHAIN_SERVICE
         next_steps += (
             "\n\nFor Jira, create an API token at"

@@ -326,8 +326,8 @@ def team_members(org: str, team: str) -> list[str]:
     return out.split()
 
 
-def commit_email(org_repo: str, user: str, email_domain: str) -> str | None:
-    """A user's commit email in `email_domain`, from their recent commits in `org_repo`."""
+def commit_email(org_repo: str, user: str, email_domains: list[str]) -> str | None:
+    """A user's commit email in one of `email_domains`, from their recent commits in `org_repo`."""
     out = run(
         [
             "gh",
@@ -337,7 +337,7 @@ def commit_email(org_repo: str, user: str, email_domain: str) -> str | None:
             ".[].commit.author.email",
         ]
     )
-    return next((e for e in out.split() if e.endswith("@" + email_domain)), None)
+    return next((e for e in out.split() if e.rsplit("@", 1)[-1] in email_domains), None)
 
 
 class _RawPrState(BaseModel):

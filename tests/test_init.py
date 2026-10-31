@@ -43,20 +43,20 @@ def no_machine_guesses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: None) -> None:
     path = tmp_path / "cfg" / "config.toml"
-    with pytest.raises(ValueError, match="no usable answer for: Directory for the notes"):
-        init.init(path, scripted({}), cwd=tmp_path)  # the only question with no guess
-    message = init.init(path, scripted({"notes": "~/notes"}), cwd=tmp_path)
+    message = init.init(path, scripted({}), cwd=tmp_path)
     assert message.startswith(f"wrote {path}")
     loaded = config.load(path)
-    assert loaded.org == "acme" and loaded.team_slugs == ["core"]
-    assert loaded.teams[0].slack_channel is None
-    assert loaded.notes_dir == Path("~/notes").expanduser()
+    assert loaded.github.org == "acme" and loaded.team_slugs == ["core"]
+    assert loaded.teams["core"].slack_channel is None
+    assert loaded.email == "jane@acme.com"
+    assert loaded.notes_dir == config.DEFAULT_NOTES_DIR.expanduser()
     assert loaded.repos == [tmp_path / "app"]
-    assert loaded.email_domain == "acme.com" and loaded.slack_workspace_url == ""
+    assert loaded.reviewer_email_domains == ["acme.com"] and loaded.slack.workspace_url == ""
     assert loaded.my_branch_prefixes == [] and loaded.port == config.DEFAULT_PORT
     assert loaded.jira is None
     text = path.read_text()
-    assert "# prune_days = 90" in text and "# [jira]" in text and "Jira" not in message
+    assert "# prune_days = 90" in text and "# [jira]" in text and "# [slack]" in text
+    assert "# notes_dir" in text and "Jira" not in message
 
 
 def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses: None) -> None:
@@ -70,26 +70,27 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
                 "organization": "other",
                 "team slugs": "a, b ,",
                 "pings to a": "#team-a",
-                "notes": "~/notes",
-                "checkouts": f"{tmp_path}/x, {tmp_path}/y",
+                "checkout": f"{tmp_path}/x, {tmp_path}/y",
                 "workspace URL": "https://o.slack.com",
                 "Prefixes": "jane/",
                 "Port": "9000",
                 "Jira site": "https://o.atlassian.net",
+                "work email": "jane@other.com",
             }
         ),
         cwd=tmp_path,
     )
     loaded = config.load(path)
-    assert loaded.org == "other" and loaded.team_slugs == ["a", "b"]
-    assert [t.slack_channel for t in loaded.teams] == ["#team-a", None]
-    assert loaded.notes_dir == Path("~/notes").expanduser()
+    assert loaded.github.org == "other" and loaded.team_slugs == ["a", "b"]
+    assert [t.slack_channel for t in loaded.teams.values()] == ["#team-a", None]
+    assert loaded.email == "jane@other.com"
+    assert loaded.reviewer_email_domains == ["other.com"]
+    assert loaded.notes_dir == config.DEFAULT_NOTES_DIR.expanduser()
     assert loaded.repos == [tmp_path / "x", tmp_path / "y"]
-    assert loaded.slack_workspace_url == "https://o.slack.com"
+    assert loaded.slack.workspace_url == "https://o.slack.com"
     assert loaded.my_branch_prefixes == ["jane/"] and loaded.port == 9000
-    assert loaded.jira is not None
-    assert (loaded.jira.site, loaded.jira.email) == ("https://o.atlassian.net", "jane@acme.com")
-    assert "security add-generic-password -s move-forward-dashboard-jira" in message
+    assert loaded.jira is not None and loaded.jira.site == "https://o.atlassian.net"
+    assert "security add-generic-password -s move-forward-jira" in message
     assert "# status_closed" in path.read_text()
 
 
@@ -104,7 +105,6 @@ def test_bad_answers_are_asked_again_with_the_reason(
                 "organization": ["acme corp", "acme"],
                 "Port": ["lots", "70000", "9000"],
                 "workspace URL": ["acme.slack.com", "https://acme.slack.com"],
-                "notes": "~/notes",
             }
         ),
         cwd=tmp_path,
@@ -114,14 +114,14 @@ def test_bad_answers_are_asked_again_with_the_reason(
     assert "'lots' isn't a port number" in out and "'70000' isn't a port number" in out
     assert "'acme.slack.com' isn't a URL starting with https://" in out
     loaded = config.load(path)
-    assert loaded.org == "acme" and loaded.port == 9000
-    assert loaded.slack_workspace_url == "https://acme.slack.com"
+    assert loaded.github.org == "acme" and loaded.port == 9000
+    assert loaded.slack.workspace_url == "https://acme.slack.com"
 
 
 def test_giving_up_after_repeated_bad_answers(tmp_path: Path, no_machine_guesses: None) -> None:
     path = tmp_path / "config.toml"
     with pytest.raises(ValueError, match="no usable answer"):
-        init.init(path, scripted({"Port": "lots", "notes": "~/notes"}), cwd=tmp_path)
+        init.init(path, scripted({"Port": "lots"}), cwd=tmp_path)
     assert not path.exists()
 
 
@@ -129,7 +129,7 @@ def test_repo_paths_must_exist(tmp_path: Path, no_machine_guesses: None) -> None
     path = tmp_path / "config.toml"
     init.init(
         path,
-        scripted({"checkouts": [f"{tmp_path}/nope", f"{tmp_path}/app"], "notes": "~/notes"}),
+        scripted({"checkout": [f"{tmp_path}/nope", f"{tmp_path}/app"]}),
         cwd=tmp_path,
     )
     assert config.load(path).repos == [tmp_path / "app"]
@@ -137,13 +137,17 @@ def test_repo_paths_must_exist(tmp_path: Path, no_machine_guesses: None) -> None
 
 def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> None:
     text = init.render_config(
-        {"org": "a", "repos": [], "notes_dir": "n"}, [{"github_slug": "t"}], None
+        {"email": "e@x.y", "repos": []},
+        {"org": "a"},
+        None,
+        {"t": {"slack_channel": "#t"}, "u": {}},
+        None,
     )
     assert tomllib.loads(text) == {
-        "org": "a",
+        "email": "e@x.y",
         "repos": [],
-        "notes_dir": "n",
-        "teams": [{"github_slug": "t"}],
+        "github": {"org": "a"},
+        "teams": {"t": {"slack_channel": "#t"}, "u": {}},
     }
     commented = {
         line[2:].split(" =")[0]
@@ -172,7 +176,7 @@ def test_team_question_shows_the_orgs_teams_as_examples(no_machine_guesses: None
 
     def prompt(question: str, _default: str) -> str:
         questions.append(question)
-        return "~/notes" if "notes" in question else ""
+        return ""
 
     init.interview(prompt, Path("/nowhere"))
     assert any("(e.g. platform, web)" in q for q in questions)

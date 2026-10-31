@@ -26,7 +26,7 @@ mfd serve --open
 each setting on the command line, with a guess from the machine as the default
 (the GitHub org of the current repo's remote, the teams `gh` says you're in,
 your git email's domain), and writes
-`~/.config/move-forward-dashboard/config.toml` with the rest of the settings
+`~/.config/move-forward/config.toml` with the rest of the settings
 as commented defaults. `mfd init --example` writes a commented example
 without asking; `--force` replaces an existing file. The required keys are
 `org`, `repos` (your main checkouts; other worktrees are found from them),
@@ -52,7 +52,7 @@ Add a `[jira]` table with `site` and `email`, then either export
 `JIRA_API_TOKEN` or store a token in the macOS keychain:
 
 ```sh
-security add-generic-password -s move-forward-dashboard-jira -a me@example.com -w <token>
+security add-generic-password -s move-forward-jira -a me@example.com -w <token>
 ```
 
 Create the token at https://id.atlassian.com/manage-profile/security/api-tokens.

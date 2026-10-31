@@ -73,7 +73,7 @@ def test_resolved_at_builds_a_key_query(monkeypatch: pytest.MonkeyPatch) -> None
     )
     fields["created"] = fields["updated"] = "2026-10-01T00:00:00Z"
 
-    def fake_search(_config: object, jql: str, _token: str) -> list[JiraIssue]:
+    def fake_search(_config: object, _email: str, jql: str, _token: str) -> list[JiraIssue]:
         seen.append(jql)
         return [
             jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j"),
@@ -86,8 +86,8 @@ def test_resolved_at_builds_a_key_query(monkeypatch: pytest.MonkeyPatch) -> None
         ]
 
     monkeypatch.setattr(jira, "search", fake_search)
-    config = JiraConfig(site="https://j", email="me@x")
-    resolved = jira.resolved_at(config, ["APP-1", "APP-2"], "t")
+    config = JiraConfig(site="https://j")
+    resolved = jira.resolved_at(config, "me@x", ["APP-1", "APP-2"], "t")
     assert seen == ["key in (APP-1, APP-2) AND statusCategory = Done"]
     assert list(resolved) == ["APP-2"] and resolved["APP-2"].year == 2026
-    assert jira.resolved_at(config, [], "t") == {} and len(seen) == 1
+    assert jira.resolved_at(config, "me@x", [], "t") == {} and len(seen) == 1

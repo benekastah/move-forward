@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from move_forward_dashboard import actions, notes
-from move_forward_dashboard.config import Config, JiraConfig, TeamConfig
+from move_forward_dashboard.config import Config, GitHubConfig, JiraConfig, TeamConfig
 from move_forward_dashboard.shell import git
 
 
@@ -46,8 +46,9 @@ def repo(tmp_path: Path) -> Path:
 @pytest.fixture
 def config(repo: Path, tmp_path: Path) -> Config:
     return Config(
-        org="acme",
-        teams=[TeamConfig(github_slug="core")],
+        email="me@acme.com",
+        github=GitHubConfig(org="acme"),
+        teams={"core": TeamConfig()},
         repos=[repo],
         notes_dir=tmp_path / "notes",
     )
@@ -288,7 +289,7 @@ def test_todo_link_appends_a_jira_or_pr_url(config: Config, work_notes: Path) ->
     fields = {"entry": "APP-1 Fix the widget", "text": "get it merged", "input": " APP-9 "}
     with pytest.raises(actions.ActionError, match="no \\[jira\\] site"):
         actions.run("todo_link", config, fields)
-    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/", email="me@x")})
+    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
     assert (
         actions.todo_link(config, fields, today=date(2026, 10, 31))
         == "linked https://j.example/browse/APP-9"
