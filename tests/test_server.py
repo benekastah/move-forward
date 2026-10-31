@@ -340,3 +340,11 @@ def test_login_signs_the_browser_in_with_a_cookie(client: HTTPConnection) -> Non
     response = get(client, "/", {"Cookie": cookie.split(";")[0]})
     assert response.status == 200
     response.read()
+
+
+def test_the_token_stays_out_of_the_log(
+    client: HTTPConnection, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level("DEBUG", logger="move_forward.server"):
+        get(client, f"/login?token={TOKEN}", {}).read()
+    assert "/login?token=" in caplog.text and TOKEN not in caplog.text

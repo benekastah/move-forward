@@ -1,6 +1,7 @@
 """The local HTTP server: server-rendered pages, a few form endpoints, and a background refresh."""
 
 import logging
+import re
 import threading
 import time
 from http import HTTPStatus
@@ -176,6 +177,14 @@ def _back_to_page(query: str, notice: str = "", extra: dict[str, str] | None = N
     return "/?" + urlencode(params) if params else "/"
 
 
+TOKEN_PARAM_RE = re.compile(r"([?&]token=)[^&\s]*")
+
+
+def _redact(text: str) -> str:
+    """`text` without the value of a `token` query parameter, for the log."""
+    return TOKEN_PARAM_RE.sub(r"\1…", text)
+
+
 def _int(query_params: dict[str, list[str]], name: str) -> int:
     try:
         return int(query_params.get(name, ["0"])[0])
@@ -191,7 +200,7 @@ def _form_fields(body: bytes) -> dict[str, str]:
 def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: object) -> None:
-            log.debug(format, *args)
+            log.debug(format, *(_redact(str(a)) for a in args))
 
         def _send(self, status: HTTPStatus, body: str, content_type: str) -> None:
             data = body.encode()
