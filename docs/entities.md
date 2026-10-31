@@ -6,10 +6,11 @@ entities, each named by a `Ref` (a kind and an id), with a title, an optional
 URL and state, the refs it points at, and attributes. Core builds the graph
 from every enabled plugin's entities on each refresh and page load.
 
-This file is the contract. Adding a kind or an attribute, or changing what one
+[plugins.md](plugins.md) draws who publishes and who reads each kind. This
+file is the contract. Adding a kind or an attribute, or changing what one
 means, is a deliberate change: update this file in the same commit.
 
-When two plugins publish the same ref (say, a person both GitHub and Slack
+When two plugins publish the same ref (say, a branch git and git_stack both
 know), the graph merges them: the first plugin's title, URL and state win,
 refs and attributes are combined, and the first plugin's attribute wins a
 clash.
@@ -23,7 +24,7 @@ APP-1 is related to every PR whose branch, title or body mentions APP-1.
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pr` | github | the PR's URL | `open`, `merged` or `closed` | `ticket` keys from its branch, title and body |
-| `person` | github (me), slack (the reviewer map) | GitHub login | | |
+| `person` | github (only me, for now) | GitHub login | | |
 | `repo` | git | GitHub `owner/name` | | |
 | `branch` | git, git_stack | `<repo dir>\t<branch>` | | its `repo` |
 | `ticket` | jira | the issue key, e.g. `APP-1` | the issue's status | |
@@ -63,9 +64,7 @@ On my open PRs only:
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `me` | bool | the person using the dashboard (github) |
-| `email` | string or null | their commit email (slack, from the reviewer map) |
-| `slack_id` | string or null | their Slack member id (slack) |
+| `me` | bool | the person using the dashboard |
 
 ### `repo`
 
