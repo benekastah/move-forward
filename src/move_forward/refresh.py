@@ -2,6 +2,7 @@
 stored."""
 
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
@@ -32,8 +33,13 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
     return build_graph(plugins, snapshots), snapshots
 
 
-def _collect(db: Database, e: Enabled, now: datetime) -> None:
-    collect_into(db, e.name, now, lambda: e.plugin.collect(e.ctx))
+def _collect_all(
+    db: Database, plugins: list[Enabled], now: datetime, collect: Callable[[Enabled], BaseModel]
+) -> None:
+    """Store each plugin's snapshot from `collect`, in parallel."""
+    with ThreadPoolExecutor(max_workers=max(1, len(plugins))) as pool:
+        for e in plugins:
+            pool.submit(collect_into, db, e.name, now, lambda e=e: collect(e))
 
 
 def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
@@ -42,12 +48,17 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
     NotesImportRepository(db).replace(notes.load(config.notes.dir))
     plugins = enabled(config, db, now)
     collecting = [e for e in plugins if e.plugin.snapshot_model is not None]
-    with ThreadPoolExecutor(max_workers=max(1, len(collecting))) as pool:
-        for e in collecting:
-            pool.submit(_collect, db, e, now)
+    first = [e for e in collecting if not e.plugin.collects_after_graph]
+    after = [e for e in collecting if e.plugin.collects_after_graph]
+    _collect_all(db, first, now, lambda e: e.plugin.collect(e.ctx))
     if shell.stopping():
         return
     graph, _ = stored_graph(db, plugins)
+    if after:
+        _collect_all(db, after, now, lambda e: e.plugin.collect_after(e.ctx, graph))
+        if shell.stopping():
+            return
+        graph, _ = stored_graph(db, plugins)
     prune_if_due(config, db, now, lambda: _prune_plugins(plugins, graph))
     for e in plugins:
         try:
