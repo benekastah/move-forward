@@ -25,6 +25,8 @@ BACKUPS_DIR = "backups"
 BACKUP_TIME_FORMAT = "%Y%m%dT%H%M%S.%fZ"
 """Sorts by time as text, so the oldest backups sort first."""
 DEFAULT_KEEP_BACKUPS = 10
+BUSY_TIMEOUT_SECONDS = 10
+"""How long a write waits for another process's (e.g. `mfd notes` while the server runs)."""
 
 V1_SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -119,8 +121,16 @@ class Database:
         self._keep_backups = keep_backups
         self._backed_up = not (self._path and self._path.exists() and self._path.stat().st_size)
         """Whether there's no need for a backup: one was taken, or there's nothing to lose."""
-        self._conn = sqlite3.connect(str(path), check_same_thread=False)
+        self._conn = sqlite3.connect(
+            str(path), check_same_thread=False, timeout=BUSY_TIMEOUT_SECONDS
+        )
         self._conn.row_factory = sqlite3.Row
+        # Foreign keys are off in SQLite unless asked for, and `ON DELETE CASCADE` needs them.
+        # (A migration that rebuilds a table someone references must say so; see `migrate`.)
+        self._conn.execute("PRAGMA foreign_keys = ON")
+        if self._path:
+            # Readers don't block the writer, so other processes can use it while we do.
+            self._conn.execute("PRAGMA journal_mode = WAL")
         self._lock = threading.Lock()
         with self._lock:
             self._conn.executescript(_SCHEMA_VERSIONS)
@@ -128,6 +138,10 @@ class Database:
 
     def migrate(self, owner: str, migrations: Sequence[str]) -> int:
         """Apply `owner`'s migrations that haven't run yet, each in its own transaction.
+
+        Foreign keys are enforced, and SQLite can't turn them off inside a transaction, so a
+        migration that rebuilds a referenced table copies it under a new name and renames,
+        rather than dropping the original first.
 
         Returns how many ran. Fails if the database has run more than `migrations` holds,
         i.e. it was used by a newer version of the dashboard.

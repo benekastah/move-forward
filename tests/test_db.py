@@ -134,3 +134,21 @@ def test_keeping_no_backups_takes_none(tmp_path: Path) -> None:
     _old_database(path)
     Database(path, keep_backups=0)
     assert _backups(path) == []
+
+
+def test_foreign_keys_cascade(tmp_path: Path) -> None:
+    db = Database(tmp_path / "a.db")
+    parent = "CREATE TABLE p_parent (id INTEGER PRIMARY KEY);"
+    child = "CREATE TABLE p_child (parent INTEGER REFERENCES p_parent ON DELETE CASCADE);"
+    db.migrate("p", [parent + child])
+    db.execute("INSERT INTO p_parent VALUES (1)")
+    db.execute("INSERT INTO p_child VALUES (1)")
+    db.execute("DELETE FROM p_parent")
+    assert db.query("SELECT * FROM p_child") == []
+    with pytest.raises(sqlite3.IntegrityError):
+        db.execute("INSERT INTO p_child VALUES (2)")
+
+
+def test_a_file_database_lets_another_process_read_while_one_writes(tmp_path: Path) -> None:
+    db = Database(tmp_path / "a.db")
+    assert db.query("PRAGMA journal_mode")[0][0] == "wal"
