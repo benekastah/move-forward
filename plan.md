@@ -56,6 +56,17 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   exists (see AGENTS.md: plugin migrations don't depend on order). Core drops those
   tables in a later migration, once the copies have shipped; a plugin enabled after that
   starts empty.
+- The reviewer map fills itself in, and can be viewed and edited when needed. Once the
+  notes cut over (5a), nothing reads `reviewer-map.md` any more; until this step, `mfd notes
+  import` loads it into core's tables, and can be rerun for it.
+  - Automatically: github already looks up reviewers' emails from their commits. Slack
+    member ids and team channels need a source: the Slack API by email
+    (`users.lookupByEmail`, with a token in the keychain like Jira's), or a convention for
+    team channels (e.g. `#team-<slug>`), or both. Open question.
+  - Viewable and editable: a page in slack's group (`/slack/contacts`) listing people and
+    teams with where their pings go, which are automatic and which were set by hand, with
+    an edit form; and `mfd slack contacts` / `mfd slack contact set|unset` for scripts.
+    A value set by hand wins over an automatic one.
 
 ### 5d. Prune without the clients
 
