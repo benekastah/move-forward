@@ -148,6 +148,9 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
   separators) and written into `on-ice.md`.
+- **Signing in on `localhost`.** `mfd open` signs in at `127.0.0.1`, and cookies are per
+  host, so the dashboard at `localhost:<port>` answers 401. The server could redirect
+  `localhost` to `127.0.0.1`.
 - **Config sections from the registry.** `Config` lists a field per built-in plugin, and
   its teams check names slack, github and jira. The check could cover every section with a
   `teams` table instead.
