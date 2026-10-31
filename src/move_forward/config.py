@@ -10,6 +10,7 @@ from typing import cast
 
 from pydantic import Field, field_validator, model_validator
 
+from . import registry
 from .db import DEFAULT_KEEP_BACKUPS
 from .plugins.git.config import GitConfig
 from .plugins.github.config import GitHubConfig
@@ -98,6 +99,13 @@ class Config(Strict):
                 raise ValueError(
                     f"[{name}.teams] has {', '.join(unknown)}, which the top-level teams don't"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _requirements(self) -> "Config":
+        unmet = registry.unmet_requirements(self)
+        if unmet:
+            raise ValueError("; ".join(unmet))
         return self
 
     @field_validator("db_path")
