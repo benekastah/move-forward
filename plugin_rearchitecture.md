@@ -597,7 +597,11 @@ Each step is its own commit (or a few), with `./check.sh` green and the page wor
    core's tables, which the notes import fills; its own `slack_*` tables arrive with step
    5, when the import goes away.
 4. **notes plugin, still on the markdown files**: todos, on ice, add-todo as an item
-   action. The page now has a group per plugin plus Act now.
+   action. The page now has a group per plugin plus Act now. Left for later steps: git's
+   "Put on ice" posts to `notes/ice` (git-stack owns icing in 4b); core knows
+   `notes/todo_done` by name to keep a ticked todo on the focus page, and builds the done
+   todo with notes' `todo_actions` (todo ids in step 5); the daily notes prune still calls
+   the GitHub and Jira clients for old PRs and tickets (step 5, with a lookup hook).
 4b. **git-stack plugin**: `[git_stack]` (no keys of its own) runs `git stack info` in each
    repo from git's `repo` entities, in `after_collect`, and owns the Stacks panel, the
    `stack_clean` action and whole-stack icing; it publishes `stack_parent` on `branch`

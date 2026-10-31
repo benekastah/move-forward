@@ -255,7 +255,7 @@ def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
     assert titles(dashboard, "iced") == [iced.head]
     actions = panel(dashboard, "iced").items[0].actions
     assert [(a.name, a.label) for a in actions] == [
-        ("thaw", "Reopen"),
-        ("delete_iced", "Delete the work"),
+        ("notes/thaw", "Reopen"),
+        ("notes/delete_iced", "Delete the work"),
     ]
     assert actions[1].confirm is not None and iced.head in actions[1].confirm

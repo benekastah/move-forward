@@ -11,16 +11,13 @@ from . import notes, panels, shell
 from .config import Config
 from .db import Database
 from .graph import Graph
-from .page import Action, Item
+from .page import Action, Item, SourceStatus
 from .plugin import ActionError, collect_into
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, enabled
 from .repositories import (
-    IcedStackRepository,
     NotesImportRepository,
-    ReviewerRepository,
     SnapshotRepository,
-    WorkItemRepository,
 )
 from .shell import CommandError
 
@@ -32,10 +29,7 @@ PERSON = "person"
 def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str, BaseModel | None]]:
     """The graph over what's stored, with the snapshots it was built from."""
     snapshots = {e.name: e.snapshot() for e in plugins}
-    legacy = panels.entities(
-        WorkItemRepository(db).all(), IcedStackRepository(db).all(), ReviewerRepository(db).users()
-    )
-    return build_graph(plugins, snapshots, legacy), snapshots
+    return build_graph(plugins, snapshots), snapshots
 
 
 def _collect(db: Database, e: Enabled, now: datetime) -> None:
@@ -45,7 +39,7 @@ def _collect(db: Database, e: Enabled, now: datetime) -> None:
 def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
     """Import the notes and refresh every plugin. Each plugin fails on its own."""
     now = now or datetime.now(UTC)
-    NotesImportRepository(db).replace(notes.load(config.notes_dir))
+    NotesImportRepository(db).replace(notes.load(config.notes.dir))
     plugins = enabled(config, db, now)
     collecting = [e for e in plugins if e.plugin.snapshot_model is not None]
     with ThreadPoolExecutor(max_workers=max(1, len(collecting))) as pool:
@@ -79,24 +73,21 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
     plugin_panels = [
-        panel for e in plugins for panel in e.plugin.panels(e.ctx, snapshots[e.name], graph)
+        panels.PluginPanels(
+            e.name, e.plugin.title, e.plugin.panels(e.ctx, snapshots[e.name], graph)
+        )
+        for e in plugins
     ]
     me = next((p for p in graph.of_kind(PERSON) if p.attrs.get("me")), None)
-    inputs = panels.Inputs(
-        now=now,
-        graph=graph,
-        work_items=WorkItemRepository(db).all(),
-        iced_stacks=IcedStackRepository(db).all(),
-    )
     sources = {
-        source: panels.SourceStatus(fetched_at=row.fetched_at, error=row.error)
+        source: SourceStatus(fetched_at=row.fetched_at, error=row.error)
         for source, row in SnapshotRepository(db).all().items()
     }
 
     def item_actions(item: Item) -> list[Action]:
         return [a for e in plugins for a in e.plugin.item_actions(e.ctx, item, graph)]
 
-    return panels.build(inputs, plugin_panels, sources, me.ref.id if me else "", item_actions)
+    return panels.build(now, plugin_panels, sources, me.ref.id if me else "", item_actions)
 
 
 def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[str]]) -> str | None:

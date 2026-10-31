@@ -23,7 +23,7 @@ def action(name: str, label: str, fields: dict[str, str], confirm: str | None = 
 
 
 def _ice_action(repo_dir: str, branch: str) -> Action:
-    return Action(name="ice", label="Put on ice", fields={"repo": repo_dir, "branch": branch})
+    return Action(name="notes/ice", label="Put on ice", fields={"repo": repo_dir, "branch": branch})
 
 
 class Builder:

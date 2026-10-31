@@ -62,17 +62,17 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
     assert items["me/APP-1-branch: 3 unpushed commits"].badges == ["has PR"]
     assert items["me/iced: 1 commits, never pushed"].badges == ["iced", "no PR"]
     actions = items["me/APP-1-branch: 3 unpushed commits"].actions
-    assert [(a.name, a.fields) for a in actions if a.name != "todo_add"] == [
+    assert [(a.name, a.fields) for a in actions if a.name != "notes/todo_add"] == [
         ("git/push_branch", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
-        ("ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
+        ("notes/ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
     ]
     assert [a.name for a in items["me/iced: 1 commits, never pushed"].actions] == [
         "git/push_branch"
     ]
     dirty = items["me/APP-1-branch: 2 modified, 1 untracked"].actions
-    assert [(a.name, a.fields) for a in dirty if a.name != "todo_add"] == [
+    assert [(a.name, a.fields) for a in dirty if a.name != "notes/todo_add"] == [
         ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
-        ("ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
+        ("notes/ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
     ]
 
 

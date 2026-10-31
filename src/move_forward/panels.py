@@ -1,54 +1,43 @@
-"""The panels that aren't a plugin's yet: the work notes' todos, stacks on ice, and review
-nudges with their ping targets; plus the Dashboard that collects every panel.
+"""The Dashboard: every enabled plugin's panels in groups, and focus mode's view of them.
 
-Pure functions, no I/O. They read other plugins' data through the graph only; the notes and
-the reviewer map come from core's tables until they become plugins of their own.
+Act now is core's group: the most urgent panels, whichever plugin built them. Every other
+panel sits in its plugin's group, in the plugins' page order.
 """
 
-import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 
-from pydantic import Field
+from .domain import Model
+from .page import Action, Group, Item, Panel, SourceStatus
+from .plugins.notes.panels import todo_actions
 
-from .domain import IcedStack, Model, ReviewerUser, Todo, WorkItem
-from .graph import Entity, Graph, Ref
-from .page import Action, Group, Item, Link, Panel, PrState, SourceStatus
-
-JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
-PR_URL_RE = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
-NOT_BLOCKED_RE = re.compile(r"^\s*(nothing|none|no|-|n/a)\b", re.IGNORECASE)
-
-PR = "pr"
-TICKET = "ticket"
-ENTRY = "entry"
-ICED_BRANCH = "iced_branch"
-PERSON = "person"
-PR_STATES: dict[str, PrState] = {"open": "open", "merged": "merged", "closed": "closed"}
+ACT_NOW = Group(
+    key="act",
+    title="Act now",
+    panel_keys=["reviews_for_me", "feedback", "ci_failures", "conflicts"],
+    open=True,
+)
 
 
-# Output models
+@dataclass(frozen=True)
+class PluginPanels:
+    """One enabled plugin's panels, which make its group on the page."""
+
+    key: str
+    title: str
+    panels: list[Panel]
 
 
-GROUPS = [
-    Group(
-        key="act",
-        title="Act now",
-        panel_keys=["reviews_for_me", "feedback", "ci_failures", "conflicts"],
-        open=True,
-    ),
-    Group(
-        key="my_prs",
-        title="My PRs",
-        panel_keys=["needs_reviewer", "nudges", "ready_to_merge", "held", "metadata"],
-    ),
-    Group(key="local", title="Local", panel_keys=["local_work", "stacks", "cleanup"]),
-    Group(key="team", title="Team", panel_keys=["team_prs"]),
-    Group(key="planning", title="Planning", panel_keys=["todos", "jira_transitions", "jira_next"]),
-    Group(key="parked", title="Parked", panel_keys=["iced"]),
-]
-"""Page order. Every panel `build` makes belongs to exactly one group."""
+def groups(plugins: list[PluginPanels]) -> list[Group]:
+    """Act now, then a group per plugin with panels outside Act now."""
+    result = [ACT_NOW]
+    for plugin in plugins:
+        keys = [p.key for p in plugin.panels if p.key not in ACT_NOW.panel_keys]
+        if keys:
+            result.append(Group(key=plugin.key, title=plugin.title, panel_keys=keys))
+    return result
+
 
 FOCUS_ORDER = [
     "todos",  # 0b. Reconcile work notes and check in
@@ -74,65 +63,11 @@ FOCUS_ALL = "all"
 """The focus category that covers every panel."""
 
 
-def todo_actions(entry: str, text: str, done: bool, suggested: bool = False) -> list[Action]:
-    """A todo's checkbox (done, or undone once it's done) and, while open, its delete button.
-
-    `suggested` draws the Done box bigger, when every PR the todo is about is merged or closed.
-    """
-    fields = {"entry": entry, "text": text}
-    if done:
-        return [
-            Action(name="todo_undone", label="Done", fields=fields, checkbox=True, checked=True)
-        ]
-    return [
-        Action(name="todo_done", label="Done", fields=fields, checkbox=True, suggested=suggested),
-        Action(
-            name="todo_delete",
-            label="Delete todo",
-            fields=fields,
-            confirm=f"Drop the todo “{text}” from {entry}? It isn't recorded as done.",
-        ),
-        Action(name="todo_link", label="Link", fields=fields, input="Jira key or PR URL"),
-        add_todo_action(entry),
-    ]
-
-
-ADD_TODO_INPUT = "New todo"
-
-
-def add_todo_action(entry: str | None, new_title: str = "", where: str = "") -> Action:
-    """An Add todo field for a work-notes entry, or for one to create titled `new_title`."""
-    if entry is not None:
-        return Action(
-            name="todo_add", label="Add todo", fields={"entry": entry}, input=ADD_TODO_INPUT
-        )
-    return Action(
-        name="todo_add",
-        label="Add todo",
-        fields={"entry": new_title, "create": "1", "where": where},
-        input=ADD_TODO_INPUT,
-    )
-
-
-def entry_for(work_items: list[WorkItem], url: str | None, keys: list[str]) -> str | None:
-    """The work-notes entry that covers a PR or ticket: one that names the URL, else one whose
-    title has one of the ticket keys."""
-    if url:
-        for item in work_items:
-            if url in item.text:
-                return item.title
-    for key in keys:
-        for item in work_items:
-            if key in _item_keys(item):
-                return item.title
-    return None
-
-
 class Dashboard(Model):
     generated_at: datetime
     login: str
     panels: list[Panel]
-    groups: list[Group] = Field(default_factory=lambda: list(GROUPS))
+    groups: list[Group]
 
     def panel(self, key: str) -> Panel:
         return next(p for p in self.panels if p.key == key)
@@ -198,264 +133,6 @@ class Dashboard(Model):
     sources: dict[str, SourceStatus]
 
 
-@dataclass(frozen=True)
-class Inputs:
-    """Everything `build` reads besides the plugins' panels, so it stays a pure function."""
-
-    now: datetime
-    graph: Graph
-    work_items: list[WorkItem] = field(default_factory=list[WorkItem])
-    iced_stacks: list[IcedStack] = field(default_factory=list[IcedStack])
-
-
-# Helpers
-
-
-def _is_blocked(item: WorkItem) -> bool:
-    values = item.fields.get("Blocked on", [])
-    return bool(values) and not NOT_BLOCKED_RE.match(values[0])
-
-
-def _todo_links(text: str, urls: list[str], states: dict[str, PrState], graph: Graph) -> list[Link]:
-    """The entry's PR links, with the ones the todo mentions first and highlighted, then the
-    PRs and Jira tickets only the todo mentions (e.g. linked with its Link button).
-
-    A todo mentions a PR by its URL, `#<number>`, or the bare number (PR numbers are long
-    enough that a matching bare number in a todo is almost surely the PR).
-    """
-    links: list[Link] = []
-    for u in urls:
-        number = u.rsplit("/", 1)[1]
-        mentioned = u in text or re.search(rf"(?<![\w/])#?{number}\b", text) is not None
-        links.append(Link(text=f"PR {number}", url=u, strong=mentioned, pr_state=states.get(u)))
-    links.sort(key=lambda link: not link.strong)
-    for u in PR_URL_RE.findall(text):
-        if u not in urls:
-            number = u.rsplit("/", 1)[1]
-            links.append(Link(text=f"PR {number}", url=u, strong=True, pr_state=states.get(u)))
-    for key in dict.fromkeys(JIRA_KEY_RE.findall(text)):
-        if url := graph.url_for(TICKET, key):
-            links.append(Link(text=key, url=url, strong=True))
-    return links
-
-
-def _todo_part(
-    entry: str,
-    todo: Todo,
-    urls: list[str],
-    states: dict[str, PrState],
-    badges: list[str],
-    graph: Graph,
-) -> Item:
-    """One todo as focus mode shows it, linked to the PR it mentions if any.
-
-    When every PR it mentions is merged or closed, the todo is probably done: it says so and
-    its Done box is drawn bigger.
-    """
-    links = _todo_links(todo.text, urls, states, graph)
-    mentioned = [link for link in links if link.strong]
-    known = [link.pr_state for link in mentioned if link.pr_state is not None]
-    probably_done = bool(known) and all(state in ("merged", "closed") for state in known)
-    return Item(
-        title=todo.text,
-        url=mentioned[0].url if mentioned else None,
-        subtitle=entry,
-        badges=[todo.size or "unsized", *(["its PRs are done"] if probably_done else []), *badges],
-        links=links,
-        actions=todo_actions(entry, todo.text, done=False, suggested=probably_done),
-    )
-
-
-def _item_urls(item: WorkItem) -> set[str]:
-    return set(PR_URL_RE.findall(item.text))
-
-
-def _item_keys(item: WorkItem) -> set[str]:
-    return set(JIRA_KEY_RE.findall(item.title))
-
-
-def merge_conditions(item: WorkItem) -> list[str]:
-    return item.fields.get("Merge conditions", [])
-
-
-def entities(
-    work_items: list[WorkItem], iced_stacks: list[IcedStack], users: dict[str, ReviewerUser]
-) -> list[Entity]:
-    """What the notes and the reviewer map publish to the graph: `entry` per work-notes entry,
-    `iced_branch` per branch on ice, and `person` per known reviewer."""
-    result: list[Entity] = []
-    for item in work_items:
-        refs = [Ref(kind=PR, id=url) for url in sorted(_item_urls(item))]
-        refs += [Ref(kind=TICKET, id=key) for key in sorted(_item_keys(item))]
-        result.append(
-            Entity.model_validate(
-                {
-                    "ref": Ref(kind=ENTRY, id=item.title),
-                    "title": item.title,
-                    "refs": refs,
-                    "attrs": {
-                        "merge_conditions": merge_conditions(item),
-                        "open_todos": [t.text for t in item.todos],
-                    },
-                }
-            )
-        )
-    for stack in iced_stacks:
-        for branch in stack.branches:
-            result.append(
-                Entity(
-                    ref=Ref(kind=ICED_BRANCH, id=branch.name),
-                    title=branch.name,
-                    attrs={"repo_dir": stack.repo_dir, "stack": stack.bottom_branch},
-                )
-            )
-    for user in users.values():
-        result.append(
-            Entity(
-                ref=Ref(kind=PERSON, id=user.login),
-                title=user.login,
-                attrs={"email": user.email, "slack_id": user.slack_id},
-            )
-        )
-    return result
-
-
-# Panels
-
-
-class _Builder:
-    def __init__(self, inputs: Inputs):
-        self.i = inputs
-        self.now = inputs.now
-        self.graph = inputs.graph
-        self.my_open_prs = [
-            pr for pr in self.graph.of_kind(PR) if pr.attrs.get("mine") and pr.state == "open"
-        ]
-
-    def _iced(self, pr: Entity) -> bool:
-        return self.graph.get(ICED_BRANCH, str(pr.attrs.get("head"))) is not None
-
-    # Notes
-
-    def with_add_todo(self, panel: Panel) -> Panel:
-        """Give each of my open PRs, each ticket and each work-notes entry an Add todo field.
-
-        The todo goes to the entry covering the PR or ticket; without one, an entry is created,
-        titled with the ticket key and summary (or the PR's URL and title, as the skill does).
-        """
-        entries = {item.title for item in self.i.work_items}
-        items: list[Item] = []
-        for item in panel.items:
-            action: Action | None = None
-            subject = self.graph.get(item.subject.kind, item.subject.id) if item.subject else None
-            if any(a.name == "todo_add" for a in item.actions):
-                pass
-            elif panel.key == "todos" and item.title in entries:
-                action = add_todo_action(item.title)
-            elif subject and subject.ref.kind == PR:
-                if subject.attrs.get("mine") and subject.state == "open":
-                    keys = [r.id for r in subject.refs if r.kind == TICKET]
-                    entry = entry_for(self.i.work_items, subject.ref.id, keys)
-                    ticket = self.graph.get(TICKET, keys[0]) if keys else None
-                    summary = ticket.attrs.get("summary") if ticket else None
-                    title = (
-                        f"{keys[0]} {summary or subject.title}"
-                        if keys
-                        else f"{subject.ref.id} {subject.title}"
-                    )
-                    action = add_todo_action(entry, title, subject.ref.id)
-            elif subject and subject.ref.kind == TICKET:
-                key = subject.ref.id
-                entry = entry_for(self.i.work_items, subject.url, [key])
-                summary = subject.attrs.get("summary")
-                action = add_todo_action(
-                    entry, f"{key} {summary}" if summary else key, subject.url or ""
-                )
-            items.append(
-                item.model_copy(update={"actions": [*item.actions, action]}) if action else item
-            )
-        return panel.model_copy(update={"items": items})
-
-    def _pr_states(self) -> dict[str, PrState]:
-        return {
-            pr.ref.id: PR_STATES[pr.state] for pr in self.graph.of_kind(PR) if pr.state in PR_STATES
-        }
-
-    def todos(self) -> Panel:
-        items: list[Item] = []
-        states = self._pr_states()
-        for item in self.i.work_items:
-            open_todos = item.todos
-            if not open_todos:
-                continue
-            urls = sorted(_item_urls(item))
-            keys = sorted(_item_keys(item))
-            blocked = _is_blocked(item)
-            quick = [t for t in open_todos if t.size == "quick"]
-            close_out = len(quick) == len(open_todos)
-            badges: list[str] = []
-            if close_out:
-                badges.append(f"close-out: {len(open_todos)} quick todo(s)")
-            if blocked:
-                badges.append("blocked: " + item.fields["Blocked on"][0][:80])
-            url = urls[0] if urls else None
-            links = [Link(text=f"PR {u.rsplit('/', 1)[1]}", url=u) for u in urls]
-            ordered = sorted(open_todos, key=lambda t: t.size != "quick")
-            items.append(
-                Item(
-                    title=item.title,
-                    url=url,
-                    subtitle=", ".join(keys),
-                    badges=badges,
-                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered],
-                    links=links,
-                    rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
-                    parts=[
-                        _todo_part(
-                            item.title,
-                            t,
-                            urls,
-                            states,
-                            badges[1 if close_out else 0 :],
-                            self.graph,
-                        )
-                        for t in ordered
-                    ],
-                )
-            )
-        return Panel(
-            key="todos",
-            title="Todos from the work notes",
-            description="Easy close-outs first; blocked work last.",
-            items=items,
-        )
-
-    def iced(self) -> Panel:
-        items = [
-            Item(
-                title=stack.bottom_branch,
-                subtitle=f"{stack.repo_dir} · iced {stack.iced or '?'}",
-                details=[stack.note] if stack.note else [],
-                badges=[f"{len(stack.branches)} branches"],
-                actions=[
-                    Action(name="thaw", label="Reopen", fields={"branch": stack.bottom_branch}),
-                    Action(
-                        name="delete_iced",
-                        label="Delete the work",
-                        fields={"branch": stack.bottom_branch},
-                        confirm=f"Delete the local branches {', '.join(b.name for b in stack.branches)}"
-                        f" in {stack.repo_dir} and drop the stack from on-ice.md? Remote branches"
-                        " and PRs are not touched.",
-                    ),
-                ],
-            )
-            for stack in self.i.iced_stacks
-        ]
-        return Panel(
-            key="iced", title="On ice", description="Stacks parked by the skill.", items=items
-        )
-
-
 def _sorted(panel: Panel) -> Panel:
     """Highest rank first, drafts last."""
     return panel.model_copy(update={"items": sorted(panel.items, key=lambda i: (i.draft, -i.rank))})
@@ -484,19 +161,22 @@ def _with_item_actions(panel: Panel, item_actions: ItemActions) -> Panel:
 
 
 def build(
-    inputs: Inputs,
-    plugin_panels: list[Panel],
+    now: datetime,
+    plugins: list[PluginPanels],
     sources: dict[str, SourceStatus],
     login: str = "",
     item_actions: ItemActions = _no_item_actions,
 ) -> Dashboard:
-    """The dashboard: the plugins' panels and these, each with its Add todo fields and the
-    plugins' item buttons, sorted."""
-    b = _Builder(inputs)
-    panels = [*plugin_panels, b.todos(), b.iced()]
+    """The dashboard: the plugins' panels in their groups, each item with the plugins' buttons,
+    sorted."""
     return Dashboard(
-        generated_at=inputs.now,
+        generated_at=now,
         login=login,
-        panels=[_sorted(_with_item_actions(b.with_add_todo(p), item_actions)) for p in panels],
+        panels=[
+            _sorted(_with_item_actions(panel, item_actions))
+            for plugin in plugins
+            for panel in plugin.panels
+        ],
+        groups=groups(plugins),
         sources=sources,
     )

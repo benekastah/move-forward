@@ -6,6 +6,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.notes.config import NotesConfig
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
 OLD = NOW - timedelta(days=100)
@@ -49,7 +50,7 @@ def _config(tmp_path: Path, jira: bool = True) -> Config:
     return Config(
         email="me@x",
         github=GitHubConfig(org="acme"),
-        notes_dir=tmp_path,
+        notes=NotesConfig(dir=tmp_path),
         jira=JiraConfig(site="https://j") if jira else None,
     )
 

@@ -23,6 +23,7 @@ from move_forward.domain import (
     StackBranch,
     Todo,
 )
+from move_forward.plugins.notes.panels import ADD_TODO_INPUT
 
 build = dashboard
 
@@ -139,20 +140,20 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_rebuilt() -> None
     assert focused is not None
     [(_, part)] = focused
     assert [(a.name, a.checkbox, a.checked) for a in part.actions] == [
-        ("todo_done", True, False),
-        ("todo_delete", False, False),
-        ("todo_link", False, False),
-        ("todo_add", False, False),
+        ("notes/todo_done", True, False),
+        ("notes/todo_delete", False, False),
+        ("notes/todo_link", False, False),
+        ("notes/todo_add", False, False),
     ]
     assert part.actions[0].fields == {"entry": "APP-2 mixed", "text": "small"}
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
     # The entry on the page only gets the Add todo field, not the todo's own actions.
-    assert [a.name for a in panel(dashboard, "todos").items[0].actions] == ["todo_add"]
+    assert [a.name for a in panel(dashboard, "todos").items[0].actions] == ["notes/todo_add"]
 
     done = dashboard.done_todo("APP-2 mixed", "small")
     assert (done.title, done.subtitle, done.badges) == ("small", "APP-2 mixed", ["done"])
     assert done.url == "https://github.com/acme/widgets/pull/7"
-    assert [(a.name, a.checked) for a in done.actions] == [("todo_undone", True)]
+    assert [(a.name, a.checked) for a in done.actions] == [("notes/todo_undone", True)]
     assert dashboard.done_todo("gone entry", "x").url is None
 
 
@@ -217,7 +218,12 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
     assert part.url == "https://github.com/acme/other/pull/4"
     # An unknown-state PR is not evidence the todo is done.
     assert part.actions[0].suggested is False
-    assert [a.name for a in part.actions] == ["todo_done", "todo_delete", "todo_link", "todo_add"]
+    assert [a.name for a in part.actions] == [
+        "notes/todo_done",
+        "notes/todo_delete",
+        "notes/todo_link",
+        "notes/todo_add",
+    ]
     assert part.actions[2].input == "Jira key or PR URL"
     # Without a Jira site, keys aren't linked.
     [(_, part)] = build(work_items=[entry]).focus_items("todos") or []
@@ -245,8 +251,8 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
 
     def add(panel_key: str, title: str) -> dict[str, str]:
         item = next(i for i in panel(dashboard, panel_key).items if i.title == title)
-        [action] = [a for a in item.actions if a.name == "todo_add"]
-        assert action.input == panels.ADD_TODO_INPUT
+        [action] = [a for a in item.actions if a.name == "notes/todo_add"]
+        assert action.input == ADD_TODO_INPUT
         return action.fields
 
     assert add("needs_reviewer", covered.title) == {"entry": "APP-1 Fix"}

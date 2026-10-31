@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from . import actions, render, shell
+from . import render, shell
 from .config import Config
 from .db import Database
 from .plugin import ActionError
@@ -85,10 +85,7 @@ class App:
         Returns the notice for the page and whether the action succeeded.
         """
         try:
-            if "/" in name:
-                notice = run_action(self.config, self.db, name, fields)
-            else:
-                notice = actions.run(name, self.config, fields)
+            notice = run_action(self.config, self.db, name, fields)
         except ActionError as e:
             return f"failed: {e}", False
         self.request_refresh()
@@ -111,6 +108,20 @@ class App:
             return render.focus_categories_page(dashboard)
         done_item = dashboard.done_todo(*done) if done else None
         return render.focus_page(dashboard, category, index, notice, done_item)
+
+
+DONE_TODO_ACTION = "notes/todo_done"
+
+
+def _redirect_params(name: str, fields: dict[str, str]) -> dict[str, str]:
+    """Extra query parameters for the page an action redirects back to, once it succeeded.
+
+    Ticking a todo off keeps it on the focus page, box ticked, so the tick can be undone.
+    Until todos have ids, core knows this one notes action by name.
+    """
+    if name == DONE_TODO_ACTION:
+        return {"done_entry": fields["entry"], "done_text": fields["text"]}
+    return {}
 
 
 def _open_keys(query: str) -> set[str] | None:
@@ -213,7 +224,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 name = url.path[len("/actions/") :]
                 fields = _form_fields(self._read_body())
                 notice, ok = app.run_action(name, fields)
-                extra = actions.redirect_params(name, fields) if ok else {}
+                extra = _redirect_params(name, fields) if ok else {}
                 self._redirect(_back_to_page(url.query, notice, extra))
             else:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")

@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from move_forward import config, init
+from move_forward.plugins.notes.config import DEFAULT_NOTES_DIR
 
 
 def scripted(answers: dict[str, str | list[str]]) -> init.Prompt:
@@ -50,13 +51,13 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
     assert loaded.github.org == "acme" and loaded.teams == ["core"]
     assert loaded.slack is None
     assert loaded.email == "jane@acme.com"
-    assert loaded.notes_dir == config.DEFAULT_NOTES_DIR.expanduser()
+    assert loaded.notes.dir == DEFAULT_NOTES_DIR.expanduser()
     assert loaded.git.repos == [tmp_path / "app"]
     assert loaded.git.my_branch_prefixes == [] and loaded.port == config.DEFAULT_PORT
     assert loaded.jira is None
     text = path.read_text()
     assert "# prune_days = 90" in text and "# [jira]" in text and "# [slack]" in text
-    assert "# notes_dir" in text and "Jira" not in message
+    assert "# [notes]" in text and "Jira" not in message
 
 
 def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses: None) -> None:
@@ -85,7 +86,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     assert loaded.github.org == "other" and loaded.teams == ["a", "b"]
     assert loaded.slack is not None and loaded.slack.teams == {"a": "#team-a"}
     assert loaded.email == "jane@other.com"
-    assert loaded.notes_dir == config.DEFAULT_NOTES_DIR.expanduser()
+    assert loaded.notes.dir == DEFAULT_NOTES_DIR.expanduser()
     assert loaded.git.repos == [tmp_path / "x", tmp_path / "y"]
     assert loaded.slack.workspace_url == "https://o.slack.com"
     assert loaded.git.my_branch_prefixes == ["jane/"] and loaded.port == 9000

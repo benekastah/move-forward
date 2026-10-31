@@ -14,13 +14,13 @@ from .db import DEFAULT_KEEP_BACKUPS
 from .plugins.git.config import GitConfig
 from .plugins.github.config import GitHubConfig
 from .plugins.jira.config import JiraConfig
+from .plugins.notes.config import NotesConfig
 from .plugins.slack.config import SlackConfig
 from .strict import Strict
 
 BASE_DIR = Path("~/.config/move-forward")
 """Where the config and, by default, the notes live."""
 DEFAULT_CONFIG_PATH = (BASE_DIR / "config.toml").expanduser()
-DEFAULT_NOTES_DIR = BASE_DIR / "notes"
 DEFAULT_DB_PATH = Path("~/.local/share/move-forward/dashboard.db")
 DEFAULT_PORT = 8765
 DEFAULT_REFRESH_SECONDS = 300
@@ -34,6 +34,7 @@ MOVED_SETTINGS = {
     "commit_history_days": "git",
     "email_domains": "github",
     "stale_review_hours": "github",
+    "notes_dir": "notes, as `dir`",
 }
 """Top-level settings that moved into a plugin's section, to say so instead of just "extra
 input"."""
@@ -48,9 +49,6 @@ class Config(Strict):
     teams: list[str] = Field(default_factory=list)
     """The teams I'm on or review for, by name. Plugins map a name to what their tool calls
     the team in their own `teams` table, e.g. `[github.teams]`."""
-    notes_dir: Path = DEFAULT_NOTES_DIR
-    """The directory of work-notes.md, on-ice.md and reviewer-map.md: the move-forward skill's
-    notes, which the dashboard reads on every refresh and writes todos and icing to."""
     db_path: Path = DEFAULT_DB_PATH
     db_backups: int = DEFAULT_KEEP_BACKUPS
     """How many copies of the database to keep in `backups/` next to it. One is taken before
@@ -67,6 +65,8 @@ class Config(Strict):
     git: GitConfig | None = None
     jira: JiraConfig | None = None
     slack: SlackConfig | None = None
+    notes: NotesConfig = Field(default_factory=NotesConfig)
+    """Always on, so always there; `[notes]` only changes its settings."""
 
     @model_validator(mode="before")
     @classmethod
@@ -100,7 +100,7 @@ class Config(Strict):
                 )
         return self
 
-    @field_validator("notes_dir", "db_path")
+    @field_validator("db_path")
     @classmethod
     def _expand(cls, value: Path) -> Path:
         return value.expanduser()

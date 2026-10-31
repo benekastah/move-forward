@@ -3,16 +3,8 @@
 from html import escape
 from urllib.parse import urlencode
 
-from .page import age
-from .panels import (
-    FOCUS_ALL,
-    Action,
-    Dashboard,
-    Group,
-    Item,
-    Link,
-    Panel,
-)
+from .page import Action, Group, Item, Link, Panel, age
+from .panels import FOCUS_ALL, Dashboard
 
 PAGE_RELOAD_SECONDS = 60
 REFRESHING_RELOAD_SECONDS = 10

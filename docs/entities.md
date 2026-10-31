@@ -23,12 +23,12 @@ APP-1 is related to every PR whose branch, title or body mentions APP-1.
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pr` | github | the PR's URL | `open`, `merged` or `closed` | `ticket` keys from its branch, title and body |
-| `person` | github (me), the reviewer map | GitHub login | | |
+| `person` | github (me), slack (the reviewer map) | GitHub login | | |
 | `repo` | git | GitHub `owner/name` | | |
 | `branch` | git | `<repo dir>\t<branch>` | | its `repo` |
 | `ticket` | jira | the issue key, e.g. `APP-1` | the issue's status | |
-| `entry` | the work notes | the entry's title | | the `pr` URLs and `ticket` keys it names |
-| `iced_branch` | the work notes | the branch's name | | |
+| `entry` | notes | the entry's title | | the `pr` URLs and `ticket` keys it names |
+| `iced_branch` | notes | the branch's name | | |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
 answers for `pr` (the id is the URL), jira for `ticket` (from its `site`).
@@ -64,8 +64,8 @@ On my open PRs only:
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `me` | bool | the person using the dashboard (github) |
-| `email` | string or null | their commit email (reviewer map) |
-| `slack_id` | string or null | their Slack member id (reviewer map) |
+| `email` | string or null | their commit email (slack, from the reviewer map) |
+| `slack_id` | string or null | their Slack member id (slack) |
 
 ### `repo`
 

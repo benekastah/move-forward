@@ -13,10 +13,17 @@ from .plugin import Context, Plugin
 from .plugins.git.plugin import GitPlugin
 from .plugins.github.plugin import GitHubPlugin
 from .plugins.jira.plugin import JiraPlugin
+from .plugins.notes.plugin import NotesPlugin
 from .plugins.slack.plugin import SlackPlugin
 from .repositories import KvRepository, SnapshotRepository
 
-PLUGINS: list[Plugin[Any, Any]] = [GitHubPlugin(), GitPlugin(), JiraPlugin(), SlackPlugin()]
+PLUGINS: list[Plugin[Any, Any]] = [
+    GitHubPlugin(),
+    GitPlugin(),
+    JiraPlugin(),
+    SlackPlugin(),
+    NotesPlugin(),
+]
 """Every built-in plugin, in page order. Each one's name is a field of `Config`."""
 
 
@@ -57,13 +64,9 @@ def enabled(config: Config, db: Database, now: datetime) -> list[Enabled]:
     return result
 
 
-def build_graph(
-    plugins: list[Enabled],
-    snapshots: dict[str, BaseModel | None],
-    extra: list[Entity] | None = None,
-) -> Graph:
-    """The graph of every plugin's entities, plus `extra` ones core publishes itself."""
-    entities = list(extra or [])
+def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) -> Graph:
+    """The graph of every plugin's entities."""
+    entities: list[Entity] = []
     for e in plugins:
         entities += e.plugin.entities(e.ctx, snapshots.get(e.name))
 

@@ -30,10 +30,7 @@ of the settings as commented defaults. `mfd init --example` writes a commented
 example without asking; `--force` replaces an existing file.
 
 The top level of the config says who you are and how the dashboard runs:
-`email`, `teams` (the names of the teams you're on or review for), `notes_dir`
-(where `work-notes.md`, `on-ice.md` and `reviewer-map.md` live: the
-move-forward skill's notes, which the dashboard reads on every refresh and
-writes todos and icing to; any directory works without the skill), `port`,
+`email`, `teams` (the names of the teams you're on or review for), `port`,
 `db_path`, `db_backups`, the refresh intervals and `prune_days`. Everything about a tool is
 in that tool's plugin section; see [Plugins](#plugins).
 
@@ -68,8 +65,13 @@ tickets, branches, ...), listed in [docs/entities.md](docs/entities.md).
 | `git` | `[git]` | each repo's worktrees, branches, `git stack info` | Local work, Stacks, Cleanup |
 | `jira` | `[jira]` | my open tickets | Jira transitions, What next |
 | `slack` | `[slack]` | nothing; reads my PRs from the graph and the reviewer map | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
+| `notes` | `[notes]`, optional: always on | the skill's notes, from markdown | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket |
 
-The notes (todos, on ice) aren't a plugin yet; they're always on.
+`[notes] dir` is where `work-notes.md`, `on-ice.md` and `reviewer-map.md`
+live: the move-forward skill's notes, which the dashboard reads on every
+refresh and writes todos and icing to (default `~/.config/move-forward/notes`;
+any directory works without the skill). The smallest config, `email` alone,
+is a todo list.
 
 `[github]` needs `org`. Its conventions that differ between organisations are
 off by default: `review_checks` (CI checks that really report review status),
@@ -107,11 +109,9 @@ and levels, and the issue types that count as incidents or bugs are settings.
 
 ## Panels
 
-The page has six collapsible groups: **Act now** (reviews for me, feedback, CI,
-conflicts), **My PRs** (needs a reviewer, nudges, ready to merge, held,
-housekeeping), **Local** (local work, stacks, cleanup), **Team**, **Planning**
-(todos, Jira) and **Parked** (on ice). Only Act now starts expanded; each
-panel inside a group collapses too.
+The page has **Act now** (reviews for me, feedback, CI, conflicts) on top,
+then a collapsible group per enabled plugin holding the rest of its panels.
+Only Act now starts expanded; each panel inside a group collapses too.
 
 - **Reviews for me**: PRs requesting my review as a person, and PRs I reviewed
   that were pushed or re-requested since.
@@ -190,7 +190,7 @@ Pages (GET, HTML):
 | --- | --- |
 | `/` | The dashboard. `?open=act,feedback` sets the open sections; `?notice=…` shows a message. |
 | `/focus` | Focus mode's category list. |
-| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act`, `my_prs`, `local`, `team`, `planning`, `parked`) or a panel key. `&done_entry=…&done_text=…` keeps a just-ticked todo on the page. |
+| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key. `&done_entry=…&done_text=…` keeps a just-ticked todo on the page. |
 | `/ping?pr=<PR URL>` | slack: the ping page for one of my PRs. |
 
 Plugins can add pages of their own; the [Plugins](#plugins) section lists them.
@@ -204,16 +204,16 @@ error status):
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/refresh` | | Starts a background refresh. |
-| `/actions/todo_add` | `entry`, `text` (or `input`), optional `size` (`quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds a todo under the entry's `Left to do`; with `create`, a missing entry is created first, with `where` as its `Where`. |
-| `/actions/todo_done` | `entry`, `text` | Moves the todo to a `Done <date>:` line; redirects with `done_entry`/`done_text`. |
-| `/actions/todo_undone` | `entry`, `text` | Moves a done todo back under `Left to do`. |
-| `/actions/todo_delete` | `entry`, `text` | Drops the todo without recording it. |
-| `/actions/todo_link` | `entry`, `text`, `input` (Jira key or URL) | Appends the ticket's or PR's URL to the todo. |
+| `/actions/notes/todo_add` | `entry`, `text` (or `input`), optional `size` (`quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds a todo under the entry's `Left to do`; with `create`, a missing entry is created first, with `where` as its `Where`. |
+| `/actions/notes/todo_done` | `entry`, `text` | Moves the todo to a `Done <date>:` line; redirects with `done_entry`/`done_text`. |
+| `/actions/notes/todo_undone` | `entry`, `text` | Moves a done todo back under `Left to do`. |
+| `/actions/notes/todo_delete` | `entry`, `text` | Drops the todo without recording it. |
+| `/actions/notes/todo_link` | `entry`, `text`, `input` (Jira key or URL) | Appends the ticket's or PR's URL to the todo. |
 | `/actions/git/push_branch` | `repo`, `branch` | `git push` (sets the upstream if missing; never forces). |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`. |
-| `/actions/ice` | `repo`, `branch` | Puts the branch's stack on ice. |
-| `/actions/thaw` | `branch` | Takes a stack off ice. |
-| `/actions/delete_iced` | `branch` | Deletes an iced stack's local branches and thaws it. |
+| `/actions/notes/ice` | `repo`, `branch` | Puts the branch's stack on ice. |
+| `/actions/notes/thaw` | `branch` | Takes a stack off ice. |
+| `/actions/notes/delete_iced` | `branch` | Deletes an iced stack's local branches and thaws it. |
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. |
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
 | `/actions/git/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
@@ -226,7 +226,7 @@ items' `parts`). `repo` is one of `[git] repos`. For
 example:
 
 ```sh
-curl -s -o /dev/null -w '%{redirect_url}\n' -X POST http://127.0.0.1:8765/actions/todo_done \
+curl -s -o /dev/null -w '%{redirect_url}\n' -X POST http://127.0.0.1:8765/actions/notes/todo_done \
   --data-urlencode 'entry=APP-1 Fix the widget' --data-urlencode 'text=reply to the thread'
 ```
 

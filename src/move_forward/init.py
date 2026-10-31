@@ -15,6 +15,7 @@ from pathlib import Path
 from . import config as config_module
 from .config import Config
 from .plugins.jira.config import DEFAULT_JIRA_KEYCHAIN_SERVICE, DEFAULT_JIRA_TOKEN_ENV
+from .plugins.notes.config import DEFAULT_NOTES_DIR
 from .shell import CommandError, run
 
 Prompt = Callable[[str, str], str]
@@ -24,7 +25,6 @@ GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 
 OPTIONAL_SETTINGS = """\
 # Optional settings, with their defaults. Uncomment to change.
-# notes_dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # db_backups = 10                        # copies kept in backups/, taken before migrations
 # refresh_seconds = 300                  # background refresh when nobody loads the page
@@ -124,6 +124,7 @@ def render_config(
     slack: dict[str, object] | None,
     slack_teams: dict[str, object],
     jira: dict[str, object] | None,
+    notes: dict[str, object] | None = None,
 ) -> str:
     """The config file: a section per plugin, with the optional settings as comments."""
     lines = ["# move-forward configuration. Paths may start with ~.", ""]
@@ -146,6 +147,13 @@ def render_config(
         text += (
             "\n# [jira]                                # uncomment to show tickets\n"
             '# site = "https://example.atlassian.net"\n' + OPTIONAL_JIRA_SETTINGS
+        )
+    if notes:
+        text += _table("notes", notes)
+    else:
+        text += (
+            "\n# [notes]                               # the move-forward skill's notes\n"
+            f'# dir = "{DEFAULT_NOTES_DIR}"  # work-notes.md, on-ice.md, reviewer-map.md\n'
         )
     return text
 
@@ -302,7 +310,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         prompt,
         "Directory for the notes, i.e. the move-forward skill's work-notes.md and on-ice.md"
         " (created if missing)",
-        str(config_module.DEFAULT_NOTES_DIR),
+        str(DEFAULT_NOTES_DIR),
         _required("a notes directory"),
     )
     port = _ask(
@@ -312,8 +320,6 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         _port,
     )
     answers: dict[str, object] = {"email": email, "teams": slugs}
-    if notes_dir != str(config_module.DEFAULT_NOTES_DIR):
-        answers["notes_dir"] = notes_dir
     git: dict[str, object] = {"repos": repos}
     if prefixes:
         git["my_branch_prefixes"] = prefixes
@@ -329,6 +335,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         {"workspace_url": slack} if slack else None,
         channels,
         {"site": site} if site else None,
+        {"dir": notes_dir} if notes_dir != str(DEFAULT_NOTES_DIR) else None,
     )
     Config.model_validate(tomllib.loads(text))  # a bad answer fails here, before writing
     return text

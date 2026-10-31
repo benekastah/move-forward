@@ -10,13 +10,13 @@ import re
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 
-from .actions import entry_bounds, left_to_do
 from .config import Config
 from .db import CORE, Database
 from .notes import WORK_NOTES_FILE
-from .panels import JIRA_KEY_RE, PR_URL_RE
 from .plugins.github import client as github
 from .plugins.jira import client as jira
+from .plugins.notes.actions import entry_bounds, left_to_do
+from .plugins.notes.panels import JIRA_KEY_RE, PR_URL_RE
 from .repositories import KvRepository
 
 log = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ def prune_notes(
     issues_resolved_at: IssuesResolvedAt | None,
 ) -> list[str]:
     """Drop finished entries and old Done lines from work-notes.md; returns what was done."""
-    path = config.notes_dir / WORK_NOTES_FILE
+    path = config.notes.dir / WORK_NOTES_FILE
     if not path.exists():
         return []
     cutoff = now - timedelta(days=config.prune_days)

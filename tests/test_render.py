@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from conftest import ME, NOW, dashboard, pr, snapshot
 
-from move_forward import panels, render
+from move_forward import page, panels, render
 
 
 def _dashboard() -> panels.Dashboard:
@@ -25,8 +25,8 @@ def test_dashboard_page_escapes_and_links() -> None:
 
 
 def test_open_query_parameter_overrides_the_defaults() -> None:
-    html = render.dashboard_page(_dashboard(), refreshing=False, open_keys={"my_prs", "feedback"})
-    assert "<details class='group' data-key='my_prs' open>" in html
+    html = render.dashboard_page(_dashboard(), refreshing=False, open_keys={"github", "feedback"})
+    assert "<details class='group' data-key='github' open>" in html
     assert "<details class='group' data-key='act'>" in html
     assert "<details class='panel empty' data-key='feedback' open>" in html
     assert "<details class='panel' data-key='nudges'>" in html
@@ -38,12 +38,12 @@ def test_only_act_now_is_open_by_default() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=False)
     assert "<details class='group' data-key='act' open><summary><h2>Act now</h2>" in html
     assert (
-        "<details class='group' data-key='my_prs'><summary><h2>My PRs</h2>"
+        "<details class='group' data-key='slack'><summary><h2>Slack</h2>"
         "<span class='count'>1</span>" in html
     )
-    assert html.count("<details class='group' data-key='") == len(panels.GROUPS)
+    keys = re.findall(r"<details class='group' data-key='(\w+)'", html)
+    assert keys == ["act", "github", "git", "slack", "notes"]  # Act now, then the plugins
     assert len(re.findall(r"class='group' data-key='\w+' open>", html)) == 1
-    assert html.count("<details class='group'") == len(panels.GROUPS)
 
 
 def test_refreshing_disables_the_button_and_reloads_sooner() -> None:
@@ -67,14 +67,14 @@ def test_sections_carry_keys_for_the_open_state_script() -> None:
     assert "details[data-key]" in html and "'?open=' + open" in html
     assert "if (open === saved) return;" in html
     # No git-stack data, so the Stacks panel is absent and its group still renders.
-    assert "data-key='stacks'" not in html and "data-key='local'" in html
+    assert "data-key='stacks'" not in html and "data-key='git'" in html
 
 
 def test_actions_render_as_forms_with_hidden_fields() -> None:
-    item = panels.Item(
+    item = page.Item(
         title="x",
         actions=[
-            panels.Action(
+            page.Action(
                 name="delete_branch",
                 label="Delete",
                 fields={"repo": "/r", "branch": "a'b"},
@@ -86,17 +86,15 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
         generated_at=NOW,
         login=ME,
         panels=[
-            panels.Panel(
+            page.Panel(
                 key="cleanup",
                 title="Cleanup",
                 description="",
                 items=[item],
-                actions=[
-                    panels.Action(name="delete_branches", label="All", fields={"targets": "t"})
-                ],
+                actions=[page.Action(name="delete_branches", label="All", fields={"targets": "t"})],
             )
         ],
-        groups=[panels.Group(key="g", title="G", panel_keys=["cleanup"], open=True)],
+        groups=[page.Group(key="g", title="G", panel_keys=["cleanup"], open=True)],
         sources={},
     )
     html = render.dashboard_page(dashboard, refreshing=False, notice="deleted 1 <branch>")
@@ -112,7 +110,7 @@ def test_focus_categories_page_lists_counts_and_links_non_empty_ones() -> None:
     assert (
         "<li class='category'><a href='/focus?cat=all&amp;i=0'>All</a><span class='count'>1" in html
     )
-    assert "<a href='/focus?cat=my_prs&amp;i=0'>My PRs</a>" in html
+    assert "<a href='/focus?cat=slack&amp;i=0'>Slack</a>" in html
     assert "<li class='category sub'><a href='/focus?cat=nudges&amp;i=0'>" in html
     assert "<li class='category empty'><span>Act now</span><span class='count'>0</span>" in html
     assert "<li class='category sub empty'><span>Feedback to address</span>" in html
@@ -145,13 +143,14 @@ def test_focus_page_steps_through_items() -> None:
 
 
 def test_focus_page_actions_come_back_to_it() -> None:
-    item = panels.Item(
-        title="x", actions=[panels.Action(name="delete_branch", label="Delete", fields={"b": "1"})]
+    item = page.Item(
+        title="x", actions=[page.Action(name="delete_branch", label="Delete", fields={"b": "1"})]
     )
     dashboard = panels.Dashboard(
+        groups=[page.Group(key="git", title="Local", panel_keys=["cleanup"])],
         generated_at=NOW,
         login=ME,
-        panels=[panels.Panel(key="cleanup", title="Cleanup", description="", items=[item])],
+        panels=[page.Panel(key="cleanup", title="Cleanup", description="", items=[item])],
         sources={},
     )
     html = render.focus_page(dashboard, "cleanup", 0, notice="done")
@@ -179,7 +178,7 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
         "<label class='check'><input type='checkbox' onchange='this.form.requestSubmit()'> Done"
         in html
     )
-    assert "action='/actions/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0'" in html
+    assert "action='/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0'" in html
     assert "<input type='hidden' name='text' value='a'>" in html
     assert "1 of 2" in html
 
@@ -187,7 +186,9 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
     done = built.done_todo("APP-2", "a")
     html = render.focus_page(built, "todos", 0, done=done)
     assert html is not None
-    assert "<input type='checkbox' checked onchange" in html and "/actions/todo_undone?" in html
+    assert (
+        "<input type='checkbox' checked onchange" in html and "/actions/notes/todo_undone?" in html
+    )
     assert "<span class='badge'>done</span>" in html
     assert "<span class='focus-position'>done · 2 to go</span>" in html
     assert "<a class='button secondary next' href='/focus?cat=todos&amp;i=0'>" in html
@@ -201,21 +202,24 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
 
 
 def test_strong_links_get_a_class() -> None:
-    item = panels.Item(
+    item = page.Item(
         title="x",
         links=[
-            panels.Link(text="PR 1", url="https://g/1", strong=True, pr_state="merged"),
-            panels.Link(text="PR 2", url="https://g/2"),
-            panels.Link(text="PR 3", url="https://g/3", pr_state="closed"),
+            page.Link(text="PR 1", url="https://g/1", strong=True, pr_state="merged"),
+            page.Link(text="PR 2", url="https://g/2"),
+            page.Link(text="PR 3", url="https://g/3", pr_state="closed"),
         ],
         actions=[
-            panels.Action(name="todo_done", label="Done", fields={}, checkbox=True, suggested=True)
+            page.Action(
+                name="notes/todo_done", label="Done", fields={}, checkbox=True, suggested=True
+            )
         ],
     )
     dashboard = panels.Dashboard(
+        groups=[],
         generated_at=NOW,
         login=ME,
-        panels=[panels.Panel(key="todos", title="T", description="", items=[item])],
+        panels=[page.Panel(key="todos", title="T", description="", items=[item])],
         sources={},
     )
     html = render.focus_page(dashboard, "todos", 0)
@@ -230,16 +234,19 @@ def test_strong_links_get_a_class() -> None:
 
 
 def test_actions_with_an_input_render_a_text_field() -> None:
-    item = panels.Item(
+    item = page.Item(
         title="x",
         actions=[
-            panels.Action(name="todo_link", label="Link", fields={"text": "x"}, input="Jira key")
+            page.Action(
+                name="notes/todo_link", label="Link", fields={"text": "x"}, input="Jira key"
+            )
         ],
     )
     dashboard = panels.Dashboard(
+        groups=[],
         generated_at=NOW,
         login=ME,
-        panels=[panels.Panel(key="todos", title="T", description="", items=[item])],
+        panels=[page.Panel(key="todos", title="T", description="", items=[item])],
         sources={},
     )
     html = render.focus_page(dashboard, "todos", 0)

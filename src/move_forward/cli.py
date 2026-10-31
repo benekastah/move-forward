@@ -18,7 +18,6 @@ EXAMPLE_CONFIG = """\
 
 email = "me@example.com"              # Jira logs in with it; its domain finds reviewers' emails
 teams = ["my-team"]                   # the teams I'm on or review for, by name
-# notes_dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # db_backups = 10                        # copies kept in backups/, taken before migrations
 # port = 8765
@@ -65,6 +64,9 @@ my-team = "#team-my-team"
 # escalation_levels = []                  # what follows it, lowest first, e.g. ["manager", "director", "vp"]
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
+
+# [notes]                               # always on; the section only changes its settings
+# dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
 """
 
 
