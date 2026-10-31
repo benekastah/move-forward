@@ -141,7 +141,11 @@ def test_git_stack_offers_to_untrack_iced_branches_it_tracks() -> None:
     assert "git_stack/untrack" not in [a.name for a in panel(untracked, "iced").items[0].actions]
 
 
-def test_untrack_refuses_unknown_repos() -> None:
-    config, db = stored(local=local_snapshot(branches=[local_branch("main")]), stacks=stacks())
-    with pytest.raises(ActionError, match="not a configured repo"):
-        refresh.run_action(config, db, "git_stack/untrack", {"targets": "/elsewhere\tme/x"})
+def test_untrack_takes_only_branches_git_stack_tracks() -> None:
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("main")]),
+        stacks=stacks(StackBranch(name="main"), StackBranch(name="me/x", parent="main")),
+    )
+    for target in ("/src/widgets\t*", "/src/widgets\tmain", "/elsewhere\tme/x"):
+        with pytest.raises(ActionError, match="doesn't track"):
+            refresh.run_action(config, db, "git_stack/untrack", {"targets": target})

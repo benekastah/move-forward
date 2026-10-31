@@ -9,7 +9,7 @@ from ...graph import Graph
 from ...plugin import ActionError, Context
 from ...shell import git
 from .config import GitStackConfig
-from .panels import BRANCH_ID_SEPARATOR, ICED_BRANCH, repo_dirs
+from .panels import BRANCH, BRANCH_ID_SEPARATOR, ICED_BRANCH, repo_dirs
 
 STACK_CLEAN_TIMEOUT_SECONDS = 600
 """`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
@@ -38,12 +38,17 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
 
 
 def untrack(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """`git stack untrack` the `<repo>\t<branch>` lines of `targets`, repo by repo."""
+    """`git stack untrack` the `<repo>\t<branch>` lines of `targets`, repo by repo. Each must
+    be a branch git-stack tracks: `git stack untrack` takes globs too, and they'd match more."""
     by_repo: dict[str, list[str]] = {}
     for line in fields.get("targets", "").splitlines():
         repo_dir, _, branch = line.partition(BRANCH_ID_SEPARATOR)
-        if branch:
-            by_repo.setdefault(repo_dir, []).append(branch)
+        if not branch:
+            continue
+        entity = graph.get(BRANCH, line)
+        if entity is None or not entity.attrs.get("stack_parent"):
+            raise ActionError(f"git-stack doesn't track {branch} in {repo_dir}")
+        by_repo.setdefault(repo_dir, []).append(branch)
     if not by_repo:
         raise ActionError("no branches to untrack")
     unknown = sorted(set(by_repo) - set(repo_dirs(graph)))
