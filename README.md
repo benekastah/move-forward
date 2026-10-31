@@ -127,6 +127,19 @@ before the command's name.
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
+| `mfd notes list [--open]` | The entries with their open todos (`--open`: only those with some). Every `mfd notes` command works on the database without the server, and prints JSON with `--json`, for scripts and the skill. |
+| `mfd notes show <entry>` | One entry with its todos, merge conditions and links. An entry is named by its id, its title, or a PR URL or ticket key it's about. |
+| `mfd notes add-entry <title> [--link <PR URL or ticket key>]... [--status S]` | Add an entry; a ticket key in the title is linked. |
+| `mfd notes set <entry> status\|blocked-on <text>` | Set what an entry's status is, or what it's blocked on. |
+| `mfd notes link <entry> <PR URL or ticket key>` | Say an entry is about a PR or ticket. A key needs a plugin that knows tickets, e.g. `[jira]`. |
+| `mfd notes todo add <entry> <text> [--size quick\|big] [--link <PR URL or ticket key>]...` | Add a todo; PR URLs in the text are linked. Prints its id. |
+| `mfd notes todo done\|undone\|delete <id>` | Tick a todo off, reopen it, or drop it without recording it as done. |
+| `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
+| `mfd notes condition add\|remove <entry> <text>` | Add or remove a merge condition. |
+| `mfd notes decline <entry> <text>` | Record that something offered for an entry (a nudge, say) was turned down today. |
+| `mfd notes ice --branch <repo> <branch> [--note N]` | Put a branch, with its git-stack stack, on ice; needs a refresh first, so git knows the branch. |
+| `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
+| `mfd notes thaw <id>` | Take what's on ice off it. |
 | `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md`, `on-ice.md` and `reviewer-map.md` from `<dir>` into the database. Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`; the reviewer map can be imported again any time. |
 | `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |

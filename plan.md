@@ -21,8 +21,10 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5b. Notes CLI and the skill
 
-- The `mfd notes ...` CLI (list, show, add-entry, set, link, todo add/done/undone/delete/
-  link, condition, decline, ice, thaw), JSON with `--json`, working without the server.
+- The CLI is built (see the README), except two parts of the design: `mfd notes ice <entry|
+  url|key>`, icing anything, which comes with "Icing anything" below, and `mfd notes
+  condition add|remove --pr <url>`: merge conditions have no per-PR column yet (a new
+  migration would add one), so they apply to the whole entry.
 - The move-forward skill's SKILL.md switches from editing the markdown to the CLI, in the
   skill's repository, the same week.
 - The skill sends the dashboard's token (`Authorization: Bearer`, from the `token` file)
@@ -767,34 +769,6 @@ CREATE TABLE jira_issue_labels (key TEXT NOT NULL REFERENCES jira_issues ON DELE
 CREATE TABLE jira_issue_blockers (key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,  -- fetched
     blocker TEXT NOT NULL, PRIMARY KEY (key, blocker));
 ```
-
-### The notes CLI and API
-
-The skill and the page share one repository layer. Every command prints JSON with
-`--json`, plain lines otherwise, and works without the server running:
-
-```sh
-mfd notes list [--open] [--json]                 # entries with their todos
-mfd notes show <entry>                           # entry by id, title, PR URL or ticket key
-mfd notes add-entry <title> [--link <url|key>]... [--status S]
-mfd notes set <entry> status|blocked-on <text>
-mfd notes link <entry> <url|key>
-mfd notes todo add <entry> <text> [--size quick|big] [--link <url|key>]...
-mfd notes todo done|undone|delete <todo id>
-mfd notes todo link <todo id> <url|key>
-mfd notes condition add|remove <entry> <text> [--pr <url>]
-mfd notes decline <entry> <text>
-mfd notes ice <entry|url|key> [--note N]         # an entry, ticket or PR, with what it links
-mfd notes ice --branch <repo> <branch> [--note N] # with its git-stack stack, if it's in one
-mfd notes thaw <ice id>
-mfd notes import <dir>                           # one-time: work-notes.md, on-ice.md, reviewer-map.md
-mfd notes export <dir>                           # back to markdown, for reading or backup
-```
-
-The HTTP actions become `POST /actions/notes/<action>` with the same fields, and todos are
-addressed by id instead of by entry title and text. The README's API section lists both.
-After this lands, the skill's SKILL.md switches from editing the markdown files to these
-commands; that edit happens in the skill's own repository.
 
 ### Upkeep
 

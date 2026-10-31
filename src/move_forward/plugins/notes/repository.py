@@ -197,6 +197,60 @@ class NotesRepository:
             )
         return entry_id
 
+    def set_status(self, entry_id: int, status: str | None) -> None:
+        self._db.execute("UPDATE notes_entries SET status = ? WHERE id = ?", (status, entry_id))
+
+    def set_blocked_on(self, entry_id: int, blocked_on: str | None) -> None:
+        self._db.execute(
+            "UPDATE notes_entries SET blocked_on = ? WHERE id = ?", (blocked_on, entry_id)
+        )
+
+    def link_entry(self, entry_id: int, link: Link) -> bool:
+        """Say the entry is about `link`; False if it already was."""
+        with self._db.transaction() as conn:
+            return (
+                conn.execute(
+                    "INSERT OR IGNORE INTO notes_links VALUES (?, ?, ?)",
+                    (entry_id, link.kind, link.ref),
+                ).rowcount
+                > 0
+            )
+
+    def add_condition(self, entry_id: int, text: str) -> bool:
+        """Add a merge condition at the end; False if the entry already has it."""
+        with self._db.transaction() as conn:
+            if conn.execute(
+                "SELECT 1 FROM notes_conditions WHERE entry_id = ? AND text = ?", (entry_id, text)
+            ).fetchone():
+                return False
+            conn.execute(
+                "INSERT INTO notes_conditions VALUES (?,"
+                " (SELECT COALESCE(MAX(position), -1) + 1 FROM notes_conditions"
+                " WHERE entry_id = ?), ?)",
+                (entry_id, entry_id, text),
+            )
+        return True
+
+    def remove_condition(self, entry_id: int, text: str) -> bool:
+        """Drop a merge condition; False if the entry didn't have it."""
+        with self._db.transaction() as conn:
+            return (
+                conn.execute(
+                    "DELETE FROM notes_conditions WHERE entry_id = ? AND text = ?",
+                    (entry_id, text),
+                ).rowcount
+                > 0
+            )
+
+    def add_declined(self, entry_id: int, on: date, text: str) -> None:
+        """Record that `text` was offered for the entry and turned down on `on`."""
+        self._db.execute(
+            "INSERT INTO notes_declined VALUES (?,"
+            " (SELECT COALESCE(MAX(position), -1) + 1 FROM notes_declined WHERE entry_id = ?),"
+            " ?, ?)",
+            (entry_id, entry_id, on.isoformat(), text),
+        )
+
     def delete_entry(self, entry_id: int) -> None:
         """Forget an entry, with its todos and everything else it holds."""
         self._db.execute("DELETE FROM notes_entries WHERE id = ?", (entry_id,))

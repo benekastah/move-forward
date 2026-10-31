@@ -2,8 +2,8 @@
 They only record: deleting or untracking iced branches is git's and git_stack's.
 
 Every action takes the form fields of its button and returns a one-line notice for the page.
-A todo is named by its entry's title and its text, as the page shows them. A repo must be
-one the graph has branches of, i.e. one of git's checkouts.
+A todo is named by its id. A repo must be one the graph has branches of, i.e. one of git's
+checkouts. `mfd notes` calls the same functions.
 """
 
 from pathlib import Path
@@ -62,7 +62,8 @@ def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
 
 
 def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """Put the branch's stack on ice, recording each branch's commit as git last saw it."""
+    """Put the branch's stack on ice, recording each branch's commit as git last saw it. An
+    optional `note` says why."""
     repo = _repo(graph, fields["repo"])
     branch = fields["branch"]
     if graph.get(BRANCH, f"{repo}{TARGET_SEPARATOR}{branch}") is None:
@@ -80,7 +81,8 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
         items.append(
             IcedItem(kind=BRANCH, ref_id=ref_id, sha=sha if isinstance(sha, str) else None)
         )
-    notes.add_ice(names[0], ctx.now.date(), ICED_FROM_DASHBOARD_NOTE, items)
+    note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
+    notes.add_ice(names[0], ctx.now.date(), note, items)
     return f"put {names[0]} on ice ({len(names)} branches)"
 
 
@@ -146,7 +148,7 @@ def todo_delete(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str])
     return f"dropped: {todo.text}"
 
 
-def _link(graph: Graph, value: str) -> Link:
+def link_for(graph: Graph, value: str) -> Link:
     """A ticket key or a PR URL as a link; a key needs a plugin that knows tickets."""
     if JIRA_KEY_RE.fullmatch(value):
         if graph.url_for(TICKET, value) is None:
@@ -162,7 +164,7 @@ def todo_link(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -
     """Link an open todo to a Jira ticket or a PR."""
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, fields, done=False)
-    link = _link(graph, fields["input"].strip())
+    link = link_for(graph, fields["input"].strip())
     if link in todo.links:
         raise ActionError(f"{link.ref} is already linked to that todo")
     notes.link_todo(todo.id, link)
