@@ -32,12 +32,12 @@ source of stack data in the `git` plugin's Stacks panel; until then only git-sta
 
 ```python
 class Plugin[C: BaseModel, S: BaseModel](Protocol):
-    name: str                       # "github"; also the snapshot source and table prefix
-    title: str                      # "GitHub"; the page group's heading
-    config_model: type[C]           # the model for its `[name]` section
+    name: str  # "github"; also the snapshot source and table prefix
+    title: str  # "GitHub"; the page group's heading
+    config_model: type[C]  # the model for its `[name]` section
 
     # Storage
-    migrations: list[str]           # SQL, applied in order; see Schema
+    migrations: list[str]  # SQL, applied in order; see Schema
     snapshot_model: type[S] | None  # None for plugins with nothing to fetch
 
     # Refresh
@@ -52,10 +52,10 @@ class Plugin[C: BaseModel, S: BaseModel](Protocol):
     def panels(self, ctx: Context[C], snapshot: S | None, graph: Graph) -> list[Panel]: ...
     def item_actions(self, ctx: Context[C], item: Item, graph: Graph) -> list[Action]: ...
     def act_now(self, ctx: Context[C], snapshot: S | None, graph: Graph) -> list[Item]: ...
-    def pages(self) -> dict[str, PageHandler]: ...          # e.g. "/ping"
+    def pages(self) -> dict[str, PageHandler]: ...  # e.g. "/ping"
 
     # Writing
-    def actions(self) -> dict[str, ActionHandler]: ...      # posted to /actions/<name>/<action>
+    def actions(self) -> dict[str, ActionHandler]: ...  # posted to /actions/<name>/<action>
     def cli(self, parser: argparse._SubParsersAction) -> None: ...  # `mfd <name> ...`
 
     # Set-up and upkeep

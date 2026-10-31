@@ -3,9 +3,9 @@ from pathlib import Path
 
 from move_forward_dashboard import notes, prune
 from move_forward_dashboard.config import Config, GitHubConfig, JiraConfig
-from move_forward_dashboard.db import Database
+from move_forward_dashboard.db import CORE, Database
 from move_forward_dashboard.domain import Ping
-from move_forward_dashboard.repositories import MetaRepository, PingRepository
+from move_forward_dashboard.repositories import KvRepository, PingRepository
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
 OLD = NOW - timedelta(days=100)
@@ -105,7 +105,7 @@ def test_prune_deletes_old_pings_and_runs_once_a_day(tmp_path: Path) -> None:
     assert [p.sent_at for p in pings.all()] == [RECENT]
 
     db = Database(":memory:")
-    meta = MetaRepository(db)
+    meta = KvRepository(db, CORE)
     pings = PingRepository(db)
     pings.add(Ping(pr_url=PR + "1", target="user:a", kind="first", message="", sent_at=OLD))
     (tmp_path / notes.WORK_NOTES_FILE).unlink()  # nothing to look up: no network needed

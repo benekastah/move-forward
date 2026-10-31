@@ -13,10 +13,10 @@ from datetime import UTC, date, datetime, timedelta
 from . import github, jira
 from .actions import entry_bounds, left_to_do
 from .config import Config
-from .db import Database
+from .db import CORE, Database
 from .notes import WORK_NOTES_FILE
 from .panels import JIRA_KEY_RE, PR_URL_RE
-from .repositories import MetaRepository, PingRepository
+from .repositories import KvRepository, PingRepository
 
 log = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ def prune(
 
 def prune_if_due(config: Config, db: Database, now: datetime) -> None:
     """Run `prune` if it hasn't run for a day. A failure is logged and retried the next day."""
-    meta = MetaRepository(db)
+    meta = KvRepository(db, CORE)
     last = meta.get(LAST_PRUNE_KEY)
     if last and datetime.fromisoformat(last) + PRUNE_EVERY > now:
         return

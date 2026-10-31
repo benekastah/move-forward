@@ -1,12 +1,23 @@
-"""The SQLite connection and schema. Queries live in `repositories`."""
+"""The SQLite connection and migrations. Queries live in `repositories`.
 
+Core and every plugin own a list of migrations, SQL scripts applied in order. How many of
+each have run is kept in `schema_versions`, so a migration runs once per database and new
+ones are appended, never edited.
+"""
+
+import re
 import sqlite3
 import threading
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA = """
+CORE = "core"
+"""The `schema_versions` key of core's own migrations."""
+OWNER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+"""What a migrations owner may be called; owner names are written into SQL."""
+
+V1_SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshots (
     source TEXT PRIMARY KEY,
     fetched_at TEXT NOT NULL,
@@ -50,6 +61,34 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT NOT NULL
 );
 """
+"""The schema before migrations. `IF NOT EXISTS` lets databases made before them upgrade."""
+
+_V2_KV_AND_LAYOUT = """
+CREATE TABLE kv (
+    plugin TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (plugin, key)
+);
+INSERT INTO kv SELECT 'core', key, value FROM meta;
+DROP TABLE meta;
+CREATE TABLE layout (
+    kind TEXT NOT NULL CHECK (kind IN ('group', 'panel')),
+    key TEXT NOT NULL,
+    parent TEXT,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (kind, key)
+);
+"""
+
+CORE_MIGRATIONS = [V1_SCHEMA, _V2_KV_AND_LAYOUT]
+
+_SCHEMA_VERSIONS = """
+CREATE TABLE IF NOT EXISTS schema_versions (
+    plugin TEXT PRIMARY KEY,
+    version INTEGER NOT NULL
+);
+"""
 
 Params = tuple[object, ...]
 
@@ -63,8 +102,41 @@ class Database:
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
-        with self.transaction() as conn:
-            conn.executescript(SCHEMA)
+        with self._lock:
+            self._conn.executescript(_SCHEMA_VERSIONS)
+        self.migrate(CORE, CORE_MIGRATIONS)
+
+    def migrate(self, owner: str, migrations: Sequence[str]) -> int:
+        """Apply `owner`'s migrations that haven't run yet, each in its own transaction.
+
+        Returns how many ran. Fails if the database has run more than `migrations` holds,
+        i.e. it was used by a newer version of the dashboard.
+        """
+        if not OWNER_RE.match(owner):
+            raise ValueError(f"bad migrations owner {owner!r}")
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT version FROM schema_versions WHERE plugin = ?", (owner,)
+            ).fetchone()
+            done: int = row["version"] if row else 0
+            if done > len(migrations):
+                raise RuntimeError(
+                    f"the database has {done} {owner} migrations but this version knows"
+                    f" {len(migrations)}; upgrade the dashboard"
+                )
+            for version, sql in enumerate(migrations[done:], start=done + 1):
+                # executescript commits any open transaction first, so the script carries
+                # its own, which records the version together with the change.
+                try:
+                    self._conn.executescript(
+                        f"BEGIN;\n{sql}\nINSERT OR REPLACE INTO schema_versions"
+                        f" VALUES ('{owner}', {version});\nCOMMIT;"
+                    )
+                except sqlite3.Error:
+                    if self._conn.in_transaction:
+                        self._conn.rollback()
+                    raise
+            return len(migrations) - done
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection]:

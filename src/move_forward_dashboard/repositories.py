@@ -187,15 +187,19 @@ class NotesImportRepository:
             conn.executemany(_PING_INSERT, [_ping_params(p, SOURCE_NOTES) for p in notes.pings])
 
 
-class MetaRepository:
-    """Small key/value state of the dashboard itself, e.g. when the last prune ran."""
+class KvRepository:
+    """Small key/value state, namespaced by owner: core (e.g. when the last prune ran) or a
+    plugin, which only ever gets a repository over its own namespace."""
 
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, owner: str):
         self._db = db
+        self._owner = owner
 
     def get(self, key: str) -> str | None:
-        rows = self._db.query("SELECT value FROM meta WHERE key = ?", (key,))
+        rows = self._db.query(
+            "SELECT value FROM kv WHERE plugin = ? AND key = ?", (self._owner, key)
+        )
         return rows[0]["value"] if rows else None
 
     def set(self, key: str, value: str) -> None:
-        self._db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, value))
+        self._db.execute("INSERT OR REPLACE INTO kv VALUES (?, ?, ?)", (self._owner, key, value))
