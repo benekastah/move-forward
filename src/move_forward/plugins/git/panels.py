@@ -75,7 +75,7 @@ class Builder:
                             badges=["uncommitted"],
                             rank=2,
                             actions=actions,
-                            subject=pr.ref if pr else None,
+                            subjects=[pr.ref] if pr else [],
                         )
                     )
             for branch in repo.branches:
@@ -107,7 +107,7 @@ class Builder:
                         badges=(["iced"] if iced else []) + (["has PR"] if pr else ["no PR"]),
                         rank=0 if iced else 1,
                         actions=actions,
-                        subject=pr.ref if pr else None,
+                        subjects=[pr.ref] if pr else [],
                     )
                 )
         return Panel(
@@ -148,7 +148,7 @@ class Builder:
                                 confirm=f"Delete local branch {b.name}?",
                             )
                         ],
-                        subject=merged.ref if merged else None,
+                        subjects=[merged.ref] if merged else [],
                     )
                 )
         actions = (

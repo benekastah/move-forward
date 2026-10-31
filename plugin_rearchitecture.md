@@ -127,12 +127,12 @@ What the cross-plugin features become:
 | Local work and Cleanup know a branch's PR | git looks up `pr` entities by `repo` and `head` |
 | Jira transitions | jira reads the `pr` entities related to each ticket |
 | Todo links show PR states; "its PRs are done" | notes reads `pr` entities' `state`; ticket links come from `graph.url_for("ticket", key)` |
-| Add todo on PRs and tickets | notes' `item_actions` adds it to any item whose `subject` is a `pr` or `ticket` |
+| Add todo on PRs and tickets | notes' `item_actions` adds it to any item with a `pr` or `ticket` among its `subjects` |
 | Ping button and Nudge reviewers | slack reads `pr` entities with `review_blockers` and requested reviewers, and `person` entities for contacts |
 | Reviewer suggestions | github maps commit emails to logins through `person` entities |
 
-`Item` gains `subject: Ref | None`, the entity it shows, which is what `item_actions` keys
-on. `Action` gains `href` for link buttons such as Ping.
+`Item` gains `subjects: list[Ref]`, the entities it's about with the main one first (a PR
+and its branch), which is what `item_actions` keys on and Act now's subject is. `Action` gains `href` for link buttons such as Ping.
 
 ## Config
 

@@ -198,9 +198,10 @@ class Builder:
         The todo goes to the entry covering the PR or ticket; without one, an entry is created,
         titled with the ticket key and summary (or the PR's URL and title, as the skill does).
         """
-        if any(a.name == TODO_ADD for a in item.actions) or item.subject is None:
+        ref = item.subject(PR) or item.subject(TICKET)
+        if any(a.name == TODO_ADD for a in item.actions) or ref is None:
             return None
-        subject = self.graph.get(item.subject.kind, item.subject.id)
+        subject = self.graph.get(ref.kind, ref.id)
         if subject is None:
             return None
         if subject.ref.kind == PR:

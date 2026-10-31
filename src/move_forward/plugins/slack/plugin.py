@@ -121,9 +121,10 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     def item_actions(self, ctx: Context[SlackConfig], item: Item, graph: Graph) -> list[Action]:
         """A Ping link on any item about one of my open PRs: Bump once a target was pinged,
         muted while the PR isn't in order."""
-        if item.subject is None or item.subject.kind != "pr":
+        pr = item.subject("pr")
+        if pr is None:
             return []
-        ping = pinger(ctx, graph).pings().get(item.subject.id)
+        ping = pinger(ctx, graph).pings().get(pr.id)
         if ping is None:
             return []
         blocked = bool(ping.blockers)

@@ -102,7 +102,7 @@ class Builder:
                         subtitle=f"{repo.dir} · on {b.parent}",
                         badges=badges,
                         rank=0 if badges else 1,
-                        subject=pr.ref if pr else None,
+                        subjects=[pr.ref] if pr else [],
                     )
                 )
             for b in repo.branches:

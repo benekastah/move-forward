@@ -18,9 +18,10 @@ class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /hello."""
 
     def item_actions(self, ctx: Context[JiraConfig], item: Item, graph: Graph) -> list[Action]:
-        if item.subject is None or item.subject.kind != "pr":
+        pr = item.subject("pr")
+        if pr is None:
             return []
-        return [Action(name="", label="Look", fields={}, href=f"/hello?pr={item.subject.id}")]
+        return [Action(name="", label="Look", fields={}, href=f"/hello?pr={pr.id}")]
 
     def pages(self) -> dict[str, PageHandler]:
         def hello(

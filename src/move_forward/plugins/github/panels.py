@@ -61,7 +61,7 @@ def pr_item(
         links=links or [],
         rank=rank,
         draft=pr.is_draft,
-        subject=pr_ref(pr),
+        subjects=[pr_ref(pr)],
     )
 
 
