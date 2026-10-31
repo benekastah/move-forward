@@ -51,10 +51,10 @@ def test_a_plugin_collects_from_the_graph_of_the_others(tmp_path: Path) -> None:
             "email": "me@x",
             "git": {"repos": []},
             "jira": {"site": "https://j"},
-            "notes": {"dir": str(tmp_path)},
         }
     )
     db = Database(":memory:")
+    registry.migrate(config, db)
     refresh.refresh(config, db, NOW)
     stored = SnapshotRepository(db).get("jira", JiraSnapshot)
     assert stored is not None

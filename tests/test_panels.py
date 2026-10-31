@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from conftest import (
     REPO,
     dashboard,
+    entry,
     issue,
     local_snapshot,
     panel,
@@ -13,7 +14,7 @@ from conftest import (
     snapshot,
     stacks,
     titles,
-    work_item,
+    todo,
 )
 
 from move_forward import panels
@@ -22,7 +23,6 @@ from move_forward.domain import (
     LocalRepo,
     LocalSnapshot,
     StackBranch,
-    Todo,
 )
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
 
@@ -30,17 +30,11 @@ build = dashboard
 
 
 def test_todos_put_close_outs_first_and_blocked_last() -> None:
-    close_out = work_item("APP-1 almost", [Todo(text="reply", size="quick")])
-    mixed = work_item(
-        "APP-2 mixed", [Todo(text="big one", size="big"), Todo(text="small", size="quick")]
-    )
-    blocked = work_item(
-        "APP-3 stuck", [Todo(text="x", size="quick")], **{"Blocked on": ["reviews"]}
-    )
-    unblocked = work_item(
-        "APP-4 fine", [Todo(text="x", size="quick")], **{"Blocked on": ["nothing"]}
-    )
-    done = work_item("APP-5 done", [])
+    close_out = entry("APP-1 almost", [todo("reply", "quick")])
+    mixed = entry("APP-2 mixed", [todo("big one", "big"), todo("small", "quick")])
+    blocked = entry("APP-3 stuck", [todo("x", "quick")], **{"Blocked on": ["reviews"]})
+    unblocked = entry("APP-4 fine", [todo("x", "quick")], **{"Blocked on": ["nothing"]})
+    done = entry("APP-5 done", [])
     dashboard = build(work_items=[mixed, blocked, close_out, done, unblocked])
     items = panel(dashboard, "todos").items
     assert [i.title for i in items] == ["APP-1 almost", "APP-4 fine", "APP-2 mixed", "APP-3 stuck"]
@@ -112,12 +106,12 @@ def test_focus_items_by_category() -> None:
 
 
 def test_focus_shows_todos_one_at_a_time() -> None:
-    mixed = work_item(
+    mixed = entry(
         "APP-2 mixed",
-        [Todo(text="big one", size="big"), Todo(text="small", size="quick")],
+        [todo("big one", "big"), todo("small", "quick")],
         Where=["https://github.com/acme/widgets/pull/7"],
     )
-    blocked = work_item("APP-3 stuck", [Todo(text="x")], **{"Blocked on": ["reviews"]})
+    blocked = entry("APP-3 stuck", [todo("x")], **{"Blocked on": ["reviews"]})
     dashboard = build(work_items=[mixed, blocked])
     assert titles(dashboard, "todos") == ["APP-2 mixed", "APP-3 stuck"]  # the page is unchanged
     focused = dashboard.focus_items("todos")
@@ -132,12 +126,12 @@ def test_focus_shows_todos_one_at_a_time() -> None:
 
 
 def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_rebuilt() -> None:
-    entry = work_item(
+    noted = entry(
         "APP-2 mixed",
-        [Todo(text="small", size="quick")],
+        [todo("small", "quick")],
         Where=["https://github.com/acme/widgets/pull/7"],
     )
-    dashboard = build(work_items=[entry])
+    dashboard = build(work_items=[noted])
     focused = dashboard.focus_items("todos")
     assert focused is not None
     [(_, part)] = focused
@@ -161,20 +155,20 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_rebuilt() -> None
 
 def test_todo_parts_put_the_prs_they_mention_first_in_bold() -> None:
     urls = [f"https://github.com/acme/widgets/pull/{n}" for n in (11, 222, 3333)]
-    entry = work_item(
+    noted = entry(
         "APP-2",
         [
-            Todo(text="get it merged"),
-            Todo(text="reply on #222 then rebase 3333"),
-            Todo(text=f"check {urls[0]} plans; 1222 is not a PR"),
-            Todo(text="follow up on 3333"),
+            todo("get it merged"),
+            todo("reply on #222 then rebase 3333"),
+            todo(f"check {urls[0]} plans; 1222 is not a PR"),
+            todo("follow up on 3333"),
         ],
         Where=urls,
     )
     github = snapshot(
         mine=[pr(222)], merged_recent=[pr(11, state="MERGED")], closed_recent=[pr(3333)]
     )
-    focused = build(work_items=[entry], github=github).focus_items("todos")
+    focused = build(work_items=[noted], github=github).focus_items("todos")
     assert focused is not None
     parts = [part for _, part in focused]
     assert [link.pr_state for link in parts[0].links] == ["merged", "open", "closed"]
@@ -202,19 +196,20 @@ def test_todo_parts_put_the_prs_they_mention_first_in_bold() -> None:
 
 
 def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None:
-    entry = work_item(
+    noted = entry(
         "APP-2 thing",
-        [Todo(text="ask about APP-9 and APP-9 again https://github.com/acme/other/pull/4")],
+        [todo("ask about APP-9 and APP-9 again https://github.com/acme/other/pull/4")],
         Where=["https://github.com/acme/widgets/pull/7"],
     )
     github = snapshot(merged_recent=[pr(7, state="MERGED")])
-    dashboard = build(work_items=[entry], github=github, jira_site="https://j.example/")
+    dashboard = build(work_items=[noted], github=github, jira_site="https://j.example/")
     focused = dashboard.focus_items("todos")
     assert focused is not None
     [(_, part)] = focused
+    # The PR named in the todo is one of the entry's PRs too; the todo's own come first.
     assert [(l.text, l.url, l.strong, l.pr_state) for l in part.links] == [
-        ("PR 7", "https://github.com/acme/widgets/pull/7", False, "merged"),
         ("PR 4", "https://github.com/acme/other/pull/4", True, None),
+        ("PR 7", "https://github.com/acme/widgets/pull/7", False, "merged"),
         ("APP-9", "https://j.example/browse/APP-9", True, None),
     ]
     assert part.url == "https://github.com/acme/other/pull/4"
@@ -228,8 +223,8 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
     ]
     assert part.actions[2].input == "Jira key or PR URL"
     # Without a Jira site, keys aren't linked.
-    [(_, part)] = build(work_items=[entry]).focus_items("todos") or []
-    assert [l.text for l in part.links] == ["PR 7", "PR 4"]
+    [(_, part)] = build(work_items=[noted]).focus_items("todos") or []
+    assert [l.text for l in part.links] == ["PR 4", "PR 7"]
 
 
 def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
@@ -238,8 +233,8 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
     fresh = pr(3, head="me/APP-3-y", title="Do y")
     no_key = pr(4, head="me/plain", title="Plain", body="no ticket")
     entries = [
-        work_item("APP-1 Fix", [Todo(text="t")]),
-        work_item("Some PR work", [Todo(text="u")], Where=[by_url.url]),
+        entry("APP-1 Fix", [todo("t")]),
+        entry("Some PR work", [todo("u")], Where=[by_url.url]),
     ]
     dashboard = build(
         github=snapshot(

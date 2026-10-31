@@ -90,11 +90,10 @@ slack and notes have no snapshot, so they don't collect.
 
 ## Not through the graph yet
 
-Until the notes move into SQLite, with each plugin's data in its own tables, some data is
-shared through core's tables instead:
+Until slack and github have tables of their own, some data is shared through core's
+tables instead:
 
-- core imports the skill's markdown on every refresh into its work items, iced stacks,
-  reviewer map and pings tables. notes reads the work items and iced stacks; slack reads
-  the reviewer map and pings, and records pings as sent.
+- core's reviewer map and pings tables, which `mfd notes import` fills from the skill's
+  markdown. slack reads them, and records pings as sent.
 - github saves reviewers' emails, looked up from their commits, into core's reviewer
   table, which slack reads along with the reviewer map.

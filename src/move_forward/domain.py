@@ -228,32 +228,6 @@ class DerivedSnapshot(Model):
 # Skill notes
 
 
-class Todo(Model):
-    text: str
-    size: Literal["quick", "big"] | None = None
-
-
-class WorkItem(Model):
-    title: str
-    fields: dict[str, list[str]]
-    """`- Key: value` lines (and their children), keyed without a trailing date."""
-    todos: list[Todo]
-    text: str
-
-
-class IcedBranch(Model):
-    name: str
-    sha: str
-
-
-class IcedStack(Model):
-    bottom_branch: str
-    repo_dir: str
-    iced: str | None = None
-    note: str | None = None
-    branches: list[IcedBranch]
-
-
 class ReviewerUser(Model):
     login: str
     email: str | None = None
@@ -272,11 +246,3 @@ class Ping(Model):
     kind: Literal["first", "follow-up"]
     message: str = ""
     sent_at: datetime
-
-
-class Notes(Model):
-    work_items: list[WorkItem]
-    pings: list[Ping]
-    iced_stacks: list[IcedStack]
-    users: list[ReviewerUser]
-    teams: list[TeamChannel]

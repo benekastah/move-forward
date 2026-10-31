@@ -4,14 +4,12 @@ branch. Pure functions; no I/O."""
 
 import re
 from datetime import datetime
-from pathlib import Path
 
-from ...domain import IcedStack, Todo, WorkItem
 from ...graph import Entity, Graph, Ref
 from ...page import Action, Item, Link, Panel, PrState
+from .markdown import JIRA_KEY_RE, PR_URL_RE
+from .models import Entry, Ice, Todo
 
-JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
-PR_URL_RE = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
 NOT_BLOCKED_RE = re.compile(r"^\s*(nothing|none|no|-|n/a)\b", re.IGNORECASE)
 
 PR = "pr"
@@ -72,43 +70,50 @@ def add_todo_action(entry: str | None, new_title: str = "", where: str = "") -> 
     )
 
 
-def entry_for(work_items: list[WorkItem], url: str | None, keys: list[str]) -> str | None:
-    """The work-notes entry that covers a PR or ticket: one that names the URL, else one whose
-    title has one of the ticket keys."""
+def entry_for(entries: list[Entry], url: str | None, keys: list[str]) -> str | None:
+    """The entry that covers a PR or ticket: one that names the URL, else one whose title has
+    one of the ticket keys."""
     if url:
-        for item in work_items:
-            if url in item.text:
-                return item.title
+        for entry in entries:
+            if url in _entry_urls(entry):
+                return entry.title
     for key in keys:
-        for item in work_items:
-            if key in _item_keys(item):
-                return item.title
+        for entry in entries:
+            if key in _entry_keys(entry):
+                return entry.title
     return None
 
 
-def _is_blocked(item: WorkItem) -> bool:
-    values = item.fields.get("Blocked on", [])
-    return bool(values) and not NOT_BLOCKED_RE.match(values[0])
+def _is_blocked(entry: Entry) -> bool:
+    return bool(entry.blocked_on) and not NOT_BLOCKED_RE.match(entry.blocked_on or "")
 
 
-def _todo_links(text: str, urls: list[str], states: dict[str, PrState], graph: Graph) -> list[Link]:
+def _todo_links(
+    todo: Todo, urls: list[str], states: dict[str, PrState], graph: Graph
+) -> list[Link]:
     """The entry's PR links, with the ones the todo mentions first and highlighted, then the
-    PRs and Jira tickets only the todo mentions (e.g. linked with its Link button).
+    PRs and Jira tickets only the todo is about (named in it, or linked with its Link button).
 
     A todo mentions a PR by its URL, `#<number>`, or the bare number (PR numbers are long
     enough that a matching bare number in a todo is almost surely the PR).
     """
+    text = todo.text
+    own_prs = [*PR_URL_RE.findall(text), *(link.ref for link in todo.links if link.kind == PR)]
+    own_keys = [
+        *JIRA_KEY_RE.findall(text),
+        *(link.ref for link in todo.links if link.kind == TICKET),
+    ]
     links: list[Link] = []
     for u in urls:
         number = u.rsplit("/", 1)[1]
-        mentioned = u in text or re.search(rf"(?<![\w/])#?{number}\b", text) is not None
+        mentioned = u in own_prs or re.search(rf"(?<![\w/])#?{number}\b", text) is not None
         links.append(Link(text=f"PR {number}", url=u, strong=mentioned, pr_state=states.get(u)))
     links.sort(key=lambda link: not link.strong)
-    for u in PR_URL_RE.findall(text):
+    for u in dict.fromkeys(own_prs):
         if u not in urls:
             number = u.rsplit("/", 1)[1]
             links.append(Link(text=f"PR {number}", url=u, strong=True, pr_state=states.get(u)))
-    for key in dict.fromkeys(JIRA_KEY_RE.findall(text)):
+    for key in dict.fromkeys(own_keys):
         if url := graph.url_for(TICKET, key):
             links.append(Link(text=key, url=url, strong=True))
     return links
@@ -127,7 +132,7 @@ def _todo_part(
     When every PR it mentions is merged or closed, the todo is probably done: it says so and
     its Done box is drawn bigger.
     """
-    links = _todo_links(todo.text, urls, states, graph)
+    links = _todo_links(todo, urls, states, graph)
     mentioned = [link for link in links if link.strong]
     known = [link.pr_state for link in mentioned if link.pr_state is not None]
     probably_done = bool(known) and all(state in ("merged", "closed") for state in known)
@@ -141,45 +146,44 @@ def _todo_part(
     )
 
 
-def _item_urls(item: WorkItem) -> set[str]:
-    return set(PR_URL_RE.findall(item.text))
+def _entry_urls(entry: Entry) -> list[str]:
+    return sorted(link.ref for link in entry.links if link.kind == PR)
 
 
-def _item_keys(item: WorkItem) -> set[str]:
-    return set(JIRA_KEY_RE.findall(item.title))
+def _entry_keys(entry: Entry) -> list[str]:
+    return sorted(link.ref for link in entry.links if link.kind == TICKET)
 
 
-def merge_conditions(item: WorkItem) -> list[str]:
-    return item.fields.get("Merge conditions", [])
-
-
-def entities(work_items: list[WorkItem], iced_stacks: list[IcedStack]) -> list[Entity]:
-    """`entry` per work-notes entry and `iced_branch` per branch on ice."""
+def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
+    """`entry` per work entry, pointing at the PRs and tickets it and its todos are about, and
+    `iced_branch` per branch on ice."""
     result: list[Entity] = []
-    for item in work_items:
-        refs = [Ref(kind=PR, id=url) for url in sorted(_item_urls(item))]
-        refs += [Ref(kind=TICKET, id=key) for key in sorted(_item_keys(item))]
+    for entry in entries:
+        links = [*entry.links, *(link for todo in entry.open_todos for link in todo.links)]
+        refs = list(dict.fromkeys(Ref(kind=link.kind, id=link.ref) for link in links))
         result.append(
             Entity.model_validate(
                 {
-                    "ref": Ref(kind=ENTRY, id=item.title),
-                    "title": item.title,
+                    "ref": Ref(kind=ENTRY, id=entry.title),
+                    "title": entry.title,
                     "refs": refs,
                     "attrs": {
-                        "merge_conditions": merge_conditions(item),
-                        "open_todos": [t.text for t in item.todos],
+                        "merge_conditions": entry.conditions,
+                        "open_todos": [t.text for t in entry.open_todos],
                     },
                 }
             )
         )
-    for stack in iced_stacks:
-        repo_dir = str(Path(stack.repo_dir).expanduser())
-        for branch in stack.branches:
+    for ice in ices:
+        for item in ice.items:
+            if item.kind != BRANCH:
+                continue
+            repo_dir, _, name = item.ref_id.partition(BRANCH_ID_SEPARATOR)
             result.append(
                 Entity(
-                    ref=Ref(kind=ICED_BRANCH, id=f"{repo_dir}{BRANCH_ID_SEPARATOR}{branch.name}"),
-                    title=branch.name,
-                    attrs={"repo_dir": repo_dir, "name": branch.name, "stack": stack.bottom_branch},
+                    ref=Ref(kind=ICED_BRANCH, id=item.ref_id),
+                    title=name,
+                    attrs={"repo_dir": repo_dir, "name": name, "stack": ice.title},
                 )
             )
     return result
@@ -190,13 +194,13 @@ class Builder:
         self,
         now: datetime,
         graph: Graph,
-        work_items: list[WorkItem],
-        iced_stacks: list[IcedStack],
+        entries: list[Entry],
+        ices: list[Ice],
     ):
         self.now = now
         self.graph = graph
-        self.work_items = work_items
-        self.iced_stacks = iced_stacks
+        self.entries = entries
+        self.ices = ices
 
     def add_todo(self, item: Item) -> Action | None:
         """An Add todo field for an item about one of my open PRs or a ticket.
@@ -214,7 +218,7 @@ class Builder:
             if not (subject.attrs.get("mine") and subject.state == "open"):
                 return None
             keys = [r.id for r in subject.refs if r.kind == TICKET]
-            entry = entry_for(self.work_items, subject.ref.id, keys)
+            entry = entry_for(self.entries, subject.ref.id, keys)
             ticket = self.graph.get(TICKET, keys[0]) if keys else None
             summary = ticket.attrs.get("summary") if ticket else None
             title = (
@@ -225,7 +229,7 @@ class Builder:
             return add_todo_action(entry, title, subject.ref.id)
         if subject.ref.kind == TICKET:
             key = subject.ref.id
-            entry = entry_for(self.work_items, subject.url, [key])
+            entry = entry_for(self.entries, subject.url, [key])
             summary = subject.attrs.get("summary")
             return add_todo_action(entry, f"{key} {summary}" if summary else key, subject.url or "")
         return None
@@ -250,36 +254,36 @@ class Builder:
     def todos(self) -> Panel:
         items: list[Item] = []
         states = self._pr_states()
-        for item in self.work_items:
-            open_todos = item.todos
+        for entry in self.entries:
+            open_todos = entry.open_todos
             if not open_todos:
                 continue
-            urls = sorted(_item_urls(item))
-            keys = sorted(_item_keys(item))
-            blocked = _is_blocked(item)
+            urls = _entry_urls(entry)
+            keys = _entry_keys(entry)
+            blocked = _is_blocked(entry)
             quick = [t for t in open_todos if t.size == "quick"]
             close_out = len(quick) == len(open_todos)
             badges: list[str] = []
             if close_out:
                 badges.append(f"close-out: {len(open_todos)} quick todo(s)")
             if blocked:
-                badges.append("blocked: " + item.fields["Blocked on"][0][:80])
+                badges.append("blocked: " + (entry.blocked_on or "")[:80])
             url = urls[0] if urls else None
             links = [Link(text=f"PR {u.rsplit('/', 1)[1]}", url=u) for u in urls]
             ordered = sorted(open_todos, key=lambda t: t.size != "quick")
             items.append(
                 Item(
-                    title=item.title,
+                    title=entry.title,
                     url=url,
                     subtitle=", ".join(keys),
                     badges=badges,
                     details=[f"[{t.size or '?'}] {t.text}" for t in ordered],
                     links=links,
                     rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
-                    actions=[add_todo_action(item.title)],
+                    actions=[add_todo_action(entry.title)],
                     parts=[
                         _todo_part(
-                            item.title,
+                            entry.title,
                             t,
                             urls,
                             states,
@@ -298,28 +302,30 @@ class Builder:
         )
 
     def iced(self) -> Panel:
-        items = [
-            Item(
-                title=stack.bottom_branch,
-                subtitle=f"{stack.repo_dir} · iced {stack.iced or '?'}",
-                details=[stack.note] if stack.note else [],
-                badges=[f"{len(stack.branches)} branches"],
-                actions=[
-                    Action(
-                        name="notes/thaw", label="Reopen", fields={"branch": stack.bottom_branch}
-                    ),
-                    Action(
-                        name="notes/delete_iced",
-                        label="Delete the work",
-                        fields={"branch": stack.bottom_branch},
-                        confirm=f"Delete the local branches {', '.join(b.name for b in stack.branches)}"
-                        f" in {stack.repo_dir} and drop the stack from on-ice.md? Remote branches"
-                        " and PRs are not touched.",
-                    ),
-                ],
+        items: list[Item] = []
+        for ice in self.ices:
+            branches = [item.ref_id.partition(BRANCH_ID_SEPARATOR) for item in ice.items]
+            repo_dir = branches[0][0] if branches else "?"
+            names = ", ".join(name for _, _, name in branches)
+            fields = {"ice": str(ice.id)}
+            items.append(
+                Item(
+                    title=ice.title,
+                    subtitle=f"{repo_dir} · iced {ice.iced_on.isoformat()}",
+                    details=[ice.note] if ice.note else [],
+                    badges=[f"{len(ice.items)} branches"],
+                    actions=[
+                        Action(name="notes/thaw", label="Reopen", fields=fields),
+                        Action(
+                            name="notes/delete_iced",
+                            label="Delete the work",
+                            fields=fields,
+                            confirm=f"Delete the local branches {names} in {repo_dir} and take"
+                            " them off ice? Remote branches and PRs are not touched.",
+                        ),
+                    ],
+                )
             )
-            for stack in self.iced_stacks
-        ]
         return Panel(
             key="iced", title="On ice", description="Stacks parked by the skill.", items=items
         )

@@ -28,10 +28,9 @@ def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
         'email = "me@acme.com"\nteams = ["core", "web"]\n\n'
         '[github]\norg = "acme"\n\n[github.teams]\nweb = "web-reviewers"\n\n'
         '[git]\nrepos = ["~/src/a"]\n\n[slack.teams]\ncore = "#team-core"\n\n'
-        '[jira]\nsite = "https://j"\n\n[notes]\ndir = "~/n"\n',
+        '[jira]\nsite = "https://j"\n',
     )
     assert loaded.git is not None and loaded.git.repos == [Path("~/src/a").expanduser()]
-    assert loaded.notes.dir == Path("~/n").expanduser()
     assert loaded.github is not None and loaded.github.review_checks == []
     assert [loaded.github.slug(t) for t in loaded.teams] == ["core", "web-reviewers"]
     assert loaded.slack is not None and loaded.slack.teams == {"core": "#team-core"}
@@ -44,7 +43,6 @@ def test_a_config_with_no_sections_enables_no_plugins(tmp_path: Path) -> None:
     loaded = _load(tmp_path, MINIMAL)
     assert (loaded.github, loaded.git, loaded.jira, loaded.slack) == (None, None, None, None)
     assert loaded.teams == []
-    assert loaded.notes.dir == Path("~/.config/move-forward/notes").expanduser()
 
 
 def test_unknown_keys_are_errors(tmp_path: Path) -> None:
@@ -57,8 +55,10 @@ def test_unknown_keys_are_errors(tmp_path: Path) -> None:
 def test_moved_settings_say_where_they_went(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match=r"`repos` is now in \[git\]"):
         _load(tmp_path, MINIMAL + "repos = []\n")
-    with pytest.raises(ValidationError, match=r"`notes_dir` is now in \[notes, as `dir`\]"):
+    with pytest.raises(ValidationError, match=r"`notes_dir` is gone; .*mfd notes import"):
         _load(tmp_path, MINIMAL + 'notes_dir = "~/n"\n')
+    with pytest.raises(ValidationError, match=r"`dir` is gone; .*mfd notes import"):
+        _load(tmp_path, MINIMAL + '\n[notes]\ndir = "~/n"\n')
 
 
 def test_a_plugin_team_must_be_a_top_level_team(tmp_path: Path) -> None:

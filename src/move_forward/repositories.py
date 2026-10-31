@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from .db import Database
-from .domain import IcedStack, Notes, Ping, ReviewerUser, TeamChannel, WorkItem
+from .domain import Ping, ReviewerUser, TeamChannel
 
 Source = Literal["notes", "lookup", "dashboard"]
 SOURCE_NOTES: Source = "notes"
@@ -62,28 +62,6 @@ class SnapshotRepository:
         if not rows or rows[0]["payload"] is None:
             return None
         return model.model_validate_json(rows[0]["payload"])
-
-
-class WorkItemRepository:
-    def __init__(self, db: Database):
-        self._db = db
-
-    def all(self) -> list[WorkItem]:
-        return [
-            WorkItem.model_validate_json(row["item"])
-            for row in self._db.query("SELECT item FROM work_items ORDER BY position")
-        ]
-
-
-class IcedStackRepository:
-    def __init__(self, db: Database):
-        self._db = db
-
-    def all(self) -> list[IcedStack]:
-        return [
-            IcedStack.model_validate_json(row["stack"])
-            for row in self._db.query("SELECT stack FROM iced_stacks ORDER BY bottom_branch")
-        ]
 
 
 class ReviewerRepository:
@@ -173,38 +151,6 @@ class PingRepository:
             )
             for row in self._db.query("SELECT * FROM pings ORDER BY sent_at, id")
         ]
-
-
-class NotesImportRepository:
-    """Replaces everything imported from the skill's notes, across tables, in one transaction."""
-
-    def __init__(self, db: Database):
-        self._db = db
-
-    def replace(self, notes: Notes) -> None:
-        with self._db.transaction() as conn:
-            conn.execute("DELETE FROM work_items")
-            conn.execute("DELETE FROM iced_stacks")
-            conn.execute("DELETE FROM reviewer_users WHERE source = ?", (SOURCE_NOTES,))
-            conn.execute("DELETE FROM team_channels WHERE source = ?", (SOURCE_NOTES,))
-            conn.execute("DELETE FROM pings WHERE source = ?", (SOURCE_NOTES,))
-            conn.executemany(
-                "INSERT INTO work_items VALUES (?, ?)",
-                [(i, item.model_dump_json()) for i, item in enumerate(notes.work_items)],
-            )
-            conn.executemany(
-                "INSERT OR REPLACE INTO iced_stacks VALUES (?, ?, ?)",
-                [(s.bottom_branch, s.repo_dir, s.model_dump_json()) for s in notes.iced_stacks],
-            )
-            conn.executemany(
-                "INSERT OR REPLACE INTO reviewer_users VALUES (?, ?, ?, ?)",
-                [(u.login, u.email, u.slack_id, SOURCE_NOTES) for u in notes.users],
-            )
-            conn.executemany(
-                "INSERT OR REPLACE INTO team_channels VALUES (?, ?, ?, ?)",
-                [(t.slug, t.channel_name, t.channel_id, SOURCE_NOTES) for t in notes.teams],
-            )
-            conn.executemany(_PING_INSERT, [_ping_params(p, SOURCE_NOTES) for p in notes.pings])
 
 
 class KvRepository:

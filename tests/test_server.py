@@ -14,8 +14,8 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.plugin import ActionError
 from move_forward.plugins.github.config import GitHubConfig
-from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.slack.config import SlackConfig
+from move_forward.registry import migrate
 from move_forward.repositories import PingRepository, SnapshotRepository
 
 
@@ -26,10 +26,10 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
         github=GitHubConfig(org="acme"),
         teams=["core"],
         slack=SlackConfig(),
-        notes=NotesConfig(dir=tmp_path),
         db_path=tmp_path / "x.db",
     )
     db = Database(":memory:")
+    migrate(config, db)
     SnapshotRepository(db).save(
         "github",
         datetime.now(UTC),

@@ -1,22 +1,22 @@
 """`[notes]`."""
 
-from pathlib import Path
+from typing import cast
 
-from pydantic import field_validator
+from pydantic import model_validator
 
 from ...strict import Strict
 
-DEFAULT_NOTES_DIR = Path("~/.config/move-forward/notes")
+IMPORT_ONCE = "the notes live in the database now: import them once with `mfd notes import <dir>`"
+"""What to say to a config that still names the markdown notes' directory."""
 
 
 class NotesConfig(Strict):
-    """`[notes]`: the move-forward skill's notes. Always on; the section is optional."""
+    """`[notes]`: the work notes and what's on ice. Always on; the section is optional and has
+    no settings yet."""
 
-    dir: Path = DEFAULT_NOTES_DIR
-    """The directory of work-notes.md, on-ice.md and reviewer-map.md, which the dashboard
-    reads on every refresh and writes todos and icing to."""
-
-    @field_validator("dir")
+    @model_validator(mode="before")
     @classmethod
-    def _expand(cls, value: Path) -> Path:
-        return value.expanduser()
+    def _no_dir(cls, data: object) -> object:
+        if isinstance(data, dict) and "dir" in cast(dict[str, object], data):
+            raise ValueError(f"`dir` is gone; {IMPORT_ONCE}")
+        return cast(object, data)

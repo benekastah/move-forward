@@ -16,23 +16,27 @@ from move_forward.domain import (
     JiraSnapshot,
     LocalRepo,
     LocalSnapshot,
-    Notes,
+    Ping,
     PullRequest,
     Review,
+    ReviewerUser,
     StackBranch,
     StackRepo,
+    TeamChannel,
     Thread,
     TimelineEvent,
-    Todo,
-    WorkItem,
 )
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
+from move_forward.plugins.notes import markdown
+from move_forward.plugins.notes.models import Entry, Ice, IcedItem, Size, Todo
+from move_forward.plugins.notes.repository import MIGRATIONS as NOTES_MIGRATIONS
+from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
 from move_forward.refresh import build_dashboard, stored_graph
 from move_forward.registry import enabled, migrate
-from move_forward.repositories import NotesImportRepository, SnapshotRepository
+from move_forward.repositories import PingRepository, ReviewerRepository, SnapshotRepository
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
 ME = "me"
@@ -136,17 +140,15 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             snapshots.save(source, NOW, cast(BaseModel, value))
     if (derived := o.pop("derived", None)) is not None:
         snapshots.save("github.derived", NOW, cast(BaseModel, derived))
-    NotesImportRepository(db).replace(
-        Notes.model_validate(
-            {
-                "work_items": o.pop("work_items", []),
-                "iced_stacks": o.pop("iced_stacks", []),
-                "users": list(cast(dict[str, object], o.pop("users", {})).values()),
-                "teams": list(cast(dict[str, object], o.pop("teams", {})).values()),
-                "pings": o.pop("pings", []),
-            }
-        )
+    db.migrate("notes", NOTES_MIGRATIONS)
+    NotesRepository(db).replace_all(
+        cast(list[Entry], o.pop("work_items", [])), cast(list[Ice], o.pop("iced_stacks", [])), []
     )
+    ReviewerRepository(db).replace_imported(
+        list(cast(dict[str, ReviewerUser], o.pop("users", {})).values()),
+        list(cast(dict[str, TeamChannel], o.pop("teams", {})).values()),
+    )
+    PingRepository(db).replace_imported(cast(list[Ping], o.pop("pings", [])))
     github: dict[str, object] = {"org": "acme"}
     for key in ("review_checks", "placeholder_labels", "ticket_link_prefix", "stale_review_hours"):
         if key in o:
@@ -223,8 +225,31 @@ def issue(key: str = "APP-1", **overrides: object) -> JiraIssue:
     return JiraIssue.model_validate(fields)
 
 
-def work_item(title: str, todos: list[Todo], **fields: list[str]) -> WorkItem:
-    return WorkItem(title=title, fields=fields, todos=todos, text=title + " " + str(fields))
+def todo(text: str, size: Size | None = None) -> Todo:
+    """An open todo."""
+    return Todo(id=0, text=text, size=size)
+
+
+def entry(title: str, todos: list[Todo], **fields: list[str]) -> Entry:
+    """An entry, read from the markdown the skill would write for it: `fields` are its
+    `- Key: value` lines, e.g. `**{"Blocked on": ["reviews"]}`."""
+    lines = [f"## {title}"]
+    lines += [f"- {key}: {value}" for key, values in fields.items() for value in values]
+    if todos:
+        lines.append("- Left to do:")
+        lines += [f"  - [{t.size}] {t.text}" if t.size else f"  - {t.text}" for t in todos]
+    [read], _ = markdown.read_work_notes("\n".join(lines))
+    return read
+
+
+def iced(branch: str, repo_dir: str = "/src/widgets") -> Ice:
+    """A one-branch stack on ice."""
+    return Ice(
+        id=0,
+        title=branch,
+        iced_on=NOW.date(),
+        items=[IcedItem(kind="branch", ref_id=f"{repo_dir}\t{branch}", sha="1")],
+    )
 
 
 def local_snapshot(**overrides: object) -> LocalSnapshot:

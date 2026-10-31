@@ -16,12 +16,12 @@ from .plugins.git.config import GitConfig
 from .plugins.git_stack.config import GitStackConfig
 from .plugins.github.config import GitHubConfig
 from .plugins.jira.config import JiraConfig
-from .plugins.notes.config import NotesConfig
+from .plugins.notes.config import IMPORT_ONCE, NotesConfig
 from .plugins.slack.config import SlackConfig
 from .strict import Strict
 
 BASE_DIR = Path("~/.config/move-forward")
-"""Where the config and, by default, the notes live."""
+"""Where the config lives."""
 DEFAULT_CONFIG_PATH = (BASE_DIR / "config.toml").expanduser()
 DEFAULT_DB_PATH = Path("~/.local/share/move-forward/dashboard.db")
 DEFAULT_PORT = 8765
@@ -36,7 +36,6 @@ MOVED_SETTINGS = {
     "commit_history_days": "git",
     "email_domains": "github",
     "stale_review_hours": "github",
-    "notes_dir": "notes, as `dir`",
 }
 """Top-level settings that moved into a plugin's section, to say so instead of just "extra
 input"."""
@@ -52,7 +51,7 @@ class Config(Strict):
     """The teams I'm on or review for, by name. Plugins map a name to what their tool calls
     the team in their own `teams` table, e.g. `[github.teams]`."""
     db_path: Path = DEFAULT_DB_PATH
-    """The SQLite database holding snapshots, imported notes and the plugins' tables."""
+    """The SQLite database holding snapshots, the notes and the plugins' tables."""
     db_backups: int = DEFAULT_KEEP_BACKUPS
     """How many copies of the database to keep in `backups/` next to it. One is taken before
     migrations change the database; the oldest go first. 0 takes none."""
@@ -84,6 +83,8 @@ class Config(Strict):
             for key in map(str, settings)
             if key in MOVED_SETTINGS
         ]
+        if "notes_dir" in settings:
+            moved.append(f"`notes_dir` is gone; {IMPORT_ONCE}")
         if moved:
             raise ValueError("; ".join(moved))
         return settings

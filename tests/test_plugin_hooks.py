@@ -64,6 +64,7 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
         {"email": "me@x", "github": {"org": "acme"}, "jira": {"site": "https://j"}}
     )
     db = Database(":memory:")
+    registry.migrate(config, db)
     SnapshotRepository(db).save("github", NOW, snapshot(mine=[pr(1, title="Fix <it>")]))
     page = refresh.plugin_page(config, db, "/hello", {"pr": [pr(1).url]})
     assert page is not None and "Fix &lt;it&gt;" in page and "/ hello</h1>" in page

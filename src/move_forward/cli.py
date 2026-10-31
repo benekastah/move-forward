@@ -70,8 +70,6 @@ my-team = "#team-my-team"
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
 
-# [notes]                               # always on; the section only changes its settings
-# dir = "~/.config/move-forward/notes"  # work-notes.md, on-ice.md, reviewer-map.md
 """
 
 

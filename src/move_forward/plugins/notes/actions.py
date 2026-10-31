@@ -1,27 +1,29 @@
 """The notes plugin's buttons: todos, icing and thawing, posted to `/actions/notes/<action>`.
 
 Every action takes the form fields of its button and returns a one-line notice for the page.
-A repo must be one the graph has branches of, i.e. one of git's checkouts.
+A todo is named by its entry's title and its text, as the page shows them. A repo must be
+one the graph has branches of, i.e. one of git's checkouts.
 """
 
 import contextlib
-import re
-from collections.abc import Callable
-from datetime import date
 from pathlib import Path
 
-from ...domain import IcedStack
 from ...graph import Graph
-from ...notes import ON_ICE_FILE, WORK_NOTES_FILE, parse_on_ice
-from ...plugin import ActionError
+from ...plugin import ActionError, ActionHandler, Context
 from ...shell import CommandError, git
 from .config import NotesConfig
+from .markdown import JIRA_KEY_RE, links_in
+from .models import Entry, IcedItem, Link, Size, Todo
+from .repository import NotesRepository
 
 ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
 TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""
 BRANCH = "branch"
+PR = "pr"
 TICKET = "ticket"
+INFERRED = "inferred"
+"""The status of an entry the dashboard made, rather than the skill."""
 
 
 def _repo(graph: Graph, repo_dir: str) -> Path:
@@ -44,11 +46,6 @@ def checked_out_in(repo: Path, branch: str) -> str | None:
     """The worktree the branch is checked out in, if any."""
     path = git(repo, "for-each-ref", "--format=%(worktreepath)", f"refs/heads/{branch}")
     return path.strip() or None
-
-
-def _tilde(path: Path) -> str:
-    home = Path.home()
-    return "~/" + str(path.relative_to(home)) if path.is_relative_to(home) else str(path)
 
 
 def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
@@ -79,261 +76,140 @@ def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
     return stack
 
 
-def ice(notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | None = None) -> str:
-    """Append the branch's stack to on-ice.md, as the move-forward skill records it."""
+def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Put the branch's stack on ice, recording each branch's commit."""
     repo = _repo(graph, fields["repo"])
     branch = fields["branch"]
     if not branch_exists(repo, branch):
         raise ActionError(f"{branch} doesn't exist in {repo}")
-    path = notes.dir / ON_ICE_FILE
-    text = path.read_text() if path.exists() else "# Stacks on ice\n"
-    branches = _stack_branches(graph, repo, branch)
-    iced_here = {
-        b.name
-        for stack in parse_on_ice(text)
-        if Path(stack.repo_dir).expanduser() == repo
-        for b in stack.branches
-    }
-    if iced_here.intersection(branches):
+    notes = NotesRepository(ctx.db)
+    names = _stack_branches(graph, repo, branch)
+    ref_ids = [f"{repo}{TARGET_SEPARATOR}{name}" for name in names]
+    iced = {item.ref_id for i in notes.ices() for item in i.items if item.kind == BRANCH}
+    if iced.intersection(ref_ids):
         raise ActionError(f"{branch} is already on ice")
-    lines = [
-        "",
-        f"## {branches[0]} ({_tilde(repo)})",
-        f"- Iced: {(today or date.today()).isoformat()}",
-        f"- Note: {ICED_FROM_DASHBOARD_NOTE}",
-        "- Branches:",
+    items = [
+        IcedItem(kind=BRANCH, ref_id=ref_id, sha=git(repo, "rev-parse", name).strip())
+        for name, ref_id in zip(names, ref_ids, strict=True)
     ]
-    for name in branches:
-        lines.append(f"  - {name} {git(repo, 'rev-parse', name).strip()}")
-    path.write_text(text.rstrip("\n") + "\n" + "\n".join(lines) + "\n")
-    return f"put {branches[0]} on ice ({len(branches)} branches)"
+    notes.add_ice(names[0], ctx.now.date(), ICED_FROM_DASHBOARD_NOTE, items)
+    return f"put {names[0]} on ice ({len(names)} branches)"
 
 
-def _iced_stacks(notes: NotesConfig) -> list[IcedStack]:
-    path = notes.dir / ON_ICE_FILE
-    return parse_on_ice(path.read_text()) if path.exists() else []
+def _ice_id(fields: dict[str, str]) -> int:
+    try:
+        return int(fields["ice"])
+    except ValueError as e:
+        raise ActionError(f"no such stack on ice: {fields['ice']!r}") from e
 
 
-def delete_iced(notes: NotesConfig, graph: Graph, fields: dict[str, str]) -> str:
-    """Delete an iced stack's local branches and drop it from on-ice.md.
+def thaw(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Take a stack off ice."""
+    notes = NotesRepository(ctx.db)
+    ice_id = _ice_id(fields)
+    found = next((i for i in notes.ices() if i.id == ice_id), None)
+    if found is None:
+        raise ActionError("that stack is not on ice")
+    notes.delete_ice(ice_id)
+    return f"thawed {found.title}"
+
+
+def delete_iced(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Delete an iced stack's local branches and take it off ice.
 
     Checks every branch first, so a branch checked out in a worktree stops it before anything
     is deleted. Remote branches and PRs are left alone.
     """
-    bottom = fields["branch"]
-    stack = next((s for s in _iced_stacks(notes) if s.bottom_branch == bottom), None)
-    if stack is None:
-        raise ActionError(f"{bottom} is not on ice")
-    repo = _repo(graph, str(Path(stack.repo_dir).expanduser()))
-    names = [b.name for b in stack.branches]
-    existing = [name for name in names if branch_exists(repo, name)]
-    for name in existing:
-        if worktree := checked_out_in(repo, name):
-            raise ActionError(f"{name} is checked out in {worktree}; switch it away first")
-    if existing:
+    notes = NotesRepository(ctx.db)
+    ice_id = _ice_id(fields)
+    found = next((i for i in notes.ices() if i.id == ice_id), None)
+    if found is None:
+        raise ActionError("that stack is not on ice")
+    branches = [item.ref_id.partition(TARGET_SEPARATOR) for item in found.items]
+    repo = _repo(graph, branches[0][0]) if branches else None
+    existing = [name for _, _, name in branches if repo and branch_exists(repo, name)]
+    if repo and existing:
+        for name in existing:
+            if worktree := checked_out_in(repo, name):
+                raise ActionError(f"{name} is checked out in {worktree}; switch it away first")
         # Not tracked by git-stack, or git-stack isn't installed: nothing to untrack.
         with contextlib.suppress(CommandError, FileNotFoundError):
             git(repo, "stack", "untrack", *existing)
         git(repo, "branch", "-D", *existing)
-    thaw(notes, graph, {"branch": bottom})
-    return f"deleted {len(existing)} branches of {bottom} and took it off ice"
+    notes.delete_ice(ice_id)
+    return f"deleted {len(existing)} branches of {found.title} and took it off ice"
 
 
-def thaw(notes: NotesConfig, graph: Graph, fields: dict[str, str]) -> str:
-    """Remove a stack's entry from on-ice.md."""
-    bottom = fields["branch"]
-    path = notes.dir / ON_ICE_FILE
-    text = path.read_text() if path.exists() else ""
-    pattern = re.compile(rf"\n## {re.escape(bottom)} \(.*?\)\n.*?(?=\n## |\Z)", re.DOTALL)
-    new_text, count = pattern.subn("", text)
-    if not count:
-        raise ActionError(f"{bottom} is not on ice")
-    path.write_text(new_text.rstrip("\n") + "\n")
-    return f"thawed {bottom}"
+# Todos
 
 
-# Work-note todos. The notes keep open todos as `  - [size] text` lines under `- Left to do:`
-# and done ones as `- Done YYYY-MM-DD: text` lines, as the move-forward skill writes them. A
-# todo ticked off here keeps its `[size]` in the Done line, so unticking restores it.
+def _entry(notes: NotesRepository, title: str) -> Entry:
+    found = next((e for e in notes.entries() if e.title == title), None)
+    if found is None:
+        raise ActionError(f"no work-notes entry titled {title}")
+    return found
 
 
-def entry_bounds(lines: list[str], entry: str) -> tuple[int, int]:
-    """Indexes of an entry's `## ` line and of the line after its last."""
-    start = next((i for i, line in enumerate(lines) if line.rstrip() == f"## {entry}"), None)
-    if start is None:
-        raise ActionError(f"no work-notes entry titled {entry}")
-    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
-    return start, end
-
-
-def left_to_do(lines: list[str], start: int, end: int) -> tuple[int, int] | None:
-    """Indexes of the entry's `- Left to do:` line and of the line after its last child."""
-    head = next((i for i in range(start, end) if lines[i].startswith("- Left to do")), None)
-    if head is None:
-        return None
-    tail = head + 1
-    while tail < end and lines[tail].startswith("  "):
-        tail += 1
-    return head, tail
-
-
-def _find_todo(lines: list[str], start: int, end: int, text: str) -> tuple[int, str | None]:
-    """The line index of the open todo `text` in the entry, and its size."""
-    block = left_to_do(lines, start, end)
-    pattern = re.compile(rf"^  - (?:\[(quick|big)\] )?{re.escape(text)}\s*$")
-    if block:
-        for i in range(block[0] + 1, block[1]):
-            if match := pattern.match(lines[i]):
-                return i, match.group(1)
-    raise ActionError(f"no open todo {text!r} in {lines[start][3:]}")
-
-
-def _pop_todo(lines: list[str], start: int, end: int, text: str) -> str | None:
-    """Remove the open todo `text` from the entry, returning its size."""
-    i, size = _find_todo(lines, start, end, text)
-    del lines[i]
-    return size
-
-
-def _touch_updated(lines: list[str], start: int, end: int, today: date) -> None:
-    updated = f"- Updated: {today.isoformat()}"
-    for i in range(start, end):
-        if lines[i].startswith("- Updated:"):
-            lines[i] = updated
-            return
-    lines.insert(_entry_text_end(lines, start, end), updated)
-
-
-def _entry_text_end(lines: list[str], start: int, end: int) -> int:
-    """The index after the entry's last non-blank line."""
-    while end > start + 1 and not lines[end - 1].strip():
-        end -= 1
-    return end
-
-
-def _edit_entry(
-    notes: NotesConfig, entry: str, edit: Callable[[list[str], int, int], str], today: date | None
-) -> str:
-    """Apply `edit` to the entry's lines in work-notes.md, bump its Updated date, and save."""
-    path = notes.dir / WORK_NOTES_FILE
-    if not path.exists():
-        raise ActionError(f"{path} doesn't exist")
-    lines = path.read_text().split("\n")
-    start, end = entry_bounds(lines, entry)
-    notice = edit(lines, start, end)
-    start, end = entry_bounds(lines, entry)
-    _touch_updated(lines, start, end, today or date.today())
-    path.write_text("\n".join(lines))
-    return notice
-
-
-def todo_done(
-    notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | None = None
-) -> str:
-    """Move an open todo to a `Done <today>:` line of its entry."""
-    text = fields["text"]
-
-    def edit(lines: list[str], start: int, end: int) -> str:
-        size = _pop_todo(lines, start, end, text)
-        block = left_to_do(lines, start, end - 1)
-        marker = f"[{size}] " if size else ""
-        at = block[1] if block else _entry_text_end(lines, start, end - 1)
-        lines.insert(at, f"- Done {(today or date.today()).isoformat()}: {marker}{text}")
-        return f"done: {text}"
-
-    return _edit_entry(notes, fields["entry"], edit, today)
-
-
-def todo_undone(
-    notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | None = None
-) -> str:
-    """Move a todo from its `Done` line back under `Left to do`, at the end."""
-    text = fields["text"]
-    pattern = re.compile(
-        rf"^- Done \d{{4}}-\d{{2}}-\d{{2}}: (\[(?:quick|big)\] )?{re.escape(text)}\s*$"
+def _todo(entry: Entry, text: str, done: bool) -> Todo:
+    found = next(
+        (t for t in entry.todos if t.text == text and (t.done_on is not None) == done), None
     )
-
-    def edit(lines: list[str], start: int, end: int) -> str:
-        for i in range(start, end):
-            if match := pattern.match(lines[i]):
-                marker = match.group(1) or ""
-                del lines[i]
-                break
-        else:
-            raise ActionError(f"no done todo {text!r} in {fields['entry']}")
-        block = left_to_do(lines, start, end - 1)
-        if block is None:
-            at = _entry_text_end(lines, start, end - 1)
-            lines[at:at] = ["- Left to do:", f"  - {marker}{text}"]
-        else:
-            lines.insert(block[1], f"  - {marker}{text}")
-        return f"reopened: {text}"
-
-    return _edit_entry(notes, fields["entry"], edit, today)
+    if found is None:
+        raise ActionError(f"no {'done' if done else 'open'} todo {text!r} in {entry.title}")
+    return found
 
 
-def todo_delete(
-    notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | None = None
-) -> str:
-    """Drop an open todo from its entry without recording it as done."""
-    text = fields["text"]
-
-    def edit(lines: list[str], start: int, end: int) -> str:
-        _pop_todo(lines, start, end, text)
-        return f"dropped: {text}"
-
-    return _edit_entry(notes, fields["entry"], edit, today)
+def todo_done(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+    notes = NotesRepository(ctx.db)
+    entry = _entry(notes, fields["entry"])
+    notes.set_done(_todo(entry, fields["text"], done=False).id, ctx.now.date())
+    notes.touch(entry.id, ctx.now.date())
+    return f"done: {fields['text']}"
 
 
-JIRA_KEY_RE = re.compile(r"[A-Z][A-Z0-9]+-\d+")
+def todo_undone(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+    notes = NotesRepository(ctx.db)
+    entry = _entry(notes, fields["entry"])
+    notes.set_done(_todo(entry, fields["text"], done=True).id, None)
+    notes.touch(entry.id, ctx.now.date())
+    return f"reopened: {fields['text']}"
 
 
-def _link_url(graph: Graph, value: str) -> str:
-    """A ticket key as its URL (from whichever plugin knows tickets), or a URL as given."""
+def todo_delete(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Drop an open todo without recording it as done."""
+    notes = NotesRepository(ctx.db)
+    entry = _entry(notes, fields["entry"])
+    notes.delete_todo(_todo(entry, fields["text"], done=False).id)
+    notes.touch(entry.id, ctx.now.date())
+    return f"dropped: {fields['text']}"
+
+
+def _link(graph: Graph, value: str) -> Link:
+    """A ticket key or a PR URL as a link; a key needs a plugin that knows tickets."""
     if JIRA_KEY_RE.fullmatch(value):
-        url = graph.url_for(TICKET, value)
-        if url is None:
+        if graph.url_for(TICKET, value) is None:
             raise ActionError("no [jira] site configured to link ticket keys")
-        return url
-    if value.startswith(("https://", "http://")) and " " not in value:
-        return value
-    raise ActionError(f"{value!r} is neither a Jira key nor a URL")
+        return Link(kind=TICKET, ref=value)
+    found = links_in(value)
+    if len(found) == 1 and found[0].kind == PR and found[0].ref == value:
+        return found[0]
+    raise ActionError(f"{value!r} is neither a Jira key nor a PR URL")
 
 
-def todo_link(
-    notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | None = None
-) -> str:
-    """Append a Jira ticket's or PR's URL to an open todo's line."""
-    text = fields["text"]
-    url = _link_url(graph, fields["input"].strip())
-
-    def edit(lines: list[str], start: int, end: int) -> str:
-        if url in text:
-            raise ActionError(f"{url} is already in that todo")
-        i, _ = _find_todo(lines, start, end, text)
-        lines[i] = lines[i].rstrip() + " " + url
-        return f"linked {url}"
-
-    return _edit_entry(notes, fields["entry"], edit, today)
+def todo_link(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Link an open todo to a Jira ticket or a PR."""
+    notes = NotesRepository(ctx.db)
+    entry = _entry(notes, fields["entry"])
+    todo = _todo(entry, fields["text"], done=False)
+    link = _link(graph, fields["input"].strip())
+    if link in todo.links:
+        raise ActionError(f"{link.ref} is already linked to that todo")
+    notes.link_todo(todo.id, link)
+    notes.touch(entry.id, ctx.now.date())
+    return f"linked {link.ref}"
 
 
-def _ensure_entry(notes: NotesConfig, entry: str, where: str, today: date) -> None:
-    """Append a work-notes entry titled `entry` if there is none, as the skill would."""
-    path = notes.dir / WORK_NOTES_FILE
-    text = path.read_text() if path.exists() else "# Work notes\n"
-    if re.search(rf"^## {re.escape(entry)}\s*$", text, re.MULTILINE):
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["", f"## {entry}", "- Status: inferred"]
-    if where:
-        lines.append(f"- Where: {where}")
-    lines += ["- Left to do:", f"- Updated: {today.isoformat()}"]
-    path.write_text(text.rstrip("\n") + "\n" + "\n".join(lines) + "\n")
-
-
-def todo_add(
-    notes: NotesConfig, graph: Graph, fields: dict[str, str], today: date | None = None
-) -> str:
+def todo_add(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     """Add an open todo to an entry: `input` (or `text`) with an optional `size`, quick or big.
 
     With `create`, a missing entry is created first (`where` names its PR or ticket).
@@ -344,25 +220,23 @@ def todo_add(
     size = fields.get("size", "")
     if size not in ("", "quick", "big"):
         raise ActionError(f"size must be quick or big, not {size!r}")
-    line = f"  - {f'[{size}] ' if size else ''}{text}"
-    if fields.get("create"):
-        _ensure_entry(notes, fields["entry"], fields.get("where", ""), today or date.today())
+    notes = NotesRepository(ctx.db)
+    title = fields["entry"]
+    entry_id = notes.entry_id(title)
+    if entry_id is None and fields.get("create"):
+        where = fields.get("where", "")
+        entry_id = notes.add_entry(
+            title, ctx.now.date(), INFERRED, where or None, links_in(where, title)
+        )
+    if entry_id is None:
+        raise ActionError(f"no work-notes entry titled {title}")
+    sized: Size | None = "quick" if size == "quick" else "big" if size == "big" else None
+    notes.add_todo(entry_id, text, sized, links_in(text))
+    notes.touch(entry_id, ctx.now.date())
+    return f"added: {text}"
 
-    def edit(lines: list[str], start: int, end: int) -> str:
-        block = left_to_do(lines, start, end)
-        if block is None:
-            at = _entry_text_end(lines, start, end)
-            lines[at:at] = ["- Left to do:", line]
-        else:
-            lines.insert(block[1], line)
-        return f"added: {text}"
 
-    return _edit_entry(notes, fields["entry"], edit, today)
-
-
-NotesAction = Callable[[NotesConfig, Graph, dict[str, str]], str]
-
-ACTIONS: dict[str, NotesAction] = {
+ACTIONS: dict[str, ActionHandler] = {
     "todo_done": todo_done,
     "todo_undone": todo_undone,
     "todo_delete": todo_delete,

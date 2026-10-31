@@ -21,16 +21,8 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5a. Notes tables and import
 
-- Core, first: the database opens with `PRAGMA foreign_keys = ON` (the planned tables rely
-  on `ON DELETE CASCADE`, which SQLite ignores without it), in WAL mode with a busy
-  timeout, since `mfd notes` will write while the server runs, from another process.
-- The notes tables (`notes_entries`, `notes_links`, `notes_todos`, `notes_todo_links`,
-  `notes_conditions`, `notes_declined`, `notes_ice`, `notes_iced`) as the notes plugin's
-  migrations.
-- `mfd notes import <dir>` / `export <dir>`; lines the importer doesn't understand are kept
-  as entry-level notes.
-- `[notes] dir` is dropped; core no longer imports markdown on every refresh, and core's
-  `work_items` and `iced_stacks` tables go.
+The notes are in the notes plugin's tables, read once with `mfd notes import`. Left:
+
 - notes stops running git: today `delete_iced` deletes branches and untracks them from
   git-stack itself, and `ice` reads shas. Deleting branches is git's action and untracking
   is git_stack's; they offer them on the On ice item, by its subjects, as item actions.
@@ -183,7 +175,7 @@ Built in, in the package (`move_forward/plugins/<name>/`):
 | `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in git's checkouts | `git_stack_branches` | none | `git_stack.stack_branch` | Stacks |
 | `jira` | `[jira]` | my open tickets | `jira_issues`, `jira_issue_labels`, `jira_issue_blockers` | none | `jira.ticket` | Jira transitions, What next |
 | `slack` | `[slack]` | nothing | none | `slack_contacts`, `slack_team_channels`, `slack_pings` | nothing | Nudge reviewers; the ping page |
-| `notes` | `[notes]`, always on | nothing | none | `notes_entries`, `notes_links`, `notes_todos`, `notes_todo_links`, `notes_conditions`, `notes_declined`, `notes_ice`, `notes_iced` | `notes.entry`, `notes.iced` | Todos, On ice |
+| `notes` | `[notes]`, always on | nothing | none | `notes_entries` and its child tables, `notes_sections`, `notes_ice`, `notes_iced` | `notes.entry`, `notes.iced` | Todos, On ice |
 
 A plugin is enabled when its config section exists. `notes` is always enabled (with
 defaults), so the smallest setup is a config with just `email` and no sections: a todo
@@ -614,62 +606,6 @@ Core also owns `act_now_feedback` (see Act now).
 
 What a plugin fetches lives in its own tables, replaced wholesale on every successful
 collect (see Data model). Core keeps no plugin data.
-
-#### notes
-
-```sql
-CREATE TABLE notes_entries (  -- kept
-    id INTEGER PRIMARY KEY,
-    title TEXT NOT NULL UNIQUE,        -- "APP-1 Fix the widget", or a PR URL and title
-    status TEXT,
-    blocked_on TEXT,                   -- NULL or "nothing" means not blocked
-    inferred INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    checked_on TEXT,                   -- the skill's check-in dates
-    asked_done_on TEXT
-);
-CREATE TABLE notes_links (             -- kept: what an entry is about: its "Where"
-    entry_id INTEGER NOT NULL REFERENCES notes_entries ON DELETE CASCADE,
-    kind TEXT NOT NULL,                -- "pr", "ticket", "branch", "repo"
-    ref TEXT NOT NULL,                 -- URL, key, "<dir>\t<branch>", path
-    PRIMARY KEY (entry_id, kind, ref)
-);
-CREATE TABLE notes_todos (  -- kept
-    id INTEGER PRIMARY KEY,
-    entry_id INTEGER NOT NULL REFERENCES notes_entries ON DELETE CASCADE,
-    position INTEGER NOT NULL,
-    text TEXT NOT NULL,
-    size TEXT CHECK (size IN ('quick', 'big')),
-    done_on TEXT,                      -- NULL while open
-    created_at TEXT NOT NULL
-);
-CREATE TABLE notes_todo_links (        -- kept: PRs and tickets one todo is about
-    todo_id INTEGER NOT NULL REFERENCES notes_todos ON DELETE CASCADE,
-    kind TEXT NOT NULL,
-    ref TEXT NOT NULL,
-    PRIMARY KEY (todo_id, kind, ref)
-);
-CREATE TABLE notes_conditions (        -- kept: merge conditions
-    id INTEGER PRIMARY KEY,
-    entry_id INTEGER NOT NULL REFERENCES notes_entries ON DELETE CASCADE,
-    pr_url TEXT,                       -- NULL: applies to all the entry's PRs
-    text TEXT NOT NULL,
-    created_on TEXT NOT NULL
-);
-CREATE TABLE notes_declined (          -- kept: "don't offer this again today"
-    id INTEGER PRIMARY KEY,
-    entry_id INTEGER REFERENCES notes_entries ON DELETE CASCADE,
-    on_date TEXT NOT NULL,
-    text TEXT NOT NULL
-);
-```
-
-Todo links replace today's guessing from the todo's text: the Link button and the CLI
-write rows here, and the importer fills them from URLs, `#123` and keys found in the text.
-The graph's `entry` entity refs are the union of `notes_links` and its todos' links.
-Icing has its own tables, `notes_ice` and `notes_iced` (see Icing anything).
-"Last asked about iced work" goes in `kv` (`notes`, `last_asked_ice`).
 
 #### slack
 

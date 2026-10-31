@@ -1,12 +1,11 @@
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
-from move_forward import notes, prune
+from move_forward import prune
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.plugins.github.config import GitHubConfig
-from move_forward.plugins.jira.config import JiraConfig
-from move_forward.plugins.notes.config import NotesConfig
+from move_forward.plugins.notes import markdown
+from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
 OLD = NOW - timedelta(days=100)
@@ -45,14 +44,16 @@ WORK_NOTES = f"""\
 """
 
 
-def _config(tmp_path: Path, jira: bool = True) -> Config:
-    (tmp_path / notes.WORK_NOTES_FILE).write_text(WORK_NOTES)
-    return Config(
-        email="me@x",
-        github=GitHubConfig(org="acme"),
-        notes=NotesConfig(dir=tmp_path),
-        jira=JiraConfig(site="https://j") if jira else None,
-    )
+CUTOFF = NOW - timedelta(days=90)
+
+
+def _seeded() -> Database:
+    """A database holding `WORK_NOTES`, as `mfd notes import` leaves it."""
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS)
+    entries, sections = markdown.read_work_notes(WORK_NOTES)
+    NotesRepository(db).replace_all(entries, [], sections)
+    return db
 
 
 def pr_closed_at(url: str) -> datetime | None:
@@ -63,41 +64,38 @@ def issues_resolved_at(keys: list[str]) -> dict[str, datetime]:
     return {k: OLD for k in keys if k in ("APP-1", "APP-2")}
 
 
-def test_prune_notes_clears_finished_entries_and_old_done_lines(tmp_path: Path) -> None:
-    config = _config(tmp_path)
-    notices = prune.prune_notes(config, NOW, pr_closed_at, issues_resolved_at)
+def test_prune_notes_clears_finished_entries_and_old_done_todos() -> None:
+    db = _seeded()
+    notices = prune.prune_notes(db, CUTOFF, pr_closed_at, issues_resolved_at)
     assert notices == [
         "cleared entry APP-1 long done",
-        "dropped 1 old Done line(s) from APP-2 done but still has a todo",
+        "dropped 1 old done todo(s) from APP-2 done but still has a todo",
         "cleared entry No ticket, no PR, stale",
     ]
-    text = (tmp_path / notes.WORK_NOTES_FILE).read_text()
-    titles = [i.title for i in notes.parse_work_notes(text)]
-    assert titles == [
+    entries = NotesRepository(db).entries()
+    assert [e.title for e in entries] == [
         "APP-2 done but still has a todo",
         "APP-3 PR merged long ago, ticket open",
         f"{PR}4 PR without a ticket, merged recently",
     ]
-    assert "Done 2026-06-01: shipped" not in text and "Done 2026-10-28: tested" in text
-    assert "\n\n\n" not in text
-    # A second run has nothing to do and leaves the file alone.
-    assert prune.prune_notes(config, NOW, pr_closed_at, issues_resolved_at) == []
+    assert [t.text for t in entries[0].todos] == ["write the wrap-up", "tested"]
+    # A second run has nothing to do.
+    assert prune.prune_notes(db, CUTOFF, pr_closed_at, issues_resolved_at) == []
 
 
-def test_entries_with_tickets_are_kept_without_jira(tmp_path: Path) -> None:
-    config = _config(tmp_path, jira=False)
-    notices = prune.prune_notes(config, NOW, pr_closed_at, None)
+def test_entries_with_tickets_are_kept_without_jira() -> None:
+    notices = prune.prune_notes(_seeded(), CUTOFF, pr_closed_at, None)
     assert notices == [
-        "dropped 1 old Done line(s) from APP-1 long done",  # kept: its ticket can't be checked
-        "dropped 1 old Done line(s) from APP-2 done but still has a todo",
+        "dropped 1 old done todo(s) from APP-1 long done",  # kept: its ticket can't be checked
+        "dropped 1 old done todo(s) from APP-2 done but still has a todo",
         "cleared entry No ticket, no PR, stale",
     ]
 
 
-def test_plugins_prune_with_the_daily_run(tmp_path: Path) -> None:
-    config = _config(tmp_path)
-    (tmp_path / notes.WORK_NOTES_FILE).unlink()
+def test_plugins_prune_with_the_daily_run() -> None:
+    config = Config(email="me@x", github=GitHubConfig(org="acme"))
     db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS)
     runs: list[datetime] = []
 
     def plugins() -> list[str]:

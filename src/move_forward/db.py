@@ -98,7 +98,13 @@ UPDATE snapshots SET source = 'github.derived' WHERE source = 'derived';
 """
 """Snapshots are named after the plugin that stores them."""
 
-CORE_MIGRATIONS = [V1_SCHEMA, _V2_KV_AND_LAYOUT, _V3_PLUGIN_SOURCES]
+_V4_NOTES_IN_THE_NOTES_PLUGIN = """
+DROP TABLE work_items;
+DROP TABLE iced_stacks;
+"""
+"""Core's copies of the markdown notes; the notes plugin's own tables hold them now."""
+
+CORE_MIGRATIONS = [V1_SCHEMA, _V2_KV_AND_LAYOUT, _V3_PLUGIN_SOURCES, _V4_NOTES_IN_THE_NOTES_PLUGIN]
 
 _SCHEMA_VERSIONS = """
 CREATE TABLE IF NOT EXISTS schema_versions (

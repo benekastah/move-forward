@@ -16,7 +16,6 @@ from pathlib import Path
 from . import config as config_module
 from .config import Config
 from .plugins.jira.config import DEFAULT_JIRA_KEYCHAIN_SERVICE, DEFAULT_JIRA_TOKEN_ENV
-from .plugins.notes.config import DEFAULT_NOTES_DIR
 from .shell import CommandError, run
 
 Prompt = Callable[[str, str], str]
@@ -130,7 +129,6 @@ def render_config(
     slack: dict[str, object] | None,
     slack_teams: dict[str, object],
     jira: dict[str, object] | None,
-    notes: dict[str, object] | None = None,
     git_stack: bool = False,
 ) -> str:
     """The config file: a section per plugin, with the optional settings as comments."""
@@ -158,13 +156,6 @@ def render_config(
         text += (
             "\n# [jira]                                # uncomment to show tickets\n"
             '# site = "https://example.atlassian.net"\n' + OPTIONAL_JIRA_SETTINGS
-        )
-    if notes:
-        text += _table("notes", notes)
-    else:
-        text += (
-            "\n# [notes]                               # the move-forward skill's notes\n"
-            f'# dir = "{DEFAULT_NOTES_DIR}"  # work-notes.md, on-ice.md, reviewer-map.md\n'
         )
     return text
 
@@ -199,15 +190,6 @@ def _ask_list(
 
     answer = _ask(prompt, question, ", ".join(default), check_all)
     return [part.strip() for part in answer.split(",") if part.strip()]
-
-
-def _required(what: str) -> Check:
-    def check(answer: str) -> str:
-        if not answer.strip():
-            raise ValueError(f"{what} is required")
-        return answer.strip()
-
-    return check
 
 
 def _word(what: str) -> Check:
@@ -325,13 +307,6 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         [],
         _branch_prefix,
     )
-    notes_dir = _ask(
-        prompt,
-        "Directory for the notes, i.e. the move-forward skill's work-notes.md and on-ice.md"
-        " (created if missing)",
-        str(DEFAULT_NOTES_DIR),
-        _required("a notes directory"),
-    )
     port = _ask(
         prompt,
         "Port for the local server (e.g. 8765)",
@@ -357,7 +332,6 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         {"workspace_url": slack} if slack else None,
         channels,
         {"site": site} if site else None,
-        {"dir": notes_dir} if notes_dir != str(DEFAULT_NOTES_DIR) else None,
         guess_git_stack(),
     )
     Config.model_validate(tomllib.loads(text))  # a bad answer fails here, before writing

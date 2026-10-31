@@ -7,6 +7,7 @@ from conftest import (
     approved_review,
     dashboard,
     event,
+    iced,
     pings,
     pr,
     snapshot,
@@ -16,7 +17,7 @@ from conftest import (
 )
 
 from move_forward import render
-from move_forward.domain import Check, IcedBranch, IcedStack, Ping, ReviewerUser, TeamChannel
+from move_forward.domain import Check, Ping, ReviewerUser, TeamChannel
 from move_forward.graph import Graph
 from move_forward.plugins.slack.config import DEFAULT_PING_FIRST, DEFAULT_PING_FOLLOW_UP
 from move_forward.plugins.slack.plugin import ping_page
@@ -146,8 +147,6 @@ def test_old_pings_are_pruned() -> None:
 
 
 def test_iced_prs_get_no_pings() -> None:
-    iced = pr(1, requested_users=["alice"])
-    stack = IcedStack(
-        bottom_branch=iced.head, repo_dir="x", branches=[IcedBranch(name=iced.head, sha="1")]
-    )
-    assert pings(github=snapshot(mine=[iced]), iced_stacks=[stack]) == {}
+    parked = pr(1, requested_users=["alice"])
+    stack = iced(parked.head, "x")
+    assert pings(github=snapshot(mine=[parked]), iced_stacks=[stack]) == {}

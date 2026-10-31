@@ -1,7 +1,7 @@
 import re
 from urllib.parse import quote
 
-from conftest import ME, NOW, dashboard, pr, snapshot
+from conftest import ME, NOW, dashboard, entry, pr, snapshot, todo
 
 from move_forward import page, panels, render
 
@@ -163,15 +163,7 @@ def test_focus_page_actions_come_back_to_it() -> None:
 
 
 def test_checkbox_actions_and_the_done_todo_view() -> None:
-    from move_forward.domain import Todo, WorkItem
-
-    entry = WorkItem(
-        title="APP-2",
-        fields={},
-        todos=[Todo(text="a", size="quick"), Todo(text="b", size="big")],
-        text="APP-2",
-    )
-    built = dashboard(work_items=[entry])
+    built = dashboard(work_items=[entry("APP-2", [todo("a", "quick"), todo("b", "big")])])
     html = render.focus_page(built, "todos", 0)
     assert html is not None
     assert (

@@ -197,6 +197,10 @@ class NotesRepository:
             )
         return entry_id
 
+    def delete_entry(self, entry_id: int) -> None:
+        """Forget an entry, with its todos and everything else it holds."""
+        self._db.execute("DELETE FROM notes_entries WHERE id = ?", (entry_id,))
+
     def touch(self, entry_id: int, on: date) -> None:
         """Record that the entry changed on `on`."""
         self._db.execute(

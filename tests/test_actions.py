@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from move_forward import notes, refresh, server
+from move_forward import refresh, server
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import (
@@ -20,10 +20,12 @@ from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git_stack.config import GitStackConfig
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira.config import JiraConfig
-from move_forward.plugins.notes import actions as notes_actions
-from move_forward.plugins.notes.config import NotesConfig
-from move_forward.registry import enabled
-from move_forward.repositories import NotesImportRepository, SnapshotRepository
+from move_forward.plugins.notes import markdown
+from move_forward.plugins.notes.actions import ICED_FROM_DASHBOARD_NOTE
+from move_forward.plugins.notes.models import Entry, Link
+from move_forward.plugins.notes.repository import NotesRepository
+from move_forward.registry import enabled, migrate
+from move_forward.repositories import SnapshotRepository
 from move_forward.shell import git
 
 
@@ -69,13 +71,15 @@ def config(repo: Path, tmp_path: Path) -> Config:
         github=GitHubConfig(org="acme"),
         teams=["core"],
         git=GitConfig(repos=[repo]),
-        notes=NotesConfig(dir=tmp_path / "notes"),
+        db_path=tmp_path / "dashboard.db",
     )
 
 
 def _stored(config: Config) -> Database:
-    """A database as a refresh leaves it: git's snapshot of the repos, and the notes imported."""
-    db = Database(":memory:")
+    """The test's database as a refresh leaves it: git's snapshot of the repos, and whatever
+    the notes hold from earlier actions."""
+    db = Database(config.db_path)
+    migrate(config, db)
     if config.git:
         # Just the branches: notes checks a repo is configured by the graph having its branches.
         repos = [
@@ -93,7 +97,6 @@ def _stored(config: Config) -> Database:
             for repo in config.git.repos
         ]
         SnapshotRepository(db).save("git", datetime.now(UTC), LocalSnapshot(repos=repos))
-    NotesImportRepository(db).replace(notes.load(config.notes.dir))
     return db
 
 
@@ -157,58 +160,54 @@ def test_wip_commit_takes_tracked_files_only(config: Config, repo: Path) -> None
         run("git/wip_commit", config, {"repo": str(repo), "worktree": str(repo)})
 
 
-def test_ice_appends_an_entry_the_notes_parser_reads_and_thaw_removes_it(
+def _notes(config: Config) -> NotesRepository:
+    return NotesRepository(_stored(config))
+
+
+def _ice(config: Config, repo: Path, branch: str) -> str:
+    return run("notes/ice", config, {"repo": str(repo), "branch": branch})
+
+
+def _ice_id(config: Config, title: str) -> str:
+    return str(next(i.id for i in _notes(config).ices() if i.title == title))
+
+
+def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     config: Config, repo: Path
 ) -> None:
-    config.notes.dir.mkdir()
-    (config.notes.dir / notes.ON_ICE_FILE).write_text(
-        "# Stacks on ice\n\nLast asked: 2026-10-30\n\n## other (~/x)\n- Iced: 2026-10-01\n"
-        "- Branches:\n  - other 1234\n"
-    )
-    notice = notes_actions.ice(
-        config.notes, graph(config), {"repo": str(repo), "branch": "wip"}, today=date(2026, 10, 30)
-    )
-    assert notice == "put wip on ice (1 branches)"
-    stacks = notes.parse_on_ice((config.notes.dir / notes.ON_ICE_FILE).read_text())
-    assert [s.bottom_branch for s in stacks] == ["other", "wip"]
-    assert stacks[1].iced == "2026-10-30"
-    assert stacks[1].note == notes_actions.ICED_FROM_DASHBOARD_NOTE
-    assert stacks[1].branches[0].sha == git(repo, "rev-parse", "wip").strip()
-    assert stacks[1].repo_dir == notes_actions._tilde(repo)  # pyright: ignore[reportPrivateUsage]
-
+    assert _ice(config, repo, "wip") == "put wip on ice (1 branches)"
+    [ice] = _notes(config).ices()
+    assert (ice.title, ice.note) == ("wip", ICED_FROM_DASHBOARD_NOTE)
+    assert [(i.kind, i.ref_id, i.sha) for i in ice.items] == [
+        ("branch", f"{repo}\twip", git(repo, "rev-parse", "wip").strip())
+    ]
     with pytest.raises(ActionError, match="already on ice"):
-        notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "wip"})
-
-    assert run("notes/thaw", config, {"branch": "wip"}) == "thawed wip"
-    text = (config.notes.dir / notes.ON_ICE_FILE).read_text()
-    assert [s.bottom_branch for s in notes.parse_on_ice(text)] == ["other"]
-    assert "Last asked: 2026-10-30" in text
+        _ice(config, repo, "wip")
+    assert run("notes/thaw", config, {"ice": str(ice.id)}) == "thawed wip"
+    assert _notes(config).ices() == []
     with pytest.raises(ActionError, match="not on ice"):
-        run("notes/thaw", config, {"branch": "wip"})
+        run("notes/thaw", config, {"ice": str(ice.id)})
+    with pytest.raises(ActionError, match="no such stack"):
+        run("notes/thaw", config, {"ice": "wip"})
 
 
-def test_delete_iced_removes_branches_and_the_entry(config: Config, repo: Path) -> None:
-    config.notes.dir.mkdir()
-    notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "wip"})
-    notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "done"})
-    notice = run("notes/delete_iced", config, {"branch": "wip"})
+def test_delete_iced_removes_branches_and_takes_them_off_ice(config: Config, repo: Path) -> None:
+    _ice(config, repo, "wip")
+    _ice(config, repo, "done")
+    notice = run("notes/delete_iced", config, {"ice": _ice_id(config, "wip")})
     assert notice == "deleted 1 branches of wip and took it off ice"
     assert git(repo, "branch", "--list", "wip") == ""
-    text = (config.notes.dir / notes.ON_ICE_FILE).read_text()
-    assert [s.bottom_branch for s in notes.parse_on_ice(text)] == ["done"]
-    with pytest.raises(ActionError, match="not on ice"):
-        run("notes/delete_iced", config, {"branch": "wip"})
+    assert [i.title for i in _notes(config).ices()] == ["done"]
 
 
 def test_delete_iced_refuses_a_checked_out_branch_before_deleting_anything(
     config: Config, repo: Path
 ) -> None:
-    config.notes.dir.mkdir()
     git(repo, "switch", "-q", "wip")
-    notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "wip"})
+    _ice(config, repo, "wip")
     with pytest.raises(ActionError, match="checked out"):
-        run("notes/delete_iced", config, {"branch": "wip"})
-    assert notes.parse_on_ice((config.notes.dir / notes.ON_ICE_FILE).read_text())
+        run("notes/delete_iced", config, {"ice": _ice_id(config, "wip")})
+    assert _notes(config).ices()
 
 
 def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -> None:
@@ -225,20 +224,22 @@ def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -
     ]
     snapshot = GitStackSnapshot(repos=[StackRepo(dir=str(repo), branches=tracked)])
     SnapshotRepository(db).save("git_stack", datetime.now(UTC), snapshot)
-    built, _ = refresh.stored_graph(db, enabled(config, db, datetime.now(UTC)))
-    config.notes.dir.mkdir()
-    notice = notes_actions.ice(config.notes, built, {"repo": str(repo), "branch": "top"})
-    assert notice == "put done on ice (4 branches)"
-    [stack] = notes.parse_on_ice((config.notes.dir / notes.ON_ICE_FILE).read_text())
-    assert [b.name for b in stack.branches] == ["done", "beside", "wip", "top"]
+    assert refresh.run_action(config, db, "notes/ice", {"repo": str(repo), "branch": "top"}) == (
+        "put done on ice (4 branches)"
+    )
+    [ice] = NotesRepository(db).ices()
+    assert [i.ref_id.partition("\t")[2] for i in ice.items] == ["done", "beside", "wip", "top"]
 
 
-def test_ice_creates_the_file_when_missing(config: Config, repo: Path) -> None:
-    config.notes.dir.mkdir()
-    notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "done"})
-    text = (config.notes.dir / notes.ON_ICE_FILE).read_text()
-    assert text.startswith("# Stacks on ice\n")
-    assert len(notes.parse_on_ice(text)) == 1
+def test_a_branch_iced_in_another_repo_can_be_iced_here(config: Config, repo: Path) -> None:
+    db = _stored(config)
+    other = markdown.read_on_ice(
+        "## wip (~/elsewhere)\n- Iced: 2026-10-01\n- Branches:\n  - wip 1234\n", date.today()
+    )[0]
+    NotesRepository(db).replace_all([], other, [])
+    assert _ice(config, repo, "wip") == "put wip on ice (1 branches)"
+    with pytest.raises(ActionError, match="already on ice"):
+        _ice(config, repo, "wip")
 
 
 WORK_NOTES = """\
@@ -258,93 +259,51 @@ WORK_NOTES = """\
   - [quick] only one
 - Updated: 2026-10-20
 """
+APP_1 = "APP-1 Fix the widget"
 
 
 @pytest.fixture
-def work_notes(config: Config) -> Path:
-    config.notes.dir.mkdir()
-    path = config.notes.dir / notes.WORK_NOTES_FILE
-    path.write_text(WORK_NOTES)
-    return path
+def work_notes(config: Config) -> None:
+    entries, sections = markdown.read_work_notes(WORK_NOTES)
+    NotesRepository(_stored(config)).replace_all(entries, [], sections)
 
 
-def _todos(path: Path, entry: str) -> list[str]:
-    item = next(i for i in notes.parse_work_notes(path.read_text()) if i.title == entry)
-    return [f"[{t.size}] {t.text}" for t in item.todos]
+def _entry(config: Config, title: str = APP_1) -> Entry:
+    return next(e for e in _notes(config).entries() if e.title == title)
 
 
-def test_todo_done_moves_the_line_to_done_and_undone_brings_it_back(
-    config: Config, work_notes: Path
-) -> None:
-    fields = {"entry": "APP-1 Fix the widget", "text": "reply to the thread"}
-    assert (
-        notes_actions.todo_done(config.notes, graph(config), fields, today=date(2026, 10, 31))
-        == "done: reply to the thread"
-    )
-    text = work_notes.read_text()
-    assert "  - [quick] reply to the thread\n" not in text
-    assert (
-        "  - no size here\n- Done 2026-10-31: [quick] reply to the thread\n- Blocked on: reviews\n"
-        "- Updated: 2026-10-31\n" in text
-    )
-    assert _todos(work_notes, "APP-1 Fix the widget") == [
-        "[big] get it merged",
-        "[None] no size here",
-    ]
-    assert "## APP-2 Other\n- Left to do:\n  - [quick] only one\n- Updated: 2026-10-20\n" in text
+def _open(config: Config, title: str = APP_1) -> list[str]:
+    return [f"[{t.size}] {t.text}" for t in _entry(config, title).open_todos]
 
-    assert (
-        notes_actions.todo_undone(config.notes, graph(config), fields, today=date(2026, 11, 1))
-        == "reopened: reply to the thread"
-    )
-    text = work_notes.read_text()
-    assert "- Done" not in text
-    assert _todos(work_notes, "APP-1 Fix the widget") == [
-        "[big] get it merged",
-        "[None] no size here",
+
+def test_todo_done_and_undone(config: Config, work_notes: None) -> None:
+    fields = {"entry": APP_1, "text": "reply to the thread"}
+    assert run("notes/todo_done", config, fields) == "done: reply to the thread"
+    entry = _entry(config)
+    assert _open(config) == ["[big] get it merged", "[None] no size here"]
+    assert [t.done_on for t in entry.todos if t.text == "reply to the thread"] == [date.today()]
+    assert entry.updated_on == date.today()
+    assert _open(config, "APP-2 Other") == ["[quick] only one"]
+
+    assert run("notes/todo_undone", config, fields) == "reopened: reply to the thread"
+    assert _open(config) == [
         "[quick] reply to the thread",
+        "[big] get it merged",
+        "[None] no size here",
     ]
-    assert "- Updated: 2026-11-01\n" in text
     with pytest.raises(ActionError, match="no done todo"):
-        notes_actions.todo_undone(config.notes, graph(config), fields)
+        run("notes/todo_undone", config, fields)
 
 
-def test_todo_done_on_the_last_todo_and_undone_recreates_left_to_do(
-    config: Config, work_notes: Path
-) -> None:
-    fields = {"entry": "APP-2 Other", "text": "only one"}
-    notes_actions.todo_done(config.notes, graph(config), fields, today=date(2026, 10, 31))
-    text = work_notes.read_text()
-    assert (
-        "## APP-2 Other\n- Left to do:\n- Done 2026-10-31: [quick] only one\n- Updated: 2026-10-31"
-        in text
+def test_todo_delete_and_errors(config: Config, work_notes: None) -> None:
+    assert run("notes/todo_delete", config, {"entry": APP_1, "text": "no size here"}) == (
+        "dropped: no size here"
     )
-    assert _todos(work_notes, "APP-2 Other") == []
-    # The skill may drop an empty `Left to do:`; undone must cope without it.
-    work_notes.write_text(text.replace("- Left to do:\n- Done", "- Done"))
-    notes_actions.todo_undone(config.notes, graph(config), fields, today=date(2026, 10, 31))
-    assert _todos(work_notes, "APP-2 Other") == ["[quick] only one"]
-    assert "- Done" not in work_notes.read_text()
-
-
-def test_todo_delete_and_errors(config: Config, work_notes: Path) -> None:
-    notice = run(
-        "notes/todo_delete", config, {"entry": "APP-1 Fix the widget", "text": "no size here"}
-    )
-    assert notice == "dropped: no size here"
-    assert _todos(work_notes, "APP-1 Fix the widget") == [
-        "[quick] reply to the thread",
-        "[big] get it merged",
-    ]
-    assert "no size here" not in work_notes.read_text()
+    assert _open(config) == ["[quick] reply to the thread", "[big] get it merged"]
     with pytest.raises(ActionError, match="no open todo"):
-        run("notes/todo_delete", config, {"entry": "APP-1 Fix the widget", "text": "no size here"})
+        run("notes/todo_delete", config, {"entry": APP_1, "text": "no size here"})
     with pytest.raises(ActionError, match="no work-notes entry"):
         run("notes/todo_done", config, {"entry": "APP-9", "text": "x"})
-    # Text is matched literally, so regex characters in a todo are fine.
-    work_notes.write_text(work_notes.read_text().replace("get it merged", "fix a.b (c) [d]"))
-    run("notes/todo_done", config, {"entry": "APP-1 Fix the widget", "text": "fix a.b (c) [d]"})
-    assert _todos(work_notes, "APP-1 Fix the widget") == ["[quick] reply to the thread"]
 
 
 def test_redirect_params_keep_a_ticked_todo_on_the_page() -> None:
@@ -354,56 +313,38 @@ def test_redirect_params_keep_a_ticked_todo_on_the_page() -> None:
     assert redirect("notes/todo_undone", fields) == {}
 
 
-def test_todo_link_appends_a_jira_or_pr_url(config: Config, work_notes: Path) -> None:
-    fields = {"entry": "APP-1 Fix the widget", "text": "get it merged", "input": " APP-9 "}
+def test_todo_link_links_a_jira_ticket_or_a_pr(config: Config, work_notes: None) -> None:
+    fields = {"entry": APP_1, "text": "get it merged", "input": " APP-9 "}
     with pytest.raises(ActionError, match="no \\[jira\\] site"):
         run("notes/todo_link", config, fields)
     config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
-    assert (
-        notes_actions.todo_link(config.notes, graph(config), fields, today=date(2026, 10, 31))
-        == "linked https://j.example/browse/APP-9"
-    )
-    assert "  - [big] get it merged https://j.example/browse/APP-9\n" in work_notes.read_text()
-    assert "- Updated: 2026-10-31" in work_notes.read_text()
-    # The todo's text now includes the link, so that's how the next action names it.
-    linked = {**fields, "text": "get it merged https://j.example/browse/APP-9"}
-    with pytest.raises(ActionError, match="already in that todo"):
-        notes_actions.todo_link(config.notes, graph(config), linked)
-    pr = {**linked, "input": "https://github.com/acme/widgets/pull/5"}
-    notes_actions.todo_link(config.notes, graph(config), pr)
-    assert _todos(work_notes, "APP-1 Fix the widget")[1] == (
-        "[big] get it merged https://j.example/browse/APP-9 https://github.com/acme/widgets/pull/5"
-    )
-    with pytest.raises(ActionError, match="neither a Jira key nor a URL"):
-        notes_actions.todo_link(config.notes, graph(config), {**fields, "input": "something else"})
-    with pytest.raises(ActionError, match="no open todo"):
-        notes_actions.todo_link(
-            config.notes, graph(config), fields
-        )  # the old text no longer matches
+    assert run("notes/todo_link", config, fields) == "linked APP-9"
+    with pytest.raises(ActionError, match="already linked"):
+        run("notes/todo_link", config, fields)
+    pr = "https://github.com/acme/widgets/pull/5"
+    run("notes/todo_link", config, {**fields, "input": pr})
+    [todo] = [t for t in _entry(config).todos if t.text == "get it merged"]
+    assert [(link.kind, link.ref) for link in todo.links] == [("pr", pr), ("ticket", "APP-9")]
+    with pytest.raises(ActionError, match="neither a Jira key nor a PR URL"):
+        run("notes/todo_link", config, {**fields, "input": "something else"})
 
 
-def test_todo_add_appends_under_left_to_do_or_creates_it(config: Config, work_notes: Path) -> None:
-    entry = "APP-1 Fix the widget"
-    assert (
-        notes_actions.todo_add(
-            config.notes, graph(config), {"entry": entry, "input": " write docs "}
-        )
-        == "added: write docs"
+def test_todo_add(config: Config, work_notes: None) -> None:
+    assert run("notes/todo_add", config, {"entry": APP_1, "input": " write docs "}) == (
+        "added: write docs"
     )
-    assert run("notes/todo_add", config, {"entry": entry, "text": "ship it", "size": "quick"})
-    assert _todos(work_notes, entry)[-2:] == ["[None] write docs", "[quick] ship it"]
-    work_notes.write_text(
-        work_notes.read_text().replace("- Left to do:\n  - [quick] only one\n", "")
-    )
-    run("notes/todo_add", config, {"entry": "APP-2 Other", "text": "fresh", "size": "big"})
-    assert _todos(work_notes, "APP-2 Other") == ["[big] fresh"]
+    run("notes/todo_add", config, {"entry": APP_1, "text": "ship it", "size": "quick"})
+    assert _open(config)[-2:] == ["[None] write docs", "[quick] ship it"]
+    pr = "https://github.com/acme/widgets/pull/8"
+    run("notes/todo_add", config, {"entry": APP_1, "text": f"review {pr}"})
+    assert _entry(config).todos[-1].links == [Link(kind="pr", ref=pr)]
     with pytest.raises(ActionError, match="empty"):
-        run("notes/todo_add", config, {"entry": entry, "input": "  "})
+        run("notes/todo_add", config, {"entry": APP_1, "input": "  "})
     with pytest.raises(ActionError, match="size must be"):
-        run("notes/todo_add", config, {"entry": entry, "text": "x", "size": "huge"})
+        run("notes/todo_add", config, {"entry": APP_1, "text": "x", "size": "huge"})
 
 
-def test_todo_add_can_create_the_entry(config: Config, work_notes: Path) -> None:
+def test_todo_add_can_create_the_entry(config: Config, work_notes: None) -> None:
     fields = {
         "entry": "APP-7 New thing",
         "text": "start",
@@ -412,27 +353,12 @@ def test_todo_add_can_create_the_entry(config: Config, work_notes: Path) -> None
     }
     with pytest.raises(ActionError, match="no work-notes entry"):
         run("notes/todo_add", config, {k: v for k, v in fields.items() if k != "create"})
-    assert (
-        notes_actions.todo_add(config.notes, graph(config), fields, today=date(2026, 10, 31))
-        == "added: start"
-    )
-    assert work_notes.read_text().endswith(
-        "\n## APP-7 New thing\n- Status: inferred\n- Where: https://github.com/acme/widgets/pull/9\n"
-        "- Left to do:\n  - start\n- Updated: 2026-10-31\n"
-    )
-    notes_actions.todo_add(
-        config.notes, graph(config), {**fields, "text": "again"}
-    )  # an existing entry isn't recreated
-    assert work_notes.read_text().count("## APP-7 New thing") == 1
-    assert _todos(work_notes, "APP-7 New thing") == ["[None] start", "[None] again"]
-
-
-def test_a_branch_iced_in_another_repo_can_be_iced_here(config: Config, repo: Path) -> None:
-    config.notes.dir.mkdir()
-    (config.notes.dir / notes.ON_ICE_FILE).write_text(
-        "# Stacks on ice\n\n## wip (~/elsewhere)\n- Iced: 2026-10-01\n- Branches:\n  - wip 1234\n"
-    )
-    notice = notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "wip"})
-    assert notice == "put wip on ice (1 branches)"
-    with pytest.raises(ActionError, match="already on ice"):
-        notes_actions.ice(config.notes, graph(config), {"repo": str(repo), "branch": "wip"})
+    assert run("notes/todo_add", config, fields) == "added: start"
+    run("notes/todo_add", config, {**fields, "text": "again"})  # not created twice
+    entry = _entry(config, "APP-7 New thing")
+    assert (entry.status, entry.where) == ("inferred", "https://github.com/acme/widgets/pull/9")
+    assert [(link.kind, link.ref) for link in entry.links] == [
+        ("pr", "https://github.com/acme/widgets/pull/9"),
+        ("ticket", "APP-7"),
+    ]
+    assert _open(config, "APP-7 New thing") == ["[None] start", "[None] again"]

@@ -1,7 +1,6 @@
-"""The notes plugin.
+"""The notes plugin: work entries with their todos, and what's on ice, in its own tables.
 
-The work notes and stacks on ice are still parsed from the skill's markdown into core's tables
-on every refresh; this plugin reads them from there.
+`mfd notes import` reads them once from the move-forward skill's markdown files.
 """
 
 import argparse
@@ -12,24 +11,15 @@ from pydantic import BaseModel
 from ...graph import Entity, Graph
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, CliHandler, Context, Plugin
-from ...repositories import IcedStackRepository, WorkItemRepository
 from . import actions, cli
 from .config import NotesConfig
 from .panels import Builder, entities
-from .repository import MIGRATIONS
+from .repository import MIGRATIONS, NotesRepository
 
 
 def _builder(ctx: Context[NotesConfig], graph: Graph) -> Builder:
-    return Builder(
-        ctx.now, graph, WorkItemRepository(ctx.db).all(), IcedStackRepository(ctx.db).all()
-    )
-
-
-def _handler(action: actions.NotesAction) -> ActionHandler:
-    def run(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
-        return action(ctx.config, graph, fields)
-
-    return run
+    notes = NotesRepository(ctx.db)
+    return Builder(ctx.now, graph, notes.entries(), notes.ices())
 
 
 class NotesPlugin(Plugin[NotesConfig, BaseModel]):
@@ -40,7 +30,8 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     cli_help = "import the skill's markdown notes, or export them back"
 
     def entities(self, ctx: Context[NotesConfig], snapshot: BaseModel | None) -> list[Entity]:
-        return entities(WorkItemRepository(ctx.db).all(), IcedStackRepository(ctx.db).all())
+        notes = NotesRepository(ctx.db)
+        return entities(notes.entries(), notes.ices())
 
     def panels(
         self, ctx: Context[NotesConfig], snapshot: BaseModel | None, graph: Graph
@@ -56,4 +47,4 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         return cli.add_commands(parser)
 
     def actions(self) -> dict[str, ActionHandler]:
-        return {name: _handler(action) for name, action in actions.ACTIONS.items()}
+        return actions.ACTIONS

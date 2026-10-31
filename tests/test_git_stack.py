@@ -7,6 +7,7 @@ import pytest
 from conftest import (
     NOW,
     dashboard,
+    iced,
     local_branch,
     local_snapshot,
     panel,
@@ -18,15 +19,13 @@ from conftest import (
 )
 
 from move_forward import refresh
-from move_forward.domain import IcedBranch, IcedStack, StackBranch, StackRepo
+from move_forward.domain import StackBranch, StackRepo
 from move_forward.plugin import ActionError
 from move_forward.plugins.git_stack import client
 from move_forward.plugins.git_stack.panels import repo_dirs
 from move_forward.registry import enabled
 
-ICED = IcedStack(
-    bottom_branch="me/x", repo_dir="/src/widgets", branches=[IcedBranch(name="me/x", sha="1")]
-)
+ICED = iced("me/x", "/src/widgets")
 
 
 def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:

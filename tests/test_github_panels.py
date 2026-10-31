@@ -7,25 +7,25 @@ from conftest import (
     NOW,
     approved_review,
     dashboard,
+    entry,
     event,
+    iced,
     local_snapshot,
     panel,
     pr,
     snapshot,
     thread,
     titles,
-    work_item,
+    todo,
 )
 
 from move_forward.domain import (
     Check,
     DerivedSnapshot,
-    IcedBranch,
-    IcedStack,
     ReviewerSuggestion,
     TeamPrScore,
-    Todo,
 )
+from move_forward.plugins.notes.models import Ice
 
 build = dashboard
 
@@ -176,7 +176,7 @@ def test_ready_to_merge_requires_everything_and_respects_merge_conditions() -> N
     )
     queued = pr(6, reviews=[approved_review()], review_decision="APPROVED", in_merge_queue=True)
     unapproved = pr(7)
-    condition = work_item(
+    condition = entry(
         "APP-2 thing",
         [],
         **{"Merge conditions": ["don't merge until PR 1 is in"], "Where": [held.url]},
@@ -202,7 +202,7 @@ def test_metadata_flags_labels_links_and_ready_looking_drafts() -> None:
     fine = pr(6)
     dashboard = build(
         github=snapshot(mine=[unknown, no_link, empty, ready_draft, draft_with_todo, fine]),
-        work_items=[work_item("APP-5 x", [Todo(text="finish", size="big")])],
+        work_items=[entry("APP-5 x", [todo("finish", "big")])],
         placeholder_labels=["needs-team", "needs-risk"],
         ticket_link_prefix="Link",
     )
@@ -240,37 +240,27 @@ def test_team_prs_rank_by_codeowners_and_skip_direct_requests() -> None:
 
 
 def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
-    iced = pr(1, requested_users=["alice"], mergeable="CONFLICTING", threads=[thread()])
+    parked = pr(1, requested_users=["alice"], mergeable="CONFLICTING", threads=[thread()])
     dashboard = build(
-        github=snapshot(mine=[iced]),
-        iced_stacks=[
-            IcedStack(
-                bottom_branch=iced.head,
-                repo_dir="x",
-                branches=[IcedBranch(name=iced.head, sha="1")],
-            )
-        ],
+        github=snapshot(mine=[parked]),
+        iced_stacks=[iced(parked.head, "x")],
     )
     for key in ("conflicts", "feedback", "needs_reviewer", "metadata"):
         assert titles(dashboard, key) == []
-    assert titles(dashboard, "iced") == [iced.head]
+    assert titles(dashboard, "iced") == [parked.head]
     actions = panel(dashboard, "iced").items[0].actions
     assert [(a.name, a.label) for a in actions] == [
         ("notes/thaw", "Reopen"),
         ("notes/delete_iced", "Delete the work"),
     ]
-    assert actions[1].confirm is not None and iced.head in actions[1].confirm
+    assert actions[1].confirm is not None and parked.head in actions[1].confirm
 
 
 def test_a_pr_is_hidden_only_by_icing_in_its_own_repos_checkout() -> None:
     mine = pr(1, mergeable="CONFLICTING")
 
-    def iced_in(repo_dir: str) -> IcedStack:
-        return IcedStack(
-            bottom_branch=mine.head,
-            repo_dir=repo_dir,
-            branches=[IcedBranch(name=mine.head, sha="1")],
-        )
+    def iced_in(repo_dir: str) -> Ice:
+        return iced(mine.head, repo_dir)
 
     # git knows acme/widgets is checked out at /src/widgets.
     here = build(

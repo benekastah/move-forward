@@ -19,15 +19,16 @@ def test_a_database_from_before_migrations_upgrades_in_place(tmp_path: Path) -> 
     conn = sqlite3.connect(path)
     conn.executescript(V1_SCHEMA)
     conn.execute("INSERT INTO meta VALUES ('last_prune', '2026-10-30')")
-    conn.execute("INSERT INTO work_items VALUES (0, '{}')")
+    conn.execute("INSERT INTO reviewer_users VALUES ('alice', NULL, NULL, 'notes')")
     conn.commit()
     conn.close()
 
     db = Database(path)
     assert _versions(db) == {CORE: len(CORE_MIGRATIONS)}
     assert KvRepository(db, CORE).get("last_prune") == "2026-10-30"
-    assert len(db.query("SELECT * FROM work_items")) == 1
-    assert not db.query("SELECT name FROM sqlite_master WHERE name = 'meta'")
+    assert len(db.query("SELECT * FROM reviewer_users")) == 1
+    for gone in ("meta", "work_items", "iced_stacks"):
+        assert not db.query("SELECT name FROM sqlite_master WHERE name = ?", (gone,))
 
 
 def test_reopening_runs_nothing_again(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
-from . import notes, panels, shell
+from . import panels, shell
 from .config import Config
 from .db import Database
 from .graph import Graph
@@ -16,10 +16,7 @@ from .page import Action, Item, SourceStatus
 from .plugin import ActionError, collect_into
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, enabled
-from .repositories import (
-    NotesImportRepository,
-    SnapshotRepository,
-)
+from .repositories import SnapshotRepository
 from .shell import CommandError
 
 log = logging.getLogger(__name__)
@@ -43,9 +40,8 @@ def _collect_all(
 
 
 def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
-    """Import the notes and refresh every plugin. Each plugin fails on its own."""
+    """Refresh every plugin. Each plugin fails on its own."""
     now = now or datetime.now(UTC)
-    NotesImportRepository(db).replace(notes.load(config.notes.dir))
     plugins = enabled(config, db, now)
     collecting = [e for e in plugins if e.plugin.snapshot_model is not None]
     first = [e for e in collecting if not e.plugin.collects_after_graph]
