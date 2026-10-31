@@ -125,7 +125,7 @@ def render_config(
     jira: dict[str, object] | None,
 ) -> str:
     """The config file: a section per plugin, with the optional settings as comments."""
-    lines = ["# move-forward-dashboard configuration. Paths may start with ~.", ""]
+    lines = ["# move-forward configuration. Paths may start with ~.", ""]
     lines += [f"{key} = {_toml_value(value)}" for key, value in answers.items()]
     text = "\n".join(lines) + "\n" + OPTIONAL_SETTINGS
     text += _table("github", github, OPTIONAL_GITHUB_SETTINGS)

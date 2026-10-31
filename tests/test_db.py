@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from move_forward_dashboard.db import CORE, CORE_MIGRATIONS, V1_SCHEMA, Database
-from move_forward_dashboard.repositories import KvRepository
+from move_forward.db import CORE, CORE_MIGRATIONS, V1_SCHEMA, Database
+from move_forward.repositories import KvRepository
 
 CREATE_A = "CREATE TABLE p_a (x INTEGER);"
 CREATE_B = "CREATE TABLE p_b (x INTEGER);"

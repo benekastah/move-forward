@@ -8,7 +8,7 @@ SQLite, behind a CLI and the HTTP API.
 
 ## Plugins
 
-Built in, in the package (`move_forward_dashboard/plugins/<name>/`):
+Built in, in the package (`move_forward/plugins/<name>/`):
 
 | Plugin | Config section | Snapshot | Own tables | Panels |
 | --- | --- | --- | --- | --- |
@@ -28,7 +28,7 @@ source of stack data in the `git` plugin's Stacks panel; until then only git-sta
 
 ## The plugin protocol
 
-`move_forward_dashboard/plugin.py`:
+`move_forward/plugin.py`:
 
 ```python
 class Plugin[C: BaseModel, S: BaseModel](Protocol):

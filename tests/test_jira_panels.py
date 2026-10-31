@@ -9,7 +9,7 @@ from conftest import (
     snapshot,
 )
 
-from move_forward_dashboard.domain import (
+from move_forward.domain import (
     JiraSnapshot,
 )
 

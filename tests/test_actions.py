@@ -3,14 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from move_forward_dashboard import actions, notes, refresh
-from move_forward_dashboard.config import Config
-from move_forward_dashboard.db import Database
-from move_forward_dashboard.plugins.git.config import GitConfig
-from move_forward_dashboard.plugins.github.config import GitHubConfig
-from move_forward_dashboard.plugins.jira.config import JiraConfig
-from move_forward_dashboard.repositories import NotesImportRepository
-from move_forward_dashboard.shell import git
+from move_forward import actions, notes, refresh
+from move_forward.config import Config
+from move_forward.db import Database
+from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.jira.config import JiraConfig
+from move_forward.repositories import NotesImportRepository
+from move_forward.shell import git
 
 
 def _init(path: Path, bare: bool = False) -> None:

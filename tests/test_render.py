@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from conftest import ME, NOW, dashboard, pr, snapshot
 
-from move_forward_dashboard import panels, render
+from move_forward import panels, render
 
 
 def _dashboard() -> panels.Dashboard:
@@ -175,7 +175,7 @@ def test_focus_page_actions_come_back_to_it() -> None:
 
 
 def test_checkbox_actions_and_the_done_todo_view() -> None:
-    from move_forward_dashboard.domain import Todo, WorkItem
+    from move_forward.domain import Todo, WorkItem
 
     entry = WorkItem(
         title="APP-2",

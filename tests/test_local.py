@@ -1,8 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from move_forward_dashboard.plugins.git import client as local
-from move_forward_dashboard.shell import git
+from move_forward.plugins.git import client as local
+from move_forward.shell import git
 
 WORKTREES = """\
 worktree /repo

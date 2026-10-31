@@ -1,4 +1,4 @@
-from move_forward_dashboard.graph import Entity, Graph, Ref
+from move_forward.graph import Entity, Graph, Ref
 
 PR = Ref(kind="pr", id="https://github.com/o/r/pull/1")
 OTHER_PR = Ref(kind="pr", id="https://github.com/o/r/pull/2")

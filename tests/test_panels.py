@@ -18,8 +18,8 @@ from conftest import (
     work_item,
 )
 
-from move_forward_dashboard import panels
-from move_forward_dashboard.domain import (
+from move_forward import panels
+from move_forward.domain import (
     Check,
     JiraSnapshot,
     LocalRepo,

@@ -1,4 +1,4 @@
-# move-forward-dashboard
+# move-forward
 
 A local dashboard of everything in flight: my PRs and what they're waiting on,
 reviews asked of me, PRs my team should look at, local branches with
@@ -18,7 +18,7 @@ Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (the
 Stacks panel is empty without it).
 
 ```sh
-~/src/move-forward-dashboard/dev-install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
+~/src/move-forward/dev-install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
 mfd serve --open
 ```
 

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from move_forward_dashboard.db import Database
-from move_forward_dashboard.domain import (
+from move_forward.db import Database
+from move_forward.domain import (
     IcedBranch,
     IcedStack,
     LocalSnapshot,
@@ -12,7 +12,7 @@ from move_forward_dashboard.domain import (
     Todo,
     WorkItem,
 )
-from move_forward_dashboard.repositories import (
+from move_forward.repositories import (
     IcedStackRepository,
     NotesImportRepository,
     PingRepository,

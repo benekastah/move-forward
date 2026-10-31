@@ -5,9 +5,9 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from move_forward_dashboard.config import Config
-from move_forward_dashboard.db import Database
-from move_forward_dashboard.domain import (
+from move_forward.config import Config
+from move_forward.db import Database
+from move_forward.domain import (
     Branch,
     Check,
     GitHubSnapshot,
@@ -23,10 +23,10 @@ from move_forward_dashboard.domain import (
     Todo,
     WorkItem,
 )
-from move_forward_dashboard.page import Panel
-from move_forward_dashboard.panels import Dashboard
-from move_forward_dashboard.refresh import build_dashboard
-from move_forward_dashboard.repositories import NotesImportRepository, SnapshotRepository
+from move_forward.page import Panel
+from move_forward.panels import Dashboard
+from move_forward.refresh import build_dashboard
+from move_forward.repositories import NotesImportRepository, SnapshotRepository
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
 ME = "me"

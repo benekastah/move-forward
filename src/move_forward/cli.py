@@ -13,7 +13,7 @@ from .refresh import build_dashboard, refresh
 from .server import serve
 
 EXAMPLE_CONFIG = """\
-# move-forward-dashboard configuration. Paths may start with ~. A plugin is enabled by its
+# move-forward configuration. Paths may start with ~. A plugin is enabled by its
 # section: leave one out to turn the plugin off.
 
 email = "me@example.com"              # Jira logs in with it; its domain finds reviewers' emails

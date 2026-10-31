@@ -2,11 +2,11 @@
 
 from conftest import ME, NOW, pr, snapshot
 
-from move_forward_dashboard.db import Database
-from move_forward_dashboard.plugin import Context
-from move_forward_dashboard.plugins.github.config import GitHubConfig
-from move_forward_dashboard.plugins.github.plugin import GitHubPlugin
-from move_forward_dashboard.repositories import KvRepository
+from move_forward.db import Database
+from move_forward.plugin import Context
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.plugin import GitHubPlugin
+from move_forward.repositories import KvRepository
 
 
 def _context(**config: object) -> Context[GitHubConfig]:

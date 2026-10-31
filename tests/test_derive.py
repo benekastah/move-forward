@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from move_forward_dashboard.domain import ReviewerUser
-from move_forward_dashboard.plugins.github import codeowners, derive
-from move_forward_dashboard.shell import git
+from move_forward.domain import ReviewerUser
+from move_forward.plugins.github import codeowners, derive
+from move_forward.shell import git
 
 
 def test_team_score_counts_owned_required_and_my_files() -> None:

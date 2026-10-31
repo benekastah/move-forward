@@ -4,11 +4,11 @@ import pytest
 from conftest import NOW
 from pydantic import ValidationError
 
-from move_forward_dashboard import config
-from move_forward_dashboard.db import Database
-from move_forward_dashboard.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS
-from move_forward_dashboard.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV
-from move_forward_dashboard.registry import enabled
+from move_forward import config
+from move_forward.db import Database
+from move_forward.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS
+from move_forward.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV
+from move_forward.registry import enabled
 
 MINIMAL = 'email = "me@acme.com"\n'
 

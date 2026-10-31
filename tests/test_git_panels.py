@@ -13,7 +13,7 @@ from conftest import (
     titles,
 )
 
-from move_forward_dashboard.domain import (
+from move_forward.domain import (
     IcedBranch,
     IcedStack,
     StackBranch,

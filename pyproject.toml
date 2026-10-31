@@ -1,5 +1,5 @@
 [project]
-name = "move-forward-dashboard"
+name = "move-forward"
 version = "0.1.0"
 description = "Local dashboard of PRs, stacks, local work and Jira tickets that need attention."
 readme = "README.md"
@@ -8,7 +8,7 @@ requires-python = ">=3.12"
 dependencies = ["pydantic>=2.7"]
 
 [project.scripts]
-mfd = "move_forward_dashboard.cli:main"
+mfd = "move_forward.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6", "basedpyright>=1.18"]
@@ -18,7 +18,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/move_forward_dashboard"]
+packages = ["src/move_forward"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

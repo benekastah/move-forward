@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from move_forward_dashboard import config, init
+from move_forward import config, init
 
 
 def scripted(answers: dict[str, str | list[str]]) -> init.Prompt:

@@ -9,11 +9,11 @@ from urllib.parse import quote, urlencode
 import pytest
 from conftest import ME, pr, snapshot
 
-from move_forward_dashboard import server
-from move_forward_dashboard.config import Config
-from move_forward_dashboard.db import Database
-from move_forward_dashboard.plugins.github.config import GitHubConfig
-from move_forward_dashboard.repositories import PingRepository, SnapshotRepository
+from move_forward import server
+from move_forward.config import Config
+from move_forward.db import Database
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.repositories import PingRepository, SnapshotRepository
 
 
 @pytest.fixture

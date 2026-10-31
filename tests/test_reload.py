@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from move_forward_dashboard import reload
+from move_forward import reload
 
 
 def test_changed_sees_edits_additions_and_removals(tmp_path: Path) -> None:
@@ -34,7 +34,7 @@ def test_restart_command_drops_one_shot_flags() -> None:
     assert reload.restart_command(argv) == [
         sys.executable,
         "-m",
-        "move_forward_dashboard.cli",
+        "move_forward.cli",
         "-c",
         "cfg.toml",
         "serve",

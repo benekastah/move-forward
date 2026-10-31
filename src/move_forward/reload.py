@@ -55,7 +55,7 @@ def compiles(files: list[Path]) -> bool:
 
 def restart_command(argv: list[str]) -> list[str]:
     """The command to re-run as: the same arguments, less the one-shot flags."""
-    return [sys.executable, "-m", "move_forward_dashboard.cli"] + [
+    return [sys.executable, "-m", "move_forward.cli"] + [
         arg for arg in argv[1:] if arg not in ONE_SHOT_FLAGS
     ]
 
