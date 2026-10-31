@@ -1,9 +1,11 @@
 import re
 from urllib.parse import quote
 
-from conftest import ME, NOW, dashboard, entry, pr, snapshot, todo
+from conftest import ME, NOW, dashboard, entry, pr, snapshot, stored, todo
 
 from move_forward import page, panels, render
+from move_forward.plugins.notes.repository import NotesRepository
+from move_forward.refresh import kept_item
 
 
 def _dashboard() -> panels.Dashboard:
@@ -171,11 +173,15 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
         in html
     )
     assert "action='/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0'" in html
-    assert "<input type='hidden' name='text' value='a'>" in html
+    assert "<input type='hidden' name='todo' value='" in html
     assert "1 of 2" in html
 
     # `a` was ticked off: it stays on the page, ticked, and Next goes to what is now item 0.
-    done = built.done_todo("APP-2", "a")
+    config, db = stored(work_items=[entry("APP-2", [todo("a", "quick"), todo("b", "big")])])
+    todo_a = next(t.id for e in NotesRepository(db).entries() for t in e.todos if t.text == "a")
+    NotesRepository(db).set_done(todo_a, NOW.date())
+    done = kept_item(config, db, f"notes:{todo_a}")
+    assert done is not None
     html = render.focus_page(built, "todos", 0, done=done)
     assert html is not None
     assert (

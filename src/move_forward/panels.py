@@ -10,7 +10,6 @@ from datetime import datetime
 
 from .domain import Model
 from .page import Action, Group, Item, Panel, SourceStatus
-from .plugins.notes.panels import todo_actions
 
 ACT_NOW = Group(
     key="act",
@@ -112,23 +111,6 @@ class Dashboard(Model):
             for item in panel.items
             for part in item.parts or [item]
         ]
-
-    def done_todo(self, entry: str, text: str) -> Item:
-        """A todo just marked done, for the focus page to keep showing with its box ticked.
-
-        Done todos aren't in the panels, so this is rebuilt from the action's fields; the
-        entry's PR links come along if the entry still has open todos.
-        """
-        todos = self.find_panel("todos")
-        parent = next((i for i in todos.items if i.title == entry), None) if todos else None
-        return Item(
-            title=text,
-            url=parent.url if parent else None,
-            subtitle=entry,
-            badges=["done"],
-            links=parent.links if parent else [],
-            actions=todo_actions(entry, text, done=True),
-        )
 
     sources: dict[str, SourceStatus]
 

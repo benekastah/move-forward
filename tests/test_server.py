@@ -12,7 +12,8 @@ from conftest import ME, pr, snapshot
 from move_forward import server
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.plugin import ActionError, ActionResult
+from move_forward.page import Action, Item
+from move_forward.plugin import KEPT, ActionError, ActionResult
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.registry import migrate
@@ -269,26 +270,46 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
 def test_ticking_a_todo_off_redirects_back_with_it(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def fake_run(_config: object, _db: object, name: str, fields: dict[str, str]) -> str:
-        return f"{name} {fields['text']}"
+    def fake_perform(
+        _config: object, _db: object, name: str, fields: dict[str, str]
+    ) -> ActionResult:
+        params = {KEPT: "notes:7"} if name == "notes/todo_done" else {}
+        return ActionResult(f"{name} {fields['todo']}", params)
 
-    monkeypatch.setattr(server, "perform_action", _results(fake_run))
+    monkeypatch.setattr(server, "perform_action", fake_perform)
+    kept = Item(
+        title="x y",
+        actions=[
+            Action(
+                name="notes/todo_undone",
+                label="Done",
+                fields={"todo": "7"},
+                checkbox=True,
+                checked=True,
+            )
+        ],
+    )
+
+    def fake_kept(*_: object) -> Item:
+        return kept
+
+    monkeypatch.setattr(server, "kept_item", fake_kept)
     response = post(
         client,
         "/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",
-        {"entry": "APP-1", "text": "x y"},
+        {"todo": "7"},
     )
     assert response.getheader("Location") == (
-        "/focus?cat=todos&i=0&done_entry=APP-1&done_text=x+y&notice=notes%2Ftodo_done+x+y"
+        "/focus?cat=todos&i=0&kept=notes%3A7&notice=notes%2Ftodo_done+7"
     )
-    body = get(client, "/focus?cat=todos&i=0&done_entry=APP-1&done_text=x+y").read().decode()
+    body = get(client, "/focus?cat=todos&i=0&kept=notes%3A7").read().decode()
     assert "<input type='checkbox' checked" in body and "x y" in body
     response = post(
         client,
         "/actions/notes/todo_undone?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",
-        {"entry": "APP-1", "text": "x y"},
+        {"todo": "7"},
     )
-    assert response.getheader("Location") == "/focus?cat=todos&i=0&notice=notes%2Ftodo_undone+x+y"
+    assert response.getheader("Location") == "/focus?cat=todos&i=0&notice=notes%2Ftodo_undone+7"
 
 
 def test_ctrl_c_shuts_down_quietly(

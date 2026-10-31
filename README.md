@@ -229,7 +229,7 @@ Pages (GET, HTML):
 | --- | --- |
 | `/` | The dashboard. `?open=act,feedback` sets the open sections; `?notice=…` shows a message. |
 | `/focus` | Focus mode's category list. |
-| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key. `&done_entry=…&done_text=…` keeps a just-ticked todo on the page. |
+| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key. `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
 | `/ping?pr=<PR URL>` | slack: the ping page for one of my PRs. |
 
 Plugins can add pages of their own; the [Plugins](#plugins) section lists them.
@@ -244,10 +244,10 @@ error status):
 | --- | --- | --- |
 | `/refresh` | | Starts a background refresh. |
 | `/actions/notes/todo_add` | `entry`, `text` (or `input`), optional `size` (`quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds an open todo at the end of the entry's; with `create`, a missing entry is created first, with `where` as its `Where`. |
-| `/actions/notes/todo_done` | `entry`, `text` | Records the todo as done today; redirects with `done_entry`/`done_text`. |
-| `/actions/notes/todo_undone` | `entry`, `text` | Reopens a done todo. |
-| `/actions/notes/todo_delete` | `entry`, `text` | Drops the todo without recording it. |
-| `/actions/notes/todo_link` | `entry`, `text`, `input` (Jira key or PR URL) | Links the todo to the ticket or PR. |
+| `/actions/notes/todo_done` | `todo` (its id) | Records the todo as done today; redirects with `kept=notes:<id>`, so the focus page keeps it, ticked, to undo. |
+| `/actions/notes/todo_undone` | `todo` | Reopens a done todo. |
+| `/actions/notes/todo_delete` | `todo` | Drops the todo without recording it. |
+| `/actions/notes/todo_link` | `todo`, `input` (Jira key or PR URL) | Links the todo to the ticket or PR. |
 | `/actions/git/push_branch` | `repo`, `branch` | `git push` (sets the upstream if missing; never forces). |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`. |
 | `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack when git_stack knows it, recording each branch's commit. |
@@ -259,16 +259,14 @@ error status):
 | `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
 | `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 
-`entry` is a work entry's title exactly as the page shows it; `text`
-is the todo's text without its `[quick]`/`[big]` marker, exactly as the
-focus page shows it (and as `mfd dump` lists it under the todos panel's
-items' `parts`). `repo` is one of `[git] repos`. For
-example:
+`entry` is a work entry's title exactly as the page shows it. `todo` is a todo's
+id, which `mfd dump` lists in the `fields` of a todo's actions under the todos
+panel's items' `parts`. `repo` is one of `[git] repos`. For example:
 
 ```sh
 curl -s -o /dev/null -w '%{redirect_url}\n' -X POST http://127.0.0.1:8765/actions/notes/todo_done \
   -H "Authorization: Bearer $(cat ~/.local/share/move-forward/token)" \
-  --data-urlencode 'entry=APP-1 Fix the widget' --data-urlencode 'text=reply to the thread'
+  --data-urlencode 'todo=12'
 ```
 
 ## Daily clean-up

@@ -43,6 +43,10 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         builder = _builder(ctx, graph)
         return [a for a in (builder.put_on_ice(item), builder.add_todo(item)) if a]
 
+    def kept_item(self, ctx: Context[NotesConfig], graph: Graph, key: str) -> Item | None:
+        """The todo `todo_done` just ticked off, by id, with its box ticked."""
+        return _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
+
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
 

@@ -9,7 +9,7 @@ one the graph has branches of, i.e. one of git's checkouts.
 from pathlib import Path
 
 from ...graph import Graph
-from ...plugin import ActionError, ActionHandler, Context
+from ...plugin import KEPT, ActionError, ActionHandler, ActionResult, Context
 from .config import NotesConfig
 from .markdown import JIRA_KEY_RE, links_in
 from .models import Entry, IcedItem, Link, Size, Todo
@@ -105,45 +105,45 @@ def thaw(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str
 # Todos
 
 
-def _entry(notes: NotesRepository, title: str) -> Entry:
-    found = next((e for e in notes.entries() if e.title == title), None)
-    if found is None:
-        raise ActionError(f"no work-notes entry titled {title}")
-    return found
+def _todo(notes: NotesRepository, fields: dict[str, str], done: bool) -> tuple[Entry, Todo]:
+    """The todo the `todo` field names by id, and its entry; it must be done or open as said."""
+    try:
+        todo_id = int(fields["todo"])
+    except ValueError as e:
+        raise ActionError(f"bad todo id {fields['todo']!r}") from e
+    for entry in notes.entries():
+        for todo in entry.todos:
+            if todo.id == todo_id:
+                if (todo.done_on is not None) != done:
+                    raise ActionError(f"{todo.text!r} isn't {'done' if done else 'open'}")
+                return entry, todo
+    raise ActionError(f"no todo {todo_id}")
 
 
-def _todo(entry: Entry, text: str, done: bool) -> Todo:
-    found = next(
-        (t for t in entry.todos if t.text == text and (t.done_on is not None) == done), None
-    )
-    if found is None:
-        raise ActionError(f"no {'done' if done else 'open'} todo {text!r} in {entry.title}")
-    return found
-
-
-def todo_done(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+def todo_done(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> ActionResult:
+    """Record an open todo as done today, and keep it on the focus page to undo."""
     notes = NotesRepository(ctx.db)
-    entry = _entry(notes, fields["entry"])
-    notes.set_done(_todo(entry, fields["text"], done=False).id, ctx.now.date())
+    entry, todo = _todo(notes, fields, done=False)
+    notes.set_done(todo.id, ctx.now.date())
     notes.touch(entry.id, ctx.now.date())
-    return f"done: {fields['text']}"
+    return ActionResult(f"done: {todo.text}", {KEPT: f"notes:{todo.id}"})
 
 
 def todo_undone(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     notes = NotesRepository(ctx.db)
-    entry = _entry(notes, fields["entry"])
-    notes.set_done(_todo(entry, fields["text"], done=True).id, None)
+    entry, todo = _todo(notes, fields, done=True)
+    notes.set_done(todo.id, None)
     notes.touch(entry.id, ctx.now.date())
-    return f"reopened: {fields['text']}"
+    return f"reopened: {todo.text}"
 
 
 def todo_delete(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     """Drop an open todo without recording it as done."""
     notes = NotesRepository(ctx.db)
-    entry = _entry(notes, fields["entry"])
-    notes.delete_todo(_todo(entry, fields["text"], done=False).id)
+    entry, todo = _todo(notes, fields, done=False)
+    notes.delete_todo(todo.id)
     notes.touch(entry.id, ctx.now.date())
-    return f"dropped: {fields['text']}"
+    return f"dropped: {todo.text}"
 
 
 def _link(graph: Graph, value: str) -> Link:
@@ -161,8 +161,7 @@ def _link(graph: Graph, value: str) -> Link:
 def todo_link(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     """Link an open todo to a Jira ticket or a PR."""
     notes = NotesRepository(ctx.db)
-    entry = _entry(notes, fields["entry"])
-    todo = _todo(entry, fields["text"], done=False)
+    entry, todo = _todo(notes, fields, done=False)
     link = _link(graph, fields["input"].strip())
     if link in todo.links:
         raise ActionError(f"{link.ref} is already linked to that todo")

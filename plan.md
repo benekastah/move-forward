@@ -23,9 +23,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 - The `mfd notes ...` CLI (list, show, add-entry, set, link, todo add/done/undone/delete/
   link, condition, decline, ice, thaw), JSON with `--json`, working without the server.
-- Core, first: an action's result can carry redirect parameters.
-- Todos addressed by id in `/actions/notes/...`; core stops knowing `notes/todo_done` by
-  name, and `panels.py` stops importing notes' `todo_actions` to build the done todo.
 - The move-forward skill's SKILL.md switches from editing the markdown to the CLI, in the
   skill's repository, the same week.
 - The skill sends the dashboard's token (`Authorization: Bearer`, from the `token` file)

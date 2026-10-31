@@ -13,6 +13,7 @@ from conftest import (
     pr,
     snapshot,
     stacks,
+    stored,
     titles,
     todo,
 )
@@ -25,6 +26,7 @@ from move_forward.domain import (
     StackBranch,
 )
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
+from move_forward.refresh import kept_item
 
 build = dashboard
 
@@ -125,7 +127,7 @@ def test_focus_shows_todos_one_at_a_time() -> None:
     assert [link.text for link in focused[0][1].links] == ["PR 7"]
 
 
-def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_rebuilt() -> None:
+def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     noted = entry(
         "APP-2 mixed",
         [todo("small", "quick")],
@@ -141,16 +143,22 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_rebuilt() -> None
         ("notes/todo_link", False, False),
         ("notes/todo_add", False, False),
     ]
-    assert part.actions[0].fields == {"entry": "APP-2 mixed", "text": "small"}
+    todo_id = part.actions[0].fields["todo"]
+    assert part.actions[0].fields == {"todo": todo_id}  # addressed by id
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
     # The entry on the page only gets the Add todo field, not the todo's own actions.
     assert [a.name for a in panel(dashboard, "todos").items[0].actions] == ["notes/todo_add"]
 
-    done = dashboard.done_todo("APP-2 mixed", "small")
-    assert (done.title, done.subtitle, done.badges) == ("small", "APP-2 mixed", ["done"])
+    config, db = stored(work_items=[noted])
+    done = kept_item(config, db, f"notes:{todo_id}")
+    assert done is not None
+    assert (done.title, done.subtitle) == ("small", "APP-2 mixed")
     assert done.url == "https://github.com/acme/widgets/pull/7"
-    assert [(a.name, a.checked) for a in done.actions] == [("notes/todo_undone", True)]
-    assert dashboard.done_todo("gone entry", "x").url is None
+    assert [(a.name, a.checked) for a in done.actions] == [("notes/todo_done", False)] + [
+        (a.name, False) for a in done.actions[1:]
+    ]  # still open: only a ticked todo offers undo
+    assert kept_item(config, db, "notes:999") is None
+    assert kept_item(config, db, "notes:x") is None
 
 
 def test_todo_parts_put_the_prs_they_mention_first_in_bold() -> None:

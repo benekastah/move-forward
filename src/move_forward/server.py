@@ -117,7 +117,7 @@ class App:
         except ActionError as e:
             return f"failed: {e}", {}
         self.request_refresh()
-        return result.notice, {**_redirect_params(name, fields), **result.params}
+        return result.notice, result.params
 
     def plugin_page(self, path: str, query: str) -> str | None:
         """An enabled plugin's page; None when there's none at `path`."""
@@ -128,36 +128,19 @@ class App:
         category: str,
         index: int,
         notice: str = "",
-        done: tuple[str, str] | None = None,
         kept: str = "",
     ) -> str | None:
         """The category list without a category, else that category's item at `index`.
 
-        `done` is the (entry, text) of a todo just ticked off, and `kept` an item an action
-        asked to keep (see `Plugin.kept_item`): either stays on the page, to undo.
+        `kept` names an item an action asked to keep on the page, e.g. a todo just ticked off,
+        so it can be undone; see `Plugin.kept_item`.
         """
         self.refresh_if_stale()
         dashboard = build_dashboard(self.config, self.db)
         if not category:
             return render.focus_categories_page(dashboard)
-        done_item = dashboard.done_todo(*done) if done else None
-        if kept:
-            done_item = kept_item(self.config, self.db, kept)
+        done_item = kept_item(self.config, self.db, kept) if kept else None
         return render.focus_page(dashboard, category, index, notice, done_item)
-
-
-DONE_TODO_ACTION = "notes/todo_done"
-
-
-def _redirect_params(name: str, fields: dict[str, str]) -> dict[str, str]:
-    """Extra query parameters for the page an action redirects back to, once it succeeded.
-
-    Ticking a todo off keeps it on the focus page, box ticked, so the tick can be undone.
-    Until todos have ids, core knows this one notes action by name.
-    """
-    if name == DONE_TODO_ACTION:
-        return {"done_entry": fields["entry"], "done_text": fields["text"]}
-    return {}
 
 
 def _open_keys(query: str) -> set[str] | None:
@@ -278,13 +261,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 params = parse_qs(url.query, keep_blank_values=True)
                 category = params.get("cat", [""])[0]
                 notice = params.get("notice", [""])[0]
-                done = (
-                    (params["done_entry"][0], params["done_text"][0])
-                    if "done_text" in params
-                    else None
-                )
                 kept = params.get(KEPT, [""])[0]
-                page = app.focus_page(category, _int(params, "i"), notice, done, kept)
+                page = app.focus_page(category, _int(params, "i"), notice, kept)
                 if page is None:
                     self._html(HTTPStatus.NOT_FOUND, "<p>No such focus category.</p>")
                 else:

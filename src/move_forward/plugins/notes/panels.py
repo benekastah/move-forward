@@ -26,13 +26,14 @@ PR_STATES: dict[str, PrState] = {"open": "open", "merged": "merged", "closed": "
 # Output models
 
 
-def todo_actions(entry: str, text: str, done: bool, suggested: bool = False) -> list[Action]:
-    """A todo's checkbox (done, or undone once it's done) and, while open, its delete button.
+def todo_actions(todo: Todo, entry: str, suggested: bool = False) -> list[Action]:
+    """A todo's checkbox (Done, or undone once it's done) and, while open, its Delete, Link and
+    Add todo buttons. The todo is addressed by id.
 
     `suggested` draws the Done box bigger, when every PR the todo is about is merged or closed.
     """
-    fields = {"entry": entry, "text": text}
-    if done:
+    fields = {"todo": str(todo.id)}
+    if todo.done_on is not None:
         return [
             Action(
                 name="notes/todo_undone", label="Done", fields=fields, checkbox=True, checked=True
@@ -46,7 +47,7 @@ def todo_actions(entry: str, text: str, done: bool, suggested: bool = False) -> 
             name="notes/todo_delete",
             label="Delete todo",
             fields=fields,
-            confirm=f"Drop the todo “{text}” from {entry}? It isn't recorded as done.",
+            confirm=f"Drop the todo “{todo.text}” from {entry}? It isn't recorded as done.",
         ),
         Action(name="notes/todo_link", label="Link", fields=fields, input="Jira key or PR URL"),
         add_todo_action(entry),
@@ -142,7 +143,7 @@ def _todo_part(
         subtitle=entry,
         badges=[todo.size or "unsized", *(["its PRs are done"] if probably_done else []), *badges],
         links=links,
-        actions=todo_actions(entry, todo.text, done=False, suggested=probably_done),
+        actions=todo_actions(todo, entry, suggested=probably_done),
     )
 
 
@@ -250,6 +251,24 @@ class Builder:
         return {
             pr.ref.id: PR_STATES[pr.state] for pr in self.graph.of_kind(PR) if pr.state in PR_STATES
         }
+
+    def kept_todo(self, todo_id: int) -> Item | None:
+        """A todo just ticked off (or back on), for the focus page to keep showing with its box
+        as it is now, so the tick can be undone; None if it's gone."""
+        for entry in self.entries:
+            for todo in entry.todos:
+                if todo.id == todo_id:
+                    links = _todo_links(todo, _entry_urls(entry), self._pr_states(), self.graph)
+                    mentioned = [link for link in links if link.strong]
+                    return Item(
+                        title=todo.text,
+                        url=(mentioned or links)[0].url if links else None,
+                        subtitle=entry.title,
+                        badges=["done"] if todo.done_on is not None else [todo.size or "unsized"],
+                        links=links,
+                        actions=todo_actions(todo, entry.title),
+                    )
+        return None
 
     def todos(self) -> Panel:
         items: list[Item] = []

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from move_forward import refresh, server
+from move_forward import refresh
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import (
@@ -15,7 +15,7 @@ from move_forward.domain import (
     StackRepo,
 )
 from move_forward.graph import Graph
-from move_forward.plugin import ActionError
+from move_forward.plugin import KEPT, ActionError
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git_stack.config import GitStackConfig
 from move_forward.plugins.github.config import GitHubConfig
@@ -296,9 +296,17 @@ def _open(config: Config, title: str = APP_1) -> list[str]:
     return [f"[{t.size}] {t.text}" for t in _entry(config, title).open_todos]
 
 
+def _todo(config: Config, text: str, title: str = APP_1) -> dict[str, str]:
+    """The fields that name a todo, by id, as its buttons post them."""
+    [todo] = [t for t in _entry(config, title).todos if t.text == text]
+    return {"todo": str(todo.id)}
+
+
 def test_todo_done_and_undone(config: Config, work_notes: None) -> None:
-    fields = {"entry": APP_1, "text": "reply to the thread"}
-    assert run("notes/todo_done", config, fields) == "done: reply to the thread"
+    fields = _todo(config, "reply to the thread")
+    result = refresh.perform_action(config, _stored(config), "notes/todo_done", fields)
+    assert result.notice == "done: reply to the thread"
+    assert result.params == {KEPT: f"notes:{fields['todo']}"}  # kept on the focus page
     entry = _entry(config)
     assert _open(config) == ["[big] get it merged", "[None] no size here"]
     assert [t.done_on for t in entry.todos if t.text == "reply to the thread"] == [date.today()]
@@ -311,30 +319,22 @@ def test_todo_done_and_undone(config: Config, work_notes: None) -> None:
         "[big] get it merged",
         "[None] no size here",
     ]
-    with pytest.raises(ActionError, match="no done todo"):
+    with pytest.raises(ActionError, match="isn't done"):
         run("notes/todo_undone", config, fields)
 
 
 def test_todo_delete_and_errors(config: Config, work_notes: None) -> None:
-    assert run("notes/todo_delete", config, {"entry": APP_1, "text": "no size here"}) == (
-        "dropped: no size here"
-    )
+    fields = _todo(config, "no size here")
+    assert run("notes/todo_delete", config, fields) == "dropped: no size here"
     assert _open(config) == ["[quick] reply to the thread", "[big] get it merged"]
-    with pytest.raises(ActionError, match="no open todo"):
-        run("notes/todo_delete", config, {"entry": APP_1, "text": "no size here"})
-    with pytest.raises(ActionError, match="no work-notes entry"):
-        run("notes/todo_done", config, {"entry": "APP-9", "text": "x"})
-
-
-def test_redirect_params_keep_a_ticked_todo_on_the_page() -> None:
-    fields = {"entry": "APP-1", "text": "x"}
-    redirect = server._redirect_params  # pyright: ignore[reportPrivateUsage]
-    assert redirect("notes/todo_done", fields) == {"done_entry": "APP-1", "done_text": "x"}
-    assert redirect("notes/todo_undone", fields) == {}
+    with pytest.raises(ActionError, match=f"no todo {fields['todo']}"):
+        run("notes/todo_delete", config, fields)
+    with pytest.raises(ActionError, match="bad todo id"):
+        run("notes/todo_done", config, {"todo": "APP-9"})
 
 
 def test_todo_link_links_a_jira_ticket_or_a_pr(config: Config, work_notes: None) -> None:
-    fields = {"entry": APP_1, "text": "get it merged", "input": " APP-9 "}
+    fields = {**_todo(config, "get it merged"), "input": " APP-9 "}
     with pytest.raises(ActionError, match="no \\[jira\\] site"):
         run("notes/todo_link", config, fields)
     config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
