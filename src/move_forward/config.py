@@ -52,10 +52,12 @@ class Config(Strict):
     """The teams I'm on or review for, by name. Plugins map a name to what their tool calls
     the team in their own `teams` table, e.g. `[github.teams]`."""
     db_path: Path = DEFAULT_DB_PATH
+    """The SQLite database holding snapshots, imported notes and the plugins' tables."""
     db_backups: int = DEFAULT_KEEP_BACKUPS
     """How many copies of the database to keep in `backups/` next to it. One is taken before
     migrations change the database; the oldest go first. 0 takes none."""
     port: int = DEFAULT_PORT
+    """The localhost port `mfd serve` listens on."""
     refresh_seconds: int = DEFAULT_REFRESH_SECONDS
     """How often the background loop refreshes when nobody loads the page."""
     refresh_on_load_seconds: int = DEFAULT_REFRESH_ON_LOAD_SECONDS

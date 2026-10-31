@@ -16,6 +16,7 @@ class SlackConfig(Strict):
     ping_first: str = DEFAULT_PING_FIRST
     """The first review reminder; `{url}` is the PR."""
     ping_follow_up: str = DEFAULT_PING_FOLLOW_UP
+    """The reminder once a reviewer has been pinged about the PR."""
     teams: dict[str, str] = Field(default_factory=dict)
     """Where review pings to a team go, e.g. `#team-a`, by its name in the top-level `teams`.
     Overrides the reviewer map."""
