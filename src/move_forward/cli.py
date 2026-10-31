@@ -4,13 +4,15 @@ import argparse
 import logging
 import sys
 import webbrowser
+from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, reload
+from . import auth, init, registry, reload
 from . import config as config_module
 from .db import Database
-from .refresh import build_dashboard, refresh
-from .registry import enabled_names, migrate
+from .plugin import CliHandler
+from .refresh import build_dashboard, refresh, stored_graph
+from .registry import enabled, enabled_names, migrate
 from .server import serve
 
 EXAMPLE_CONFIG = """\
@@ -73,7 +75,7 @@ my-team = "#team-my-team"
 """
 
 
-def _parser() -> argparse.ArgumentParser:
+def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     parser = argparse.ArgumentParser(prog="mfd", description="Local dashboard of work in flight.")
     parser.add_argument(
         "-c",
@@ -108,7 +110,12 @@ def _parser() -> argparse.ArgumentParser:
         "--example", action="store_true", help="write a commented example instead of asking"
     )
     init_parser.add_argument("--force", action="store_true", help="overwrite an existing config")
-    return parser
+    plugin_commands = {
+        plugin.name: plugin.cli(commands.add_parser(plugin.name, help=plugin.cli_help))
+        for plugin in registry.PLUGINS
+        if plugin.cli_help
+    }
+    return parser, plugin_commands
 
 
 def _open(url: str) -> None:
@@ -118,7 +125,8 @@ def _open(url: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser, plugin_commands = _parser()
+    args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -169,6 +177,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "dump":
         print(build_dashboard(config, db).model_dump_json(indent=2))
         return 0
+    if args.command in plugin_commands:
+        plugins = enabled(config, db, datetime.now(UTC))
+        e = next((e for e in plugins if e.name == args.command), None)
+        if e is None:
+            print(f"[{args.command}] isn't in {config_path}", file=sys.stderr)
+            return 1
+        graph, _ = stored_graph(db, plugins)
+        return plugin_commands[args.command](e.ctx, graph, args)
     if args.command == "serve":
         port = args.port or config.port
         if args.open:

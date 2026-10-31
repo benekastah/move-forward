@@ -58,6 +58,8 @@ class Context[C: BaseModel]:
 
 PageHandler = Callable[[Context[Any], Graph, dict[str, list[str]]], str | None]
 """Renders a page from the query parameters; None means not found."""
+CliHandler = Callable[[Context[Any], Graph, argparse.Namespace], int]
+"""Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
 ActionHandler = Callable[[Context[Any], Graph, dict[str, str]], str]
 """Runs a button's action with its form fields; returns the notice for the page and raises
 `ActionError` with the reason when it can't."""
@@ -138,9 +140,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Button handlers by name, posted to `/actions/<plugin>/<name>`."""
         return {}
 
-    def cli(self, parser: argparse.ArgumentParser) -> None:
-        """Add the plugin's commands to `parser`, which is `mfd <name>`. Leaving it alone
-        means the plugin has no `mfd <name>` command."""
+    cli_help: ClassVar[str | None] = None
+    """The help line of `mfd <name>`; None means the plugin has no command."""
+
+    def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        """Add the arguments of `mfd <name>` to `parser` and return what runs it. Only called
+        when `cli_help` is set."""
+        raise NotImplementedError(f"{self.name} has cli_help but no cli")
 
     # Set-up and upkeep
 
