@@ -142,6 +142,13 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
   separators) and written into `on-ice.md`.
+- **Notes are empty until imported.** After upgrading, the Todos and On ice panels are
+  empty until `mfd notes import` runs, with nothing on the page saying so. An empty notes
+  plugin could say "run `mfd notes import <dir>`" in its panels.
+- **Restoring deleted iced branches.** A stack on ice keeps the commit of each branch, but
+  once git deletes them there's no button to bring them back. git could add Restore
+  branches on the On ice item, recreating each at its commit; and Reopen on a stack whose
+  branches are gone could confirm first, since the commits are forgotten with it.
 - **Signing in on `localhost`.** `mfd open` signs in at `127.0.0.1`, and cookies are per
   host, so the dashboard at `localhost:<port>` answers 401. The server could redirect
   `localhost` to `127.0.0.1`.
