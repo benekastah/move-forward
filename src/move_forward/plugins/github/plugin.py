@@ -1,0 +1,164 @@
+"""The GitHub plugin."""
+
+import logging
+
+from ...domain import DerivedSnapshot, GitHubSnapshot, PullRequest, ReviewerUser
+from ...graph import Entity, Graph, Ref
+from ...page import Panel
+from ...plugin import Context, Plugin, collect_into
+from ...repositories import ReviewerRepository, SnapshotRepository
+from . import client, derive
+from .config import GitHubConfig
+from .panels import PR, Builder
+from .prs import (
+    changes_requested,
+    last_review_activity,
+    review_blockers,
+    ticket_keys,
+)
+
+log = logging.getLogger(__name__)
+
+DERIVED = "derived"
+"""The snapshot part `after_collect` stores: team scores and reviewer suggestions."""
+PERSON = "person"
+REPO = "repo"
+TICKET = "ticket"
+
+
+def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
+    return [ctx.config.slug(team) for team in ctx.teams]
+
+
+class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
+    name = "github"
+    title = "GitHub"
+    config_model = GitHubConfig
+    snapshot_model = GitHubSnapshot
+
+    def collect(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot:
+        return client.collect(ctx.config.org, _team_slugs(ctx), ctx.config.history_days, ctx.now)
+
+    def _email_domains(self, ctx: Context[GitHubConfig]) -> list[str]:
+        if ctx.config.email_domains:
+            return ctx.config.email_domains
+        return [ctx.email.rsplit("@", 1)[1]] if "@" in ctx.email else []
+
+    def _lookup_emails(self, ctx: Context[GitHubConfig], gh: GitHubSnapshot) -> None:
+        """Cache the commit email of every requested reviewer we don't know yet."""
+        domains = self._email_domains(ctx)
+        if not domains:
+            return
+        reviewers = ReviewerRepository(ctx.db)
+        known = reviewers.users()
+        for pr in gh.mine:
+            for login in pr.requested_users:
+                if login in known:
+                    continue
+                try:
+                    email = client.commit_email(pr.repo, login, domains)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("email lookup for %s failed: %s", login, e)
+                    continue
+                reviewers.save_looked_up_email(login, email)
+                known[login] = ReviewerUser(login=login, email=email)
+
+    def after_collect(self, ctx: Context[GitHubConfig], graph: Graph) -> None:
+        """Look up reviewers' emails, then score team PRs and suggest reviewers from the
+        local checkouts the graph's `repo` entities describe."""
+        gh = SnapshotRepository(ctx.db).get(self.name, GitHubSnapshot)
+        if gh is None:
+            return
+        self._lookup_emails(ctx, gh)
+        checkouts = [
+            derive.Checkout.model_validate({"github_repo": repo.ref.id, **repo.attrs})
+            for repo in graph.of_kind(REPO)
+        ]
+        collect_into(
+            ctx.db,
+            f"{self.name}.{DERIVED}",
+            ctx.now,
+            lambda: derive.collect(
+                gh,
+                checkouts,
+                ReviewerRepository(ctx.db).users(),
+                ctx.config.org,
+                _team_slugs(ctx),
+                ctx.config.reviewer_history_days,
+                ctx.config.required_owner_marker,
+            ),
+        )
+
+    def _pr_entity(
+        self,
+        ctx: Context[GitHubConfig],
+        pr: PullRequest,
+        me: str,
+        state: str,
+        mine: bool,
+        team_names: dict[str, str],
+    ) -> Entity:
+        attrs: dict[str, object] = {
+            "repo": pr.repo,
+            "number": pr.number,
+            "head": pr.head,
+            "base": pr.base,
+            "author": pr.author,
+            "draft": pr.is_draft,
+            "mine": mine,
+            "changes_requested": changes_requested(pr),
+            "created_at": pr.created_at.isoformat(),
+            "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
+            "requested_users": list(pr.requested_users),
+            "requested_teams": [team_names.get(slug, slug) for slug in pr.requested_teams],
+        }
+        if mine and state == "open":
+            last = last_review_activity(pr)
+            attrs["review_blockers"] = review_blockers(pr, me, ctx.config.review_checks)
+            attrs["last_review_activity"] = last.isoformat() if last else None
+            stale_after = ctx.config.stale_review_hours * 3600
+            attrs["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
+        return Entity.model_validate(
+            {
+                "ref": {"kind": PR, "id": pr.url},
+                "title": pr.title,
+                "url": pr.url,
+                "state": state,
+                "refs": [{"kind": TICKET, "id": key} for key in ticket_keys(pr)],
+                "attrs": attrs,
+            }
+        )
+
+    def entities(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None) -> list[Entity]:
+        """`pr` for every PR in the snapshot, and a `person` for me."""
+        if snapshot is None:
+            return []
+        team_names = {ctx.config.slug(team): team for team in ctx.teams}
+        groups = [
+            (snapshot.mine, "open", True),
+            (snapshot.merged_recent, "merged", True),
+            (snapshot.closed_recent, "closed", True),
+            (snapshot.direct_requests, "open", False),
+            (snapshot.reviewed_by_me, "open", False),
+            (snapshot.team_requests, "open", False),
+        ]
+        entities: dict[str, Entity] = {}
+        for prs, state, mine in groups:
+            for pr in prs:
+                if pr.url not in entities:
+                    entities[pr.url] = self._pr_entity(
+                        ctx, pr, snapshot.login, state, mine, team_names
+                    )
+        me = Entity(
+            ref=Ref(kind=PERSON, id=snapshot.login), title=snapshot.login, attrs={"me": True}
+        )
+        return [*entities.values(), me]
+
+    def url_for(self, ctx: Context[GitHubConfig], kind: str, id: str) -> str | None:
+        return id if kind == PR else None
+
+    def panels(
+        self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None, graph: Graph
+    ) -> list[Panel]:
+        derived = SnapshotRepository(ctx.db).get(f"{self.name}.{DERIVED}", DerivedSnapshot)
+        return Builder(ctx.config, ctx.teams, ctx.now, snapshot, derived, graph).panels()

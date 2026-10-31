@@ -1,11 +1,12 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from move_forward_dashboard import notes, prune
-from move_forward_dashboard.config import Config, GitHubConfig, JiraConfig
-from move_forward_dashboard.db import Database
-from move_forward_dashboard.domain import Ping
-from move_forward_dashboard.repositories import MetaRepository, PingRepository
+from move_forward import notes, prune
+from move_forward.config import Config
+from move_forward.db import Database
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.notes.config import NotesConfig
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
 OLD = NOW - timedelta(days=100)
@@ -49,8 +50,7 @@ def _config(tmp_path: Path, jira: bool = True) -> Config:
     return Config(
         email="me@x",
         github=GitHubConfig(org="acme"),
-        repos=[],
-        notes_dir=tmp_path,
+        notes=NotesConfig(dir=tmp_path),
         jira=JiraConfig(site="https://j") if jira else None,
     )
 
@@ -94,25 +94,16 @@ def test_entries_with_tickets_are_kept_without_jira(tmp_path: Path) -> None:
     ]
 
 
-def test_prune_deletes_old_pings_and_runs_once_a_day(tmp_path: Path) -> None:
+def test_plugins_prune_with_the_daily_run(tmp_path: Path) -> None:
     config = _config(tmp_path)
+    (tmp_path / notes.WORK_NOTES_FILE).unlink()
     db = Database(":memory:")
-    pings = PingRepository(db)
-    for when in (OLD, RECENT):
-        pings.add(Ping(pr_url=PR + "1", target="user:a", kind="first", message="", sent_at=when))
-    notices = prune.prune(config, db, NOW, pr_closed_at, issues_resolved_at)
-    assert notices[-1] == "deleted 1 old ping(s)"
-    assert [p.sent_at for p in pings.all()] == [RECENT]
+    runs: list[datetime] = []
 
-    db = Database(":memory:")
-    meta = MetaRepository(db)
-    pings = PingRepository(db)
-    pings.add(Ping(pr_url=PR + "1", target="user:a", kind="first", message="", sent_at=OLD))
-    (tmp_path / notes.WORK_NOTES_FILE).unlink()  # nothing to look up: no network needed
-    prune.prune_if_due(config, db, NOW)
-    assert meta.get(prune.LAST_PRUNE_KEY) == NOW.isoformat() and pings.all() == []
-    pings.add(Ping(pr_url=PR + "1", target="user:a", kind="first", message="", sent_at=OLD))
-    prune.prune_if_due(config, db, NOW + timedelta(hours=23))
-    assert len(pings.all()) == 1  # not due yet
-    prune.prune_if_due(config, db, NOW + timedelta(hours=25))
-    assert pings.all() == []
+    def plugins() -> list[str]:
+        runs.append(NOW)
+        return []
+
+    prune.prune_if_due(config, db, NOW, plugins)
+    prune.prune_if_due(config, db, NOW + timedelta(hours=1), plugins)
+    assert len(runs) == 1

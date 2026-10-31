@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from move_forward_dashboard import notes
+from move_forward import notes
 
 WORK_NOTES = """\
 # Work notes

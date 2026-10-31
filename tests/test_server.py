@@ -9,10 +9,14 @@ from urllib.parse import quote, urlencode
 import pytest
 from conftest import ME, pr, snapshot
 
-from move_forward_dashboard import server
-from move_forward_dashboard.config import Config, GitHubConfig, TeamConfig
-from move_forward_dashboard.db import Database
-from move_forward_dashboard.repositories import PingRepository, SnapshotRepository
+from move_forward import server
+from move_forward.config import Config
+from move_forward.db import Database
+from move_forward.plugin import ActionError
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.notes.config import NotesConfig
+from move_forward.plugins.slack.config import SlackConfig
+from move_forward.repositories import PingRepository, SnapshotRepository
 
 
 @pytest.fixture
@@ -20,9 +24,9 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
     config = Config(
         email="me@acme.com",
         github=GitHubConfig(org="acme"),
-        teams={"core": TeamConfig()},
-        repos=[],
-        notes_dir=tmp_path,
+        teams=["core"],
+        slack=SlackConfig(),
+        notes=NotesConfig(dir=tmp_path),
         db_path=tmp_path / "x.db",
     )
     db = Database(":memory:")
@@ -99,10 +103,13 @@ def test_ping_page_lists_targets(client: HTTPConnection) -> None:
 def test_mark_as_sent_records_a_ping_and_redirects(client: HTTPConnection, app: server.App) -> None:
     response = post(
         client,
-        "/pings",
+        "/actions/slack/mark_sent",
         {"pr_url": pr(1).url, "target": "user:alice", "kind": "first", "message": "hi <there>"},
     )
-    assert response.status == 303 and response.getheader("Location") == "/"
+    assert response.status == 303
+    assert response.getheader("Location") == "/?" + urlencode(
+        {"notice": "marked the first ping to alice as sent"}
+    )
     pings = PingRepository(app.db).all()
     assert [(p.target, p.kind, p.message) for p in pings] == [("user:alice", "first", "hi <there>")]
     # The next page shows the follow-up.
@@ -110,8 +117,12 @@ def test_mark_as_sent_records_a_ping_and_redirects(client: HTTPConnection, app: 
     assert "Gentle bump" in body
 
 
-def test_invalid_ping_form_is_rejected(client: HTTPConnection) -> None:
-    assert post(client, "/pings", {"pr_url": "x", "target": "t", "kind": "later"}).status == 400
+def test_invalid_ping_form_is_rejected(client: HTTPConnection, app: server.App) -> None:
+    response = post(
+        client, "/actions/slack/mark_sent", {"pr_url": "x", "target": "t", "kind": "later"}
+    )
+    assert response.status == 303 and "failed%3A+bad+ping" in (response.getheader("Location") or "")
+    assert PingRepository(app.db).all() == []
 
 
 def test_page_load_refreshes_stale_data_in_the_background(
@@ -131,13 +142,13 @@ def test_actions_run_and_redirect_with_a_notice(
 ) -> None:
     seen: list[tuple[str, dict[str, str]]] = []
 
-    def fake_run(name: str, _config: object, fields: dict[str, str]) -> str:
+    def fake_run(_config: object, _db: object, name: str, fields: dict[str, str]) -> str:
         seen.append((name, fields))
         if name == "boom":
-            raise server.actions.ActionError("nope")
+            raise ActionError("nope")
         return "did it"
 
-    monkeypatch.setattr(server.actions, "run", fake_run)
+    monkeypatch.setattr(server, "run_action", fake_run)
     response = post(client, "/actions/delete_branch", {"repo": "/r", "branch": "b"})
     assert response.status == 303
     assert response.getheader("Location") == "/?notice=did+it"
@@ -155,8 +166,8 @@ def test_actions_run_and_redirect_with_a_notice(
 
 
 def test_open_parameter_is_rendered_and_kept_through_refresh(client: HTTPConnection) -> None:
-    body = get(client, "/?open=my_prs").read().decode()
-    assert "<details class='group' data-key='my_prs' open>" in body
+    body = get(client, "/?open=github").read().decode()
+    assert "<details class='group' data-key='github' open>" in body
     assert "<details class='group' data-key='act'>" in body
     response = post(client, "/refresh?open=", {})
     assert response.getheader("Location") == "/?open="
@@ -184,7 +195,7 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
     def fake_run(*_: object) -> str:
         return "did it"
 
-    monkeypatch.setattr(server.actions, "run", fake_run)
+    monkeypatch.setattr(server, "run_action", fake_run)
     response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dall%26i%3D0", {})
     assert response.getheader("Location") == "/focus?cat=all&i=0&notice=did+it"
     # Only local paths; anything else goes to the dashboard.
@@ -197,26 +208,26 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
 def test_ticking_a_todo_off_redirects_back_with_it(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def fake_run(name: str, _config: object, fields: dict[str, str]) -> str:
+    def fake_run(_config: object, _db: object, name: str, fields: dict[str, str]) -> str:
         return f"{name} {fields['text']}"
 
-    monkeypatch.setattr(server.actions, "run", fake_run)
+    monkeypatch.setattr(server, "run_action", fake_run)
     response = post(
         client,
-        "/actions/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",
+        "/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",
         {"entry": "APP-1", "text": "x y"},
     )
     assert response.getheader("Location") == (
-        "/focus?cat=todos&i=0&done_entry=APP-1&done_text=x+y&notice=todo_done+x+y"
+        "/focus?cat=todos&i=0&done_entry=APP-1&done_text=x+y&notice=notes%2Ftodo_done+x+y"
     )
     body = get(client, "/focus?cat=todos&i=0&done_entry=APP-1&done_text=x+y").read().decode()
     assert "<input type='checkbox' checked" in body and "x y" in body
     response = post(
         client,
-        "/actions/todo_undone?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",
+        "/actions/notes/todo_undone?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",
         {"entry": "APP-1", "text": "x y"},
     )
-    assert response.getheader("Location") == "/focus?cat=todos&i=0&notice=todo_undone+x+y"
+    assert response.getheader("Location") == "/focus?cat=todos&i=0&notice=notes%2Ftodo_undone+x+y"
 
 
 def test_ctrl_c_shuts_down_quietly(

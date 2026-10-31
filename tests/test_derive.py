@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from move_forward_dashboard import codeowners, derive
-from move_forward_dashboard.domain import LocalRepo, ReviewerUser
-from move_forward_dashboard.shell import git
+from move_forward.domain import ReviewerUser
+from move_forward.plugins.github import codeowners, derive
+from move_forward.shell import git
 
 
 def test_team_score_counts_owned_required_and_my_files() -> None:
@@ -48,7 +48,7 @@ def test_suggest_reviewers_counts_recent_committers_with_known_logins(tmp_path: 
     _commit(repo, "carol@x", "web/e.py")
     _commit(repo, "nobody@x", "api/f.py")
     git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
-    local = LocalRepo(dir=str(repo), default_branch="main", worktrees=[], branches=[])
+    local = derive.Checkout(github_repo="acme/widgets", dir=str(repo), default_branch="main")
     users = {
         "alice": ReviewerUser(login="alice", email="alice@x"),
         "bob": ReviewerUser(login="bob", email="bob@x"),

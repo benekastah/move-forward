@@ -1,4 +1,4 @@
-# move-forward-dashboard
+# move-forward
 
 A local dashboard of everything in flight: my PRs and what they're waiting on,
 reviews asked of me, PRs my team should look at, local branches with
@@ -18,37 +18,32 @@ Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (the
 Stacks panel is empty without it).
 
 ```sh
-~/src/move-forward-dashboard/dev-install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
+~/src/move-forward/dev-install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
 mfd serve --open
 ```
 
 `dev-install.sh` ends with `mfd init` when there is no config yet: it asks for
 each setting on the command line, with a guess from the machine as the default
 (the GitHub org of the current repo's remote, the teams `gh` says you're in,
-your git email's domain), and writes
-`~/.config/move-forward/config.toml` with the rest of the settings
-as commented defaults. `mfd init --example` writes a commented example
-without asking; `--force` replaces an existing file. The required keys are
-`org`, `repos` (your main checkouts; other worktrees are found from them),
-`notes_dir` (where `work-notes.md`, `on-ice.md` and `reviewer-map.md` live:
-the move-forward skill's notes, which the dashboard reads on every refresh
-and writes todos and icing to; any directory works without the skill) and
-one `[[teams]]` table per GitHub team or review group you review for, with
-its `github_slug` and optionally the `slack_channel` review pings go to.
-`slack_workspace_url` makes the ping page link to channels and people;
-`email_domain` lets it look up reviewers' emails from their commits.
+your git email), and writes `~/.config/move-forward/config.toml` with the rest
+of the settings as commented defaults. `mfd init --example` writes a commented
+example without asking; `--force` replaces an existing file.
 
-Conventions that differ between organisations are settings, off by default:
-`review_checks` (CI checks that really report review status),
-`required_owner_marker` (a CODEOWNERS comment such as `#required`),
-`ticket_link_prefix` (the PR body line that links the ticket, e.g. `Link`),
-`placeholder_labels` (template labels to replace), the ping message
-templates, and under `[jira]` the workflow status names, the escalation
-label prefix and levels, and the issue types that count as incidents or bugs.
+The top level of the config says who you are and how the dashboard runs:
+`email`, `teams` (the names of the teams you're on or review for), `port`,
+`db_path`, `db_backups`, the refresh intervals and `prune_days`. Everything about a tool is
+in that tool's plugin section; see [Plugins](#plugins).
+
+Teams are named once, at the top level. A plugin that has its own idea of a
+team maps the names in a `teams` table of its section: `[github.teams]` gives
+a team's GitHub slug where it isn't the name, `[slack.teams]` the channel its
+review pings go to, `[jira.teams]` its id in Jira's team field. A name there
+that the top-level `teams` doesn't have is an error.
 
 ### Jira
 
-Add a `[jira]` table with `site` and `email`, then either export
+Add a `[jira]` section with `site`; requests log in as the top-level `email`
+with an API token. Either export
 `JIRA_API_TOKEN` or store a token in the macOS keychain:
 
 ```sh
@@ -57,23 +52,67 @@ security add-generic-password -s move-forward-jira -a me@example.com -w <token>
 
 Create the token at https://id.atlassian.com/manage-profile/security/api-tokens.
 
+## Plugins
+
+Each external tool is a plugin, enabled by its section in the config: leave a
+section out and the plugin, its panels and its fetching are off. Plugins learn
+about each other's data only through a shared graph of entities (PRs,
+tickets, branches, ...), listed in [docs/entities.md](docs/entities.md).
+
+| Plugin | Section | Fetches | Panels |
+| --- | --- | --- | --- |
+| `github` | `[github]` | my open, merged and closed PRs, review requests, PRs I reviewed, my teams' PRs (with `gh`) | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
+| `git` | `[git]` | each repo's worktrees, branches, `git stack info` | Local work, Stacks, Cleanup |
+| `jira` | `[jira]` | my open tickets | Jira transitions, What next |
+| `slack` | `[slack]` | nothing; reads my PRs from the graph and the reviewer map | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
+| `notes` | `[notes]`, optional: always on | the skill's notes, from markdown | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket |
+
+`[notes] dir` is where `work-notes.md`, `on-ice.md` and `reviewer-map.md`
+live: the move-forward skill's notes, which the dashboard reads on every
+refresh and writes todos and icing to (default `~/.config/move-forward/notes`;
+any directory works without the skill). The smallest config, `email` alone,
+is a todo list.
+
+`[github]` needs `org`. Its conventions that differ between organisations are
+off by default: `review_checks` (CI checks that really report review status),
+`required_owner_marker` (a CODEOWNERS comment such as `#required`),
+`ticket_link_prefix` (the PR body line that links the ticket, e.g. `Link`) and
+`placeholder_labels` (template labels to replace). `email_domains` picks
+reviewers' emails from their commits (default: your email's domain),
+`stale_review_hours` says when a review request can be nudged, and
+`reviewer_history_days` how far back commits count for reviewer suggestions.
+
+`[git]` needs `repos`, your main checkouts; their other worktrees are found
+with `git worktree list`. `my_branch_prefixes` marks branches as yours (without
+it every local branch is), `ignored_worktree_globs` leaves worktrees out, and
+`commit_history_days` says how far back your commits count towards the
+directories you work in.
+
+`[slack]` turns on review pings. `workspace_url` makes the ping page link to
+channels and people, `ping_first` and `ping_follow_up` are the messages, and
+`[slack.teams]` the channel each team's pings go to (winning over the reviewer
+map). Its page is `/ping?pr=<PR URL>`, and its one action
+`/actions/slack/mark_sent`.
+
+`[jira]` needs `site`; the workflow status names, the escalation label prefix
+and levels, and the issue types that count as incidents or bugs are settings.
+
 ## Commands
 
 | Command | Does |
 | --- | --- |
 | `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`. |
-| `mfd serve --reload` | Development: also restart when a source file of the dashboard changes (`--open` isn't repeated on restart). |
+| `mfd serve --reload` | Development: also restart when a source file of the dashboard or the config file changes (`--open` isn't repeated on restart). The new code and config are checked first, with `mfd check` in a separate process; if that fails, the error is logged, the running server carries on, and the next change tries again. |
+| `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
-| `mfd init` | Write the example config. |
+| `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 
 ## Panels
 
-The page has six collapsible groups: **Act now** (reviews for me, feedback, CI,
-conflicts), **My PRs** (needs a reviewer, nudges, ready to merge, held,
-housekeeping), **Local** (local work, stacks, cleanup), **Team**, **Planning**
-(todos, Jira) and **Parked** (on ice). Only Act now starts expanded; each
-panel inside a group collapses too.
+The page has **Act now** (reviews for me, feedback, CI, conflicts) on top,
+then a collapsible group per enabled plugin holding the rest of its panels.
+Only Act now starts expanded; each panel inside a group collapses too.
 
 - **Reviews for me**: PRs requesting my review as a person, and PRs I reviewed
   that were pushed or re-requested since.
@@ -86,8 +125,8 @@ panel inside a group collapses too.
 - **Needs a reviewer**: no person requested and no approval. PRs requesting
   one of my `teams` get recent committers to the PR's directories as
   suggestions for whom to assign instead.
-- **Nudge reviewers**: PRs in order (green, no conflicts, no open threads) with
-  no review activity for `stale_review_hours`. The ping button on any of my
+- **Nudge reviewers** (slack): PRs in order (green, no conflicts, no open threads) with
+  no review activity for `[github] stale_review_hours`. The Ping link on any of my
   PRs opens a page with one message per requested reviewer or team, a link to
   their Slack DM or channel, and "mark as sent", which makes the next ping a
   follow-up. Nudges the skill logged in `work-notes.md` count too.
@@ -152,10 +191,13 @@ Pages (GET, HTML):
 | --- | --- |
 | `/` | The dashboard. `?open=act,feedback` sets the open sections; `?notice=…` shows a message. |
 | `/focus` | Focus mode's category list. |
-| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act`, `my_prs`, `local`, `team`, `planning`, `parked`) or a panel key. `&done_entry=…&done_text=…` keeps a just-ticked todo on the page. |
-| `/ping?pr=<PR URL>` | The ping page for one of my PRs. |
+| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key. `&done_entry=…&done_text=…` keeps a just-ticked todo on the page. |
+| `/ping?pr=<PR URL>` | slack: the ping page for one of my PRs. |
 
-Forms (POST, `application/x-www-form-urlencoded`; each answers `303 See Other`
+Plugins can add pages of their own; the [Plugins](#plugins) section lists them.
+
+Forms (POST, `application/x-www-form-urlencoded`). A plugin's buttons post to
+`/actions/<plugin>/<action>`; the rest are core's. Each answers `303 See Other`
 to `/`, or to the `back` query parameter when it's a local path, with
 `notice=<outcome>` added; a failure is `notice=failed: <reason>`, never an
 error status):
@@ -163,29 +205,29 @@ error status):
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/refresh` | | Starts a background refresh. |
-| `/pings` | `pr_url`, `target` (`user:<login>` or `team:<slug>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent. |
-| `/actions/todo_add` | `entry`, `text` (or `input`), optional `size` (`quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds a todo under the entry's `Left to do`; with `create`, a missing entry is created first, with `where` as its `Where`. |
-| `/actions/todo_done` | `entry`, `text` | Moves the todo to a `Done <date>:` line; redirects with `done_entry`/`done_text`. |
-| `/actions/todo_undone` | `entry`, `text` | Moves a done todo back under `Left to do`. |
-| `/actions/todo_delete` | `entry`, `text` | Drops the todo without recording it. |
-| `/actions/todo_link` | `entry`, `text`, `input` (Jira key or URL) | Appends the ticket's or PR's URL to the todo. |
-| `/actions/push_branch` | `repo`, `branch` | `git push` (sets the upstream if missing; never forces). |
-| `/actions/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`. |
-| `/actions/ice` | `repo`, `branch` | Puts the branch's stack on ice. |
-| `/actions/thaw` | `branch` | Takes a stack off ice. |
-| `/actions/delete_iced` | `branch` | Deletes an iced stack's local branches and thaws it. |
-| `/actions/delete_branch` | `repo`, `branch` | `git branch -D`. |
-| `/actions/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
-| `/actions/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
+| `/actions/notes/todo_add` | `entry`, `text` (or `input`), optional `size` (`quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds a todo under the entry's `Left to do`; with `create`, a missing entry is created first, with `where` as its `Where`. |
+| `/actions/notes/todo_done` | `entry`, `text` | Moves the todo to a `Done <date>:` line; redirects with `done_entry`/`done_text`. |
+| `/actions/notes/todo_undone` | `entry`, `text` | Moves a done todo back under `Left to do`. |
+| `/actions/notes/todo_delete` | `entry`, `text` | Drops the todo without recording it. |
+| `/actions/notes/todo_link` | `entry`, `text`, `input` (Jira key or URL) | Appends the ticket's or PR's URL to the todo. |
+| `/actions/git/push_branch` | `repo`, `branch` | `git push` (sets the upstream if missing; never forces). |
+| `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`. |
+| `/actions/notes/ice` | `repo`, `branch` | Puts the branch's stack on ice. |
+| `/actions/notes/thaw` | `branch` | Takes a stack off ice. |
+| `/actions/notes/delete_iced` | `branch` | Deletes an iced stack's local branches and thaws it. |
+| `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. |
+| `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
+| `/actions/git/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
+| `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 
 `entry` is a work-notes entry's title exactly as its `##` line has it; `text`
 is the todo's text without its `[quick]`/`[big]` marker, exactly as the
 focus page shows it (and as `mfd dump` lists it under the todos panel's
-items' `parts`). `repo` is one of the configured repo directories. For
+items' `parts`). `repo` is one of `[git] repos`. For
 example:
 
 ```sh
-curl -s -o /dev/null -w '%{redirect_url}\n' -X POST http://127.0.0.1:8765/actions/todo_done \
+curl -s -o /dev/null -w '%{redirect_url}\n' -X POST http://127.0.0.1:8765/actions/notes/todo_done \
   --data-urlencode 'entry=APP-1 Fix the widget' --data-urlencode 'text=reply to the thread'
 ```
 
@@ -201,12 +243,20 @@ Jira; without Jira, entries with ticket keys are kept.
 
 ## How it stores things
 
-`dashboard.db` holds each collector's latest snapshot as JSON (kept when a
-refresh fails, with the error alongside), the work notes, iced stacks and
+`dashboard.db` holds each plugin's latest snapshot as JSON, under the
+plugin's name (kept when a refresh fails, with the error alongside), the work notes, iced stacks and
 reviewer map imported from the skill's `.md` files on every refresh, emails
 looked up from commits, and pings marked as sent. The skill's files stay the
 source of truth for the notes. The dashboard writes only `on-ice.md`, when a
 button puts a stack on ice or thaws one, in the skill's own format.
+
+The schema is built by migrations: core and each plugin own a list, applied in
+order at start-up and counted in `schema_versions`, so an older database
+upgrades in place. Before the first migration that would change an existing
+database, it's copied to `backups/dashboard.db.<UTC time>` next to it (with
+SQLite's backup API, so the copy is consistent); the newest `db_backups` (10)
+copies are kept, and `db_backups = 0` turns this off. To roll back, stop the
+server and copy a backup over `dashboard.db`.
 
 ## Development
 
