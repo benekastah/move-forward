@@ -13,7 +13,7 @@ from .config import Config
 from .db import Database
 from .graph import Graph
 from .page import Action, Item, SourceStatus
-from .plugin import ActionError, collect_into
+from .plugin import ActionError, ActionResult, collect_into
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, enabled
 from .repositories import SnapshotRepository
@@ -109,6 +109,23 @@ def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[s
 
 
 def run_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> str:
+    """Run a plugin's action, `<plugin>/<action>`, for its notice; raises `ActionError` when
+    it can't."""
+    return perform_action(config, db, name, fields).notice
+
+
+def kept_item(config: Config, db: Database, kept: str) -> Item | None:
+    """The item an action asked to keep on the focus page, by its `KEPT` parameter."""
+    plugin_name, _, key = kept.partition(":")
+    plugins = enabled(config, db, datetime.now(UTC))
+    e = next((e for e in plugins if e.name == plugin_name), None)
+    if e is None:
+        return None
+    graph, _ = stored_graph(db, plugins)
+    return e.plugin.kept_item(e.ctx, graph, key)
+
+
+def perform_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> ActionResult:
     """Run a plugin's action, `<plugin>/<action>`; raises `ActionError` when it can't."""
     plugin_name, _, action_name = name.partition("/")
     plugins = enabled(config, db, datetime.now(UTC))
@@ -118,8 +135,9 @@ def run_action(config: Config, db: Database, name: str, fields: dict[str, str]) 
         raise ActionError(f"unknown action {name}")
     graph, _ = stored_graph(db, plugins)
     try:
-        return handler(e.ctx, graph, fields)
+        result = handler(e.ctx, graph, fields)
     except KeyError as err:
         raise ActionError(f"missing field {err}") from err
     except CommandError as err:
         raise ActionError(str(err)) from err
+    return result if isinstance(result, ActionResult) else ActionResult(result)

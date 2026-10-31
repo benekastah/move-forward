@@ -11,7 +11,7 @@ import argparse
 import logging
 import traceback
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, ClassVar, Protocol
 
@@ -60,9 +60,24 @@ PageHandler = Callable[[Context[Any], Graph, dict[str, list[str]]], str | None]
 """Renders a page from the query parameters; None means not found."""
 CliHandler = Callable[[Context[Any], Graph, argparse.Namespace], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
-ActionHandler = Callable[[Context[Any], Graph, dict[str, str]], str]
-"""Runs a button's action with its form fields; returns the notice for the page and raises
-`ActionError` with the reason when it can't."""
+KEPT = "kept"
+"""The redirect parameter naming an item to keep on the focus page: `<plugin>:<key>`."""
+
+
+@dataclass(frozen=True)
+class ActionResult:
+    """What an action did: the notice for the page, and parameters for the page it redirects
+    back to."""
+
+    notice: str
+    params: dict[str, str] = field(default_factory=dict[str, str])
+    """e.g. `{KEPT: "notes:12"}`, to keep a todo just ticked off on the focus page; see
+    `Plugin.kept_item`."""
+
+
+ActionHandler = Callable[[Context[Any], Graph, dict[str, str]], str | ActionResult]
+"""Runs a button's action with its form fields; returns the notice for the page (or a result
+with redirect parameters too) and raises `ActionError` with the reason when it can't."""
 
 
 class ActionError(Exception):
@@ -129,6 +144,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def item_actions(self, ctx: Context[C], item: Item, graph: Graph) -> list[Action]:
         """Buttons the plugin adds to another plugin's item, e.g. "add todo" on a PR."""
         return []
+
+    def kept_item(self, ctx: Context[C], graph: Graph, key: str) -> Item | None:
+        """An item one of this plugin's actions asked to keep on the focus page after changing
+        it (its result's `KEPT` parameter, `<plugin>:<key>`), e.g. a todo just ticked off,
+        shown with its box ticked so the tick can be undone."""
+        return None
 
     def pages(self) -> dict[str, PageHandler]:
         """Extra pages by path, e.g. "/ping"."""

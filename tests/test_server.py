@@ -1,5 +1,5 @@
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPResponse
 from http.server import ThreadingHTTPServer
@@ -12,7 +12,7 @@ from conftest import ME, pr, snapshot
 from move_forward import server
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.plugin import ActionError
+from move_forward.plugin import ActionError, ActionResult
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.registry import migrate
@@ -83,6 +83,18 @@ def post(
         },
     )
     return client.getresponse()
+
+
+FakeRun = Callable[[object, object, str, dict[str, str]], str]
+
+
+def _results(run: FakeRun) -> Callable[[object, object, str, dict[str, str]], ActionResult]:
+    """An action runner standing in for `perform_action`, from one that returns notices."""
+
+    def perform(config: object, db: object, name: str, fields: dict[str, str]) -> ActionResult:
+        return ActionResult(run(config, db, name, fields))
+
+    return perform
 
 
 def test_dashboard_page_renders_panels_and_ping_links(client: HTTPConnection) -> None:
@@ -197,7 +209,7 @@ def test_actions_run_and_redirect_with_a_notice(
             raise ActionError("nope")
         return "did it"
 
-    monkeypatch.setattr(server, "run_action", fake_run)
+    monkeypatch.setattr(server, "perform_action", _results(fake_run))
     response = post(client, "/actions/delete_branch", {"repo": "/r", "branch": "b"})
     assert response.status == 303
     assert response.getheader("Location") == "/?notice=did+it"
@@ -244,7 +256,7 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
     def fake_run(*_: object) -> str:
         return "did it"
 
-    monkeypatch.setattr(server, "run_action", fake_run)
+    monkeypatch.setattr(server, "perform_action", _results(fake_run))
     response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dall%26i%3D0", {})
     assert response.getheader("Location") == "/focus?cat=all&i=0&notice=did+it"
     # Only local paths; anything else goes to the dashboard.
@@ -260,7 +272,7 @@ def test_ticking_a_todo_off_redirects_back_with_it(
     def fake_run(_config: object, _db: object, name: str, fields: dict[str, str]) -> str:
         return f"{name} {fields['text']}"
 
-    monkeypatch.setattr(server, "run_action", fake_run)
+    monkeypatch.setattr(server, "perform_action", _results(fake_run))
     response = post(
         client,
         "/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",

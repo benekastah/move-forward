@@ -13,8 +13,8 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from . import auth, render, shell
 from .config import Config
 from .db import Database
-from .plugin import ActionError
-from .refresh import build_dashboard, plugin_page, refresh, run_action
+from .plugin import KEPT, ActionError
+from .refresh import build_dashboard, kept_item, perform_action, plugin_page, refresh
 
 log = logging.getLogger(__name__)
 
@@ -107,34 +107,42 @@ class App:
             build_dashboard(self.config, self.db), self.refreshing, notice, open_keys
         )
 
-    def run_action(self, name: str, fields: dict[str, str]) -> tuple[str, bool]:
+    def run_action(self, name: str, fields: dict[str, str]) -> tuple[str, dict[str, str]]:
         """Run a button's action and refresh afterwards, so the page reflects it soon.
 
-        Returns the notice for the page and whether the action succeeded.
+        Returns the notice for the page and, when it succeeded, its redirect parameters.
         """
         try:
-            notice = run_action(self.config, self.db, name, fields)
+            result = perform_action(self.config, self.db, name, fields)
         except ActionError as e:
-            return f"failed: {e}", False
+            return f"failed: {e}", {}
         self.request_refresh()
-        return notice, True
+        return result.notice, {**_redirect_params(name, fields), **result.params}
 
     def plugin_page(self, path: str, query: str) -> str | None:
         """An enabled plugin's page; None when there's none at `path`."""
         return plugin_page(self.config, self.db, path, parse_qs(query, keep_blank_values=True))
 
     def focus_page(
-        self, category: str, index: int, notice: str = "", done: tuple[str, str] | None = None
+        self,
+        category: str,
+        index: int,
+        notice: str = "",
+        done: tuple[str, str] | None = None,
+        kept: str = "",
     ) -> str | None:
         """The category list without a category, else that category's item at `index`.
 
-        `done` is the (entry, text) of a todo just ticked off, kept on the page to undo.
+        `done` is the (entry, text) of a todo just ticked off, and `kept` an item an action
+        asked to keep (see `Plugin.kept_item`): either stays on the page, to undo.
         """
         self.refresh_if_stale()
         dashboard = build_dashboard(self.config, self.db)
         if not category:
             return render.focus_categories_page(dashboard)
         done_item = dashboard.done_todo(*done) if done else None
+        if kept:
+            done_item = kept_item(self.config, self.db, kept)
         return render.focus_page(dashboard, category, index, notice, done_item)
 
 
@@ -275,7 +283,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     if "done_text" in params
                     else None
                 )
-                page = app.focus_page(category, _int(params, "i"), notice, done)
+                kept = params.get(KEPT, [""])[0]
+                page = app.focus_page(category, _int(params, "i"), notice, done, kept)
                 if page is None:
                     self._html(HTTPStatus.NOT_FOUND, "<p>No such focus category.</p>")
                 else:
@@ -299,8 +308,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             elif url.path.startswith("/actions/"):
                 name = url.path[len("/actions/") :]
                 fields = _form_fields(self._read_body())
-                notice, ok = app.run_action(name, fields)
-                extra = _redirect_params(name, fields) if ok else {}
+                notice, extra = app.run_action(name, fields)
                 self._redirect(_back_to_page(url.query, notice, extra))
             else:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
