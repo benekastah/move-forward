@@ -77,10 +77,10 @@ def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
 
 
 def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """Put the branch's stack on ice, recording each branch's commit."""
+    """Put the branch's stack on ice, recording each branch's commit as git last saw it."""
     repo = _repo(graph, fields["repo"])
     branch = fields["branch"]
-    if not branch_exists(repo, branch):
+    if graph.get(BRANCH, f"{repo}{TARGET_SEPARATOR}{branch}") is None:
         raise ActionError(f"{branch} doesn't exist in {repo}")
     notes = NotesRepository(ctx.db)
     names = _stack_branches(graph, repo, branch)
@@ -88,10 +88,13 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     iced = {item.ref_id for i in notes.ices() for item in i.items if item.kind == BRANCH}
     if iced.intersection(ref_ids):
         raise ActionError(f"{branch} is already on ice")
-    items = [
-        IcedItem(kind=BRANCH, ref_id=ref_id, sha=git(repo, "rev-parse", name).strip())
-        for name, ref_id in zip(names, ref_ids, strict=True)
-    ]
+    items: list[IcedItem] = []
+    for ref_id in ref_ids:
+        entity = graph.get(BRANCH, ref_id)
+        sha = entity.attrs.get("sha") if entity else None
+        items.append(
+            IcedItem(kind=BRANCH, ref_id=ref_id, sha=sha if isinstance(sha, str) else None)
+        )
     notes.add_ice(names[0], ctx.now.date(), ICED_FROM_DASHBOARD_NOTE, items)
     return f"put {names[0]} on ice ({len(names)} branches)"
 

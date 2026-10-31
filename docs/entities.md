@@ -114,3 +114,4 @@ On branches git-stack tracks (git_stack):
 | `repo_dir` | string | the repo's directory, with `~` expanded |
 | `name` | string | the branch's name |
 | `stack` | string | the bottom branch of the iced stack it belongs to |
+| `sha` | string or null | the commit it pointed at when iced |

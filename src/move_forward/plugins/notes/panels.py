@@ -183,7 +183,7 @@ def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
                 Entity(
                     ref=Ref(kind=ICED_BRANCH, id=item.ref_id),
                     title=name,
-                    attrs={"repo_dir": repo_dir, "name": name, "stack": ice.title},
+                    attrs={"repo_dir": repo_dir, "name": name, "stack": ice.title, "sha": item.sha},
                 )
             )
     return result

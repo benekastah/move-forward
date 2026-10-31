@@ -88,10 +88,16 @@ def _stored(config: Config) -> Database:
                 default_branch="main",
                 worktrees=[],
                 branches=[
-                    Branch(name=name, committed_at=datetime.now(UTC))
-                    for name in git(
-                        repo, "for-each-ref", "--format=%(refname:short)", "refs/heads"
-                    ).split()
+                    Branch(name=name, sha=sha, committed_at=datetime.now(UTC))
+                    for name, sha in (
+                        line.split()
+                        for line in git(
+                            repo,
+                            "for-each-ref",
+                            "--format=%(refname:short) %(objectname)",
+                            "refs/heads",
+                        ).splitlines()
+                    )
                 ],
             )
             for repo in config.git.repos
@@ -181,6 +187,8 @@ def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     assert [(i.kind, i.ref_id, i.sha) for i in ice.items] == [
         ("branch", f"{repo}\twip", git(repo, "rev-parse", "wip").strip())
     ]
+    iced_wip = graph(config).get("iced_branch", f"{repo}\twip")
+    assert iced_wip is not None and iced_wip.attrs["sha"] == ice.items[0].sha
     with pytest.raises(ActionError, match="already on ice"):
         _ice(config, repo, "wip")
     assert run("notes/thaw", config, {"ice": str(ice.id)}) == "thawed wip"
