@@ -6,10 +6,18 @@ import pytest
 from move_forward import notes, refresh, server
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.domain import Branch, LocalRepo, LocalSnapshot
+from move_forward.domain import (
+    Branch,
+    GitStackSnapshot,
+    LocalRepo,
+    LocalSnapshot,
+    StackBranch,
+    StackRepo,
+)
 from move_forward.graph import Graph
 from move_forward.plugin import ActionError
 from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git_stack.config import GitStackConfig
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.notes import actions as notes_actions
@@ -201,6 +209,28 @@ def test_delete_iced_refuses_a_checked_out_branch_before_deleting_anything(
     with pytest.raises(ActionError, match="checked out"):
         run("notes/delete_iced", config, {"branch": "wip"})
     assert notes.parse_on_ice((config.notes.dir / notes.ON_ICE_FILE).read_text())
+
+
+def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -> None:
+    git(repo, "branch", "top", "wip")
+    git(repo, "branch", "beside", "done")
+    config = config.model_copy(update={"git_stack": GitStackConfig()})
+    db = _stored(config)
+    tracked = [
+        StackBranch(name="main"),
+        StackBranch(name="done", parent="main"),
+        StackBranch(name="wip", parent="done"),
+        StackBranch(name="top", parent="wip"),
+        StackBranch(name="beside", parent="done"),
+    ]
+    snapshot = GitStackSnapshot(repos=[StackRepo(dir=str(repo), branches=tracked)])
+    SnapshotRepository(db).save("git_stack", datetime.now(UTC), snapshot)
+    built, _ = refresh.stored_graph(db, enabled(config, db, datetime.now(UTC)))
+    config.notes.dir.mkdir()
+    notice = notes_actions.ice(config.notes, built, {"repo": str(repo), "branch": "top"})
+    assert notice == "put done on ice (4 branches)"
+    [stack] = notes.parse_on_ice((config.notes.dir / notes.ON_ICE_FILE).read_text())
+    assert [b.name for b in stack.branches] == ["done", "beside", "wip", "top"]
 
 
 def test_ice_creates_the_file_when_missing(config: Config, repo: Path) -> None:

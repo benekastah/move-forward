@@ -21,10 +21,6 @@ def action(name: str, label: str, fields: dict[str, str], confirm: str | None = 
     return Action(name=f"git/{name}", label=label, fields=fields, confirm=confirm)
 
 
-def _ice_action(repo_dir: str, branch: str) -> Action:
-    return Action(name="notes/ice", label="Put on ice", fields={"repo": repo_dir, "branch": branch})
-
-
 class Builder:
     def __init__(
         self, config: GitConfig, now: datetime, snapshot: LocalSnapshot | None, graph: Graph
@@ -64,8 +60,6 @@ class Builder:
                                 "wip_commit", "WIP commit", {"repo": repo.dir, "worktree": wt.path}
                             )
                         )
-                    if wt.branch and wt.branch not in self.iced_branches:
-                        actions.append(_ice_action(repo.dir, wt.branch))
                     items.append(
                         Item(
                             title=f"{wt.branch or 'detached HEAD'}: {wt.modified} modified,"
@@ -75,7 +69,8 @@ class Builder:
                             badges=["uncommitted"],
                             rank=2,
                             actions=actions,
-                            subjects=[pr.ref] if pr else [],
+                            subjects=([branch_ref(repo.dir, wt.branch)] if wt.branch else [])
+                            + ([pr.ref] if pr else []),
                         )
                     )
             for branch in repo.branches:
@@ -97,8 +92,6 @@ class Builder:
                     actions.append(
                         action("push_branch", "Push", {"repo": repo.dir, "branch": branch.name})
                     )
-                if not iced:
-                    actions.append(_ice_action(repo.dir, branch.name))
                 items.append(
                     Item(
                         title=f"{branch.name}: {reason}",
@@ -107,7 +100,7 @@ class Builder:
                         badges=(["iced"] if iced else []) + (["has PR"] if pr else ["no PR"]),
                         rank=0 if iced else 1,
                         actions=actions,
-                        subjects=[pr.ref] if pr else [],
+                        subjects=[branch_ref(repo.dir, branch.name)] + ([pr.ref] if pr else []),
                     )
                 )
         return Panel(

@@ -1,5 +1,6 @@
-"""The notes plugin's panels: todos from the work notes and stacks on ice, and the Add todo
-field it puts on items about my PRs and tickets. Pure functions; no I/O."""
+"""The notes plugin's panels: todos from the work notes and stacks on ice, and what it puts on
+other plugins' items: Add todo on items about my PRs and tickets, Put on ice on items about a
+branch. Pure functions; no I/O."""
 
 import re
 from datetime import datetime
@@ -16,6 +17,9 @@ PR = "pr"
 TICKET = "ticket"
 ENTRY = "entry"
 ICED_BRANCH = "iced_branch"
+BRANCH = "branch"
+BRANCH_ID_SEPARATOR = "\t"
+"""Joins a repo dir and a branch name in a `branch` entity's id."""
 TODO_ADD = "notes/todo_add"
 PR_STATES: dict[str, PrState] = {"open": "open", "merged": "merged", "closed": "closed"}
 
@@ -223,6 +227,18 @@ class Builder:
             summary = subject.attrs.get("summary")
             return add_todo_action(entry, f"{key} {summary}" if summary else key, subject.url or "")
         return None
+
+    def put_on_ice(self, item: Item) -> Action | None:
+        """A Put on ice button for an item about one of git's branches, unless it's on ice."""
+        ref = item.subject(BRANCH)
+        if ref is None or self.graph.get(BRANCH, ref.id) is None:
+            return None
+        repo_dir, _, name = ref.id.partition(BRANCH_ID_SEPARATOR)
+        if self.graph.get(ICED_BRANCH, name) is not None:
+            return None
+        return Action(
+            name="notes/ice", label="Put on ice", fields={"repo": repo_dir, "branch": name}
+        )
 
     def _pr_states(self) -> dict[str, PrState]:
         return {

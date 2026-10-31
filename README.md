@@ -68,7 +68,7 @@ fails to load without it, saying which (e.g. "[git_stack] needs [git]").
 | `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in each of git's repos | Stacks |
 | `jira` | `[jira]` | my open tickets | Jira transitions, What next |
 | `slack` | `[slack]` | nothing; reads my PRs from the graph and the reviewer map | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
-| `notes` | `[notes]`, optional: always on | the skill's notes, from markdown | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket |
+| `notes` | `[notes]`, optional: always on | the skill's notes, from markdown | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket, and Put on ice on every item about a local branch |
 
 `[notes] dir` is where `work-notes.md`, `on-ice.md` and `reviewer-map.md`
 live: the move-forward skill's notes, which the dashboard reads on every
@@ -140,7 +140,7 @@ Only Act now starts expanded; each panel inside a group collapses too.
 - **Ready to merge** and **Held by merge conditions** (from the work notes).
 - **Local work**: dirty worktrees, unpushed and never-pushed branches, with
   buttons: WIP commit (tracked files only), Push (never forced; sets the
-  upstream for a new branch), Put on ice.
+  upstream for a new branch), and notes' Put on ice.
 - **Stacks** (git_stack): `git stack info` statuses other than up-to-date, and
   tracked branches with no PR, with a button per repo that runs `git stack
   clean -d local` for its merged branches (not offered while the repo has iced
@@ -218,7 +218,7 @@ error status):
 | `/actions/notes/todo_link` | `entry`, `text`, `input` (Jira key or URL) | Appends the ticket's or PR's URL to the todo. |
 | `/actions/git/push_branch` | `repo`, `branch` | `git push` (sets the upstream if missing; never forces). |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`. |
-| `/actions/notes/ice` | `repo`, `branch` | Puts the branch's stack on ice. |
+| `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack when git_stack knows it. |
 | `/actions/notes/thaw` | `branch` | Takes a stack off ice. |
 | `/actions/notes/delete_iced` | `branch` | Deletes an iced stack's local branches and thaws it. |
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. |
