@@ -24,7 +24,7 @@ class Link(Model):
 
 
 class Action(Model):
-    """A button that posts `fields` to `/actions/<name>`."""
+    """A button that posts `fields` to `/actions/<name>`, or, with `href`, a link to a page."""
 
     name: str
     label: str
@@ -38,6 +38,13 @@ class Action(Model):
     """Drawn bigger: the data says this is probably the thing to do."""
     input: str | None = None
     """Placeholder of a text field, posted as `input`, that the button submits along."""
+    href: str | None = None
+    """Makes the button a link to this page instead of a form (`name` and `fields` unused).
+    Links sit at the top right of their item."""
+    title: str | None = None
+    """A tooltip, e.g. why a link is muted."""
+    muted: bool = False
+    """Drawn faintly: it can be done, but the data says not yet."""
 
 
 class Item(Model):

@@ -634,3 +634,10 @@ Raised while building, not yet scheduled:
   remote regex. A second code host (Bitbucket, GitLab) needs ids like
   `github.com/acme/widgets` so they can't collide, and `git` parsing any host. A shared
   base for code-host plugins (PR panels over a normalized PR) can wait for that second host.
+- **Windows.** Once the plugin steps are done, make it run on Windows: the Jira token's
+  fallback is the macOS keychain (`security`); `dev-install.sh`, `dev-venv.sh`, `check.sh`
+  and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
+  process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
+  separators) and written into `on-ice.md`.
+- **CI.** After Windows: GitHub Actions running `check.sh`'s checks, and the tests on
+  Linux, macOS and Windows.

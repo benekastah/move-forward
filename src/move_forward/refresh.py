@@ -12,6 +12,7 @@ from .config import Config
 from .db import Database
 from .domain import TeamChannel
 from .graph import Graph
+from .page import Action, Item
 from .plugin import ActionError, collect_into
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, enabled
@@ -97,7 +98,22 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         source: panels.SourceStatus(fetched_at=row.fetched_at, error=row.error)
         for source, row in SnapshotRepository(db).all().items()
     }
-    return panels.build(inputs, plugin_panels, sources, me.ref.id if me else "")
+
+    def item_actions(item: Item) -> list[Action]:
+        return [a for e in plugins for a in e.plugin.item_actions(e.ctx, item, graph)]
+
+    return panels.build(inputs, plugin_panels, sources, me.ref.id if me else "", item_actions)
+
+
+def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[str]]) -> str | None:
+    """An enabled plugin's page at `path`, or None when there's no such page (or the plugin
+    has nothing at that query)."""
+    plugins = enabled(config, db, datetime.now(UTC))
+    for e in plugins:
+        if handler := e.plugin.pages().get(path):
+            graph, _ = _graph(db, plugins)
+            return handler(e.ctx, graph, query)
+    return None
 
 
 def run_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> str:

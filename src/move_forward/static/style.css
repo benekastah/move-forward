@@ -194,8 +194,8 @@ button, .button {
 }
 button.secondary { background: transparent; color: var(--text); border-color: var(--border); }
 button:disabled { opacity: 0.5; cursor: default; }
-.button.ping { padding: 2px 8px; font-size: 12px; white-space: nowrap; }
-.button.ping.blocked { background: transparent; color: var(--muted); border-color: var(--border); }
+.button.ping, .button.link-action { padding: 2px 8px; font-size: 12px; white-space: nowrap; }
+.button.ping.blocked, .button.link-action.muted { background: transparent; color: var(--muted); border-color: var(--border); }
 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .panel > .actions { padding: 8px 14px 0; }

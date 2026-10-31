@@ -7,6 +7,7 @@ the reviewer map come from core's tables until they become plugins of their own.
 
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, cast
@@ -618,20 +619,44 @@ def _sorted(panel: Panel) -> Panel:
     return panel.model_copy(update={"items": sorted(panel.items, key=lambda i: (i.draft, -i.rank))})
 
 
+ItemActions = Callable[[Item], list[Action]]
+"""The buttons the plugins add to an item, whoever built it; see `Plugin.item_actions`."""
+
+
+def _no_item_actions(item: Item) -> list[Action]:
+    return []
+
+
+def _with_item_actions(panel: Panel, item_actions: ItemActions) -> Panel:
+    """Each item, and each of its focus-mode parts, with the plugins' buttons added."""
+
+    def add(item: Item) -> Item:
+        return item.model_copy(
+            update={
+                "actions": [*item.actions, *item_actions(item)],
+                "parts": [add(part) for part in item.parts],
+            }
+        )
+
+    return panel.model_copy(update={"items": [add(item) for item in panel.items]})
+
+
 def build(
     inputs: Inputs,
     plugin_panels: list[Panel],
     sources: dict[str, SourceStatus],
     login: str = "",
+    item_actions: ItemActions = _no_item_actions,
 ) -> Dashboard:
-    """The dashboard: the plugins' panels and these, each with its Add todo fields, sorted."""
+    """The dashboard: the plugins' panels and these, each with its Add todo fields and the
+    plugins' item buttons, sorted."""
     b = _Builder(inputs)
     pings = b.pings()
     panels = [*plugin_panels, b.nudges(pings), b.todos(), b.iced()]
     return Dashboard(
         generated_at=inputs.now,
         login=login,
-        panels=[_sorted(b.with_add_todo(p)) for p in panels],
+        panels=[_sorted(_with_item_actions(b.with_add_todo(p), item_actions)) for p in panels],
         pings=pings,
         sources=sources,
     )

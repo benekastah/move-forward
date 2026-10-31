@@ -190,6 +190,8 @@ Pages (GET, HTML):
 | `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act`, `my_prs`, `local`, `team`, `planning`, `parked`) or a panel key. `&done_entry=…&done_text=…` keeps a just-ticked todo on the page. |
 | `/ping?pr=<PR URL>` | The ping page for one of my PRs. |
 
+Plugins can add pages of their own; each plugin's section below lists them.
+
 Forms (POST, `application/x-www-form-urlencoded`). A plugin's buttons post to
 `/actions/<plugin>/<action>`; the rest are core's. Each answers `303 See Other`
 to `/`, or to the `back` query parameter when it's a local path, with

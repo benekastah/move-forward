@@ -66,6 +66,22 @@ def _e(text: object) -> str:
     return escape(str(text), quote=True)
 
 
+def e(text: object) -> str:
+    """`text` escaped for HTML text and attribute values, for plugins' pages."""
+    return _e(text)
+
+
+def page(title: str, crumb: str, body: str, script: str = "") -> str:
+    """A whole single-column page in the dashboard's look, for plugins' pages: the header
+    reads "Move forward / `crumb`", and `body` (HTML) goes in its main column."""
+    return (
+        _head(title, None)
+        + f"<header><h1>{LOGO} / {_e(crumb)}</h1></header><main class='single'>{body}</main>"
+        + (f"<script>{script}</script>" if script else "")
+        + "</body></html>"
+    )
+
+
 def _head(title: str, reload_seconds: int | None) -> str:
     """Up to and including the `<body>` tag.
 
@@ -110,6 +126,14 @@ def _ping_button(item: Item, pings: dict[str, PrPing]) -> str:
     )
 
 
+def _link_action(action: Action) -> str:
+    title = f" title='{_e(action.title)}'" if action.title else ""
+    return (
+        f"<a class='button link-action{' muted' if action.muted else ''}'"
+        f" href='{_e(action.href)}'{title}>{_e(action.label)}</a>"
+    )
+
+
 def _action(action: Action, back: str = "") -> str:
     """A button's form. `back` is where the action redirects afterwards; default the page."""
     fields = "".join(
@@ -138,7 +162,7 @@ def _action(action: Action, back: str = "") -> str:
 
 
 def _actions(actions: list[Action], back: str = "") -> str:
-    buttons = "".join(_action(a, back) for a in actions)
+    buttons = "".join(_action(a, back) for a in actions if a.href is None)
     return f"<div class='actions'>{buttons}</div>" if actions else ""
 
 
@@ -157,7 +181,9 @@ def _item(item: Item, pings: dict[str, PrPing], back: str = "") -> str:
     )
     parts = [
         "<li class='item'><div class='item-head'>",
-        f"<div class='item-title'>{title}</div>{_ping_button(item, pings)}</div>",
+        f"<div class='item-title'>{title}</div>{_ping_button(item, pings)}"
+        + "".join(_link_action(a) for a in item.actions if a.href is not None)
+        + "</div>",
     ]
     if item.subtitle:
         parts.append(f"<div class='item-subtitle'>{_e(item.subtitle)}</div>")

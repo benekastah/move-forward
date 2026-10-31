@@ -17,7 +17,7 @@ from .config import Config
 from .db import Database
 from .domain import Ping
 from .plugin import ActionError
-from .refresh import build_dashboard, refresh, run_action
+from .refresh import build_dashboard, plugin_page, refresh, run_action
 from .repositories import PingRepository
 
 log = logging.getLogger(__name__)
@@ -109,6 +109,10 @@ class App:
             return f"failed: {e}", False
         self.request_refresh()
         return notice, True
+
+    def plugin_page(self, path: str, query: str) -> str | None:
+        """An enabled plugin's page; None when there's none at `path`."""
+        return plugin_page(self.config, self.db, path, parse_qs(query, keep_blank_values=True))
 
     def ping_page(self, pr_url: str) -> str | None:
         return render.ping_page(build_dashboard(self.config, self.db), pr_url)
@@ -225,6 +229,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     self._html(HTTPStatus.NOT_FOUND, "<p>No such focus category.</p>")
                 else:
                     self._html(HTTPStatus.OK, page)
+            elif (page := app.plugin_page(url.path, url.query)) is not None:
+                self._html(HTTPStatus.OK, page)
             elif url.path in STATIC_FILES:
                 name, content_type = STATIC_FILES[url.path]
                 self._send(HTTPStatus.OK, (STATIC_DIR / name).read_text(), content_type)
