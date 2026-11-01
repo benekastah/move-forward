@@ -1,9 +1,8 @@
 """Core's hooks for plugins: buttons on other plugins' items, pages and commands."""
 
 import argparse
-import time
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import ClassVar
 
@@ -11,7 +10,7 @@ import pytest
 from conftest import NOW, dashboard, issue, pr, snapshot, stored
 from pydantic import BaseModel
 
-from move_forward import cli, refresh, registry, render
+from move_forward import cli, localtime, refresh, registry, render
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import Model
@@ -304,20 +303,15 @@ def test_a_plugin_prepares_its_item_actions_once_per_page(monkeypatch: pytest.Mo
 
 
 def test_today_is_the_local_date(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TZ", "America/Los_Angeles")
-    time.tzset()
-    try:
-        late_evening = datetime(2026, 10, 31, 3, 0, tzinfo=UTC)  # 8pm on the 30th there
-        ctx = Context(
-            config=JiraConfig(site="https://j"),
-            email="me@x",
-            teams=[],
-            prune_days=90,
-            now=late_evening,
-            db=Database(":memory:"),
-            kv=KvRepository(Database(":memory:"), "jira"),
-        )
-        assert ctx.today == date(2026, 10, 30)
-    finally:
-        monkeypatch.undo()
-        time.tzset()
+    monkeypatch.setattr(localtime, "zone", timezone(timedelta(hours=-7)))  # Pacific, in summer
+    late_evening = datetime(2026, 10, 31, 3, 0, tzinfo=UTC)  # 8pm on the 30th there
+    ctx = Context(
+        config=JiraConfig(site="https://j"),
+        email="me@x",
+        teams=[],
+        prune_days=90,
+        now=late_evening,
+        db=Database(":memory:"),
+        kv=KvRepository(Database(":memory:"), "jira"),
+    )
+    assert ctx.today == date(2026, 10, 30)

@@ -34,8 +34,9 @@ is what's left to build.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
   plugin last fetched, and why it failed.
-- Times are kept in UTC and shown in local time; a day recorded as "today"
-  (a todo done, an entry touched) is the local one, `ctx.today`.
+- Times are kept in UTC and shown in local time, through `localtime`; a day
+  recorded as "today" (a todo done, an entry touched) is the local one,
+  `ctx.today`.
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database
   reads beyond what the plugin passes in. Everything slow happens in
   `collect` or `after_collect`, or in `collect_after` for a plugin that

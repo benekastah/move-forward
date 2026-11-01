@@ -17,7 +17,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
-from . import shell
+from . import localtime, shell
 from .asking import Asker, InitSetup
 from .db import Database
 from .graph import Entity, Graph
@@ -51,7 +51,7 @@ class Context[C: BaseModel]:
     @property
     def today(self) -> date:
         """Today where I am: the local date, for what's recorded as done or changed today."""
-        return self.now.astimezone().date()
+        return localtime.day(self.now)
 
 
 PageHandler = Callable[[Context[Any], Graph, dict[str, list[str]]], str | None]

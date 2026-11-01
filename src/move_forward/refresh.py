@@ -8,7 +8,7 @@ from datetime import UTC, datetime, time, timedelta
 
 from pydantic import BaseModel
 
-from . import act_now, panels, shell
+from . import act_now, localtime, panels, shell
 from .act_now import Feedback
 from .config import Config
 from .db import Database
@@ -212,7 +212,7 @@ def _act_now_action(db: Database, action: str, fields: dict[str, str]) -> Action
         feedback.forget(key)
         return ActionResult("unpinned")
     if action == "snooze":
-        local = now.astimezone()
+        local = localtime.local(now)
         tomorrow = datetime.combine(local.date() + timedelta(days=1), time(), local.tzinfo)
         feedback.say(key, Feedback(action="snooze", fingerprint=fingerprint, until=tomorrow), now)
         return ActionResult("snoozed until tomorrow")

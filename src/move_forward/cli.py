@@ -7,7 +7,7 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, registry, reload, tls
+from . import auth, init, localtime, registry, reload, tls
 from . import config as config_module
 from .db import Database
 from .plugin import CliHandler
@@ -140,13 +140,13 @@ def _cert(paths: tls.Paths, force: bool, trust: bool) -> int:
     """`mfd cert`: make the certificates unless they're there, and trust them if asked."""
     if paths.ready() and not force:
         print(
-            f"certificates in {paths.dir} cover until {tls.expires(paths).astimezone():%Y-%m-%d};"
+            f"certificates in {paths.dir} cover until {localtime.day(tls.expires(paths))};"
             " --force replaces them"
         )
     else:
         tls.make(paths)
         print(
-            f"made certificates in {paths.dir} covering until {tls.expires(paths).astimezone():%Y-%m-%d};"
+            f"made certificates in {paths.dir} covering until {localtime.day(tls.expires(paths))};"
             " `mfd serve` moves from one to the next by itself"
         )
     if trust:
