@@ -185,6 +185,9 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         if e.name in snapshots:
             e.plugin.store(e.ctx, snapshots[e.name])
             SnapshotRepository(db).save_fetched(e.name, NOW)
+    plugins = enabled(config, db, NOW)
+    notes = next(e for e in plugins if e.name == "notes")
+    notes.plugin.after_collect(notes.ctx, stored_graph(db, plugins)[0])  # what ice covers
     if derived is not None:
         DerivedRepository(db).replace(derived)
         SnapshotRepository(db).save_fetched("github.derived", NOW)

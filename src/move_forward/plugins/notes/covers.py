@@ -31,8 +31,10 @@ class _PrView(Model):
 
 def covers(graph: Graph, ices: list[Ice]) -> dict[int, list[Ref]]:
     """By act of icing, the PRs from its branches (in the repo git has them checked out from,
-    or in any repo when git doesn't know the checkout) and the entities tracking them."""
+    or, when git doesn't know the checkout, in any repo git doesn't know one of) and the
+    entities tracking them."""
     repos = {r.dir: r.id for r in graph.view(REPO, _RepoView)}
+    checked_out = set(repos.values())
     prs = graph.view(PR, _PrView)
     found: dict[int, list[Ref]] = {}
     for ice in ices:
@@ -42,9 +44,10 @@ def covers(graph: Graph, ices: list[Ice]) -> dict[int, list[Ref]]:
                 continue
             repo_dir, _, name = item.ref_id.partition(BRANCH_ID_SEPARATOR)
             repo = repos.get(repo_dir)
-            refs += [
-                Ref(kind=PR, id=pr.id) for pr in prs if pr.head == name and repo in (None, pr.repo)
-            ]
+            for pr in prs:
+                from_here = pr.repo == repo if repo else pr.repo not in checked_out
+                if pr.head == name and from_here:
+                    refs.append(Ref(kind=PR, id=pr.id))
             branch = Ref(kind=BRANCH, id=item.ref_id)
             refs += [e.ref for e in graph.related(branch, STACK_BRANCH)]
         if refs:

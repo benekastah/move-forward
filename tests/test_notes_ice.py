@@ -47,9 +47,18 @@ def test_an_ice_covers_its_branches_prs_in_their_repo_and_what_tracks_them() -> 
     }
 
 
-def test_without_the_checkout_an_ice_covers_prs_from_its_branch_name_in_any_repo() -> None:
-    graph = Graph([_pr(1, "acme/widgets", "me/x"), _pr(2, "acme/other", "me/x")])
-    assert covers(graph, [_ice(7, BRANCH.id)]) == {7: [e.ref for e in graph.of_kind("pr")]}
+def test_without_its_checkout_an_ice_covers_its_branch_names_prs_in_repos_git_lacks() -> None:
+    graph = Graph(
+        [
+            Entity(ref=Ref(kind="repo", id="acme/other"), title="o", attrs={"dir": "/src/other"}),
+            _pr(1, "acme/widgets", "me/x"),
+            _pr(2, "acme/more", "me/x"),
+            _pr(3, "acme/other", "me/x"),  # checked out elsewhere: not this branch's
+        ]
+    )
+    assert covers(graph, [_ice(7, BRANCH.id)]) == {
+        7: [_pr(1, "acme/widgets", "me/x").ref, _pr(2, "acme/more", "me/x").ref]
+    }
 
 
 def test_iced_entities_hide_their_items_and_covers() -> None:
