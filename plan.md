@@ -103,9 +103,22 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
 - **Changes as they happen**: Socket Mode, a connection the dashboard opens itself, brings
   Slack's events as they happen, so slack implements `changed` (see the other plugins)
   without polling.
+- **Following github**: slack `watches` github, so right after each github refresh its
+  `changed(ctx, graph)` compares my open PRs and their requested reviewers with what it
+  saw last. A new review request or a new reviewer has slack look at once for the pings
+  and reactions about that PR (pings recognized, reactions to pings), rather than waiting
+  for its own schedule. The PRs that moved are the ones to look up, not all of them.
 
 ## Follow-ups
 
+- **git_stack watches git instead of riding along with it.** git_stack collects after git
+  and `requires` it, so every git refresh (once a minute for uncommitted edits, and after
+  every local change) runs `git stack info` in every repo, even when no branch moved. It
+  could declare `watches = ["git"]` and a `changed(ctx, graph)` comparing git's `branch`
+  entities (tips, upstreams) with what it saw last, and collect only when they moved,
+  with its own `refresh_seconds` as the backstop. First check where git-stack keeps its
+  stack metadata: what it keeps outside git's refs wouldn't show in git's branches, and
+  would need a check of its own (that file's time).
 - **Act now, after living with it.** Questions to answer from use: whether quick wins
   should lead at the end of the day and important work in the morning (a weight profile
   per part of the day); whether someone waiting on my team should weigh more (the `person`
