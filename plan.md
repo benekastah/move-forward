@@ -2,10 +2,9 @@
 
 What's left to build in move-forward. Only what's still to do lives here: when a step or
 section is done, remove it in the same PR, and delete this file once it's empty. The code,
-`AGENTS.md` and `docs/` are the reference for what's built (so far, steps 1–5e of the
-plugin rearchitecture: core, the github, git, jira, slack and notes plugins, git_stack,
-authentication, CI on Linux, the notes in their own tables behind `mfd notes`, and slack's
-and github's own tables).
+`AGENTS.md` and `docs/` are the reference for what's built: core and its plugins (github,
+git, git_stack, jira, slack, notes), Act now's first version, `mfd init`, HTTPS, per-plugin
+refresh intervals, and Windows support with CI on Linux, macOS and Windows.
 
 ## Goal
 
@@ -55,8 +54,8 @@ Marketplace, so the app stays internal. Hosting can come later if it's needed.
   secret is shared; the app's client id becomes a new `[slack]` key. Slack only takes
   `https://` redirect URLs, even for localhost, so the redirect is
   `https://127.0.0.1:<port>/slack/callback`, on the dashboard served over HTTPS (`mfd cert
-  --trust`). The token goes where tokens go today (the
-  keychain, or a file readable only by me).
+  --trust`). The token goes in the system's secret store, as `mfd token set` stores
+  tokens today.
 - Not collaborators: a collaborator can manage the app (its scopes, its redirect URLs, its
   credentials), so making a whole company collaborators isn't something to ask an admin
   for, and Slack documents no cap on them either way.
@@ -125,6 +124,10 @@ Each plugin refreshes on its own `refresh_seconds` now. What's left:
 
 ## Follow-ups
 
+- **Refresh a plugin by hand, and show when it last did.** Each plugin's group on the
+  page gets a refresh button that refreshes just that plugin (and those built on it, as
+  the server's loop does), and its `<summary>` shows when the plugin last refreshed, in
+  local time (with its error, if the last one failed).
 - **GitHub Enterprise.** github assumes github.com: a `host` key, passed to every `gh`
   call (`--hostname`) and used for PR URLs, would let it work with an Enterprise server.
   `mfd init`'s org question already takes a pasted org URL; it would fill in both the host
@@ -146,14 +149,14 @@ Each plugin refreshes on its own `refresh_seconds` now. What's left:
   remote regex. A second code host (Bitbucket, GitLab) needs ids like
   `github.com/acme/widgets` so they can't collide, and `git` parsing any host. A shared
   base for code-host plugins (PR panels over a normalized PR) can wait for that second host.
-- **Windows.** Once the plugin steps are done, make it run on Windows: the Jira token's
-  fallback (and the Slack token's) is the macOS keychain (`security`); `install.sh`,
-  `dev-venv.sh`, `check.sh` and the git hooks are shell scripts, to become Python (a venv,
-  pip and copying the hooks need nothing else) so one script runs everywhere; `mfd cert
-  --trust` has only been tried on Linux, and Firefox on Windows should read the Windows
-  store but needs trying; `shell` stops subprocesses on ctrl-c with POSIX
-  process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
-  separators) and stored in `notes_ice`.
+- **Windows, on a real machine.** CI passes on Windows, but these need trying by hand:
+  `py dev.py install` (the PATH change, the `mfd.cmd` shim, the hooks through `py -3`);
+  `mfd cert --trust`, then Edge, Chrome and Firefox (which should read the Windows store)
+  on `https://127.0.0.1`; `mfd serve` restarting on a config change, since `os.execv` on
+  Windows starts a new process and exits rather than replacing it (the console may return
+  to its prompt with the server still running); ctrl-c stopping a refresh in flight;
+  `mfd token set` with Credential Manager; git-stack itself on Windows; and repo paths
+  compared as `Path`s (case, `~`, separators), including those stored in `notes_ice`.
 - **Skill stand-ins for missing notes fields.** The move-forward skill keeps some state
   outside the database until the notes can hold it: check-ins (`Checked`, `Asked-done`) are
   `decline` items with those reserved texts; the once-a-day ice question and the per-PR
@@ -170,8 +173,6 @@ Each plugin refreshes on its own `refresh_seconds` now. What's left:
   built-in plugin's copy has shipped, or it stays as harmless dead data.
 - **Config sections from the registry.** `Config` lists a field per built-in plugin; it
   could build them from the registry, so adding a plugin needn't change core.
-- **CI on macOS and Windows.** After Windows: the tests on macOS and Windows runners too
-  (free for this public repo), next to the Linux job that runs now.
 - **Icing and git-stack groups.** Putting a stack on ice walks the stack's parents only;
   git_stack doesn't publish groups, so a group's other stacks aren't iced with it.
 
@@ -316,10 +317,6 @@ What's left of it:
 - **A second code host.** A GitLab plugin would publish its own kind of PR (one plugin per
   kind), and every consumer would read both. If that gets repetitive, a PR could become a
   contract several plugins publish to. That can wait for the second host.
-
-### Schema
-
-`act_now_feedback` (see Act now) comes with step 6b.
 
 ### Upkeep
 
