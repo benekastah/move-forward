@@ -131,6 +131,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """What the plugin publishes to the graph, from its snapshot and tables."""
         return []
 
+    def fetch(self, ctx: Context[C], kind: str, ids: list[str]) -> list[Entity]:
+        """Entities of a kind the plugin publishes, by id, fetched from its tool now, even ones
+        its snapshot doesn't hold; `Graph.fetch` asks. [] for a kind it doesn't know."""
+        return []
+
     def url_for(self, ctx: Context[C], kind: str, id: str) -> str | None:
         """A URL for an entity of a kind the plugin knows, even one not in the graph, e.g. a
         ticket's from its key."""

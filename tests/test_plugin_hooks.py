@@ -10,7 +10,7 @@ from conftest import NOW, dashboard, pr, snapshot
 from move_forward import cli, refresh, registry, render
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.graph import Graph
+from move_forward.graph import Entity, Graph, Ref
 from move_forward.page import Action, Item
 from move_forward.plugin import CliHandler, Context, PageHandler
 from move_forward.plugins.jira.config import JiraConfig
@@ -100,3 +100,32 @@ def test_a_plugin_adds_an_mfd_command(
     config.write_text(config.read_text() + '\n[jira]\nsite = "https://j"\n')
     assert cli.main(["-c", str(config), "jira", "tickets"]) == 3
     assert capsys.readouterr().out == "tickets: 0 for me@x\n"
+
+
+class _Fetching(JiraPlugin):
+    """Jira, fetching any ticket asked for (and, wrongly, a PR along with it)."""
+
+    asked: ClassVar[list[list[str]]] = []
+
+    def fetch(self, ctx: Context[JiraConfig], kind: str, ids: list[str]) -> list[Entity]:
+        self.asked.append(ids)
+        if kind != "ticket":
+            return []
+        return [Entity(ref=Ref(kind="ticket", id=i), title=i) for i in ids] + [
+            Entity(ref=Ref(kind="pr", id="https://pr/1"), title="stray")
+        ]
+
+
+def test_the_graph_fetches_through_the_plugin_that_owns_the_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plugins = [_Fetching() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config = Config.model_validate({"email": "me@x", "jira": {"site": "https://j"}})
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    assert list(graph.fetch("ticket", ["APP-1", "APP-2"])) == ["APP-1", "APP-2"]
+    assert graph.fetch("ticket", []) == {}
+    assert graph.fetch("pr", ["https://pr/1"]) == {}
+    assert _Fetching.asked == [["APP-1", "APP-2"], ["https://pr/1"]]

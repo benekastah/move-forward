@@ -103,4 +103,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     def url_for(kind: str, id: str) -> str | None:
         return next((url for e in plugins if (url := e.plugin.url_for(e.ctx, kind, id))), None)
 
-    return Graph(entities, url_for)
+    def fetch(kind: str, ids: list[str]) -> list[Entity]:
+        return [entity for e in plugins for entity in e.plugin.fetch(e.ctx, kind, ids)]
+
+    return Graph(entities, url_for, fetch)

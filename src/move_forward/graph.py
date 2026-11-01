@@ -16,6 +16,8 @@ TICKET = "ticket"
 
 UrlFor = Callable[[str, str], str | None]
 """Asks the plugins for an entity's URL by kind and id, whether or not it's in the graph."""
+Fetch = Callable[[str, list[str]], list["Entity"]]
+"""Asks the plugins to fetch entities of a kind by id, now; see `Graph.fetch`."""
 
 
 class Ref(Model):
@@ -40,6 +42,10 @@ def _no_url(kind: str, id: str) -> str | None:
     return None
 
 
+def _no_fetch(kind: str, ids: list[str]) -> list["Entity"]:
+    return []
+
+
 def _merge(first: Entity, second: Entity) -> Entity:
     """One entity from two plugins' views of it, e.g. a branch git and git_stack both know.
     The first plugin's fields win; refs and attributes are combined."""
@@ -56,11 +62,14 @@ def _merge(first: Entity, second: Entity) -> Entity:
 class Graph:
     """Every enabled plugin's entities, indexed by ref and by the refs pointing at them."""
 
-    def __init__(self, entities: Iterable[Entity] = (), url_for: UrlFor = _no_url):
+    def __init__(
+        self, entities: Iterable[Entity] = (), url_for: UrlFor = _no_url, fetch: Fetch = _no_fetch
+    ):
         self._by_ref: dict[Ref, Entity] = {}
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
         self._url_for = url_for
+        self._fetch = fetch
         merged: dict[Ref, Entity] = {}
         for entity in entities:
             first = merged.get(entity.ref)
@@ -109,3 +118,11 @@ class Graph:
         if entity and entity.url:
             return entity.url
         return self._url_for(kind, id)
+
+    def fetch(self, kind: str, ids: list[str]) -> dict[str, Entity]:
+        """Entities of `kind` by id, fetched now from the plugin that owns the kind, whether or
+        not the graph has them: e.g. PRs merged months ago, for the daily prune. Slow (it calls
+        the tool), so only for work that runs rarely; ids the plugin can't find are left out."""
+        if not ids:
+            return {}
+        return {e.ref.id: e for e in self._fetch(kind, ids) if e.ref.kind == kind}
