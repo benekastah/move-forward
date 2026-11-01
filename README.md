@@ -100,9 +100,10 @@ directories you work in.
 init` adds it when git-stack is installed; add it by hand to an older config.
 
 `[slack]` turns on review pings. `workspace_url` makes the ping page link to
-channels and people, `ping_first` and `ping_follow_up` are the messages, and
+channels and people, `ping_first` and `ping_follow_up` are the messages,
 `[slack.teams]` the channel each team's pings go to (winning over the reviewer
-map). Its page is `/ping?pr=<PR URL>`, and its one action
+map), and `team_channel` (e.g. `"#team-{team}"`) a guess at the channel of a
+team nothing else names one for. Its page is `/ping?pr=<PR URL>`, and its one action
 `/actions/slack/mark_sent`. People's Slack ids and teams' channels come from the
 skill's `reviewer-map.md`, read with `mfd slack import <dir>` (which also picks
 up the nudges the skill logged in `work-notes.md`), or are set by hand on

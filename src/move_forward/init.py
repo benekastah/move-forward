@@ -50,6 +50,7 @@ OPTIONAL_GIT_SETTINGS = """\
 OPTIONAL_SLACK_SETTINGS = """\
 # ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 # ping_follow_up = "Gentle bump on this review request"
+# team_channel = ""                      # a team's channel when none is set, e.g. "#team-{team}"
 """
 OPTIONAL_JIRA_SETTINGS = """\
 # token_env = "JIRA_API_TOKEN"            # else the macOS keychain item for your email

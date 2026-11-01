@@ -114,6 +114,7 @@ SLACK_OVERRIDES = (
     "slack_workspace_url",
     "ping_first",
     "ping_follow_up",
+    "team_channel",
     "users",
     "teams",
     "pings",
@@ -154,7 +155,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             github[key] = o.pop(key)
     git: dict[str, object] = {"repos": [], "my_branch_prefixes": o.pop("my_branch_prefixes", [])}
     slack: dict[str, object] = {"workspace_url": o.pop("slack_workspace_url", "")}
-    for key in ("ping_first", "ping_follow_up"):
+    for key in ("ping_first", "ping_follow_up", "team_channel"):
         if key in o:
             slack[key] = o.pop(key)
     jira: dict[str, object] = {}

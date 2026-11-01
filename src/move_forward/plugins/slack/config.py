@@ -1,6 +1,6 @@
 """`[slack]`."""
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from ...strict import Strict
 
@@ -20,3 +20,19 @@ class SlackConfig(Strict):
     teams: dict[str, str] = Field(default_factory=dict)
     """Where review pings to a team go, e.g. `#team-a`, by its name in the top-level `teams`.
     Overrides the reviewer map."""
+    team_channel: str = ""
+    """The channel of a team nothing else names one for, from its name: e.g. `#team-{team}`.
+    Empty means no guess."""
+
+    @field_validator("team_channel")
+    @classmethod
+    def _pattern(cls, value: str) -> str:
+        if value and (not value.startswith("#") or "{team}" not in value):
+            raise ValueError(
+                f"{value!r} must be a channel name with {{team}} in it, e.g. #team-{{team}}"
+            )
+        return value
+
+    def guessed_channel(self, team: str) -> str | None:
+        """The channel `team_channel` gives `team`, if it's set."""
+        return self.team_channel.replace("{team}", team) if self.team_channel else None

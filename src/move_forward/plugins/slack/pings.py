@@ -133,6 +133,8 @@ class Pinger:
                 destination = f"{team.channel_name or name} ({team.channel_id})"
             elif team and team.channel_name:
                 destination = team.channel_name
+            elif guessed := self.config.guessed_channel(name):
+                destination = f"{guessed} (guessed from team_channel)"
             targets.append(
                 self._target(
                     "team", name, link, destination, last_by_target.get(f"team:{name}"), pr

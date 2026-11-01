@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+import pytest
 from conftest import (
     NOW,
     Reviewer,
@@ -20,7 +21,11 @@ from conftest import (
 from move_forward import render
 from move_forward.domain import Check
 from move_forward.graph import Graph
-from move_forward.plugins.slack.config import DEFAULT_PING_FIRST, DEFAULT_PING_FOLLOW_UP
+from move_forward.plugins.slack.config import (
+    DEFAULT_PING_FIRST,
+    DEFAULT_PING_FOLLOW_UP,
+    SlackConfig,
+)
 from move_forward.plugins.slack.models import Ping, TeamChannel
 from move_forward.plugins.slack.plugin import ping_page
 from move_forward.plugins.slack.repository import SlackRepository
@@ -152,3 +157,25 @@ def test_iced_prs_get_no_pings() -> None:
     parked = pr(1, requested_users=["alice"])
     stack = iced(parked.head, "x")
     assert pings(github=snapshot(mine=[parked]), iced_stacks=[stack]) == {}
+
+
+def test_a_team_with_no_channel_gets_one_from_team_channel() -> None:
+    mine = pr(1, requested_teams=["web", "core"])
+    found = pings(
+        github=snapshot(mine=[mine]),
+        teams=_teams(),  # web has a channel; core doesn't
+        team_channel="#team-{team}",
+    )
+    destinations = {t.name: t.destination for t in found[mine.url].targets}
+    assert destinations["core"] == "#team-core (guessed from team_channel)"
+    assert destinations["web"].startswith("#team-web (C1)")
+    unguessed = pings(github=snapshot(mine=[mine]), teams=_teams())
+    assert {t.name: t.destination for t in unguessed[mine.url].targets}["core"] == "team core"
+
+
+def test_team_channel_must_be_a_channel_with_the_team_in_it() -> None:
+    with pytest.raises(ValueError, match="must be a channel name with"):
+        SlackConfig(team_channel="team-{team}")
+    with pytest.raises(ValueError, match="must be a channel name with"):
+        SlackConfig(team_channel="#team")
+    assert SlackConfig(team_channel="#t-{team}").guessed_channel("web") == "#t-web"
