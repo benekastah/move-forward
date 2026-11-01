@@ -155,6 +155,31 @@ def test_push_sets_upstream_then_pushes_plainly(config: Config, repo: Path) -> N
     assert git(repo, "rev-parse", "wip") == git(repo, "rev-parse", "origin/wip")
 
 
+def test_push_goes_where_git_would_with_remotes_not_called_origin(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    git(repo, "remote", "rename", "origin", "upstream")
+    fork = tmp_path / "fork.git"
+    _init(fork, bare=True)
+    push = {"repo": str(repo), "branch": "wip"}
+    assert run("git/push_branch", config, push) == "pushed wip"  # one remote: that one
+    assert git(repo, "rev-parse", "--abbrev-ref", "wip@{upstream}").strip() == "upstream/wip"
+    git(repo, "remote", "add", "fork", str(fork))
+    git(repo, "branch", "-q", "--no-track", "idea", "wip")
+    idea = {"repo": str(repo), "branch": "idea"}
+    with pytest.raises(ActionError, match="remote.pushDefault"):  # two, and nothing says which
+        run("git/push_branch", config, idea)
+    git(repo, "config", "remote.pushDefault", "fork")
+    run("git/push_branch", config, idea)
+    assert git(fork, "rev-parse", "idea") == git(repo, "rev-parse", "idea")
+    # A fork's triangle: wip tracks upstream but pushes to the fork, under its own name.
+    git(repo, "switch", "-q", "wip")
+    _commit(repo, "c.txt")
+    run("git/push_branch", config, push)
+    assert git(fork, "rev-parse", "wip") == git(repo, "rev-parse", "wip")
+    assert git(repo, "rev-parse", "upstream/wip") != git(repo, "rev-parse", "wip")
+
+
 def test_wip_commit_takes_tracked_files_only(config: Config, repo: Path) -> None:
     (repo / "a.txt").write_text("changed")
     (repo / "new.txt").write_text("untracked")

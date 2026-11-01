@@ -11,6 +11,10 @@ class RepoAttrs(Model):
     dir: str
     """The main checkout's path."""
     default_branch: str
+    default_refs: list[str] = Field(default_factory=list[str])
+    """The default branch on each remote (`upstream/main`), or the local one when no remote
+    has it: what a commit not yet on the default branch isn't on. Pass them to `git log` in
+    `dir`."""
     my_dirs: list[str] = Field(default_factory=list[str])
     """Directories I committed to within `[git] commit_history_days`."""
 

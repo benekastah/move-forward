@@ -21,6 +21,11 @@ checkout) isn't yours, and an older one that wasn't counted is. `ignored_worktre
 leaves worktrees out, and `commit_history_days` says how far back
 your commits count towards the directories you work in.
 
+Remotes can have any names. "The default branch" is the default branch on every remote
+(`upstream/main` and `origin/main` in a fork), or the local one in a repo without remotes:
+a commit on any of them is on the default branch. The repo's GitHub name comes from the
+remote its local default branch tracks, else from the first remote on GitHub.
+
 ## Publishes
 
 `repo` for each checkout (by its GitHub `owner/name`) and `branch` for each local branch;
@@ -50,7 +55,7 @@ git nominates the branches Cleanup lists, quick to delete.
 
 | Path | Fields | Does |
 | --- | --- | --- |
-| `/actions/git/push_branch` | `repo`, `branch` | `git push` (sets the upstream if missing; never forces). |
+| `/actions/git/push_branch` | `repo`, `branch` | `git push`, where git would push it: a branch with an upstream to its push remote; one without to its `pushRemote`, `remote.pushDefault`, its remote or the only remote, setting the upstream (refused when there are several and nothing says which). Never forces. |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`; the worktree must be the repo's. |
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. Refused for a checked-out branch, or an iced one with commits since it was iced. |
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |

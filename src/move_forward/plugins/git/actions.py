@@ -152,7 +152,9 @@ def delete_branches(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str
 
 
 def push_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """Push a branch, setting its upstream if it has none. Never forces."""
+    """Push a branch where git would (see `client.push_target`), or one without an upstream
+    to the remote git would pick (`client.push_remote`), setting its upstream. Never
+    forces."""
     repo = repo_path(ctx.config, fields["repo"])
     branch = fields["branch"]
     if not branch_exists(repo, branch):
@@ -163,9 +165,15 @@ def push_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -
     except CommandError:
         has_upstream = False
     if has_upstream:
-        git(repo, "push", "origin", f"{branch}:{branch}")
+        remote, ref = client.push_target(repo, branch)
+        git(repo, "push", remote, f"refs/heads/{branch}:{ref}")
     else:
-        git(repo, "push", "--set-upstream", "origin", branch)
+        remote = client.push_remote(repo, branch)
+        if remote is None:
+            raise ActionError(
+                f"{repo} has no remote to push to, or several: set remote.pushDefault to say which"
+            )
+        git(repo, "push", "--set-upstream", remote, branch)
     return f"pushed {branch}"
 
 

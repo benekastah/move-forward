@@ -74,6 +74,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                             RepoAttrs(
                                 dir=repo.dir,
                                 default_branch=repo.default_branch,
+                                default_refs=list(repo.default_refs),
                                 my_dirs=list(repo.my_dirs),
                             )
                         ),

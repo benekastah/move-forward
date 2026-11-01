@@ -1,5 +1,5 @@
-"""The git plugin's tables: each checkout, its worktrees and branches, and the directories I
-commit to, as the last refresh found them."""
+"""The git plugin's tables: each checkout, its worktrees and branches, its remotes' default
+branches, and the directories I commit to, as the last refresh found them."""
 
 from collections import defaultdict
 from datetime import datetime
@@ -70,6 +70,14 @@ MIGRATIONS = [
     """
     ALTER TABLE git_branches ADD COLUMN my_commits INTEGER;  -- NULL: not counted
     """,
+    """
+    CREATE TABLE git_default_refs (    -- fetched: the default branch on each remote
+        repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        ref TEXT NOT NULL,             -- e.g. upstream/main, or refs/heads/main
+        PRIMARY KEY (repo_dir, position)
+    );
+    """,
 ]
 """The git plugin's migrations."""
 
@@ -119,6 +127,10 @@ class LocalRepository:
                 "INSERT OR IGNORE INTO git_my_dirs VALUES (?, ?)",
                 [(r.dir, d) for r in repos for d in r.my_dirs],
             )
+            conn.executemany(
+                "INSERT INTO git_default_refs VALUES (?, ?, ?)",
+                [(r.dir, n, ref) for r in repos for n, ref in enumerate(r.default_refs)],
+            )
 
     def load(self) -> LocalSnapshot:
         db = self._db
@@ -150,12 +162,16 @@ class LocalRepository:
         my_dirs: defaultdict[str, list[str]] = defaultdict(list)
         for row in db.query("SELECT * FROM git_my_dirs ORDER BY repo_dir, path"):
             my_dirs[row["repo_dir"]].append(row["path"])
+        default_refs: defaultdict[str, list[str]] = defaultdict(list)
+        for row in db.query("SELECT * FROM git_default_refs ORDER BY repo_dir, position"):
+            default_refs[row["repo_dir"]].append(row["ref"])
         return LocalSnapshot(
             repos=[
                 LocalRepo(
                     dir=row["dir"],
                     github_repo=row["github_repo"],
                     default_branch=row["default_branch"],
+                    default_refs=default_refs[row["dir"]],
                     worktrees=worktrees[row["dir"]],
                     branches=branches[row["dir"]],
                     my_dirs=my_dirs[row["dir"]],

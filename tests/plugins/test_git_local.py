@@ -1,7 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from move_forward.db import Database
 from move_forward.plugins.git import client as local
+from move_forward.plugins.git.models import LocalSnapshot
+from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
 from move_forward.shell import git
 
 WORKTREES = """\
@@ -139,5 +142,41 @@ def test_a_repo_without_a_remote_is_collected(tmp_path: Path) -> None:
     _commit(repo, "a.txt")
     git(repo, "checkout", "-q", "-b", "idea")
     collected = local.collect_repo(repo, "me@example.com", datetime.now(UTC), 30, [])
-    assert collected.github_repo is None and collected.my_dirs == []
+    assert collected.github_repo is None and collected.my_dirs == ["."]  # from the local main
     assert [b.name for b in collected.branches] == ["idea", "main"]
+
+
+def test_remotes_are_read_whatever_they_are_called(tmp_path: Path) -> None:
+    """A fork: `upstream` is the org's repo, which main tracks, and `fork` is mine. Neither is
+    `origin`."""
+    org = tmp_path / "org"
+    _init_repo(org)
+    _commit(org, "a.txt")
+    fork = tmp_path / "fork"
+    git(tmp_path, "clone", "-q", str(org), str(fork))
+    _configure(fork)
+    _commit(fork, "f.txt")  # on the fork's main only
+    repo = tmp_path / "repo"
+    git(tmp_path, "clone", "-q", "-o", "upstream", str(org), str(repo))
+    _configure(repo)
+    git(repo, "remote", "add", "fork", str(fork))
+    git(repo, "fetch", "-q", "fork")
+    git(repo, "switch", "-q", "--no-track", "-c", "synced", "fork/main")  # all on a remote
+    git(repo, "switch", "-q", "-c", "mine", "main")
+    _commit(repo, "m.txt")
+    git(repo, "switch", "-q", "main")
+    git(repo, "remote", "set-url", "upstream", "git@github.com:acme/widgets.git")
+    git(repo, "remote", "set-url", "fork", "https://github.com/me/widgets.git")
+
+    found = local.read_remotes(repo)
+    assert found.default_branch == "main" and found.github_repo == "acme/widgets"
+    assert sorted(found.default_refs) == ["fork/main", "upstream/main"]
+    now = datetime.now(UTC) + timedelta(seconds=1)
+    collected = local.collect_repo(repo, "", now, 30, [])
+    branches = {b.name: b for b in collected.branches}
+    assert branches["mine"].ahead_of_default == 1 and branches["mine"].my_commits == 1
+    assert branches["synced"].ahead_of_default == 0 and branches["synced"].my_commits == 0
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    LocalRepository(db).replace(LocalSnapshot(repos=[collected]))
+    assert LocalRepository(db).load().repos[0].default_refs == collected.default_refs

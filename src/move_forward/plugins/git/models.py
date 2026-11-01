@@ -36,8 +36,12 @@ class Branch(Model):
 class LocalRepo(Model):
     dir: str
     github_repo: str | None = None
-    """owner/name of the origin remote, if it is on GitHub."""
+    """owner/name of the main remote, if it is on GitHub, else of another that is (see
+    `client.read_remotes`)."""
     default_branch: str
+    default_refs: list[str] = Field(default_factory=list)
+    """The default branch on each remote (`origin/main`, `upstream/main`), or the local one
+    when no remote has it: what "not on the default branch yet" is measured against."""
     worktrees: list[Worktree]
     branches: list[Branch]
     my_dirs: list[str] = Field(default_factory=list)
