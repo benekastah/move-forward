@@ -38,6 +38,10 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   `[act_now]` weights first, then plugins' sections. If the restart's second of downtime
   gets in the way there, apply edits live instead: swap the config in place, migrate
   plugins newly enabled, and restart only for `port` and `db_path`.
+  The same form sets things up: `mfd serve` without a config opens it (still behind the
+  token and same-site checks, writing only the config file), with the browser's
+  autocomplete for what can be fetched as it's filled in (the org's teams once the org is
+  given, like `mfd init`'s tab completion).
 - **One unknown key fails jira's whole fetch.** Jira rejects a `key in (...)` search naming
   a ticket that doesn't exist (mistyped, deleted, or in a project I can't see), so the
   prune learns nothing about any ticket that day and keeps every entry naming one. Fetch
