@@ -27,7 +27,16 @@ def _pr(number: int, repo: str, head: str) -> Entity:
 
 
 def _ice(ice_id: int, *branch_ids: str) -> Ice:
-    items = [IcedItem(kind="branch", ref_id=b, sha="1") for b in branch_ids]
+    items = [
+        IcedItem(
+            kind="branch",
+            ref_id=b,
+            name=b.partition("\t")[2],
+            repo_dir=b.partition("\t")[0],
+            sha="1",
+        )
+        for b in branch_ids
+    ]
     return Ice(id=ice_id, title="me/x", iced_on=NOW.date(), items=items)
 
 

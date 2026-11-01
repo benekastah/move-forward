@@ -174,7 +174,15 @@ def read_on_ice(text: str, today: date) -> tuple[list[Ice], date | None]:
             if (child := _CHILD_RE.match(line)) and in_branches:
                 name, _, sha = child.group(1).partition(" ")
                 ref_id = f"{repo_dir}{BRANCH_ID_SEPARATOR}{name}"
-                items.append(IcedItem(kind=BRANCH, ref_id=ref_id, sha=sha.strip() or None))
+                items.append(
+                    IcedItem(
+                        kind=BRANCH,
+                        ref_id=ref_id,
+                        name=name,
+                        repo_dir=repo_dir,
+                        sha=sha.strip() or None,
+                    )
+                )
                 continue
             in_branches = False
             if field := _FIELD_RE.match(line):
@@ -235,13 +243,12 @@ def write_on_ice(ices: list[Ice], last_asked: date | None) -> str:
     if last_asked:
         parts.append(f"Last asked: {last_asked.isoformat()}")
     for ice in ices:
-        repo_dir = ice.items[0].ref_id.partition(BRANCH_ID_SEPARATOR)[0] if ice.items else "?"
+        repo_dir = next((i.repo_dir for i in ice.items if i.repo_dir), "?")
         lines = [f"## {ice.title} ({_tilde(repo_dir)})", f"- Iced: {ice.iced_on.isoformat()}"]
         if ice.note:
             lines.append(f"- Note: {ice.note}")
         lines.append("- Branches:")
         for item in ice.items:
-            name = item.ref_id.partition(BRANCH_ID_SEPARATOR)[2]
-            lines.append(f"  - {name} {item.sha or ''}".rstrip())
+            lines.append(f"  - {item.name} {item.sha or ''}".rstrip())
         parts.append("\n".join(lines))
     return "\n\n".join(parts) + "\n"

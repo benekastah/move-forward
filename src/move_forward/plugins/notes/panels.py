@@ -19,8 +19,6 @@ TICKET = "ticket"
 ENTRY = "entry"
 ICED = "iced"
 BRANCH = "branch"
-BRANCH_ID_SEPARATOR = "\t"
-"""Joins a repo dir and a branch name in a `branch` entity's id."""
 TODO_ADD = "notes/todo_add"
 PR_STATES: dict[str, PrState] = {"open": "open", "merged": "merged", "closed": "closed"}
 
@@ -360,8 +358,7 @@ class Builder:
     def iced(self) -> Panel:
         items: list[Item] = []
         for ice in self.ices:
-            branches = [item.ref_id.partition(BRANCH_ID_SEPARATOR) for item in ice.items]
-            repo_dir = branches[0][0] if branches else "?"
+            repo_dir = next((i.repo_dir for i in ice.items if i.repo_dir), "?")
             items.append(
                 Item(
                     title=ice.title,

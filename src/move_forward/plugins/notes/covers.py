@@ -10,8 +10,6 @@ PR = "pr"
 REPO = "repo"
 BRANCH = "branch"
 STACK_BRANCH = "stack_branch"
-BRANCH_ID_SEPARATOR = "\t"
-"""Joins a repo dir and a branch name in a `branch` entity's id."""
 
 
 class _RepoView(Model):
@@ -42,8 +40,8 @@ def covers(graph: Graph, ices: list[Ice]) -> dict[int, list[Ref]]:
         for item in ice.items:
             if item.kind != BRANCH:
                 continue
-            repo_dir, _, name = item.ref_id.partition(BRANCH_ID_SEPARATOR)
-            repo = repos.get(repo_dir)
+            name = item.name
+            repo = repos.get(item.repo_dir or "")
             for pr in prs:
                 from_here = pr.repo == repo if repo else pr.repo not in checked_out
                 if pr.head == name and from_here:

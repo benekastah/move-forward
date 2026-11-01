@@ -64,7 +64,12 @@ class IcedItem(Model):
     kind: str
     """A graph kind; "branch" for now."""
     ref_id: str
-    """The entity's id, e.g. `<repo dir>\\t<branch>`."""
+    """The entity's id, e.g. `<repo dir>\\t<branch>`: whatever its publisher made it, never
+    parsed."""
+    name: str
+    """What to call it, e.g. a branch's name, also once its publisher has forgotten it."""
+    repo_dir: str | None = None
+    """For a branch, its checkout."""
     sha: str | None = None
     """For a branch, its commit when iced, to restore it from."""
 

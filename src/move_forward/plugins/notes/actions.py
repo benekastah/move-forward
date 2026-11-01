@@ -106,7 +106,8 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
         raise ActionError(f"{branch} is already on ice")
     items: list[IcedItem] = []
     for name in names:
-        items.append(IcedItem(kind=BRANCH, ref_id=branches[name].id, sha=branches[name].sha))
+        b = branches[name]
+        items.append(IcedItem(kind=BRANCH, ref_id=b.id, name=name, repo_dir=b.repo_dir, sha=b.sha))
     note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
     ice_id = notes.add_ice(names[0], ctx.now.date(), note, items)
     notes.replace_covers([ice_id], covers(graph, notes.ices()))

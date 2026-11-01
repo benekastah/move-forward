@@ -54,8 +54,12 @@ def test_todos_reopen_get_links_and_go(notes: NotesRepository) -> None:
 
 def test_icing_and_thawing(notes: NotesRepository) -> None:
     items = [
-        IcedItem(kind="branch", ref_id="/src/w\tme/bottom", sha="a1"),
-        IcedItem(kind="branch", ref_id="/src/w\tme/top", sha="b2"),
+        IcedItem(
+            kind="branch", ref_id="/src/w\tme/bottom", name="me/bottom", repo_dir="/src/w", sha="a1"
+        ),
+        IcedItem(
+            kind="branch", ref_id="/src/w\tme/top", name="me/top", repo_dir="/src/w", sha="b2"
+        ),
     ]
     ice = notes.add_ice("me/bottom", DAY, "parked", items)
     [read] = notes.ices()
@@ -88,7 +92,12 @@ def test_replace_all_keeps_everything_an_import_read(notes: NotesRepository) -> 
         lines=["- Odd: kept as is"],
         links=[PR],
     )
-    ice = Ice(id=0, title="me/b", iced_on=DAY, items=[IcedItem(kind="branch", ref_id="/w\tme/b")])
+    ice = Ice(
+        id=0,
+        title="me/b",
+        iced_on=DAY,
+        items=[IcedItem(kind="branch", ref_id="/w\tme/b", name="me/b", repo_dir="/w")],
+    )
     sections = [Section(heading=None, body="Intro."), Section(heading="Reviews", body="- x")]
     notes.replace_all([entry], [ice], sections)
     [read] = notes.entries()
@@ -98,3 +107,15 @@ def test_replace_all_keeps_everything_an_import_read(notes: NotesRepository) -> 
         ("x", None, DAY, []),
     ]
     assert [i.title for i in notes.ices()] == ["me/b"] and notes.sections() == sections
+
+
+def test_branches_iced_before_names_were_kept_get_theirs_from_their_ids() -> None:
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS[:2])
+    db.execute("INSERT INTO notes_ice (id, title, iced_on) VALUES (1, 'me/b', '2026-10-01')")
+    db.execute("INSERT INTO notes_iced VALUES (1, 0, 'branch', ?, 'a1')", ("/src/w\tme/b",))
+    db.migrate("notes", MIGRATIONS)
+    [ice] = NotesRepository(db).ices()
+    assert ice.items == [
+        IcedItem(kind="branch", ref_id="/src/w\tme/b", name="me/b", repo_dir="/src/w", sha="a1")
+    ]

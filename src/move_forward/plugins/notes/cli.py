@@ -120,7 +120,7 @@ def _entry_text(entry: Entry) -> str:
 
 
 def _ice_text(ice: Ice) -> str:
-    items = ", ".join(item.ref_id.partition("\t")[2] or item.ref_id for item in ice.items)
+    items = ", ".join(item.name for item in ice.items)
     note = f"  ({ice.note})" if ice.note else ""
     return f"{ice.id}  {ice.title}  iced {ice.iced_on}: {items}{note}"
 

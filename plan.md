@@ -26,10 +26,7 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 - jira's key pattern matches `UTF-8`, `SHA-256` and the like in PR titles and bodies, so
   those become `ticket` refs: PRs mentioning one are related, and an entry naming one is
   never pruned (Jira can't say it's resolved). Restrict the pattern to the project keys
-  jira sees (from its snapshot, or a `[jira] projects` key). A notes migration renames the kinds stored in `notes_iced`
-  and `notes_links` to their namespaced names. notes also stores each iced item's name (it parses
-  git's branch ids for them today, to show a stack after git deleted its branches), so
-  ids stay opaque to everyone but their publisher.
+  jira sees (from its snapshot, or a `[jira] projects` key).
 - Once no plugin publishes another's kind, the graph can stop merging refs from two plugins.
 - Core: `item_actions` is called once per item, and slack rebuilds every ping and notes
   rereads its tables on each call. Plugins get a `prepare_item_actions(ctx, graph)` hook
@@ -37,7 +34,8 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 - `docs/entities.md` generated from the kind models, or checked against them by a test.
 - Namespace the kinds (`github.pr`, `git.branch`, ...), after linking kinds and mentions, so
   github never has to name `jira.ticket`. Every plugin already declares its kinds and reads
-  others' through views, so this is a rename, plus the notes migration above.
+  others' through views, so this is a rename, plus a notes migration renaming the kinds
+  stored in `notes_iced`, `notes_ice_covers` and `notes_links`.
 
 ### 6. Layout
 

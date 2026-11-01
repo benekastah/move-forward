@@ -85,6 +85,17 @@ MIGRATIONS = [
         PRIMARY KEY (ice_id, kind, ref_id)
     );
     """,
+    # Names, so notes needn't parse git's branch ids for them; branches iced so far were all
+    # `<repo dir>\t<name>`.
+    """
+    ALTER TABLE notes_iced ADD COLUMN name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE notes_iced ADD COLUMN repo_dir TEXT;
+    UPDATE notes_iced
+    SET repo_dir = substr(ref_id, 1, instr(ref_id, char(9)) - 1),
+        name = substr(ref_id, instr(ref_id, char(9)) + 1)
+    WHERE kind = 'branch' AND instr(ref_id, char(9)) > 0;
+    UPDATE notes_iced SET name = ref_id WHERE name = '';
+    """,
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
 only the notes know what's in them."""
@@ -159,7 +170,13 @@ class NotesRepository:
         items: defaultdict[int, list[IcedItem]] = defaultdict(list)
         for row in self._db.query("SELECT * FROM notes_iced ORDER BY ice_id, position"):
             items[row["ice_id"]].append(
-                IcedItem(kind=row["kind"], ref_id=row["ref_id"], sha=row["sha"])
+                IcedItem(
+                    kind=row["kind"],
+                    ref_id=row["ref_id"],
+                    name=row["name"],
+                    repo_dir=row["repo_dir"],
+                    sha=row["sha"],
+                )
             )
         return [
             Ice(
@@ -326,8 +343,12 @@ class NotesRepository:
             ice_id = cursor.lastrowid
             assert ice_id is not None
             conn.executemany(
-                "INSERT INTO notes_iced VALUES (?, ?, ?, ?, ?)",
-                [(ice_id, i, item.kind, item.ref_id, item.sha) for i, item in enumerate(items)],
+                "INSERT INTO notes_iced (ice_id, position, kind, ref_id, sha, name, repo_dir)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (ice_id, i, item.kind, item.ref_id, item.sha, item.name, item.repo_dir)
+                    for i, item in enumerate(items)
+                ],
             )
         return ice_id
 
@@ -413,9 +434,19 @@ class NotesRepository:
                 )
                 # A branch in two stacks stays with the first: something is on ice once.
                 conn.executemany(
-                    "INSERT OR IGNORE INTO notes_iced VALUES (?, ?, ?, ?, ?)",
+                    "INSERT OR IGNORE INTO notes_iced"
+                    " (ice_id, position, kind, ref_id, sha, name, repo_dir)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
                     [
-                        (cursor.lastrowid, i, item.kind, item.ref_id, item.sha)
+                        (
+                            cursor.lastrowid,
+                            i,
+                            item.kind,
+                            item.ref_id,
+                            item.sha,
+                            item.name,
+                            item.repo_dir,
+                        )
                         for i, item in enumerate(ice.items)
                     ],
                 )
