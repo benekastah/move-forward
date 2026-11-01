@@ -61,6 +61,7 @@ fetched entity carries:
 | `repo` | string | `owner/name` |
 | `number` | int | |
 | `head`, `base` | string | branch names |
+| `head_oid` | string or null | the commit the head branch is at on GitHub, as of github's last refresh |
 | `author` | string or null | login |
 | `draft` | bool | |
 | `mine` | bool | I opened it |

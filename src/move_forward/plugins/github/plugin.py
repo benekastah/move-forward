@@ -168,6 +168,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             "repo": pr.repo,
             "number": pr.number,
             "head": pr.head,
+            "head_oid": pr.head_oid,
             "base": pr.base,
             "author": pr.author,
             "draft": pr.is_draft,

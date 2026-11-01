@@ -12,6 +12,8 @@ class PrAttrs(Model):
     """`owner/name`."""
     number: int
     head: str
+    head_oid: str | None = None
+    """The commit its head branch is at on GitHub, as of github's last refresh."""
     base: str
     author: str | None
     draft: bool
