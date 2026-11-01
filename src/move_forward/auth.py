@@ -80,11 +80,14 @@ def from_request(authorization: str | None, cookie: str | None) -> str | None:
     return None
 
 
-def set_cookie(token: str) -> str:
+def set_cookie(token: str, secure: bool = False) -> str:
     """The `Set-Cookie` value signing a browser in: scripts can't read it and other sites'
-    requests don't carry it."""
-    return f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={COOKIE_MAX_AGE_SECONDS}"
+    requests don't carry it; `secure`, over HTTPS, it's never sent over plain HTTP."""
+    cookie = (
+        f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={COOKIE_MAX_AGE_SECONDS}"
+    )
+    return cookie + ("; Secure" if secure else "")
 
 
-def login_url(port: int, token: str) -> str:
-    return f"http://127.0.0.1:{port}/login?token={token}"
+def login_url(port: int, token: str, scheme: str = "http") -> str:
+    return f"{scheme}://127.0.0.1:{port}/login?token={token}"

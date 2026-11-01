@@ -128,6 +128,14 @@ def _linkable(url: str | None) -> bool:
     )
 
 
+def banner(text: str, urgency: str | None) -> str:
+    """A bar across the page for something that must be done: "notice" (blue), "soon"
+    (yellow) or "now" (red); nothing without an urgency."""
+    if not text or urgency is None:
+        return ""
+    return f"<div class='banner {_e(urgency)}' role='alert'>{_e(text)}</div>"
+
+
 def _badge(text: str) -> str:
     warn = any(word in text.lower() for word in WARNING_BADGE_WORDS)
     return f"<span class='badge{' warn' if warn else ''}'>{_e(text)}</span>"
@@ -267,23 +275,28 @@ def dashboard_page(
     refreshing: bool,
     notice: str = "",
     open_keys: set[str] | None = None,
+    warning: str = "",
+    urgency: str | None = None,
 ) -> str:
     """The page.
 
     `notice` is the outcome of an action just run, shown in the header. `open_keys` are the
     sections the `open` query parameter says are open; None means the parameter was absent
-    and the defaults apply.
+    and the defaults apply. `warning` is something to fix, e.g. certificates ending soon,
+    shown in the header, and across the page too with an `urgency` (see `banner`).
     """
     status = "refreshing…" if refreshing else f"built {dashboard.generated_at:%H:%M}"
     reload_seconds = REFRESHING_RELOAD_SECONDS if refreshing else PAGE_RELOAD_SECONDS
     notice_html = f"<span class='notice'>{_e(notice)}</span>" if notice else ""
+    notice_html += f"<span class='notice warn'>{_e(warning)}</span>" if warning else ""
     return (
         _head("Move forward", reload_seconds) + f"<header><h1>{LOGO}</h1><div class='header-right'>"
         f"{notice_html}<span>{_e(status)}</span>"
         "<a class='button' href='/focus'>Focus</a>"
         "<form method='post' action='/refresh'><button type='submit'"
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
-        "<main>"
+        + banner(warning, urgency)
+        + "<main>"
         + "".join(_group(group, dashboard, open_keys) for group in dashboard.groups)
         + "</main>"
         f"<footer>{_sources(dashboard)}<form method='post' action='/layout/reset'>"
@@ -306,8 +319,9 @@ def _focus_category(dashboard: Dashboard, key: str, title: str, cls: str) -> str
     )
 
 
-def focus_categories_page(dashboard: Dashboard) -> str:
-    """Focus mode's first page: "All", then each group with its panels, each with a count."""
+def focus_categories_page(dashboard: Dashboard, alert: str = "") -> str:
+    """Focus mode's first page: "All", then each group with its panels, each with a count.
+    `alert` is a `banner` to show across it."""
     rows = [_focus_category(dashboard, FOCUS_ALL, "All", "category")]
     for group in dashboard.groups:
         rows.append(_focus_category(dashboard, group.key, group.title, "category"))
@@ -317,7 +331,7 @@ def focus_categories_page(dashboard: Dashboard) -> str:
             if (panel := dashboard.find_panel(key))
         )
     return (
-        _head("Focus", None) + f"<header><h1>{LOGO} / focus</h1></header>"
+        _head("Focus", None) + f"<header><h1>{LOGO} / focus</h1></header>{alert}"
         "<main class='single'><article class='panel padded'><h2>What to focus on?</h2>"
         "<p>One item at a time, in the skill's order of priority.</p>"
         f"<ul class='categories'>{''.join(rows)}</ul></article></main></body></html>"
@@ -330,6 +344,7 @@ def focus_page(
     index: int,
     notice: str = "",
     done: tuple[str, Item] | None = None,
+    alert: str = "",
 ) -> str | None:
     """One item of a focus category with previous and next links; None for an unknown category.
 
@@ -346,7 +361,7 @@ def focus_page(
     notice_html = f"<span class='notice'>{_e(notice)}</span>" if notice else ""
     header = (
         f"<header><h1>{LOGO} / <a href='/focus'>focus</a>"
-        f" / {_e(title)}</h1>{notice_html}</header><main class='single'>"
+        f" / {_e(title)}</h1>{notice_html}</header>{alert}<main class='single'>"
     )
     if not items and done is None:
         return (

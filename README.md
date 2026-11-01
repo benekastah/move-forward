@@ -19,8 +19,22 @@ the `git_stack` plugin).
 
 ```sh
 ~/src/move-forward/install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
+mfd cert --trust                # a certificate for https://127.0.0.1, trusted by your browsers
 mfd serve --open
 ```
+
+`mfd cert` makes certificates for `127.0.0.1` and `localhost`, signed by a local
+authority that can vouch for nothing else (its key signs them and is thrown away), so `mfd
+serve` answers on `https://`. It signs three ahead, each starting 25 days before the one
+before it ends, and `mfd serve` moves to the next by itself, without a restart: about six
+and a half years without renewing. `--trust` adds the authority (`tls/ca.pem`, next to the
+database) to macOS's keychain or Windows's user store, and, where NSS's `certutil` is
+installed (`libnss3-tools`, `nss-tools`), to Firefox's profiles and Chrome's store on
+Linux; elsewhere, import it as an authority in the browser's certificate settings.
+Without a certificate, or with `https = false`, the dashboard stays on plain HTTP. The page's
+header and `mfd check` warn 30 days before the last certificate ends, and a banner across
+every page from 14 days: blue, yellow from 7, red from 3; `mfd cert --force --trust` then makes a new authority
+and chain, trusted again.
 
 `install.sh` ends with `mfd init` when there is no config yet: it asks for
 your email, which plugins to set up (github, git, and git_stack when it's
@@ -35,6 +49,7 @@ example without asking; `--force` replaces an existing file.
 
 The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
+`https` (serve over HTTPS with `mfd cert`'s certificate; default true),
 `db_path`, `db_backups`, `refresh_seconds` (how often the background loop
 refreshes), `refresh_on_load_seconds` (a page load refreshes data older than
 this) and `prune_days`. Everything about a tool is
@@ -85,6 +100,7 @@ before the command's name.
 | `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`; `--open` opens it signed in, like `mfd open`. It restarts when the config file changes, once the new config passes `mfd check` (run in a separate process); if it fails, the error is logged, the running server carries on, and the next change tries again. |
 | `mfd open [--port N]` | Open the running dashboard in a browser, signed in (see [API](#api)). |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
+| `mfd cert [--trust] [--force]` | Make the certificates `mfd serve` uses for HTTPS, unless they're there (`--force` replaces them); `--trust` adds their authority to the system's and browsers' stores. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
@@ -138,6 +154,7 @@ cookie: `mfd open` visits `/login?token=<token>`, which sets the cookie and
 goes to the dashboard. A request without the token gets `401 Unauthorized`;
 delete the file to make a new token, which signs every browser out.
 
+With the certificate, everything is on `https://` and the cookie is marked `Secure`.
 Requests must also name the server as `127.0.0.1:<port>` or `localhost:<port>`
 in their `Host` header (a page asked for at `localhost` is sent to the same path at
 `127.0.0.1`, where the sign-in cookie is), and a POST that carries an `Origin` header must come
@@ -200,8 +217,8 @@ notes in the notes plugin's tables, the page's dragged order (core's `layout`), 
 slack plugin's, and reviewers' emails in the github plugin's (from `mfd github
 import`, or looked up from commits). It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.
-The server's token sits next to it, in `token`. The database, its backups and the token
-are readable by you alone.
+The server's token sits next to it, in `token`, and the HTTPS certificate in `tls/`. The
+database, its backups, the token and the certificate's key are readable by you alone.
 
 The schema is built by migrations: core and each plugin own a list, applied in
 order at start-up and counted in `schema_versions`, so an older database
