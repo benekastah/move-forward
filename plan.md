@@ -29,7 +29,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 - Core: `item_actions` is called once per item, and slack rebuilds every ping and notes
   rereads its tables on each call. Plugins get a `prepare_item_actions(ctx, graph)` hook
   that does that work once per page and returns the per-item function.
-- `docs/entities.md` generated from the kind models, or checked against them by a test.
 - Namespace the kinds (`github.pr`, `git.branch`, ...), after linking kinds and mentions, so
   github never has to name `jira.ticket`. Every plugin already declares its kinds and reads
   others' through views, so this is a rename, plus a notes migration renaming the kinds

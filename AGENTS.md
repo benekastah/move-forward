@@ -51,7 +51,8 @@ is what's left to build.
     endpoints. The available plugins table and the API section must match the
     code.
   - `docs/entities.md`: a new entity kind or attribute, or a change to what
-    one means or who publishes it.
+    one means or who publishes it. `tests/test_entities_doc.py` checks its
+    kinds and attributes against the plugins' kind models.
   - `docs/plugins.md`: a change to what a plugin publishes or reads, its item
     actions, its `requires`, or the phase it collects in.
   - `docs/graph.md`: a change to how the graph is built or read (its methods,
