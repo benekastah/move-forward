@@ -28,7 +28,7 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   tables in a later migration, once the copies have shipped; a plugin enabled after that
   starts empty.
 - The reviewer map fills itself in, and can be viewed and edited when needed. Once the
-  notes cut over (5a), nothing reads `reviewer-map.md` any more; until this step, `mfd notes
+  notes cut over, nothing reads `reviewer-map.md` any more; until this step, `mfd notes
   import` loads it into core's tables, and can be rerun for it.
   - Automatically: github already looks up reviewers' emails from their commits. Slack
     member ids and team channels need a source: the Slack API by email
@@ -129,10 +129,19 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   fallback is the macOS keychain (`security`); `dev-install.sh`, `dev-venv.sh`, `check.sh`
   and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
-  separators) and written into `on-ice.md`.
+  separators) and stored in `notes_ice`.
 - **Notes are empty until imported.** After upgrading, the Todos and On ice panels are
   empty until `mfd notes import` runs, with nothing on the page saying so. An empty notes
   plugin could say "run `mfd notes import <dir>`" in its panels.
+- **Skill stand-ins for missing notes fields.** The move-forward skill keeps some state
+  outside the database until the notes can hold it: check-ins (`Checked`, `Asked-done`) are
+  `decline` items with those reserved texts; the once-a-day ice question and the per-PR
+  "offered" dates live in its gitignored `daily.json`; merge conditions apply to a whole
+  entry, so a PR's URL goes in the condition text; `reviewer-map.md` is read only through
+  `mfd notes import` (until step 5c). Give the notes real fields or tables for these, per-PR
+  conditions included, and move the skill onto them.
+- **Finished entries are never pruned by the dashboard.** Prune deletes only entries
+  finished 90 days ago; the skill clears finished ones itself with `mfd notes remove`.
 - **Restoring deleted iced branches.** A stack on ice keeps the commit of each branch, but
   once git deletes them there's no button to bring them back. git could add Restore
   branches on the On ice item, recreating each at its commit; and Reopen on a stack whose
@@ -408,8 +417,7 @@ panel useful:
 #### Where things stand
 
 - **JSON in the database.** Every plugin's snapshot is one JSON blob in `snapshots.payload`
-  (`github`, `github.derived`, `git`, `git_stack`, `jira`). So are core's `work_items` and
-  `iced_stacks` rows, which step 5a replaces. Nothing can be filtered or indexed in SQL. The
+  (`github`, `github.derived`, `git`, `git_stack`, `jira`). Nothing can be filtered or indexed in SQL. The
   schema exists only as the pydantic models, and a stored blob that no longer fits its
   model fails when it's read.
 - **Untyped entities.** The graph is built in memory on every page load and never stored.
