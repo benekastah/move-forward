@@ -61,6 +61,12 @@ is what's left to build.
   scripts applied in order and counted in `schema_versions`. Never edit one
   that has been committed to `main`; add a new one. A plugin's tables are
   prefixed with its name.
+- **A plugin table is fetched or kept**, and its comment says which.
+  Fetched tables hold what `collect` brings back; `store` replaces them
+  wholesale, so they're never pruned. Kept tables hold what only the dashboard
+  knows (notes, pings sent, looked-up emails); they survive refreshes, a
+  migration that reshapes them copies their rows, and the plugin's `prune`
+  clears what's finished.
 - **Plugin migrations don't depend on order.** A plugin can be enabled at any
   time, before or after any other, so its migrations touch only its own tables
   and never assume another plugin's migrations have run, or haven't. Data

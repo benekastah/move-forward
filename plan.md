@@ -378,46 +378,31 @@ panel useful:
 
 #### Where things stand
 
-- **JSON in the database.** Every plugin's snapshot is one JSON blob in `snapshots.payload`
-  (`github`, `github.derived`, `git`, `git_stack`, `jira`). Nothing can be filtered or indexed in SQL. The
-  schema exists only as the pydantic models, and a stored blob that no longer fits its
-  model fails when it's read.
 - **Untyped entities.** The graph is built in memory on every page load and never stored.
   `Ref.kind` is any string and `Entity.attrs` is a `dict[str, JsonValue]`. Consumers read
   attributes defensively (`str(pr.attrs.get("head"))`), so if a publisher renames an
   attribute, consumers quietly get `"None"`, `False` or `[]`. The contract is only the
   prose in `docs/entities.md`.
-- **Shared kinds and core tables.** Two plugins can publish the same ref and the graph
-  merges them: git_stack adds `stack_parent` to git's `branch`. Some data still bypasses
-  the graph through core's tables: github and slack share core's reviewer table, which
-  github writes looked-up emails to (until step 5c splits it into `github_people` and
-  `slack_contacts`). Core knows two kinds by name: `ticket` (`Graph.related`) and
-  `person` (finding `me`).
+- **Shared kinds.** Two plugins can publish the same ref and the graph merges them:
+  git_stack adds `stack_parent` to git's `branch`. Core knows two kinds by name: `ticket`
+  (`Graph.related`) and `person` (finding `me`).
 
 #### Principles
 
-1. **No JSON in the database.** Every table has a set schema; a list becomes a child table.
-   `kv` holds scalars only.
-2. **Plugins own their data.** A plugin's tables hold what it fetches as well as what it
-   keeps, prefixed with its name. Core owns only `schema_versions`, collection status,
-   `kv`, `layout` and `act_now_feedback`. Tables for PRs, branches, repos, tickets or iced
-   branches belong to the plugin that knows them, not to core.
-3. **Entity kinds are plugin-owned, one publisher per kind.** The publishing plugin
+1. **Entity kinds are plugin-owned, one publisher per kind.** The publishing plugin
    declares each of its kinds as a typed model, and kinds are namespaced like panel keys:
    `github.pr`, `git.branch`. Core validates every published entity against its kind's
    model when it builds the graph.
-4. **Extend by pointing, not by merging.** A plugin that knows more about another's entity
+2. **Extend by pointing, not by merging.** A plugin that knows more about another's entity
    publishes its own kind with a ref to it: git_stack publishes `git_stack.stack_branch`
    pointing at the `git.branch`. The graph's merging of one ref from two plugins goes
    away.
-5. **Consumers declare what they read.** Plugins still can't import each other, so a
+3. **Consumers declare what they read.** Plugins still can't import each other, so a
    consumer describes the fields it uses as its own small model, e.g. slack's `PrView`
    with `head`, `draft` and `requested_users`. `graph.of_kind("github.pr", PrView)` returns
    validated instances, and a mismatch raises. If a publisher renames an attribute, that
    consumer's tests fail instead of the page quietly showing less.
-6. **The graph stays in memory.** Entities are derived from plugin tables on every build
-   and aren't stored. A stored copy would be a second source of truth to keep in step.
-7. **The docs follow the models.** `docs/entities.md` is generated from the kind models, or
+4. **The docs follow the models.** `docs/entities.md` is generated from the kind models, or
    a test checks it against them.
 
 #### Units of work: linking kinds
@@ -492,21 +477,6 @@ Put on ice becomes an item action on any item whose subject notes can ice: entri
 tickets, PRs and branches. The On ice panel lists acts of icing, with Thaw, and Delete for
 the ones holding branches.
 
-#### Storage in the plugin protocol
-
-`collect` keeps returning the snapshot model S, which panels and `entities` keep using in
-memory. Two hooks replace the JSON:
-
-- `store(ctx, snapshot)`: core calls it after a successful `collect`, in one transaction.
-  The plugin replaces its fetched tables wholesale. A failed `collect` leaves them alone,
-  so the last good data stays, as it does today.
-- `load(ctx) -> S | None`: rebuilds S from the plugin's tables, with one query per table
-  and the filtering done in SQL.
-
-During the move, the default implementations keep reading and writing JSON. Each plugin
-moves on its own branch. Once none uses JSON, the `payload` column goes, and `snapshots`
-becomes `collections (source, fetched_at, error)`: status only.
-
 #### Open questions
 
 - **Finding `me`.** `refresh` finds `me` among `person` entities by name. Like linking
@@ -514,227 +484,16 @@ becomes `collections (source, fetched_at, error)`: status only.
 - **A second code host.** With `github.pr` owned by github, a GitLab plugin would publish
   `gitlab.pr`, and every consumer would read both. If that gets repetitive, `pr` could
   become a contract that several plugins publish to. That can wait for the second host.
-- **Migration cost.** Every new field GitHub gives us becomes a migration. That's the price
-  of a set schema, and it's accepted.
-
 ### Schema
 
-All tables are created by migrations. Core owns `schema_versions` and applies each
-plugin's `migrations` in order at start-up, recording how many ran. Foreign keys are on
-(`PRAGMA foreign_keys = ON`), so the `ON DELETE CASCADE`s below take effect.
-
-Every plugin table is one of two sorts, and its comment in the sketches says which:
-
-- **Fetched** (`-- fetched`): what `collect` brings back, replaced wholesale by `store` on
-  every successful collect. Never pruned; a refresh drops what's gone.
-- **Kept** (`-- kept`): what only the dashboard knows (notes, pings sent, looked-up
-  emails). Survives refreshes, is copied when a migration reshapes it, and is cleared by
-  the plugin's `prune`.
-
-#### Core
-
-```sql
-CREATE TABLE schema_versions (
-    plugin TEXT PRIMARY KEY,           -- "core" or a plugin name
-    version INTEGER NOT NULL           -- migrations applied so far
-);
-CREATE TABLE collections (             -- was snapshots; status only after step 5e
-    source TEXT PRIMARY KEY,           -- plugin name, or "<plugin>.<part>"
-    fetched_at TEXT NOT NULL,          -- of the last good collect
-    error TEXT                         -- the last collect's error, if it failed
-);
-CREATE TABLE kv (                      -- replaces meta: namespaced key/value state
-    plugin TEXT NOT NULL,
-    key TEXT NOT NULL,
-    value TEXT NOT NULL,
-    PRIMARY KEY (plugin, key)
-);
-CREATE TABLE layout (                  -- drag-and-drop order
-    kind TEXT NOT NULL,                -- "group" or "panel"
-    key TEXT NOT NULL,                 -- group key, or "<plugin>.<panel>"
-    parent TEXT,                       -- for a panel: its group ("act" or a plugin name)
-    position INTEGER NOT NULL,
-    PRIMARY KEY (kind, key)
-);
-```
-
-Core also owns `act_now_feedback` (see Act now).
-
-What a plugin fetches lives in its own tables, replaced wholesale on every successful
-collect (see Data model). Core keeps no plugin data.
-
-#### slack
-
-```sql
-CREATE TABLE slack_contacts (          -- kept: the reviewer map's users
-    login TEXT PRIMARY KEY,
-    slack_id TEXT,
-    source TEXT NOT NULL               -- "import", "dashboard"
-);
-CREATE TABLE slack_team_channels (     -- kept: the reviewer map's teams; [slack.teams] wins
-    team TEXT PRIMARY KEY,
-    channel_name TEXT,
-    channel_id TEXT
-);
-CREATE TABLE slack_pings (             -- kept: unchanged apart from the name
-    id INTEGER PRIMARY KEY,
-    pr_url TEXT NOT NULL,
-    target TEXT NOT NULL,              -- "user:<login>" or "team:<slug>"
-    kind TEXT NOT NULL,
-    message TEXT NOT NULL,
-    sent_at TEXT NOT NULL,
-    source TEXT NOT NULL
-);
-CREATE INDEX slack_pings_pr_url ON slack_pings (pr_url);
-```
-
-#### github
-
-```sql
-CREATE TABLE github_people (           -- kept: commit emails looked up or imported
-    login TEXT PRIMARY KEY,
-    email TEXT,
-    source TEXT NOT NULL               -- "lookup", "import"
-);
-```
-
-Tables for what github fetches, replacing its `snapshots` JSON:
-
-```sql
-CREATE TABLE github_prs (  -- fetched
-    url TEXT PRIMARY KEY,
-    number INTEGER NOT NULL,
-    repo TEXT NOT NULL,                -- owner/name
-    title TEXT NOT NULL,
-    body TEXT NOT NULL,
-    state TEXT NOT NULL,
-    is_draft INTEGER NOT NULL,
-    author TEXT,
-    head TEXT NOT NULL,
-    head_oid TEXT NOT NULL,
-    base TEXT NOT NULL,
-    default_branch TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    merged_at TEXT,
-    last_commit_at TEXT,
-    size INTEGER NOT NULL,
-    changed_files INTEGER NOT NULL,
-    mergeable TEXT NOT NULL,
-    merge_state TEXT NOT NULL,
-    review_decision TEXT,
-    rollup_state TEXT,
-    in_merge_queue INTEGER NOT NULL
-);
-CREATE TABLE github_pr_lists (         -- fetched: why it was fetched; a PR can be in several
-    pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
-    list TEXT NOT NULL CHECK (list IN ('mine', 'direct_requests', 'reviewed_by_me',
-        'team_requests', 'merged_recent', 'closed_recent')),
-    PRIMARY KEY (pr_url, list)
-);
-CREATE TABLE github_pr_labels (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
-    label TEXT NOT NULL, PRIMARY KEY (pr_url, label));
-CREATE TABLE github_pr_requests (      -- fetched: requested reviewers
-    pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK (kind IN ('user', 'team')),
-    name TEXT NOT NULL,                -- login or team slug
-    PRIMARY KEY (pr_url, kind, name)
-);
-CREATE TABLE github_pr_reviews (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
-    author TEXT, state TEXT NOT NULL, submitted_at TEXT);
-CREATE TABLE github_pr_threads (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
-    resolved INTEGER NOT NULL, outdated INTEGER NOT NULL, path TEXT, author TEXT,
-    body TEXT NOT NULL, url TEXT, created_at TEXT);
-CREATE TABLE github_pr_checks (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
-    name TEXT NOT NULL, state TEXT NOT NULL, url TEXT);
-CREATE TABLE github_pr_events (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
-    type TEXT NOT NULL, at TEXT NOT NULL, actor TEXT,
-    reviewer_kind TEXT CHECK (reviewer_kind IN ('user', 'team')), reviewer TEXT, reason TEXT);
-CREATE TABLE github_pr_files (pr_url TEXT NOT NULL REFERENCES github_prs ON DELETE CASCADE,  -- fetched
-    path TEXT NOT NULL, PRIMARY KEY (pr_url, path));
-CREATE TABLE github_team_members (login TEXT PRIMARY KEY);  -- fetched
-CREATE TABLE github_reviewer_suggestions (   -- fetched: was the github.derived snapshot
-    pr_url TEXT NOT NULL, login TEXT NOT NULL, commits INTEGER NOT NULL,
-    PRIMARY KEY (pr_url, login));
-CREATE TABLE github_team_scores (  -- fetched
-    pr_url TEXT PRIMARY KEY, owned_files INTEGER NOT NULL, required_files INTEGER NOT NULL,
-    my_files INTEGER NOT NULL);
-```
-
-My login goes in `kv` (`github`, `login`).
-
-#### git
-
-```sql
-CREATE TABLE git_repos (  -- fetched
-    dir TEXT PRIMARY KEY,              -- the main checkout
-    github_repo TEXT,
-    default_branch TEXT NOT NULL
-);
-CREATE TABLE git_worktrees (  -- fetched
-    path TEXT PRIMARY KEY,
-    repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,
-    branch TEXT,                       -- NULL when detached
-    modified INTEGER NOT NULL,
-    untracked INTEGER NOT NULL
-);
-CREATE TABLE git_branches (  -- fetched
-    repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    upstream TEXT,
-    ahead INTEGER NOT NULL,
-    behind INTEGER NOT NULL,
-    gone INTEGER NOT NULL,
-    committed_at TEXT NOT NULL,
-    ahead_of_default INTEGER,
-    PRIMARY KEY (repo_dir, name)
-);
-CREATE TABLE git_my_dirs (repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,  -- fetched
-    path TEXT NOT NULL, PRIMARY KEY (repo_dir, path));
-```
-
-#### git_stack
-
-```sql
-CREATE TABLE git_stack_branches (  -- fetched
-    repo_dir TEXT NOT NULL,
-    name TEXT NOT NULL,
-    parent TEXT,                       -- NULL for a root
-    status TEXT,
-    current INTEGER NOT NULL,
-    stack_group TEXT,
-    PRIMARY KEY (repo_dir, name)
-);
-```
-
-#### jira
-
-```sql
-CREATE TABLE jira_issues (  -- fetched
-    key TEXT PRIMARY KEY,
-    summary TEXT NOT NULL,
-    status TEXT NOT NULL,
-    status_category TEXT NOT NULL,
-    type TEXT NOT NULL,
-    priority TEXT,
-    parent TEXT,
-    created TEXT NOT NULL,
-    updated TEXT NOT NULL,
-    resolved TEXT,
-    url TEXT NOT NULL
-);
-CREATE TABLE jira_issue_labels (key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,  -- fetched
-    label TEXT NOT NULL, PRIMARY KEY (key, label));
-CREATE TABLE jira_issue_blockers (key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,  -- fetched
-    blocker TEXT NOT NULL, PRIMARY KEY (key, blocker));
-```
+Core's `layout` table is migrated already (for step 6); `act_now_feedback` (see Act now)
+comes with step 6b.
 
 ### Upkeep
 
-The daily prune becomes per plugin: notes drops done todos, finished entries and stale
-declines; slack drops old pings; github drops looked-up emails nobody references. Each
-asks the graph whether a PR is merged or a ticket resolved, and `prune_days` stays one
-top-level setting.
+Each plugin prunes its own data daily (notes: old done todos and finished entries; slack:
+old pings). Still to add: notes dropping old declines, and github dropping looked-up emails
+no PR has asked about in `prune_days`.
 
 ### Risks
 
