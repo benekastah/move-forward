@@ -145,3 +145,8 @@ def test_act_now_ranking_is_tuned_in_its_section(tmp_path: Path) -> None:
     path.write_text('email = "me@x"\n[act_now]\nweights = { speed = 1 }\n')
     with pytest.raises(ValidationError, match="speed"):
         config.load(path)
+
+
+def test_refresh_seconds_moved_into_each_plugins_section(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match=r"`refresh_seconds` is now per plugin"):
+        _load(tmp_path, MINIMAL + "refresh_seconds = 60\n")

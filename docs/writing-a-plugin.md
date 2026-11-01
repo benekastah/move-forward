@@ -86,7 +86,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
         return IssueRepository(ctx.db).load()
 ```
 
-- `collect` runs in a refresh, in parallel with the other plugins, and may be slow: it's
+- A plugin that collects has a `refresh_seconds` setting in its section (with a default
+  that suits its tool): the server refreshes it that often, on its own schedule.
+- `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with
   what it stored last.

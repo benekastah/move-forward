@@ -13,6 +13,9 @@ DEFAULT_IGNORED_WORKTREE_GLOBS = ["*/.claude/worktrees/*"]
 class GitConfig(Strict):
     """`[git]`: the repos I work in on this machine."""
 
+    refresh_seconds: int = Field(default=60, ge=10)
+    """How often the dashboard refreshes this plugin's data in the background (it only reads local checkouts)."""
+
     repos: list[Path]
     """Main checkouts of the repos I work in, one per repo. Their other worktrees are found
     from them with `git worktree list`, so those aren't listed."""

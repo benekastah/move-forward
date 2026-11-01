@@ -16,6 +16,8 @@ Create the token at https://id.atlassian.com/manage-profile/security/api-tokens.
 
 ## Config
 
+`refresh_seconds` (900) is how often it refreshes in the background: tickets change slowly.
+
 `[jira]` needs `site`, an `https://` URL (the requests carry your token). `token_env` and
 `keychain_service` say where its token is. `status_in_progress`, `status_in_review` and
 `status_closed` are the workflow's status names, for Jira transitions.

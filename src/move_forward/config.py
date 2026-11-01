@@ -26,7 +26,6 @@ BASE_DIR = Path("~/.config/move-forward")
 DEFAULT_CONFIG_PATH = (BASE_DIR / "config.toml").expanduser()
 DEFAULT_DB_PATH = Path("~/.local/share/move-forward/dashboard.db")
 DEFAULT_PORT = 8765
-DEFAULT_REFRESH_SECONDS = 300
 DEFAULT_REFRESH_ON_LOAD_SECONDS = 60
 DEFAULT_PRUNE_DAYS = 90
 
@@ -61,8 +60,6 @@ class Config(Strict):
     https: bool = True
     """Serve over HTTPS with the certificate `mfd cert` makes (until there is one, plain
     HTTP); false keeps plain HTTP."""
-    refresh_seconds: int = DEFAULT_REFRESH_SECONDS
-    """How often the background loop refreshes when nobody loads the page."""
     refresh_on_load_seconds: int = DEFAULT_REFRESH_ON_LOAD_SECONDS
     """A page load starts a background refresh if the last one began longer ago than this."""
     prune_days: int = DEFAULT_PRUNE_DAYS
@@ -91,6 +88,8 @@ class Config(Strict):
         ]
         if "notes_dir" in settings:
             moved.append(f"`notes_dir` is gone; {IMPORT_ONCE}")
+        if "refresh_seconds" in settings:
+            moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")
         if moved:
             raise ValueError("; ".join(moved))
         return settings

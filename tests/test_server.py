@@ -14,6 +14,7 @@ from move_forward.db import Database
 from move_forward.page import Action, Item
 from move_forward.panels import Layout
 from move_forward.plugin import KEPT, ActionError, ActionResult
+from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.slack.config import SlackConfig
@@ -438,3 +439,25 @@ def test_localhost_goes_to_127_0_0_1_where_the_sign_in_cookie_is(client: HTTPCon
     response = get(client, "//evil.example/x", {"Host": host})
     assert response.getheader("Location", "").startswith(f"http://127.0.0.1:{client.port}/")
     response.read()
+
+
+def test_the_loop_refreshes_each_plugin_as_it_falls_due(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = [1000.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    app.config = app.config.model_copy(
+        update={"git": GitConfig(repos=[]), "refresh_on_load_seconds": 120}
+    )
+    assert app.intervals() == {"github": 300, "git": 60}
+    assert app.due() == {"github", "git"}  # never refreshed
+    app.refresh_now()
+    assert app.due() == set()
+    clock[0] += 61
+    assert app.due() == {"git"} and app._seconds_to_next() == 1.0  # pyright: ignore[reportPrivateUsage]
+    clock[0] += 240
+    assert app.due() == {"git", "github"}
+    app.refresh_now({"git"})
+    assert app.due() == {"github"}
+    app.refresh_if_stale()  # github's data is 301s old, over refresh_on_load_seconds
+    assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]

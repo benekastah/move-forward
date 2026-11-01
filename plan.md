@@ -110,10 +110,8 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
 
 ### 10. Refresh in smaller steps
 
-- **Per-plugin intervals** (in progress): each collecting plugin refreshes on its own
-  schedule, a `refresh_seconds` setting in its section (git often, it's local; github
-  less, it's rate-limited; jira least), with git_stack following git. The Refresh button
-  still refreshes everything; each group could get its own.
+Each plugin refreshes on its own `refresh_seconds` now. What's left:
+
 - **Change signals instead of webhooks.** Webhooks would need GitHub, Jira and Slack to
   reach `127.0.0.1`, i.e. a public tunnel: another service, and an opening onto the
   machine. Cheap signals that something changed get most of the benefit, so the heavy

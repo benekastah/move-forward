@@ -22,6 +22,9 @@ class JiraConfig(Strict):
     else the macOS keychain.
     """
 
+    refresh_seconds: int = Field(default=900, ge=10)
+    """How often the dashboard refreshes this plugin's data in the background (tickets change slowly)."""
+
     site: str
     """e.g. https://example.atlassian.net. Must be `https://`: requests carry the API token."""
     token_env: str = DEFAULT_JIRA_TOKEN_ENV

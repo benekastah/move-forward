@@ -20,7 +20,15 @@ from .config import Config
 from .db import Database
 from .panels import Layout
 from .plugin import KEPT, ActionError
-from .refresh import build_dashboard, kept_item, perform_action, plugin_page, refresh
+from .refresh import (
+    build_dashboard,
+    kept_item,
+    perform_action,
+    plugin_page,
+    refresh,
+    refresh_seconds,
+)
+from .registry import enabled
 from .repositories import LayoutRepository
 
 log = logging.getLogger(__name__)
@@ -76,44 +84,92 @@ class App:
         self._refresh_lock = threading.Lock()
         self._wake = threading.Event()
         self.refreshing = False
-        self.last_refresh: float | None = None
-        """`time.monotonic()` when the last refresh started; None before the first."""
+        self.last_refreshed: dict[str, float] = {}
+        """`time.monotonic()` when each plugin's last refresh started."""
+        self._pending: set[str] | None = set()
+        """Plugins asked for since the loop last ran: by a page load (stale ones) or the
+        Refresh button (None: all of them)."""
+        self._pending_lock = threading.Lock()
 
-    def refresh_now(self) -> bool:
-        """Refresh unless one is already running; returns whether this call did it."""
+    def intervals(self) -> dict[str, int]:
+        """How often each plugin that refreshes on its own does: its `refresh_seconds`."""
+        plugins = enabled(self.config, self.db, datetime.now(UTC))
+        return {e.name: s for e in plugins if (s := refresh_seconds(e)) is not None}
+
+    def due(self, now: float | None = None) -> set[str]:
+        """The plugins whose `refresh_seconds` have passed since they last refreshed."""
+        now = time.monotonic() if now is None else now
+        last = self.last_refreshed
+        return {
+            name
+            for name, seconds in self.intervals().items()
+            if name not in last or now - last[name] >= seconds
+        }
+
+    def refresh_now(self, only: set[str] | None = None) -> bool:
+        """Refresh every plugin, or `only` those, unless a refresh is already running;
+        returns whether this call did it."""
         if not self._refresh_lock.acquire(blocking=False):
             return False
         try:
             self.refreshing = True
-            self.last_refresh = time.monotonic()
-            refresh(self.config, self.db)
+            started = time.monotonic()
+            for name in self.intervals() if only is None else only:
+                self.last_refreshed[name] = started
+            refresh(self.config, self.db, None, only)
         finally:
             self.refreshing = False
             self._refresh_lock.release()
         return True
 
-    def request_refresh(self) -> None:
-        """Ask the background loop to refresh as soon as it can."""
+    def request_refresh(self, only: set[str] | None = None) -> None:
+        """Ask the background loop to refresh `only` these plugins, or all of them, as soon as
+        it can."""
+        with self._pending_lock:
+            if only is None or self._pending is None:
+                self._pending = None
+            else:
+                self._pending |= only
         self._wake.set()
 
     def refresh_if_stale(self) -> None:
-        """Start a background refresh if the last one began over `refresh_on_load_seconds` ago."""
+        """Ask for the plugins whose data is older than `refresh_on_load_seconds`."""
         if self.refreshing:
             return
-        if (
-            self.last_refresh is None
-            or time.monotonic() - self.last_refresh >= self.config.refresh_on_load_seconds
-        ):
-            self.request_refresh()
+        now = time.monotonic()
+        last = self.last_refreshed
+        stale = {
+            name
+            for name in self.intervals()
+            if name not in last or now - last[name] >= self.config.refresh_on_load_seconds
+        }
+        if stale:
+            self.request_refresh(stale)
+
+    def _seconds_to_next(self) -> float:
+        """How long until the next plugin is due, at least a second."""
+        now = time.monotonic()
+        waits = [
+            self.last_refreshed.get(name, now) + seconds - now
+            for name, seconds in self.intervals().items()
+        ]
+        return max(1.0, min(waits, default=60.0))
 
     def run_refresh_loop(self) -> None:
+        """Refresh everything at start, then each plugin as it falls due, and what's asked
+        for (`request_refresh`) at once."""
+        only: set[str] | None = None
         while True:
             try:
-                self.refresh_now()
+                if only is None or only:
+                    self.refresh_now(only)
             except Exception:
                 log.exception("refresh failed")
-            self._wake.wait(self.config.refresh_seconds)
+            self._wake.wait(self._seconds_to_next())
             self._wake.clear()
+            with self._pending_lock:
+                pending, self._pending = self._pending, set()
+            only = None if pending is None else pending | self.due()
 
     def dashboard_page(self, notice: str = "", open_keys: set[str] | None = None) -> str:
         """The page from stored data; a page load also refreshes stale data in the background."""

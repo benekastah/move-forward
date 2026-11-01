@@ -56,13 +56,39 @@ def _collect_all(
             )
 
 
-def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
-    """Refresh every plugin. Each plugin fails on its own."""
+def refresh_seconds(e: Enabled) -> int | None:
+    """How often a plugin refreshes on its own: its section's `refresh_seconds`. None for a
+    plugin that doesn't collect, or that collects after the plugins it requires (git_stack,
+    after git)."""
+    if e.plugin.snapshot_model is None or e.plugin.collects_after_graph:
+        return None
+    seconds: object = getattr(e.ctx.config, "refresh_seconds", None)
+    return seconds if isinstance(seconds, int) else None
+
+
+def refresh(
+    config: Config, db: Database, now: datetime | None = None, only: set[str] | None = None
+) -> None:
+    """Refresh every plugin, or `only` those (and the plugins that collect after them, e.g.
+    git_stack after git). Each plugin fails on its own. After collecting, the graph is built
+    again, the daily prune runs if due, and `after_collect` runs for the plugins collected
+    and those that collect nothing (they work from the others' data)."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     collecting = [e for e in plugins if e.plugin.snapshot_model is not None]
-    first = [e for e in collecting if not e.plugin.collects_after_graph]
-    after = [e for e in collecting if e.plugin.collects_after_graph]
+    first = [
+        e
+        for e in collecting
+        if not e.plugin.collects_after_graph and (only is None or e.name in only)
+    ]
+    collected = {e.name for e in first}
+    after = [
+        e
+        for e in collecting
+        if e.plugin.collects_after_graph
+        and (only is None or e.name in only or collected.intersection(e.plugin.requires))
+    ]
+    collected |= {e.name for e in after}
     _collect_all(db, first, now, lambda e: e.plugin.collect(e.ctx))
     if shell.stopping():
         return
@@ -74,6 +100,8 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
         graph, _ = stored_graph(db, plugins)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
+        if e.name not in collected and e.plugin.snapshot_model is not None:
+            continue
         try:
             e.plugin.after_collect(e.ctx, graph)
         except Exception:

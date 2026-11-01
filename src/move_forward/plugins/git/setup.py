@@ -3,6 +3,7 @@
 from ...asking import Asker, InitSetup, branch_prefix, checkout, directories, path
 
 TEMPLATE = """\
+# refresh_seconds = 60                 # how often it refreshes (only reads local checkouts)
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # commit_history_days = 180              # commit history for "directories I work in"
 """

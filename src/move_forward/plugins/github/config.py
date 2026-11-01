@@ -14,6 +14,9 @@ DEFAULT_REVIEWER_HISTORY_DAYS = 180
 class GitHubConfig(Strict):
     """`[github]`: the organization and its pull-request conventions."""
 
+    refresh_seconds: int = Field(default=300, ge=10)
+    """How often the dashboard refreshes this plugin's data in the background (GitHub's API is rate-limited)."""
+
     org: str
     """The GitHub organization, as in github.com/<org>."""
     history_days: int = DEFAULT_HISTORY_DAYS

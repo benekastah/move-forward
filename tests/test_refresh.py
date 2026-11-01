@@ -17,6 +17,9 @@ from move_forward.plugin import ActionError, Context
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.models import GitHubSnapshot
+from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
@@ -162,3 +165,60 @@ def test_feedback_that_is_over_or_old_is_pruned() -> None:
     feedback.say(("pr", "3", ""), Feedback(action="pin", fingerprint="f"), NOW)
     assert feedback.prune(NOW + timedelta(seconds=1), NOW - timedelta(days=90)) == 2
     assert list(feedback.all()) == [("pr", "3", "")]
+
+
+def test_refreshing_some_plugins_brings_the_ones_built_on_them_along(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class Git(GitPlugin):
+        def collect(self, ctx: Context[GitConfig]) -> LocalSnapshot:
+            calls.append("git")
+            return local_snapshot()
+
+    class JiraOnGit(JiraPlugin):
+        collects_after_graph: ClassVar[bool] = True
+        requires: ClassVar[list[str]] = ["git"]
+
+        def collect_after(self, ctx: Context[JiraConfig], graph: Graph) -> JiraSnapshot:
+            calls.append("jira")
+            return JiraSnapshot(issues=[])
+
+        def after_collect(self, ctx: Context[JiraConfig], graph: Graph) -> None:
+            calls.append("jira after")
+
+    class GitHub(GitHubPlugin):
+        def collect(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot:
+            calls.append("github")
+            return snapshot()
+
+        def after_collect(self, ctx: Context[GitHubConfig], graph: Graph) -> None:
+            calls.append("github after")
+
+    swap = {"git": Git(), "jira": JiraOnGit(), "github": GitHub()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    config = Config.model_validate(
+        {
+            "email": "me@x",
+            "github": {"org": "acme"},
+            "git": {"repos": []},
+            "jira": {"site": "https://j"},
+        }
+    )
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    refresh.refresh(config, db, NOW, {"git"})
+    assert calls == ["git", "jira", "jira after"]  # jira is built on git; github isn't due
+    calls.clear()
+    refresh.refresh(config, db, NOW, {"github"})
+    assert calls == ["github", "github after"]
+
+
+def test_each_plugin_refreshes_on_its_own_setting() -> None:
+    config = Config.model_validate(
+        {"email": "me@x", "github": {"org": "acme"}, "git": {"repos": [], "refresh_seconds": 30}}
+    )
+    plugins = registry.enabled(config, Database(":memory:"), NOW)
+    seconds = {e.name: refresh.refresh_seconds(e) for e in plugins}
+    assert seconds == {"github": 300, "git": 30, "notes": None}

@@ -7,6 +7,7 @@ from ...asking import Asker, InitSetup, checkout, choices, quiet, word
 
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 TEMPLATE = """\
+# refresh_seconds = 300                 # how often it refreshes (GitHub's API is rate-limited)
 # history_days = 14                      # how far back merged and closed PRs are fetched
 # review_checks = []                     # checks that report review status, not CI, e.g. ["review-policy"]
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners, e.g. "#required"

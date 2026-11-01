@@ -3,6 +3,7 @@
 from ...asking import Asker, InitSetup, https_url
 
 TEMPLATE = """\
+# refresh_seconds = 900                 # how often it refreshes (tickets change slowly)
 # token_env = "JIRA_API_TOKEN"            # else the macOS keychain item for your email
 # keychain_service = "move-forward-jira"
 # status_in_progress = "In Progress"      # workflow names the transitions panel uses

@@ -5,6 +5,8 @@ requests, PRs I reviewed, and my teams' PRs. Enabled by a `[github]` section.
 
 ## Config
 
+`refresh_seconds` (300) is how often it refreshes in the background: GitHub's API is rate-limited.
+
 `[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
 fetched. Its conventions that differ between organisations are off by default:
 `review_checks` (CI checks that really report review status), `required_owner_marker` (a

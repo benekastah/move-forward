@@ -25,12 +25,12 @@ teams = ["my-team"]                   # the teams I'm on or review for, by name
 # db_backups = 10                        # copies kept in backups/, taken before migrations
 # port = 8765
 # https = true                           # serve over HTTPS with `mfd cert`'s certificate
-# refresh_seconds = 300                  # background refresh when nobody loads the page
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                         # clear work finished this long ago from the notes
 
 [github]
 org = "example-org"
+# refresh_seconds = 300
 # history_days = 14
 # review_checks = []                     # checks that report review status, not CI
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners
@@ -45,6 +45,7 @@ org = "example-org"
 
 [git]
 repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are found from them
+# refresh_seconds = 60
 # my_branch_prefixes = ["me/"]            # besides branches with my commits or PRs
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # commit_history_days = 180
@@ -64,6 +65,7 @@ my-team = "#team-my-team"
 
 # [jira]
 # site = "https://example.atlassian.net"
+# refresh_seconds = 900
 # token_env = "JIRA_API_TOKEN"            # else the macOS keychain item for my email
 # keychain_service = "move-forward-jira"
 # status_in_progress = "In Progress"      # workflow names the transitions panel uses

@@ -5,6 +5,8 @@ Enabled by a `[git]` section.
 
 ## Config
 
+`refresh_seconds` (60) is how often it refreshes in the background: it only reads local checkouts.
+
 `[git]` needs `repos`, your main checkouts; their other worktrees are found with
 `git worktree list`, and a listed path that's a worktree of another listed repo is folded
 into it. A branch is yours if a PR of yours comes from it, if it has commits of yours

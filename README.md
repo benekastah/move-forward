@@ -50,9 +50,10 @@ example without asking; `--force` replaces an existing file.
 The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
 `https` (serve over HTTPS with `mfd cert`'s certificate; default true),
-`db_path`, `db_backups`, `refresh_seconds` (how often the background loop
-refreshes), `refresh_on_load_seconds` (a page load refreshes data older than
-this) and `prune_days`. Everything about a tool is
+`db_path`, `db_backups`, `refresh_on_load_seconds` (a page load refreshes
+plugins whose data is older than this) and `prune_days`. Each plugin that
+fetches refreshes on its own schedule, the `refresh_seconds` in its section
+(git every minute, github every 5, jira every 15, by default). Everything about a tool is
 in that tool's plugin section; see [Plugins](#plugins).
 
 `[act_now]` tunes how Act now ranks what the plugins nominate: `size` (7,
@@ -97,7 +98,7 @@ before the command's name.
 
 | Command | Does |
 | --- | --- |
-| `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`; `--open` opens it signed in, like `mfd open`. It restarts when the config file changes, once the new config passes `mfd check` (run in a separate process); if it fails, the error is logged, the running server carries on, and the next change tries again. |
+| `mfd serve [--open] [--port N]` | Serve the page, refreshing each plugin on its own `refresh_seconds`; `--open` opens it signed in, like `mfd open`. It restarts when the config file changes, once the new config passes `mfd check` (run in a separate process); if it fails, the error is logged, the running server carries on, and the next change tries again. |
 | `mfd open [--port N]` | Open the running dashboard in a browser, signed in (see [API](#api)). |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
 | `mfd cert [--trust] [--force]` | Make the certificates `mfd serve` uses for HTTPS, unless they're there (`--force` replaces them); `--trust` adds their authority to the system's and browsers' stores. |
