@@ -40,29 +40,18 @@ Marketplace, so the app stays internal. Hosting can come later if it's needed.
   reading it needs no new dependency) and gets it approved once. The manifest asks for
   every feature's user scopes and no bot scopes. A test checks it against the scopes the
   features below need.
-- Everyone else is added as a collaborator on the app, clicks "Install to Workspace" on
-  its settings page, and copies the user token (`xoxp-`) Slack shows them into
-  `token_env` or the keychain, where the token goes today. Slack runs the OAuth flow
-  itself, so `mfd` needs no redirect, client id or secret, and nothing new in code.
-- Check before building: that a collaborator's install gives them their own user token,
-  not the creator's, and how many collaborators an app can have.
-- Slack's page walks through both halves: creating and approving the app, and installing
-  it as a collaborator. It lists the scopes per feature.
-
-If the collaborator route doesn't work, `mfd serve` runs Slack's OAuth flow itself, from a
-"Connect Slack" button, using PKCE so no client secret is shared (the app's client id
-becomes a new `[slack]` key). Slack's console only takes `https://` redirect URLs, even
-for localhost, so the redirect is `https://127.0.0.1:<port>/slack/callback`, served by
-`mfd serve` with the standard library's `ssl`. Only the callback needs HTTPS, so it can
-be a second listener, leaving the page on plain HTTP.
-
-- The certificate is made at install (`install.sh`, or an `mfd` command it calls) and
-  lives next to the config. The browser has to trust it. With `mkcert` installed, it
-  makes a local CA and adds it to the system's and browsers' trust stores, so there's
-  no warning. Without `mkcert`, a self-signed certificate made with `openssl` works if
-  the person clicks through the browser's warning, which happens only when they connect.
-  Slack's page explains both, including Firefox, which keeps its own trust store.
-- `mfd check` says when the certificate is missing or about to expire.
+- Everyone signs in to that one app with Slack's OAuth flow, from a "Connect Slack"
+  button `mfd serve` shows, and gets their own user token. It uses PKCE, so no client
+  secret is shared; the app's client id becomes a new `[slack]` key. Slack only takes
+  `https://` redirect URLs, even for localhost, so the redirect is
+  `https://127.0.0.1:<port>/slack/callback`, on the dashboard served over HTTPS (the
+  `https-serve` stack: `mfd cert --trust`). The token goes where tokens go today (the
+  keychain, or a file readable only by me).
+- Not collaborators: a collaborator can manage the app (its scopes, its redirect URLs, its
+  credentials), so making a whole company collaborators isn't something to ask an admin
+  for, and Slack documents no cap on them either way.
+- Slack's page walks through creating and approving the app, connecting, and the scopes
+  per feature. On Enterprise Grid, an org-ready app installs across the organization.
 
 Turning PKCE on can't be undone, and Slack expires a PKCE app's refresh tokens after 30
 days, so someone who stays away that long connects again. If none of this works, the app
@@ -133,8 +122,11 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   `github.com/acme/widgets` so they can't collide, and `git` parsing any host. A shared
   base for code-host plugins (PR panels over a normalized PR) can wait for that second host.
 - **Windows.** Once the plugin steps are done, make it run on Windows: the Jira token's
-  fallback (and the Slack token's) is the macOS keychain (`security`); `install.sh`, `dev-venv.sh`, `check.sh`
-  and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
+  fallback (and the Slack token's) is the macOS keychain (`security`); `install.sh`,
+  `dev-venv.sh`, `check.sh` and the git hooks are shell scripts, to become Python (a venv,
+  pip and copying the hooks need nothing else) so one script runs everywhere; `mfd cert
+  --trust` has only been tried on Linux, and Firefox on Windows should read the Windows
+  store but needs trying; `shell` stops subprocesses on ctrl-c with POSIX
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
   separators) and stored in `notes_ice`.
 - **Skill stand-ins for missing notes fields.** The move-forward skill keeps some state
