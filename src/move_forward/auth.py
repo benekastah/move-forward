@@ -28,6 +28,14 @@ def token_path(db_path: Path) -> Path:
     return db_path.parent / TOKEN_FILE
 
 
+def _draft(path: Path) -> Path:
+    """A new token in a private file of its own beside `path` (mode 0600), to put in place."""
+    fd, draft = tempfile.mkstemp(dir=path.parent, prefix=f".{TOKEN_FILE}.")
+    with os.fdopen(fd, "w") as f:
+        f.write(secrets.token_urlsafe(TOKEN_BYTES) + "\n")
+    return Path(draft)
+
+
 def load_or_create(path: Path) -> str:
     """The token in `path`, made on first use. The file is mine alone (mode 0600); one that
     others could read is made private again, with a warning.
@@ -37,18 +45,16 @@ def load_or_create(path: Path) -> str:
     the whole token or makes the file itself.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists() or not path.read_text().strip():
-        path.unlink(missing_ok=True)  # an empty file is left from a crash; start again
-        token = secrets.token_urlsafe(TOKEN_BYTES)
-        fd, draft = tempfile.mkstemp(dir=path.parent, prefix=f".{TOKEN_FILE}.")  # mode 0600
+    if not path.exists():
+        draft = _draft(path)
         try:
-            with os.fdopen(fd, "w") as f:
-                f.write(token + "\n")
             os.link(draft, path)  # fails if another process got there first; theirs stands
         except FileExistsError:
             pass
         finally:
             os.unlink(draft)
+    if not path.read_text().strip():  # left empty by a crash: replace it, in one step
+        os.replace(_draft(path), path)
     mode = stat.S_IMODE(path.stat().st_mode)
     if mode & 0o077:
         log.warning("%s was readable by others (mode %o); making it private", path, mode)
