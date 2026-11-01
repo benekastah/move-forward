@@ -413,3 +413,10 @@ def test_a_close_out_entry_is_nominated_to_finish() -> None:
     assert [(i.title, i.details[0]) for i in act] == [
         ("tick the box: APP-1 Almost", "why: quick, closes APP-1 Almost")
     ]
+
+
+def test_empty_notes_say_how_to_fill_them() -> None:
+    empty = dashboard().panel("notes.todos")
+    assert "mfd notes import <dir>" in empty.description
+    some = dashboard(work_items=[entry("APP-1", [todo("x")])]).panel("notes.todos")
+    assert "mfd notes import" not in some.description

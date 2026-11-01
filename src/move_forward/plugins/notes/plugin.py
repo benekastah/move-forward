@@ -20,6 +20,12 @@ from .kinds import EntryAttrs, IcedAttrs
 from .panels import ENTRY, ICED, TODOS, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
+EMPTY_NOTES = (
+    "No notes yet: `mfd notes import <dir>` reads the skill's work-notes.md and on-ice.md,"
+    " and `mfd notes add-entry <title>` starts one."
+)
+"""What the Todos panel says while the notes are empty."""
+
 
 def _builder(ctx: Context[NotesConfig], graph: Graph) -> Builder:
     notes = NotesRepository(ctx.db)
@@ -55,7 +61,10 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         self, ctx: Context[NotesConfig], snapshot: BaseModel | None, graph: Graph
     ) -> list[Panel]:
         builder = _builder(ctx, graph)
-        return [builder.todos(), builder.iced()]
+        todos = builder.todos()
+        if NotesRepository(ctx.db).is_empty():  # e.g. just upgraded, before an import
+            todos = todos.model_copy(update={"description": EMPTY_NOTES})
+        return [todos, builder.iced()]
 
     def act_now(
         self,

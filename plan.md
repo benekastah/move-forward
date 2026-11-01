@@ -104,9 +104,6 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
   separators) and stored in `notes_ice`.
-- **Notes are empty until imported.** After upgrading, the Todos and On ice panels are
-  empty until `mfd notes import` runs, with nothing on the page saying so. An empty notes
-  plugin could say "run `mfd notes import <dir>`" in its panels.
 - **Skill stand-ins for missing notes fields.** The move-forward skill keeps some state
   outside the database until the notes can hold it: check-ins (`Checked`, `Asked-done`) are
   `decline` items with those reserved texts; the once-a-day ice question and the per-PR
