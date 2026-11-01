@@ -6,7 +6,7 @@ repos. Enabled by a `[git_stack]` section, which needs `[git]`.
 ## Config
 
 `[git_stack]` has no settings. `mfd init` adds it when git-stack is installed; add it by
-hand to an older config.
+hand to an older config. The Clean button needs a git-stack whose `clean` takes `--json`.
 
 ## Publishes
 
@@ -27,4 +27,4 @@ branches.
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/actions/git_stack/untrack` | `targets` (lines of `<repo dir>\t<branch>`) | `git stack untrack` for each. |
-| `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
+| `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local --json`, saying which branches it deleted, which it untracked but kept, and its warnings; refused while the repo has iced stacks. |

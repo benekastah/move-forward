@@ -5,6 +5,8 @@ The repo must be one git has branches in, i.e. one of `[git] repos`.
 
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
 from ...graph import Graph
 from ...plugin import ActionError, Context
 from ...shell import git
@@ -13,6 +15,38 @@ from .panels import STACK_BRANCH, StackBranchView, iced_stacks, repo_dirs
 
 STACK_CLEAN_TIMEOUT_SECONDS = 600
 """`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
+
+
+class _Event(BaseModel):
+    """One thing `git stack clean --json` reports having done, of the fields read here."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+    type: str
+    message: str
+    warning: bool = False
+    branch: str | None = None
+    deleted_tip: str | None = None
+    """On an `untracked` event, the commit the deleted branch was at; None if it was kept."""
+
+
+class _CleanReport(BaseModel):
+    """`git stack clean --json`'s output: what happened, in order."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+    events: list[_Event]
+
+
+def cleaned(out: str) -> str:
+    """What `git stack clean --json` did, in words: the branches deleted, those untracked but
+    kept (checked out in another worktree, say), and its warnings."""
+    events = _CleanReport.model_validate_json(out).events
+    untracked = [(e.branch, e.deleted_tip) for e in events if e.type == "untracked" and e.branch]
+    deleted = [branch for branch, tip in untracked if tip]
+    kept = [branch for branch, tip in untracked if not tip]
+    parts = [f"deleted {', '.join(deleted)}"] if deleted else []
+    parts += [f"untracked {', '.join(kept)}"] if kept else []
+    parts += [f"warning: {e.message}" for e in events if e.warning]
+    return "; ".join(parts) or "nothing merged to clean"
 
 
 def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:
@@ -28,9 +62,8 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
     if iced:
         names = ", ".join(sorted(iced))
         raise ActionError(f"{repo} has iced stacks ({names}); clean per stack instead")
-    out = git(repo, "stack", "clean", "-d", "local", timeout=STACK_CLEAN_TIMEOUT_SECONDS)
-    deleted = sum(1 for line in out.splitlines() if "deleted" in line.lower())
-    return f"ran git stack clean -d local in {repo}" + (f", {deleted} deleted" if deleted else "")
+    out = git(repo, "stack", "clean", "-d", "local", "--json", timeout=STACK_CLEAN_TIMEOUT_SECONDS)
+    return f"cleaned {repo}: {cleaned(out)}"
 
 
 def untrack(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:

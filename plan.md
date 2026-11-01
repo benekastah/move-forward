@@ -38,11 +38,7 @@ most severe first:
    and the panel says clean "is left to you", but `git stack clean` takes no stacks. Say
    what works: `git stack sync <branch>` or `sync -g <group>` (which also restack and
    push), or untracking the merged branches by hand.
-4. **Count deleted branches right.** `stack_clean` counts stdout lines with "deleted", but
-   clean always prints "fetching origin, and pruning its deleted branches" (one too many
-   when nothing was deleted) and ends with the stacks' tree (a branch named `*deleted*`
-   counts). Match `; deleted it (was ` until clean has `--json`.
-5. **Say what Clean will do.** Its count comes from `git stack info --offline`, while clean
+4. **Say what Clean will do.** Its count comes from `git stack info --offline`, while clean
    fetches, fast-forwards the roots and asks GitHub, so it can untrack a different set:
    say "about N". The confirm says it fast-forwards main, but it's every stack's root; and
    it doesn't mention that clean refuses with uncommitted changes to tracked files, so the
@@ -59,8 +55,9 @@ In git-stack itself (`../git-stack`), which the items above would then build on:
 - **`git stack clean <branch>...` / `-g <group>`**: clean only the named stacks, as `sync`
   takes them. The dashboard could then offer Clean in a repo with iced stacks (cleaning the
   others), and "clean per stack" becomes true.
-- **`git stack clean --json`** (and perhaps `sync --json`): what was untracked, deleted and
-  warned about, so callers don't scrape human-readable lines (item 4).
+- **`--json` on the other commands** (in progress in git-stack): the plugin still reads
+  `git stack info --json` and `clean --json` only; others it runs (`untrack`) could report
+  what they did the same way.
 
 ### 9. Slack, reading and pinging
 

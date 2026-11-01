@@ -23,7 +23,7 @@ from move_forward import refresh
 from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.plugin import ActionError
-from move_forward.plugins.git_stack import client
+from move_forward.plugins.git_stack import actions, client
 from move_forward.plugins.git_stack.models import StackBranch, StackRepo
 from move_forward.plugins.git_stack.panels import repo_dirs
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
@@ -212,3 +212,43 @@ def test_iced_stack_branches_are_left_out_of_the_stacks_panel() -> None:
         "me/y: needs-restack",
         "me/y: tracked, no PR",
     ]
+
+
+CLEAN_JSON = """{
+  "events": [
+    {"type": "fetching", "message": "fetching origin, and pruning its deleted branches",
+     "warning": false, "remote": "origin"},
+    {"type": "untracked", "message": "me/a was merged into main; deleted it (was 1234)",
+     "warning": false, "branch": "me/a", "parent": "main", "children": [], "deleted_tip": "1234"},
+    {"type": "not-deleted-in-other-worktree", "message": "me/b is checked out in /wt",
+     "warning": true, "branch": "me/b", "path": "/wt"},
+    {"type": "untracked", "message": "me/b was merged into main", "warning": false,
+     "branch": "me/b", "parent": "main", "children": [], "deleted_tip": null}
+  ],
+  "result": [{"name": "me/undeleted-thing", "parent": "main"}],
+  "error": null
+}"""
+
+
+def test_stack_clean_says_what_it_deleted_from_its_json_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ran: list[tuple[str, ...]] = []
+
+    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
+        ran.append(args)
+        return CLEAN_JSON
+
+    monkeypatch.setattr(actions, "git", fake_git)
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("main")]),
+        stacks=stacks(StackBranch(name="me/a", parent="main")),
+    )
+    notice = refresh.run_action(config, db, "git_stack/stack_clean", {"repo": "/src/widgets"})
+    assert ran == [("stack", "clean", "-d", "local", "--json")]
+    assert notice == (
+        "cleaned /src/widgets: deleted me/a; untracked me/b; warning: me/b is checked out in /wt"
+    )
+    assert (
+        actions.cleaned('{"events": [], "result": [], "error": null}') == "nothing merged to clean"
+    )

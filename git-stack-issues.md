@@ -29,8 +29,8 @@ should block it.
 `stack_clean`'s refusal says "clean per stack instead", and the panel says `git stack clean`
 "is left to you". `git stack clean` takes no stack arguments: it always covers every stack.
 The per-stack alternatives are `git stack sync <branch>` or `sync -g <group>`, which also
-restack and push, or `git stack untrack` of the merged branches by hand. See the proposed
-`clean` selectors below.
+restack and push. Once an untracked iced stack no longer blocks Clean (above), the message
+could suggest untracking the iced stacks first.
 
 ## Clean's "N deleted" count is off by one
 
@@ -51,13 +51,14 @@ fixes it until git-stack has a structured output (see `clean --json` below).
   are fine), which the confirm text doesn't mention, so the button often just fails. See
   "clean's clean-worktree check" below.
 
-## Proposed git-stack additions
+## git-stack additions
 
-- **`git stack clean <branch>...` / `-g <group>`**: clean only the named stacks, as `sync`
-  takes them. The dashboard could then offer Clean in a repo with iced stacks, cleaning the
-  others, and "clean per stack" becomes true.
-- **`git stack clean --json`** (and perhaps `sync --json`): what was untracked, deleted and
-  warned about, so callers don't scrape human-readable lines.
+**`git stack clean --json`** (added in git-stack): stdout is one JSON object with
+`events` (each with a stable `type`, its `message`, whether it's a `warning`, and its
+fields), `result` (every stack, as `info --json` lists them) and `error`. The messages go
+to stderr. If it fails partway, it still prints what happened, with `error` set, and exits
+non-zero. Counting `untracked` events with a non-null `deleted_tip` fixes the count above.
+Other commands get `--json` when something needs it; `sync` is the likely next one.
 
 `show-stack --json` isn't needed: `git stack info <branch> --json` already gives a branch's
 whole stack, groups included.
@@ -82,3 +83,12 @@ check refuses for nothing. That's the usual case from the dashboard: on a featur
 with work in progress, cleaning other merged branches. Narrowing the check to those two
 cases (still before anything changes) would keep the protection and let the button work
 far more often.
+
+## Icing could be partly git-stack's
+
+The parts of icing that clash with git-stack are commands that cover several stacks
+(`clean`, and `sync`, `restack` and `push` through a group) reaching an iced stack. A
+per-stack "parked" flag in git-stack, which those commands skip and `info --json` reports,
+would let move-forward set it when icing and drop its own workarounds (refusing Clean,
+icing whole groups). The rest of icing (notes, dates, hiding, thawing) stays here. Not
+worth it until the workarounds are a real problem.
