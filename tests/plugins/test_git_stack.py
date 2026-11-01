@@ -297,3 +297,25 @@ def test_a_clean_that_fails_partway_says_how_far_it_got(monkeypatch: pytest.Monk
 
     with pytest.raises(ActionError, match=r"failed: rebase conflict \(after it deleted me/a\)"):
         _clean_with(monkeypatch, failing)
+
+
+def test_untrack_says_which_branches_now_start_their_own_stacks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ran: list[tuple[str, ...]] = []
+
+    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
+        ran.append(args)
+        result = {"type": "result", "untracked": [{"branch": "me/b", "children": ["me/c"]}]}
+        return _json_lines([], result)
+
+    monkeypatch.setattr(actions, "git", fake_git)
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/b")]),
+        stacks=stacks(
+            StackBranch(name="me/b", parent="main"), StackBranch(name="me/c", parent="me/b")
+        ),
+    )
+    notice = refresh.run_action(config, db, "git_stack/untrack", {"targets": "/src/widgets\tme/b"})
+    assert ran == [("stack", "untrack", "me/b", "--json")]
+    assert notice == "untracked me/b; me/c now starts its own stack"

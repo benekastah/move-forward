@@ -49,9 +49,6 @@ In git-stack itself (`../git-stack`), which the items above would then build on:
 - **`git stack clean <branch>...` / `-g <group>`**: clean only the named stacks, as `sync`
   takes them. The dashboard could then offer Clean in a repo with iced stacks (cleaning the
   others), and "clean per stack" becomes true.
-- **`--json` on the other commands** (in progress in git-stack): the plugin still reads
-  `git stack info --json` and `clean --json` only; others it runs (`untrack`) could report
-  what they did the same way.
 
 ### 9. Slack, reading and pinging
 
