@@ -11,7 +11,7 @@ dependencies = ["cryptography>=50.0.2", "pydantic>=2.7"]
 mfd = "move_forward.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "basedpyright>=1.18"]
+dev = ["pytest>=8", "ruff>=0.6", "basedpyright>=1.18", "coverage>=7.17.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -35,3 +35,11 @@ include = ["src", "tests", "dev.py"]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
 reportMissingModuleSource = false
+
+[tool.coverage.run]
+source = ["move_forward"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

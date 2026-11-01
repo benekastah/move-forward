@@ -2,11 +2,12 @@
 
     python dev.py venv               # .venv with the package (editable) and the dev tools
     python dev.py check [ARGS...]    # format, lint, types, then the tests (ARGS go to pytest)
+    python dev.py coverage [ARGS...] # the tests under coverage.py, and what they don't run
     python dev.py install            # venv, `mfd` on PATH, the git hooks, then `mfd init`
     python dev.py pre-commit         # what the pre-commit hook runs
     python dev.py pre-push           # what the pre-push hook runs
 
-On macOS and Linux, check.sh, dev-venv.sh, install.sh and the hooks in git_hooks/ call this.
+On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
 Standard library only: it runs before .venv exists.
 """
 
@@ -63,6 +64,16 @@ def check(pytest_args: list[str]) -> None:
     run(tool("ruff"), "check", "--quiet")
     run(tool("basedpyright"))
     run(tool("python"), "-m", "pytest", *pytest_args)
+
+
+def coverage(pytest_args: list[str]) -> None:
+    """The tests under coverage.py, then each file's lines and branches they didn't run
+    (see `[tool.coverage]` in pyproject.toml); htmlcov/index.html shows them in the source."""
+    venv()
+    run(tool("coverage"), "run", "-m", "pytest", "-q", *pytest_args)
+    run(tool("coverage"), "report")
+    run(tool("coverage"), "html", "--quiet")
+    print("line by line: htmlcov/index.html")
 
 
 def _bin_dir() -> Path:
@@ -199,6 +210,8 @@ def main(argv: list[str]) -> None:
         venv()
     elif command == "check":
         check(rest)
+    elif command == "coverage":
+        coverage(rest)
     elif command == "install":
         install()
     elif command == "pre-commit":

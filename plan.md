@@ -17,7 +17,7 @@ SQLite, behind a CLI and the HTTP API.
 ## Remaining steps
 
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
-the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
+the plugin change that needs them (see `AGENTS.md`), `dev.py check` green and the page working.
 
 ### 6b. Act now
 

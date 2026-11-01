@@ -18,7 +18,7 @@ Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (for
 the `git_stack` plugin).
 
 ```sh
-~/src/move-forward/install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
+python3 ~/src/move-forward/dev.py install  # .venv, `mfd` on PATH, git hooks, then `mfd init`
                                 # (on Windows: py dev.py install)
 mfd cert --trust                # a certificate for https://127.0.0.1, trusted by your browsers
 mfd serve --open
@@ -37,7 +37,7 @@ header and `mfd check` warn 30 days before the last certificate ends, and a bann
 every page from 14 days: blue, yellow from 7, red from 3; `mfd cert --force --trust` then makes a new authority
 and chain, trusted again.
 
-`install.sh` ends with `mfd init` when there is no config yet: it asks for
+`dev.py install` ends with `mfd init` when there is no config yet: it asks for
 your email, which plugins to set up (github, git, and git_stack when it's
 installed, by default; jira and slack when you name them), then each chosen
 plugin's settings, with a guess from the machine as the default (the GitHub org
@@ -238,11 +238,12 @@ server and copy a backup over `dashboard.db`.
 ## Development
 
 ```sh
-./check.sh            # ruff format --check, ruff check, basedpyright (strict), pytest
-.venv/bin/ruff format # fix formatting
+python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest
+python3 dev.py coverage  # the tests under coverage.py: what they miss, and htmlcov/index.html
+.venv/bin/ruff format    # fix formatting
 ```
 
-`install.sh` points the repo at `git_hooks/`: `pre-commit` formats and
-lint-fixes staged Python, `pre-push` runs `check.sh`. GitHub Actions runs
-`check.sh` on Linux for every push and pull request
-(`.github/workflows/check.yml`).
+On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points the repo at
+`git_hooks/`: `pre-commit` formats and lint-fixes staged Python, `pre-push` runs
+`dev.py check`. GitHub Actions runs `dev.py check` on Linux, macOS and Windows for every
+push and pull request (`.github/workflows/check.yml`).

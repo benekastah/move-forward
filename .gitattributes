@@ -1,4 +1,3 @@
-# sh reads these, Git for Windows' too, and it chokes on Windows line endings: keep them
-# Unix-style even where git checks files out with CRLF.
-*.sh text eol=lf
+# git runs the hooks with sh, Git for Windows' too, and sh chokes on Windows line endings:
+# keep them Unix-style even where git checks files out with CRLF.
 git_hooks/* text eol=lf
