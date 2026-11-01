@@ -40,7 +40,9 @@ is what's left to build.
   prune) can ask the owning plugin for entities its snapshot no longer holds
   with `graph.fetch`. Buttons on other plugins' items come from
   `item_actions`, called per item; a plugin that reads its tables for them
-  does so once per page in `prepare_item_actions`.
+  does so once per page in `prepare_item_actions`. A plugin nominates items for
+  core's Act now with `act_now`, each with `Signals` (effort, what it closes,
+  who's waiting); by default, the items of its panels marked `act_now`.
 
 ## Rules for changes
 

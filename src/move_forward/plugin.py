@@ -174,6 +174,20 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def panels(self, ctx: Context[C], snapshot: S | None, graph: Graph) -> list[Panel]:
         return []
 
+    def act_now(
+        self, ctx: Context[C], snapshot: S | None, graph: Graph, panels: list[Panel]
+    ) -> list[Item]:
+        """The plugin's candidates for core's Act now, each with `signals`, from its
+        `panels`. By default the items of the panels marked `act_now`, each taking its
+        panel's signals if it has none of its own; a plugin that knows better nominates
+        precisely."""
+        return [
+            item if item.signals else item.model_copy(update={"signals": panel.signals})
+            for panel in panels
+            if panel.act_now
+            for item in panel.items
+        ]
+
     def item_actions(self, ctx: Context[C], item: Item, graph: Graph) -> list[Action]:
         """Buttons the plugin adds to another plugin's item, e.g. "add todo" on a PR."""
         return []

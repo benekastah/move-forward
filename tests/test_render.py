@@ -46,7 +46,7 @@ def test_only_act_now_is_open_by_default() -> None:
         "<span class='count'>1</span>" in html
     )
     keys = re.findall(r"<details class='group' data-key='(\w+)'", html)
-    assert keys == ["act", "notes", "git", "github", "slack"]  # Act now, then by priority
+    assert keys == ["act", "notes", "github", "git", "slack"]  # Act now, then by priority
     assert len(re.findall(r"class='group' data-key='\w+' open>", html)) == 1
 
 

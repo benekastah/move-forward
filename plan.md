@@ -22,14 +22,12 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 6b. Act now
 
-- A first version: the `act_now` hook, `Item.signals` with `effort`, `closes`, `waiting`,
-  `blocked` and `verb` only, the ranking, diversity per plugin and per subject, and an
-  explanation on every item. `importance`, `due` and merging across tools through the
-  graph come after.
-- `Plugin.act_now` fallback from panels marked `actionable`.
+- Plugins' signals: verbs and effort for their Act now panels, and nominations beyond
+  them (jira closing a ticket, git deleting a merged branch, slack bumping a review, a
+  notes entry's last quick todo). `importance`, `due` and merging across tools through
+  the graph come after.
 - `[act_now]` (`size`, `per_plugin`, `weights`), in all four places a config key goes.
 - The `act_now_feedback` table: snooze, dismiss, pin.
-- Focus mode gets an Act now category.
 
 ### 7. Worktrees
 

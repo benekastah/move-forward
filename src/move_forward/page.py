@@ -47,6 +47,24 @@ class Action(Model):
     """Drawn faintly: it can be done, but the data says not yet."""
 
 
+Effort = Literal["minutes", "hour", "day", "unknown"]
+
+
+class Signals(Model):
+    """What core's Act now ranks an item by, in terms common to every tool."""
+
+    effort: Effort = "unknown"
+    """How long doing it takes."""
+    closes: str | None = None
+    """What doing it finishes, e.g. "APP-12" or "PR 330"; None if it only moves things on."""
+    waiting: list[str] = Field(default_factory=list[str])
+    """Who is waiting on me for it: logins, names, "customer"."""
+    blocked: bool = False
+    """Not doable now: waiting on someone else, on CI, or for a decision."""
+    verb: str = ""
+    """What to do, as a short imperative: "Reply to 2 threads", "Merge", "Review"."""
+
+
 class Item(Model):
     title: str
     url: str | None = None
@@ -64,6 +82,8 @@ class Item(Model):
     subjects: list[Ref] = Field(default_factory=list)
     """The entities the item is about, the main one first, e.g. a PR and its branch; other
     plugins add their buttons by them."""
+    signals: Signals | None = None
+    """What Act now ranks it by, should its plugin nominate it; None takes its panel's."""
     parts: list["Item"] = Field(default_factory=list)
     """Pieces focus mode shows one at a time instead of this item, e.g. a work item's todos.
 
@@ -86,7 +106,10 @@ class Panel(Model):
     the skill starts its check-in with, 10 for reviews asked of me, 130 for what to pick up
     next. The page's layout, once someone has dragged things about, overrides it."""
     act_now: bool = False
-    """In core's Act now group rather than its plugin's: work that needs doing first."""
+    """Its items are candidates for core's Act now (see `Plugin.act_now`): work that's often
+    the next thing to do."""
+    signals: Signals | None = None
+    """The signals of its items that carry none, for Act now: e.g. "Review", in minutes."""
 
 
 class SourceStatus(Model):

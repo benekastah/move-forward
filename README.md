@@ -163,8 +163,14 @@ before the command's name.
 
 ## Panels
 
-The page has **Act now** (reviews for me, conflicts, feedback, CI) on top,
-then a collapsible group per enabled plugin holding the rest of its panels.
+The page has **Act now** on top: the best next actions across every tool, at
+most 7, no more than 3 from one plugin, one per PR or ticket. Each says what to
+do and why it's there ("quick, closes APP-12, alice waiting"), and anything
+else due on the same subject ("also: Fix CI"). Finishing something counts
+most, then quick work, then someone waiting; blocked work is left out. Each
+plugin nominates its own items (today: those in Reviews for me, Merge
+conflicts, Feedback and CI failures). Below it is a collapsible group per
+enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
 their most urgent panel: notes (todos), git, git_stack, github, slack, jira.
 Drag a group's or a panel's title to move it (a panel within its group; Act
@@ -224,7 +230,7 @@ Only Act now starts expanded; each panel inside a group collapses too.
 The Focus button in the header opens a list of categories: All, each group
 and each panel, with counts. Pick one to see a single item at a time, with
 Prev and Next (or the left and right arrow keys). All goes through the panels
-as the page shows them.
+as the page shows them, but Act now, whose items are in the other panels too.
 Work-note entries are split into their todos, one per page, quick ones first.
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or
 bare number) first and in bold; merged PRs are purple and struck through,

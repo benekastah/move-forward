@@ -95,12 +95,11 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
-    plugin_panels = [
-        panels.PluginPanels(
-            e.name, e.plugin.title, e.plugin.panels(e.ctx, snapshots[e.name], graph)
-        )
-        for e in plugins
-    ]
+    plugin_panels: list[panels.PluginPanels] = []
+    for e in plugins:
+        own = e.plugin.panels(e.ctx, snapshots[e.name], graph)
+        nominated = e.plugin.act_now(e.ctx, snapshots[e.name], graph, own)
+        plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
     me = next((p for p in graph.view(PERSON, _PersonView) if p.me), None)
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)

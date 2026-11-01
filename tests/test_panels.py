@@ -62,20 +62,27 @@ def test_build_with_nothing_stored() -> None:
 def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
     dashboard = build(local=local_snapshot(), stacks=stacks(StackBranch(name="main")))
     assert [(g.key, g.panel_keys) for g in dashboard.groups] == [
-        (
-            "act",
-            ["github.reviews_for_me", "github.conflicts", "github.feedback", "github.ci_failures"],
-        ),
+        ("act", ["act.now"]),
         ("notes", ["notes.todos", "notes.iced"]),  # by each group's most urgent panel: step 0b
-        ("git", ["git.local_work", "git.cleanup"]),
-        ("git_stack", ["git_stack.stacks"]),
         (
             "github",
             [
                 f"github.{k}"
-                for k in ("metadata", "needs_reviewer", "team_prs", "ready_to_merge", "held")
+                for k in (
+                    "reviews_for_me",
+                    "conflicts",
+                    "feedback",
+                    "ci_failures",
+                    "metadata",
+                    "needs_reviewer",
+                    "team_prs",
+                    "ready_to_merge",
+                    "held",
+                )
             ],
         ),
+        ("git", ["git.local_work", "git.cleanup"]),
+        ("git_stack", ["git_stack.stacks"]),
     ]
     everything = dashboard.focus_items(panels.FOCUS_ALL)
     assert everything is not None  # every item's panel, in the page's order; all empty here
@@ -99,11 +106,8 @@ def test_focus_items_by_category() -> None:
         < keys.index("github.needs_reviewer")
     )
     assert [i.title for _, i in everything if _.key == "github.reviews_for_me"] == [pr(3).title]
-    act = dashboard.focus_items("act")
-    assert act is not None and [panel.key for panel, _ in act] == [
-        "github.reviews_for_me",
-        "github.conflicts",
-    ]
+    act = dashboard.focus_items("act")  # the review request, then the conflicted PR
+    assert act is not None and [i.title for _, i in act] == [pr(3).title, pr(2).title]
     one = dashboard.focus_items("slack.nudges")
     assert one is not None and [i.title for _, i in one] == [pr(1).title]
     assert dashboard.focus_items("nope") is None
@@ -337,7 +341,8 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
         jira=JiraSnapshot(issues=[]),
         slack=True,
     )
-    by_priority = [p.key for p in sorted(built.panels, key=lambda p: p.priority)]
+    plugins_panels = [p for p in built.panels if p.key != "act.now"]
+    by_priority = [p.key for p in sorted(plugins_panels, key=lambda p: p.priority)]
     assert by_priority == [
         "notes.todos",
         "github.reviews_for_me",
