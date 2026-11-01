@@ -24,7 +24,8 @@ is what's left to build.
   attributes, and the graph checks its entities against them. A consumer reads
   another plugin's entities with `graph.view(kind, View)`, through its own
   small model of the fields it uses, not `attrs.get`. A kind that stands for a
-  unit of work (a ticket, a work entry) is declared in `linking`; an entity
+  unit of work (a ticket, a work entry) is declared in `linking` (with
+  `linking_patterns` narrowing its id pattern from the plugin's data); an entity
   that may name one publishes the text in `mentions` rather than refs to
   another plugin's kind. A kind whose entities hide what they point at (ice) is
   declared in `hides`, and core leaves items about hidden things off the page;

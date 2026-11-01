@@ -129,7 +129,8 @@ A view lists only what its consumer reads, so publishers can add attributes free
 ### Related entities
 
 Some kinds stand for a unit of work and link what's about it. A plugin declares them in
-`linking`, each with the pattern of its ids, or None:
+`linking`, each with the pattern of its ids, or None (its `linking_patterns` hook can narrow
+a pattern from what it has seen, as jira does to the project keys it knows):
 
 ```python
 class JiraPlugin(Plugin[JiraConfig]):

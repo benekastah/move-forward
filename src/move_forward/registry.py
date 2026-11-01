@@ -142,6 +142,6 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
                 log.exception("%s: fetching %s failed", e.name, kind)
         return found
 
-    linking = {kind: p for e in plugins for kind, p in e.plugin.linking.items()}
+    linking = {kind: p for e in plugins for kind, p in e.plugin.linking_patterns(e.ctx).items()}
     hiding = [kind for e in plugins for kind in e.plugin.hides]
     return Graph(entities, url_for, fetch, linking, hiding)

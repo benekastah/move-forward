@@ -102,7 +102,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     linking: ClassVar[dict[str, str | None]] = {}
     """Of its kinds, the ones that link what they're about (see `Graph.related`): each with the
     pattern of its ids, so the graph finds them in other entities' `mentions` (a ticket's
-    key), or None when its entities point at what they link themselves (a work entry)."""
+    key), or None when its entities point at what they link themselves (a work entry).
+    `linking_patterns` can narrow the patterns from what the plugin has seen."""
     hides: ClassVar[list[str]] = []
     """Of its kinds, the ones whose entities hide what they point at (see `Graph.hidden`):
     core leaves items about hidden things out of every panel but the hiding plugin's own
@@ -147,6 +148,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         caching lookups in the plugin's tables."""
 
     # Reading
+
+    def linking_patterns(self, ctx: Context[C]) -> dict[str, str | None]:
+        """Its `linking` kinds with the patterns of their ids as of now, e.g. only the project
+        keys jira has seen; None where no id can be found in text. Read from its tables, so
+        cheap: core asks every time it builds the graph."""
+        return dict(self.linking)
 
     def entities(self, ctx: Context[C], snapshot: S | None) -> list[Entity]:
         """What the plugin publishes to the graph, from its snapshot and tables."""

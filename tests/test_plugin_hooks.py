@@ -253,3 +253,15 @@ def test_a_kind_two_plugins_declare_is_the_first_ones(
     graph = _graph_with(_Claiming(), monkeypatch)
     assert [e.title for e in graph.of_kind("pr")] == [pr(1).title]
     assert "github and jira both declare pr; jira's are left out" in caplog.text
+
+
+class _Narrowed(JiraPlugin):
+    """Jira, finding only OPS keys in text."""
+
+    def linking_patterns(self, ctx: Context[JiraConfig]) -> dict[str, str | None]:
+        return {"ticket": r"\bOPS-\d+\b"}
+
+
+def test_a_plugin_can_narrow_its_linking_patterns(monkeypatch: pytest.MonkeyPatch) -> None:
+    graph = _graph_with(_Narrowed(), monkeypatch)
+    assert graph.named("APP-1 and OPS-2") == [Ref(kind="ticket", id="OPS-2")]
