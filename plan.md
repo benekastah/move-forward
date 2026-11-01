@@ -23,11 +23,6 @@ the plugin change that needs them (see `AGENTS.md`), `dev.py check` green and th
 
 Left to do, in git-stack itself (`../git-stack`; see `git-stack-issues.md`):
 
-- **Narrow clean's clean-worktree check.** `clean` calls `ensure_clean_worktree()` up front,
-  but only touches the working tree to fast-forward a checked-out root, or (with `-d local`
-  or `both`) to switch off a checked-out branch it deletes. Checking only those two cases,
-  still before anything changes, keeps the protection and lets clean run from a feature
-  branch with work in progress, the dashboard's usual case.
 - **`git stack clean <branch>...` / `-g <group>`**: clean only the named stacks, as `sync`
   takes them. The dashboard could then offer Clean in a repo with iced stacks (cleaning the
   others), and "clean per stack" becomes true.

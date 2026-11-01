@@ -21,8 +21,8 @@ have deleted), with its parent, status and, on a stack's bottom branch, its grou
   branches. Its count is about right: it comes from the last offline `git stack info`,
   while clean fetches and asks GitHub. It isn't offered while git-stack tracks an iced
   stack in the repo, since clean covers every stack; untracking the iced stack (On ice's
-  Untrack) brings it back. Clean refuses while tracked files in the repo's checkout have
-  uncommitted changes.
+  Untrack) brings it back. With uncommitted changes in the repo's checkout, clean refuses
+  only if the branch checked out there is a stack's root or one it would delete.
 
 On notes' On ice panel, git_stack adds Untrack to a stack while git-stack tracks its
 branches.

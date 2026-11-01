@@ -59,7 +59,7 @@ def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
         ("git_stack/stack_clean", {"repo": "/src/widgets"}, "Clean about 1 merged in widgets")
     ]
     confirm = clean[0].confirm or ""
-    assert "each stack's root" in confirm and "uncommitted changes" in confirm
+    assert "each stack's root" in confirm and "one it would delete" in confirm
 
 
 def test_stack_clean_is_not_offered_while_git_stack_tracks_an_iced_stack() -> None:

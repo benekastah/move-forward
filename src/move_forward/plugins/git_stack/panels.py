@@ -157,8 +157,9 @@ class Builder:
                         # GitHub, so it may find more or fewer.
                         confirm=f"Run `git stack clean -d local` in {repo.dir}? It fetches,"
                         " fast-forwards each stack's root (e.g. main), untracks the branches"
-                        " that merged and deletes them locally. It refuses while tracked files"
-                        " there have uncommitted changes.",
+                        " that merged and deletes them locally. With uncommitted changes there, it"
+                        " refuses if the checked-out branch is a stack's root or one it would"
+                        " delete.",
                     )
                 )
             for b in repo.branches:
