@@ -45,8 +45,6 @@ flowchart LR
     iced -. "refuse stack clean" .-> git_stack
     pr -. "transitions (related)" .-> jira
     pr -. "pings, nudges" .-> slack([slack])
-    iced -. "don't ping iced PRs" .-> slack
-    repo -. "a PR's checkout, for iced checks" .-> slack
     person -. "emails, to look up Slack ids" .-> slack
     pr -. "todo link states; an iced branch's PRs" .-> notes
     repo -. "an iced branch's checkout" .-> notes

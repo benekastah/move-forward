@@ -17,10 +17,6 @@ from .config import SlackConfig
 from .models import Contact, Ping, TeamChannel
 
 PR = "pr"
-ICED_BRANCH = "iced_branch"
-REPO = "repo"
-BRANCH_ID_SEPARATOR = "\t"
-"""Joins a repo dir and a branch name in an `iced_branch` entity's id."""
 
 
 class PingTarget(Model):
@@ -68,18 +64,6 @@ class PrView(Model):
     last_review_activity: str | None = None
 
 
-class _RepoView(Model):
-    """What slack reads of a `repo` (git's): where it's checked out."""
-
-    dir: str
-
-
-class _IcedView(Model):
-    """What slack reads of an `iced_branch` (notes')."""
-
-    name: str
-
-
 def my_open_prs(graph: Graph) -> list[PrView]:
     return [pr for pr in graph.view(PR, PrView) if pr.mine and pr.state == "open"]
 
@@ -109,15 +93,6 @@ class Pinger:
         self.teams = teams
         self.recorded = pings
         self.my_open_prs = my_open_prs(graph)
-
-    def _iced(self, pr: PrView) -> bool:
-        """Whether the PR's branch is on ice: in the checkout of its repo that git knows, or,
-        when git knows no checkout of it, in any repo."""
-        checkout = self.graph.view_one(REPO, pr.repo, _RepoView)
-        if checkout is not None:
-            iced_id = f"{checkout.dir}{BRANCH_ID_SEPARATOR}{pr.head}"
-            return self.graph.get(ICED_BRANCH, iced_id) is not None
-        return any(e.name == pr.head for e in self.graph.view(ICED_BRANCH, _IcedView))
 
     def _target(
         self,
@@ -181,7 +156,7 @@ class Pinger:
             any_ping[ping.pr_url] = ping
         result: dict[str, PrPing] = {}
         for pr in self.my_open_prs:
-            if pr.draft or self._iced(pr):
+            if pr.draft or self.graph.hidden(Ref(kind=PR, id=pr.id)):  # e.g. on ice
                 continue
             url = pr.id
             last_by_target = dict(by_pr.get(url, {}))
