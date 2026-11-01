@@ -32,6 +32,14 @@ def repo_path(config: GitConfig, repo_dir: str) -> Path:
     return path
 
 
+def worktrees(repo: Path) -> list[Path]:
+    """The repo's worktrees, as `git worktree list` has them now."""
+    return [
+        Path(path)
+        for path, _ in client.parse_worktrees(git(repo, "worktree", "list", "--porcelain"))
+    ]
+
+
 def branch_exists(repo: Path, branch: str) -> bool:
     try:
         git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
@@ -124,11 +132,12 @@ def push_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -
 
 
 def wip_commit(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """Commit the modified tracked files of a worktree as "WIP". Untracked files are left."""
-    repo_path(ctx.config, fields["repo"])
+    """Commit the modified tracked files of a worktree of the repo as "WIP". Untracked files
+    are left."""
+    repo = repo_path(ctx.config, fields["repo"])
     worktree = Path(fields["worktree"])
-    if not (worktree / ".git").exists():
-        raise ActionError(f"{worktree} is not a worktree")
+    if worktree.resolve() not in {w.resolve() for w in worktrees(repo)}:
+        raise ActionError(f"{worktree} is not a worktree of {repo}")
     modified, _ = client.parse_status(git(worktree, "status", "--porcelain"))
     if not modified:
         raise ActionError(f"{worktree} has no modified tracked files")

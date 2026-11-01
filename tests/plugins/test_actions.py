@@ -166,6 +166,21 @@ def test_wip_commit_takes_tracked_files_only(config: Config, repo: Path) -> None
         run("git/wip_commit", config, {"repo": str(repo), "worktree": str(repo)})
 
 
+def test_wip_commit_refuses_a_checkout_that_isnt_the_repos(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    git(elsewhere, "init", "-q")
+    (elsewhere / "f").write_text("x")
+    git(elsewhere, "add", "f")
+    git(elsewhere, "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "init")
+    (elsewhere / "f").write_text("changed")
+    with pytest.raises(ActionError, match="not a worktree of"):
+        run("git/wip_commit", config, {"repo": str(repo), "worktree": str(elsewhere)})
+    assert git(elsewhere, "log", "--format=%s").strip() == "init"
+
+
 def _notes(config: Config) -> NotesRepository:
     return NotesRepository(_stored(config))
 
