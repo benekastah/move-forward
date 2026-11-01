@@ -16,6 +16,7 @@ from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.plugins.jira.repository import IssueRepository
 from move_forward.repositories import SnapshotRepository
 
 
@@ -56,8 +57,7 @@ def test_a_plugin_collects_from_the_graph_of_the_others(tmp_path: Path) -> None:
     db = Database(":memory:")
     registry.migrate(config, db)
     refresh.refresh(config, db, NOW)
-    stored = SnapshotRepository(db).get("jira", JiraSnapshot)
-    assert stored is not None
+    stored = IssueRepository(db).load()
     assert [i.summary for i in stored.issues] == ["about acme/widgets"]
     assert _JiraAfterGit.seen_by_after_collect == ["APP-1"]
 

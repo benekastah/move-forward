@@ -7,12 +7,13 @@ import pytest
 
 from move_forward import https
 from move_forward.db import Database
-from move_forward.domain import JiraIssue
+from move_forward.domain import JiraIssue, JiraSnapshot
 from move_forward.plugin import Context
 from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
-from move_forward.repositories import KvRepository
+from move_forward.plugins.jira.repository import MIGRATIONS, IssueRepository
+from move_forward.repositories import KvRepository, SnapshotRepository
 
 RAW: dict[str, object] = {
     "key": "APP-1",
@@ -170,3 +171,18 @@ def test_resolved_tickets_are_fetched(monkeypatch: pytest.MonkeyPatch) -> None:
         {"resolved_at": "2026-06-01T00:00:00+00:00"},
     )
     assert JiraPlugin().fetch(ctx, "pr", ["x"]) == []
+
+
+def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
+    db = Database(":memory:")
+    labelled = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
+    bare = labelled.model_copy(update={"key": "APP-3", "labels": [], "open_blockers": []})
+    SnapshotRepository(db).save(
+        "jira", datetime(2026, 10, 30, tzinfo=UTC), JiraSnapshot(issues=[labelled, bare])
+    )
+    db.migrate("jira", MIGRATIONS)
+    repo = IssueRepository(db)
+    assert repo.load() == JiraSnapshot(issues=[labelled, bare])
+    repo.replace(JiraSnapshot(issues=[bare]))
+    assert repo.load() == JiraSnapshot(issues=[bare])
+    assert db.query("SELECT * FROM jira_issue_labels") == []  # gone with their tickets

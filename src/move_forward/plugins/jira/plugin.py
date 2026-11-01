@@ -1,6 +1,7 @@
 """The Jira plugin: my open tickets, the status changes their PRs suggest, and what's next."""
 
 from datetime import datetime
+from typing import ClassVar
 
 from ...domain import JiraIssue, JiraSnapshot
 from ...graph import Entity, Graph, Ref
@@ -8,6 +9,7 @@ from ...page import Item, Link, Panel, age
 from ...plugin import Context, Plugin
 from . import client
 from .config import JiraConfig
+from .repository import MIGRATIONS, IssueRepository
 
 TICKET = "ticket"
 PR = "pr"
@@ -117,9 +119,16 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     title = "Jira"
     config_model = JiraConfig
     snapshot_model = JiraSnapshot
+    migrations: ClassVar[list[str]] = MIGRATIONS
 
     def collect(self, ctx: Context[JiraConfig]) -> JiraSnapshot:
         return client.collect(ctx.config, ctx.email)
+
+    def store(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot) -> None:
+        IssueRepository(ctx.db).replace(snapshot)
+
+    def load(self, ctx: Context[JiraConfig]) -> JiraSnapshot | None:
+        return IssueRepository(ctx.db).load()
 
     def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
         return [
