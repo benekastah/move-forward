@@ -19,6 +19,7 @@ class BranchAttrs(Model):
     """A `branch`: a local branch, by `<repo dir>\\t<name>`."""
 
     repo_dir: str
+    name: str
     sha: str | None
     """The commit it points at, as of the last refresh."""
     ahead: int

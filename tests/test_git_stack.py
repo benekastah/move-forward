@@ -21,6 +21,7 @@ from legacy import save_json_snapshot
 
 from move_forward import refresh
 from move_forward.db import Database
+from move_forward.graph import Ref
 from move_forward.plugin import ActionError
 from move_forward.plugins.git_stack import client
 from move_forward.plugins.git_stack.models import StackBranch, StackRepo
@@ -70,22 +71,29 @@ def test_without_its_section_there_is_no_stacks_panel() -> None:
     assert "stacks" not in [p.key for p in dashboard(local=local_snapshot()).panels]
 
 
-def test_tracked_branches_carry_their_stack_on_gits_branch_entities() -> None:
+def test_tracked_branches_are_stack_branches_pointing_at_gits() -> None:
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main"), local_branch("me/top", ahead=1)]),
         stacks=stacks(
             StackBranch(name="main"),
             StackBranch(name="me/top", parent="main", status="needs-restack"),
+            StackBranch(name="me/gone", parent="main"),  # git deleted it; git-stack tracks it
         ),
     )
     graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
-    top = graph.get("branch", "/src/widgets\tme/top")
-    assert top is not None
-    assert top.attrs["stack_parent"] == "main"
-    assert top.attrs["stack_status"] == "needs-restack"
-    assert top.attrs["ahead"] == 1  # git's view of the same branch, merged in
-    main = graph.get("branch", "/src/widgets\tmain")
-    assert main is not None and "stack_parent" not in main.attrs  # a root, not tracked
+    top = graph.get("stack_branch", "/src/widgets\tme/top")
+    assert top is not None and top.refs == [Ref(kind="branch", id="/src/widgets\tme/top")]
+    assert top.attrs == {
+        "repo_dir": "/src/widgets",
+        "name": "me/top",
+        "stack_parent": "main",
+        "stack_status": "needs-restack",
+    }
+    # git's own branch is left as git published it, and a branch git deleted isn't git's.
+    branch = graph.get("branch", "/src/widgets\tme/top")
+    assert branch is not None and "stack_parent" not in branch.attrs
+    assert graph.get("branch", "/src/widgets\tme/gone") is None
+    assert graph.get("stack_branch", "/src/widgets\tmain") is None  # a root, not tracked
     assert repo_dirs(graph) == ["/src/widgets"]
 
 
@@ -167,3 +175,16 @@ def test_the_migration_keeps_the_last_snapshot_and_store_replaces_it() -> None:
     second = stacks(StackBranch(name="main"), dir="/src/other")
     repo.replace(second)
     assert repo.load() == second
+
+
+def test_an_iced_branch_git_has_deleted_can_still_be_untracked() -> None:
+    built = dashboard(
+        local=local_snapshot(branches=[local_branch("main")]),  # me/x is gone from git
+        stacks=stacks(StackBranch(name="main"), StackBranch(name="me/x", parent="main")),
+        iced_stacks=[iced("me/x")],
+    )
+    [item] = panel(built, "iced").items
+    names = [a.name for a in item.actions]
+    assert "git_stack/untrack" in names and "git/delete_together" not in names
+    [untrack] = [a for a in item.actions if a.name == "git_stack/untrack"]
+    assert untrack.fields == {"targets": "/src/widgets\tme/x"} and "me/x" in (untrack.confirm or "")

@@ -12,7 +12,7 @@ from . import actions, client
 from .config import GitStackConfig
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
-from .panels import BRANCH, Builder, entities, repo_dirs, untrack_iced_action
+from .panels import STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
 from .repository import MIGRATIONS, StackRepository
 
 
@@ -24,8 +24,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     snapshot_model = GitStackSnapshot
     collects_after_graph = True
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {BRANCH: StackBranchAttrs}
-    """git's kind; git_stack's entities of it carry only what it adds, merged into git's."""
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {STACK_BRANCH: StackBranchAttrs}
 
     def collect_after(self, ctx: Context[GitStackConfig], graph: Graph) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""

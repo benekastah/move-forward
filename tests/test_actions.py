@@ -243,7 +243,8 @@ def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -
         "put done on ice (4 branches)"
     )
     [ice] = NotesRepository(db).ices()
-    assert [i.ref_id.partition("\t")[2] for i in ice.items] == ["done", "beside", "wip", "top"]
+    # In git-stack's order, as `git stack show-stack` gives it.
+    assert [i.ref_id.partition("\t")[2] for i in ice.items] == ["done", "wip", "top", "beside"]
 
 
 def test_a_branch_iced_in_another_repo_can_be_iced_here(config: Config, repo: Path) -> None:

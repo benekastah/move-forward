@@ -205,6 +205,15 @@ class _PrView(Model):
     mine: bool
 
 
+class _BranchView(Model):
+    """What notes reads of a `branch` (git's); a branch only git-stack still tracks has
+    neither."""
+
+    id: str
+    repo_dir: str | None = None
+    name: str | None = None
+
+
 class _TicketView(Model):
     """What notes reads of a `ticket` (jira's)."""
 
@@ -256,13 +265,15 @@ class Builder:
     def put_on_ice(self, item: Item) -> Action | None:
         """A Put on ice button for an item about one of git's branches, unless it's on ice."""
         ref = item.subject(BRANCH)
-        if ref is None or self.graph.get(BRANCH, ref.id) is None:
+        branch = self.graph.view_one(BRANCH, ref.id, _BranchView) if ref else None
+        if branch is None or branch.repo_dir is None or branch.name is None:
+            return None  # not one of git's
+        if self.graph.get(ICED_BRANCH, branch.id) is not None:
             return None
-        if self.graph.get(ICED_BRANCH, ref.id) is not None:
-            return None
-        repo_dir, _, name = ref.id.partition(BRANCH_ID_SEPARATOR)
         return Action(
-            name="notes/ice", label="Put on ice", fields={"repo": repo_dir, "branch": name}
+            name="notes/ice",
+            label="Put on ice",
+            fields={"repo": branch.repo_dir, "branch": branch.name},
         )
 
     def _pr_states(self) -> dict[str, PrState]:

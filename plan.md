@@ -22,24 +22,23 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- One branch per plugin: declare its kinds, namespaced (`github.pr`, `git.branch`, ...),
-  and read others' kinds through views.
-- Consumers stop parsing entity ids: today git_stack and notes split `<repo dir>\t<branch>`
-  themselves. A kind publishes the parts as attributes (`git.branch` has `repo_dir` and
-  `name`), and the id stays opaque.
-- git_stack publishes `git_stack.stack_branch` instead of adding attributes to git's
-  branches, and the graph stops merging refs from two plugins.
 - Linking kinds and mentions (see Units of work): `jira.ticket` and `notes.entry` declare
   themselves linking, github publishes the keys a PR mentions instead of refs to
   `ticket`, and `Graph.related` follows any linking kind instead of `ticket` by name.
 - Icing anything, with hiding in core (see Icing anything): `notes.iced` declares that it
   hides what it covers, core leaves those items out of panels and Act now, and the
   consumers' own ice checks go. A notes migration renames the kinds stored in `notes_iced`
-  and `notes_links` to their namespaced names.
+  and `notes_links` to their namespaced names. notes also stores each iced item's name (it parses
+  git's branch ids for them today, to show a stack after git deleted its branches), so
+  ids stay opaque to everyone but their publisher.
+- Once no plugin publishes another's kind, the graph can stop merging refs from two plugins.
 - Core: `item_actions` is called once per item, and slack rebuilds every ping and notes
   rereads its tables on each call. Plugins get a `prepare_item_actions(ctx, graph)` hook
   that does that work once per page and returns the per-item function.
 - `docs/entities.md` generated from the kind models, or checked against them by a test.
+- Namespace the kinds (`github.pr`, `git.branch`, ...), after linking kinds and mentions, so
+  github never has to name `jira.ticket`. Every plugin already declares its kinds and reads
+  others' through views, so this is a rename, plus the notes migration above.
 
 ### 6. Layout
 

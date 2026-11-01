@@ -26,7 +26,7 @@ flowchart LR
     github -- "publishes (me, emails)" --> person
     git([git]) -- publishes --> repo
     git -- "publishes (repo_dir, ahead, ...)" --> branch
-    git_stack([git_stack]) -- "adds stack_parent, stack_status" --> branch
+    git_stack([git_stack]) -- "publishes, pointing at branch" --> stack_branch[stack_branch]
     jira([jira]) -- publishes --> ticket
     notes([notes]) -- publishes --> entry
     notes -- publishes --> iced
@@ -47,7 +47,7 @@ flowchart LR
     person -. "emails, to look up Slack ids" .-> slack
     pr -. "todo link states" .-> notes
     ticket -. "Add todo titles" .-> notes
-    branch -. "the stack to ice" .-> notes
+    stack_branch -. "the stack to ice" .-> notes
     person -. "who I am" .-> core([core])
 ```
 

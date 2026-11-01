@@ -14,6 +14,7 @@ from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
 
 BRANCH = "branch"
+STACK_BRANCH = "stack_branch"
 PR = "pr"
 REPO = "repo"
 ICED_BRANCH = "iced_branch"
@@ -25,14 +26,19 @@ def branch_ref(repo_dir: str, branch: str) -> Ref:
     return Ref(kind=BRANCH, id=f"{repo_dir}{BRANCH_ID_SEPARATOR}{branch}")
 
 
-class BranchView(Model):
-    """What git_stack reads of a `branch`: git's checkout, and whether git-stack tracks it
-    (its own `stack_parent`, merged in)."""
+class StackBranchView(Model):
+    """A `stack_branch`, git_stack's own: a branch git-stack tracks."""
 
     id: str
-    repo_dir: str | None = None
-    """None for a branch only git-stack still tracks, e.g. one deleted locally."""
-    stack_parent: str | None = None
+    repo_dir: str
+    name: str
+    stack_parent: str
+
+
+class _BranchView(Model):
+    """What git_stack reads of a `branch` (git's): its checkout."""
+
+    repo_dir: str
 
 
 class _RepoView(Model):
@@ -67,16 +73,22 @@ class IcedView(Model):
 
 def repo_dirs(graph: Graph) -> list[str]:
     """The checkouts git has branches in, i.e. `[git] repos`."""
-    return sorted({d for b in graph.view(BRANCH, BranchView) if (d := b.repo_dir)})
+    return sorted({b.repo_dir for b in graph.view(BRANCH, _BranchView)})
 
 
 def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
-    """`stack_parent` and `stack_status` on the `branch` of each tracked branch."""
+    """A `stack_branch` per tracked branch, pointing at git's `branch` of it, which git may
+    have deleted."""
     return [
         Entity(
-            ref=branch_ref(repo.dir, b.name),
+            ref=Ref(kind=STACK_BRANCH, id=branch_ref(repo.dir, b.name).id),
             title=b.name,
-            attrs=attrs(StackBranchAttrs(stack_parent=b.parent, stack_status=b.status)),
+            refs=[branch_ref(repo.dir, b.name)],
+            attrs=attrs(
+                StackBranchAttrs(
+                    repo_dir=repo.dir, name=b.name, stack_parent=b.parent, stack_status=b.status
+                )
+            ),
         )
         for repo in (snapshot.repos if snapshot else [])
         for b in repo.branches
@@ -168,19 +180,18 @@ def untrack_iced_action(item: Item, graph: Graph) -> Action | None:
     """An Untrack button for an item about iced branches, i.e. notes' On ice item, when
     git-stack still tracks some of them. An `iced_branch`'s id is its branch's."""
     tracked = [
-        ref.id
+        b
         for ref in item.subjects
         if ref.kind == ICED_BRANCH
-        and (b := graph.view_one(BRANCH, ref.id, BranchView)) is not None
-        and b.stack_parent
+        and (b := graph.view_one(STACK_BRANCH, ref.id, StackBranchView)) is not None
     ]
     if not tracked:
         return None
     return Action(
         name="git_stack/untrack",
         label="Untrack",
-        fields={"targets": "\n".join(tracked)},
+        fields={"targets": "\n".join(b.id for b in tracked)},
         confirm="Stop git-stack tracking "
-        + ", ".join(ref_id.partition(BRANCH_ID_SEPARATOR)[2] for ref_id in tracked)
+        + ", ".join(b.name for b in tracked)
         + "? The branches themselves are left alone.",
     )

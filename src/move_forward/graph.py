@@ -47,7 +47,7 @@ def _no_fetch(kind: str, ids: list[str]) -> list["Entity"]:
 
 
 def _merge(first: Entity, second: Entity) -> Entity:
-    """One entity from two plugins' views of it, e.g. a branch git and git_stack both know.
+    """One entity from two plugins' views of it, should two publish the same ref.
     The first plugin's fields win; refs and attributes are combined."""
     return first.model_copy(
         update={

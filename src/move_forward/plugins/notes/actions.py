@@ -20,6 +20,7 @@ ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
 TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""
 BRANCH = "branch"
+STACK_BRANCH = "stack_branch"
 PR = "pr"
 TICKET = "ticket"
 INFERRED = "inferred"
@@ -30,26 +31,45 @@ class _BranchView(Model):
     """What notes reads of a `branch` (git's, with what git_stack adds)."""
 
     id: str
+    repo_dir: str | None = None
+    """None for a branch only git-stack still tracks."""
+    name: str | None = None
     sha: str | None = None
-    stack_parent: str | None = None
+
+
+class _StackBranchView(Model):
+    """What notes reads of a `stack_branch` (git_stack's)."""
+
+    repo_dir: str
+    name: str
+    stack_parent: str
+
+
+def _branches(graph: Graph, repo: Path) -> dict[str, _BranchView]:
+    """git's branches in `repo`, by name."""
+    return {
+        b.name: b
+        for b in graph.view(BRANCH, _BranchView)
+        if b.name and b.repo_dir and Path(b.repo_dir) == repo
+    }
 
 
 def _repo(graph: Graph, repo_dir: str) -> Path:
     """`repo_dir`, if the graph has branches in it (from `[git] repos`)."""
-    prefix = repo_dir + TARGET_SEPARATOR
-    if not any(b.ref.id.startswith(prefix) for b in graph.of_kind(BRANCH)):
+    if not _branches(graph, Path(repo_dir)):
         raise ActionError(f"{repo_dir} is not a configured repo")
     return Path(repo_dir)
 
 
 def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
-    """The branch's whole stack, bottom first, from the `stack_parent` git-stack puts on
-    branches; just the branch when it isn't in a stack (or git-stack isn't on)."""
-    prefix = f"{repo}{TARGET_SEPARATOR}"
+    """The branch's whole stack, bottom first, from git_stack's `stack_branch`es; just the
+    branch when it isn't in a stack (or git_stack isn't on). Only branches git still has
+    are iced."""
+    here = _branches(graph, repo)
     parents = {
-        b.id.removeprefix(prefix): b.stack_parent
-        for b in graph.view(BRANCH, _BranchView)
-        if b.id.startswith(prefix) and b.stack_parent
+        b.name: b.stack_parent
+        for b in graph.view(STACK_BRANCH, _StackBranchView)
+        if Path(b.repo_dir) == repo and b.name in here
     }
     if branch not in parents:
         return [branch]
@@ -75,20 +95,18 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     optional `note` says why."""
     repo = _repo(graph, fields["repo"])
     branch = fields["branch"]
-    if graph.get(BRANCH, f"{repo}{TARGET_SEPARATOR}{branch}") is None:
+    branches = _branches(graph, repo)
+    if branch not in branches:
         raise ActionError(f"{branch} doesn't exist in {repo}")
     notes = NotesRepository(ctx.db)
     names = _stack_branches(graph, repo, branch)
-    ref_ids = [f"{repo}{TARGET_SEPARATOR}{name}" for name in names]
+    ref_ids = [branches[name].id for name in names]
     iced = {item.ref_id for i in notes.ices() for item in i.items if item.kind == BRANCH}
     if iced.intersection(ref_ids):
         raise ActionError(f"{branch} is already on ice")
     items: list[IcedItem] = []
-    for ref_id in ref_ids:
-        branch_view = graph.view_one(BRANCH, ref_id, _BranchView)
-        items.append(
-            IcedItem(kind=BRANCH, ref_id=ref_id, sha=branch_view.sha if branch_view else None)
-        )
+    for name in names:
+        items.append(IcedItem(kind=BRANCH, ref_id=branches[name].id, sha=branches[name].sha))
     note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
     notes.add_ice(names[0], ctx.now.date(), note, items)
     return f"put {names[0]} on ice ({len(names)} branches)"

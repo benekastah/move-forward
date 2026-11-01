@@ -69,6 +69,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                         attrs=attrs(
                             BranchAttrs(
                                 repo_dir=repo.dir,
+                                name=branch.name,
                                 sha=branch.sha,
                                 ahead=branch.ahead,
                                 behind=branch.behind,

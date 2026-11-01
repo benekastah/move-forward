@@ -10,8 +10,7 @@ from every enabled plugin's entities on each refresh and page load.
 file is the contract. Adding a kind or an attribute, or changing what one
 means, is a deliberate change: update this file in the same commit.
 
-When two plugins publish the same ref (say, a branch git and git_stack both
-know), the graph merges them: the first plugin's title, URL and state win,
+When two plugins publish the same ref, the graph merges them: the first plugin's title, URL and state win,
 refs and attributes are combined, and the first plugin's attribute wins a
 clash.
 
@@ -26,7 +25,8 @@ APP-1 is related to every PR whose branch, title or body mentions APP-1.
 | `pr` | github | the PR's URL | `open`, `merged` or `closed` | `ticket` keys from its branch, title and body |
 | `person` | github: me, and everyone it knows an email for | GitHub login | | |
 | `repo` | git | GitHub `owner/name` | | |
-| `branch` | git, git_stack | `<repo dir>\t<branch>` | | its `repo` |
+| `branch` | git | `<repo dir>\t<branch>` | | its `repo` |
+| `stack_branch` | git_stack | its `branch`'s id | | its `branch`, which git may have deleted |
 | `ticket` | jira | the issue key, e.g. `APP-1` | the issue's status | |
 | `entry` | notes | the entry's title | | the `pr` URLs and `ticket` keys it names |
 | `iced_branch` | notes | `<repo dir>\t<branch>`, like `branch` | | |
@@ -93,13 +93,17 @@ On my open PRs only:
 | `ahead`, `behind` | int | commits ahead of and behind its upstream |
 | `gone` | bool | its upstream was deleted |
 | `repo_dir` | string | the checkout it's in (git) |
+| `name` | string | the branch's name (git) |
 | `sha` | string or null | the commit it points at, as of the last refresh (git) |
 | `checked_out_in` | string or null | the worktree it's checked out in |
 
-On branches git-stack tracks (git_stack):
+### `stack_branch`
+
+A branch git-stack tracks, including one git no longer has.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
+| `repo_dir`, `name` | string | its checkout and name, as git's `branch` has them |
 | `stack_parent` | string | the branch it's built on |
 | `stack_status` | string or null | git-stack's status, e.g. `up-to-date`, `needs-restack`, `merged` |
 
