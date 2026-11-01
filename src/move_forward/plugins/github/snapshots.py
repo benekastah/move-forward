@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Literal, cast
 
 from ...db import Database, Params
-from ...domain import (
+from .models import (
     Check,
     DerivedSnapshot,
     GitHubSnapshot,

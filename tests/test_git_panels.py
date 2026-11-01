@@ -18,9 +18,7 @@ from legacy import save_json_snapshot
 
 from move_forward import refresh
 from move_forward.db import Database
-from move_forward.domain import (
-    Worktree,
-)
+from move_forward.plugins.git.models import Worktree
 from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
 from move_forward.registry import enabled
 

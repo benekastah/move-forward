@@ -9,12 +9,13 @@ from conftest import NOW, issue, local_snapshot
 from move_forward import refresh, registry
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.domain import JiraSnapshot, LocalSnapshot
 from move_forward.graph import Graph
 from move_forward.plugin import Context
 from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.jira.repository import IssueRepository
 from move_forward.repositories import SnapshotRepository

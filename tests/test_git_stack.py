@@ -21,9 +21,9 @@ from legacy import save_json_snapshot
 
 from move_forward import refresh
 from move_forward.db import Database
-from move_forward.domain import StackBranch, StackRepo
 from move_forward.plugin import ActionError
 from move_forward.plugins.git_stack import client
+from move_forward.plugins.git_stack.models import StackBranch, StackRepo
 from move_forward.plugins.git_stack.panels import repo_dirs
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 from move_forward.registry import enabled

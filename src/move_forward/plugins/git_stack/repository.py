@@ -3,7 +3,7 @@
 from collections import defaultdict
 
 from ...db import Database
-from ...domain import GitStackSnapshot, StackBranch, StackRepo
+from .models import GitStackSnapshot, StackBranch, StackRepo
 
 MIGRATIONS = [
     """

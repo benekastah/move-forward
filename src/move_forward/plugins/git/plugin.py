@@ -2,12 +2,12 @@
 
 from typing import ClassVar
 
-from ...domain import LocalSnapshot
 from ...graph import Entity, Graph, Ref
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
 from . import actions, client
 from .config import GitConfig
+from .models import LocalSnapshot
 from .panels import Builder, branch_ref, delete_iced_action
 from .repository import MIGRATIONS, LocalRepository
 

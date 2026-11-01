@@ -6,15 +6,10 @@ from pathlib import Path
 
 from pydantic import Field
 
-from ...domain import (
-    DerivedSnapshot,
-    GitHubSnapshot,
-    Model,
-    ReviewerSuggestion,
-    TeamPrScore,
-)
+from ...domain import Model
 from ...shell import CommandError, git
 from . import codeowners
+from .models import DerivedSnapshot, GitHubSnapshot, ReviewerSuggestion, TeamPrScore
 
 MAX_SUGGESTIONS = 5
 

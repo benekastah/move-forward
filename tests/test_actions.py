@@ -6,19 +6,13 @@ import pytest
 from move_forward import refresh
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.domain import (
-    Branch,
-    GitStackSnapshot,
-    LocalRepo,
-    LocalSnapshot,
-    StackBranch,
-    StackRepo,
-)
 from move_forward.graph import Graph
 from move_forward.plugin import KEPT, ActionError
 from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack.config import GitStackConfig
+from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 from move_forward.plugins.git_stack.repository import StackRepository
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira.config import JiraConfig

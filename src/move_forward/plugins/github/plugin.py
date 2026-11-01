@@ -4,13 +4,13 @@ import argparse
 import logging
 from typing import ClassVar
 
-from ...domain import GitHubSnapshot, PullRequest
 from ...graph import Entity, Graph, Ref
 from ...page import Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
 from ...shell import CommandError
 from . import cli, client, derive
 from .config import GitHubConfig
+from .models import GitHubSnapshot, PullRequest
 from .panels import PR, Builder
 from .people import PeopleRepository
 from .prs import (

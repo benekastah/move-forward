@@ -19,12 +19,9 @@ from conftest import (
 )
 
 from move_forward import panels
-from move_forward.domain import (
-    JiraSnapshot,
-    LocalRepo,
-    LocalSnapshot,
-    StackBranch,
-)
+from move_forward.plugins.git.models import LocalRepo, LocalSnapshot
+from move_forward.plugins.git_stack.models import StackBranch
+from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
 from move_forward.refresh import kept_item
 

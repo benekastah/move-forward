@@ -19,7 +19,7 @@ from conftest import (
     todo,
 )
 
-from move_forward.domain import (
+from move_forward.plugins.github.models import (
     Check,
     DerivedSnapshot,
     ReviewerSuggestion,

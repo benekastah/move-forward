@@ -3,12 +3,12 @@
 from pathlib import Path
 from typing import ClassVar
 
-from ...domain import GitStackSnapshot
 from ...graph import Entity, Graph
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
 from . import actions, client
 from .config import GitStackConfig
+from .models import GitStackSnapshot
 from .panels import Builder, entities, repo_dirs, untrack_iced_action
 from .repository import MIGRATIONS, StackRepository
 

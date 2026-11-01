@@ -6,8 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from ...domain import Branch, LocalRepo, LocalSnapshot, Worktree
 from ...shell import CommandError, git
+from .models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 _GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
 _TRACK_RE = re.compile(r"ahead (\d+)|behind (\d+)|(gone)")

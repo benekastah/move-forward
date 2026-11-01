@@ -9,9 +9,7 @@ from conftest import (
     snapshot,
 )
 
-from move_forward.domain import (
-    JiraSnapshot,
-)
+from move_forward.plugins.jira.models import JiraSnapshot
 
 build = dashboard
 

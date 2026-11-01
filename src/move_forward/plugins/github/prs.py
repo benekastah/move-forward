@@ -3,7 +3,7 @@
 import re
 from datetime import datetime
 
-from ...domain import Check, PullRequest, Thread
+from .models import Check, PullRequest, Thread
 
 JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 BOT_LOGIN_RE = re.compile(r"bot\b|\[bot\]$|^copilot", re.IGNORECASE)

@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from ...db import Database
-from ...domain import JiraIssue, JiraSnapshot
+from .models import JiraIssue, JiraSnapshot
 
 MIGRATIONS = [
     """

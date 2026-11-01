@@ -5,10 +5,10 @@ Pure functions of the snapshot, the derived snapshot and the graph; no I/O.
 
 from datetime import datetime, timedelta
 
-from ...domain import DerivedSnapshot, GitHubSnapshot, PullRequest
 from ...graph import Graph, Ref
 from ...page import Item, Link, Panel, age
 from .config import GitHubConfig
+from .models import DerivedSnapshot, GitHubSnapshot, PullRequest
 from .prs import (
     approved,
     changes_requested,

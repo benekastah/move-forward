@@ -19,8 +19,8 @@ from conftest import (
 )
 
 from move_forward import render
-from move_forward.domain import Check
 from move_forward.graph import Graph
+from move_forward.plugins.github.models import Check
 from move_forward.plugins.slack.config import (
     DEFAULT_PING_FIRST,
     DEFAULT_PING_FOLLOW_UP,

@@ -11,9 +11,11 @@ is what's left to build.
   plugins whose section is there (`registry.py`), runs their collectors,
   builds the entity graph (`graph.py`), and renders the page.
 - Each tool is a plugin in `src/move_forward/plugins/<name>/`: `config.py`
-  (its section's model), `client.py` (talking to the tool), `panels.py` (pure
-  functions from its snapshot and the graph to panels), `plugin.py` (the
-  `Plugin` subclass), and `actions.py` if it has buttons.
+  (its section's model), `models.py` (its data), `client.py` (talking to the
+  tool), a repository module with its tables' migrations and queries,
+  `panels.py` (pure functions from its snapshot and the graph to panels),
+  `plugin.py` (the `Plugin` subclass), and `actions.py` if it has buttons.
+  Core's `domain.py` has only the base `Model`.
 - Plugins never import each other or read each other's config, snapshots or
   tables. What one needs from another goes through the graph. A plugin that's
   built on another declares it in `requires`.

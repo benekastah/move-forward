@@ -4,8 +4,8 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ...domain import GitStackSnapshot, StackBranch, StackRepo
 from ...shell import git
+from .models import GitStackSnapshot, StackBranch, StackRepo
 
 
 def parse_info(out: str) -> list[StackBranch]:

@@ -8,7 +8,10 @@ from conftest import ME, NOW, pr, snapshot
 from legacy import save_json_snapshot
 
 from move_forward.db import Database
-from move_forward.domain import (
+from move_forward.plugin import Context
+from move_forward.plugins.github import client
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.models import (
     DerivedSnapshot,
     Review,
     ReviewerSuggestion,
@@ -16,9 +19,6 @@ from move_forward.domain import (
     Thread,
     TimelineEvent,
 )
-from move_forward.plugin import Context
-from move_forward.plugins.github import client
-from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository

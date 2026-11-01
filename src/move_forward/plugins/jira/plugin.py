@@ -3,12 +3,12 @@
 from datetime import datetime
 from typing import ClassVar
 
-from ...domain import JiraIssue, JiraSnapshot
 from ...graph import Entity, Graph, Ref
 from ...page import Item, Link, Panel, age
 from ...plugin import Context, Plugin
 from . import client
 from .config import JiraConfig
+from .models import JiraIssue, JiraSnapshot
 from .repository import MIGRATIONS, IssueRepository
 
 TICKET = "ticket"

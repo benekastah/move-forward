@@ -10,15 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...domain import (
-    Check,
-    GitHubSnapshot,
-    PullRequest,
-    Review,
-    Thread,
-    TimelineEvent,
-)
 from ...shell import CommandError, run, stopping
+from .models import Check, GitHubSnapshot, PullRequest, Review, Thread, TimelineEvent
 
 COMMIT_EMAIL_LOOKUP_COUNT = 10
 PAGE_SIZE = 25

@@ -7,9 +7,9 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 
 from pathlib import Path
 
-from ...domain import GitStackSnapshot
 from ...graph import Entity, Graph, Ref
 from ...page import Action, Item, Panel
+from .models import GitStackSnapshot
 
 BRANCH = "branch"
 PR = "pr"

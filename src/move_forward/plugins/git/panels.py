@@ -6,10 +6,10 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 
 from datetime import datetime
 
-from ...domain import LocalSnapshot
 from ...graph import Entity, Graph, Ref
 from ...page import Action, Item, Panel, age
 from .config import GitConfig
+from .models import LocalSnapshot
 
 TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""

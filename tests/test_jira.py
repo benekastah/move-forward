@@ -8,10 +8,10 @@ from legacy import save_json_snapshot
 
 from move_forward import https
 from move_forward.db import Database
-from move_forward.domain import JiraIssue, JiraSnapshot
 from move_forward.plugin import Context
 from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.jira.repository import MIGRATIONS, IssueRepository
 from move_forward.repositories import KvRepository

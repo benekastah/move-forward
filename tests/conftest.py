@@ -7,27 +7,23 @@ from pydantic import BaseModel
 
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.domain import (
-    Branch,
+from move_forward.domain import Model
+from move_forward.page import Panel
+from move_forward.panels import Dashboard
+from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
+from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
+from move_forward.plugins.github.models import (
     Check,
     DerivedSnapshot,
     GitHubSnapshot,
-    GitStackSnapshot,
-    JiraIssue,
-    LocalRepo,
-    LocalSnapshot,
-    Model,
     PullRequest,
     Review,
-    StackBranch,
-    StackRepo,
     Thread,
     TimelineEvent,
 )
-from move_forward.page import Panel
-from move_forward.panels import Dashboard
 from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.github.snapshots import DerivedRepository
+from move_forward.plugins.jira.models import JiraIssue
 from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.models import Entry, Ice, IcedItem, Size, Todo
 from move_forward.plugins.notes.repository import MIGRATIONS as NOTES_MIGRATIONS

@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from ...db import Database
-from ...domain import Branch, LocalRepo, LocalSnapshot, Worktree
+from .models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 _FROM_SNAPSHOT = "FROM snapshots, json_each(snapshots.payload, '$.repos') AS repo"
 _GIT_SNAPSHOT = "snapshots.source = 'git' AND snapshots.payload IS NOT NULL"
