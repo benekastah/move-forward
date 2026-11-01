@@ -23,6 +23,10 @@ TARGET_SEPARATOR = "\t"
 BRANCH = "branch"
 STACK_BRANCH = "stack_branch"
 PR = "pr"
+TICKET = "ticket"
+ENTRY = "entry"
+ICEABLE = (PR, TICKET, ENTRY)
+"""What `ice_item` puts on ice on its own; branches go with their stacks, through `ice`."""
 INFERRED = "inferred"
 """The status of an entry the dashboard made, rather than the skill."""
 
@@ -112,6 +116,27 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     ice_id = notes.add_ice(names[0], ctx.now.date(), note, items)
     notes.replace_covers([ice_id], covers(graph, notes.ices()))
     return f"put {names[0]} on ice ({len(names)} branches)"
+
+
+def ice_item(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Put a PR, ticket or work entry on ice, by `kind` and `id`, with what it links: an
+    entry its PRs and tickets, a ticket the PRs that mention it. An optional `note` says
+    why."""
+    kind, ref_id = fields["kind"], fields["id"]
+    if kind not in ICEABLE:
+        raise ActionError(f"notes puts PRs, tickets and work entries on ice, not a {kind!r}")
+    entity = graph.get(kind, ref_id)
+    if entity is None:
+        raise ActionError(f"no {kind} {ref_id!r} to put on ice")
+    notes = NotesRepository(ctx.db)
+    iced = {(item.kind, item.ref_id) for i in notes.ices() for item in i.items}
+    if (kind, ref_id) in iced or graph.hidden(entity.ref):
+        raise ActionError(f"{entity.title} is already on ice")
+    note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
+    item = IcedItem(kind=kind, ref_id=ref_id, name=entity.title)
+    ice_id = notes.add_ice(entity.title, ctx.now.date(), note, [item])
+    notes.replace_covers([ice_id], covers(graph, notes.ices()))
+    return f"put {entity.title} on ice"
 
 
 def _ice_id(fields: dict[str, str]) -> int:
@@ -231,5 +256,6 @@ ACTIONS: dict[str, ActionHandler] = {
     "todo_link": todo_link,
     "todo_add": todo_add,
     "ice": ice,
+    "ice_item": ice_item,
     "thaw": thaw,
 }

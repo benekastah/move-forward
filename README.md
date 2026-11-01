@@ -72,7 +72,7 @@ fails to load without it, saying which (e.g. "[git_stack] needs [git]").
 | `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in each of git's repos | Stacks |
 | `jira` | `[jira]` | my open tickets | Jira transitions, What next |
 | `slack` | `[slack]` | nothing; reads my PRs from the graph, and where pings go from its own tables | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
-| `notes` | `[notes]`, optional: always on | nothing: work entries, todos and what's on ice live in the database | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket, and Put on ice on every item about a local branch |
+| `notes` | `[notes]`, optional: always on | nothing: work entries, todos and what's on ice live in the database | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket, and Put on ice on every item about a local branch, one of my open PRs, a ticket or a work entry |
 
 `[notes]` has no settings. The notes (work entries with their todos, and
 what's on ice) live in the database. Notes kept as the move-forward skill's
@@ -149,11 +149,11 @@ before the command's name.
 | `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
 | `mfd notes condition add\|remove <entry> <text>` | Add or remove a merge condition. |
 | `mfd notes decline <entry> <text>` | Record that something offered for an entry (a nudge, say) was turned down today. |
-| `mfd notes ice --branch <repo> <branch> [--note N]` | Put a branch, with its git-stack stack, on ice; needs a refresh first, so git knows the branch. |
+| `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack, on ice, or a `pr` (by URL), `ticket` (by key) or `entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
 | `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database. Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`. |
-| `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. |
+| `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. `on-ice.md` holds only stacks: PRs, tickets and entries on ice stay in the database. |
 | `mfd github import <dir>` | Read reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions; they win over emails looked up from commits. Run it again whenever the map changes. |
 | `mfd slack contacts [--json]` | Where people's and teams' pings go, and whether each was imported or set by hand. |
 | `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
@@ -204,12 +204,14 @@ Only Act now starts expanded; each panel inside a group collapses too.
 - **Cleanup**: local branches whose PR merged or whose remote is gone, with a
   Delete button each and Delete all (`git branch -D`; a branch checked out in a
   worktree is refused).
-- **On ice**: parked stacks, with Reopen (thaw). git adds Delete branches
-  (the local ones, all or none, after a confirmation; refused for a branch with
-  commits since it was iced; remote branches and PRs are untouched), and
-  git_stack adds Untrack while git-stack tracks them. The stack stays on ice
-  with the commits it was iced at until it's reopened. Their PRs and branches
-  are left out of the other panels.
+- **On ice**: parked stacks, PRs, tickets and work entries, with Reopen
+  (thaw). For a stack, git adds Delete branches (the local ones, all or none,
+  after a confirmation; refused for a branch with commits since it was iced;
+  remote branches and PRs are untouched), and git_stack adds Untrack while
+  git-stack tracks them. The stack stays on ice with the commits it was iced
+  at until it's reopened. Everything on ice is left out of the other panels,
+  with what it links: a stack's PRs, the PRs that mention an iced ticket, and
+  an iced entry's PRs and tickets.
 
 ## Focus mode
 
@@ -282,7 +284,8 @@ error status):
 | `/actions/git/push_branch` | `repo`, `branch` | `git push` (sets the upstream if missing; never forces). |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`. |
 | `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack when git_stack knows it, recording each branch's commit. |
-| `/actions/notes/thaw` | `ice` (its id, as the On ice panel's buttons have it) | Takes a stack off ice. |
+| `/actions/notes/ice_item` | `kind` (`pr`, `ticket` or `entry`), `id`, optional `note` | Puts the PR, ticket or work entry on ice, with what it links. |
+| `/actions/notes/thaw` | `ice` (its id, as the On ice panel's buttons have it) | Takes what's on ice off it. |
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. Refused for a checked-out branch, or an iced one with commits since it was iced. |
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
 | `/actions/git/delete_together` | `targets` | Deletes all of them or, if any can't go, none. |

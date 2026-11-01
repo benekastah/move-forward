@@ -172,3 +172,11 @@ def test_a_plugin_command_needs_its_section(
     config.write_text(f'email = "me@x"\ndb_path = "{tmp_path / "d.db"}"\n')
     assert cli.main(["-c", str(config), "notes", "list", "--json"]) == 0
     assert json.loads(capsys.readouterr().out) == []  # notes is always on
+
+
+def test_ice_a_work_entry_by_kind_and_id(run: Run) -> None:
+    run("add-entry", "APP-1 Fix")
+    assert run("ice", "--item", "entry", "APP-1 Fix")[1] == "put APP-1 Fix on ice\n"
+    code, _, err = run("ice", "--item", "entry", "nope")
+    assert code == 1 and "no entry 'nope'" in err
+    assert "APP-1 Fix" in run("ices")[1]

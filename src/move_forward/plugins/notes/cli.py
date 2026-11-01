@@ -60,10 +60,17 @@ def export_notes(ctx: Context[NotesConfig], notes_dir: Path, force: bool) -> str
     targets[0].write_text(markdown.write_work_notes(entries, repo.sections()))
     last_asked = ctx.kv.get(LAST_ASKED_ICE)
     ices = repo.ices()
+    stacks = [i for i in ices if all(item.kind == markdown.BRANCH for item in i.items)]
     targets[1].write_text(
-        markdown.write_on_ice(ices, date.fromisoformat(last_asked) if last_asked else None)
+        markdown.write_on_ice(stacks, date.fromisoformat(last_asked) if last_asked else None)
     )
-    return f"wrote {len(entries)} entries and {len(ices)} stacks on ice to {notes_dir}"
+    left_out = len(ices) - len(stacks)
+    return f"wrote {len(entries)} entries and {len(stacks)} stacks on ice to {notes_dir}" + (
+        f"; on-ice.md holds only stacks, so {left_out} other thing(s) on ice stay in the"
+        " database only"
+        if left_out
+        else ""
+    )
 
 
 Command = Callable[[Context[NotesConfig], Graph, argparse.Namespace], "Result"]
@@ -240,6 +247,10 @@ def cmd_decline(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespac
 
 
 def cmd_ice(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
+    if args.item:
+        kind, ref_id = args.item
+        fields = {"kind": kind, "id": ref_id, "note": args.note or ""}
+        return Result(_notice(actions.ice_item(ctx, graph, fields)))
     repo, branch = args.branch
     fields = {"repo": str(Path(repo).expanduser()), "branch": branch, "note": args.note or ""}
     return Result(_notice(actions.ice(ctx, graph, fields)))
@@ -326,8 +337,16 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     decline = add("decline", "record that something offered for an entry was turned down today")
     decline.add_argument("entry")
     decline.add_argument("text")
-    ice = add("ice", "put a branch, with its git-stack stack, on ice (needs a refresh first)")
-    ice.add_argument("--branch", nargs=2, metavar=("REPO", "BRANCH"), required=True)
+    ice = add(
+        "ice",
+        "put a branch (with its git-stack stack), a PR, a ticket or a work entry on ice"
+        " (needs a refresh first)",
+    )
+    what = ice.add_mutually_exclusive_group(required=True)
+    what.add_argument("--branch", nargs=2, metavar=("REPO", "BRANCH"))
+    what.add_argument(
+        "--item", nargs=2, metavar=("KIND", "ID"), help="pr URL, ticket KEY or entry TITLE"
+    )
     ice.add_argument("--note")
     add("thaw", "take what's on ice off it").add_argument("ice", type=int)
     import_parser = add("import", "read work-notes.md and on-ice.md from a directory")

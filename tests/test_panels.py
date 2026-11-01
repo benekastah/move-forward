@@ -143,8 +143,11 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     todo_id = part.actions[0].fields["todo"]
     assert part.actions[0].fields == {"todo": todo_id}  # addressed by id
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
-    # The entry on the page only gets the Add todo field, not the todo's own actions.
-    assert [a.name for a in panel(dashboard, "todos").items[0].actions] == ["notes/todo_add"]
+    # The entry on the page gets the Add todo field and Put on ice, not the todo's own actions.
+    assert [a.name for a in panel(dashboard, "todos").items[0].actions] == [
+        "notes/todo_add",
+        "notes/ice_item",
+    ]
 
     config, db = stored(work_items=[noted])
     done = kept_item(config, db, f"notes:{todo_id}")

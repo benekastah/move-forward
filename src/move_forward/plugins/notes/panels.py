@@ -267,17 +267,29 @@ class Builder:
         return add_todo_action(entry, title, ticket.url or "")
 
     def put_on_ice(self, item: Item) -> Action | None:
-        """A Put on ice button for an item about one of git's branches, unless it's on ice."""
+        """A Put on ice button for an item about one of git's branches (with its stack), else
+        about one of my open PRs, a ticket or a work entry, unless it's on ice already."""
+        if any(self.graph.hides(s.kind) for s in item.subjects):
+            return None  # about ice itself
         ref = item.subject(BRANCH)
         branch = self.graph.view_one(BRANCH, ref.id, _BranchView) if ref else None
-        if branch is None or branch.repo_dir is None or branch.name is None:
-            return None  # not one of git's
-        if self.graph.hidden(Ref(kind=BRANCH, id=branch.id)):
+        if branch is not None and branch.repo_dir is not None and branch.name is not None:
+            if self.graph.hidden(Ref(kind=BRANCH, id=branch.id)):
+                return None
+            return Action(
+                name="notes/ice",
+                label="Put on ice",
+                fields={"repo": branch.repo_dir, "branch": branch.name},
+            )
+        ref = item.subject(PR) or item.subject(TICKET) or item.subject(ENTRY)
+        if ref is None or self.graph.get(ref.kind, ref.id) is None or self.graph.hidden(ref):
             return None
+        if ref.kind == PR:
+            pr = self.graph.view_one(PR, ref.id, _PrView)
+            if pr is None or not (pr.mine and pr.state == "open"):
+                return None
         return Action(
-            name="notes/ice",
-            label="Put on ice",
-            fields={"repo": branch.repo_dir, "branch": branch.name},
+            name="notes/ice_item", label="Put on ice", fields={"kind": ref.kind, "id": ref.id}
         )
 
     def _pr_states(self) -> dict[str, PrState]:
@@ -335,6 +347,7 @@ class Builder:
                     links=links,
                     rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
                     actions=[add_todo_action(entry.title)],
+                    subjects=[Ref(kind=ENTRY, id=entry.title)],
                     parts=[
                         _todo_part(
                             entry.title,
@@ -358,24 +371,33 @@ class Builder:
     def iced(self) -> Panel:
         items: list[Item] = []
         for ice in self.ices:
-            repo_dir = next((i.repo_dir for i in ice.items if i.repo_dir), "?")
+            branches = [i for i in ice.items if i.kind == BRANCH]
+            others = [i for i in ice.items if i.kind != BRANCH]
+            where = next((i.repo_dir for i in branches if i.repo_dir), None)
+            where = where or ", ".join(dict.fromkeys(i.kind for i in others)) or "?"
+            first = others[0] if others else None
             items.append(
                 Item(
                     title=ice.title,
-                    subtitle=f"{repo_dir} · iced {ice.iced_on.isoformat()}",
+                    url=self.graph.url_for(first.kind, first.ref_id) if first else None,
+                    subtitle=f"{where} · iced {ice.iced_on.isoformat()}",
                     details=[ice.note] if ice.note else [],
-                    badges=[f"{len(ice.items)} branches"],
+                    badges=[f"{len(branches)} branches"] if branches else [],
                     actions=[
                         Action(name="notes/thaw", label="Reopen", fields={"ice": str(ice.id)})
                     ],
                     # The `iced` keeps the item on the page; git and git_stack add deleting
-                    # and untracking the branches.
+                    # and untracking the branches. Not the PRs, tickets or entries iced: the
+                    # item isn't about them for other plugins' buttons.
                     subjects=[
                         Ref(kind=ICED, id=str(ice.id)),
-                        *(Ref(kind=item.kind, id=item.ref_id) for item in ice.items),
+                        *(Ref(kind=BRANCH, id=i.ref_id) for i in branches),
                     ],
                 )
             )
         return Panel(
-            key="iced", title="On ice", description="Stacks parked by the skill.", items=items
+            key="iced",
+            title="On ice",
+            description="Stacks, PRs, tickets and work entries parked until they're reopened.",
+            items=items,
         )

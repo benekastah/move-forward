@@ -83,6 +83,8 @@ flowchart TB
     notes([notes]) -- "Add todo" --> prItems
     notes -- "Add todo" --> ticketItems
     notes -- "Put on ice" --> branchItems
+    notes -- "Put on ice" --> prItems
+    notes -- "Put on ice" --> ticketItems
     git -- "Delete branches" --> icedItems
     git_stack -- "Untrack" --> icedItems
 

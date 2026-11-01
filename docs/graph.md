@@ -170,9 +170,10 @@ names with it).
 ### Hidden entities
 
 A plugin can declare kinds whose entities **hide** what they point at, in `hides`. notes'
-`iced` is one: what's on ice stays off the page until it's thawed. It points at the
-branches on ice and at what notes finds for them after each refresh: their PRs, and
-git_stack's `stack_branch`es.
+`iced` is one: what's on ice stays off the page until it's thawed. It points at what's on
+ice (a stack's branches, a PR, a ticket or a work entry) and at what notes finds for it
+after each refresh: the branches' PRs and git_stack's `stack_branch`es, and what an iced
+entry points at.
 `graph.hidden(ref)` says whether a hiding entity covers `ref`, directly or through a
 linking entity next to it: icing a ticket hides the PRs that mention it, icing a work entry
 hides the PRs it names. It doesn't go the other way: icing a PR leaves its ticket alone.

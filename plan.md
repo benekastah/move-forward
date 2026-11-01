@@ -22,7 +22,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- Icing anything (see Icing anything): icing entries, tickets and PRs.
 - jira's key pattern matches `UTF-8`, `SHA-256` and the like in PR titles and bodies, so
   those become `ticket` refs: PRs mentioning one are related, and an entry naming one is
   never pruned (Jira can't say it's resolved). Restrict the pattern to the project keys
@@ -414,45 +413,55 @@ plugin must know, it's whatever linking kinds the enabled plugins publish, so Ac
 merges nominations through them too (a ticket, its PR and its entry's todo become one
 item).
 
-#### Icing anything
+#### Open questions
 
-notes owns icing. It can ice any entity, not just branches:
+- **How much to trust tool-provided importance.** Jira priority is often stale; an
+  escalation label is more telling. Per-plugin mapping into 0–2 keeps that judgment in
+  the plugin.
+- **Effort for unknown items.** Treat unknown as "hour" for scoring, or keep them out of
+  the quick-wins slot only? Probably the latter.
+- **Time of day.** Quick wins at the end of the day, important work in the morning? An
+  easy later addition: a weight profile per part of the day.
+- **Teams.** "Someone is waiting" could weigh people on my teams more. That needs the
+  `person` entities to know team membership, which github already fetches.
 
-- **A unit of work** (an entry or a ticket): everything it links is iced with it, including
-  PRs and branches that appear later for the same ticket or entry. Todos stay with their
-  entry: they're iced with it, never on their own.
-- **A PR.**
-- **A branch:** with git_stack, its whole stack, as now. Each branch's sha is recorded so
-  the stack can be restored after it's deleted.
+### Data model
 
-```sql
-CREATE TABLE notes_ice (               -- kept: one act of icing
-    id INTEGER PRIMARY KEY,
-    title TEXT NOT NULL,               -- e.g. "APP-12 Fix the widget" or a stack's bottom branch
-    iced_on TEXT NOT NULL,
-    note TEXT
-);
-CREATE TABLE notes_iced (              -- kept: what one act of icing covers
-    ice_id INTEGER NOT NULL REFERENCES notes_ice ON DELETE CASCADE,
-    kind TEXT NOT NULL,                -- e.g. "jira.ticket", "notes.entry", "github.pr", "git.branch"
-    ref_id TEXT NOT NULL,
-    position INTEGER NOT NULL,         -- a stack's order, bottom first
-    sha TEXT,                          -- for branches
-    PRIMARY KEY (kind, ref_id)
-);
-```
+#### Where things stand
 
-notes publishes a `notes.iced` entity per act of icing, pointing at everything it covers.
-For an iced entry, that includes what the entry links, which notes knows from its own
-tables. An iced ticket reaches its PRs because the ticket is a linking kind.
+- **Untyped entities.** The graph is built in memory on every page load and never stored.
+  `Ref.kind` is any string and `Entity.attrs` is a `dict[str, JsonValue]`. Consumers read
+  attributes defensively (`str(pr.attrs.get("head"))`), so if a publisher renames an
+  attribute, consumers quietly get `"None"`, `False` or `[]`. The contract is only the
+  prose in `docs/entities.md`.
+- **Shared kinds.** Two plugins can publish the same ref and the graph merges them:
+  git_stack adds `stack_parent` to git's `branch`. Core knows two kinds by name: `ticket`
+  (`Graph.related`) and `person` (finding `me`).
 
-Core already hides what an `iced` covers (see `docs/graph.md`). An iced entry also covers
-what the entry links (an iced entry is a linking entity, so that comes for free); an iced
-ticket reaches its PRs because the ticket is a linking kind.
+#### Principles
 
-Put on ice becomes an item action on any item whose subject notes can ice: entries,
-tickets, PRs and branches. The On ice panel lists acts of icing, with Thaw, and Delete for
-the ones holding branches.
+1. **Entity kinds are plugin-owned, one publisher per kind.** The publishing plugin
+   declares each of its kinds as a typed model, and kinds are namespaced like panel keys:
+   `github.pr`, `git.branch`. Core validates every published entity against its kind's
+   model when it builds the graph.
+2. **Extend by pointing, not by merging.** A plugin that knows more about another's entity
+   publishes its own kind with a ref to it: git_stack publishes `git_stack.stack_branch`
+   pointing at the `git.branch`. The graph's merging of one ref from two plugins goes
+   away.
+3. **Consumers declare what they read.** Plugins still can't import each other, so a
+   consumer describes the fields it uses as its own small model, e.g. slack's `PrView`
+   with `head`, `draft` and `requested_users`. `graph.of_kind("github.pr", PrView)` returns
+   validated instances, and a mismatch raises. If a publisher renames an attribute, that
+   consumer's tests fail instead of the page quietly showing less.
+4. **The docs follow the models.** `docs/entities.md` is generated from the kind models, or
+   a test checks it against them.
+
+#### Units of work
+
+Linking kinds are in (see `docs/graph.md`). What's left: work isn't one kind that every
+plugin must know, it's whatever linking kinds the enabled plugins publish, so Act now
+merges nominations through them too (a ticket, its PR and its entry's todo become one
+item).
 
 #### Open questions
 

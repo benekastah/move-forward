@@ -1,21 +1,31 @@
 """notes' ice as other plugins see it: an `iced` entity per act of icing, hiding what it
 covers, including what notes finds for it in the graph."""
 
-from conftest import NOW
+from pathlib import Path
 
+import pytest
+from conftest import NOW, dashboard, entry, issue, panel, pr, snapshot, stored, titles, todo
+
+from move_forward import refresh
+from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref
-from move_forward.plugin import Context
+from move_forward.plugin import ActionError, Context
+from move_forward.plugins.jira.models import JiraSnapshot
+from move_forward.plugins.notes.cli import export_notes
 from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.covers import covers
 from move_forward.plugins.notes.models import Ice, IcedItem
 from move_forward.plugins.notes.panels import entities
 from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
+from move_forward.refresh import build_dashboard
+from move_forward.registry import enabled
 from move_forward.repositories import KvRepository
 
 WIDGETS = "/src/widgets"
 BRANCH = Ref(kind="branch", id=f"{WIDGETS}\tme/x")
+ICE = "notes/ice_item"
 
 
 def _pr(number: int, repo: str, head: str) -> Entity:
@@ -111,3 +121,88 @@ def test_after_a_refresh_notes_finds_its_covers_again() -> None:
     pr = _pr(1, "acme/widgets", "me/x")
     NotesPlugin().after_collect(ctx, Graph([pr]))
     assert NotesRepository(db).covers() == {ice_id: [pr.ref]}
+
+
+def _work() -> tuple[Config, Database]:
+    """Two conflicting PRs of mine, mentioning APP-1 and APP-2, those tickets, and an entry
+    about APP-1."""
+    return stored(
+        github=snapshot(mine=[pr(1, merge_state="DIRTY"), pr(2, merge_state="DIRTY")]),
+        jira=JiraSnapshot(issues=[issue("APP-1"), issue("APP-2")]),
+        work_items=[entry("APP-1 Fix", [todo("finish")])],
+    )
+
+
+def _shown(config: Config, db: Database) -> set[str]:
+    """Every item's title, but On ice's."""
+    built = build_dashboard(config, db, NOW)
+    return {i.title.split()[0] for p in built.panels if p.key != "iced" for i in p.items}
+
+
+def _ice_item(config: Config, db: Database, kind: str, ref_id: str) -> str:
+    return refresh.run_action(config, db, "notes/ice_item", {"kind": kind, "id": ref_id})
+
+
+def test_icing_a_ticket_hides_the_prs_mentioning_it_and_the_entry_about_it() -> None:
+    config, db = _work()
+    assert {"PR", "APP-1", "APP-2"} <= _shown(config, db)
+    assert _ice_item(config, db, "ticket", "APP-1") == "put APP-1 Do the thing on ice"
+    shown = _shown(config, db)
+    assert "APP-1" not in shown and "APP-2" in shown  # the entry and the ticket's own items
+    built = build_dashboard(config, db, NOW)
+    assert titles(built, "conflicts") == ["PR 2"]
+    [on_ice] = panel(built, "iced").items
+    assert (on_ice.title, on_ice.url) == ("APP-1 Do the thing", "https://jira/browse/APP-1")
+
+
+def test_icing_an_entry_hides_it_and_what_its_tickets_link() -> None:
+    config, db = _work()
+    _ice_item(config, db, "entry", "APP-1 Fix")
+    built = build_dashboard(config, db, NOW)
+    assert titles(built, "conflicts") == ["PR 2"]
+    assert titles(built, "todos") == []
+
+
+def test_icing_a_pr_hides_only_it() -> None:
+    config, db = _work()
+    _ice_item(config, db, "pr", pr(1).url)
+    built = build_dashboard(config, db, NOW)
+    assert titles(built, "conflicts") == ["PR 2"]
+    assert titles(built, "todos") == ["APP-1 Fix"]  # its ticket and entry aren't on ice
+
+
+def test_ice_item_refuses_other_kinds_unknown_ids_and_what_is_on_ice() -> None:
+    config, db = _work()
+    with pytest.raises(ActionError, match="not a 'branch'"):
+        _ice_item(config, db, "branch", "/src/widgets\tme/x")
+    with pytest.raises(ActionError, match="no ticket 'APP-9'"):
+        _ice_item(config, db, "ticket", "APP-9")
+    _ice_item(config, db, "ticket", "APP-1")
+    with pytest.raises(ActionError, match="already on ice"):
+        _ice_item(config, db, "ticket", "APP-1")
+    with pytest.raises(ActionError, match="already on ice"):
+        _ice_item(config, db, "pr", pr(1).url)  # hidden through APP-1
+
+
+def test_put_on_ice_is_offered_on_my_open_prs_tickets_and_entries() -> None:
+    mine, theirs = pr(1, merge_state="DIRTY"), pr(3, author="alice")
+    built = dashboard(
+        github=snapshot(mine=[mine], direct_requests=[theirs]),
+        work_items=[entry("APP-1 Fix", [todo("finish")])],
+    )
+
+    def ice_fields(key: str) -> list[dict[str, str]]:
+        return [a.fields for i in panel(built, key).items for a in i.actions if a.name == ICE]
+
+    assert ice_fields("conflicts") == [{"kind": "pr", "id": mine.url}]
+    assert ice_fields("todos") == [{"kind": "entry", "id": "APP-1 Fix"}]
+    assert ice_fields("reviews_for_me") == []  # not mine
+
+
+def test_export_writes_only_stacks_to_on_ice_md(tmp_path: Path) -> None:
+    config, db = _work()
+    _ice_item(config, db, "ticket", "APP-1")
+    notes = next(e for e in enabled(config, db, NOW) if e.name == "notes")
+    notice = export_notes(notes.ctx, tmp_path, force=False)
+    assert "1 other thing(s) on ice stay in the database only" in notice
+    assert "APP-1" not in (tmp_path / "on-ice.md").read_text()
