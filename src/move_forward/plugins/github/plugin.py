@@ -4,12 +4,15 @@ import argparse
 import logging
 from typing import ClassVar
 
-from ...graph import Entity, Graph, Ref
+from pydantic import BaseModel
+
+from ...graph import Entity, Graph, Ref, attrs
 from ...page import Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
 from ...shell import CommandError
 from . import cli, client, derive
 from .config import GitHubConfig
+from .kinds import PersonAttrs, PrAttrs
 from .models import GitHubSnapshot, PullRequest
 from .panels import PR, Builder
 from .people import PeopleRepository
@@ -41,6 +44,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     title = "GitHub"
     config_model = GitHubConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {PR: PrAttrs, PERSON: PersonAttrs}
     cli_help = "import reviewers' emails from the skill's reviewer map"
     snapshot_model = GitHubSnapshot
 
@@ -113,7 +117,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         mine: bool,
         team_names: dict[str, str],
     ) -> Entity:
-        attrs: dict[str, object] = {
+        fields: dict[str, object] = {
             "repo": pr.repo,
             "number": pr.number,
             "head": pr.head,
@@ -129,19 +133,18 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         }
         if mine and state == "open":
             last = last_review_activity(pr)
-            attrs["review_blockers"] = review_blockers(pr, me, ctx.config.review_checks)
-            attrs["last_review_activity"] = last.isoformat() if last else None
             stale_after = ctx.config.stale_review_hours * 3600
-            attrs["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
-        return Entity.model_validate(
-            {
-                "ref": {"kind": PR, "id": pr.url},
-                "title": pr.title,
-                "url": pr.url,
-                "state": state,
-                "refs": [{"kind": TICKET, "id": key} for key in ticket_keys(pr)],
-                "attrs": attrs,
-            }
+            fields["review_blockers"] = review_blockers(pr, me, ctx.config.review_checks)
+            fields["last_review_activity"] = last.isoformat() if last else None
+            fields["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
+        pr_attrs = PrAttrs.model_validate(fields)
+        return Entity(
+            ref=Ref(kind=PR, id=pr.url),
+            title=pr.title,
+            url=pr.url,
+            state=state,
+            refs=[Ref(kind=TICKET, id=key) for key in ticket_keys(pr)],
+            attrs=attrs(pr_attrs),
         )
 
     def entities(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None) -> list[Entity]:
@@ -170,7 +173,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             Entity(
                 ref=Ref(kind=PERSON, id=login),
                 title=login,
-                attrs={"me": login == snapshot.login, "email": emails.get(login)},
+                attrs=attrs(PersonAttrs(me=login == snapshot.login, email=emails.get(login))),
             )
             for login in dict.fromkeys([snapshot.login, *emails])
         ]

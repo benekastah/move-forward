@@ -142,3 +142,8 @@ class Graph:
 def _as[V: BaseModel](entity: Entity, model: type[V]) -> V:
     fields = {"id": entity.ref.id, "title": entity.title, "url": entity.url, "state": entity.state}
     return model.model_validate({**entity.attrs, **fields})
+
+
+def attrs(model: BaseModel) -> dict[str, JsonValue]:
+    """An entity's attributes from its kind's model: the fields set, as JSON values."""
+    return model.model_dump(mode="json", exclude_unset=True)

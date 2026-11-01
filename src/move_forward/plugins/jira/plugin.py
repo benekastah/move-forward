@@ -3,11 +3,14 @@
 from datetime import datetime
 from typing import ClassVar
 
-from ...graph import Entity, Graph, Ref
+from pydantic import BaseModel
+
+from ...graph import Entity, Graph, Ref, attrs
 from ...page import Item, Link, Panel, age
 from ...plugin import Context, Plugin
 from . import client
 from .config import JiraConfig
+from .kinds import TicketAttrs
 from .models import JiraIssue, JiraSnapshot
 from .repository import MIGRATIONS, IssueRepository
 
@@ -120,6 +123,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     config_model = JiraConfig
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
 
     def collect(self, ctx: Context[JiraConfig]) -> JiraSnapshot:
         return client.collect(ctx.config, ctx.email)
@@ -137,12 +141,14 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 title=f"{issue.key} {issue.summary}",
                 url=issue.url,
                 state=issue.status,
-                attrs={
-                    "summary": issue.summary,
-                    "status": issue.status,
-                    "status_category": issue.status_category,
-                    "type": issue.type,
-                },
+                attrs=attrs(
+                    TicketAttrs(
+                        summary=issue.summary,
+                        status=issue.status,
+                        status_category=issue.status_category,
+                        type=issue.type,
+                    )
+                ),
             )
             for issue in (snapshot.issues if snapshot else [])
         ]

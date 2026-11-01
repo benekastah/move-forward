@@ -14,7 +14,8 @@ from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, CliHandler, Context, Plugin
 from . import actions, cli, prune
 from .config import NotesConfig
-from .panels import Builder, entities
+from .kinds import EntryAttrs, IcedBranchAttrs
+from .panels import ENTRY, ICED_BRANCH, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 
@@ -28,6 +29,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     title = "Notes"
     config_model = NotesConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {ENTRY: EntryAttrs, ICED_BRANCH: IcedBranchAttrs}
     cli_help = "import the skill's markdown notes, or export them back"
 
     def entities(self, ctx: Context[NotesConfig], snapshot: BaseModel | None) -> list[Entity]:

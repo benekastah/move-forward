@@ -2,16 +2,20 @@
 
 from typing import ClassVar
 
-from ...graph import Entity, Graph, Ref
+from pydantic import BaseModel
+
+from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
 from . import actions, client
 from .config import GitConfig
+from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
 from .panels import Builder, branch_ref, delete_iced_action
 from .repository import MIGRATIONS, LocalRepository
 
 REPO = "repo"
+BRANCH = "branch"
 
 
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
@@ -20,6 +24,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     config_model = GitConfig
     snapshot_model = LocalSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {REPO: RepoAttrs, BRANCH: BranchAttrs}
 
     def collect(self, ctx: Context[GitConfig]) -> LocalSnapshot:
         return client.collect(
@@ -45,11 +50,13 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                     Entity(
                         ref=repo_ref,
                         title=repo.github_repo or repo.dir,
-                        attrs={
-                            "dir": repo.dir,
-                            "default_branch": repo.default_branch,
-                            "my_dirs": list(repo.my_dirs),
-                        },
+                        attrs=attrs(
+                            RepoAttrs(
+                                dir=repo.dir,
+                                default_branch=repo.default_branch,
+                                my_dirs=list(repo.my_dirs),
+                            )
+                        ),
                     )
                 )
             checked_out = {wt.branch: wt.path for wt in repo.worktrees if wt.branch}
@@ -59,14 +66,16 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                         ref=branch_ref(repo.dir, branch.name),
                         title=branch.name,
                         refs=[repo_ref] if repo_ref else [],
-                        attrs={
-                            "repo_dir": repo.dir,
-                            "sha": branch.sha,
-                            "ahead": branch.ahead,
-                            "behind": branch.behind,
-                            "gone": branch.gone,
-                            "checked_out_in": checked_out.get(branch.name),
-                        },
+                        attrs=attrs(
+                            BranchAttrs(
+                                repo_dir=repo.dir,
+                                sha=branch.sha,
+                                ahead=branch.ahead,
+                                behind=branch.behind,
+                                gone=branch.gone,
+                                checked_out_in=checked_out.get(branch.name),
+                            )
+                        ),
                     )
                 )
         return entities

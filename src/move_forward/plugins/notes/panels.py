@@ -5,8 +5,9 @@ branch. Pure functions; no I/O."""
 import re
 from datetime import datetime
 
-from ...graph import Entity, Graph, Ref
+from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Link, Panel, PrState
+from .kinds import EntryAttrs, IcedBranchAttrs
 from .markdown import JIRA_KEY_RE, PR_URL_RE
 from .models import Entry, Ice, Todo
 
@@ -168,10 +169,12 @@ def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
                     "ref": Ref(kind=ENTRY, id=entry.title),
                     "title": entry.title,
                     "refs": refs,
-                    "attrs": {
-                        "merge_conditions": entry.conditions,
-                        "open_todos": [t.text for t in entry.open_todos],
-                    },
+                    "attrs": attrs(
+                        EntryAttrs(
+                            merge_conditions=entry.conditions,
+                            open_todos=[t.text for t in entry.open_todos],
+                        )
+                    ),
                 }
             )
         )
@@ -184,7 +187,9 @@ def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
                 Entity(
                     ref=Ref(kind=ICED_BRANCH, id=item.ref_id),
                     title=name,
-                    attrs={"repo_dir": repo_dir, "name": name, "stack": ice.title, "sha": item.sha},
+                    attrs=attrs(
+                        IcedBranchAttrs(repo_dir=repo_dir, name=name, stack=ice.title, sha=item.sha)
+                    ),
                 )
             )
     return result

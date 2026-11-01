@@ -3,13 +3,16 @@
 from pathlib import Path
 from typing import ClassVar
 
+from pydantic import BaseModel
+
 from ...graph import Entity, Graph
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
 from . import actions, client
 from .config import GitStackConfig
+from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
-from .panels import Builder, entities, repo_dirs, untrack_iced_action
+from .panels import BRANCH, Builder, entities, repo_dirs, untrack_iced_action
 from .repository import MIGRATIONS, StackRepository
 
 
@@ -21,6 +24,8 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     snapshot_model = GitStackSnapshot
     collects_after_graph = True
     migrations: ClassVar[list[str]] = MIGRATIONS
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {BRANCH: StackBranchAttrs}
+    """git's kind; git_stack's entities of it carry only what it adds, merged into git's."""
 
     def collect_after(self, ctx: Context[GitStackConfig], graph: Graph) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""

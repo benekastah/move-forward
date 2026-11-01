@@ -7,8 +7,9 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 
 from pathlib import Path
 
-from ...graph import Entity, Graph, Ref
+from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Panel
+from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
 
 BRANCH = "branch"
@@ -36,7 +37,7 @@ def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
         Entity(
             ref=branch_ref(repo.dir, b.name),
             title=b.name,
-            attrs={"stack_parent": b.parent, "stack_status": b.status},
+            attrs=attrs(StackBranchAttrs(stack_parent=b.parent, stack_status=b.status)),
         )
         for repo in (snapshot.repos if snapshot else [])
         for b in repo.branches
