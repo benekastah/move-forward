@@ -145,6 +145,19 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.
         caching lookups in the plugin's tables."""
 
+    change_check_seconds: ClassVar[int | None] = None
+    """How often `mfd serve` asks `changed`; None for a plugin without such a check."""
+
+    def changed(self, ctx: Context[C]) -> bool:
+        """Whether what the plugin collects has changed since this was last asked, by a check
+        far cheaper than `collect` (files' times, a request answered "not modified"), so the
+        plugin refreshes soon after a change rather than at its next `refresh_seconds`.
+        Keep what it compares against in `ctx.kv`; with nothing kept yet, keep it and say
+        False. Core asks once more after each refresh of the plugin and ignores the answer,
+        so what the refresh did itself (`git status` rewriting the index) doesn't count. May
+        raise; the error is logged and the next check tries again."""
+        return False
+
     # Reading
 
     def linking_patterns(self, ctx: Context[C]) -> dict[str, str | None]:

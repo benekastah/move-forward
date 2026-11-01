@@ -3,19 +3,21 @@ from collections.abc import Callable, Iterator
 from http.client import HTTPConnection, HTTPResponse
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from typing import ClassVar
 from urllib.parse import quote, urlencode
 
 import pytest
 from conftest import ME, pr, snapshot
 
-from move_forward import server
+from move_forward import registry, server
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.page import Action, Item
 from move_forward.panels import Layout
-from move_forward.plugin import KEPT, ActionError, ActionResult
+from move_forward.plugin import KEPT, ActionError, ActionResult, Context
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.repository import SlackRepository
@@ -488,3 +490,36 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
     assert app.due() == {"github"}
     app.refresh_if_stale()  # github's data is 301s old, over refresh_on_load_seconds
     assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
+
+
+class _GitHubWithChecks(GitHubPlugin):
+    """github whose change check answers from `answers`, raising for an exception."""
+
+    change_check_seconds: ClassVar[int | None] = 60
+    answers: ClassVar[list[bool | Exception]] = []
+
+    def changed(self, ctx: Context[GitHubConfig]) -> bool:
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+
+def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    swap = {"github": _GitHubWithChecks()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    monkeypatch.setattr(_GitHubWithChecks, "answers", [False, RuntimeError("offline"), True])
+    assert app.check_for_changes(1000.0) == set()
+    assert app.check_for_changes(1030.0) == set()  # not asked: 60s haven't passed
+    assert app.check_for_changes(1060.0) == set()  # the check failed; tried again later
+    assert app.check_for_changes(1120.0) == {"github"}
+    assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
+    # A refresh asks once more, to forget what it changed itself, and starts the wait over.
+    monkeypatch.setattr(_GitHubWithChecks, "answers", [True, True])
+    monkeypatch.setattr(server.time, "monotonic", lambda: 2000.0)
+    app.refresh_now({"github"})
+    assert _GitHubWithChecks.answers == [True]
+    assert app.check_for_changes(2030.0) == set() and _GitHubWithChecks.answers == [True]
+    assert app.check_for_changes(2060.0) == {"github"}

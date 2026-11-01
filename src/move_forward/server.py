@@ -43,6 +43,8 @@ STATIC_FILES = {
 """Served paths to the file in `STATIC_DIR` and its content type."""
 MAX_BODY_BYTES = 64 * 1024
 TLS_HANDSHAKE_SECONDS = 10
+CHANGE_LOOP_SECONDS = 1.0
+"""How often the change loop looks for plugins whose `change_check_seconds` have passed."""
 TLS_RECHECK_SECONDS = 3600
 """How often the HTTPS server looks for a newer certificate in the chain."""
 """A connection that hasn't finished its TLS handshake by then is dropped."""
@@ -92,6 +94,8 @@ class App:
         """Plugins asked for since the loop last ran: by a page load (stale ones) or the
         Refresh buttons (None: all of them)."""
         self._pending_lock = threading.Lock()
+        self._last_checked: dict[str, float] = {}
+        """`time.monotonic()` when each plugin was last asked whether it `changed`."""
 
     def refreshable(self) -> set[str]:
         """The plugins a refresh can be asked for: those that collect."""
@@ -126,10 +130,57 @@ class App:
             for name in self.intervals() if only is None else only:
                 self.last_refreshed[name] = started
             refresh(self.config, self.db, None, only)
+            self._rebaseline(self.refreshing)
         finally:
             self.refreshing = frozenset()
             self._refresh_lock.release()
         return True
+
+    def _rebaseline(self, names: frozenset[str]) -> None:
+        """Ask the plugins just refreshed whether they `changed`, ignoring the answer, so
+        what the refresh did itself isn't taken for a change."""
+        now = time.monotonic()
+        for e in enabled(self.config, self.db, datetime.now(UTC)):
+            if e.name in names and e.plugin.change_check_seconds is not None:
+                self._last_checked[e.name] = now
+                try:
+                    e.plugin.changed(e.ctx)
+                except Exception:
+                    log.debug("%s: change check failed", e.name, exc_info=True)
+
+    def check_for_changes(self, now: float | None = None) -> set[str]:
+        """Ask each plugin whose `change_check_seconds` have passed whether it `changed`,
+        except those refreshing now, and ask for a refresh of those that did; returns them.
+        A check that fails is logged (at debug: its refresh shows the error) and tried again
+        next time."""
+        now = time.monotonic() if now is None else now
+        changed: set[str] = set()
+        for e in enabled(self.config, self.db, datetime.now(UTC)):
+            seconds = e.plugin.change_check_seconds
+            last = self._last_checked.get(e.name)
+            if seconds is None or e.name in self.refreshing:
+                continue
+            if last is not None and now - last < seconds:
+                continue
+            self._last_checked[e.name] = now
+            try:
+                if e.plugin.changed(e.ctx):
+                    changed.add(e.name)
+            except Exception:
+                log.debug("%s: change check failed", e.name, exc_info=True)
+        if changed:
+            log.info("changed: %s; refreshing", ", ".join(sorted(changed)))
+            self.request_refresh(changed)
+        return changed
+
+    def run_change_loop(self) -> None:
+        """Check for changes (`check_for_changes`) every `CHANGE_LOOP_SECONDS`."""
+        while True:
+            try:
+                self.check_for_changes()
+            except Exception:
+                log.exception("checking for changes failed")
+            time.sleep(CHANGE_LOOP_SECONDS)
 
     def request_refresh(self, only: set[str] | None = None) -> None:
         """Ask the background loop to refresh `only` these plugins, or all of them, as soon as
@@ -489,6 +540,7 @@ def serve(config: Config, db: Database, token: str, port: int | None = None) -> 
     served = scheme(config)
     app = App(config, db, token, served)
     threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
+    threading.Thread(target=app.run_change_loop, name="changes", daemon=True).start()
     address = ("127.0.0.1", port or config.port)
     if served == "https":
         paths = tls.Paths.beside(config.db_path)

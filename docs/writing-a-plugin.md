@@ -89,6 +89,12 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 
 - A plugin that collects has a `refresh_seconds` setting in its section (with a default
   that suits its tool): the server refreshes it that often, on its own schedule.
+- A plugin with a cheap way to tell that its tool has something new (a file's time, a
+  request answered "not modified") sets `change_check_seconds` and implements
+  `changed(ctx)`: the server asks that often, and refreshes the plugin as soon as it says
+  True. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
+  the server asks once more and ignores the answer, so what the refresh did itself isn't
+  taken for a change. With `changed`, `refresh_seconds` can be long.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with

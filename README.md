@@ -54,7 +54,9 @@ The top level of the config says who you are and how the dashboard runs:
 `db_path`, `db_backups`, `refresh_on_load_seconds` (a page load refreshes
 plugins whose data is older than this) and `prune_days`. Each plugin that
 fetches refreshes on its own schedule, the `refresh_seconds` in its section
-(git every minute, github every 5, jira every 15, by default). Everything about a tool is
+(git every minute, github every 5, jira every 15, by default), and sooner when
+its plugin can tell cheaply that its tool has something new (each plugin's page
+says how). Everything about a tool is
 in that tool's plugin section; see [Plugins](#plugins).
 
 `[act_now]` tunes how Act now ranks what the plugins nominate: `size` (7,
@@ -99,7 +101,7 @@ before the command's name.
 
 | Command | Does |
 | --- | --- |
-| `mfd serve [--open] [--port N]` | Serve the page, refreshing each plugin on its own `refresh_seconds`; `--open` opens it signed in, like `mfd open`. The server runs in a child process: `mfd serve` starts a new one when the config file changes, once the new config passes `mfd check` (run in a separate process; if it fails, the error is logged, the running server carries on, and the next change tries again), and when the server fails, unless it keeps failing as it starts. Ctrl-c stops it. |
+| `mfd serve [--open] [--port N]` | Serve the page, refreshing each plugin on its own `refresh_seconds`, and when it says its tool changed; `--open` opens it signed in, like `mfd open`. The server runs in a child process: `mfd serve` starts a new one when the config file changes, once the new config passes `mfd check` (run in a separate process; if it fails, the error is logged, the running server carries on, and the next change tries again), and when the server fails, unless it keeps failing as it starts. Ctrl-c stops it. |
 | `mfd open [--port N]` | Open the running dashboard in a browser, signed in (see [API](#api)). |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
 | `mfd cert [--trust] [--force]` | Make the certificates `mfd serve` uses for HTTPS, unless they're there (`--force` replaces them); `--trust` adds their authority to the system's and browsers' stores. |
