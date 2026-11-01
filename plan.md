@@ -108,6 +108,23 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
 - **Focus sets my status**: entering focus mode sets "Focusing" and Do Not Disturb for a
   while, and leaving it clears them.
 
+### 10. Refresh in smaller steps
+
+- **Per-plugin intervals** (in progress): each collecting plugin refreshes on its own
+  schedule, a `refresh_seconds` setting in its section (git often, it's local; github
+  less, it's rate-limited; jira least), with git_stack following git. The Refresh button
+  still refreshes everything; each group could get its own.
+- **Change signals instead of webhooks.** Webhooks would need GitHub, Jira and Slack to
+  reach `127.0.0.1`, i.e. a public tunnel: another service, and an opening onto the
+  machine. Cheap signals that something changed get most of the benefit, so the heavy
+  fetches can run rarely:
+  - github: poll the notifications API (built for it: `X-Poll-Interval`, and a 304 when
+    nothing's new is cheap); a notification about one of my PRs refreshes github at once.
+  - git: watch `.git/HEAD` and the refs for changes, and refresh when they move.
+  - jira: search only for tickets `updated` since the last check.
+  - slack: Socket Mode, once the app exists (step 9): events come over a connection the
+    dashboard opens itself.
+
 ## Follow-ups
 
 - **GitHub Enterprise.** github assumes github.com: a `host` key, passed to every `gh`
