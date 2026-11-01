@@ -126,16 +126,20 @@ def _subject(nomination: Nomination, n: int) -> tuple[str, str] | Ref:
     return subjects[0] if subjects else (nomination.plugin, str(n))
 
 
-def panel(
+def panels(
     nominations: list[Nomination],
     config: ActNowConfig | None = None,
     feedback: dict[FeedbackKey, Feedback] | None = None,
     now: datetime | None = None,
-) -> Panel:
-    """The Act now panel: nominations not blocked, snoozed or dismissed, pinned ones first and
+    titles: dict[str, str] | None = None,
+) -> list[Panel]:
+    """Act now's panels: nominations not blocked, snoozed or dismissed, pinned ones first and
     then the best (by score, then the plugin's own rank, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
-    in all, each with buttons to snooze, dismiss or pin it."""
+    in all, each with buttons to snooze, dismiss or pin it. They're split into a panel per
+    plugin (keyed and, by `titles`, titled after it), so they flow across the page; the
+    panels come in their best items' order, and each item is badged with its place overall.
+    With nothing to act on, one empty panel says so."""
     config = config or ActNowConfig()
     feedback = feedback or {}
     size, per_plugin, weights = config.size, config.per_plugin, config.weights
@@ -167,20 +171,29 @@ def panel(
         else:
             kept[subject] = (nomination, [])
     per: dict[str, int] = {}
-    items: list[Item] = []
+    by_plugin: dict[str, list[Item]] = {}
+    place = 0
     for nomination, also in kept.values():
-        if len(items) == size:
+        if place == size:
             break
         if per.get(nomination.plugin, 0) == per_plugin:
             continue
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1
-        items.append(_shown(nomination, also, len(items), size, pinned(nomination)))
-    return Panel(
-        key=KEY,
-        title="Act now",
-        description="The best next actions across every tool, and why each is here.",
-        items=items,
-    )
+        shown = _shown(nomination, also, place, size, pinned(nomination))
+        by_plugin.setdefault(nomination.plugin, []).append(shown)
+        place += 1
+    if not by_plugin:
+        return [Panel(key=KEY, title="Act now", description="Nothing to act on now.", items=[])]
+    titles = titles or {}
+    return [
+        Panel(
+            key=plugin,
+            title=titles.get(plugin, plugin),
+            description="Its next actions, numbered by their place across every tool.",
+            items=items,
+        )
+        for plugin, items in by_plugin.items()
+    ]
 
 
 def _buttons(nomination: Nomination, pinned: bool) -> list[Action]:
@@ -201,9 +214,9 @@ def _buttons(nomination: Nomination, pinned: bool) -> list[Action]:
 
 
 def _shown(nomination: Nomination, also: list[str], place: int, size: int, pinned: bool) -> Item:
-    """The item as Act now shows it: its verb first, why it's here, what else is due on the
-    same subject, and the buttons to set it aside. Ranked by its place, since the panel
-    keeps its own order."""
+    """The item as Act now shows it: its verb first, its place overall as a badge, why it's
+    here, what else is due on the same subject, and the buttons to set it aside. Ranked by
+    its place, since the panels keep their own order."""
     item, signals = nomination.item, nomination.signals
     reason = ("pinned, " if pinned else "") + why(signals)
     reason = reason.removesuffix(", ")
@@ -214,6 +227,7 @@ def _shown(nomination: Nomination, also: list[str], place: int, size: int, pinne
         update={
             "title": f"{signals.verb}: {item.title}" if signals.verb else item.title,
             "details": details,
+            "badges": [f"#{place + 1}", *item.badges],
             "rank": size - place,
             "draft": False,
             "parts": [],

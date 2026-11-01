@@ -40,14 +40,10 @@ def _by_priority(panels: list[Panel]) -> list[str]:
     return [p.key for p in sorted(panels, key=lambda p: p.priority)]
 
 
-ACT_NOW_PANEL = f"{ACT_NOW}.{act_now.KEY}"
-"""The Act now panel's key: the only panel in core's Act now group."""
-
-
-def groups(plugins: list[PluginPanels]) -> list[Group]:
-    """Act now, then a group per plugin: panels by priority, and groups by their most urgent
-    panel's."""
-    result = [Group(key=ACT_NOW, title="Act now", panel_keys=[ACT_NOW_PANEL], open=True)]
+def groups(plugins: list[PluginPanels], act_now_keys: list[str]) -> list[Group]:
+    """Act now with its `act_now_keys` panels, then a group per plugin: panels by priority,
+    and groups by their most urgent panel's."""
+    result = [Group(key=ACT_NOW, title="Act now", panel_keys=act_now_keys, open=True)]
     rest = sorted(
         [plugin for plugin in plugins if plugin.panels],
         key=lambda plugin: min(p.priority for p in plugin.panels),
@@ -130,6 +126,16 @@ class Dashboard(Model):
             return panel.title
         return None
 
+    def _act_now(self) -> list[tuple[Panel, Item]]:
+        group = self.find_group(ACT_NOW)
+        keys = group.panel_keys if group else []
+        found = [(p, item) for key in keys if (p := self.find_panel(key)) for item in p.items]
+        return sorted(found, key=lambda pair: -pair[1].rank)
+
+    def act_now(self) -> list[Item]:
+        """Act now's items in their order across every tool, whichever panel each is in."""
+        return [item for _, item in self._act_now()]
+
     def focus_items(self, category: str) -> list[tuple[Panel, Item]] | None:
         """The items focus mode steps through for a category, each with its panel.
 
@@ -137,6 +143,8 @@ class Dashboard(Model):
         plugins' panels too), items in their panel's order, and an item with `parts`
         contributes those instead of itself; None for an unknown category.
         """
+        if category == ACT_NOW:  # in its own order across the tools, not panel by panel
+            return [(panel, item) for panel, item in self._act_now()]
         if category == FOCUS_ALL:  # Act now's items are all in some plugin's panel too
             keys = [key for g in self.groups if g.key != ACT_NOW for key in g.panel_keys]
         elif (group := self.find_group(category)) is not None:
@@ -225,19 +233,22 @@ def build(
         for item in plugin.nominations
         if not hidden(item)
     ]
-    ranked = act_now.panel(nominations, ranking, feedback, now)
-    ranked = ranked.model_copy(update={"key": ACT_NOW_PANEL})
+    titles = {plugin.key: plugin.title for plugin in plugins}
+    ranked = [
+        p.model_copy(update={"key": panel_key(ACT_NOW, p.key)})
+        for p in act_now.panels(nominations, ranking, feedback, now, titles)
+    ]
     return Dashboard(
         generated_at=now,
         login=login,
         panels=[
-            _with_item_actions(ranked, item_actions),
+            *(_with_item_actions(panel, item_actions) for panel in ranked),
             *(
                 _sorted(_with_item_actions(_without_hidden(panel, hidden), item_actions))
                 for plugin in plugins
                 for panel in plugin.panels
             ),
         ],
-        groups=laid_out(groups(plugins), layout or Layout()),
+        groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),
         sources=sources,
     )

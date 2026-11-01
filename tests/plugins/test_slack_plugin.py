@@ -122,7 +122,7 @@ def test_nudge_blockers_and_staleness() -> None:
     assert draft.url not in found
     built = dashboard(slack=True, **stored)
     assert sorted(titles(built, "slack.nudges")) == ["PR 2", "PR 3"]
-    nudged = [i.title for i in built.panel("act.now").items if "the reviewers" in i.title]
+    nudged = [i.title for i in built.act_now() if "the reviewers" in i.title]
     assert sorted(nudged) == ["Ping the reviewers: PR 2", "Ping the reviewers: PR 3"]
 
 

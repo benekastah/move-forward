@@ -282,7 +282,7 @@ def test_act_now_ranks_my_prs_and_reviews_by_what_github_knows_of_them() -> None
     dashboard = build(
         github=snapshot(mine=[ready], direct_requests=[small, big]),
     )
-    act = panel(dashboard, "act.now").items
+    act = dashboard.act_now()
     assert [(i.title, i.details[0]) for i in act] == [
         (f"Merge: {ready.title}", "why: quick, closes acme/widgets#3"),
         (f"Review: {small.title}", "why: quick, alice waiting"),

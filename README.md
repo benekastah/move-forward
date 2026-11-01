@@ -113,7 +113,10 @@ Plugins add commands of their own, `mfd <plugin> ...`: see
 ## Panels
 
 The page has **Act now** on top: the best next actions across every tool, at
-most 7, no more than 3 from one plugin, one per PR or ticket. Each says what to
+most 7, no more than 3 from one plugin, one per PR or ticket. They're shown in a
+panel per plugin, so they flow across the page, the panel with the best item
+first, and each is badged with its place overall (`#1`, `#2`, ...); focus mode's
+Act now goes through them in that order. Each says what to
 do and why it's there ("quick, closes APP-12, alice waiting"), and anything
 else due on the same subject ("also: Fix CI"). Finishing something counts
 most, then quick work, then someone waiting; blocked work is left out. Each

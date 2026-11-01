@@ -67,6 +67,6 @@ def test_a_ticket_whose_prs_merged_is_nominated_to_close() -> None:
         github=snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)]),
         jira=JiraSnapshot(issues=[issue("APP-1", status="In Review")]),
     )
-    [closing] = [i for i in panel(dashboard, "act.now").items if "APP-1" in i.title]
+    [closing] = [i for i in dashboard.act_now() if "APP-1" in i.title]
     assert closing.title == "Move to Closed: APP-1 Do the thing"
     assert closing.details[0] == "why: quick, closes APP-1"

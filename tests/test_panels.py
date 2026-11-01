@@ -409,7 +409,7 @@ def test_a_close_out_entry_is_nominated_to_finish() -> None:
             entry("APP-3 Stuck", [todo("ship", "quick")], **{"Blocked on": ["infra"]}),
         ]
     )
-    act = built.panel("act.now").items
+    act = built.act_now()
     assert [(i.title, i.details[0]) for i in act] == [
         ("tick the box: APP-1 Almost", "why: quick, closes APP-1 Almost")
     ]

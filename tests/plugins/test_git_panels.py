@@ -170,7 +170,7 @@ def test_git_keeps_its_snapshot_in_its_tables() -> None:
 def test_a_merged_branch_still_here_is_nominated_to_delete() -> None:
     merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
     local = local_snapshot(branches=[local_branch("me/done", upstream="origin/me/done")])
-    act = panel(build(github=snapshot(merged_recent=[merged]), local=local), "act.now").items
+    act = build(github=snapshot(merged_recent=[merged]), local=local).act_now()
     assert [(i.title, i.details[0]) for i in act] == [
         ("Delete the branch: me/done: PR merged 1d ago", "why: quick")
     ]

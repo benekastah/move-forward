@@ -129,7 +129,7 @@ def test_act_now_buttons_snooze_dismiss_pin_and_unpin(monkeypatch: pytest.Monkey
     )
 
     def act() -> list[Item]:
-        return refresh.build_dashboard(config, db, NOW).panel("act.now").items
+        return refresh.build_dashboard(config, db, NOW).act_now()
 
     first, second = act()
     pin = next(a for a in second.actions if a.label == "Pin")
