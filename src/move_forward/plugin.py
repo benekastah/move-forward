@@ -209,6 +209,7 @@ def collect_into[T: BaseModel](
     snapshots = SnapshotRepository(db)
     try:
         result = collector()
+        store(result)  # one transaction: on failure, the last good result is still there
     except Exception as e:  # noqa: BLE001 - one failing source must not stop the others
         if shell.stopping():
             return None  # ctrl-c interrupted the commands; nothing to record
@@ -216,6 +217,5 @@ def collect_into[T: BaseModel](
         log.debug("%s", traceback.format_exc())
         snapshots.save_error(source, now, f"{type(e).__name__}: {e}")
         return None
-    store(result)
     snapshots.save_fetched(source, now)
     return result

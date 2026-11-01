@@ -69,7 +69,11 @@ class IssueRepository:
 
     def replace(self, snapshot: JiraSnapshot) -> None:
         """Keep the tickets a refresh found, in place of the last refresh's."""
-        issues = snapshot.issues
+        # A search's pages can overlap: the same ticket twice is kept once, at its first place.
+        firsts: dict[str, JiraIssue] = {}
+        for issue in snapshot.issues:
+            firsts.setdefault(issue.key, issue)
+        issues = list(firsts.values())
         with self._db.transaction() as conn:
             conn.execute("DELETE FROM jira_issues")  # and, by cascade, their labels and blockers
             conn.executemany(

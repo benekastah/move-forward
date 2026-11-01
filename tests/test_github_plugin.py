@@ -159,3 +159,15 @@ def test_derived_data_moves_from_json_and_round_trips() -> None:
     assert store.load() == derived
     store.replace(DerivedSnapshot())
     assert store.load() == DerivedSnapshot()
+
+
+def test_a_pr_a_search_found_twice_is_kept_once_at_its_first_place() -> None:
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    repo = PrRepository(db)
+    repo.replace(snapshot(mine=[pr(1), pr(2), pr(1, title="again")]))
+    loaded = repo.load()
+    assert loaded is not None and [(p.number, p.title) for p in loaded.mine] == [
+        (1, "PR 1"),
+        (2, "PR 2"),
+    ]

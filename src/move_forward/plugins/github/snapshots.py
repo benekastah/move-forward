@@ -60,7 +60,11 @@ class PrRepository:
         """Keep what the searches found, in place of what the last refresh's found."""
         rows: dict[str, list[Params]] = defaultdict(list)
         for name in LISTS:
-            for position, pr in enumerate(getattr(snapshot, name)):
+            # A search's pages can overlap: the same PR twice is kept once, at its first place.
+            firsts: dict[str, PullRequest] = {}
+            for pr in getattr(snapshot, name):
+                firsts.setdefault(pr.url, pr)
+            for position, pr in enumerate(firsts.values()):
                 key = (name, pr.url)
                 rows["github_prs"].append(
                     (

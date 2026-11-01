@@ -101,3 +101,20 @@ def test_a_plugin_can_keep_its_snapshot_itself(
     assert "git is gone" in (SnapshotRepository(db).all()["git"].error or "")
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
     assert graph.get("repo", "acme/widgets") is not None
+
+
+class _GitThatCantStore(_GitInKv):
+    def store(self, ctx: Context[GitConfig], snapshot: LocalSnapshot) -> None:
+        raise RuntimeError("disk full")
+
+
+def test_a_failing_store_is_recorded_like_a_failing_collect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    swap = {"git": _GitThatCantStore()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    config = Config.model_validate({"email": "me@x", "git": {"repos": []}})
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    refresh.refresh(config, db, NOW)
+    assert "disk full" in (SnapshotRepository(db).all()["git"].error or "")

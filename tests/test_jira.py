@@ -185,3 +185,16 @@ def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
     repo.replace(JiraSnapshot(issues=[bare]))
     assert repo.load() == JiraSnapshot(issues=[bare])
     assert db.query("SELECT * FROM jira_issue_labels") == []  # gone with their tickets
+
+
+def test_a_ticket_a_search_found_twice_is_kept_once() -> None:
+    db = Database(":memory:")
+    db.migrate("jira", MIGRATIONS)
+    first = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
+    other = first.model_copy(update={"key": "APP-3"})
+    repo = IssueRepository(db)
+    repo.replace(JiraSnapshot(issues=[first, other, first.model_copy(update={"summary": "x"})]))
+    assert [(i.key, i.summary) for i in repo.load().issues] == [
+        (first.key, first.summary),
+        ("APP-3", first.summary),
+    ]
