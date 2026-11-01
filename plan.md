@@ -401,8 +401,8 @@ panel useful:
    with `head`, `draft` and `requested_users`. `graph.of_kind("github.pr", PrView)` returns
    validated instances, and a mismatch raises. If a publisher renames an attribute, that
    consumer's tests fail instead of the page quietly showing less.
-4. **The docs follow the models.** `docs/entities.md` is generated from the kind models, or
-   a test checks it against them.
+4. **The docs follow the models.** A test checks `docs/entities.md` against the kind
+   models.
 
 #### Units of work
 
