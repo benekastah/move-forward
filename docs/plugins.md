@@ -2,7 +2,10 @@
 
 Plugins never import or call each other. Each one publishes entities to the graph and
 reads what the others publish; [graph.md](graph.md) explains the graph, and
-[entities.md](entities.md) lists every kind and attribute.
+[entities.md](entities.md) lists every kind and attribute. Each plugin has a page of
+its own: [github](plugins/github.md), [git](plugins/git.md),
+[git_stack](plugins/git_stack.md), [jira](plugins/jira.md), [slack](plugins/slack.md)
+and [notes](plugins/notes.md).
 These diagrams show who publishes and who reads what. Keep them in step with the code: a
 change to what a plugin publishes or reads, to its item actions or to its `requires`
 updates this file in the same commit.

@@ -49,7 +49,7 @@ class LinearConfig(Strict):
 
 - Config models subclass `Strict`, which rejects unknown keys: a typo is an error.
 - Every field has a docstring.
-- Every key appears in four places: the model, the README's section for the plugin,
+- Every key appears in four places: the model, the plugin's page in `docs/plugins/`,
   `mfd init`'s rendered config as a commented default (`init.py`), and
   `mfd init --example` (`cli.py`). A plugin can ask its own setup questions in
   `init_questions(ask)`.
@@ -248,8 +248,9 @@ Tests go in `tests/plugins/`, named after the plugin (`test_linear_*.py`).
 
 ## Docs to update in the same commit
 
-- The README: the plugins table, the plugin's section (panels, config keys, commands,
-  endpoints).
+- The plugin's page, `docs/plugins/<name>.md` (copy one of the others): its config and
+  setup, what it publishes, its panels, what it nominates for Act now, its buttons, pages
+  and commands. Add a row for it to the README's plugins table.
 - [entities.md](entities.md) for its kinds, [plugins.md](plugins.md) for what it publishes
   and reads.
 - `mfd init`'s rendered config and `mfd init --example` for its config keys.

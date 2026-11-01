@@ -53,9 +53,11 @@ is what's left to build.
   tests, and stack the plugin PR on it (`git stack branch`).
 - **Keep the docs up to date as you code**, in the same commit as the change,
   not in a docs pass afterwards:
-  - the README: panels, config keys, commands, command-line options and HTTP
-    endpoints. The available plugins table and the API section must match the
-    code.
+  - the README for core: its config keys, commands, command-line options,
+    HTTP endpoints and the page; its plugins table must match the code.
+  - the plugin's page, `docs/plugins/<name>.md`, for a plugin: its config keys
+    and setup, what it publishes, its panels, what it nominates for Act now, its
+    buttons, pages and commands.
   - `docs/entities.md`: a new entity kind or attribute, or a change to what
     one means or who publishes it. `tests/test_entities_doc.py` checks its
     kinds and attributes against the plugins' kind models.
@@ -72,7 +74,7 @@ is what's left to build.
   Before committing, look for docs the change made untrue: search the docs
   and docstrings for the names you renamed, moved or removed.
 - **Every config key appears in four places**: its model (with a docstring),
-  the README, `mfd init`'s rendered config (as a commented default, see
+  the README (core's) or the plugin's page in `docs/plugins/`, `mfd init`'s rendered config (as a commented default, see
   `init.py`) and `mfd init --example` (`cli.py`). Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
   `MOVED_SETTINGS` in `config.py`).

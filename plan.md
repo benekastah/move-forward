@@ -30,7 +30,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 - `mfd init` asks which plugins to set up, as one list answer checked against the registry
   (default all; notes always on), then each chosen plugin's `init_questions`.
-- README sections per plugin.
 
 ## Follow-ups
 
