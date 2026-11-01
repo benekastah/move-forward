@@ -9,7 +9,7 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, keychain, localtime, registry, reload, tls
+from . import auth, init, keychain, localtime, registry, supervisor, tls
 from . import config as config_module
 from .db import Database
 from .plugin import CliHandler
@@ -264,6 +264,11 @@ def main(argv: list[str] | None = None) -> int:
     config = config_module.load(config_path)
     if args.command == "token":
         return _token(config, config_path, args)
+    if args.command == "serve" and not supervisor.supervised():
+        # The server runs in a child process, which this one replaces on a change (see
+        # `supervisor`); the child opens the database and serves.
+        full_argv = [sys.argv[0], *(sys.argv[1:] if argv is None else argv)]
+        return supervisor.supervise(full_argv, config_path, code=args.reload)
     token = auth.load_or_create(auth.token_path(config.db_path))
     if args.command == "open":
         _open(auth.login_url(args.port or config.port, token, scheme(config)))
@@ -291,10 +296,10 @@ def main(argv: list[str] | None = None) -> int:
         graph, _ = stored_graph(db, plugins)
         return plugin_commands[args.command](e.ctx, graph, args)
     if args.command == "serve":
+        supervisor.serve_supervised()
         port = args.port or config.port
         if args.open:
             _open(auth.login_url(port, token, scheme(config)))
-        reload.start(config_path, code=args.reload)
         serve(config, db, token, port)
     return 0
 

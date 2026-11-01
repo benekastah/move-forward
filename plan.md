@@ -152,9 +152,8 @@ Each plugin refreshes on its own `refresh_seconds` now. What's left:
 - **Windows, on a real machine.** CI passes on Windows, but these need trying by hand:
   `py dev.py install` (the PATH change, the `mfd.cmd` shim, the hooks through `py -3`);
   `mfd cert --trust`, then Edge, Chrome and Firefox (which should read the Windows store)
-  on `https://127.0.0.1`; `mfd serve` restarting on a config change, since `os.execv` on
-  Windows starts a new process and exits rather than replacing it (the console may return
-  to its prompt with the server still running); ctrl-c stopping a refresh in flight;
+  on `https://127.0.0.1`; `mfd serve` replacing its server on a config change, and
+  ctrl-c stopping it (the server ignores ctrl-c and the parent ends it);
   `mfd token set` with Credential Manager; git-stack itself on Windows; and repo paths
   compared as `Path`s (case, `~`, separators), including those stored in `notes_ice`.
 - **Skill stand-ins for missing notes fields.** The move-forward skill keeps some state

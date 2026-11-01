@@ -45,7 +45,7 @@ def test_restart_command_drops_one_shot_flags() -> None:
 
 
 class Restarted(Exception):
-    """Raised by the fake restart; the real one execs and never returns."""
+    """Raised by the fake restart, to end the watch."""
 
 
 def test_watch_restarts_once_a_change_compiles(

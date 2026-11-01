@@ -1,19 +1,16 @@
-"""Restart the server when its config changes, and with `mfd serve --reload` (for
-development) when its source changes too.
+"""Watching for the changes that restart `mfd serve`'s server (see `supervisor`): its
+config file, and with `mfd serve --reload` (for development) the package's source too.
 
-A thread polls the modification times of the config file, and with `--reload` the
-package's files. When one changes, the changed Python files are compiled, then `mfd check` runs in a separate process
-to import every module and load the config. Only if both pass does the process replace
-itself with the same command; otherwise the error is logged, the running server carries on,
-and the next change tries again.
+The watcher polls their modification times. When one changes, the changed Python files are
+compiled, then `mfd check` runs in a separate process to import every module and load the
+config. Only if both pass is the server restarted; otherwise the error is logged, the
+running server carries on, and the next change tries again.
 """
 
 import logging
-import os
 import py_compile
 import subprocess
 import sys
-import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -99,25 +96,18 @@ def passes_check(argv: list[str] | None = None) -> bool:
     return True
 
 
-def restart() -> None:
-    command = restart_command(sys.argv)
-    log.info("restarting: %s", " ".join(command))
-    sys.stdout.flush()
-    sys.stderr.flush()
-    os.execv(command[0], command)
-
-
 def watch(
-    restart: Callable[[], None] = restart,
+    restart: Callable[[], None],
     root: Path | None = PACKAGE_DIR,
     extra: list[Path] | None = None,
     check: Callable[[], bool] = passes_check,
+    alive: Callable[[], bool] = lambda: True,
 ) -> None:
-    """Poll until a change compiles and passes `check`, then call `restart` (which normally
-    doesn't return). A change that fails is waited out until the next one."""
+    """Poll while `alive`, calling `restart` each time a change compiles and passes
+    `check`. A change that fails is waited out until the next one."""
     extra = extra or []
     before = snapshot(watched_files(root) + extra)
-    while True:
+    while alive():
         time.sleep(POLL_SECONDS)
         files = changed(before, root, extra)
         if not files:
@@ -128,11 +118,3 @@ def watch(
         if compiles(files) and check():
             log.info("changed: %s", ", ".join(p.name for p in files))
             restart()
-
-
-def start(config_path: Path, code: bool) -> None:
-    """Watch `config_path`, and with `code` the package's source, in a daemon thread."""
-    root = PACKAGE_DIR if code else None
-    threading.Thread(
-        target=watch, kwargs={"root": root, "extra": [config_path]}, name="reload", daemon=True
-    ).start()

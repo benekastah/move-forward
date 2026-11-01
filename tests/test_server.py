@@ -315,10 +315,10 @@ def test_ticking_a_todo_off_redirects_back_with_it(
     )
 
 
-def test_ctrl_c_shuts_down_quietly(
+def test_being_stopped_shuts_down_quietly(
     app: server.App, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    closed: list[bool] = []
+    closed = False
 
     class FakeServer:
         server_port = 1
@@ -330,7 +330,8 @@ def test_ctrl_c_shuts_down_quietly(
             raise KeyboardInterrupt
 
         def server_close(self) -> None:
-            closed.append(True)
+            nonlocal closed
+            closed = True
 
     monkeypatch.setattr(server, "ThreadingHTTPServer", FakeServer)
     monkeypatch.setattr(server.shell, "_stopping", threading.Event())  # don't stop other tests
@@ -341,7 +342,7 @@ def test_ctrl_c_shuts_down_quietly(
     monkeypatch.setattr(server.threading.Thread, "start", no_start)
     with caplog.at_level("INFO"):
         server.serve(app.config, app.db, TOKEN, 1)
-    assert closed == [True] and "shutting down on ctrl-c" in caplog.text
+    assert closed and "shutting down" in caplog.text
     assert server.shell.stopping()
     with pytest.raises(server.shell.CommandError, match="shutting down"):
         server.shell.run(["true"])

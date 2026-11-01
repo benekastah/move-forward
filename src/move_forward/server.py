@@ -468,8 +468,9 @@ def serve(config: Config, db: Database, token: str, port: int | None = None) -> 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        # The interpreter waits for a refresh in flight; `shell.stop` makes it wind down fast.
-        log.info("shutting down on ctrl-c…")
+        # Stopped by the `mfd serve` parent (see `supervisor`). The interpreter waits for a refresh
+        # in flight; `shell.stop` makes it wind down fast.
+        log.info("shutting down…")
         shell.stop()
     finally:
         server.server_close()
