@@ -6,10 +6,12 @@ recorded so far; no I/O.
 
 from collections import defaultdict
 from datetime import datetime
-from typing import Literal, cast
+from typing import Literal
+
+from pydantic import Field
 
 from ...domain import Model
-from ...graph import Entity, Graph
+from ...graph import Graph, Ref
 from ...page import Item, Panel, age
 from .config import SlackConfig
 from .models import Contact, Ping, TeamChannel
@@ -46,13 +48,44 @@ class PrPing(Model):
     """No review activity for `[github] stale_review_hours`."""
 
 
-def strings(value: object) -> list[str]:
-    """An attribute that should be a list of strings, as one; [] when it isn't a list."""
-    return [str(v) for v in cast(list[object], value)] if isinstance(value, list) else []
+class PrView(Model):
+    """What slack reads of a `pr` (github's)."""
+
+    id: str
+    title: str
+    url: str | None = None
+    state: str | None = None
+    repo: str
+    number: int
+    head: str
+    draft: bool
+    mine: bool
+    created_at: str
+    requested_users: list[str] = Field(default_factory=list[str])
+    requested_teams: list[str] = Field(default_factory=list[str])
+    review_blockers: list[str] | None = None
+    review_stale: bool | None = None
+    last_review_activity: str | None = None
 
 
-def _datetime(value: object) -> datetime | None:
-    return datetime.fromisoformat(value) if isinstance(value, str) else None
+class _RepoView(Model):
+    """What slack reads of a `repo` (git's): where it's checked out."""
+
+    dir: str
+
+
+class _IcedView(Model):
+    """What slack reads of an `iced_branch` (notes')."""
+
+    name: str
+
+
+def my_open_prs(graph: Graph) -> list[PrView]:
+    return [pr for pr in graph.view(PR, PrView) if pr.mine and pr.state == "open"]
+
+
+def _datetime(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value) if value else None
 
 
 def _slack_link(workspace: str, path: str) -> str | None:
@@ -75,19 +108,16 @@ class Pinger:
         self.users = users
         self.teams = teams
         self.recorded = pings
-        self.my_open_prs = [
-            pr for pr in graph.of_kind(PR) if pr.attrs.get("mine") and pr.state == "open"
-        ]
+        self.my_open_prs = my_open_prs(graph)
 
-    def _iced(self, pr: Entity) -> bool:
+    def _iced(self, pr: PrView) -> bool:
         """Whether the PR's branch is on ice: in the checkout of its repo that git knows, or,
         when git knows no checkout of it, in any repo."""
-        head = str(pr.attrs.get("head"))
-        checkout = self.graph.get(REPO, str(pr.attrs.get("repo")))
+        checkout = self.graph.view_one(REPO, pr.repo, _RepoView)
         if checkout is not None:
-            iced_id = f"{checkout.attrs.get('dir')}{BRANCH_ID_SEPARATOR}{head}"
+            iced_id = f"{checkout.dir}{BRANCH_ID_SEPARATOR}{pr.head}"
             return self.graph.get(ICED_BRANCH, iced_id) is not None
-        return any(e.attrs.get("name") == head for e in self.graph.of_kind(ICED_BRANCH))
+        return any(e.name == pr.head for e in self.graph.view(ICED_BRANCH, _IcedView))
 
     def _target(
         self,
@@ -96,7 +126,7 @@ class Pinger:
         link: str | None,
         destination: str,
         last: Ping | None,
-        pr: Entity,
+        pr: PrView,
     ) -> PingTarget:
         ping_kind: Literal["first", "follow-up"] = "follow-up" if last else "first"
         return PingTarget(
@@ -106,15 +136,15 @@ class Pinger:
             destination=destination,
             ping_kind=ping_kind,
             last_ping=last.sent_at if last else None,
-            message=self.config.ping_first.format(url=pr.ref.id)
+            message=self.config.ping_first.format(url=pr.id)
             if ping_kind == "first"
             else self.config.ping_follow_up,
         )
 
-    def _targets(self, pr: Entity, last_by_target: dict[str, Ping]) -> list[PingTarget]:
+    def _targets(self, pr: PrView, last_by_target: dict[str, Ping]) -> list[PingTarget]:
         targets: list[PingTarget] = []
         workspace = self.config.workspace_url
-        for login in strings(pr.attrs.get("requested_users")):
+        for login in pr.requested_users:
             user = self.users.get(login)
             link = (
                 _slack_link(workspace, f"team/{user.slack_id}") if user and user.slack_id else None
@@ -124,7 +154,7 @@ class Pinger:
                     "user", login, link, f"{login} (DM)", last_by_target.get(f"user:{login}"), pr
                 )
             )
-        for name in strings(pr.attrs.get("requested_teams")):
+        for name in pr.requested_teams:
             team = self.teams.get(name)
             link = None
             destination = f"team {name}"
@@ -151,29 +181,29 @@ class Pinger:
             any_ping[ping.pr_url] = ping
         result: dict[str, PrPing] = {}
         for pr in self.my_open_prs:
-            if pr.attrs.get("draft") or self._iced(pr):
+            if pr.draft or self._iced(pr):
                 continue
-            url = pr.ref.id
+            url = pr.id
             last_by_target = dict(by_pr.get(url, {}))
             # A nudge the skill logged without a target counts for every target.
             if (untargeted := any_ping.get(url)) and untargeted.target.startswith("unknown"):
-                for login in strings(pr.attrs.get("requested_users")):
+                for login in pr.requested_users:
                     last_by_target.setdefault(f"user:{login}", untargeted)
-                for name in strings(pr.attrs.get("requested_teams")):
+                for name in pr.requested_teams:
                     last_by_target.setdefault(f"team:{name}", untargeted)
             result[url] = PrPing(
                 pr_url=url,
                 title=pr.title,
                 targets=self._targets(pr, last_by_target),
-                blockers=strings(pr.attrs.get("review_blockers")),
-                stale=bool(pr.attrs.get("review_stale")),
+                blockers=pr.review_blockers or [],
+                stale=bool(pr.review_stale),
             )
         return result
 
     def nudges(self, pings: dict[str, PrPing]) -> Panel:
         items: list[Item] = []
         for pr in self.my_open_prs:
-            ping = pings.get(pr.ref.id)
+            ping = pings.get(pr.id)
             if not ping or ping.blockers or not ping.stale:
                 continue
             details = [
@@ -181,17 +211,17 @@ class Pinger:
                 + (f" (last {age(self.now, t.last_ping)} ago)" if t.last_ping else "")
                 for t in ping.targets
             ]
-            last = _datetime(pr.attrs.get("last_review_activity"))
+            last = _datetime(pr.last_review_activity)
             details.append(f"last review activity {age(self.now, last)} ago")
-            since = last or _datetime(pr.attrs.get("created_at")) or self.now
+            since = last or _datetime(pr.created_at) or self.now
             items.append(
                 Item(
                     title=pr.title,
                     url=pr.url,
-                    subtitle=f"{pr.attrs.get('repo')}#{pr.attrs.get('number')}",
+                    subtitle=f"{pr.repo}#{pr.number}",
                     details=details,
                     rank=-since.timestamp(),
-                    subjects=[pr.ref],
+                    subjects=[Ref(kind=PR, id=pr.id)],
                 )
             )
         return Panel(

@@ -4,11 +4,12 @@ what `mfd slack` shares with them."""
 import re
 
 from ... import render
+from ...domain import Model
 from ...graph import Graph
 from ...plugin import ActionError, Context
 from . import client
 from .config import SlackConfig
-from .pings import strings
+from .pings import my_open_prs
 from .repository import DASHBOARD, IMPORTED, LOOKED_UP, SlackRepository
 
 CONTACTS_PATH = "/slack/contacts"
@@ -17,6 +18,12 @@ PERSON = "person"
 SLACK_ID_RE = re.compile(r"^[UW][A-Z0-9]{6,}$")
 CHANNEL_ID_RE = re.compile(r"^[CG][A-Z0-9]{6,}$")
 CHANNEL_NAME_RE = re.compile(r"^#[\w-]+$")
+
+
+class _PersonView(Model):
+    """What slack reads of a `person` (github's): their commit email."""
+
+    email: str | None = None
 
 
 def _optional(value: str, pattern: re.Pattern[str], what: str) -> str | None:
@@ -66,10 +73,9 @@ def _requested(graph: Graph) -> tuple[set[str], set[str]]:
     """The people and teams my open PRs ask to review, by login and team."""
     users: set[str] = set()
     teams: set[str] = set()
-    for pr in graph.of_kind(PR):
-        if pr.attrs.get("mine") and pr.state == "open":
-            users.update(strings(pr.attrs.get("requested_users")))
-            teams.update(strings(pr.attrs.get("requested_teams")))
+    for pr in my_open_prs(graph):
+        users.update(pr.requested_users)
+        teams.update(pr.requested_teams)
     return users, teams
 
 
@@ -155,9 +161,9 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
     users, _ = _requested(graph)
     found: list[str] = []
     for login in sorted(users - set(known)):
-        person = graph.get(PERSON, login)
-        email = person.attrs.get("email") if person else None
-        if not isinstance(email, str):
+        person = graph.view_one(PERSON, login, _PersonView)
+        email = person.email if person else None
+        if email is None:
             continue
         slack_id = client.lookup_by_email(api_token, email)
         slack.save_looked_up(login, slack_id)
