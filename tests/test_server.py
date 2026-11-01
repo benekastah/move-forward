@@ -547,3 +547,10 @@ def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
     app.refresh_now({"git"})  # nothing of github's moved
     assert app._pending == set() and _GitHubWatchingGit.answers == []  # pyright: ignore[reportPrivateUsage]
     assert app.check_for_changes() == set()  # no change_check_seconds: never polled
+
+
+def test_secrets_in_query_parameters_are_left_out_of_the_log() -> None:
+    line = "GET /slack/callback?code=abc&state=xyz&ok=1 /login?token=t0k HTTP/1.1"
+    assert server._redact(line) == (  # pyright: ignore[reportPrivateUsage]
+        "GET /slack/callback?code=…&state=…&ok=1 /login?token=… HTTP/1.1"
+    )

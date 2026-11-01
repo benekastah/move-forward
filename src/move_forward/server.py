@@ -346,11 +346,13 @@ def _back_to_page(query: str, notice: str = "", extra: dict[str, str] | None = N
     return "/?" + urlencode(params) if params else "/"
 
 
-TOKEN_PARAM_RE = re.compile(r"([?&]token=)[^&\s]*")
+TOKEN_PARAM_RE = re.compile(r"([?&](?:token|code|state)=)[^&\s]*")
+"""Query parameters that carry secrets: the sign-in token, and an OAuth sign-in's code and
+state, as a tool's sign-in (Slack's) sends them back."""
 
 
 def _redact(text: str) -> str:
-    """`text` without the value of a `token` query parameter, for the log."""
+    """`text` without the values of secret query parameters, for the log."""
     return TOKEN_PARAM_RE.sub(r"\1…", text)
 
 
