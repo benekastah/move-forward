@@ -6,6 +6,11 @@ requests, PRs I reviewed, and my teams' PRs. Enabled by a `[github]` section.
 ## Config
 
 `refresh_seconds` (300) is how often it refreshes in the background: GitHub's API is rate-limited.
+It also refreshes soon after I get a notification about something in the org (a review
+requested, a review, a comment, CI): it polls my notifications as often as GitHub allows
+(every 60 seconds, usually), and GitHub answers "not modified" cheaply when there's nothing
+new. Changes that notify nobody, like a PR falling into conflict, wait for
+`refresh_seconds`.
 
 `[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
 fetched. Its conventions that differ between organisations are off by default:

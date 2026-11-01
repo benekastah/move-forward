@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from datetime import datetime, timedelta
 from typing import ClassVar
 
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from ...graph import Entity, Graph, Ref, attrs
 from ...page import Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
 from ...shell import CommandError
-from . import cli, client, derive
+from . import cli, client, derive, notifications
 from .config import GitHubConfig
 from .kinds import PersonAttrs, PrAttrs
 from .models import GitHubSnapshot, PullRequest
@@ -33,6 +34,10 @@ DERIVED = "derived"
 suggestions. Its status is recorded under that name; what it found goes to its tables."""
 PERSON = "person"
 REPO = "repo"
+NOTIFICATIONS_SEEN = "notifications_last_modified"
+"""The kv key of the notifications' last `Last-Modified`, for `changed`."""
+NOTIFICATIONS_WAIT = "notifications_poll_after"
+"""The kv key of when GitHub lets `changed` poll the notifications again."""
 
 
 def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
@@ -59,6 +64,25 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
         PrRepository(ctx.db).replace(snapshot)
+
+    change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
+
+    def changed(self, ctx: Context[GitHubConfig]) -> bool:
+        """Whether I have a notification about something in the org (a review requested, a
+        comment, a review, CI) newer than the last check. A "not modified" answer is cheap,
+        and GitHub's poll interval is kept to."""
+        wait = ctx.kv.get(NOTIFICATIONS_WAIT)
+        if wait and ctx.now < datetime.fromisoformat(wait):
+            return False
+        seen = ctx.kv.get(NOTIFICATIONS_SEEN)
+        found = notifications.fetch(seen)
+        if found is None:
+            return False
+        ctx.kv.set(NOTIFICATIONS_SEEN, found.last_modified)
+        ctx.kv.set(
+            NOTIFICATIONS_WAIT, (ctx.now + timedelta(seconds=found.poll_seconds)).isoformat()
+        )
+        return seen is not None and found.new_in(ctx.config.org, seen)
 
     def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
         return PrRepository(ctx.db).load()

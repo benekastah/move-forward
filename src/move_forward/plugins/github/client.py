@@ -17,9 +17,9 @@ COMMIT_EMAIL_LOOKUP_COUNT = 10
 PAGE_SIZE = 25
 """PRs per search page. Each carries threads, checks and events, and large pages time out."""
 PAGE_ATTEMPTS = 2
+"""GitHub sometimes answers a heavy search with an empty body; one retry usually fixes it."""
 PARALLEL_REQUESTS = 8
 """The searches and lookups `collect` runs at once; well under gh's rate limits."""
-"""GitHub sometimes answers a heavy search with an empty body; one retry usually fixes it."""
 
 
 class _Raw(BaseModel):
