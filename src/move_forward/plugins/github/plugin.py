@@ -135,7 +135,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         )
 
     def entities(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None) -> list[Entity]:
-        """`pr` for every PR in the snapshot, and a `person` for me."""
+        """`pr` for every PR in the snapshot, and a `person` for me and for everyone whose
+        email github knows."""
         if snapshot is None:
             return []
         team_names = {ctx.config.slug(team): team for team in ctx.teams}
@@ -154,10 +155,16 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                     entities[pr.url] = self._pr_entity(
                         ctx, pr, snapshot.login, state, mine, team_names
                     )
-        me = Entity(
-            ref=Ref(kind=PERSON, id=snapshot.login), title=snapshot.login, attrs={"me": True}
-        )
-        return [*entities.values(), me]
+        emails = PeopleRepository(ctx.db).emails()
+        people = [
+            Entity(
+                ref=Ref(kind=PERSON, id=login),
+                title=login,
+                attrs={"me": login == snapshot.login, "email": emails.get(login)},
+            )
+            for login in dict.fromkeys([snapshot.login, *emails])
+        ]
+        return [*entities.values(), *people]
 
     def url_for(self, ctx: Context[GitHubConfig], kind: str, id: str) -> str | None:
         return id if kind == PR else None

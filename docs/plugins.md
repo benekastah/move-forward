@@ -23,7 +23,7 @@ flowchart LR
     end
 
     github([github]) -- publishes --> pr
-    github -- "publishes (me)" --> person
+    github -- "publishes (me, emails)" --> person
     git([git]) -- publishes --> repo
     git -- "publishes (repo_dir, ahead, ...)" --> branch
     git_stack([git_stack]) -- "adds stack_parent, stack_status" --> branch

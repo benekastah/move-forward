@@ -1,16 +1,19 @@
-"""The GitHub plugin's contract with the others: the `pr` entities it publishes."""
+"""The GitHub plugin's contract with the others: the `pr` and `person` entities it
+publishes."""
 
 from conftest import ME, NOW, pr, snapshot
 
 from move_forward.db import Database
 from move_forward.plugin import Context
 from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.people import MIGRATIONS, PeopleRepository
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.repositories import KvRepository
 
 
 def _context(**config: object) -> Context[GitHubConfig]:
     db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
     return Context(
         config=GitHubConfig.model_validate({"org": "acme", **config}),
         email="me@acme.com",
@@ -49,7 +52,12 @@ def test_pr_entities_carry_state_ownership_tickets_and_team_names() -> None:
     assert "review_blockers" not in entities[theirs.url].attrs
 
 
-def test_i_am_a_person() -> None:
-    entities = GitHubPlugin().entities(_context(), snapshot())
-    me = next(e for e in entities if e.ref.kind == "person")
-    assert me.ref.id == ME and me.attrs == {"me": True}
+def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
+    ctx = _context()
+    PeopleRepository(ctx.db).replace_imported({"alice": "a@x", ME: "me@x"})
+    people = {
+        e.ref.id: e.attrs
+        for e in GitHubPlugin().entities(ctx, snapshot())
+        if e.ref.kind == "person"
+    }
+    assert people == {ME: {"me": True, "email": "me@x"}, "alice": {"me": False, "email": "a@x"}}

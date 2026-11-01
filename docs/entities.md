@@ -24,7 +24,7 @@ APP-1 is related to every PR whose branch, title or body mentions APP-1.
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pr` | github | the PR's URL | `open`, `merged` or `closed` | `ticket` keys from its branch, title and body |
-| `person` | github (only me, for now) | GitHub login | | |
+| `person` | github: me, and everyone it knows an email for | GitHub login | | |
 | `repo` | git | GitHub `owner/name` | | |
 | `branch` | git, git_stack | `<repo dir>\t<branch>` | | its `repo` |
 | `ticket` | jira | the issue key, e.g. `APP-1` | the issue's status | |
@@ -65,6 +65,7 @@ On my open PRs only:
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `me` | bool | the person using the dashboard |
+| `email` | string or null | their commit email, imported or looked up from commits |
 
 ### `repo`
 
