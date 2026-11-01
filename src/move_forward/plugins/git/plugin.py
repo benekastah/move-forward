@@ -48,7 +48,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
     change_check_seconds: ClassVar[int | None] = 5
 
-    def changed(self, ctx: Context[GitConfig]) -> bool:
+    def changed(self, ctx: Context[GitConfig], graph: Graph) -> bool:
         """Whether a repo's refs moved (see `changes`): reading a few files' times, cheap
         enough to do every few seconds."""
         now = changes.fingerprint(ctx.config.repos)

@@ -6,6 +6,7 @@ import pytest
 from conftest import NOW
 
 from move_forward.db import Database
+from move_forward.graph import Graph
 from move_forward.plugin import Context
 from move_forward.plugins.github import notifications
 from move_forward.plugins.github.config import GitHubConfig
@@ -59,7 +60,7 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
             db=db,
             kv=KvRepository(db, "github"),
         )
-        return plugin.changed(ctx)
+        return plugin.changed(ctx, Graph([]))
 
     assert not changed(0)  # the first look only notes where things stand
     assert not changed(0) and len(asked) == 1  # GitHub's poll interval isn't up

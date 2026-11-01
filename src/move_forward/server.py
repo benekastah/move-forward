@@ -27,9 +27,10 @@ from .refresh import (
     plugin_page,
     refresh,
     refresh_seconds,
+    stored_graph,
     to_collect,
 )
-from .registry import enabled
+from .registry import Enabled, enabled
 from .repositories import LayoutRepository
 
 log = logging.getLogger(__name__)
@@ -140,11 +141,14 @@ class App:
         """Ask the plugins just refreshed whether they `changed`, ignoring the answer, so
         what the refresh did itself isn't taken for a change."""
         now = time.monotonic()
-        for e in enabled(self.config, self.db, datetime.now(UTC)):
-            if e.name in names and e.plugin.change_check_seconds is not None:
-                self._last_checked[e.name] = now
+        plugins = enabled(self.config, self.db, datetime.now(UTC))
+        checked = [e for e in plugins if e.name in names and e.plugin.change_check_seconds]
+        graph = stored_graph(self.db, plugins)[0] if checked else None
+        for e in checked:
+            self._last_checked[e.name] = now
+            if graph is not None:
                 try:
-                    e.plugin.changed(e.ctx)
+                    e.plugin.changed(e.ctx, graph)
                 except Exception:
                     log.debug("%s: change check failed", e.name, exc_info=True)
 
@@ -154,17 +158,23 @@ class App:
         A check that fails is logged (at debug: its refresh shows the error) and tried again
         next time."""
         now = time.monotonic() if now is None else now
-        changed: set[str] = set()
-        for e in enabled(self.config, self.db, datetime.now(UTC)):
+        plugins = enabled(self.config, self.db, datetime.now(UTC))
+        due: list[Enabled] = []
+        for e in plugins:
             seconds = e.plugin.change_check_seconds
             last = self._last_checked.get(e.name)
             if seconds is None or e.name in self.refreshing:
                 continue
-            if last is not None and now - last < seconds:
-                continue
+            if last is None or now - last >= seconds:
+                due.append(e)
+        if not due:
+            return set()
+        graph, _ = stored_graph(self.db, plugins)  # once for every check due
+        changed: set[str] = set()
+        for e in due:
             self._last_checked[e.name] = now
             try:
-                if e.plugin.changed(e.ctx):
+                if e.plugin.changed(e.ctx, graph):
                     changed.add(e.name)
             except Exception:
                 log.debug("%s: change check failed", e.name, exc_info=True)

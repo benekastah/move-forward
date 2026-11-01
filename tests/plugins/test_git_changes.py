@@ -5,6 +5,7 @@ from pathlib import Path
 from conftest import NOW
 
 from move_forward.db import Database
+from move_forward.graph import Graph
 from move_forward.plugin import Context
 from move_forward.plugins.git import changes
 from move_forward.plugins.git.config import GitConfig
@@ -71,7 +72,7 @@ def test_the_plugin_says_changed_once_per_move_after_its_first_look(tmp_path: Pa
         kv=KvRepository(db, "git"),
     )
     plugin = GitPlugin()
-    assert not plugin.changed(ctx)  # nothing to compare against yet
+    assert not plugin.changed(ctx, Graph([]))  # nothing to compare against yet
     git(repo, "commit", "-q", "--allow-empty", "-m", "second")
-    assert plugin.changed(ctx)
-    assert not plugin.changed(ctx)
+    assert plugin.changed(ctx, Graph([]))
+    assert not plugin.changed(ctx, Graph([]))

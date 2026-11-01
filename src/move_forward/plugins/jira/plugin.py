@@ -199,7 +199,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
 
     change_check_seconds: ClassVar[int | None] = 60
 
-    def changed(self, ctx: Context[JiraConfig]) -> bool:
+    def changed(self, ctx: Context[JiraConfig], graph: Graph) -> bool:
         """Whether a ticket of mine was updated since the last look (and a minute before
         it, as Jira counts in whole minutes): a one-result search."""
         checked = ctx.kv.get(CHECKED)

@@ -67,7 +67,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
 
-    def changed(self, ctx: Context[GitHubConfig]) -> bool:
+    def changed(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
         """Whether I have a notification about something in the org (a review requested, a
         comment, a review, CI) newer than the last check. A "not modified" answer is cheap,
         and GitHub's poll interval is kept to."""

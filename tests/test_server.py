@@ -12,6 +12,7 @@ from conftest import ME, pr, snapshot
 from move_forward import registry, server
 from move_forward.config import Config
 from move_forward.db import Database
+from move_forward.graph import Graph
 from move_forward.page import Action, Item
 from move_forward.panels import Layout
 from move_forward.plugin import KEPT, ActionError, ActionResult, Context
@@ -478,6 +479,7 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
     app.config = app.config.model_copy(
         update={"git": GitConfig(repos=[]), "refresh_on_load_seconds": 120}
     )
+    migrate(app.config, app.db)  # git's tables, as `mfd serve` makes them
     assert app.intervals() == {"github": 300, "git": 60}
     assert app.due() == {"github", "git"}  # never refreshed
     app.refresh_now()
@@ -498,7 +500,7 @@ class _GitHubWithChecks(GitHubPlugin):
     change_check_seconds: ClassVar[int | None] = 60
     answers: ClassVar[list[bool | Exception]] = []
 
-    def changed(self, ctx: Context[GitHubConfig]) -> bool:
+    def changed(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer

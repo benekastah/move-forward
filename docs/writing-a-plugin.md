@@ -90,8 +90,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - A plugin that collects has a `refresh_seconds` setting in its section (with a default
   that suits its tool): the server refreshes it that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
-  request answered "not modified") sets `change_check_seconds` and implements
-  `changed(ctx)`: the server asks that often, and refreshes the plugin as soon as it says
+  request answered "not modified", another plugin's entities in the graph) sets
+  `change_check_seconds` and implements `changed(ctx, graph)`: the server asks that often, and refreshes the plugin as soon as it says
   True. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
   the server asks once more and ignores the answer, so what the refresh did itself isn't
   taken for a change. With `changed`, `refresh_seconds` can be long.
