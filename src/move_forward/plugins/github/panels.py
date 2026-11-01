@@ -28,22 +28,6 @@ from .prs import (
 MERGE_QUEUE_LOOKBACK = timedelta(days=2)
 PR = "pr"
 ENTRY = "entry"
-ICED_BRANCH = "iced_branch"
-REPO = "repo"
-BRANCH_ID_SEPARATOR = "\t"
-"""Joins a repo dir and a branch name in an `iced_branch` entity's id."""
-
-
-class _RepoView(Model):
-    """What github reads of a `repo` (git's): where it's checked out."""
-
-    dir: str
-
-
-class _IcedView(Model):
-    """What github reads of an `iced_branch` (notes')."""
-
-    name: str
 
 
 class _EntryView(Model):
@@ -51,16 +35,6 @@ class _EntryView(Model):
 
     merge_conditions: list[str] = Field(default_factory=list[str])
     open_todos: list[str] = Field(default_factory=list[str])
-
-
-def is_iced(graph: Graph, repo: str, head: str) -> bool:
-    """Whether a PR's branch is on ice: in the checkout of its repo that git knows, or, when
-    git knows no checkout of it, in any repo."""
-    checkout = graph.view_one(REPO, repo, _RepoView)
-    if checkout is not None:
-        iced_id = f"{checkout.dir}{BRANCH_ID_SEPARATOR}{head}"
-        return graph.get(ICED_BRANCH, iced_id) is not None
-    return any(e.name == head for e in graph.view(ICED_BRANCH, _IcedView))
 
 
 def pr_ref(pr: PullRequest) -> Ref:
@@ -119,9 +93,6 @@ class Builder:
         self.me = snapshot.login if snapshot else ""
         self.mine: list[PullRequest] = snapshot.mine if snapshot else []
 
-    def _iced(self, pr: PullRequest) -> bool:
-        return is_iced(self.graph, pr.repo, pr.head)
-
     def _entries(self, pr: PullRequest) -> list[_EntryView]:
         """The work entries about the PR or its tickets."""
         return self.graph.view_related(pr_ref(pr), ENTRY, _EntryView)
@@ -156,7 +127,7 @@ class Builder:
     def needs_reviewer(self) -> Panel:
         items: list[Item] = []
         for pr in self.mine:
-            if pr.is_draft or approved(pr) or pr.requested_users or self._iced(pr):
+            if pr.is_draft or approved(pr) or pr.requested_users:
                 continue
             details: list[str] = []
             if pr.requested_teams:
@@ -179,8 +150,6 @@ class Builder:
     def feedback(self) -> Panel:
         items: list[Item] = []
         for pr in self.mine:
-            if self._iced(pr):
-                continue
             threads = unresolved_threads(pr)
             details = [
                 f"{'(outdated) ' if t.outdated else ''}{t.author or '?'} on {t.path or 'PR'}:"
@@ -204,7 +173,7 @@ class Builder:
         items: list[Item] = []
         cutoff = self.now - MERGE_QUEUE_LOOKBACK
         for pr in self.mine:
-            if pr.is_draft or self._iced(pr):
+            if pr.is_draft:
                 continue
             failing = [c for c in failing_checks(pr) if c.name not in self.config.review_checks]
             details = [f"{c.name}: {c.state}" for c in failing]
@@ -227,7 +196,7 @@ class Builder:
     def conflicts(self) -> Panel:
         items: list[Item] = []
         for pr in self.mine:
-            if has_conflicts(pr) and not self._iced(pr):
+            if has_conflicts(pr):
                 items.append(
                     pr_item(
                         self.now,
@@ -246,7 +215,7 @@ class Builder:
         ready: list[Item] = []
         held: list[Item] = []
         for pr in self.mine:
-            if pr.is_draft or self._iced(pr) or pr.in_merge_queue:
+            if pr.is_draft or pr.in_merge_queue:
                 continue
             reasons: list[str] = []
             if not approved(pr):
@@ -286,8 +255,6 @@ class Builder:
     def metadata(self) -> Panel:
         items: list[Item] = []
         for pr in self.mine:
-            if self._iced(pr):
-                continue
             problems = [label for label in pr.labels if label in self.config.placeholder_labels]
             keys = ticket_keys(pr)
             prefix = self.config.ticket_link_prefix

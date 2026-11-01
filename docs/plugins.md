@@ -35,9 +35,8 @@ flowchart LR
     notes -- "publishes, pointing at what it hides" --> ice
     ice -. "hides what it covers" .-> core([core])
 
-    repo -. "checkouts: team PR scores, reviewer suggestions, iced checks" .-> github
+    repo -. "checkouts: team PR scores, reviewer suggestions" .-> github
     entry -. "merge conditions (Held)" .-> github
-    iced -. "skip iced work" .-> github
     pr -. "a branch's PR" .-> git
     iced -. "iced badge" .-> git
     branch -. "which checkouts to scan" .-> git_stack
