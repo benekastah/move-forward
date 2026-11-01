@@ -1,19 +1,22 @@
 """The `mfd` command."""
 
 import argparse
+import getpass
 import logging
+import os
 import sys
 import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, localtime, registry, reload, tls
+from . import auth, init, keychain, localtime, registry, reload, tls
 from . import config as config_module
 from .db import Database
 from .plugin import CliHandler
 from .refresh import build_dashboard, refresh, stored_graph
 from .registry import enabled, enabled_names, migrate
 from .server import scheme, serve
+from .shell import CommandError
 
 EXAMPLE_CONFIG = """\
 # move-forward configuration. Paths may start with ~. A plugin is enabled by its
@@ -128,12 +131,69 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         "--example", action="store_true", help="write a commented example instead of asking"
     )
     init_parser.add_argument("--force", action="store_true", help="overwrite an existing config")
+    token_parser = commands.add_parser(
+        "token", help="store a plugin's API token in the system's secret store, or check it"
+    )
+    token_commands = token_parser.add_subparsers(dest="token_command", required=True)
+    set_parser = token_commands.add_parser("set", help="ask for a token and store it")
+    set_parser.add_argument("plugin", choices=_token_plugins())
+    token_commands.add_parser("check", help="say where each plugin's token is found")
     plugin_commands = {
         plugin.name: plugin.cli(commands.add_parser(plugin.name, help=plugin.cli_help))
         for plugin in registry.PLUGINS
         if plugin.cli_help
     }
     return parser, plugin_commands
+
+
+def _token_plugins() -> list[str]:
+    """The plugins whose section says where their token is (see `keychain.TokenSettings`)."""
+    fields = set(keychain.TokenSettings.__annotations__)
+    return [p.name for p in registry.PLUGINS if fields <= p.config_model.model_fields.keys()]
+
+
+def _token(config: config_module.Config, config_path: Path, args: argparse.Namespace) -> int:
+    """`mfd token set <plugin>`: ask for the plugin's token without echoing it and store it
+    in the system's secret store, for the top-level `email`. `mfd token check`: say where
+    each enabled plugin's token is found, without showing it."""
+    sections = {
+        name: section
+        for name in enabled_names(config)
+        if isinstance(section := getattr(config, name), keychain.TokenSettings)
+    }
+    if args.token_command == "check":
+        for name, section in sections.items():
+            if os.environ.get(section.token_env):
+                print(f"{name}: from ${section.token_env}")
+            elif keychain.read(section.keychain_service, config.email):
+                print(f"{name}: from the secret store ({section.keychain_service})")
+            else:
+                print(f"{name}: missing; run `mfd token set {name}`")
+        return 0
+    section = sections.get(args.plugin)
+    if section is None:
+        print(f"[{args.plugin}] isn't in {config_path}", file=sys.stderr)
+        return 1
+    try:
+        secret = getpass.getpass(f"{args.plugin} API token: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\nnothing stored", file=sys.stderr)
+        return 1
+    try:
+        keychain.write(section.keychain_service, config.email, secret)
+    except FileNotFoundError:
+        print(
+            f"no secret store: install `secret-tool` (libsecret), or set ${section.token_env}",
+            file=sys.stderr,
+        )
+        return 1
+    except (ValueError, CommandError) as e:
+        print(f"not stored: {e}", file=sys.stderr)
+        return 1
+    print(f"stored under {section.keychain_service} for {config.email}")
+    if os.environ.get(section.token_env):
+        print(f"note: ${section.token_env} is set, and is used before the secret store")
+    return 0
 
 
 def _cert(paths: tls.Paths, force: bool, trust: bool) -> int:
@@ -202,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"warning: {problem}")
         return 0
     config = config_module.load(config_path)
+    if args.command == "token":
+        return _token(config, config_path, args)
     token = auth.load_or_create(auth.token_path(config.db_path))
     if args.command == "open":
         _open(auth.login_url(args.port or config.port, token, scheme(config)))

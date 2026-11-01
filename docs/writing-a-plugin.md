@@ -63,8 +63,9 @@ class LinearConfig(Strict):
   on the first tab) or `asking.directories`. Keep the questions and guesses in a
   `setup.py` (see github's), with `init_template` (the optional keys, commented) and `init_example` (the
   required ones, commented, written when the plugin isn't chosen).
-- Secrets never go in the config: read them from the environment or the keychain, as jira
-  and slack do. Anything sent with a token must go over HTTPS (`move_forward.https`).
+- Secrets never go in the config. Give the section `token_env` and `keychain_service`, as
+  jira and slack do, and read the token with `keychain.token(config, email)`: then
+  `mfd token set <plugin>` stores it and `mfd token check` finds it. Anything sent with a token must go over HTTPS (`move_forward.https`).
 
 ## Collecting and storing
 

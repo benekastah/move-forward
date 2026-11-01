@@ -15,12 +15,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
-from . import asking, keychain, registry
+from . import asking, registry
 from . import config as config_module
 from .asking import Asker, Complete, InitSetup, Prompt, choices, quiet
 from .config import Config
 from .plugin import Plugin
-from .plugins.jira.config import DEFAULT_JIRA_KEYCHAIN_SERVICE, DEFAULT_JIRA_TOKEN_ENV
+from .plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV
 
 OPTIONAL_SETTINGS = """\
 # Optional settings, with their defaults. Uncomment to change.
@@ -172,11 +172,9 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
     path.write_text(text)
     next_steps = f"wrote {path}\nrun `mfd serve --open` to start"
     if "\n[jira]\n" in text:
-        service = DEFAULT_JIRA_KEYCHAIN_SERVICE
         next_steps += (
             "\n\nFor Jira, create an API token at"
-            " https://id.atlassian.com/manage-profile/security/api-tokens, then either"
-            f" export {DEFAULT_JIRA_TOKEN_ENV} or store it in the system's secret store:\n"
-            f"  {keychain.how_to_store(service, '<jira email>')}"
+            " https://id.atlassian.com/manage-profile/security/api-tokens, then store it"
+            f" with `mfd token set jira` (or export {DEFAULT_JIRA_TOKEN_ENV})"
         )
     return next_steps

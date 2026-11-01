@@ -107,6 +107,8 @@ before the command's name.
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
+| `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account. |
+| `mfd token check` | Say where each enabled plugin's token is found: its environment variable, the secret store, or nowhere. Never prints a token. |
 
 Plugins add commands of their own, `mfd <plugin> ...`: see
 [notes](docs/plugins/notes.md#commands), [slack](docs/plugins/slack.md#commands) and

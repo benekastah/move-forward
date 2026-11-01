@@ -27,15 +27,20 @@ def stopping() -> bool:
     return _stopping.is_set()
 
 
-def run(args: list[str], cwd: Path | None = None, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> str:
-    """Run a command and return its stdout.
+def run(
+    args: list[str],
+    cwd: Path | None = None,
+    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+    input: str | None = None,
+) -> str:
+    """Run a command, with `input` on its stdin, and return its stdout.
 
     Raises CommandError if it exits non-zero, or if `stop` was called.
     """
     if _stopping.is_set():
         raise CommandError(f"{args[0]}: not run, shutting down")
     result = subprocess.run(
-        args, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False
+        args, cwd=cwd, input=input, capture_output=True, text=True, timeout=timeout, check=False
     )
     if result.returncode != 0:
         shown = " ".join(args)

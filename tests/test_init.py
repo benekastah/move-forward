@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from move_forward import asking, config, init, keychain
+from move_forward import asking, config, init
 from move_forward.plugins.git import setup as git_setup
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.github import setup as github_setup
@@ -112,7 +112,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     assert loaded.slack.workspace_url == "https://o.slack.com"
     assert loaded.git.my_branch_prefixes == ["jane/"] and loaded.port == 9000
     assert loaded.jira is not None and loaded.jira.site == "https://o.atlassian.net"
-    assert keychain.how_to_store("move-forward-jira", "<jira email>") in message
+    assert "`mfd token set jira`" in message
     assert "# status_closed" in path.read_text()
 
 
