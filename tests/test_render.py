@@ -256,3 +256,18 @@ def test_actions_with_an_input_render_a_text_field() -> None:
         " placeholder='Jira key' required><button type='submit' class='secondary small'>Link</button>"
         in html
     )
+
+
+def test_only_web_and_dashboard_urls_become_links() -> None:
+    item = page.Item(
+        title="sneaky",
+        url="javascript:alert(1)",
+        links=[
+            page.Link(text="also", url="javascript:alert(2)"),
+            page.Link(text="ok", url="https://x/1"),
+        ],
+        actions=[page.Action(name="", label="Go", fields={}, href="javascript:alert(3)")],
+    )
+    html = render._item(item)  # pyright: ignore[reportPrivateUsage]
+    assert "javascript:" not in html
+    assert "<a href='https://x/1'" in html and "sneaky" in html and "also" in html
