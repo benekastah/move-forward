@@ -7,7 +7,7 @@ Kinds and their attributes are a published contract, listed in `docs/entities.md
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 
-from pydantic import Field, JsonValue
+from pydantic import BaseModel, Field, JsonValue
 
 from .domain import Model
 
@@ -126,3 +126,19 @@ class Graph:
         if not ids:
             return {}
         return {e.ref.id: e for e in self._fetch(kind, ids) if e.ref.kind == kind}
+
+    def view[V: BaseModel](self, kind: str, model: type[V]) -> list[V]:
+        """The entities of `kind` as `model`: a consumer's own view of the fields it reads, from
+        an entity's `id`, `title`, `url`, `state` and attributes. Raises if one doesn't fit, so
+        a publisher's change that breaks a consumer fails its tests, not quietly the page."""
+        return [_as(entity, model) for entity in self.of_kind(kind)]
+
+    def view_one[V: BaseModel](self, kind: str, id: str, model: type[V]) -> V | None:
+        """One entity as `model` (see `view`); None when the graph doesn't have it."""
+        entity = self.get(kind, id)
+        return _as(entity, model) if entity else None
+
+
+def _as[V: BaseModel](entity: Entity, model: type[V]) -> V:
+    fields = {"id": entity.ref.id, "title": entity.title, "url": entity.url, "state": entity.state}
+    return model.model_validate({**entity.attrs, **fields})

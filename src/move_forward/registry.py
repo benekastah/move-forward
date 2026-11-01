@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .db import Database
 from .graph import Entity, Graph
@@ -100,7 +100,18 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     """The graph of every plugin's entities."""
     entities: list[Entity] = []
     for e in plugins:
-        entities += e.plugin.entities(e.ctx, snapshots.get(e.name))
+        for entity in e.plugin.entities(e.ctx, snapshots.get(e.name)):
+            model = e.plugin.kinds.get(entity.ref.kind)
+            try:
+                if model is not None:
+                    model.model_validate(entity.attrs)
+            except ValidationError as error:
+                # A plugin bug; tests catch it. The page goes on without the entity.
+                log.error(
+                    "%s published a bad %s %s: %s", e.name, entity.ref.kind, entity.ref.id, error
+                )
+                continue
+            entities.append(entity)
 
     def url_for(kind: str, id: str) -> str | None:
         return next((url for e in plugins if (url := e.plugin.url_for(e.ctx, kind, id))), None)

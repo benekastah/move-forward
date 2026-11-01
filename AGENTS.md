@@ -19,6 +19,10 @@ is what's left to build.
 - Plugins never import each other or read each other's config, snapshots or
   tables. What one needs from another goes through the graph. A plugin that's
   built on another declares it in `requires`.
+- A plugin declares the kinds it publishes in `kinds`, each with a model of its
+  attributes, and the graph checks its entities against them. A consumer reads
+  another plugin's entities with `graph.view(kind, View)`, through its own
+  small model of the fields it uses, not `attrs.get`.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
   plugin last fetched, and why it failed.

@@ -22,8 +22,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- Core: kind models declared by plugins and registered with core, validation when the
-  graph is built, and typed reads for consumers (`graph.of_kind(kind, View)`).
 - One branch per plugin: declare its kinds, namespaced (`github.pr`, `git.branch`, ...),
   and read others' kinds through views.
 - Consumers stop parsing entity ids: today git_stack and notes split `<repo dir>\t<branch>`

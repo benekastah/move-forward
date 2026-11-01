@@ -1,3 +1,7 @@
+import pytest
+from pydantic import ValidationError
+
+from move_forward.domain import Model
 from move_forward.graph import Entity, Graph, Ref
 
 PR = Ref(kind="pr", id="https://github.com/o/r/pull/1")
@@ -62,3 +66,26 @@ def test_two_plugins_entities_for_one_ref_merge_with_the_first_winning() -> None
     assert merged is not None and merged.title == "alice" and merged.url == "https://slack/a"
     assert merged.attrs == {"email": "a@x", "me": False, "slack_id": "U1"}
     assert len(graph.of_kind("person")) == 1
+
+
+class _PrView(Model):
+    id: str
+    state: str | None
+    head: str
+    draft: bool = False
+
+
+def test_a_consumer_reads_entities_through_its_own_view() -> None:
+    pr = Entity(
+        ref=Ref(kind="pr", id="https://pr/1"),
+        title="Fix",
+        state="open",
+        attrs={"head": "me/x", "draft": True, "extra": 1},
+    )
+    graph = Graph([pr, Entity(ref=Ref(kind="pr", id="https://pr/2"), title="No head")])
+    assert graph.view_one("pr", "https://pr/1", _PrView) == _PrView(
+        id="https://pr/1", state="open", head="me/x", draft=True
+    )
+    assert graph.view_one("pr", "https://pr/9", _PrView) is None
+    with pytest.raises(ValidationError, match="head"):
+        graph.view("pr", _PrView)  # the second PR has no head: loud, not quiet

@@ -6,15 +6,18 @@ from typing import ClassVar
 
 import pytest
 from conftest import NOW, dashboard, pr, snapshot
+from pydantic import BaseModel
 
 from move_forward import cli, refresh, registry, render
 from move_forward.config import Config
 from move_forward.db import Database
+from move_forward.domain import Model
 from move_forward.graph import Entity, Graph, Ref
 from move_forward.page import Action, Item
 from move_forward.plugin import CliHandler, Context, PageHandler
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
 
 
@@ -144,3 +147,32 @@ def test_a_plugin_failing_to_fetch_is_left_out(monkeypatch: pytest.MonkeyPatch) 
     registry.migrate(config, db)
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
     assert graph.fetch("ticket", ["APP-1"]) == {}
+
+
+class _TicketAttrs(Model):
+    summary: str
+
+
+class _Declaring(JiraPlugin):
+    """Jira, declaring its tickets need a summary, and publishing one without."""
+
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {"ticket": _TicketAttrs}
+
+    def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
+        return [
+            Entity(ref=Ref(kind="ticket", id="APP-1"), title="good", attrs={"summary": "s"}),
+            Entity(ref=Ref(kind="ticket", id="APP-2"), title="bad", attrs={"summary": 3.5}),
+        ]
+
+
+def test_an_entity_that_doesnt_fit_its_kind_is_left_out(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    plugins = [_Declaring() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config = Config.model_validate({"email": "me@x", "jira": {"site": "https://j"}})
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    assert [t.ref.id for t in graph.of_kind("ticket")] == ["APP-1"]
+    assert "published a bad ticket APP-2" in caplog.text

@@ -96,6 +96,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """e.g. "GitHub": the heading of the plugin's group on the page."""
     config_model: ClassVar[type[BaseModel]]
     """The model of the `[name]` section: C."""
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {}
+    """The entity kinds the plugin publishes, each with the model of its attributes. The graph
+    checks the plugin's entities of those kinds against them as it's built."""
     requires: ClassVar[list[str]] = []
     """Plugins whose entities this one is built on, e.g. `["git"]`; the config must enable
     them too."""
