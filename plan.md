@@ -2,7 +2,7 @@
 
 What's left to build in move-forward. Only what's still to do lives here: when a step or
 section is done, remove it in the same PR, and delete this file once it's empty. The code,
-`AGENTS.md` and `docs/` are the reference for what's built (so far, steps 1–5c of the
+`AGENTS.md` and `docs/` are the reference for what's built (so far, steps 1–5d of the
 plugin rearchitecture: core, the github, git, jira, slack and notes plugins, git_stack,
 authentication, CI on Linux, the notes in their own tables behind `mfd notes`, and slack's
 and github's own tables).
@@ -19,13 +19,6 @@ SQLite, behind a CLI and the HTTP API.
 
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
-
-### 5d. Prune without the clients
-
-- Core, first: a lookup hook, so a plugin can ask the plugin that owns a kind about an
-  entity older than its fetched data (a PR merged months ago, a resolved ticket).
-- The daily notes prune moves into notes and asks through that hook, instead of core's
-  `prune.py` calling the GitHub and Jira clients.
 
 ### 5e. Plugin tables instead of JSON
 

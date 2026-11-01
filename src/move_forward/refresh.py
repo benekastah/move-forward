@@ -55,7 +55,7 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
         if shell.stopping():
             return
         graph, _ = stored_graph(db, plugins)
-    prune_if_due(config, db, now, lambda: _prune_plugins(plugins, graph))
+    prune_if_due(db, now, lambda: _prune_plugins(plugins, graph))
     for e in plugins:
         try:
             e.plugin.after_collect(e.ctx, graph)

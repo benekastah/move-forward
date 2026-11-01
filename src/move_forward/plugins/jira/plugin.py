@@ -138,6 +138,24 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for issue in (snapshot.issues if snapshot else [])
         ]
 
+    def fetch(self, ctx: Context[JiraConfig], kind: str, ids: list[str]) -> list[Entity]:
+        """The resolved ones among tickets by key, with `resolved_at`; open ones are left
+        out."""
+        if kind != TICKET:
+            return []
+        token = client.token(ctx.config, ctx.email)
+        resolved = client.resolved_at(ctx.config, ctx.email, ids, token)
+        return [
+            Entity(
+                ref=ticket_ref(key),
+                title=key,
+                url=self.url_for(ctx, TICKET, key),
+                state="done",
+                attrs={"resolved_at": at.isoformat()},
+            )
+            for key, at in resolved.items()
+        ]
+
     def url_for(self, ctx: Context[JiraConfig], kind: str, id: str) -> str | None:
         return f"{ctx.config.site.rstrip('/')}/browse/{id}" if kind == TICKET else None
 

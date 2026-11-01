@@ -347,14 +347,14 @@ class _RawPrState(BaseModel):
     closed_at: datetime | None = Field(default=None, alias="closedAt")
 
 
-def pr_closed_at(url: str) -> datetime | None:
-    """When a PR was merged or closed, or None while it's open."""
+def pr_state(url: str) -> tuple[str, datetime | None]:
+    """A PR's state, `open`, `merged` or `closed`, and when it was merged or closed."""
     raw = _RawPrState.model_validate_json(
         run(["gh", "pr", "view", url, "--json", "state,mergedAt,closedAt"])
     )
     if raw.state == "OPEN":
-        return None
-    return raw.merged_at or raw.closed_at
+        return "open", None
+    return ("merged" if raw.merged_at else "closed"), raw.merged_at or raw.closed_at
 
 
 def collect(org: str, teams: list[str], history_days: int, now: datetime) -> GitHubSnapshot:

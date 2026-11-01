@@ -1,14 +1,19 @@
 """The GitHub plugin's contract with the others: the `pr` and `person` entities it
 publishes."""
 
+from datetime import UTC, datetime
+
+import pytest
 from conftest import ME, NOW, pr, snapshot
 
 from move_forward.db import Database
 from move_forward.plugin import Context
+from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.people import MIGRATIONS, PeopleRepository
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.repositories import KvRepository
+from move_forward.shell import CommandError
 
 
 def _context(**config: object) -> Context[GitHubConfig]:
@@ -61,3 +66,25 @@ def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
         if e.ref.kind == "person"
     }
     assert people == {ME: {"me": True, "email": "me@x"}, "alice": {"me": False, "email": "a@x"}}
+
+
+def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    states = {
+        "https://pr/1": ("merged", datetime(2026, 6, 1, tzinfo=UTC)),
+        "https://pr/2": ("open", None),
+    }
+
+    def pr_state(url: str) -> tuple[str, datetime | None]:
+        if url not in states:
+            raise CommandError("gh: not found")
+        return states[url]
+
+    monkeypatch.setattr(client, "pr_state", pr_state)
+    fetched = GitHubPlugin().fetch(
+        _context(), "pr", ["https://pr/1", "https://pr/2", "https://gone"]
+    )
+    assert [(e.ref.id, e.state, e.attrs["closed_at"]) for e in fetched] == [
+        ("https://pr/1", "merged", "2026-06-01T00:00:00+00:00"),
+        ("https://pr/2", "open", None),
+    ]
+    assert GitHubPlugin().fetch(_context(), "ticket", ["APP-1"]) == []

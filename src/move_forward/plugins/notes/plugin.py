@@ -4,6 +4,7 @@
 """
 
 import argparse
+from datetime import timedelta
 from typing import ClassVar
 
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 from ...graph import Entity, Graph
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, CliHandler, Context, Plugin
-from . import actions, cli
+from . import actions, cli, prune
 from .config import NotesConfig
 from .panels import Builder, entities
 from .repository import MIGRATIONS, NotesRepository
@@ -46,6 +47,10 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     def kept_item(self, ctx: Context[NotesConfig], graph: Graph, key: str) -> Item | None:
         """The todo `todo_done` just ticked off, by id, with its box ticked."""
         return _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
+
+    def prune(self, ctx: Context[NotesConfig], graph: Graph) -> list[str]:
+        cutoff = ctx.now - timedelta(days=ctx.prune_days)
+        return prune.prune(NotesRepository(ctx.db), graph, cutoff)
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)

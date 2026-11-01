@@ -34,6 +34,17 @@ APP-1 is related to every PR whose branch, title or body mentions APP-1.
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
 answers for `pr` (the id is the URL), jira for `ticket` (from its `site`).
 
+## Fetched on demand
+
+`Graph.fetch(kind, ids)` asks the plugin that owns a kind for entities by id, now, even ones
+long gone from its snapshot; it's slow, so it's for rare work like the daily prune. What a
+fetched entity carries:
+
+| Kind | Fetched by | state | Attributes |
+| --- | --- | --- | --- |
+| `pr` | github, with `gh pr view` | `open`, `merged` or `closed` | `closed_at`: ISO datetime or null, when it was merged or closed |
+| `ticket` | jira; only resolved ones | `done` | `resolved_at`: ISO datetime |
+
 ## Attributes
 
 ### `pr`

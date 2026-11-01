@@ -6,9 +6,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 
 from move_forward import https
+from move_forward.db import Database
 from move_forward.domain import JiraIssue
+from move_forward.plugin import Context
 from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.repositories import KvRepository
 
 RAW: dict[str, object] = {
     "key": "APP-1",
@@ -135,3 +139,34 @@ def test_redirects_are_not_followed_with_the_token() -> None:
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_resolved_tickets_are_fetched(monkeypatch: pytest.MonkeyPatch) -> None:
+    def resolved_at(
+        config: JiraConfig, email: str, keys: list[str], api_token: str
+    ) -> dict[str, datetime]:
+        assert api_token == "t" and keys == ["APP-1", "APP-2"]
+        return {"APP-1": datetime(2026, 6, 1, tzinfo=UTC)}
+
+    def token(config: JiraConfig, email: str) -> str:
+        return "t"
+
+    monkeypatch.setattr(jira, "token", token)
+    monkeypatch.setattr(jira, "resolved_at", resolved_at)
+    db = Database(":memory:")
+    ctx = Context(
+        config=JiraConfig(site="https://j"),
+        email="me@x",
+        teams=[],
+        prune_days=90,
+        now=datetime(2026, 10, 30, tzinfo=UTC),
+        db=db,
+        kv=KvRepository(db, "jira"),
+    )
+    [fetched] = JiraPlugin().fetch(ctx, "ticket", ["APP-1", "APP-2"])
+    assert (fetched.ref.id, fetched.url, fetched.attrs) == (
+        "APP-1",
+        "https://j/browse/APP-1",
+        {"resolved_at": "2026-06-01T00:00:00+00:00"},
+    )
+    assert JiraPlugin().fetch(ctx, "pr", ["x"]) == []

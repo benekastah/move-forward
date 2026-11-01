@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
 from move_forward import prune
-from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.plugins.github.config import GitHubConfig
+from move_forward.graph import Entity, Graph, Ref
 from move_forward.plugins.notes import markdown
+from move_forward.plugins.notes import prune as notes_prune
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
@@ -56,17 +56,43 @@ def _seeded() -> Database:
     return db
 
 
-def pr_closed_at(url: str) -> datetime | None:
-    return {PR + "1": OLD, PR + "2": OLD, PR + "3": OLD, PR + "4": RECENT}.get(url)
+CLOSED = {PR + "1": OLD, PR + "2": OLD, PR + "3": OLD, PR + "4": RECENT}
+RESOLVED = {"APP-1": OLD, "APP-2": OLD}
 
 
-def issues_resolved_at(keys: list[str]) -> dict[str, datetime]:
-    return {k: OLD for k in keys if k in ("APP-1", "APP-2")}
+def _graph(with_jira: bool = True) -> tuple[Graph, list[tuple[str, list[str]]]]:
+    """A graph whose fetch answers as github and (unless not `with_jira`) jira would."""
+    asked: list[tuple[str, list[str]]] = []
+
+    def fetch(kind: str, ids: list[str]) -> list[Entity]:
+        asked.append((kind, ids))
+        if kind == "pr":
+            return [
+                Entity(
+                    ref=Ref(kind="pr", id=u), title=u, attrs={"closed_at": CLOSED[u].isoformat()}
+                )
+                for u in ids
+                if u in CLOSED
+            ]
+        if kind == "ticket" and with_jira:
+            return [
+                Entity(
+                    ref=Ref(kind="ticket", id=k),
+                    title=k,
+                    attrs={"resolved_at": RESOLVED[k].isoformat()},
+                )
+                for k in ids
+                if k in RESOLVED
+            ]
+        return []
+
+    return Graph(fetch=fetch), asked
 
 
-def test_prune_notes_clears_finished_entries_and_old_done_todos() -> None:
+def test_finished_entries_and_old_done_todos_go() -> None:
     db = _seeded()
-    notices = prune.prune_notes(db, CUTOFF, pr_closed_at, issues_resolved_at)
+    graph, asked = _graph()
+    notices = notes_prune.prune(NotesRepository(db), graph, CUTOFF)
     assert notices == [
         "cleared entry APP-1 long done",
         "dropped 1 old done todo(s) from APP-2 done but still has a todo",
@@ -79,12 +105,14 @@ def test_prune_notes_clears_finished_entries_and_old_done_todos() -> None:
         f"{PR}4 PR without a ticket, merged recently",
     ]
     assert [t.text for t in entries[0].todos] == ["write the wrap-up", "tested"]
-    # A second run has nothing to do.
-    assert prune.prune_notes(db, CUTOFF, pr_closed_at, issues_resolved_at) == []
+    # One fetch per kind, for the entries with no open todos only.
+    assert asked == [("pr", [PR + "1", PR + "3", PR + "4"]), ("ticket", ["APP-1", "APP-3"])]
+    assert notes_prune.prune(NotesRepository(db), graph, CUTOFF) == []
 
 
 def test_entries_with_tickets_are_kept_without_jira() -> None:
-    notices = prune.prune_notes(_seeded(), CUTOFF, pr_closed_at, None)
+    graph, _ = _graph(with_jira=False)
+    notices = notes_prune.prune(NotesRepository(_seeded()), graph, CUTOFF)
     assert notices == [
         "dropped 1 old done todo(s) from APP-1 long done",  # kept: its ticket can't be checked
         "dropped 1 old done todo(s) from APP-2 done but still has a todo",
@@ -92,16 +120,16 @@ def test_entries_with_tickets_are_kept_without_jira() -> None:
     ]
 
 
-def test_plugins_prune_with_the_daily_run() -> None:
-    config = Config(email="me@x", github=GitHubConfig(org="acme"))
+def test_plugins_prune_once_a_day() -> None:
     db = Database(":memory:")
-    db.migrate("notes", MIGRATIONS)
     runs: list[datetime] = []
 
     def plugins() -> list[str]:
         runs.append(NOW)
         return []
 
-    prune.prune_if_due(config, db, NOW, plugins)
-    prune.prune_if_due(config, db, NOW + timedelta(hours=1), plugins)
+    prune.prune_if_due(db, NOW, plugins)
+    prune.prune_if_due(db, NOW + timedelta(hours=1), plugins)
     assert len(runs) == 1
+    prune.prune_if_due(db, NOW + timedelta(days=1), plugins)
+    assert len(runs) == 2

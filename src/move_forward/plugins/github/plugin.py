@@ -9,6 +9,7 @@ from ...graph import Entity, Graph, Ref
 from ...page import Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
 from ...repositories import SnapshotRepository
+from ...shell import CommandError
 from . import cli, client, derive
 from .config import GitHubConfig
 from .panels import PR, Builder
@@ -165,6 +166,28 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             for login in dict.fromkeys([snapshot.login, *emails])
         ]
         return [*entities.values(), *people]
+
+    def fetch(self, ctx: Context[GitHubConfig], kind: str, ids: list[str]) -> list[Entity]:
+        """PRs by URL, with their state and `closed_at`: when they were merged or closed."""
+        if kind != PR:
+            return []
+        found: list[Entity] = []
+        for url in ids:
+            try:
+                state, closed_at = client.pr_state(url)
+            except CommandError as e:
+                log.warning("couldn't fetch %s: %s", url, e)
+                continue
+            found.append(
+                Entity(
+                    ref=Ref(kind=PR, id=url),
+                    title=url,
+                    url=url,
+                    state=state,
+                    attrs={"closed_at": closed_at.isoformat() if closed_at else None},
+                )
+            )
+        return found
 
     def url_for(self, ctx: Context[GitHubConfig], kind: str, id: str) -> str | None:
         return id if kind == PR else None
