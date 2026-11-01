@@ -331,15 +331,20 @@ class NotesRepository:
             )
         return ice_id
 
-    def replace_covers(self, covers: dict[int, list[Ref]], only: int | None = None) -> None:
-        """Replace what the acts of icing hide besides their own items, or only act `only`'s."""
-        rows = [(i, r.kind, r.id) for i, refs in covers.items() for r in refs if only in (None, i)]
+    def replace_covers(self, ice_ids: list[int], covers: dict[int, list[Ref]]) -> None:
+        """Replace what the acts of icing `ice_ids` hide besides their own items. Others' are
+        left alone, e.g. a stack iced while a refresh found covers, and an act thawed meanwhile
+        stays gone."""
+        rows = [(i, r.kind, r.id, i) for i in ice_ids for r in covers.get(i, [])]
         with self._db.transaction() as conn:
-            if only is None:
-                conn.execute("DELETE FROM notes_ice_covers")
-            else:
-                conn.execute("DELETE FROM notes_ice_covers WHERE ice_id = ?", (only,))
-            conn.executemany("INSERT OR IGNORE INTO notes_ice_covers VALUES (?, ?, ?)", rows)
+            conn.executemany(
+                "DELETE FROM notes_ice_covers WHERE ice_id = ?", [(i,) for i in ice_ids]
+            )
+            conn.executemany(
+                "INSERT OR IGNORE INTO notes_ice_covers"
+                " SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM notes_ice WHERE id = ?)",
+                rows,
+            )
 
     def delete_ice(self, ice_id: int) -> None:
         """Thaw: forget the act of icing and what it covered."""

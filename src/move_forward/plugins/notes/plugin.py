@@ -46,7 +46,8 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         """Find again what each act of icing covers besides its items, e.g. new PRs from its
         branches."""
         notes = NotesRepository(ctx.db)
-        notes.replace_covers(covers(graph, notes.ices()))
+        ices = notes.ices()
+        notes.replace_covers([i.id for i in ices], covers(graph, ices))
 
     def panels(
         self, ctx: Context[NotesConfig], snapshot: BaseModel | None, graph: Graph

@@ -71,20 +71,19 @@ def test_iced_entities_hide_their_items_and_covers() -> None:
     assert graph.hidden(BRANCH) and graph.hidden(pr)
 
 
-def test_covers_are_replaced_wholesale_or_for_one_ice() -> None:
+def test_covers_are_replaced_only_for_the_ices_named_and_only_while_they_exist() -> None:
     db = Database(":memory:")
     db.migrate("notes", MIGRATIONS)
     notes = NotesRepository(db)
     first = notes.add_ice("a", NOW.date(), None, _ice(0, BRANCH.id).items)
     second = notes.add_ice("b", NOW.date(), None, _ice(0, f"{WIDGETS}\tme/y").items)
     one, two = Ref(kind="pr", id="1"), Ref(kind="pr", id="2")
-    notes.replace_covers({first: [one], second: [two]})
-    notes.replace_covers({first: [two], second: []}, only=first)
+    notes.replace_covers([first, second], {first: [one], second: [two]})
+    notes.replace_covers([first], {first: [two], second: []})  # second's are left alone
     assert notes.covers() == {first: [two], second: [two]}
-    notes.replace_covers({second: [one]})
-    assert notes.covers() == {second: [one]}
-    notes.delete_ice(second)
-    assert notes.covers() == {}
+    notes.delete_ice(second)  # thawed while a refresh was finding covers for it
+    notes.replace_covers([first, second], {first: [one], second: [one]})
+    assert notes.covers() == {first: [one]}
 
 
 def test_after_a_refresh_notes_finds_its_covers_again() -> None:

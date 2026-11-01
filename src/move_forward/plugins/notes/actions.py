@@ -109,7 +109,7 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
         items.append(IcedItem(kind=BRANCH, ref_id=branches[name].id, sha=branches[name].sha))
     note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
     ice_id = notes.add_ice(names[0], ctx.now.date(), note, items)
-    notes.replace_covers(covers(graph, notes.ices()), only=ice_id)
+    notes.replace_covers([ice_id], covers(graph, notes.ices()))
     return f"put {names[0]} on ice ({len(names)} branches)"
 
 
