@@ -188,3 +188,21 @@ def test_reopening_a_stack_whose_branches_are_gone_asks_first() -> None:
         reopen["me/gone"].confirm is not None
         and "me/gone no longer exist" in reopen["me/gone"].confirm
     )
+
+
+def test_a_branch_is_mine_by_my_commits_a_pr_of_mine_or_its_prefix() -> None:
+    def work(prefixes: list[str]) -> list[str]:
+        local = local_snapshot(
+            branches=[
+                local_branch("main"),
+                local_branch("fix-x", ahead_of_default=2, my_commits=1),  # my commits
+                local_branch("review-9", ahead_of_default=3, my_commits=0),  # someone else's
+                local_branch("me/old", ahead_of_default=1, my_commits=0),  # my prefix
+                local_branch("ancient", ahead_of_default=1),  # too old to count
+            ]
+        )
+        built = build(local=local, my_branch_prefixes=prefixes)
+        return sorted(i.title.split(":")[0] for i in panel(built, "git.local_work").items)
+
+    assert work(["me/"]) == ["fix-x", "me/old"]
+    assert work([]) == ["ancient", "fix-x"]  # without prefixes, uncounted branches still count

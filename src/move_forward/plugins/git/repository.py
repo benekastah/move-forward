@@ -66,7 +66,10 @@ MIGRATIONS = [
     INSERT OR IGNORE INTO git_my_dirs
         SELECT json_extract(repo.value, '$.dir'), d.value
         {_FROM_SNAPSHOT}, json_each(repo.value, '$.my_dirs') AS d WHERE {_GIT_SNAPSHOT};
+    """,
     """
+    ALTER TABLE git_branches ADD COLUMN my_commits INTEGER;  -- NULL: not counted
+    """,
 ]
 """The git plugin's migrations."""
 
@@ -93,7 +96,7 @@ class LocalRepository:
                 ],
             )
             conn.executemany(
-                "INSERT INTO git_branches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO git_branches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (
                         r.dir,
@@ -106,6 +109,7 @@ class LocalRepository:
                         b.gone,
                         b.committed_at.isoformat(),
                         b.ahead_of_default,
+                        b.my_commits,
                     )
                     for r in repos
                     for n, b in enumerate(r.branches)
@@ -140,6 +144,7 @@ class LocalRepository:
                     gone=bool(row["gone"]),
                     committed_at=datetime.fromisoformat(row["committed_at"]),
                     ahead_of_default=row["ahead_of_default"],
+                    my_commits=row["my_commits"],
                 )
             )
         my_dirs: defaultdict[str, list[str]] = defaultdict(list)

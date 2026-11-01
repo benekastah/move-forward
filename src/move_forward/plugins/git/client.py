@@ -116,6 +116,10 @@ def collect_repo(
         git(repo, "for-each-ref", "refs/heads", f"--format={_FOR_EACH_REF_FORMAT}")
     )
     recent = now - timedelta(days=commit_history_days)
+    try:
+        repo_email = my_email(repo)  # a repo can have its own, e.g. a personal project's
+    except CommandError:
+        repo_email = ""
     with_counts: list[Branch] = []
     for branch in branches:
         if (
@@ -130,6 +134,9 @@ def collect_repo(
             except CommandError:
                 count = None
             branch = branch.model_copy(update={"ahead_of_default": count})
+        if branch.name != default_branch and branch.committed_at >= recent:
+            mine = _my_commits(repo, default_branch, branch.name, repo_email or email)
+            branch = branch.model_copy(update={"my_commits": mine})
         with_counts.append(branch)
 
     try:
@@ -144,6 +151,26 @@ def collect_repo(
         branches=with_counts,
         my_dirs=_my_dirs(repo, default_branch, email, commit_history_days),
     )
+
+
+def _my_commits(repo: Path, default_branch: str, branch: str, email: str) -> int | None:
+    """My commits on `branch` that aren't on the default branch, by my email (taken as a
+    fixed string, not a pattern); None when git can't say."""
+    if not email:
+        return None
+    try:
+        return int(
+            git(
+                repo,
+                "rev-list",
+                "--count",
+                "--fixed-strings",
+                f"--author=<{email}>",
+                f"origin/{default_branch}..refs/heads/{branch}",
+            )
+        )
+    except CommandError:
+        return None
 
 
 def main_worktree(repo: Path) -> Path:

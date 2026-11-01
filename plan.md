@@ -125,13 +125,9 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   token and same-site checks, writing only the config file), with the browser's
   autocomplete for what can be fetched as it's filled in (the org's teams once the org is
   given, like `mfd init`'s tab completion).
-- **Which branches are mine.** `my_branch_prefixes` is a hint, not the test. Stronger
-  signals, for the git plugin: my commits ahead of the default branch (`git rev-list
-  --count --author=<my emails> origin/<default>..<branch>`, limited to recently active
-  branches), a PR of mine from the branch in any state (open, draft, merged, closed),
-  git-stack tracking it, a reflog that says I created it from a local branch, and being
-  checked out in one of my worktrees. All commits ahead by others and no PR of mine is a
-  review checkout: not mine, whatever its prefix.
+- **More signals for which branches are mine.** A PR of mine, my commits off the default
+  branch and `my_branch_prefixes` decide it now; git-stack tracking it and being checked
+  out in one of my worktrees could count too, if those miss some.
 - **Host-qualified repo ids.** `repo` ids are GitHub `owner/name`, from a GitHub-only
   remote regex. A second code host (Bitbucket, GitLab) needs ids like
   `github.com/acme/widgets` so they can't collide, and `git` parsing any host. A shared

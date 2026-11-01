@@ -19,7 +19,8 @@ def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
         directories,
     )
     prefixes = ask.list(
-        "Prefixes of your branch names (e.g. jane/; blank: every local branch counts as yours)",
+        "Prefixes of your branch names (e.g. jane/; blank for none: your commits and PRs still"
+        " mark branches as yours)",
         [],
         branch_prefix,
     )

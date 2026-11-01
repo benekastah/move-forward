@@ -10,7 +10,7 @@ from ...domain import Model
 from ...graph import Graph, Ref
 from ...page import Action, Item, Panel, Signals, age
 from .config import GitConfig
-from .models import LocalSnapshot
+from .models import Branch, LocalSnapshot
 
 TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
@@ -56,12 +56,16 @@ class Builder:
         prs = self.prs_by_branch.get((repo or "", branch), [])
         return next((pr for pr in prs if pr.state == state), None)
 
-    def _is_my_branch(self, repo: str | None, name: str) -> bool:
-        """Mine by prefix (when prefixes are configured) or by having a PR of mine."""
-        prefixes = self.config.my_branch_prefixes
-        if not prefixes or any(name.startswith(p) for p in prefixes):
+    def _is_my_branch(self, repo: str | None, branch: Branch) -> bool:
+        """Mine if a PR of mine comes from it, if I have commits on it that aren't on the
+        default branch, or by its name's prefix. Without prefixes, a branch whose commits
+        were counted and none are mine (a review checkout) isn't; one too old to count is."""
+        if (repo or "", branch.name) in self.prs_by_branch or branch.my_commits:
             return True
-        return (repo or "", name) in self.prs_by_branch
+        prefixes = self.config.my_branch_prefixes
+        if prefixes:
+            return any(branch.name.startswith(p) for p in prefixes)
+        return branch.my_commits is None
 
     def local_work(self) -> Panel:
         items: list[Item] = []
@@ -91,7 +95,7 @@ class Builder:
                     )
             for branch in repo.branches:
                 if branch.name == repo.default_branch or not self._is_my_branch(
-                    repo.github_repo, branch.name
+                    repo.github_repo, branch
                 ):
                     continue
                 reason = None
@@ -135,7 +139,7 @@ class Builder:
                     when = datetime.fromisoformat(merged.merged_at) if merged.merged_at else None
                     title = f"{b.name}: PR merged {age(self.now, when)} ago"
                     subtitle = repo.dir
-                elif b.gone and not b.ahead and self._is_my_branch(repo.github_repo, b.name):
+                elif b.gone and not b.ahead and self._is_my_branch(repo.github_repo, b):
                     title = f"{b.name}: upstream gone"
                     subtitle = f"{repo.dir} · last commit {age(self.now, b.committed_at)} ago"
                 else:

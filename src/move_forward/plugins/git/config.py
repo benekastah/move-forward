@@ -17,8 +17,8 @@ class GitConfig(Strict):
     """Main checkouts of the repos I work in, one per repo. Their other worktrees are found
     from them with `git worktree list`, so those aren't listed."""
     my_branch_prefixes: list[str] = Field(default_factory=list)
-    """Branch name prefixes that mark a branch as mine, e.g. `["jane/"]`. When set, branches
-    without one are left out of Cleanup and Local work unless they have a PR of mine."""
+    """Branch name prefixes that mark a branch as mine, e.g. `["jane/"]`. A branch with a PR
+    of mine, or commits of mine off the default branch, is mine whatever its name."""
     ignored_worktree_globs: list[str] = Field(
         default_factory=lambda: list(DEFAULT_IGNORED_WORKTREE_GLOBS)
     )

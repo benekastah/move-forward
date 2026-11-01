@@ -106,3 +106,28 @@ def test_a_listed_worktree_of_another_listed_repo_is_folded_into_it(tmp_path: Pa
     git(repo, "worktree", "add", "-q", "-b", "side", str(second))
     assert local.folded([second, other, repo]) == [repo, other]  # the main checkout stays
     assert local.folded([second, other]) == [second, other]  # the first listed, without it
+
+
+def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) -> None:
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _commit(origin, "a.txt")
+    repo = tmp_path / "repo"
+    git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _configure(repo)
+    git(repo, "switch", "-q", "-c", "mine")
+    _commit(repo, "m.txt")
+    git(repo, "switch", "-q", "-c", "stacked")  # on mine, with someone else's commit on top
+    (repo / "o.txt").write_text("o")
+    git(repo, "add", "o.txt")
+    git(repo, "-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
+    git(repo, "switch", "-q", "-c", "theirs", "main")
+    (repo / "t.txt").write_text("t")
+    git(repo, "add", "t.txt")
+    git(repo, "-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
+    git(repo, "switch", "-q", "main")
+
+    now = datetime.now(UTC) + timedelta(seconds=1)
+    result = local.collect_repo(repo, "nobody@example.com", now, 30, [])  # the repo's email wins
+    counted = {b.name: b.my_commits for b in result.branches}
+    assert counted == {"main": None, "mine": 1, "stacked": 1, "theirs": 0}
