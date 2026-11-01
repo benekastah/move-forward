@@ -49,9 +49,16 @@ def serve_supervised() -> None:
     """Set up a server `supervise` started: ignore ctrl-c, which the parent answers by
     stopping this server, and on macOS and Linux take that stop (SIGTERM) as ctrl-c, so the
     server winds down as it would. (Windows ends a process outright.)"""
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    # A handler, not SIG_IGN: the commands the server runs (git, gh) would inherit SIG_IGN
+    # and ignore ctrl-c too, but a handler is reset when they start.
+    signal.signal(signal.SIGINT, _ignore)
     if sys.platform != "win32":
         signal.signal(signal.SIGTERM, _interrupt)
+    os.environ.pop(SUPERVISED_ENV, None)  # so an `mfd serve` they start supervises its own
+
+
+def _ignore(signum: int, frame: FrameType | None) -> None:
+    pass
 
 
 def _interrupt(signum: int, frame: FrameType | None) -> None:

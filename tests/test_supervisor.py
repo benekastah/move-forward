@@ -1,5 +1,7 @@
 """`mfd serve`'s parent process: replacing, restarting and stopping the server."""
 
+import os
+import signal
 from collections.abc import Callable
 from pathlib import Path
 
@@ -92,3 +94,19 @@ def test_ctrl_c_stops_the_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(supervisor, "watch", watch)
     assert supervisor.supervise(["mfd", "serve"], tmp_path / "c.toml", code=False, popen=popen) == 0
     assert [s.terminated for s in servers] == [True]
+
+
+def test_the_server_leaves_ctrl_c_to_the_parent_but_not_for_its_commands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(supervisor.SUPERVISED_ENV, "1")
+    before = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
+    try:
+        supervisor.serve_supervised()
+        handler = signal.getsignal(signal.SIGINT)
+        # Ignored by a handler, which commands it starts don't inherit, unlike SIG_IGN.
+        assert callable(handler) and handler is not signal.default_int_handler
+        assert supervisor.SUPERVISED_ENV not in os.environ
+    finally:
+        signal.signal(signal.SIGINT, before[0])
+        signal.signal(signal.SIGTERM, before[1])

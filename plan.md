@@ -156,6 +156,10 @@ Each plugin refreshes on its own `refresh_seconds` now. What's left:
   ctrl-c stopping it (the server ignores ctrl-c and the parent ends it);
   `mfd token set` with Credential Manager; git-stack itself on Windows; and repo paths
   compared as `Path`s (case, `~`, separators), including those stored in `notes_ice`.
+  On a Windows that isn't in English, `icacls` names SYSTEM and Administrators in its
+  language, so `private.is_private` wouldn't recognize them and the token file would be
+  warned about on every start: look their names up from their well-known SIDs
+  (`LookupAccountSidW`) rather than matching English ones.
 - **Skill stand-ins for missing notes fields.** The move-forward skill keeps some state
   outside the database until the notes can hold it: check-ins (`Checked`, `Asked-done`) are
   `decline` items with those reserved texts; the once-a-day ice question and the per-PR

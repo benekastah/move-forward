@@ -120,8 +120,16 @@ def _add_to_user_path(folder: Path) -> None:
         except FileNotFoundError:
             current, kind = "", winreg.REG_EXPAND_SZ
         parts = [p for p in str(current).split(";") if p]
-        if str(folder) not in parts:
-            winreg.SetValueEx(key, "Path", 0, kind, ";".join([*parts, str(folder)]))
+        if str(folder) in parts:
+            return
+        winreg.SetValueEx(key, "Path", 0, kind, ";".join([*parts, str(folder)]))
+    # Tell running programs (Explorer, which starts new terminals) the environment changed.
+    import ctypes
+
+    hwnd_broadcast, wm_settingchange, smto_abortifhung = 0xFFFF, 0x001A, 0x0002
+    ctypes.windll.user32.SendMessageTimeoutW(
+        hwnd_broadcast, wm_settingchange, 0, "Environment", smto_abortifhung, 5000, None
+    )
 
 
 def _git(*args: str, stdin: bytes | None = None) -> bytes:
