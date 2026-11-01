@@ -37,6 +37,14 @@ def test_related_goes_both_ways_and_through_linking_entities() -> None:
     assert graph.related(PR, "pr") == []  # OTHER_PR is two links away: APP-1, then the entry
 
 
+def test_units_are_the_linking_entities_a_ref_is_part_of() -> None:
+    graph = _graph()
+    assert graph.units(PR) == [TICKET]  # it mentions the ticket
+    assert graph.units(OTHER_PR) == [ENTRY]  # the entry names it
+    assert graph.units(TICKET) == [ENTRY, TICKET]  # named by the entry, and a unit itself
+    assert graph.units(Ref(kind="pr", id="unknown")) == []
+
+
 def test_a_shared_ref_links_only_through_a_linking_kind() -> None:
     repo = Ref(kind="repo", id="o/r")
     prs = [

@@ -117,13 +117,8 @@ class Graph:
         linking entity both are next to: a ticket they both mention, a work entry that names
         both. In graph order, once each, never `ref` itself."""
         neighbours = self._neighbours(ref)
-        entity = self._by_ref.get(ref)
-        linkers = [r for r in entity.refs if r.kind in self._linking] if entity else []
-        linkers += [n.ref for n in neighbours if n.ref.kind in self._linking]
-        if ref.kind in self._linking:
-            linkers.append(ref)
         candidates = list(neighbours)
-        for linker in dict.fromkeys(linkers):
+        for linker in self.units(ref):
             candidates += self._neighbours(linker)
             if linker in self._by_ref:
                 candidates.append(self._by_ref[linker])
@@ -132,6 +127,17 @@ class Graph:
             if candidate.ref.kind == kind and candidate.ref != ref:
                 found.setdefault(candidate.ref, candidate)
         return list(found.values())
+
+    def units(self, ref: Ref) -> list[Ref]:
+        """The units of work `ref` is part of: the entities of linking kinds it points at,
+        mentions or is pointed at by (a ticket a PR mentions, the work entry naming it), and
+        `ref` itself when it's one. Once each."""
+        entity = self._by_ref.get(ref)
+        linkers = [r for r in entity.refs if r.kind in self._linking] if entity else []
+        linkers += [n.ref for n in self._neighbours(ref) if n.ref.kind in self._linking]
+        if ref.kind in self._linking:
+            linkers.append(ref)
+        return list(dict.fromkeys(linkers))
 
     def hides(self, kind: str) -> bool:
         """Whether entities of `kind` hide what they point at, e.g. notes' ice."""

@@ -93,6 +93,7 @@ sequenceDiagram
 graph.get("pr", url)  # one entity, or None
 graph.of_kind("pr")  # every entity of a kind
 graph.related(ref, "entry")  # see below
+graph.units(ref)  # the linking entities it's part of, see below
 graph.named("APP-1: fix it")  # the linking entities a text names, see below
 graph.hidden(ref)  # whether something on ice covers it, see below
 graph.url_for("ticket", "APP-1")
@@ -159,6 +160,11 @@ them), `related(pr12, "entry")` is the entry, and `related(ticket, "pr")` is PR 
 PR 13 (the entry links them). It goes one link deep: `related(pr12, "pr")` is nothing,
 since PR 13 is two links away, through the ticket and then the entry. Core knows no
 linking kind by name; a Linear or GitHub issue would join in by declaring its kind.
+
+`units(ref)` is the linking entities themselves: those `ref` points at, mentions or is
+pointed at by, and `ref` if it's one. Here `units(pr12)` is the ticket, `units(pr13)` the
+entry, and `units(ticket)` the entry and the ticket. Act now merges an item about a unit
+(moving the ticket) into an item about something in it (PR 12) this way.
 
 A linking kind with a pattern is found in **mentions**: text an entity carries that may
 name one, like a PR's branch, title and body. Building the graph, core adds a ref from the
