@@ -1,4 +1,5 @@
-# Runs check.sh (formatting, lint, types, tests) on every push and pull request.
+# Runs every check (formatting, lint, types, tests) on Linux, macOS and Windows, on every
+# push and pull request.
 name: check
 
 on:
@@ -10,7 +11,11 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -18,4 +23,4 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.12"
-      - run: ./check.sh
+      - run: python dev.py check
