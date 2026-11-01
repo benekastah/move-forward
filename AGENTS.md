@@ -110,6 +110,15 @@ is what's left to build.
 - **No new runtime dependencies.** pydantic and cryptography (for the HTTPS
   certificate) are the only ones; tools are reached through their CLIs (`gh`,
   `git`) or the standard library.
+- **Linux, macOS and Windows, with every change.** Each change must keep working
+  on all three; CI runs `./check.sh` on each, and it must pass on all of them.
+  Use `pathlib` rather than joining paths with `/`, and write paths into TOML or
+  URLs with `as_posix()`. Branch on `sys.platform` rather than assuming POSIX
+  (modes, process groups, `os.execv`, `time.tzset`), and when a system needs its
+  own way (`private.py`'s access lists, `keychain.py`'s stores), give it one
+  rather than skipping it there. Dev tooling goes in `dev.py`, not shell scripts.
+  A test that can only run on one system says why in its `skipif`, and the other
+  systems get a test of their own.
 - **Nothing destructive without a confirm.** Buttons that delete or rewrite
   set `confirm`, never force-push, reset or stash.
 - **Every save must leave working code.** People run `mfd serve --reload`,
