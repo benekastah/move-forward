@@ -15,7 +15,7 @@ from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.page import Action, Item
 from move_forward.panels import Layout
-from move_forward.plugin import KEPT, ActionError, ActionResult, Context
+from move_forward.plugin import KEPT, ActionError, ActionResult, Context, PageHandler
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -554,3 +554,25 @@ def test_secrets_in_query_parameters_are_left_out_of_the_log() -> None:
     assert server._redact(line) == (  # pyright: ignore[reportPrivateUsage]
         "GET /slack/callback?code=…&state=…&ok=1 /login?token=… HTTP/1.1"
     )
+
+
+class _GitHubWithASignIn(GitHubPlugin):
+    sign_in_pages: ClassVar[frozenset[str]] = frozenset({"/github/back"})
+
+    def pages(self) -> dict[str, PageHandler]:
+        def page(ctx: Context[GitHubConfig], graph: Graph, query: dict[str, list[str]]) -> str:
+            return f"back with {query.get('state', ['?'])[0]}"
+
+        return {"/github/back": page, "/github/private": page}
+
+
+def test_a_sign_in_page_is_served_without_the_cookie_and_the_rest_still_need_it(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    swap = {"github": _GitHubWithASignIn()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    response = get(client, "/github/back?state=s1", {})  # as a redirect from Slack comes
+    assert response.status == 200 and response.read().decode() == "back with s1"
+    response = get(client, "/github/private?state=s1", {})
+    assert response.status == 401
+    response.read()

@@ -256,7 +256,10 @@ Set `Item.fingerprint` to what would make a snoozed or dismissed item worth anot
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, {KEPT: "<plugin>:<key>"})` and implement `kept_item`.
 - **Pages.** `pages()` maps paths to handlers returning HTML (use `render.page` and
-  `render.e` to escape everything).
+  `render.e` to escape everything). A page a tool's sign-in (OAuth) redirects back to goes
+  in `sign_in_pages` too: browsers don't send the dashboard's cookie on a redirect from
+  another site, so it's served without one, and must check OAuth's single-use `state`
+  before doing anything.
 - **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`.
 
 ## Upkeep

@@ -227,6 +227,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Extra pages by path, e.g. "/ping"."""
         return {}
 
+    sign_in_pages: ClassVar[frozenset[str]] = frozenset()
+    """Of its pages, those a tool's sign-in (OAuth) sends the browser back to, e.g.
+    "/slack/callback". They're served without the dashboard's sign-in cookie, which browsers
+    don't send on a redirect from another site, so the page must check its own proof that
+    the request is the one it started (OAuth's single-use `state`) before doing anything."""
+
     # Writing
 
     def actions(self) -> dict[str, ActionHandler]:

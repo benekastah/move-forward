@@ -83,7 +83,8 @@ class App:
         self.config = config
         self.db = db
         self.token = token
-        """What every request but `/login` and the static files must carry; see `auth`."""
+        """What every request but `/login`, the static files and plugins' sign-in pages must
+        carry; see `auth`."""
         self.scheme = scheme
         """"https" when serving with the certificate (see `tls`), else "http"."""
         self._refresh_lock = threading.Lock()
@@ -293,6 +294,11 @@ class App:
         self.request_refresh()
         return result.notice, result.params
 
+    def sign_in_pages(self) -> set[str]:
+        """The enabled plugins' pages a tool's sign-in returns to (`Plugin.sign_in_pages`)."""
+        plugins = enabled(self.config, self.db, datetime.now(UTC))
+        return {path for e in plugins for path in e.plugin.sign_in_pages}
+
     def plugin_page(self, path: str, query: str) -> str | None:
         """An enabled plugin's page; None when there's none at `path`."""
         return plugin_page(self.config, self.db, path, parse_qs(query, keep_blank_values=True))
@@ -444,6 +450,12 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 return
             if url.path == LOGIN_PATH:
                 self._login(url.query)
+                return
+            if url.path in app.sign_in_pages():  # proves itself; see Plugin.sign_in_pages
+                if (page := app.plugin_page(url.path, url.query)) is None:
+                    self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
+                else:
+                    self._html(HTTPStatus.OK, page)
                 return
             if self._refuse_strangers():
                 return
