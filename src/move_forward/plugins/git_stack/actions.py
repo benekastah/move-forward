@@ -9,7 +9,7 @@ from ...graph import Graph
 from ...plugin import ActionError, Context
 from ...shell import git
 from .config import GitStackConfig
-from .panels import ICED_BRANCH, STACK_BRANCH, IcedView, StackBranchView, repo_dirs
+from .panels import STACK_BRANCH, StackBranchView, iced_stacks, repo_dirs
 
 STACK_CLEAN_TIMEOUT_SECONDS = 600
 """`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
@@ -24,9 +24,9 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
     if fields["repo"] not in repo_dirs(graph):
         raise ActionError(f"{fields['repo']} is not a configured repo")
     repo = Path(fields["repo"])
-    iced = sorted(e.stack for e in graph.view(ICED_BRANCH, IcedView) if Path(e.repo_dir) == repo)
+    iced = iced_stacks(graph).get(fields["repo"], [])
     if iced:
-        names = ", ".join(dict.fromkeys(iced))
+        names = ", ".join(sorted(iced))
         raise ActionError(f"{repo} has iced stacks ({names}); clean per stack instead")
     out = git(repo, "stack", "clean", "-d", "local", timeout=STACK_CLEAN_TIMEOUT_SECONDS)
     deleted = sum(1 for line in out.splitlines() if "deleted" in line.lower())

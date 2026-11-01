@@ -17,13 +17,17 @@ BRANCH = "branch"
 STACK_BRANCH = "stack_branch"
 PR = "pr"
 REPO = "repo"
-ICED_BRANCH = "iced_branch"
+ICED = "iced"
 BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""
 
 
 def branch_ref(repo_dir: str, branch: str) -> Ref:
     return Ref(kind=BRANCH, id=f"{repo_dir}{BRANCH_ID_SEPARATOR}{branch}")
+
+
+def _stack_branch(repo_dir: str, branch: str) -> Ref:
+    return Ref(kind=STACK_BRANCH, id=branch_ref(repo_dir, branch).id)
 
 
 class StackBranchView(Model):
@@ -63,12 +67,21 @@ class _PrView(Model):
         return Ref(kind=PR, id=self.id)
 
 
-class IcedView(Model):
-    """What git_stack reads of an `iced_branch` (notes')."""
-
-    id: str
-    repo_dir: str
-    stack: str
+def iced_stacks(graph: Graph) -> dict[str, list[str]]:
+    """The titles of what's on ice (notes' `iced`), by the checkouts of its branches that git
+    or git-stack still has."""
+    found: dict[str, list[str]] = {}
+    for iced in graph.of_kind(ICED):
+        for ref in iced.refs:
+            if ref.kind == BRANCH:
+                branch = graph.view_one(BRANCH, ref.id, _BranchView)
+            elif ref.kind == STACK_BRANCH:
+                branch = graph.view_one(STACK_BRANCH, ref.id, _BranchView)
+            else:
+                continue
+            if branch is not None and iced.title not in found.get(branch.repo_dir, []):
+                found.setdefault(branch.repo_dir, []).append(iced.title)
+    return found
 
 
 def repo_dirs(graph: Graph) -> list[str]:
@@ -81,7 +94,7 @@ def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
     have deleted."""
     return [
         Entity(
-            ref=Ref(kind=STACK_BRANCH, id=branch_ref(repo.dir, b.name).id),
+            ref=_stack_branch(repo.dir, b.name),
             title=b.name,
             refs=[branch_ref(repo.dir, b.name)],
             attrs=attrs(
@@ -104,9 +117,7 @@ class Builder:
         for pr in graph.view(PR, _PrView):
             if pr.mine:
                 self.my_prs.setdefault((pr.repo, pr.head), []).append(pr)
-        iced = graph.view(ICED_BRANCH, IcedView)
-        self.iced_branches = {e.id for e in iced}
-        self.iced_repo_dirs = {e.repo_dir for e in iced}
+        self.iced_stacks = iced_stacks(graph)
 
     def _pr(self, repo_dir: str, branch: str, state: str) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
@@ -118,7 +129,7 @@ class Builder:
         actions: list[Action] = []
         for repo in self.snapshot.repos if self.snapshot else []:
             merged = [b.name for b in repo.branches if b.status == "merged"]
-            if merged and repo.dir in self.iced_repo_dirs:
+            if merged and repo.dir in self.iced_stacks:
                 items.append(
                     Item(
                         title=f"{len(merged)} merged stack branches not cleaned",
@@ -141,23 +152,17 @@ class Builder:
                 if b.status in (None, "up-to-date"):
                     continue
                 pr = self._pr(repo.dir, b.name, "open")
-                badges = ["iced"] if branch_ref(repo.dir, b.name).id in self.iced_branches else []
                 items.append(
                     Item(
                         title=f"{b.name}: {b.status}",
                         url=pr.url if pr else None,
                         subtitle=f"{repo.dir} · on {b.parent}",
-                        badges=badges,
-                        rank=0 if badges else 1,
-                        subjects=[pr.subject] if pr else [],
+                        rank=1,
+                        subjects=[_stack_branch(repo.dir, b.name), *([pr.subject] if pr else [])],
                     )
                 )
             for b in repo.branches:
-                if (
-                    b.parent is None
-                    or b.status == "merged"
-                    or branch_ref(repo.dir, b.name).id in self.iced_branches
-                ):
+                if b.parent is None or b.status == "merged":
                     continue
                 if not (self._pr(repo.dir, b.name, "open") or self._pr(repo.dir, b.name, "merged")):
                     items.append(
@@ -165,6 +170,7 @@ class Builder:
                             title=f"{b.name}: tracked, no PR",
                             subtitle=f"{repo.dir} · on {b.parent}",
                             rank=0.5,
+                            subjects=[_stack_branch(repo.dir, b.name)],
                         )
                     )
         return Panel(
@@ -177,12 +183,14 @@ class Builder:
 
 
 def untrack_iced_action(item: Item, graph: Graph) -> Action | None:
-    """An Untrack button for an item about iced branches, i.e. notes' On ice item, when
-    git-stack still tracks some of them. An `iced_branch`'s id is its branch's."""
+    """An Untrack button for an item about what hides its branches, i.e. notes' On ice item,
+    when git-stack still tracks some of them. A `stack_branch`'s id is its branch's."""
+    if not any(graph.hides(ref.kind) for ref in item.subjects):
+        return None
     tracked = [
         b
         for ref in item.subjects
-        if ref.kind == ICED_BRANCH
+        if ref.kind == BRANCH
         and (b := graph.view_one(STACK_BRANCH, ref.id, StackBranchView)) is not None
     ]
     if not tracked:

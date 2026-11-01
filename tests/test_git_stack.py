@@ -60,11 +60,19 @@ def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
 
 def test_stack_clean_is_not_offered_while_the_repo_has_iced_stacks() -> None:
     built = dashboard(
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/x")]),
         stacks=stacks(StackBranch(name="me/old", parent="main", status="merged")),
         iced_stacks=[ICED],
     )
     assert panel(built, "stacks").actions == []
     assert "1 merged stack branches not cleaned" in titles(built, "stacks")
+    # Once git has deleted the iced branch, and git-stack doesn't track it, clean can't touch
+    # it.
+    gone = dashboard(
+        stacks=stacks(StackBranch(name="me/old", parent="main", status="merged")),
+        iced_stacks=[ICED],
+    )
+    assert [a.name for a in panel(gone, "stacks").actions] == ["git_stack/stack_clean"]
 
 
 def test_without_its_section_there_is_no_stacks_panel() -> None:
@@ -113,7 +121,7 @@ def test_parse_info_reads_git_stack_json() -> None:
 def test_stack_clean_refuses_unknown_repos_and_repos_with_iced_stacks() -> None:
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main")]),
-        stacks=stacks(),
+        stacks=stacks(StackBranch(name="me/x", parent="main")),  # git-stack still tracks it
         iced_stacks=[ICED],
     )
     with pytest.raises(ActionError, match=r"iced stacks \(me/x\)"):
@@ -188,3 +196,14 @@ def test_an_iced_branch_git_has_deleted_can_still_be_untracked() -> None:
     assert "git_stack/untrack" in names and "git/delete_together" not in names
     [untrack] = [a for a in item.actions if a.name == "git_stack/untrack"]
     assert untrack.fields == {"targets": "/src/widgets\tme/x"} and "me/x" in (untrack.confirm or "")
+
+
+def test_iced_stack_branches_are_left_out_of_the_stacks_panel() -> None:
+    built = dashboard(
+        stacks=stacks(
+            StackBranch(name="me/x", parent="main", status="needs-restack"),
+            StackBranch(name="me/y", parent="main", status="needs-restack"),
+        ),
+        iced_stacks=[ICED],
+    )
+    assert sorted(titles(built, "stacks")) == ["me/y: needs-restack", "me/y: tracked, no PR"]
