@@ -6,6 +6,7 @@ Each is keyed by a service (e.g. `move-forward-jira`) and an account (my email).
 `mfd token set` stores a plugin's token with `write`; the plugin reads it with `token`.
 """
 
+import contextlib
 import ctypes
 import os
 import sys
@@ -77,6 +78,24 @@ def write(service: str, account: str, secret: str) -> None:
         raise CommandError(f"the secret store didn't keep the token for {service}")
 
 
+def delete(service: str, account: str) -> None:
+    """Remove the secret stored for `service` and `account`, if there is one. Raises
+    CommandError when one is there and the store won't remove it."""
+    if sys.platform == "darwin":
+        command = ["security", "delete-generic-password", "-s", service, "-a", account]
+    elif sys.platform == "win32":
+        _credential_manager_delete(service)
+        command = None
+    else:
+        command = ["secret-tool", "clear", "service", service, "account", account]
+    if command is not None:
+        # `security` fails when there's nothing to delete; what's left is checked below.
+        with contextlib.suppress(CommandError, FileNotFoundError):
+            run(command)
+    if read(service, account) is not None:
+        raise CommandError(f"the secret store kept the token for {service}")
+
+
 if sys.platform == "win32":
     from ctypes import wintypes
 
@@ -141,3 +160,11 @@ def _credential_manager_write(target: str, account: str, secret: str) -> None:
     )
     if not ctypes.WinDLL("advapi32", use_last_error=True).CredWriteW(ctypes.byref(credential), 0):
         raise CommandError(f"CredWriteW: {ctypes.FormatError(ctypes.get_last_error())}")
+
+
+def _credential_manager_delete(target: str) -> None:
+    """Delete a generic credential from Windows' Credential Manager; nothing to delete is
+    fine."""
+    if sys.platform != "win32":
+        return
+    ctypes.WinDLL("advapi32").CredDeleteW(target, _GENERIC, 0)

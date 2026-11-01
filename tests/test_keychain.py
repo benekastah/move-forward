@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from move_forward import cli, keychain
+from move_forward.shell import CommandError
 
 
 def test_on_macos_and_linux_the_store_is_asked_through_its_command(
@@ -75,14 +76,49 @@ def test_a_secret_stored_with_cmdkey_is_read_from_credential_manager() -> None:
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows' Credential Manager")
-def test_a_secret_written_to_credential_manager_reads_back() -> None:
+def test_a_secret_written_to_credential_manager_reads_back_and_deletes() -> None:
     target = "move-forward-test-write"
     try:
         keychain.write(target, "me@x", "first")
         keychain.write(target, "me@x", "s3cret-token")  # replaces
         assert keychain.read(target, "me@x") == "s3cret-token"
+        keychain.delete(target, "me@x")
+        assert keychain.read(target, "me@x") is None
+        keychain.delete(target, "me@x")  # nothing there: fine
     finally:
         subprocess.run(["cmdkey", f"/delete:{target}"], check=False, capture_output=True)
+
+
+def test_on_macos_and_linux_a_secret_is_deleted_through_the_stores_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked: list[list[str]] = []
+    stored: list[str] = []
+
+    def run(args: list[str], input: str | None = None) -> str:
+        asked.append(args)
+        if "find-generic-password" in args or "lookup" in args:
+            if stored:
+                return stored[0]
+            raise CommandError("not found")
+        if "delete-generic-password" in args or "clear" in args:
+            stored.clear()
+        return ""
+
+    monkeypatch.setattr(keychain, "run", run)
+    for platform, command in (("darwin", "security"), ("linux", "secret-tool")):
+        monkeypatch.setattr(keychain.sys, "platform", platform)
+        stored[:] = ["s3cret"]
+        keychain.delete("svc", "me@x")
+        assert asked[-2][0] == command and "svc" in asked[-2] and not stored
+    stored[:] = ["s3cret"]
+
+    def stubborn(args: list[str], input: str | None = None) -> str:
+        return "s3cret" if "lookup" in args else ""
+
+    monkeypatch.setattr(keychain, "run", stubborn)
+    with pytest.raises(CommandError, match="kept the token"):
+        keychain.delete("svc", "me@x")
 
 
 def _config(tmp_path: Path) -> Path:
