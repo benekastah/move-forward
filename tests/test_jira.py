@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
+from move_forward import https
 from move_forward.domain import JiraIssue
 from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
@@ -102,7 +103,7 @@ def test_the_token_is_never_sent_to_a_site_that_isnt_https(
     def no_request(*_: object, **__: object) -> None:
         raise AssertionError("a request was made")
 
-    monkeypatch.setattr(jira._opener, "open", no_request)  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(https.opener, "open", no_request)
     unvalidated = JiraConfig.model_construct(site="http://j.atlassian.net")
     with pytest.raises(RuntimeError, match="isn't https"):
         jira.search(unvalidated, "me@x", "jql", "token")
@@ -130,7 +131,7 @@ def test_redirects_are_not_followed_with_the_token() -> None:
     )
     try:
         with pytest.raises(RuntimeError, match="not following it"):
-            jira._opener.open(request, timeout=5)  # pyright: ignore[reportPrivateUsage]
+            https.opener.open(request, timeout=5)
     finally:
         httpd.shutdown()
         httpd.server_close()

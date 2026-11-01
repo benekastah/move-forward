@@ -5,12 +5,10 @@ import json
 import os
 import urllib.request
 from datetime import datetime
-from email.message import Message
-from typing import IO
-from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ... import https
 from ...domain import JiraIssue, JiraSnapshot
 from ...shell import CommandError, run
 from .config import JiraConfig
@@ -141,34 +139,9 @@ def to_issue(raw: RawIssue, site: str) -> JiraIssue:
     )
 
 
-class _NoRedirects(urllib.request.HTTPRedirectHandler):
-    """Refuses to follow redirects: urllib would send the token's `Authorization` header on
-    to wherever the redirect points, another host or plain http included."""
-
-    def redirect_request(
-        self,
-        req: urllib.request.Request,
-        fp: IO[bytes],
-        code: int,
-        msg: str,
-        headers: Message,
-        newurl: str,
-    ) -> urllib.request.Request | None:
-        raise RuntimeError(f"Jira redirected {req.full_url} to {newurl}; not following it")
-
-
-_opener = urllib.request.build_opener(_NoRedirects)
-
-
-def _require_https(url: str) -> None:
-    """Refuse to send the token anywhere but https, whatever built the config."""
-    if urlsplit(url).scheme != "https":
-        raise RuntimeError(f"not sending the Jira token to {url}: it isn't https")
-
-
 def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[JiraIssue]:
     url = config.site.rstrip("/") + SEARCH_PATH
-    _require_https(url)
+    https.require_https(url, "the Jira token")
     auth = base64.b64encode(f"{email}:{api_token}".encode()).decode()
     issues: list[JiraIssue] = []
     next_token: str | None = None
@@ -186,7 +159,7 @@ def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[Jir
             },
             method="POST",
         )
-        with _opener.open(request, timeout=60) as response:
+        with https.opener.open(request, timeout=60) as response:
             page = RawSearchResponse.model_validate_json(response.read())
         issues.extend(to_issue(raw, config.site) for raw in page.issues)
         if not page.next_page_token:
