@@ -7,13 +7,13 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, registry, reload
+from . import auth, init, registry, reload, tls
 from . import config as config_module
 from .db import Database
 from .plugin import CliHandler
 from .refresh import build_dashboard, refresh, stored_graph
 from .registry import enabled, enabled_names, migrate
-from .server import serve
+from .server import scheme, serve
 
 EXAMPLE_CONFIG = """\
 # move-forward configuration. Paths may start with ~. A plugin is enabled by its
@@ -24,6 +24,7 @@ teams = ["my-team"]                   # the teams I'm on or review for, by name
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # db_backups = 10                        # copies kept in backups/, taken before migrations
 # port = 8765
+# https = true                           # serve over HTTPS with `mfd cert`'s certificate
 # refresh_seconds = 300                  # background refresh when nobody loads the page
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                         # clear work finished this long ago from the notes
@@ -104,6 +105,15 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         help="development: restart when the dashboard's source files change, not just its config",
     )
 
+    cert_parser = commands.add_parser(
+        "cert", help="make the certificate `mfd serve` uses for HTTPS, and trust it"
+    )
+    cert_parser.add_argument(
+        "--trust", action="store_true", help="add it to this system's and browsers' stores"
+    )
+    cert_parser.add_argument(
+        "--force", action="store_true", help="make a new one even if one is there"
+    )
     open_parser = commands.add_parser("open", help="open the running dashboard, signed in")
     open_parser.add_argument("--port", type=int, help="override the configured port")
     commands.add_parser("refresh", help="refresh every source once and exit")
@@ -122,6 +132,21 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         if plugin.cli_help
     }
     return parser, plugin_commands
+
+
+def _cert(paths: tls.Paths, force: bool, trust: bool) -> int:
+    """`mfd cert`: make the certificate unless one is there, and trust it if asked."""
+    if paths.ready() and not force:
+        print(f"{paths.cert} is there (until {tls.expires(paths):%Y-%m-%d}); --force replaces it")
+    else:
+        tls.make(paths)
+        print(f"made {paths.cert}, until {tls.expires(paths):%Y-%m-%d}; `mfd serve` uses it")
+    if trust:
+        for line in tls.trust(paths):
+            print(line)
+    else:
+        print(f"trust {paths.ca} with `mfd cert --trust`, so browsers don't warn")
+    return 0
 
 
 def _open(url: str) -> None:
@@ -165,12 +190,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{config_path}: {e}", file=sys.stderr)
             return 1
         print(f"{config_path}: ok; plugins: {', '.join(enabled_names(checked))}")
+        if checked.https and (problem := tls.problem(tls.Paths.beside(checked.db_path))):
+            print(f"warning: {problem}")
         return 0
     config = config_module.load(config_path)
     token = auth.load_or_create(auth.token_path(config.db_path))
     if args.command == "open":
-        _open(auth.login_url(args.port or config.port, token))
+        _open(auth.login_url(args.port or config.port, token, scheme(config)))
         return 0
+    if args.command == "cert":
+        return _cert(tls.Paths.beside(config.db_path), args.force, args.trust)
     db = Database(config.db_path, config.db_backups)
     migrate(config, db)
 
@@ -194,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         port = args.port or config.port
         if args.open:
-            _open(auth.login_url(port, token))
+            _open(auth.login_url(port, token, scheme(config)))
         reload.start(config_path, code=args.reload)
         serve(config, db, token, port)
     return 0

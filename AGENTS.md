@@ -104,8 +104,9 @@ is what's left to build.
   assert on panel contents; plugin contract tests assert on the entities a
   plugin publishes. Tests touching git make real repos in `tmp_path`; tests
   never touch the network.
-- **No new runtime dependencies.** pydantic is the only one; tools are
-  reached through their CLIs (`gh`, `git`) or the standard library.
+- **No new runtime dependencies.** pydantic and cryptography (for the HTTPS
+  certificate) are the only ones; tools are reached through their CLIs (`gh`,
+  `git`) or the standard library.
 - **Nothing destructive without a confirm.** Buttons that delete or rewrite
   set `confirm`, never force-push, reset or stash.
 - **Every save must leave working code.** People run `mfd serve --reload`,

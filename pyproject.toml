@@ -5,7 +5,7 @@ description = "Local dashboard of PRs, stacks, local work and Jira tickets that 
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2.7"]
+dependencies = ["cryptography>=50.0.2", "pydantic>=2.7"]
 
 [project.scripts]
 mfd = "move_forward.cli:main"
