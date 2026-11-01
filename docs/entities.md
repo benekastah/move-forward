@@ -139,6 +139,7 @@ One act of icing, e.g. a stack. Core leaves items about whatever it hides off th
 | --- | --- | --- |
 | `iced_on` | string | ISO date |
 | `note` | string or null | why it's on ice |
+| `shas` | object | the commit each branch it put on ice pointed at then, by the branch's id |
 
 ### `iced_branch`
 

@@ -66,6 +66,7 @@ def test_iced_entities_hide_their_items_and_covers() -> None:
     published = entities([], [_ice(7, BRANCH.id)], {7: [pr]})
     [iced] = [e for e in published if e.ref.kind == "iced"]
     assert (iced.ref.id, iced.title, iced.refs) == ("7", "me/x", [BRANCH, pr])
+    assert iced.attrs["shas"] == {BRANCH.id: "1"}
     graph = Graph(published, hiding=["iced"])
     assert graph.hidden(BRANCH) and graph.hidden(pr)
 

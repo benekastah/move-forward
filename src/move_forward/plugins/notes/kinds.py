@@ -30,3 +30,5 @@ class IcedAttrs(Model):
     iced_on: str
     """ISO date."""
     note: str | None = None
+    shas: dict[str, str] = Field(default_factory=dict[str, str])
+    """The commit each branch it put on ice pointed at then, by the branch's id."""

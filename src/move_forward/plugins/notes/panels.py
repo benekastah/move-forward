@@ -191,7 +191,13 @@ def entities(entries: list[Entry], ices: list[Ice], covers: dict[int, list[Ref]]
                 ref=Ref(kind=ICED, id=str(ice.id)),
                 title=ice.title,
                 refs=list(dict.fromkeys([*own, *covers.get(ice.id, [])])),
-                attrs=attrs(IcedAttrs(iced_on=ice.iced_on.isoformat(), note=ice.note)),
+                attrs=attrs(
+                    IcedAttrs(
+                        iced_on=ice.iced_on.isoformat(),
+                        note=ice.note,
+                        shas={i.ref_id: i.sha for i in ice.items if i.kind == BRANCH and i.sha},
+                    )
+                ),
             )
         )
         for item in ice.items:
@@ -380,9 +386,10 @@ class Builder:
                         Action(name="notes/thaw", label="Reopen", fields={"ice": str(ice.id)})
                     ],
                     # The `iced` keeps the item on the page; git and git_stack add deleting
-                    # and untracking the branches by the `iced_branch`es.
+                    # and untracking the branches.
                     subjects=[
                         Ref(kind=ICED, id=str(ice.id)),
+                        *(Ref(kind=item.kind, id=item.ref_id) for item in ice.items),
                         *(
                             Ref(kind=ICED_BRANCH, id=item.ref_id)
                             for item in ice.items
