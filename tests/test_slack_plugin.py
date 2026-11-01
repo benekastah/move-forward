@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from conftest import (
     NOW,
+    Reviewer,
     approved_review,
     dashboard,
     event,
@@ -17,10 +18,10 @@ from conftest import (
 )
 
 from move_forward import render
-from move_forward.domain import Check, Ping, ReviewerUser, TeamChannel
+from move_forward.domain import Check
 from move_forward.graph import Graph
 from move_forward.plugins.slack.config import DEFAULT_PING_FIRST, DEFAULT_PING_FOLLOW_UP
-from move_forward.plugins.slack.models import Ping as SlackPing
+from move_forward.plugins.slack.models import Ping, TeamChannel
 from move_forward.plugins.slack.plugin import ping_page
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import enabled
@@ -30,8 +31,8 @@ def _teams() -> dict[str, TeamChannel]:
     return {"web": TeamChannel(slug="web", channel_name="#team-web", channel_id="C1")}
 
 
-def _users() -> dict[str, ReviewerUser]:
-    return {"alice": ReviewerUser(login="alice", email="a@x", slack_id="U1")}
+def _users() -> dict[str, Reviewer]:
+    return {"alice": Reviewer(login="alice", email="a@x", slack_id="U1")}
 
 
 def test_ping_targets_links_and_messages() -> None:
@@ -141,7 +142,7 @@ def test_old_pings_are_pruned() -> None:
     config, db = stored(slack=True)
     repo = SlackRepository(db)
     for when in (NOW - timedelta(days=100), NOW - timedelta(days=10)):
-        repo.add_ping(SlackPing(pr_url="https://pr/1", target="user:a", kind="first", sent_at=when))
+        repo.add_ping(Ping(pr_url="https://pr/1", target="user:a", kind="first", sent_at=when))
     [slack] = [e for e in enabled(config, db, NOW) if e.name == "slack"]
     assert slack.plugin.prune(slack.ctx, Graph()) == ["deleted 1 old ping(s)"]
     assert [p.sent_at for p in repo.pings()] == [NOW - timedelta(days=10)]

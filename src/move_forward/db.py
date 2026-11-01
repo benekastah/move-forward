@@ -74,7 +74,11 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT NOT NULL
 );
 """
-"""The schema before migrations. `IF NOT EXISTS` lets databases made before them upgrade."""
+"""The schema before migrations. `IF NOT EXISTS` lets databases made before them upgrade.
+
+Core no longer uses `reviewer_users`, `team_channels` or `pings`, but keeps them: the slack
+and github plugins' first migrations copy from them, whenever those plugins are enabled,
+and core's migrations run first, so emptying them would lose what's there."""
 
 _V2_KV_AND_LAYOUT = """
 CREATE TABLE kv (

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from test_notes import REVIEWER_MAP, WORK_NOTES
+from skill_notes import REVIEWER_MAP, WORK_NOTES
 
 from move_forward import cli
 from move_forward.db import Database
@@ -37,14 +37,16 @@ def test_the_migration_copies_what_core_held_for_slack() -> None:
 
 def test_the_reviewer_map_and_logged_nudges_are_read() -> None:
     contacts, teams = markdown.read_reviewer_map(REVIEWER_MAP)
-    assert contacts and all(c.login for c in contacts)
-    assert teams and all(t.slug for t in teams)
-    nudges = markdown.read_nudges(WORK_NOTES)
-    assert {p.pr_url for p in nudges} == {
-        "https://github.com/acme/widgets/pull/12",
-        "https://github.com/acme/widgets/pull/13",
-    }
-    assert {p.target for p in nudges} == {markdown.LOGGED_TARGET}
+    assert [(c.login, c.slack_id) for c in contacts] == [("alice", "U111"), ("bob", None)]
+    assert [(t.slug, t.channel_name, t.channel_id) for t in teams] == [
+        ("core", "#team-core-chat", None),
+        ("web", "#team-web", "C0123ABCD"),
+    ]
+    day = datetime(2026, 10, 29, tzinfo=UTC)
+    assert [(p.pr_url, p.kind, p.sent_at, p.target) for p in markdown.read_nudges(WORK_NOTES)] == [
+        ("https://github.com/acme/widgets/pull/12", "first", day, markdown.LOGGED_TARGET),
+        ("https://github.com/acme/widgets/pull/13", "first", day, markdown.LOGGED_TARGET),
+    ]
 
 
 def test_mfd_slack_import(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

@@ -4,7 +4,7 @@ reviewer map, or looked up."""
 from pathlib import Path
 
 import pytest
-from test_notes import REVIEWER_MAP
+from skill_notes import REVIEWER_MAP
 
 from move_forward import cli
 from move_forward.db import Database
@@ -42,6 +42,7 @@ def test_mfd_github_import(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     )
     assert cli.main(["-c", str(config), "github", "import", str(tmp_path)]) == 0
     emails = read_reviewer_map(REVIEWER_MAP)
-    assert emails and f"imported {len(emails)}" in capsys.readouterr().out
+    assert emails == {"alice": "alice@example.com"}  # bob has no email
+    assert "imported 1 reviewers' emails" in capsys.readouterr().out
     assert PeopleRepository(Database(tmp_path / "d.db")).emails() == emails
     assert cli.main(["-c", str(config), "github", "import", str(tmp_path / "nope")]) == 1

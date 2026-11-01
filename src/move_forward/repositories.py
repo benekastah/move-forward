@@ -1,20 +1,10 @@
-"""Repositories: every SQL query, grouped by what it reads and writes."""
+"""Core's repositories: the queries over core's own tables. Plugins keep theirs."""
 
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel
 
 from .db import Database
-from .domain import Ping, ReviewerUser, TeamChannel
-
-Source = Literal["notes", "lookup", "dashboard"]
-SOURCE_NOTES: Source = "notes"
-"""Rows imported from the skill's .md files; replaced on every import."""
-SOURCE_LOOKUP: Source = "lookup"
-"""Rows the dashboard looked up itself; kept across imports, but notes win."""
-SOURCE_DASHBOARD: Source = "dashboard"
-"""Rows recorded from the dashboard UI."""
 
 
 class SnapshotRow(BaseModel):
@@ -62,95 +52,6 @@ class SnapshotRepository:
         if not rows or rows[0]["payload"] is None:
             return None
         return model.model_validate_json(rows[0]["payload"])
-
-
-class ReviewerRepository:
-    """How to reach reviewers: users' emails and Slack IDs, teams' channels."""
-
-    def __init__(self, db: Database):
-        self._db = db
-
-    def users(self) -> dict[str, ReviewerUser]:
-        return {
-            row["login"]: ReviewerUser(
-                login=row["login"], email=row["email"], slack_id=row["slack_id"]
-            )
-            for row in self._db.query("SELECT * FROM reviewer_users")
-        }
-
-    def save_looked_up_email(self, login: str, email: str | None) -> None:
-        """Cache a login's email. Never overwrites a row imported from the notes."""
-        self._db.execute(
-            "INSERT INTO reviewer_users VALUES (?, ?, NULL, ?) ON CONFLICT (login) DO NOTHING",
-            (login, email, SOURCE_LOOKUP),
-        )
-
-    def replace_imported(self, users: list[ReviewerUser], teams: list[TeamChannel]) -> None:
-        """Replace the users and teams imported from the reviewer map with these."""
-        with self._db.transaction() as conn:
-            conn.execute("DELETE FROM reviewer_users WHERE source = ?", (SOURCE_NOTES,))
-            conn.execute("DELETE FROM team_channels WHERE source = ?", (SOURCE_NOTES,))
-            conn.executemany(
-                "INSERT OR REPLACE INTO reviewer_users VALUES (?, ?, ?, ?)",
-                [(u.login, u.email, u.slack_id, SOURCE_NOTES) for u in users],
-            )
-            conn.executemany(
-                "INSERT OR REPLACE INTO team_channels VALUES (?, ?, ?, ?)",
-                [(t.slug, t.channel_name, t.channel_id, SOURCE_NOTES) for t in teams],
-            )
-
-    def teams(self) -> dict[str, TeamChannel]:
-        return {
-            row["slug"]: TeamChannel(
-                slug=row["slug"], channel_name=row["channel_name"], channel_id=row["channel_id"]
-            )
-            for row in self._db.query("SELECT * FROM team_channels")
-        }
-
-
-_PING_INSERT = (
-    "INSERT INTO pings (pr_url, target, kind, message, sent_at, source) VALUES (?, ?, ?, ?, ?, ?)"
-)
-
-
-def _ping_params(ping: Ping, source: Source) -> tuple[object, ...]:
-    return (ping.pr_url, ping.target, ping.kind, ping.message, ping.sent_at.isoformat(), source)
-
-
-class PingRepository:
-    """Review pings sent from the dashboard, plus nudges the skill recorded."""
-
-    def __init__(self, db: Database):
-        self._db = db
-
-    def add(self, ping: Ping) -> None:
-        self._db.execute(_PING_INSERT, _ping_params(ping, SOURCE_DASHBOARD))
-
-    def replace_imported(self, pings: list[Ping]) -> None:
-        """Replace the nudges imported from the work notes with these."""
-        with self._db.transaction() as conn:
-            conn.execute("DELETE FROM pings WHERE source = ?", (SOURCE_NOTES,))
-            conn.executemany(_PING_INSERT, [_ping_params(p, SOURCE_NOTES) for p in pings])
-
-    def delete_before(self, cutoff: datetime) -> int:
-        """Delete pings sent before `cutoff`; returns how many."""
-        with self._db.transaction() as conn:
-            return conn.execute(
-                "DELETE FROM pings WHERE sent_at < ?", (cutoff.isoformat(),)
-            ).rowcount
-
-    def all(self) -> list[Ping]:
-        """Every recorded ping, oldest first."""
-        return [
-            Ping(
-                pr_url=row["pr_url"],
-                target=row["target"],
-                kind=row["kind"],
-                message=row["message"],
-                sent_at=datetime.fromisoformat(row["sent_at"]),
-            )
-            for row in self._db.query("SELECT * FROM pings ORDER BY sent_at, id")
-        ]
 
 
 class KvRepository:

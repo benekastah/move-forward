@@ -21,9 +21,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5c. slack and github tables
 
-- Core stops using `reviewer_users`, `team_channels` and `pings`, and a migration
-  empties them rather than dropping them: plugin migrations copy from them in plain SQL,
-  which can't ask whether a table exists, so they stay, empty, for a plugin enabled later.
 - The reviewer map fills itself in, and can be viewed and edited when needed. Once the
   notes cut over, the dashboard reads `reviewer-map.md` only when asked: `mfd slack import`
   and `mfd github import`.

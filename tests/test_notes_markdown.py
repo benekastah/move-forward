@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from test_notes import ON_ICE, REVIEWER_MAP, WORK_NOTES
+from skill_notes import ON_ICE, REVIEWER_MAP, WORK_NOTES
 
 from move_forward import cli
 from move_forward.db import Database

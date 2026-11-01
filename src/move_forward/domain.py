@@ -225,26 +225,3 @@ class DerivedSnapshot(Model):
     """Reviewer suggestions keyed by PR URL, for my PRs waiting on my team."""
     team_scores: dict[str, TeamPrScore] = {}
     """Keyed by PR URL, for PRs requesting my team's review."""
-
-
-# Skill notes
-
-
-class ReviewerUser(Model):
-    login: str
-    email: str | None = None
-    slack_id: str | None = None
-
-
-class TeamChannel(Model):
-    slug: str
-    channel_name: str | None = None
-    channel_id: str | None = None
-
-
-class Ping(Model):
-    pr_url: str
-    target: str
-    kind: Literal["first", "follow-up"]
-    message: str = ""
-    sent_at: datetime

@@ -1,6 +1,4 @@
-from datetime import UTC, datetime
-
-from move_forward import notes
+"""Notes as the move-forward skill keeps them in markdown, for tests importing them."""
 
 WORK_NOTES = """\
 # Work notes
@@ -68,23 +66,3 @@ REVIEWER_MAP = """\
 | alice | alice@example.com | U111 |
 | `bob` | | |
 """
-
-
-def test_reviews_section_is_not_a_work_item_but_its_nudges_are_pings() -> None:
-    pings = notes.parse_nudges(WORK_NOTES)
-    assert [(p.pr_url, p.kind, p.sent_at) for p in pings] == [
-        ("https://github.com/acme/widgets/pull/12", "first", datetime(2026, 10, 29, tzinfo=UTC)),
-        ("https://github.com/acme/widgets/pull/13", "first", datetime(2026, 10, 29, tzinfo=UTC)),
-    ]
-
-
-def test_reviewer_map() -> None:
-    users, teams = notes.parse_reviewer_map(REVIEWER_MAP)
-    assert [(u.login, u.email, u.slack_id) for u in users] == [
-        ("alice", "alice@example.com", "U111"),
-        ("bob", None, None),
-    ]
-    assert [(t.slug, t.channel_name, t.channel_id) for t in teams] == [
-        ("core", "#team-core-chat", None),
-        ("web", "#team-web", "C0123ABCD"),
-    ]

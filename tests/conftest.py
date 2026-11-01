@@ -16,13 +16,11 @@ from move_forward.domain import (
     JiraSnapshot,
     LocalRepo,
     LocalSnapshot,
-    Ping,
+    Model,
     PullRequest,
     Review,
-    ReviewerUser,
     StackBranch,
     StackRepo,
-    TeamChannel,
     Thread,
     TimelineEvent,
 )
@@ -33,9 +31,7 @@ from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.models import Entry, Ice, IcedItem, Size, Todo
 from move_forward.plugins.notes.repository import MIGRATIONS as NOTES_MIGRATIONS
 from move_forward.plugins.notes.repository import NotesRepository
-from move_forward.plugins.slack.models import Contact
-from move_forward.plugins.slack.models import Ping as SlackPing
-from move_forward.plugins.slack.models import TeamChannel as SlackTeamChannel
+from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
 from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
 from move_forward.plugins.slack.repository import SlackRepository
@@ -149,7 +145,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     NotesRepository(db).replace_all(
         cast(list[Entry], o.pop("work_items", [])), cast(list[Ice], o.pop("iced_stacks", [])), []
     )
-    reviewers = cast(dict[str, ReviewerUser], o.pop("users", {}))
+    reviewers = cast(dict[str, Reviewer], o.pop("users", {}))
     channels = cast(dict[str, TeamChannel], o.pop("teams", {}))
     pings = cast(list[Ping], o.pop("pings", []))
     github: dict[str, object] = {"org": "acme"}
@@ -192,8 +188,8 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     if enable_slack:
         SlackRepository(db).replace_imported(
             [Contact(login=u.login, slack_id=u.slack_id) for u in reviewers.values()],
-            [SlackTeamChannel.model_validate(t.model_dump()) for t in channels.values()],
-            [SlackPing.model_validate(p.model_dump()) for p in pings],
+            list(channels.values()),
+            pings,
         )
     return config, db
 
@@ -233,6 +229,14 @@ def issue(key: str = "APP-1", **overrides: object) -> JiraIssue:
     }
     fields.update(overrides)
     return JiraIssue.model_validate(fields)
+
+
+class Reviewer(Model):
+    """Someone who reviews: their GitHub login, commit email (github) and Slack id (slack)."""
+
+    login: str
+    email: str | None = None
+    slack_id: str | None = None
 
 
 def todo(text: str, size: Size | None = None) -> Todo:
