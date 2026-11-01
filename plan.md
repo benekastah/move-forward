@@ -75,9 +75,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   once git deletes them there's no button to bring them back. git could add Restore
   branches on the On ice item, recreating each at its commit; and Reopen on a stack whose
   branches are gone could confirm first, since the commits are forgotten with it.
-- **Slack lookups that found nobody are never retried.** A reviewer whose email had no
-  Slack account when looked up keeps an empty id until set by hand, even after they join.
-  Misses could be looked up again after `prune_days`, or slack's prune could clear them.
 - **Stale JSON in `snapshots.payload`.** Core no longer writes it, but the last JSON each
   plugin stored stays there, unused once that plugin's migration has copied it. A plugin
   can't clear core's table, so this needs a core migration that runs only after every

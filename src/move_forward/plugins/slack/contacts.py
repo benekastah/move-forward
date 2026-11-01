@@ -166,7 +166,7 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
         if email is None:
             continue
         slack_id = client.lookup_by_email(api_token, email)
-        slack.save_looked_up(login, slack_id)
+        slack.save_looked_up(login, slack_id, ctx.now)
         if slack_id:
             found.append(login)
     return found

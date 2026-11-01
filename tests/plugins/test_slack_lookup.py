@@ -4,6 +4,8 @@ import io
 import json
 import urllib.request
 from collections.abc import Callable
+from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 from conftest import NOW, Reviewer, pr, snapshot, stored
@@ -100,3 +102,22 @@ def test_the_client_reads_slacks_answers(monkeypatch: pytest.MonkeyPatch) -> Non
     answers.append({"ok": False, "error": "missing_scope"})
     with pytest.raises(RuntimeError, match="missing_scope"):
         client.lookup_by_email("t", "a@x")
+
+
+def test_a_lookup_that_found_nobody_is_tried_again_after_prune_days(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked = _lookups(monkeypatch, {})
+    config, db = stored(
+        github=snapshot(mine=[pr(1, requested_users=["bob"])]),
+        users={"bob": Reviewer(login="bob", email="b@x")},
+    )
+    plugins = enabled(config, db, NOW)
+    graph, _ = stored_graph(db, plugins)
+    [slack] = [e for e in plugins if e.name == "slack"]
+    contacts.look_up_requested(slack.ctx, graph)
+    assert slack.plugin.prune(slack.ctx, graph) == []  # bob was looked up just now
+    later = replace(slack.ctx, now=NOW + timedelta(days=config.prune_days + 1))
+    assert slack.plugin.prune(later, graph) == ["will look up 1 person(s) again"]
+    _lookups(monkeypatch, {"b@x": "U222222"})
+    assert contacts.look_up_requested(later, graph) == ["bob"] and asked == ["b@x"]

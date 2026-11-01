@@ -18,8 +18,9 @@ People's Slack ids and teams' channels come from the skill's `reviewer-map.md`, 
 token (`token_env`, default `SLACK_API_TOKEN`, else the macOS keychain item
 `keychain_service` for your email), each refresh also looks up the Slack id of every
 reviewer my open PRs ask for whom nothing names one for, by the email github knows for
-them. The token needs the `users:read.email` scope; a lookup that finds nobody isn't tried
-again, and an import or a value set by hand wins over a lookup.
+them. The token needs the `users:read.email` scope; a lookup that finds nobody is tried again
+once it's `prune_days` old (they may have joined Slack since), and an import or a value
+set by hand wins over a lookup.
 
 ## Panels
 

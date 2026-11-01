@@ -218,5 +218,8 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
 
     def prune(self, ctx: Context[SlackConfig], graph: Graph) -> list[str]:
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
-        deleted = SlackRepository(ctx.db).delete_pings_before(cutoff)
-        return [f"deleted {deleted} old ping(s)"] if deleted else []
+        slack = SlackRepository(ctx.db)
+        deleted = slack.delete_pings_before(cutoff)
+        retried = slack.forget_misses_before(cutoff)
+        notices = [f"deleted {deleted} old ping(s)"] if deleted else []
+        return notices + ([f"will look up {retried} person(s) again"] if retried else [])

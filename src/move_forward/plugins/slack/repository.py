@@ -62,6 +62,11 @@ MIGRATIONS = [
     DROP TABLE slack_contacts;
     ALTER TABLE slack_contacts_new RENAME TO slack_contacts;
     """,
+    """
+    -- When a lookup ran, so one that found nobody is tried again later. Misses from before
+    -- have none, and are tried again at the next prune.
+    ALTER TABLE slack_contacts ADD COLUMN looked_up_at TEXT;
+    """,
 ]
 """The slack plugin's migrations. Every table is kept: only the dashboard knows these."""
 
@@ -94,16 +99,29 @@ class SlackRepository:
         )
         return {row["target"]: row["source"] for row in rows}
 
-    def save_looked_up(self, login: str, slack_id: str | None) -> None:
+    def save_looked_up(self, login: str, slack_id: str | None, now: datetime) -> None:
         """Remember what a lookup found, or that it found nobody, unless the login is known."""
         self._db.execute(
-            "INSERT OR IGNORE INTO slack_contacts VALUES (?, ?, ?)", (login, slack_id, LOOKED_UP)
+            "INSERT OR IGNORE INTO slack_contacts (login, slack_id, source, looked_up_at)"
+            " VALUES (?, ?, ?, ?)",
+            (login, slack_id, LOOKED_UP, now.isoformat()),
         )
+
+    def forget_misses_before(self, cutoff: datetime) -> int:
+        """Forget lookups that found nobody before `cutoff`, so they're tried again (the
+        person may have joined Slack since); how many."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM slack_contacts WHERE source = ? AND slack_id IS NULL"
+                " AND (looked_up_at IS NULL OR looked_up_at < ?)",
+                (LOOKED_UP, cutoff.isoformat()),
+            ).rowcount
 
     def set_contact(self, login: str, slack_id: str | None) -> None:
         """Set a person's Slack id by hand; it wins over imports from now on."""
         self._db.execute(
-            "INSERT OR REPLACE INTO slack_contacts VALUES (?, ?, ?)", (login, slack_id, DASHBOARD)
+            "INSERT OR REPLACE INTO slack_contacts (login, slack_id, source) VALUES (?, ?, ?)",
+            (login, slack_id, DASHBOARD),
         )
 
     def unset_contact(self, login: str) -> bool:
@@ -169,7 +187,8 @@ class SlackRepository:
             for table in ("slack_contacts", "slack_team_channels", "slack_pings"):
                 conn.execute(f"DELETE FROM {table} WHERE source = ?", (IMPORTED,))
             conn.executemany(  # over a lookup, but not over a value set by hand
-                "INSERT INTO slack_contacts VALUES (?, ?, ?) ON CONFLICT (login) DO UPDATE"
+                "INSERT INTO slack_contacts (login, slack_id, source) VALUES (?, ?, ?)"
+                " ON CONFLICT (login) DO UPDATE"
                 " SET slack_id = excluded.slack_id, source = excluded.source"
                 " WHERE slack_contacts.source = ?",
                 [(c.login, c.slack_id, IMPORTED, LOOKED_UP) for c in contacts if c.slack_id],
