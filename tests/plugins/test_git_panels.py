@@ -206,3 +206,29 @@ def test_a_branch_is_mine_by_my_commits_a_pr_of_mine_or_its_prefix() -> None:
 
     assert work(["me/"]) == ["fix-x", "me/old"]
     assert work([]) == ["ancient", "fix-x"]  # without prefixes, uncounted branches still count
+
+
+def test_a_checkout_of_a_pr_that_moved_on_github_is_shown_without_fetching() -> None:
+    reviewing = pr(7, author="alice", head="alice/feature", head_oid="b" * 40)
+    mine = pr(8, head="me/APP-8-fix", head_oid="c" * 40)
+    tracked = {"upstream": "origin/x", "ahead": 0}
+    built = dashboard(
+        github=snapshot(mine=[mine], direct_requests=[reviewing]),
+        local=local_snapshot(
+            branches=[
+                local_branch("alice/feature", sha="a" * 40, **tracked),  # alice pushed since
+                local_branch("me/APP-8-fix", sha="c" * 40, **tracked),  # up to date
+                local_branch("me/APP-8-fix-2", sha="d" * 40, **tracked),  # no PR
+            ]
+        ),
+    )
+    items = panel(built, "git.local_work").items
+    assert [i.title for i in items] == ["alice/feature: PR #7 moved on GitHub; pull it"]
+    assert items[0].badges == ["behind GitHub"] and items[0].url == reviewing.url
+    unpushed = dashboard(  # with commits of its own to push, it's unpushed work instead
+        github=snapshot(mine=[mine.model_copy(update={"head_oid": "e" * 40})]),
+        local=local_snapshot(
+            branches=[local_branch("me/APP-8-fix", sha="c" * 40, upstream="origin/x", ahead=1)]
+        ),
+    )
+    assert titles(unpushed, "git.local_work") == ["me/APP-8-fix: 1 unpushed commits"]

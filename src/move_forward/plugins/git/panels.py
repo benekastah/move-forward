@@ -10,7 +10,7 @@ from ...domain import Model
 from ...graph import Graph, Ref
 from ...page import Action, Item, Panel, Signals, age
 from .config import GitConfig
-from .models import Branch, LocalSnapshot
+from .models import Branch, LocalRepo, LocalSnapshot
 
 TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
@@ -30,7 +30,9 @@ class _PrView(Model):
     url: str | None = None
     state: str | None = None
     repo: str
+    number: int
     head: str
+    head_oid: str | None = None
     mine: bool
     merged_at: str | None = None
 
@@ -47,9 +49,14 @@ class Builder:
         self.now = now
         self.local = snapshot
         self.prs_by_branch: dict[tuple[str, str], list[_PrView]] = {}
+        """My PRs, by repo and head branch."""
+        self.open_prs: dict[tuple[str, str], _PrView] = {}
+        """Every open PR github knows (mine, or one I review), by repo and head branch."""
         for pr in graph.view(PR, _PrView):
             if pr.mine:
                 self.prs_by_branch.setdefault((pr.repo, pr.head), []).append(pr)
+            if pr.state == "open":
+                self.open_prs.setdefault((pr.repo, pr.head), pr)
 
     def _pr(self, repo: str | None, branch: str, state: str) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
@@ -94,9 +101,12 @@ class Builder:
                         )
                     )
             for branch in repo.branches:
-                if branch.name == repo.default_branch or not self._is_my_branch(
-                    repo.github_repo, branch
-                ):
+                if branch.name == repo.default_branch:
+                    continue
+                if item := self._behind_github(repo, branch):
+                    items.append(item)
+                    continue
+                if not self._is_my_branch(repo.github_repo, branch):
                     continue
                 reason = None
                 if branch.ahead:
@@ -125,8 +135,30 @@ class Builder:
             key="local_work",
             priority=50,  # 5. restack and push
             title="Local work",
-            description="Uncommitted changes in worktrees, and branches with unpushed commits.",
+            description="Uncommitted changes in worktrees, branches with unpushed commits, and"
+            " checkouts of PRs that moved on GitHub.",
             items=items,
+        )
+
+    def _behind_github(self, repo: LocalRepo, branch: Branch) -> Item | None:
+        """An item for a branch with nothing to push whose open PR (mine, or one I review)
+        is at another commit on GitHub: someone pushed to it since it was last pulled.
+        Read from github's PRs, so it needs no fetch."""
+        pr = self.open_prs.get((repo.github_repo or "", branch.name))
+        if (
+            pr is None
+            or branch.ahead
+            or branch.upstream is None
+            or pr.head_oid is None
+            or branch.sha in (None, pr.head_oid)
+        ):
+            return None
+        return Item(
+            title=f"{branch.name}: PR #{pr.number} moved on GitHub; pull it",
+            url=pr.url,
+            subtitle=f"{repo.dir} · last commit here {age(self.now, branch.committed_at)} ago",
+            badges=["behind GitHub"],
+            subjects=[branch_ref(repo.dir, branch.name), pr.subject],
         )
 
     def cleanup(self) -> Panel:
