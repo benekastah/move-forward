@@ -218,8 +218,9 @@ def test_renewing_gets_louder_as_the_last_certificate_nears_its_end(tmp_path: Pa
     tls.make(paths)
     last = tls.expires(paths)
     assert tls.urgency(paths, last - timedelta(days=20)) is None  # just the header
-    assert tls.urgency(paths, last - timedelta(days=10)) == "soon"
-    assert tls.urgency(paths, last - timedelta(days=3)) == "now"
+    assert tls.urgency(paths, last - timedelta(days=10)) == "notice"
+    assert tls.urgency(paths, last - timedelta(days=5)) == "soon"
+    assert tls.urgency(paths, last - timedelta(days=2)) == "now"
     assert tls.urgency(paths, last + timedelta(days=1)) == "now"
 
 
@@ -232,7 +233,7 @@ def test_the_banner_is_on_the_dashboard_and_focus_pages(
     tls.make(tls.Paths.beside(config.db_path))
     app = server.App(config, db, TOKEN)
     assert "class='banner" not in app.dashboard_page()
-    soon = tls.expires(tls.Paths.beside(config.db_path)) - timedelta(days=3)
+    soon = tls.expires(tls.Paths.beside(config.db_path)) - timedelta(days=2, hours=12)
     real_urgency, real_problem = tls.urgency, tls.problem
 
     def urgency(paths: tls.Paths) -> str | None:
@@ -243,7 +244,7 @@ def test_the_banner_is_on_the_dashboard_and_focus_pages(
 
     monkeypatch.setattr(server.tls, "urgency", urgency)
     monkeypatch.setattr(server.tls, "problem", problem)
-    banner = "<div class='banner now' role='alert'>the last certificate ends in 3 days"
+    banner = "<div class='banner now' role='alert'>the last certificate ends in 2 days"
     assert banner in app.dashboard_page()
     assert banner in (app.focus_page("", 0) or "")
     assert banner in (app.focus_page("all", 0) or "")

@@ -129,8 +129,8 @@ def _linkable(url: str | None) -> bool:
 
 
 def banner(text: str, urgency: str | None) -> str:
-    """A bar across the page for something that must be done soon ("soon": amber) or now
-    ("now": bright red); nothing without an urgency."""
+    """A bar across the page for something that must be done: "notice" (blue), "soon"
+    (yellow) or "now" (red); nothing without an urgency."""
     if not text or urgency is None:
         return ""
     return f"<div class='banner {_e(urgency)}' role='alert'>{_e(text)}</div>"

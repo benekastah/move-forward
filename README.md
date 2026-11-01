@@ -32,8 +32,8 @@ database) to macOS's keychain or Windows's user store, and, where NSS's `certuti
 installed (`libnss3-tools`, `nss-tools`), to Firefox's profiles and Chrome's store on
 Linux; elsewhere, import it as an authority in the browser's certificate settings.
 Without a certificate, or with `https = false`, the dashboard stays on plain HTTP. The page's
-header and `mfd check` warn 30 days before the last certificate ends, a banner across every
-page from 14 days, bright red from 7; `mfd cert --force --trust` then makes a new authority
+header and `mfd check` warn 30 days before the last certificate ends, and a banner across
+every page from 14 days: blue, yellow from 7, red from 3; `mfd cert --force --trust` then makes a new authority
 and chain, trusted again.
 
 `install.sh` ends with `mfd init` when there is no config yet: it asks for
