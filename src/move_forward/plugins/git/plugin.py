@@ -1,5 +1,7 @@
 """The git plugin."""
 
+from typing import ClassVar
+
 from ...domain import LocalSnapshot
 from ...graph import Entity, Graph, Ref
 from ...page import Action, Item, Panel
@@ -7,6 +9,7 @@ from ...plugin import ActionHandler, Context, Plugin
 from . import actions, client
 from .config import GitConfig
 from .panels import Builder, branch_ref, delete_iced_action
+from .repository import MIGRATIONS, LocalRepository
 
 REPO = "repo"
 
@@ -16,6 +19,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     title = "Local"
     config_model = GitConfig
     snapshot_model = LocalSnapshot
+    migrations: ClassVar[list[str]] = MIGRATIONS
 
     def collect(self, ctx: Context[GitConfig]) -> LocalSnapshot:
         return client.collect(
@@ -24,6 +28,12 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             ctx.config.commit_history_days,
             ctx.config.ignored_worktree_globs,
         )
+
+    def store(self, ctx: Context[GitConfig], snapshot: LocalSnapshot) -> None:
+        LocalRepository(ctx.db).replace(snapshot)
+
+    def load(self, ctx: Context[GitConfig]) -> LocalSnapshot | None:
+        return LocalRepository(ctx.db).load()
 
     def entities(self, ctx: Context[GitConfig], snapshot: LocalSnapshot | None) -> list[Entity]:
         """A `repo` per checkout on GitHub, and a `branch` per local branch."""

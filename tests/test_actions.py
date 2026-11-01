@@ -17,6 +17,7 @@ from move_forward.domain import (
 from move_forward.graph import Graph
 from move_forward.plugin import KEPT, ActionError
 from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack.config import GitStackConfig
 from move_forward.plugins.git_stack.repository import StackRepository
 from move_forward.plugins.github.config import GitHubConfig
@@ -26,7 +27,6 @@ from move_forward.plugins.notes.actions import ICED_FROM_DASHBOARD_NOTE
 from move_forward.plugins.notes.models import Entry, Link
 from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.registry import enabled, migrate
-from move_forward.repositories import SnapshotRepository
 from move_forward.shell import git
 
 
@@ -103,7 +103,7 @@ def _stored(config: Config) -> Database:
             )
             for repo in config.git.repos
         ]
-        SnapshotRepository(db).save("git", datetime.now(UTC), LocalSnapshot(repos=repos))
+        LocalRepository(db).replace(LocalSnapshot(repos=repos))
     return db
 
 

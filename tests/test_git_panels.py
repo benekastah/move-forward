@@ -16,10 +16,13 @@ from conftest import (
 )
 
 from move_forward import refresh
+from move_forward.db import Database
 from move_forward.domain import (
     Worktree,
 )
+from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
 from move_forward.registry import enabled
+from move_forward.repositories import SnapshotRepository
 
 build = dashboard
 
@@ -147,3 +150,23 @@ def test_git_offers_to_delete_iced_branches_on_the_on_ice_item_only() -> None:
     assert [a.name for a in on_ice["me/gone"].actions] == ["notes/thaw"]
     [local_work] = panel(built, "local_work").items
     assert "git/delete_together" not in [a.name for a in local_work.actions]
+
+
+def test_git_keeps_its_snapshot_in_its_tables() -> None:
+    first = local_snapshot(
+        worktrees=[Worktree(path="/src/widgets", branch=None, modified=1, untracked=2)],
+        branches=[
+            local_branch("main", sha="a" * 40, upstream="origin/main"),
+            local_branch("me/x", ahead=2, gone=True, ahead_of_default=3),
+        ],
+        my_dirs=["api", "web"],
+    )
+    db = Database(":memory:")
+    SnapshotRepository(db).save("git", NOW, first)
+    db.migrate("git", MIGRATIONS)
+    repo = LocalRepository(db)
+    assert repo.load() == first
+    second = local_snapshot(dir="/src/other", github_repo=None)
+    repo.replace(second)
+    assert repo.load() == second
+    assert db.query("SELECT * FROM git_branches") == []  # gone with their repo
