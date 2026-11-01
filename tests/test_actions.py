@@ -18,6 +18,7 @@ from move_forward.graph import Graph
 from move_forward.plugin import KEPT, ActionError
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git_stack.config import GitStackConfig
+from move_forward.plugins.git_stack.repository import StackRepository
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.notes import markdown
@@ -243,7 +244,7 @@ def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -
         StackBranch(name="beside", parent="done"),
     ]
     snapshot = GitStackSnapshot(repos=[StackRepo(dir=str(repo), branches=tracked)])
-    SnapshotRepository(db).save("git_stack", datetime.now(UTC), snapshot)
+    StackRepository(db).replace(snapshot)
     assert refresh.run_action(config, db, "notes/ice", {"repo": str(repo), "branch": "top"}) == (
         "put done on ice (4 branches)"
     )

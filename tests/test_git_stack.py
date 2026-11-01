@@ -19,11 +19,14 @@ from conftest import (
 )
 
 from move_forward import refresh
+from move_forward.db import Database
 from move_forward.domain import StackBranch, StackRepo
 from move_forward.plugin import ActionError
 from move_forward.plugins.git_stack import client
 from move_forward.plugins.git_stack.panels import repo_dirs
+from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 from move_forward.registry import enabled
+from move_forward.repositories import SnapshotRepository
 
 ICED = iced("me/x", "/src/widgets")
 
@@ -149,3 +152,18 @@ def test_untrack_takes_only_branches_git_stack_tracks() -> None:
     for target in ("/src/widgets\t*", "/src/widgets\tmain", "/elsewhere\tme/x"):
         with pytest.raises(ActionError, match="doesn't track"):
             refresh.run_action(config, db, "git_stack/untrack", {"targets": target})
+
+
+def test_the_migration_keeps_the_last_snapshot_and_store_replaces_it() -> None:
+    db = Database(":memory:")
+    first = stacks(
+        StackBranch(name="main"),
+        StackBranch(name="me/a", parent="main", status="needs-restack", current=True, group="g"),
+    )
+    SnapshotRepository(db).save("git_stack", NOW, first)
+    db.migrate("git_stack", MIGRATIONS)
+    repo = StackRepository(db)
+    assert repo.load() == first
+    second = stacks(StackBranch(name="main"), dir="/src/other")
+    repo.replace(second)
+    assert repo.load() == second

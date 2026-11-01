@@ -10,6 +10,7 @@ from ...plugin import ActionHandler, Context, Plugin
 from . import actions, client
 from .config import GitStackConfig
 from .panels import Builder, entities, repo_dirs, untrack_iced_action
+from .repository import MIGRATIONS, StackRepository
 
 
 class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
@@ -19,10 +20,18 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     requires: ClassVar[list[str]] = ["git"]
     snapshot_model = GitStackSnapshot
     collects_after_graph = True
+    migrations: ClassVar[list[str]] = MIGRATIONS
 
     def collect_after(self, ctx: Context[GitStackConfig], graph: Graph) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""
         return client.collect([Path(d) for d in repo_dirs(graph)])
+
+    def store(self, ctx: Context[GitStackConfig], snapshot: GitStackSnapshot) -> None:
+        StackRepository(ctx.db).replace(snapshot)
+
+    def load(self, ctx: Context[GitStackConfig]) -> GitStackSnapshot | None:
+        """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""
+        return StackRepository(ctx.db).load()
 
     def entities(
         self, ctx: Context[GitStackConfig], snapshot: GitStackSnapshot | None

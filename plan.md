@@ -23,7 +23,7 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 ### 5e. Plugin tables instead of JSON
 
 - One branch per plugin, moving its fetched data into its own tables: github (including
-  what was the `github.derived` snapshot), git, git_stack, jira. Each migration copies the
+  what was the `github.derived` snapshot), git and jira (git_stack's is done). Each migration copies the
   stored JSON snapshot into the new tables, so the page isn't empty until the next refresh.
 - Each plugin's models move from core's `domain.py` into the plugin (`models.py`), next to
   its tables. Core's `domain.py` keeps only `Model`.
