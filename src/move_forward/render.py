@@ -285,7 +285,7 @@ def dashboard_page(
     and the defaults apply. `warning` is something to fix, e.g. certificates ending soon,
     shown in the header, and across the page too with an `urgency` (see `banner`).
     """
-    status = "refreshing…" if refreshing else f"built {dashboard.generated_at:%H:%M}"
+    status = "refreshing…" if refreshing else f"built {dashboard.generated_at.astimezone():%H:%M}"
     reload_seconds = REFRESHING_RELOAD_SECONDS if refreshing else PAGE_RELOAD_SECONDS
     notice_html = f"<span class='notice'>{_e(notice)}</span>" if notice else ""
     notice_html += f"<span class='notice warn'>{_e(warning)}</span>" if warning else ""

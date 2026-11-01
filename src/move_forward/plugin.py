@@ -12,7 +12,7 @@ import logging
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
@@ -42,10 +42,16 @@ class Context[C: BaseModel]:
     prune_days: int
     """Work finished this long ago is cleared by `prune`."""
     now: datetime
+    """Now, as an aware time (UTC); show it, or take a day from it, in local time."""
     db: Database
     """For the plugin's own repository over its own tables, which its migrations made."""
     kv: KvRepository
     """Key/value state in the plugin's namespace."""
+
+    @property
+    def today(self) -> date:
+        """Today where I am: the local date, for what's recorded as done or changed today."""
+        return self.now.astimezone().date()
 
 
 PageHandler = Callable[[Context[Any], Graph, dict[str, list[str]]], str | None]

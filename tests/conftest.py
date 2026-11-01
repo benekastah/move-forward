@@ -1,8 +1,11 @@
 """Shared factories: small, fully populated domain objects that tests tweak."""
 
+import time
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
+import pytest
 from pydantic import BaseModel
 
 from move_forward.config import Config
@@ -39,6 +42,16 @@ from move_forward.repositories import SnapshotRepository
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
 ME = "me"
 REPO = "acme/widgets"
+
+
+@pytest.fixture(autouse=True)
+def in_utc(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Every test runs in UTC, so what the app takes in local time is the same anywhere."""
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
 
 
 def pr(number: int = 1, **overrides: object) -> PullRequest:

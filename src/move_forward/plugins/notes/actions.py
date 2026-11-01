@@ -113,7 +113,7 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
         b = branches[name]
         items.append(IcedItem(kind=BRANCH, ref_id=b.id, name=name, repo_dir=b.repo_dir, sha=b.sha))
     note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
-    ice_id = notes.add_ice(names[0], ctx.now.date(), note, items)
+    ice_id = notes.add_ice(names[0], ctx.today, note, items)
     notes.replace_covers([ice_id], covers(graph, notes.ices()))
     return f"put {names[0]} on ice ({len(names)} branches)"
 
@@ -134,7 +134,7 @@ def ice_item(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) ->
         raise ActionError(f"{entity.title} is already on ice")
     note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
     item = IcedItem(kind=kind, ref_id=ref_id, name=entity.title)
-    ice_id = notes.add_ice(entity.title, ctx.now.date(), note, [item])
+    ice_id = notes.add_ice(entity.title, ctx.today, note, [item])
     notes.replace_covers([ice_id], covers(graph, notes.ices()))
     return f"put {entity.title} on ice"
 
@@ -179,8 +179,8 @@ def todo_done(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -
     """Record an open todo as done today, and keep it on the focus page to undo."""
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, fields, done=False)
-    notes.set_done(todo.id, ctx.now.date())
-    notes.touch(entry.id, ctx.now.date())
+    notes.set_done(todo.id, ctx.today)
+    notes.touch(entry.id, ctx.today)
     return ActionResult(f"done: {todo.text}", {KEPT: f"notes:{todo.id}"})
 
 
@@ -188,7 +188,7 @@ def todo_undone(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str])
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, fields, done=True)
     notes.set_done(todo.id, None)
-    notes.touch(entry.id, ctx.now.date())
+    notes.touch(entry.id, ctx.today)
     return f"reopened: {todo.text}"
 
 
@@ -197,7 +197,7 @@ def todo_delete(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str])
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, fields, done=False)
     notes.delete_todo(todo.id)
-    notes.touch(entry.id, ctx.now.date())
+    notes.touch(entry.id, ctx.today)
     return f"dropped: {todo.text}"
 
 
@@ -224,7 +224,7 @@ def todo_link(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -
     if link in todo.links:
         raise ActionError(f"{link.ref} is already linked to that todo")
     notes.link_todo(todo.id, link)
-    notes.touch(entry.id, ctx.now.date())
+    notes.touch(entry.id, ctx.today)
     return f"linked {link.ref}"
 
 
@@ -244,12 +244,12 @@ def todo_add(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) ->
     entry_id = notes.entry_id(title)
     if entry_id is None and fields.get("create"):
         where = fields.get("where", "")
-        entry_id = notes.add_entry(title, ctx.now.date(), INFERRED, where or None, links_in(where))
+        entry_id = notes.add_entry(title, ctx.today, INFERRED, where or None, links_in(where))
     if entry_id is None:
         raise ActionError(f"no work-notes entry titled {title}")
     sized: Size | None = "quick" if size == "quick" else "big" if size == "big" else None
     notes.add_todo(entry_id, text, sized, links_in(text))
-    notes.touch(entry_id, ctx.now.date())
+    notes.touch(entry_id, ctx.today)
     return f"added: {text}"
 
 

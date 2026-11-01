@@ -35,7 +35,7 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
     repo = NotesRepository(ctx.db)
     work_notes = read(markdown.WORK_NOTES_FILE)
     entries, sections = markdown.read_work_notes(work_notes)
-    ices, last_asked = markdown.read_on_ice(read(markdown.ON_ICE_FILE), ctx.now.date())
+    ices, last_asked = markdown.read_on_ice(read(markdown.ON_ICE_FILE), ctx.today)
     if (entries or ices) and not repo.is_empty() and not replace:
         raise ValueError("the notes already have entries; pass --replace to replace them")
     if entries or ices or sections:
@@ -162,7 +162,7 @@ def cmd_add_entry(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namesp
         raise ValueError(f"there is already an entry titled {args.title!r}")
     links = [actions.link_for(graph, v) for v in args.link]
     entry_id = notes.add_entry(
-        args.title, ctx.now.date(), args.status, args.where, list(dict.fromkeys(links))
+        args.title, ctx.today, args.status, args.where, list(dict.fromkeys(links))
     )
     return Result(f"added entry {entry_id}", {"notice": f"added {args.title}", "id": entry_id})
 
@@ -183,7 +183,7 @@ def cmd_set(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -
         notes.set_where(entry.id, args.text)
     else:
         notes.set_blocked_on(entry.id, args.text)
-    notes.touch(entry.id, ctx.now.date())
+    notes.touch(entry.id, ctx.today)
     return Result(f"{entry.title}: {args.field} is now {args.text}")
 
 
@@ -193,7 +193,7 @@ def cmd_link(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) 
     link = actions.link_for(graph, args.ref)
     if not notes.link_entry(entry.id, link):
         raise ValueError(f"{entry.title} is already about {link.ref}")
-    notes.touch(entry.id, ctx.now.date())
+    notes.touch(entry.id, ctx.today)
     return Result(f"{entry.title}: linked {link.ref}")
 
 
@@ -206,7 +206,7 @@ def cmd_todo_add(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespa
     links = [*markdown.links_in(text), *(actions.link_for(graph, v) for v in args.link)]
     size: Size | None = args.size
     todo_id = notes.add_todo(entry.id, text, size, list(dict.fromkeys(links)))
-    notes.touch(entry.id, ctx.now.date())
+    notes.touch(entry.id, ctx.today)
     return Result(f"added todo {todo_id}", {"notice": f"added: {text}", "id": todo_id})
 
 
@@ -235,14 +235,14 @@ def cmd_condition(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namesp
             raise ValueError(f"{entry.title} already has that merge condition")
     elif not notes.remove_condition(entry.id, text):
         raise ValueError(f"{entry.title} has no merge condition {text!r}")
-    notes.touch(entry.id, ctx.now.date())
+    notes.touch(entry.id, ctx.today)
     return Result(f"{entry.title}: {args.condition_command} merge condition")
 
 
 def cmd_decline(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
-    notes.add_declined(entry.id, ctx.now.date(), args.text.strip())
+    notes.add_declined(entry.id, ctx.today, args.text.strip())
     return Result(f"{entry.title}: declined for today")
 
 

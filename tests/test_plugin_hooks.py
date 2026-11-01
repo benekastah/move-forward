@@ -1,7 +1,9 @@
 """Core's hooks for plugins: buttons on other plugins' items, pages and commands."""
 
 import argparse
+import time
 from collections.abc import Callable
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import ClassVar
 
@@ -20,6 +22,7 @@ from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.repositories import KvRepository
 
 
 class Hooked(JiraPlugin):
@@ -298,3 +301,23 @@ def test_a_plugin_prepares_its_item_actions_once_per_page(monkeypatch: pytest.Mo
     assert _Prepared.prepared == 1
     looks = [a.href for i in built.panel("github.conflicts").items for a in i.actions if a.href]
     assert looks == [f"/look?pr={pr(1).url}", f"/look?pr={pr(2).url}"]
+
+
+def test_today_is_the_local_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TZ", "America/Los_Angeles")
+    time.tzset()
+    try:
+        late_evening = datetime(2026, 10, 31, 3, 0, tzinfo=UTC)  # 8pm on the 30th there
+        ctx = Context(
+            config=JiraConfig(site="https://j"),
+            email="me@x",
+            teams=[],
+            prune_days=90,
+            now=late_evening,
+            db=Database(":memory:"),
+            kv=KvRepository(Database(":memory:"), "jira"),
+        )
+        assert ctx.today == date(2026, 10, 30)
+    finally:
+        monkeypatch.undo()
+        time.tzset()

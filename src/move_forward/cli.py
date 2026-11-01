@@ -138,13 +138,13 @@ def _cert(paths: tls.Paths, force: bool, trust: bool) -> int:
     """`mfd cert`: make the certificates unless they're there, and trust them if asked."""
     if paths.ready() and not force:
         print(
-            f"certificates in {paths.dir} cover until {tls.expires(paths):%Y-%m-%d};"
+            f"certificates in {paths.dir} cover until {tls.expires(paths).astimezone():%Y-%m-%d};"
             " --force replaces them"
         )
     else:
         tls.make(paths)
         print(
-            f"made certificates in {paths.dir} covering until {tls.expires(paths):%Y-%m-%d};"
+            f"made certificates in {paths.dir} covering until {tls.expires(paths).astimezone():%Y-%m-%d};"
             " `mfd serve` moves from one to the next by itself"
         )
     if trust:
