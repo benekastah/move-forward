@@ -5,6 +5,7 @@ branch. Pure functions; no I/O."""
 import re
 from datetime import datetime
 
+from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Link, Panel, PrState
 from .kinds import EntryAttrs, IcedBranchAttrs
@@ -195,6 +196,23 @@ def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
     return result
 
 
+class _PrView(Model):
+    """What notes reads of a `pr` (github's)."""
+
+    id: str
+    title: str
+    state: str | None = None
+    mine: bool
+
+
+class _TicketView(Model):
+    """What notes reads of a `ticket` (jira's)."""
+
+    id: str
+    url: str | None = None
+    summary: str | None = None
+
+
 class Builder:
     def __init__(
         self,
@@ -217,28 +235,23 @@ class Builder:
         ref = item.subject(PR) or item.subject(TICKET)
         if any(a.name == TODO_ADD for a in item.actions) or ref is None:
             return None
-        subject = self.graph.get(ref.kind, ref.id)
-        if subject is None:
-            return None
-        if subject.ref.kind == PR:
-            if not (subject.attrs.get("mine") and subject.state == "open"):
+        if ref.kind == PR:
+            pr = self.graph.view_one(PR, ref.id, _PrView)
+            entity = self.graph.get(PR, ref.id)
+            if pr is None or entity is None or not (pr.mine and pr.state == "open"):
                 return None
-            keys = [r.id for r in subject.refs if r.kind == TICKET]
-            entry = entry_for(self.entries, subject.ref.id, keys)
-            ticket = self.graph.get(TICKET, keys[0]) if keys else None
-            summary = ticket.attrs.get("summary") if ticket else None
-            title = (
-                f"{keys[0]} {summary or subject.title}"
-                if keys
-                else f"{subject.ref.id} {subject.title}"
-            )
-            return add_todo_action(entry, title, subject.ref.id)
-        if subject.ref.kind == TICKET:
-            key = subject.ref.id
-            entry = entry_for(self.entries, subject.url, [key])
-            summary = subject.attrs.get("summary")
-            return add_todo_action(entry, f"{key} {summary}" if summary else key, subject.url or "")
-        return None
+            keys = [r.id for r in entity.refs if r.kind == TICKET]
+            entry = entry_for(self.entries, pr.id, keys)
+            ticket = self.graph.view_one(TICKET, keys[0], _TicketView) if keys else None
+            summary = ticket.summary if ticket else None
+            title = f"{keys[0]} {summary or pr.title}" if keys else f"{pr.id} {pr.title}"
+            return add_todo_action(entry, title, pr.id)
+        ticket = self.graph.view_one(TICKET, ref.id, _TicketView)
+        if ticket is None:
+            return None
+        entry = entry_for(self.entries, ticket.url, [ticket.id])
+        title = f"{ticket.id} {ticket.summary}" if ticket.summary else ticket.id
+        return add_todo_action(entry, title, ticket.url or "")
 
     def put_on_ice(self, item: Item) -> Action | None:
         """A Put on ice button for an item about one of git's branches, unless it's on ice."""
@@ -254,7 +267,9 @@ class Builder:
 
     def _pr_states(self) -> dict[str, PrState]:
         return {
-            pr.ref.id: PR_STATES[pr.state] for pr in self.graph.of_kind(PR) if pr.state in PR_STATES
+            pr.id: PR_STATES[pr.state]
+            for pr in self.graph.view(PR, _PrView)
+            if pr.state in PR_STATES
         }
 
     def kept_todo(self, todo_id: int) -> Item | None:

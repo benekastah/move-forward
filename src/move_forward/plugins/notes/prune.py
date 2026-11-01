@@ -8,6 +8,7 @@ ticket are kept: nothing can say it's resolved.
 
 from datetime import UTC, date, datetime
 
+from ...domain import Model
 from ...graph import Entity, Graph
 from .models import Entry
 from .repository import NotesRepository
@@ -21,10 +22,20 @@ def _by(day: date | None, cutoff: datetime) -> bool:
     return day is not None and datetime.combine(day, datetime.min.time(), UTC) <= cutoff
 
 
-def _over_by(entity: Entity | None, attr: str, cutoff: datetime) -> bool:
-    """Whether the fetched entity says its work ended (`attr`) on or before `cutoff`."""
-    value = entity.attrs.get(attr) if entity else None
-    return isinstance(value, str) and datetime.fromisoformat(value) <= cutoff
+class _Ended(Model):
+    """What notes reads of a fetched `pr` (`closed_at`) or `ticket` (`resolved_at`)."""
+
+    closed_at: str | None = None
+    resolved_at: str | None = None
+
+
+def _over_by(entity: Entity | None, cutoff: datetime) -> bool:
+    """Whether the fetched entity says its work ended on or before `cutoff`."""
+    if entity is None:
+        return False
+    ended = _Ended.model_validate(entity.attrs)
+    when = ended.closed_at or ended.resolved_at
+    return when is not None and datetime.fromisoformat(when) <= cutoff
 
 
 def _finished(
@@ -37,8 +48,8 @@ def _finished(
     keys = [link.ref for link in entry.links if link.kind == TICKET]
     if not urls and not keys:
         return _by(entry.updated_on, cutoff)
-    return all(_over_by(prs.get(u), "closed_at", cutoff) for u in urls) and all(
-        _over_by(tickets.get(k), "resolved_at", cutoff) for k in keys
+    return all(_over_by(prs.get(u), cutoff) for u in urls) and all(
+        _over_by(tickets.get(k), cutoff) for k in keys
     )
 
 

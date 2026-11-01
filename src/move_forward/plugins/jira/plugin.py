@@ -5,6 +5,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
+from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Item, Link, Panel, age
 from ...plugin import Context, Plugin
@@ -37,23 +38,35 @@ def escalation(issue: JiraIssue, label_prefix: str, levels: list[str]) -> int:
     return best
 
 
+class _PrView(Model):
+    """What jira reads of a `pr` (github's), to suggest status changes."""
+
+    id: str
+    url: str | None = None
+    state: str | None = None
+    number: int
+    draft: bool
+    mine: bool
+    changes_requested: bool
+
+
 def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
     items: list[Item] = []
     for issue in snapshot.issues:
-        prs = [p for p in graph.related(ticket_ref(issue.key), PR) if p.attrs.get("mine")]
+        prs = [p for p in graph.view_related(ticket_ref(issue.key), PR, _PrView) if p.mine]
         open_prs = [p for p in prs if p.state == "open"]
         merged = [p for p in prs if p.state == "merged"]
         proposal = None
         if (
             issue.status == config.status_in_progress
             and open_prs
-            and all(not p.attrs.get("draft") for p in open_prs)
+            and all(not p.draft for p in open_prs)
         ):
             proposal = f"{config.status_in_progress} → {config.status_in_review}: all PRs open and non-draft"
         elif issue.status == config.status_in_review and merged and not open_prs:
             proposal = f"{config.status_in_review} → {config.status_closed}: all PRs merged"
         elif issue.status == config.status_in_review and any(
-            p.attrs.get("draft") or p.attrs.get("changes_requested") for p in open_prs
+            p.draft or p.changes_requested for p in open_prs
         ):
             proposal = (
                 f"{config.status_in_review} → {config.status_in_progress}:"
@@ -67,9 +80,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                     title=f"{issue.key} {issue.summary}",
                     url=issue.url,
                     subtitle=proposal,
-                    links=[
-                        Link(text=f"#{p.attrs.get('number')}", url=p.url or p.ref.id) for p in prs
-                    ],
+                    links=[Link(text=f"#{p.number}", url=p.url or p.id) for p in prs],
                     subjects=[ticket_ref(issue.key)],
                 )
             )

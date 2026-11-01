@@ -8,6 +8,7 @@ checkouts. `mfd notes` calls the same functions.
 
 from pathlib import Path
 
+from ...domain import Model
 from ...graph import Graph
 from ...plugin import KEPT, ActionError, ActionHandler, ActionResult, Context
 from .config import NotesConfig
@@ -25,6 +26,14 @@ INFERRED = "inferred"
 """The status of an entry the dashboard made, rather than the skill."""
 
 
+class _BranchView(Model):
+    """What notes reads of a `branch` (git's, with what git_stack adds)."""
+
+    id: str
+    sha: str | None = None
+    stack_parent: str | None = None
+
+
 def _repo(graph: Graph, repo_dir: str) -> Path:
     """`repo_dir`, if the graph has branches in it (from `[git] repos`)."""
     prefix = repo_dir + TARGET_SEPARATOR
@@ -38,9 +47,9 @@ def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
     branches; just the branch when it isn't in a stack (or git-stack isn't on)."""
     prefix = f"{repo}{TARGET_SEPARATOR}"
     parents = {
-        e.ref.id.removeprefix(prefix): parent
-        for e in graph.of_kind(BRANCH)
-        if e.ref.id.startswith(prefix) and isinstance(parent := e.attrs.get("stack_parent"), str)
+        b.id.removeprefix(prefix): b.stack_parent
+        for b in graph.view(BRANCH, _BranchView)
+        if b.id.startswith(prefix) and b.stack_parent
     }
     if branch not in parents:
         return [branch]
@@ -76,10 +85,9 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
         raise ActionError(f"{branch} is already on ice")
     items: list[IcedItem] = []
     for ref_id in ref_ids:
-        entity = graph.get(BRANCH, ref_id)
-        sha = entity.attrs.get("sha") if entity else None
+        branch_view = graph.view_one(BRANCH, ref_id, _BranchView)
         items.append(
-            IcedItem(kind=BRANCH, ref_id=ref_id, sha=sha if isinstance(sha, str) else None)
+            IcedItem(kind=BRANCH, ref_id=ref_id, sha=branch_view.sha if branch_view else None)
         )
     note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
     notes.add_ice(names[0], ctx.now.date(), note, items)
