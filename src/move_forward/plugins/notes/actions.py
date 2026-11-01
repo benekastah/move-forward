@@ -209,7 +209,10 @@ def link_for(graph: Graph, value: str) -> Link:
     found = links_in(value)
     if len(found) == 1 and found[0].ref == value:
         return found[0]
-    raise ActionError(f"{value!r} is neither a PR URL nor a ticket key (with [jira] set up)")
+    raise ActionError(
+        f"{value!r} is neither a PR URL nor a ticket key: a key needs [jira], and a project"
+        " jira has seen a ticket of mine in"
+    )
 
 
 def todo_link(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
