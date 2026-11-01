@@ -15,7 +15,7 @@ from ... import render
 from ...graph import Graph
 from ...page import Action, Item, Panel, age
 from ...plugin import ActionError, ActionHandler, CliHandler, Context, PageHandler, Plugin
-from . import cli
+from . import cli, contacts
 from .config import SlackConfig
 from .models import Ping, TeamChannel
 from .pings import Pinger, PingTarget, PrPing
@@ -104,7 +104,8 @@ def ping_page(ping: PrPing, now: datetime) -> str:
         f"<p><a href='{e(ping.pr_url)}' target='_blank' rel='noopener'>{e(ping.pr_url)}</a></p>"
         f"{blockers}{targets}"
         "<p class='target-note'>Copy the message, paste it in Slack, then mark it as sent so the"
-        " next ping is a follow-up.</p></article>"
+        f" next ping is a follow-up. <a href='{contacts.CONTACTS_PATH}'>Where pings go</a></p>"
+        "</article>"
     )
     return render.page(f"Ping: {ping.title}", "ping", body, COPY_SCRIPT)
 
@@ -114,7 +115,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     title = "Slack"
     config_model = SlackConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
-    cli_help = "import the reviewer map from the skill's markdown"
+    cli_help = "see and set where review pings go, or import them from the skill's markdown"
 
     def panels(
         self, ctx: Context[SlackConfig], snapshot: BaseModel | None, graph: Graph
@@ -154,7 +155,12 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             found = pinger(ctx, graph).pings().get(pr_url)
             return ping_page(found, ctx.now) if found else None
 
-        return {PING_PATH: ping}
+        def where_pings_go(
+            ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]
+        ) -> str | None:
+            return contacts.contacts_page(ctx, graph)
+
+        return {PING_PATH: ping, contacts.CONTACTS_PATH: where_pings_go}
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
@@ -177,7 +183,11 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             )
             return f"marked the {form.kind} ping to {form.target.partition(':')[2]} as sent"
 
-        return {"mark_sent": mark_sent}
+        return {
+            "mark_sent": mark_sent,
+            "set_contact": contacts.set_contact_action,
+            "set_team_channel": contacts.set_team_channel_action,
+        }
 
     def prune(self, ctx: Context[SlackConfig], graph: Graph) -> list[str]:
         cutoff = ctx.now - timedelta(days=ctx.prune_days)

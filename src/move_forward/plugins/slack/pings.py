@@ -46,7 +46,8 @@ class PrPing(Model):
     """No review activity for `[github] stale_review_hours`."""
 
 
-def _strings(value: object) -> list[str]:
+def strings(value: object) -> list[str]:
+    """An attribute that should be a list of strings, as one; [] when it isn't a list."""
     return [str(v) for v in cast(list[object], value)] if isinstance(value, list) else []
 
 
@@ -113,7 +114,7 @@ class Pinger:
     def _targets(self, pr: Entity, last_by_target: dict[str, Ping]) -> list[PingTarget]:
         targets: list[PingTarget] = []
         workspace = self.config.workspace_url
-        for login in _strings(pr.attrs.get("requested_users")):
+        for login in strings(pr.attrs.get("requested_users")):
             user = self.users.get(login)
             link = (
                 _slack_link(workspace, f"team/{user.slack_id}") if user and user.slack_id else None
@@ -123,7 +124,7 @@ class Pinger:
                     "user", login, link, f"{login} (DM)", last_by_target.get(f"user:{login}"), pr
                 )
             )
-        for name in _strings(pr.attrs.get("requested_teams")):
+        for name in strings(pr.attrs.get("requested_teams")):
             team = self.teams.get(name)
             link = None
             destination = f"team {name}"
@@ -154,15 +155,15 @@ class Pinger:
             last_by_target = dict(by_pr.get(url, {}))
             # A nudge the skill logged without a target counts for every target.
             if (untargeted := any_ping.get(url)) and untargeted.target.startswith("unknown"):
-                for login in _strings(pr.attrs.get("requested_users")):
+                for login in strings(pr.attrs.get("requested_users")):
                     last_by_target.setdefault(f"user:{login}", untargeted)
-                for name in _strings(pr.attrs.get("requested_teams")):
+                for name in strings(pr.attrs.get("requested_teams")):
                     last_by_target.setdefault(f"team:{name}", untargeted)
             result[url] = PrPing(
                 pr_url=url,
                 title=pr.title,
                 targets=self._targets(pr, last_by_target),
-                blockers=_strings(pr.attrs.get("review_blockers")),
+                blockers=strings(pr.attrs.get("review_blockers")),
                 stale=bool(pr.attrs.get("review_stale")),
             )
         return result

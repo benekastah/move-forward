@@ -72,6 +72,39 @@ class SlackRepository:
             for row in self._db.query("SELECT * FROM slack_team_channels")
         }
 
+    def sources(self) -> dict[str, Source]:
+        """Where each contact (`user:<login>`) and team channel (`team:<team>`) came from."""
+        rows = self._db.query(
+            "SELECT 'user:' || login AS target, source FROM slack_contacts"
+            " UNION ALL SELECT 'team:' || team, source FROM slack_team_channels"
+        )
+        return {row["target"]: row["source"] for row in rows}
+
+    def set_contact(self, login: str, slack_id: str | None) -> None:
+        """Set a person's Slack id by hand; it wins over imports from now on."""
+        self._db.execute(
+            "INSERT OR REPLACE INTO slack_contacts VALUES (?, ?, ?)", (login, slack_id, DASHBOARD)
+        )
+
+    def unset_contact(self, login: str) -> bool:
+        """Forget a person's Slack id; False if there was none. An import can bring it back."""
+        with self._db.transaction() as conn:
+            return conn.execute("DELETE FROM slack_contacts WHERE login = ?", (login,)).rowcount > 0
+
+    def set_team_channel(self, team: str, name: str | None, channel_id: str | None) -> None:
+        """Set a team's channel by hand; it wins over imports from now on."""
+        self._db.execute(
+            "INSERT OR REPLACE INTO slack_team_channels VALUES (?, ?, ?, ?)",
+            (team, name, channel_id, DASHBOARD),
+        )
+
+    def unset_team_channel(self, team: str) -> bool:
+        """Forget a team's channel; False if there was none. An import can bring it back."""
+        with self._db.transaction() as conn:
+            return (
+                conn.execute("DELETE FROM slack_team_channels WHERE team = ?", (team,)).rowcount > 0
+            )
+
     def pings(self) -> list[Ping]:
         """Every ping sent, oldest first."""
         return [

@@ -28,10 +28,8 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
     member ids and team channels need a source: the Slack API by email
     (`users.lookupByEmail`, with a token in the keychain like Jira's), or a convention for
     team channels (e.g. `#team-<slug>`), or both. Open question.
-  - Viewable and editable: a page in slack's group (`/slack/contacts`) listing people and
-    teams with where their pings go, which are automatic and which were set by hand, with
-    an edit form; and `mfd slack contacts` / `mfd slack contact set|unset` for scripts.
-    A value set by hand wins over an automatic one.
+  - Viewable and editable: done (`/slack/contacts`, `mfd slack contact|team`); once there's
+    an automatic source, the page should say which values came from it.
 
 ### 5d. Prune without the clients
 

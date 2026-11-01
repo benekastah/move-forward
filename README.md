@@ -105,8 +105,9 @@ channels and people, `ping_first` and `ping_follow_up` are the messages, and
 map). Its page is `/ping?pr=<PR URL>`, and its one action
 `/actions/slack/mark_sent`. People's Slack ids and teams' channels come from the
 skill's `reviewer-map.md`, read with `mfd slack import <dir>` (which also picks
-up the nudges the skill logged in `work-notes.md`); run it again whenever the
-map changes.
+up the nudges the skill logged in `work-notes.md`), or are set by hand on
+`/slack/contacts` or with `mfd slack contact|team set`; what's set by hand
+wins over a later import.
 
 `[jira]` needs `site`, an `https://` URL (the requests carry your token). `token_env` and `keychain_service` say where its token
 is (see [Jira](#jira)). `status_in_progress`, `status_in_review` and
@@ -147,6 +148,9 @@ before the command's name.
 | `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database. Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`. |
 | `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. |
 | `mfd github import <dir>` | Read reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions; they win over emails looked up from commits. Run it again whenever the map changes. |
+| `mfd slack contacts [--json]` | Where people's and teams' pings go, and whether each was imported or set by hand. |
+| `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
+| `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel. |
 | `mfd slack import <dir>` | Read people's Slack ids and teams' channels from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 
@@ -250,6 +254,7 @@ Pages (GET, HTML):
 | `/focus` | Focus mode's category list. |
 | `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key. `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
 | `/ping?pr=<PR URL>` | slack: the ping page for one of my PRs. |
+| `/slack/contacts` | slack: where people's and teams' pings go, imported or set by hand, with a form to change each; the ping page links to it. |
 
 Plugins can add pages of their own; the [Plugins](#plugins) section lists them.
 
@@ -277,6 +282,8 @@ error status):
 | `/actions/git_stack/untrack` | `targets` | `git stack untrack` for each. |
 | `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local`; refused while the repo has iced stacks. |
 | `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
+| `/actions/slack/set_contact` | `login`, `slack_id` (blank for none) | Sets where a person's pings go, by hand; it wins over imports. |
+| `/actions/slack/set_team_channel` | `team`, `channel_name`, `channel_id` (one of them at least) | Sets where a team's pings go, by hand; `[slack.teams]` still wins. |
 
 `entry` is a work entry's title exactly as the page shows it. `todo` is a todo's
 id, which `mfd dump` lists in the `fields` of a todo's actions under the todos
