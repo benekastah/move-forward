@@ -6,11 +6,21 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 from .shell import CommandError, run
 
-Prompt = Callable[[str, str], str]
-"""Asks a question with a default and returns the answer ("" means take the default)."""
+Complete = Callable[[str], list[str]]
+"""The answers that could finish what's typed so far, for tab completion."""
+
+
+class Prompt(Protocol):
+    """Asks a question with a default and returns the answer ("" means take the default);
+    `complete`, if given, offers answers on tab."""
+
+    def __call__(self, question: str, default: str, complete: Complete | None = None, /) -> str: ...
+
+
 Check = Callable[[str], str]
 """Normalises an answer, or raises ValueError saying what's wrong with it."""
 
@@ -35,10 +45,17 @@ class Asker:
     def __init__(self, prompt: Prompt):
         self._prompt = prompt
 
-    def __call__(self, question: str, default: str, check: Check | None = None) -> str:
-        """Ask until the answer passes `check`; a bad answer prints why and asks again."""
+    def __call__(
+        self,
+        question: str,
+        default: str,
+        check: Check | None = None,
+        complete: Complete | None = None,
+    ) -> str:
+        """Ask until the answer passes `check`; a bad answer prints why and asks again. Tab
+        offers what `complete` gives."""
         for _ in range(MAX_RETRIES):
-            answer = self._prompt(question, default) or default
+            answer = self._prompt(question, default, complete) or default
             if check is None:
                 return answer
             try:
@@ -47,14 +64,21 @@ class Asker:
                 print(f"  {e}; try again")
         raise ValueError(f"no usable answer for: {question}")
 
-    def list(self, question: str, default: list[str], check: Check | None = None) -> list[str]:
-        """A comma-separated answer; each item goes through `check`."""
+    def list(
+        self,
+        question: str,
+        default: list[str],
+        check: Check | None = None,
+        complete: Complete | None = None,
+    ) -> list[str]:
+        """A comma-separated answer; each item goes through `check`, and tab completes each
+        with `complete`."""
 
         def check_all(answer: str) -> str:
             parts = [part.strip() for part in answer.split(",") if part.strip()]
             return ", ".join(check(part) if check else part for part in parts)
 
-        answer = self(question, ", ".join(default), check_all)
+        answer = self(question, ", ".join(default), check_all, complete)
         return [part.strip() for part in answer.split(",") if part.strip()]
 
 
@@ -134,3 +158,30 @@ def checkout(cwd: Path) -> Path | None:
     """The git checkout `cwd` is in, if any."""
     top = quiet(["git", "rev-parse", "--show-toplevel"], cwd)
     return Path(top) if top else None
+
+
+def choices(options: list[str] | Callable[[], list[str]]) -> Complete:
+    """Completes from `options`, or from what `options()` returns, asked once, on the first
+    tab (e.g. an org's teams, fetched only if wanted)."""
+    found: list[list[str]] = []
+
+    def complete(text: str) -> list[str]:
+        if not found:
+            found.append(options() if callable(options) else options)
+        return [option for option in found[0] if option.startswith(text)]
+
+    return complete
+
+
+def directories(text: str) -> list[str]:
+    """The directories whose path starts with `text` (`~` allowed), each ending in `/`."""
+    typed = Path(text).expanduser()
+    parent, stem = (typed, "") if text.endswith("/") else (typed.parent, typed.name)
+    if not parent.is_dir():
+        return []
+    shown = text[: len(text) - len(stem)]
+    return sorted(
+        f"{shown}{child.name}/"
+        for child in parent.iterdir()
+        if child.is_dir() and child.name.startswith(stem) and not child.name.startswith(".")
+    )

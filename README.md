@@ -27,6 +27,8 @@ your email, which plugins to set up (github, git, and git_stack when it's
 installed, by default; jira and slack when you name them), then each chosen
 plugin's settings, with a guess from the machine as the default (the GitHub org
 of the current repo's remote, the teams `gh` says you're in, your git email).
+Tab completes plugin names, your org's team slugs and repo paths, and the org
+question takes the org's URL pasted whole (`https://github.com/acme`).
 It writes `~/.config/move-forward/config.toml` with the rest of the settings as
 commented defaults, and the plugins you left out as commented-out sections. `mfd init --example` writes a commented
 example without asking; `--force` replaces an existing file.

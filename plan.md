@@ -28,6 +28,10 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ## Follow-ups
 
+- **GitHub Enterprise.** github assumes github.com: a `host` key, passed to every `gh`
+  call (`--hostname`) and used for PR URLs, would let it work with an Enterprise server.
+  `mfd init`'s org question already takes a pasted org URL; it would fill in both the host
+  and the org.
 - **Settings from the page.** `mfd serve` restarts when the config changes (and passes
   `mfd check`), so a settings page can change settings by writing the config file
   (keeping its comments and hand edits), and the file stays the one source of truth:

@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[git]`."""
 
-from ...asking import Asker, InitSetup, branch_prefix, checkout, path
+from ...asking import Asker, InitSetup, branch_prefix, checkout, directories, path
 
 TEMPLATE = """\
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
@@ -16,6 +16,7 @@ def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
         " from it (e.g. ~/src/app, ~/src/infra)",
         [str(here)] if here else [],
         path,
+        directories,
     )
     prefixes = ask.list(
         "Prefixes of your branch names (e.g. jane/; blank: every local branch counts as yours)",

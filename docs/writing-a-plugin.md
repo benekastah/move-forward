@@ -56,8 +56,10 @@ class LinearConfig(Strict):
 - `mfd init` asks which plugins to set up (offering those whose `init_suggested()` is
   true), then each chosen one's `init_questions(ask, setup)`, which returns its section's
   values. `setup` has my email, where init runs and the teams found so far; a plugin can
-  set the teams (github does). Keep the questions and guesses in a `setup.py` (see
-  github's), with `init_template` (the optional keys, commented) and `init_example` (the
+  set the teams (github does). `ask(question, default, check, complete)` and `ask.list`
+  tab-complete with `complete`: `asking.choices(...)` (a list, or a function fetching it
+  on the first tab) or `asking.directories`. Keep the questions and guesses in a
+  `setup.py` (see github's), with `init_template` (the optional keys, commented) and `init_example` (the
   required ones, commented, written when the plugin isn't chosen).
 - Secrets never go in the config: read them from the environment or the keychain, as jira
   and slack do. Anything sent with a token must go over HTTPS (`move_forward.https`).

@@ -16,7 +16,7 @@ def scripted(answers: dict[str, str | list[str]]) -> asking.Prompt:
     """
     queues = {word: list(a) if isinstance(a, list) else [a] for word, a in answers.items()}
 
-    def prompt(question: str, _default: str) -> str:
+    def prompt(question: str, _default: str, _complete: asking.Complete | None = None) -> str:
         for word, queue in queues.items():
             if word in question:
                 return queue.pop(0) if len(queue) > 1 else queue[0]
@@ -214,9 +214,60 @@ def test_without_github_the_teams_are_asked_by_name(
 def test_team_question_shows_the_orgs_teams_as_examples(no_machine_guesses: None) -> None:
     questions: list[str] = []
 
-    def prompt(question: str, _default: str) -> str:
+    def prompt(question: str, _default: str, _complete: asking.Complete | None = None) -> str:
         questions.append(question)
         return ""
 
     init.interview(prompt, Path("/nowhere"))
     assert any("(e.g. platform, web)" in q for q in questions)
+
+
+def test_a_pasted_org_url_gives_the_org(tmp_path: Path, no_machine_guesses: None) -> None:
+    assert github_setup.org("https://github.com/acme/") == "acme"
+    assert github_setup.org("github.com/acme") == "acme" and github_setup.org("acme") == "acme"
+    with pytest.raises(ValueError, match="only github.com"):
+        github_setup.org("https://github.example.com/acme")
+    path = tmp_path / "config.toml"
+    init.init(path, scripted({"organization": "https://github.com/other"}), cwd=tmp_path)
+    github = config.load(path).github
+    assert github is not None and github.org == "other"
+
+
+def test_tab_completes_plugins_the_orgs_teams_and_directories(
+    tmp_path: Path, no_machine_guesses: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fetched: list[str] = []
+
+    def org_teams(org: str) -> list[str]:
+        fetched.append(org)
+        return ["core", "core-infra", "web"]
+
+    monkeypatch.setattr(github_setup, "org_teams", org_teams)
+    completions: dict[str, list[str]] = {}
+
+    def prompt(question: str, _default: str, complete: asking.Complete | None = None) -> str:
+        if complete:
+            word = question.split()[0]
+            completions[word] = complete("co" if word == "GitHub" else "")
+        return ""
+
+    (tmp_path / "app" / "src").mkdir()
+    (tmp_path / "app" / ".hidden").mkdir()
+    init.interview(prompt, tmp_path)
+    assert completions["Plugins"] == ["github", "git", "git_stack", "jira", "slack"]
+    assert completions["GitHub"] == ["core", "core-infra"] and fetched == ["acme"]
+    assert asking.directories(f"{tmp_path}/app/") == [f"{tmp_path}/app/src/"]
+    assert asking.directories(f"{tmp_path}/ap") == [f"{tmp_path}/app/"]
+    assert asking.directories(f"{tmp_path}/nope/x") == []
+
+
+def test_teams_are_fetched_only_when_completion_asks() -> None:
+    asked: list[bool] = []
+
+    def teams() -> list[str]:
+        asked.append(True)
+        return ["a", "b"]
+
+    complete = asking.choices(teams)
+    assert asked == []
+    assert complete("") == ["a", "b"] and complete("b") == ["b"] and asked == [True]

@@ -10,12 +10,14 @@ as a `Config` before the file is written.
 
 import json
 import tomllib
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
 from . import asking, registry
 from . import config as config_module
-from .asking import Asker, InitSetup, Prompt, quiet
+from .asking import Asker, Complete, InitSetup, Prompt, choices, quiet
 from .config import Config
 from .plugin import Plugin
 from .plugins.jira.config import DEFAULT_JIRA_KEYCHAIN_SERVICE, DEFAULT_JIRA_TOKEN_ENV
@@ -36,10 +38,42 @@ OPTIONAL_ACT_NOW_SETTINGS = """\
 """
 
 
-def console_prompt(question: str, default: str) -> str:
-    """Ask on the terminal; the default (a guess from the machine) is shown in brackets."""
+def console_prompt(question: str, default: str, complete: Complete | None = None) -> str:
+    """Ask on the terminal; the default (a guess from the machine) is shown in brackets, and
+    tab offers what `complete` gives, where readline is there to offer it."""
     suffix = f" [Enter keeps: {default}]" if default else ""
-    return input(f"{question}{suffix}: ").strip()
+    with _completing(complete):
+        return input(f"{question}{suffix}: ").strip()
+
+
+@contextmanager
+def _completing(complete: Complete | None) -> Generator[None]:
+    """Tab completes with `complete` while the block runs: word by word, a word being what's
+    between spaces and commas, so paths and team slugs complete whole."""
+    try:
+        import readline
+    except ImportError:  # not on every platform; then no completion, just typing
+        readline = None
+    if complete is None or readline is None:
+        yield
+        return
+    matches: list[str] = []
+
+    def completer(text: str, state: int) -> str | None:
+        if state == 0:
+            matches[:] = complete(text)
+        return matches[state] if state < len(matches) else None
+
+    before, delims = readline.get_completer(), readline.get_completer_delims()
+    readline.set_completer(completer)
+    readline.set_completer_delims(" ,\t\n")
+    binding = "bind ^I rl_complete" if "libedit" in (readline.__doc__ or "") else "tab: complete"
+    readline.parse_and_bind(binding)
+    try:
+        yield
+    finally:
+        readline.set_completer(before)
+        readline.set_completer_delims(delims)
 
 
 def guess_email() -> str:
@@ -106,6 +140,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         f"Plugins to set up, comma-separated ({', '.join(p.name for p in offered())})",
         [p.name for p in offered() if p.init_suggested()],
         _plugins,
+        choices([p.name for p in offered()]),
     )
     sections = {
         plugin.name: plugin.init_questions(ask, setup)

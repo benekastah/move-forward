@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from ...asking import Asker, InitSetup, checkout, quiet, word
+from ...asking import Asker, InitSetup, checkout, choices, quiet, word
 
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 TEMPLATE = """\
@@ -44,18 +44,37 @@ def org_team_examples(org: str) -> list[str]:
     return quiet(["gh", "api", f"orgs/{org}/teams?per_page=3", "--jq", ".[].slug"]).split()[:3]
 
 
+ORG_URL_RE = re.compile(r"^(?:https?://)?([^/\s]+)/([^/\s]+)/?$")
+
+
+def org(answer: str) -> str:
+    """An org's name, or the org out of its URL pasted whole (`https://github.com/acme`)."""
+    if match := ORG_URL_RE.match(answer.strip()):
+        host, name = match.groups()
+        if host.lower() not in ("github.com", "www.github.com"):
+            raise ValueError(f"{host} isn't github.com; only github.com orgs work for now")
+        answer = name
+    return word("GitHub organization")(answer)
+
+
+def org_teams(org: str) -> list[str]:
+    """Every team slug in `org`, for tab completion; empty when they can't be read."""
+    return quiet(["gh", "api", "--paginate", f"orgs/{org}/teams", "--jq", ".[].slug"]).split()
+
+
 def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
     """The org, and the teams I review for (which become the config's top-level teams)."""
-    org = ask(
-        "GitHub organization, as in github.com/<org> (e.g. acme)",
+    name = ask(
+        "GitHub organization, or its URL (e.g. acme, or https://github.com/acme)",
         guess_org(setup.cwd),
-        word("GitHub organization"),
+        org,
     )
-    examples = org_team_examples(org) or ["team-a", "team-b"]
+    examples = org_team_examples(name) or ["team-a", "team-b"]
     setup.teams = ask.list(
-        "GitHub team slugs you review for, comma-separated; leave out org-wide teams"
-        f" (e.g. {', '.join(examples)})",
-        guess_teams(org),
+        "GitHub team slugs you review for, comma-separated (tab completes); leave out"
+        f" org-wide teams (e.g. {', '.join(examples)})",
+        guess_teams(name),
         word("team slug"),
+        choices(lambda: org_teams(name)),
     )
-    return {"org": org}
+    return {"org": name}
