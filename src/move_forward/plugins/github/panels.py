@@ -5,6 +5,9 @@ Pure functions of the snapshot, the derived snapshot and the graph; no I/O.
 
 from datetime import datetime, timedelta
 
+from pydantic import Field
+
+from ...domain import Model
 from ...graph import Graph, Ref
 from ...page import Item, Link, Panel, age
 from .config import GitHubConfig
@@ -31,14 +34,33 @@ BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in an `iced_branch` entity's id."""
 
 
+class _RepoView(Model):
+    """What github reads of a `repo` (git's): where it's checked out."""
+
+    dir: str
+
+
+class _IcedView(Model):
+    """What github reads of an `iced_branch` (notes')."""
+
+    name: str
+
+
+class _EntryView(Model):
+    """What github reads of an `entry` (notes')."""
+
+    merge_conditions: list[str] = Field(default_factory=list[str])
+    open_todos: list[str] = Field(default_factory=list[str])
+
+
 def is_iced(graph: Graph, repo: str, head: str) -> bool:
     """Whether a PR's branch is on ice: in the checkout of its repo that git knows, or, when
     git knows no checkout of it, in any repo."""
-    checkout = graph.get(REPO, repo)
+    checkout = graph.view_one(REPO, repo, _RepoView)
     if checkout is not None:
-        iced_id = f"{checkout.attrs.get('dir')}{BRANCH_ID_SEPARATOR}{head}"
+        iced_id = f"{checkout.dir}{BRANCH_ID_SEPARATOR}{head}"
         return graph.get(ICED_BRANCH, iced_id) is not None
-    return any(e.attrs.get("name") == head for e in graph.of_kind(ICED_BRANCH))
+    return any(e.name == head for e in graph.view(ICED_BRANCH, _IcedView))
 
 
 def pr_ref(pr: PullRequest) -> Ref:
@@ -100,14 +122,9 @@ class Builder:
     def _iced(self, pr: PullRequest) -> bool:
         return is_iced(self.graph, pr.repo, pr.head)
 
-    def _entry_attr(self, pr: PullRequest, attr: str) -> list[str]:
-        """An attribute's values over the work entries about the PR or its tickets."""
-        values: list[str] = []
-        for entry in self.graph.related(pr_ref(pr), ENTRY):
-            value = entry.attrs.get(attr)
-            if isinstance(value, list):
-                values += [str(v) for v in value]
-        return values
+    def _entries(self, pr: PullRequest) -> list[_EntryView]:
+        """The work entries about the PR or its tickets."""
+        return self.graph.view_related(pr_ref(pr), ENTRY, _EntryView)
 
     # Reviews for me
 
@@ -246,7 +263,7 @@ class Builder:
                 reasons.append(f"stacked on {pr.base}")
             if reasons:
                 continue
-            conditions = self._entry_attr(pr, "merge_conditions")
+            conditions = [c for e in self._entries(pr) for c in e.merge_conditions]
             if conditions:
                 held.append(pr_item(self.now, pr, details=[f"held: {c}" for c in conditions]))
             else:
@@ -282,7 +299,7 @@ class Builder:
                 pr.is_draft
                 and pr.rollup_state == "SUCCESS"
                 and not unresolved_threads(pr)
-                and not self._entry_attr(pr, "open_todos")
+                and not any(e.open_todos for e in self._entries(pr))
             ):
                 problems.append("draft with green CI and no open todos: ready?")
             if problems:

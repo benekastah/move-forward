@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from . import panels, shell
 from .config import Config
 from .db import Database
+from .domain import Model
 from .graph import Graph
 from .page import Action, Item, SourceStatus
 from .plugin import ActionError, ActionResult, collect_into
@@ -22,6 +23,13 @@ from .shell import CommandError
 log = logging.getLogger(__name__)
 
 PERSON = "person"
+
+
+class _PersonView(Model):
+    """What core reads of a `person`: whether it's me."""
+
+    id: str
+    me: bool = False
 
 
 def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str, BaseModel | None]]:
@@ -93,7 +101,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         )
         for e in plugins
     ]
-    me = next((p for p in graph.of_kind(PERSON) if p.attrs.get("me")), None)
+    me = next((p for p in graph.view(PERSON, _PersonView) if p.me), None)
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)
         for source, row in SnapshotRepository(db).all().items()
@@ -102,7 +110,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
     def item_actions(item: Item) -> list[Action]:
         return [a for e in plugins for a in e.plugin.item_actions(e.ctx, item, graph)]
 
-    return panels.build(now, plugin_panels, sources, me.ref.id if me else "", item_actions)
+    return panels.build(now, plugin_panels, sources, me.id if me else "", item_actions)
 
 
 def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[str]]) -> str | None:
