@@ -26,11 +26,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   and `due` in the signals and the score, and merging nominations across tools through
   the graph ("Merge PR 330, then close APP-12").
 
-### 8. Init and docs
-
-- `mfd init` asks which plugins to set up, as one list answer checked against the registry
-  (default all; notes always on), then each chosen plugin's `init_questions`.
-
 ## Follow-ups
 
 - **Settings from the page.** `mfd serve` restarts when the config changes (and passes
@@ -95,13 +90,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   git_stack doesn't publish groups, so a group's other stacks aren't iced with it.
 
 ## Design for the remaining steps
-
-### Config
-
-`mfd init` asks the core questions, then which plugins to set up,
-as one list answer checked against the registry ("Plugins to set up (github, git, jira,
-slack)", defaulting to all of them; `notes` is always on and not offered), then each chosen
-plugin's `init_questions`. Plugins left out get no section, so they stay disabled.
 
 ### Act now
 

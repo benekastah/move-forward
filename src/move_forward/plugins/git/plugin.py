@@ -4,6 +4,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
+from ...asking import Asker, InitSetup
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
@@ -13,6 +14,7 @@ from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
 from .panels import Builder, branch_ref, delete_iced_action
 from .repository import MIGRATIONS, LocalRepository
+from .setup import TEMPLATE, questions
 
 REPO = "repo"
 BRANCH = "branch"
@@ -21,6 +23,11 @@ BRANCH = "branch"
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     name = "git"
     title = "Local"
+    init_template = TEMPLATE
+
+    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+        return questions(ask, setup)
+
     config_model = GitConfig
     snapshot_model = LocalSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS

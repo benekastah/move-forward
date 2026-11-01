@@ -1,5 +1,6 @@
 """The git-stack plugin."""
 
+import shutil
 from pathlib import Path
 from typing import ClassVar
 
@@ -19,6 +20,11 @@ from .repository import MIGRATIONS, StackRepository
 class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     name = "git_stack"
     title = "git-stack"
+
+    def init_suggested(self) -> bool:
+        """Only when git-stack is installed, i.e. `git stack` would run."""
+        return shutil.which("git-stack") is not None
+
     config_model = GitStackConfig
     requires: ClassVar[list[str]] = ["git"]
     snapshot_model = GitStackSnapshot

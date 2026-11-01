@@ -14,6 +14,7 @@ from urllib.parse import quote
 from pydantic import BaseModel, Field
 
 from ... import render
+from ...asking import Asker, InitSetup
 from ...graph import Graph
 from ...page import Action, Item, Panel, age
 from ...plugin import ActionError, ActionHandler, CliHandler, Context, PageHandler, Plugin
@@ -22,6 +23,7 @@ from .config import SlackConfig
 from .models import Ping, TeamChannel
 from .pings import Pinger, PingTarget, PrPing
 from .repository import MIGRATIONS, SlackRepository
+from .setup import EXAMPLE, TEMPLATE, questions
 
 log = logging.getLogger(__name__)
 
@@ -117,6 +119,16 @@ def ping_page(ping: PrPing, now: datetime) -> str:
 class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     name = "slack"
     title = "Slack"
+    init_template = TEMPLATE
+    init_example = EXAMPLE
+
+    def init_suggested(self) -> bool:
+        """Only when asked for: it needs a site (jira) or workspace (slack) to be useful."""
+        return False
+
+    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+        return questions(ask, setup)
+
     config_model = SlackConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
     cli_help = "see and set where review pings go, or import them from the skill's markdown"

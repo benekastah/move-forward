@@ -74,8 +74,8 @@ is what's left to build.
   Before committing, look for docs the change made untrue: search the docs
   and docstrings for the names you renamed, moved or removed.
 - **Every config key appears in four places**: its model (with a docstring),
-  the README (core's) or the plugin's page in `docs/plugins/`, `mfd init`'s rendered config (as a commented default, see
-  `init.py`) and `mfd init --example` (`cli.py`). Config models reject unknown
+  the README (core's) or the plugin's page in `docs/plugins/`, `mfd init`'s rendered config (as a commented default:
+  core's in `init.py`, a plugin's in its `setup.py`) and `mfd init --example` (`cli.py`). Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
   `MOVED_SETTINGS` in `config.py`).
 - **Migrations are append-only.** Core and each plugin own a list of SQL

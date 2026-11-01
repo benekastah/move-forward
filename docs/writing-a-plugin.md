@@ -16,6 +16,7 @@ src/move_forward/plugins/linear/
     config.py      # LinearConfig: the [linear] section
     models.py      # LinearSnapshot and its parts: what collect brings back
     client.py      # talking to Linear (the standard library or a CLI; no new dependencies)
+    setup.py       # mfd init's questions for [linear], and its commented defaults
     repository.py  # the plugin's tables: MIGRATIONS, and store/load queries
     kinds.py       # IssueAttrs: the attributes of the entities it publishes
     panels.py      # pure functions from the snapshot and the graph to panels
@@ -50,9 +51,14 @@ class LinearConfig(Strict):
 - Config models subclass `Strict`, which rejects unknown keys: a typo is an error.
 - Every field has a docstring.
 - Every key appears in four places: the model, the plugin's page in `docs/plugins/`,
-  `mfd init`'s rendered config as a commented default (`init.py`), and
-  `mfd init --example` (`cli.py`). A plugin can ask its own setup questions in
-  `init_questions(ask)`.
+  `mfd init`'s rendered config as a commented default (the plugin's `init_template`),
+  and `mfd init --example` (`cli.py`).
+- `mfd init` asks which plugins to set up (offering those whose `init_suggested()` is
+  true), then each chosen one's `init_questions(ask, setup)`, which returns its section's
+  values. `setup` has my email, where init runs and the teams found so far; a plugin can
+  set the teams (github does). Keep the questions and guesses in a `setup.py` (see
+  github's), with `init_template` (the optional keys, commented) and `init_example` (the
+  required ones, commented, written when the plugin isn't chosen).
 - Secrets never go in the config: read them from the environment or the keychain, as jira
   and slack do. Anything sent with a token must go over HTTPS (`move_forward.https`).
 

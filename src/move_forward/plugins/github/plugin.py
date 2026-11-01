@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
+from ...asking import Asker, InitSetup
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
@@ -21,6 +22,7 @@ from .prs import (
     last_review_activity,
     review_blockers,
 )
+from .setup import TEMPLATE, questions
 from .snapshots import DerivedRepository, PrRepository
 from .tables import MIGRATIONS
 
@@ -40,6 +42,11 @@ def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
 class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     name = "github"
     title = "GitHub"
+    init_template = TEMPLATE
+
+    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+        return questions(ask, setup)
+
     config_model = GitHubConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {PR: PrAttrs, PERSON: PersonAttrs}

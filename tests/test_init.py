@@ -3,10 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from move_forward import config, init
+from move_forward import asking, config, init
+from move_forward.plugins.git import setup as git_setup
+from move_forward.plugins.git_stack.plugin import GitStackPlugin
+from move_forward.plugins.github import setup as github_setup
 
 
-def scripted(answers: dict[str, str | list[str]]) -> init.Prompt:
+def scripted(answers: dict[str, str | list[str]]) -> asking.Prompt:
     """A prompt answering by a word of the question; anything unlisted takes the default.
 
     A list of answers is given one per asking, so a test can answer badly and then well.
@@ -26,8 +29,11 @@ def scripted(answers: dict[str, str | list[str]]) -> init.Prompt:
 def no_machine_guesses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "app").mkdir()
 
-    def guess_repo(_cwd: Path) -> tuple[Path | None, str]:
-        return tmp_path / "app", "acme"
+    def checkout(_cwd: Path) -> Path | None:
+        return tmp_path / "app"
+
+    def guess_org(_cwd: Path) -> str:
+        return "acme"
 
     def guess_teams(org: str) -> list[str]:
         return ["core"] if org == "acme" else []
@@ -35,11 +41,15 @@ def no_machine_guesses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def org_team_examples(org: str) -> list[str]:
         return ["platform", "web"] if org == "acme" else []
 
-    monkeypatch.setattr(init, "guess_repo", guess_repo)
-    monkeypatch.setattr(init, "guess_teams", guess_teams)
-    monkeypatch.setattr(init, "org_team_examples", org_team_examples)
+    def installed(_self: GitStackPlugin) -> bool:
+        return False
+
+    monkeypatch.setattr(git_setup, "checkout", checkout)
+    monkeypatch.setattr(github_setup, "guess_org", guess_org)
+    monkeypatch.setattr(github_setup, "guess_teams", guess_teams)
+    monkeypatch.setattr(github_setup, "org_team_examples", org_team_examples)
     monkeypatch.setattr(init, "guess_email", lambda: "jane@acme.com")
-    monkeypatch.setattr(init, "guess_git_stack", lambda: False)
+    monkeypatch.setattr(GitStackPlugin, "init_suggested", installed)
 
 
 def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: None) -> None:
@@ -62,7 +72,10 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
 def test_init_turns_on_git_stack_when_it_is_installed(
     tmp_path: Path, no_machine_guesses: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(init, "guess_git_stack", lambda: True)
+    def installed(_self: GitStackPlugin) -> bool:
+        return True
+
+    monkeypatch.setattr(GitStackPlugin, "init_suggested", installed)
     path = tmp_path / "config.toml"
     init.init(path, scripted({}), cwd=tmp_path)
     assert config.load(path).git_stack is not None
@@ -76,6 +89,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
         path,
         scripted(
             {
+                "Plugins": "github, git, jira, slack",
                 "organization": "other",
                 "team slugs": "a, b ,",
                 "pings to a": "#team-a",
@@ -110,6 +124,7 @@ def test_bad_answers_are_asked_again_with_the_reason(
         path,
         scripted(
             {
+                "Plugins": ["github, gitlab", "github, git, jira, slack"],
                 "organization": ["acme corp", "acme"],
                 "Port": ["lots", "70000", "9000"],
                 "workspace URL": ["acme.slack.com", "https://acme.slack.com"],
@@ -119,6 +134,7 @@ def test_bad_answers_are_asked_again_with_the_reason(
         cwd=tmp_path,
     )
     out = capsys.readouterr().out
+    assert "no plugin named 'gitlab'" in out
     assert "'acme corp' isn't a GitHub organization" in out
     assert "'lots' isn't a port number" in out and "'70000' isn't a port number" in out
     assert "'acme.slack.com' isn't a URL starting with https://" in out
@@ -150,11 +166,7 @@ def test_repo_paths_must_exist(tmp_path: Path, no_machine_guesses: None) -> None
 def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> None:
     text = init.render_config(
         {"email": "e@x.y", "teams": ["t", "u"]},
-        {"org": "a"},
-        {"repos": []},
-        None,
-        {"t": "#t"},
-        None,
+        {"github": {"org": "a"}, "git": {"repos": []}, "slack": {"teams": {"t": "#t"}}},
     )
     assert tomllib.loads(text) == {
         "email": "e@x.y",
@@ -185,8 +197,18 @@ def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> No
 
 
 def test_guesses_cope_without_git_or_gh(tmp_path: Path) -> None:
-    assert init.guess_repo(tmp_path) == (None, "")
-    assert init.guess_teams("") == [] and init.org_team_examples("") == []
+    assert asking.checkout(tmp_path) is None and github_setup.guess_org(tmp_path) == ""
+    assert github_setup.guess_teams("") == [] and github_setup.org_team_examples("") == []
+
+
+def test_without_github_the_teams_are_asked_by_name(
+    tmp_path: Path, no_machine_guesses: None
+) -> None:
+    path = tmp_path / "config.toml"
+    init.init(path, scripted({"Plugins": "git", "Teams": "web, api"}), cwd=tmp_path)
+    loaded = config.load(path)
+    assert loaded.github is None and loaded.teams == ["web", "api"]
+    assert "# [github]" in path.read_text()
 
 
 def test_team_question_shows_the_orgs_teams_as_examples(no_machine_guesses: None) -> None:

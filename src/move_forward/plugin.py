@@ -13,26 +13,18 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, ClassVar, Protocol
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
 from . import shell
+from .asking import Asker, InitSetup
 from .db import Database
 from .graph import Entity, Graph
 from .page import Action, Item, Panel
 from .repositories import KvRepository, SnapshotRepository
 
 log = logging.getLogger(__name__)
-
-Check = Callable[[str], str]
-"""Validates an answer: returns it (possibly normalised) or raises ValueError with the reason."""
-
-
-class Asker(Protocol):
-    """Asks one `mfd init` question, again until `check` accepts the answer."""
-
-    def __call__(self, question: str, default: str, check: Check | None = None) -> str: ...
 
 
 @dataclass(frozen=True)
@@ -224,8 +216,23 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Set-up and upkeep
 
-    def init_questions(self, ask: Asker) -> dict[str, object]:
-        """Ask for the `[name]` section's settings in `mfd init`; returns its values."""
+    always_on: ClassVar[bool] = False
+    """On without a section (notes), so `mfd init` doesn't offer it."""
+    init_template: ClassVar[str] = ""
+    """The section's optional settings with their defaults, commented out, as `mfd init`
+    writes them under the section."""
+    init_example: ClassVar[str] = ""
+    """The section's required settings, commented out, for a section `mfd init` writes
+    commented out because the plugin wasn't chosen."""
+
+    def init_suggested(self) -> bool:
+        """Whether `mfd init` offers to set the plugin up by default."""
+        return True
+
+    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+        """Ask for the `[name]` section's settings in `mfd init`; returns its values (a
+        table's as a dict, e.g. `{"teams": {...}}` for `[name.teams]`). `setup` has what
+        init knows so far; a plugin can add to its `teams`."""
         return {}
 
     def prune(self, ctx: Context[C], graph: Graph) -> list[str]:

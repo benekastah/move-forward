@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
+from ...asking import Asker, InitSetup
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Item, Link, Panel, Signals, age
@@ -15,6 +16,7 @@ from .config import JiraConfig
 from .kinds import TicketAttrs
 from .models import JiraIssue, JiraSnapshot
 from .repository import MIGRATIONS, IssueRepository
+from .setup import EXAMPLE, TEMPLATE, questions
 
 TICKET = "ticket"
 PR = "pr"
@@ -148,6 +150,16 @@ def key_pattern(projects: list[str]) -> str | None:
 class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     name = "jira"
     title = "Jira"
+    init_template = TEMPLATE
+    init_example = EXAMPLE
+
+    def init_suggested(self) -> bool:
+        """Only when asked for: it needs a site (jira) or workspace (slack) to be useful."""
+        return False
+
+    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+        return questions(ask, setup)
+
     config_model = JiraConfig
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS

@@ -29,6 +29,7 @@ def _builder(ctx: Context[NotesConfig], graph: Graph) -> Builder:
 class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     name = "notes"
     title = "Notes"
+    always_on = True
     config_model = NotesConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {
