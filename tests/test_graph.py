@@ -120,3 +120,12 @@ def test_related_entities_through_a_view() -> None:
         title: str
 
     assert _graph().view_related(PR, "entry", Titled) == [Titled(id=ENTRY.id, title="APP-1 work")]
+
+
+def test_named_finds_linking_ids_in_any_text() -> None:
+    graph = Graph(linking=LINKING)
+    assert graph.named("APP-2: see APP-1, and APP-2 again") == [
+        Ref(kind="ticket", id="APP-2"),
+        TICKET,
+    ]
+    assert Graph().named("APP-1") == []  # no plugin declares a pattern

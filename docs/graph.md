@@ -96,6 +96,7 @@ sequenceDiagram
 graph.get("pr", url)  # one entity, or None
 graph.of_kind("pr")  # every entity of a kind
 graph.related(ref, "entry")  # see below
+graph.named("APP-1: fix it")  # the linking entities a text names, see below
 graph.url_for("ticket", "APP-1")
 ```
 
@@ -161,7 +162,9 @@ A linking kind with a pattern is found in **mentions**: text an entity carries t
 name one, like a PR's branch, title and body. Building the graph, core adds a ref from the
 entity to each linking entity whose id its mentions match, whether or not that entity is
 in the graph, so the publisher needn't know the kind. Without the plugin that declares
-the pattern (Jira not set up), mentions link nothing.
+the pattern (Jira not set up), mentions link nothing. `graph.named(text)` finds the same
+refs in any text, for a plugin reading text of its own (notes finds the tickets a todo
+names with it).
 
 ### URLs, and entities not in the graph
 

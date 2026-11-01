@@ -47,17 +47,23 @@ def _no_fetch(kind: str, ids: list[str]) -> list["Entity"]:
     return []
 
 
+def _named(texts: Iterable[str], patterns: dict[str, re.Pattern[str]]) -> list[Ref]:
+    """The linking entities `texts` name by id, in order, once each."""
+    return list(
+        dict.fromkeys(
+            Ref(kind=kind, id=match[0])
+            for text in texts
+            for kind, pattern in patterns.items()
+            for match in pattern.finditer(text)
+        )
+    )
+
+
 def _with_mentions(entity: Entity, patterns: dict[str, re.Pattern[str]]) -> Entity:
     """The entity pointing, too, at each linking entity whose id its mentions name."""
     if not entity.mentions or not patterns:
         return entity
-    found = [
-        Ref(kind=kind, id=match[0])
-        for text in entity.mentions
-        for kind, pattern in patterns.items()
-        for match in pattern.finditer(text)
-    ]
-    refs = list(dict.fromkeys([*entity.refs, *found]))
+    refs = list(dict.fromkeys([*entity.refs, *_named(entity.mentions, patterns)]))
     return entity.model_copy(update={"refs": refs}) if len(refs) != len(entity.refs) else entity
 
 
@@ -88,8 +94,8 @@ class Graph:
         the pattern of its ids, for finding them in entities' `mentions`; None for a kind
         whose entities point at what they link themselves."""
         self._linking = dict(linking or {})
-        patterns = {k: re.compile(p) for k, p in self._linking.items() if p is not None}
-        entities = [_with_mentions(e, patterns) for e in entities]
+        self._patterns = {k: re.compile(p) for k, p in self._linking.items() if p is not None}
+        entities = [_with_mentions(e, self._patterns) for e in entities]
         self._by_ref: dict[Ref, Entity] = {}
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
@@ -137,6 +143,12 @@ class Graph:
             if candidate.ref.kind == kind and candidate.ref != ref:
                 found.setdefault(candidate.ref, candidate)
         return list(found.values())
+
+    def named(self, text: str) -> list[Ref]:
+        """The linking entities `text` names by id, as an entity's `mentions` would find them,
+        whether or not they're in the graph: e.g. the tickets a todo names by key. For a
+        plugin to find another's ids in text without knowing their pattern."""
+        return _named([text], self._patterns)
 
     def url_for(self, kind: str, id: str) -> str | None:
         """The entity's URL if it's in the graph, else whatever a plugin can make of it, e.g.
