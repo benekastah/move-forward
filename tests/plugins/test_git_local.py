@@ -94,3 +94,15 @@ def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
     assert feature.upstream is None and feature.ahead_of_default == 1
     assert feature.sha == git(repo, "rev-parse", "feature").strip()
     assert result.my_dirs == ["src"]
+
+
+def test_a_listed_worktree_of_another_listed_repo_is_folded_into_it(tmp_path: Path) -> None:
+    repo, other = tmp_path / "repo", tmp_path / "other"
+    _init_repo(repo)
+    _commit(repo, "a.txt")
+    _init_repo(other)
+    _commit(other, "a.txt")
+    second = tmp_path / "repo2"
+    git(repo, "worktree", "add", "-q", "-b", "side", str(second))
+    assert local.folded([second, other, repo]) == [repo, other]  # the main checkout stays
+    assert local.folded([second, other]) == [second, other]  # the first listed, without it

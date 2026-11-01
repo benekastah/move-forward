@@ -26,10 +26,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   and `due` in the signals and the score, and merging nominations across tools through
   the graph ("Merge PR 330, then close APP-12").
 
-### 7. Worktrees
-
-- A path in `[git] repos` that's a worktree of another listed repo is folded into it.
-
 ### 8. Init and docs
 
 - `mfd init` asks which plugins to set up, as one list answer checked against the registry
@@ -107,14 +103,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 as one list answer checked against the registry ("Plugins to set up (github, git, jira,
 slack)", defaulting to all of them; `notes` is always on and not offered), then each chosen
 plugin's `init_questions`. Plugins left out get no section, so they stay disabled.
-
-#### Worktrees
-
-`repos` lists one main checkout per repository. Each refresh runs `git worktree list` in
-it, so worktrees made or removed since (e.g. a second checkout at `~/src/app2`) show up
-without a config change. A path in `repos` that turns out to be a worktree of another
-listed repo is folded into that repo, so listing both doesn't double up. Actions accept any
-worktree of a configured repo, not only the listed path.
 
 ### Act now
 

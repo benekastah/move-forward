@@ -146,6 +146,23 @@ def collect_repo(
     )
 
 
+def main_worktree(repo: Path) -> Path:
+    """The repository's main checkout: `git worktree list` names it first."""
+    [(path, _), *_] = parse_worktrees(git(repo, "worktree", "list", "--porcelain"))
+    return Path(path).resolve()
+
+
+def folded(repos: list[Path]) -> list[Path]:
+    """`repos` with one path per repository: a path that's a worktree of another listed one
+    is folded into it, keeping the main checkout if it's listed, else the first listed."""
+    by_main: dict[Path, Path] = {}
+    for repo in repos:
+        main = main_worktree(repo)
+        if main not in by_main or repo.resolve() == main:
+            by_main[main] = repo
+    return list(by_main.values())
+
+
 def my_email(repo: Path) -> str:
     return git(repo, "config", "user.email").strip()
 
@@ -157,7 +174,7 @@ def collect(
     ignored_worktree_globs: list[str],
 ) -> LocalSnapshot:
     email = my_email(repos[0]) if repos else ""
-    existing = [repo for repo in repos if repo.exists()]
+    existing = folded([repo for repo in repos if repo.exists()])
 
     def one(repo: Path) -> LocalRepo:
         return collect_repo(repo, email, now, commit_history_days, ignored_worktree_globs)

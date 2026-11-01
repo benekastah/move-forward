@@ -97,7 +97,8 @@ reviewers' emails from their commits (default: your email's domain),
 `reviewer_history_days` how far back commits count for reviewer suggestions.
 
 `[git]` needs `repos`, your main checkouts; their other worktrees are found
-with `git worktree list`. `my_branch_prefixes` marks branches as yours (without
+with `git worktree list`, and a listed path that's a worktree of another listed
+repo is folded into it. `my_branch_prefixes` marks branches as yours (without
 it every local branch is), `ignored_worktree_globs` leaves worktrees out, and
 `commit_history_days` says how far back your commits count towards the
 directories you work in.
