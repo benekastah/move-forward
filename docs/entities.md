@@ -36,7 +36,6 @@ pattern for its ids (`ticket`'s is a Jira key) is found in other entities'
 | `ticket` (linking) | jira | the issue key, e.g. `APP-1` | the issue's status | |
 | `entry` (linking) | notes | the entry's title | | the `pr` URLs and `ticket` keys linked to it and its open todos, and the `ticket` keys its title mentions |
 | `iced` (hiding) | notes | the act of icing's id | | what it puts on ice (`branch`es today), and what else that covers: the branches' `pr`s and `stack_branch`es |
-| `iced_branch` | notes | `<repo dir>\t<branch>`, like `branch` | | |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
 answers for `pr` (the id is the URL), jira for `ticket` (from its `site`).
@@ -140,12 +139,3 @@ One act of icing, e.g. a stack. Core leaves items about whatever it hides off th
 | `iced_on` | string | ISO date |
 | `note` | string or null | why it's on ice |
 | `shas` | object | the commit each branch it put on ice pointed at then, by the branch's id |
-
-### `iced_branch`
-
-| Attribute | Type | Meaning |
-| --- | --- | --- |
-| `repo_dir` | string | the repo's directory, with `~` expanded |
-| `name` | string | the branch's name |
-| `stack` | string | the bottom branch of the iced stack it belongs to |
-| `sha` | string or null | the commit it pointed at when iced |

@@ -39,14 +39,12 @@ flowchart LR
     pr -->|mentions| ticket
     branch["branch<br/>(git)"] -->|in| repo["repo<br/>(git)"]
     stack_branch["stack_branch<br/>(git_stack)"] -->|tracks| branch
-    iced["iced_branch<br/>(notes)"] -. "same id as" .-> branch
     ice["iced<br/>(notes)"] -->|hides| branch
     ice -->|hides| pr
     person["person<br/>(github)"]
 ```
 
-`iced_branch` doesn't point at its branch; it shares the branch's id, so a consumer asks
-`graph.get("iced_branch", branch_id)`. `person` stands alone: core finds `me` among them, and
+`iced` hides what it points at; see [hidden entities](#hidden-entities). `person` stands alone: core finds `me` among them, and
 slack reads their emails.
 
 ## How it's built

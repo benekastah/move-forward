@@ -15,8 +15,8 @@ from ...plugin import ActionHandler, CliHandler, Context, Plugin
 from . import actions, cli, prune
 from .config import NotesConfig
 from .covers import covers
-from .kinds import EntryAttrs, IcedAttrs, IcedBranchAttrs
-from .panels import ENTRY, ICED, ICED_BRANCH, Builder, entities
+from .kinds import EntryAttrs, IcedAttrs
+from .panels import ENTRY, ICED, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 
@@ -33,7 +33,6 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     kinds: ClassVar[dict[str, type[BaseModel]]] = {
         ENTRY: EntryAttrs,
         ICED: IcedAttrs,
-        ICED_BRANCH: IcedBranchAttrs,
     }
     linking: ClassVar[dict[str, str | None]] = {ENTRY: None}
     hides: ClassVar[list[str]] = [ICED]

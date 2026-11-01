@@ -12,17 +12,6 @@ class EntryAttrs(Model):
     open_todos: list[str] = Field(default_factory=list[str])
 
 
-class IcedBranchAttrs(Model):
-    """An `iced_branch`: a branch on ice, by `<repo dir>\\t<name>` like git's `branch`."""
-
-    repo_dir: str
-    name: str
-    stack: str
-    """The title of the act of icing it's in: its stack's bottom branch."""
-    sha: str | None
-    """The commit it pointed at when iced."""
-
-
 class IcedAttrs(Model):
     """An `iced`: one act of icing, by its id. It hides what it points at: its items, and
     what else it covers, like its branches' PRs."""

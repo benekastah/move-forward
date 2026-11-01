@@ -8,7 +8,7 @@ from datetime import datetime
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Link, Panel, PrState
-from .kinds import EntryAttrs, IcedAttrs, IcedBranchAttrs
+from .kinds import EntryAttrs, IcedAttrs
 from .markdown import PR_URL_RE
 from .models import Entry, Ice, Todo
 
@@ -17,7 +17,6 @@ NOT_BLOCKED_RE = re.compile(r"^\s*(nothing|none|no|-|n/a)\b", re.IGNORECASE)
 PR = "pr"
 TICKET = "ticket"
 ENTRY = "entry"
-ICED_BRANCH = "iced_branch"
 ICED = "iced"
 BRANCH = "branch"
 BRANCH_ID_SEPARATOR = "\t"
@@ -163,7 +162,7 @@ def entry_keys(entry: Entry, graph: Graph) -> list[str]:
 def entities(entries: list[Entry], ices: list[Ice], covers: dict[int, list[Ref]]) -> list[Entity]:
     """`entry` per work entry, pointing at the PRs and tickets it and its todos are linked to
     and mentioning its title (for the tickets it names); `iced` per act of icing, pointing at
-    what it covers and the `covers` found for it; and `iced_branch` per branch on ice."""
+    what it covers and the `covers` found for it."""
     result: list[Entity] = []
     for entry in entries:
         links = [*entry.links, *(link for todo in entry.open_todos for link in todo.links)]
@@ -200,19 +199,6 @@ def entities(entries: list[Entry], ices: list[Ice], covers: dict[int, list[Ref]]
                 ),
             )
         )
-        for item in ice.items:
-            if item.kind != BRANCH:
-                continue
-            repo_dir, _, name = item.ref_id.partition(BRANCH_ID_SEPARATOR)
-            result.append(
-                Entity(
-                    ref=Ref(kind=ICED_BRANCH, id=item.ref_id),
-                    title=name,
-                    attrs=attrs(
-                        IcedBranchAttrs(repo_dir=repo_dir, name=name, stack=ice.title, sha=item.sha)
-                    ),
-                )
-            )
     return result
 
 
@@ -390,11 +376,6 @@ class Builder:
                     subjects=[
                         Ref(kind=ICED, id=str(ice.id)),
                         *(Ref(kind=item.kind, id=item.ref_id) for item in ice.items),
-                        *(
-                            Ref(kind=ICED_BRANCH, id=item.ref_id)
-                            for item in ice.items
-                            if item.kind == BRANCH
-                        ),
                     ],
                 )
             )

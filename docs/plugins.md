@@ -20,7 +20,6 @@ flowchart LR
         branch[branch]
         ticket[ticket]
         entry[entry]
-        iced[iced_branch]
         ice[iced]
     end
 
@@ -31,7 +30,6 @@ flowchart LR
     git_stack([git_stack]) -- "publishes, pointing at branch" --> stack_branch[stack_branch]
     jira([jira]) -- publishes --> ticket
     notes([notes]) -- publishes --> entry
-    notes -- publishes --> iced
     notes -- "publishes, pointing at what it hides" --> ice
     ice -. "hides what it covers" .-> core([core])
 

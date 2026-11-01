@@ -22,10 +22,7 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- Icing anything (see Icing anything): notes' `iced` hides what it covers now; the
-  consumers' own ice checks go (github, slack, git's and git_stack's), git's delete and
-  git_stack's untrack find iced branches through `iced`, and `iced_branch` goes. Then
-  icing entries, tickets and PRs. A notes migration renames the kinds stored in `notes_iced`
+- Icing anything (see Icing anything): icing entries, tickets and PRs. A notes migration renames the kinds stored in `notes_iced`
   and `notes_links` to their namespaced names. notes also stores each iced item's name (it parses
   git's branch ids for them today, to show a stack after git deleted its branches), so
   ids stay opaque to everyone but their publisher.
@@ -447,12 +444,9 @@ notes publishes a `notes.iced` entity per act of icing, pointing at everything i
 For an iced entry, that includes what the entry links, which notes knows from its own
 tables. An iced ticket reaches its PRs because the ticket is a linking kind.
 
-Plugins don't check for ice themselves. The `notes.iced` kind model declares that it
-**hides** what it covers, and core, building the page, leaves out of every panel and of
-Act now any item whose subject is hidden: covered directly, or linked to something covered.
-The On ice panel is the exception; it shows them. So github, git, git_stack and slack stop
-knowing about notes at all, and Act now's `blocked` needn't carry "on ice". This replaces
-`notes.iced_branch` and every branch-name lookup.
+Core already hides what an `iced` covers (see `docs/graph.md`). An iced entry also covers
+what the entry links (an iced entry is a linking entity, so that comes for free); an iced
+ticket reaches its PRs because the ticket is a linking kind.
 
 Put on ice becomes an item action on any item whose subject notes can ice: entries,
 tickets, PRs and branches. The On ice panel lists acts of icing, with Thaw, and Delete for

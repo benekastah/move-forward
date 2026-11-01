@@ -178,8 +178,8 @@ def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     assert [(i.kind, i.ref_id, i.sha) for i in ice.items] == [
         ("branch", f"{repo}\twip", git(repo, "rev-parse", "wip").strip())
     ]
-    iced_wip = graph(config).get("iced_branch", f"{repo}\twip")
-    assert iced_wip is not None and iced_wip.attrs["sha"] == ice.items[0].sha
+    iced_wip = graph(config).get("iced", str(ice.id))
+    assert iced_wip is not None and iced_wip.attrs["shas"] == {f"{repo}\twip": ice.items[0].sha}
     assert graph(config).hidden(Ref(kind="branch", id=f"{repo}\twip"))
     with pytest.raises(ActionError, match="already on ice"):
         _ice(config, repo, "wip")
