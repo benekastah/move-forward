@@ -288,3 +288,28 @@ def test_act_now_ranks_my_prs_and_reviews_by_what_github_knows_of_them() -> None
         (f"Review: {small.title}", "why: quick, alice waiting"),
         (f"Review: {big.title}", "why: bob waiting"),  # a day's review: no quick win
     ]
+
+
+def test_act_now_says_how_long_a_review_or_a_reply_has_waited() -> None:
+    asked = pr(
+        1,
+        author="alice",
+        events=[
+            event(
+                "ReviewRequestedEvent", NOW - timedelta(days=5), reviewer_kind="user", reviewer=ME
+            ),
+            event(
+                "ReviewRequestedEvent", NOW - timedelta(days=3), reviewer_kind="user", reviewer=ME
+            ),
+            event(
+                "ReviewRequestedEvent", NOW - timedelta(hours=1), reviewer_kind="user", reviewer="x"
+            ),
+        ],
+    )
+    questioned = pr(
+        2, threads=[thread("bob").model_copy(update={"created_at": NOW - timedelta(days=2)})]
+    )
+    act = build(github=snapshot(mine=[questioned], direct_requests=[asked])).act_now()
+    why = {i.title: i.details[0] for i in act}
+    assert why[f"Review: {asked.title}"] == "why: quick, alice waiting 3d"  # the latest request
+    assert why[f"Reply: {questioned.title}"] == "why: quick, bob waiting 2d"

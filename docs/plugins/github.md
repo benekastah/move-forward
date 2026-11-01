@@ -49,8 +49,9 @@ tickets they name), and `person` for me and everyone it knows an email for; see
 ## Act now
 
 github nominates reviews (quick when up to 100 lines, about an hour up to 500, with the
-author waiting), feedback to reply to (quick, the thread authors waiting), CI failures and
-merge conflicts (about an hour), and PRs ready to merge (quick, closing the PR).
+author waiting since my review was last asked for by name), feedback to reply to (quick,
+the thread authors waiting since the oldest unresolved thread), CI failures and merge
+conflicts (about an hour), and PRs ready to merge (quick, closing the PR).
 
 ## Commands
 

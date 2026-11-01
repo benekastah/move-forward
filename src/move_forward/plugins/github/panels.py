@@ -81,9 +81,23 @@ def review_effort(pr: PullRequest) -> Effort:
     return "minutes" if pr.size <= 100 else "hour" if pr.size <= 500 else "day"
 
 
-def _review(pr: PullRequest) -> Signals:
+def requested_of(pr: PullRequest, me: str) -> datetime | None:
+    """When my review was last asked for on the PR, by name; None if it never was."""
+    times = [
+        e.at
+        for e in pr.events
+        if e.type == "ReviewRequestedEvent" and e.reviewer_kind == "user" and e.reviewer == me
+    ]
+    return max(times, default=None)
+
+
+def _review(pr: PullRequest, me: str) -> Signals:
+    """Review it: its author waits, since my review was asked for."""
     return Signals(
-        verb="Review", effort=review_effort(pr), waiting=[pr.author] if pr.author else []
+        verb="Review",
+        effort=review_effort(pr),
+        waiting=[pr.author] if pr.author else [],
+        waiting_since=requested_of(pr, me),
     )
 
 
@@ -122,7 +136,7 @@ class Builder:
                         pr,
                         details=["review requested"],
                         rank=pr.updated_at.timestamp(),
-                        signals=_review(pr),
+                        signals=_review(pr, self.me),
                     )
                 )
             seen = {pr.url for pr in self.gh.direct_requests}
@@ -135,7 +149,7 @@ class Builder:
                             pr,
                             details=[reason],
                             rank=pr.updated_at.timestamp(),
-                            signals=_review(pr),
+                            signals=_review(pr, self.me),
                         )
                     )
         return Panel(
@@ -188,7 +202,10 @@ class Builder:
             details += unanswered_feedback(pr, self.me)
             if details:
                 authors = list(dict.fromkeys(t.author for t in threads if t.author))
-                waiting = Signals(verb="Reply", effort="minutes", waiting=authors)
+                since = min((t.created_at for t in threads if t.created_at), default=None)
+                waiting = Signals(
+                    verb="Reply", effort="minutes", waiting=authors, waiting_since=since
+                )
                 items.append(
                     pr_item(
                         self.now,
