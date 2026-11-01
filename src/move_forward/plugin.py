@@ -99,6 +99,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
     kinds: ClassVar[dict[str, type[BaseModel]]] = {}
     """The entity kinds the plugin publishes, each with the model of its attributes. The graph
     checks the plugin's entities of those kinds against them as it's built."""
+    linking: ClassVar[dict[str, str | None]] = {}
+    """Of its kinds, the ones that link what they're about (see `Graph.related`): each with the
+    pattern of its ids, so the graph finds them in other entities' `mentions` (a ticket's
+    key), or None when its entities point at what they link themselves (a work entry)."""
     requires: ClassVar[list[str]] = []
     """Plugins whose entities this one is built on, e.g. `["git"]`; the config must enable
     them too."""

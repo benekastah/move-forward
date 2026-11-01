@@ -15,9 +15,14 @@ When two plugins publish the same ref, the graph merges them: the first plugin's
 refs and attributes are combined, and the first plugin's attribute wins a
 clash.
 
-`Graph.related(ref, kind)` finds entities of `kind` one hop from `ref` in
-either direction, or that share a `ticket` with it: a work entry naming
-APP-1 is related to every PR whose branch, title or body mentions APP-1.
+Some kinds are **linking**: their entities stand for a unit of work, and link
+what's about it. `ticket` (jira) and `entry` (notes) are. `Graph.related(ref,
+kind)` finds entities of `kind` one hop from `ref` in either direction, or
+linked with it by a linking entity: a work entry naming APP-1 is related to
+every PR whose branch, title or body mentions APP-1. A linking kind with a
+pattern for its ids (`ticket`'s is a Jira key) is found in other entities'
+`mentions`, so they point at it without their plugin knowing the kind; see
+[graph.md](graph.md#related-entities).
 
 ## Kinds
 
@@ -28,8 +33,8 @@ APP-1 is related to every PR whose branch, title or body mentions APP-1.
 | `repo` | git | GitHub `owner/name` | | |
 | `branch` | git | `<repo dir>\t<branch>` | | its `repo` |
 | `stack_branch` | git_stack | its `branch`'s id | | its `branch`, which git may have deleted |
-| `ticket` | jira | the issue key, e.g. `APP-1` | the issue's status | |
-| `entry` | notes | the entry's title | | the `pr` URLs and `ticket` keys it names |
+| `ticket` (linking) | jira | the issue key, e.g. `APP-1` | the issue's status | |
+| `entry` (linking) | notes | the entry's title | | the `pr` URLs and `ticket` keys it names |
 | `iced_branch` | notes | `<repo dir>\t<branch>`, like `branch` | | |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github

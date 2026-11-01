@@ -30,6 +30,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     config_model = NotesConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {ENTRY: EntryAttrs, ICED_BRANCH: IcedBranchAttrs}
+    linking: ClassVar[dict[str, str | None]] = {ENTRY: None}
     cli_help = "import the skill's markdown notes, or export them back"
 
     def entities(self, ctx: Context[NotesConfig], snapshot: BaseModel | None) -> list[Entity]:

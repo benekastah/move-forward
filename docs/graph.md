@@ -24,6 +24,7 @@ class Entity(Model):
     url: str | None
     state: str | None  # "open", "merged", a ticket's status, ...
     refs: list[Ref]  # what it points at
+    mentions: list[str]  # text that may name linking entities, see below
     attrs: dict[str, JsonValue]
 ```
 
@@ -54,7 +55,8 @@ flowchart TB
     snapshot -->|"Plugin.entities"| published["entities, per plugin"]
     published --> check{"fits the model the plugin<br/>declared for its kind?"}
     check -->|no| dropped["left out, logged:<br/>a plugin bug"]
-    check -->|yes| merge["one entity per ref<br/>(two publishers' merged)"]
+    check -->|yes| mentions["mentions of linking ids<br/>become refs"]
+    mentions --> merge["one entity per ref<br/>(two publishers' merged)"]
     merge --> index["indexed by ref, by kind,<br/>and by the refs pointing at each"]
     index --> built(["Graph"])
 ```
@@ -66,10 +68,12 @@ flowchart TB
    `move_forward.graph`). Core
    checks every entity against its kind's model; one that doesn't fit is left out and
    logged, so the page goes on without it.
-3. Two plugins publishing the same ref would be merged, the first plugin's fields winning;
+3. Text an entity `mentions` that matches a linking kind's id pattern becomes a ref to it
+   (see [related entities](#related-entities)).
+4. Two plugins publishing the same ref would be merged, the first plugin's fields winning;
    no plugin does any more (git_stack publishes its own `stack_branch` instead of adding to
    git's `branch`), and the merging is due to go.
-4. The graph indexes entities by ref, by kind, and by the refs pointing at each, for the
+5. The graph indexes entities by ref, by kind, and by the refs pointing at each, for the
    lookups below.
 
 During a refresh the graph is built twice:
@@ -125,8 +129,20 @@ A view lists only what its consumer reads, so publishers can add attributes free
 
 ### Related entities
 
+Some kinds stand for a unit of work and link what's about it. A plugin declares them in
+`linking`, each with the pattern of its ids, or None:
+
+```python
+class JiraPlugin(Plugin[JiraConfig]):
+    linking = {"ticket": r"\b[A-Z][A-Z0-9]+-\d+\b"}
+
+
+class NotesPlugin(Plugin[NotesConfig]):
+    linking = {"entry": None}  # an entry points at what it links itself
+```
+
 `related(ref, kind)` finds entities of `kind` one hop from `ref`, in either direction, or
-that share a ticket with it:
+linked with it by a linking entity that's one hop from both:
 
 ```mermaid
 flowchart LR
@@ -135,10 +151,17 @@ flowchart LR
     entry -->|names| pr13["pr 13"]
 ```
 
-Here `related(entry, "pr")` is PR 13 (the entry names it) and PR 12 (both are about APP-1),
-and `related(pr12, "entry")` is the entry. A ticket is the only kind that links this way
-today; making that a declaration on a kind (so a work entry, a Linear issue or a GitHub
-issue can link too) is part of step 5f in `plan.md`.
+Here `related(entry, "pr")` is PR 13 (the entry names it) and PR 12 (the ticket links
+them), `related(pr12, "entry")` is the entry, and `related(ticket, "pr")` is PR 12 and
+PR 13 (the entry links them). It goes one link deep: `related(pr12, "pr")` is nothing,
+since PR 13 is two links away, through the ticket and then the entry. Core knows no
+linking kind by name; a Linear or GitHub issue would join in by declaring its kind.
+
+A linking kind with a pattern is found in **mentions**: text an entity carries that may
+name one, like a PR's branch, title and body. Building the graph, core adds a ref from the
+entity to each linking entity whose id its mentions match, whether or not that entity is
+in the graph, so the publisher needn't know the kind. Without the plugin that declares
+the pattern (Jira not set up), mentions link nothing.
 
 ### URLs, and entities not in the graph
 

@@ -205,6 +205,7 @@ def test_metadata_flags_labels_links_and_ready_looking_drafts() -> None:
         work_items=[entry("APP-5 x", [todo("finish", "big")])],
         placeholder_labels=["needs-team", "needs-risk"],
         ticket_link_prefix="Link",
+        jira_site="https://jira",  # so PR 5 and the entry are linked through APP-5
     )
     items = {i.title: i.details for i in panel(dashboard, "metadata").items}
     assert items == {

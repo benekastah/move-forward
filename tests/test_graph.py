@@ -8,6 +8,7 @@ PR = Ref(kind="pr", id="https://github.com/o/r/pull/1")
 OTHER_PR = Ref(kind="pr", id="https://github.com/o/r/pull/2")
 TICKET = Ref(kind="ticket", id="APP-1")
 ENTRY = Ref(kind="entry", id="1")
+LINKING: dict[str, str | None] = {"ticket": r"\bAPP-\d+\b", "entry": None}
 
 
 def _graph() -> Graph:
@@ -19,6 +20,7 @@ def _graph() -> Graph:
             Entity(ref=ENTRY, title="APP-1 work", refs=[TICKET, OTHER_PR]),
         ],
         url_for=lambda kind, id: f"https://jira/{id}" if kind == "ticket" else None,
+        linking=LINKING,
     )
 
 
@@ -26,13 +28,34 @@ def _ids(entities: list[Entity]) -> list[str]:
     return [e.ref.id for e in entities]
 
 
-def test_related_goes_both_ways_and_through_a_shared_ticket() -> None:
+def test_related_goes_both_ways_and_through_linking_entities() -> None:
     graph = _graph()
     assert _ids(graph.related(ENTRY, "pr")) == [OTHER_PR.id, PR.id]  # direct, then via APP-1
     assert _ids(graph.related(PR, "entry")) == [ENTRY.id]  # via APP-1
     assert _ids(graph.related(OTHER_PR, "entry")) == [ENTRY.id]  # pointed at
-    assert _ids(graph.related(TICKET, "pr")) == [PR.id]
-    assert graph.related(PR, "pr") == []  # OTHER_PR is two hops away, through the entry
+    assert _ids(graph.related(TICKET, "pr")) == [PR.id, OTHER_PR.id]  # mentions it; via the entry
+    assert graph.related(PR, "pr") == []  # OTHER_PR is two links away: APP-1, then the entry
+
+
+def test_a_shared_ref_links_only_through_a_linking_kind() -> None:
+    repo = Ref(kind="repo", id="o/r")
+    prs = [
+        Entity(ref=PR, title="pr 1", refs=[repo]),
+        Entity(ref=OTHER_PR, title="pr 2", refs=[repo]),
+    ]
+    assert Graph(prs, linking=LINKING).related(PR, "pr") == []
+    assert _ids(Graph(prs, linking={"repo": None}).related(PR, "pr")) == [OTHER_PR.id]
+
+
+def test_mentions_point_at_the_linking_entities_they_name() -> None:
+    pr = Entity(ref=PR, title="pr 1", refs=[TICKET], mentions=["me/APP-1-fix", "APP-2 and APP-1"])
+    graph = Graph([pr], linking=LINKING)
+    found = graph.get("pr", PR.id)
+    assert found is not None
+    assert found.refs == [TICKET, Ref(kind="ticket", id="APP-2")]  # once each
+    assert _ids(graph.related(Ref(kind="ticket", id="APP-2"), "pr")) == [PR.id]
+    unlinked = Graph([pr]).get("pr", PR.id)  # no plugin declares tickets: nothing found
+    assert unlinked is not None and unlinked.refs == [TICKET]
 
 
 def test_url_for_prefers_the_graph_then_asks_the_plugins() -> None:
@@ -96,4 +119,4 @@ def test_related_entities_through_a_view() -> None:
         id: str
         title: str
 
-    assert _graph().view_related(TICKET, "pr", Titled) == [Titled(id=PR.id, title="pr 1")]
+    assert _graph().view_related(PR, "entry", Titled) == [Titled(id=ENTRY.id, title="APP-1 work")]

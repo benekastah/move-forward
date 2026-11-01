@@ -23,7 +23,10 @@ is what's left to build.
 - A plugin declares the kinds it publishes in `kinds`, each with a model of its
   attributes, and the graph checks its entities against them. A consumer reads
   another plugin's entities with `graph.view(kind, View)`, through its own
-  small model of the fields it uses, not `attrs.get`.
+  small model of the fields it uses, not `attrs.get`. A kind that stands for a
+  unit of work (a ticket, a work entry) is declared in `linking`; an entity
+  that may name one publishes the text in `mentions` rather than refs to
+  another plugin's kind.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
   plugin last fetched, and why it failed.

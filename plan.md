@@ -22,9 +22,9 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- Linking kinds and mentions (see Units of work): `jira.ticket` and `notes.entry` declare
-  themselves linking, github publishes the keys a PR mentions instead of refs to
-  `ticket`, and `Graph.related` follows any linking kind instead of `ticket` by name.
+- Mentions (see Units of work): github publishes a PR's branch, title and body as
+  `mentions` instead of refs to `ticket`, and notes an entry's title, so neither finds Jira
+  keys itself.
 - Icing anything, with hiding in core (see Icing anything): `notes.iced` declares that it
   hides what it covers, core leaves those items out of panels and Act now, and the
   consumers' own ice checks go. A notes migration renames the kinds stored in `notes_iced`

@@ -135,6 +135,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
+    linking: ClassVar[dict[str, str | None]] = {TICKET: r"\b[A-Z][A-Z0-9]+-\d+\b"}
 
     def collect(self, ctx: Context[JiraConfig]) -> JiraSnapshot:
         return client.collect(ctx.config, ctx.email)

@@ -4,15 +4,13 @@ Each plugin publishes entities (PRs, tickets, branches, ...) that point at other
 Kinds and their attributes are a published contract, listed in `docs/entities.md`.
 """
 
+import re
 from collections import defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 
 from pydantic import BaseModel, Field, JsonValue
 
 from .domain import Model
-
-TICKET = "ticket"
-"""The kind that links entities indirectly: two entities about one ticket are related."""
 
 UrlFor = Callable[[str, str], str | None]
 """Asks the plugins for an entity's URL by kind and id, whether or not it's in the graph."""
@@ -35,6 +33,9 @@ class Entity(Model):
     """e.g. "open", "draft", "merged", "closed"; a ticket's status."""
     refs: list[Ref] = Field(default_factory=list)
     """What it points at."""
+    mentions: list[str] = Field(default_factory=list)
+    """Text that may name linking entities by id, e.g. a PR's branch, title and body; the graph
+    adds a ref to each linking entity whose id it finds in it."""
     attrs: dict[str, JsonValue] = Field(default_factory=dict)
 
 
@@ -44,6 +45,20 @@ def _no_url(kind: str, id: str) -> str | None:
 
 def _no_fetch(kind: str, ids: list[str]) -> list["Entity"]:
     return []
+
+
+def _with_mentions(entity: Entity, patterns: dict[str, re.Pattern[str]]) -> Entity:
+    """The entity pointing, too, at each linking entity whose id its mentions name."""
+    if not entity.mentions or not patterns:
+        return entity
+    found = [
+        Ref(kind=kind, id=match[0])
+        for text in entity.mentions
+        for kind, pattern in patterns.items()
+        for match in pattern.finditer(text)
+    ]
+    refs = list(dict.fromkeys([*entity.refs, *found]))
+    return entity.model_copy(update={"refs": refs}) if len(refs) != len(entity.refs) else entity
 
 
 def _merge(first: Entity, second: Entity) -> Entity:
@@ -63,8 +78,18 @@ class Graph:
     """Every enabled plugin's entities, indexed by ref and by the refs pointing at them."""
 
     def __init__(
-        self, entities: Iterable[Entity] = (), url_for: UrlFor = _no_url, fetch: Fetch = _no_fetch
+        self,
+        entities: Iterable[Entity] = (),
+        url_for: UrlFor = _no_url,
+        fetch: Fetch = _no_fetch,
+        linking: Mapping[str, str | None] | None = None,
     ):
+        """`linking` names the kinds that link what they're about (see `related`), each with
+        the pattern of its ids, for finding them in entities' `mentions`; None for a kind
+        whose entities point at what they link themselves."""
+        self._linking = dict(linking or {})
+        patterns = {k: re.compile(p) for k, p in self._linking.items() if p is not None}
+        entities = [_with_mentions(e, patterns) for e in entities]
         self._by_ref: dict[Ref, Entity] = {}
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
@@ -93,19 +118,21 @@ class Graph:
         return out + self._pointing_at.get(ref, [])
 
     def related(self, ref: Ref, kind: str) -> list[Entity]:
-        """Entities of `kind` one hop from `ref` in either direction, or that share a ticket
-        with it, e.g. a work entry and the PRs for the ticket it names. In graph order, once
-        each, never `ref` itself."""
-        found: dict[Ref, Entity] = {}
+        """Entities of `kind` one hop from `ref` in either direction, or linked with it by a
+        linking entity both are next to: a ticket they both mention, a work entry that names
+        both. In graph order, once each, never `ref` itself."""
+        neighbours = self._neighbours(ref)
         entity = self._by_ref.get(ref)
-        tickets = [r for r in entity.refs if r.kind == TICKET] if entity else []
-        if ref.kind == TICKET:
-            tickets.append(ref)
-        candidates = self._neighbours(ref)
-        for ticket in tickets:
-            candidates += self._pointing_at.get(ticket, [])
-            if ticket in self._by_ref:
-                candidates.append(self._by_ref[ticket])
+        linkers = [r for r in entity.refs if r.kind in self._linking] if entity else []
+        linkers += [n.ref for n in neighbours if n.ref.kind in self._linking]
+        if ref.kind in self._linking:
+            linkers.append(ref)
+        candidates = list(neighbours)
+        for linker in dict.fromkeys(linkers):
+            candidates += self._neighbours(linker)
+            if linker in self._by_ref:
+                candidates.append(self._by_ref[linker])
+        found: dict[Ref, Entity] = {}
         for candidate in candidates:
             if candidate.ref.kind == kind and candidate.ref != ref:
                 found.setdefault(candidate.ref, candidate)
