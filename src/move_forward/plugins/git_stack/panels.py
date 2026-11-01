@@ -17,13 +17,6 @@ BRANCH = "branch"
 STACK_BRANCH = "stack_branch"
 PR = "pr"
 REPO = "repo"
-ICED = "iced"
-WITHOUT_CLEAN = (
-    "`git stack clean` covers every stack, iced ones too: untrack the iced stacks (On ice's"
-    " Untrack), or clean stack by stack with `git stack sync <branch>` (or `-g <group>`),"
-    " which also restacks and pushes"
-)
-"""What to do instead of Clean while git-stack tracks an iced stack."""
 BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""
 
@@ -73,22 +66,6 @@ class _PrView(Model):
         return Ref(kind=PR, id=self.id)
 
 
-def iced_stacks(graph: Graph) -> dict[str, list[str]]:
-    """The titles of what's on ice (notes' `iced`) with branches git-stack still tracks, by
-    their checkouts: what `git stack clean`, which goes through every tracked branch, would
-    touch. An iced stack that's been untracked is out of its reach. A `stack_branch`'s id is
-    its branch's."""
-    found: dict[str, list[str]] = {}
-    for iced in graph.of_kind(ICED):
-        for ref in iced.refs:
-            if ref.kind not in (BRANCH, STACK_BRANCH):
-                continue
-            branch = graph.view_one(STACK_BRANCH, ref.id, _BranchView)
-            if branch is not None and iced.title not in found.get(branch.repo_dir, []):
-                found.setdefault(branch.repo_dir, []).append(iced.title)
-    return found
-
-
 def repo_dirs(graph: Graph) -> list[str]:
     """The checkouts git has branches in, i.e. `[git] repos`."""
     return sorted({b.repo_dir for b in graph.view(BRANCH, _BranchView)})
@@ -126,7 +103,6 @@ class Builder:
         for pr in graph.view(PR, _PrView):
             if pr.mine:
                 self.my_prs.setdefault((pr.repo, pr.head), []).append(pr)
-        self.iced_stacks = iced_stacks(graph)
 
     def _pr(self, repo_dir: str, branch: str, state: str) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
@@ -138,16 +114,7 @@ class Builder:
         actions: list[Action] = []
         for repo in self.snapshot.repos if self.snapshot else []:
             merged = [b.name for b in repo.branches if b.status == "merged"]
-            if merged and repo.dir in self.iced_stacks:
-                items.append(
-                    Item(
-                        title=f"{len(merged)} merged stack branches not cleaned",
-                        subtitle=repo.dir,
-                        details=[f"this repo has iced stacks; {WITHOUT_CLEAN}"],
-                        rank=-1,
-                    )
-                )
-            elif merged:
+            if merged:
                 actions.append(
                     Action(
                         name="git_stack/stack_clean",
@@ -157,7 +124,8 @@ class Builder:
                         # GitHub, so it may find more or fewer.
                         confirm=f"Run `git stack clean -d local` in {repo.dir}? It fetches,"
                         " fast-forwards each stack's root (e.g. main), untracks the branches"
-                        " that merged and deletes them locally. With uncommitted changes there, it"
+                        " that merged (iced stacks' too) and deletes them locally. With"
+                        " uncommitted changes there, it"
                         " refuses if the checked-out branch is a stack's root or one it would"
                         " delete.",
                     )

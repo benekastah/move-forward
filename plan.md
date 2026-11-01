@@ -19,14 +19,6 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `dev.py check` green and the page working.
 
-### git-stack: agreeing with what git-stack does
-
-Left to do, in git-stack itself (`../git-stack`; see `git-stack-issues.md`):
-
-- **`git stack clean <branch>...` / `-g <group>`**: clean only the named stacks, as `sync`
-  takes them. The dashboard could then offer Clean in a repo with iced stacks (cleaning the
-  others), and "clean per stack" becomes true.
-
 ### 9. Slack, reading and pinging
 
 Slack becomes a source of work, not just a place pings go. It needs a Slack app with a

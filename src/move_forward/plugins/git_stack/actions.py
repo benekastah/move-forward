@@ -12,7 +12,7 @@ from ...graph import Graph
 from ...plugin import ActionError, Context
 from ...shell import DEFAULT_TIMEOUT_SECONDS, CommandError, git
 from .config import GitStackConfig
-from .panels import STACK_BRANCH, WITHOUT_CLEAN, StackBranchView, iced_stacks, repo_dirs
+from .panels import STACK_BRANCH, StackBranchView, repo_dirs
 
 STACK_CLEAN_TIMEOUT_SECONDS = 600
 """`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
@@ -94,19 +94,13 @@ def cleaned(events: list[_Event]) -> str:
 
 
 def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """`git stack clean -d local --json`: untrack merged branches in every stack and delete
-    them, saying what it did, or how far it got before it failed.
-
-    Refused while the repo has iced branches, since clean touches every stack (the skill's
-    rule).
-    """
+    """`git stack clean -d local --json`: untrack merged branches in every stack, iced ones
+    too, and delete them, saying what it did, or how far it got before it failed. It never
+    restacks or pushes, so an iced stack's unmerged branches are left as they are, and a
+    merged one it deletes can be restored at its iced commit by reopening the stack."""
     if fields["repo"] not in repo_dirs(graph):
         raise ActionError(f"{fields['repo']} is not a configured repo")
     repo = Path(fields["repo"])
-    iced = iced_stacks(graph).get(fields["repo"], [])
-    if iced:
-        names = ", ".join(sorted(iced))
-        raise ActionError(f"{repo} has iced stacks ({names}); {WITHOUT_CLEAN}")
     found = run_json(
         repo,
         ["clean", "-d", "local"],
