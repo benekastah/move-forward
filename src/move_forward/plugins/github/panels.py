@@ -9,7 +9,7 @@ from pydantic import Field
 
 from ...domain import Model
 from ...graph import Graph, Ref
-from ...page import Item, Link, Panel, age
+from ...page import Effort, Item, Link, Panel, Signals, age
 from .config import GitHubConfig
 from .models import DerivedSnapshot, GitHubSnapshot, PullRequest
 from .prs import (
@@ -60,6 +60,7 @@ def pr_item(
     details: list[str] | None = None,
     links: list[Link] | None = None,
     rank: float = 0,
+    signals: Signals | None = None,
 ) -> Item:
     return Item(
         title=pr.title,
@@ -71,6 +72,18 @@ def pr_item(
         rank=rank,
         draft=pr.is_draft,
         subjects=[pr_ref(pr)],
+        signals=signals,
+    )
+
+
+def review_effort(pr: PullRequest) -> Effort:
+    """How long reviewing it takes, by its size: minutes up to 100 lines, an hour up to 500."""
+    return "minutes" if pr.size <= 100 else "hour" if pr.size <= 500 else "day"
+
+
+def _review(pr: PullRequest) -> Signals:
+    return Signals(
+        verb="Review", effort=review_effort(pr), waiting=[pr.author] if pr.author else []
     )
 
 
@@ -105,7 +118,11 @@ class Builder:
             for pr in self.gh.direct_requests:
                 items.append(
                     pr_item(
-                        self.now, pr, details=["review requested"], rank=pr.updated_at.timestamp()
+                        self.now,
+                        pr,
+                        details=["review requested"],
+                        rank=pr.updated_at.timestamp(),
+                        signals=_review(pr),
                     )
                 )
             seen = {pr.url for pr in self.gh.direct_requests}
@@ -113,7 +130,13 @@ class Builder:
                 reason = needs_re_review(pr, self.me)
                 if reason and pr.url not in seen:
                     items.append(
-                        pr_item(self.now, pr, details=[reason], rank=pr.updated_at.timestamp())
+                        pr_item(
+                            self.now,
+                            pr,
+                            details=[reason],
+                            rank=pr.updated_at.timestamp(),
+                            signals=_review(pr),
+                        )
                     )
         return Panel(
             key="reviews_for_me",
@@ -164,7 +187,18 @@ class Builder:
                 details.insert(0, "changes requested")
             details += unanswered_feedback(pr, self.me)
             if details:
-                items.append(pr_item(self.now, pr, details=details, links=links, rank=len(details)))
+                authors = list(dict.fromkeys(t.author for t in threads if t.author))
+                waiting = Signals(verb="Reply", effort="minutes", waiting=authors)
+                items.append(
+                    pr_item(
+                        self.now,
+                        pr,
+                        details=details,
+                        links=links,
+                        rank=len(details),
+                        signals=waiting,
+                    )
+                )
         return Panel(
             key="feedback",
             priority=30,  # 3. feedback on my PRs
@@ -195,6 +229,7 @@ class Builder:
             key="ci_failures",
             priority=40,  # 4. CI failures
             act_now=True,
+            signals=Signals(verb="Fix CI", effort="hour"),
             title="CI failures",
             description="Failing checks and recent merge-queue evictions on my non-draft PRs.",
             items=items,
@@ -215,6 +250,7 @@ class Builder:
             key="conflicts",
             priority=20,  # 2. sync stacks
             act_now=True,
+            signals=Signals(verb="Resolve conflicts", effort="hour"),
             title="Merge conflicts",
             description="My open PRs that conflict with their base.",
             items=items,
@@ -245,11 +281,17 @@ class Builder:
             if conditions:
                 held.append(pr_item(self.now, pr, details=[f"held: {c}" for c in conditions]))
             else:
-                ready.append(pr_item(self.now, pr, details=["approved, green, base is default"]))
+                merge = Signals(verb="Merge", effort="minutes", closes=f"{pr.repo}#{pr.number}")
+                ready.append(
+                    pr_item(
+                        self.now, pr, details=["approved, green, base is default"], signals=merge
+                    )
+                )
         return (
             Panel(
                 key="ready_to_merge",
                 priority=90,  # 9. the merge queue
+                act_now=True,
                 title="Ready to merge",
                 description="Approved, green, no open threads, based on the default branch.",
                 items=ready,

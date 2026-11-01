@@ -107,7 +107,10 @@ def test_focus_items_by_category() -> None:
     )
     assert [i.title for _, i in everything if _.key == "github.reviews_for_me"] == [pr(3).title]
     act = dashboard.focus_items("act")  # the review request, then the conflicted PR
-    assert act is not None and [i.title for _, i in act] == [pr(3).title, pr(2).title]
+    assert act is not None and [i.title for _, i in act] == [
+        f"Review: {pr(3).title}",
+        f"Resolve conflicts: {pr(2).title}",
+    ]
     one = dashboard.focus_items("slack.nudges")
     assert one is not None and [i.title for _, i in one] == [pr(1).title]
     assert dashboard.focus_items("nope") is None
@@ -367,6 +370,7 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
         "github.feedback",
         "github.ci_failures",
         "github.conflicts",
+        "github.ready_to_merge",
     }
 
 

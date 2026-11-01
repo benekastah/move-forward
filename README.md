@@ -173,8 +173,10 @@ most 7, no more than 3 from one plugin, one per PR or ticket. Each says what to
 do and why it's there ("quick, closes APP-12, alice waiting"), and anything
 else due on the same subject ("also: Fix CI"). Finishing something counts
 most, then quick work, then someone waiting; blocked work is left out. Each
-plugin nominates its own items (today: those in Reviews for me, Merge
-conflicts, Feedback and CI failures). Below it is a collapsible group per
+plugin nominates its own items. github nominates reviews (quick when up to
+100 lines, with the author waiting), feedback to reply to (the thread authors
+waiting), CI failures, merge conflicts, and PRs ready to merge (quick, and it
+closes the PR). Below it is a collapsible group per
 enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
 their most urgent panel: notes (todos), git, git_stack, github, slack, jira.

@@ -272,3 +272,18 @@ def test_a_pr_is_hidden_only_by_icing_in_its_own_repos_checkout() -> None:
         github=snapshot(mine=[mine]), local=local_snapshot(), iced_stacks=[iced_in("/src/other")]
     )
     assert titles(elsewhere, "github.conflicts") == [mine.title]
+
+
+def test_act_now_ranks_my_prs_and_reviews_by_what_github_knows_of_them() -> None:
+    small = pr(1, author="alice", size=40)
+    big = pr(2, author="bob", size=900)
+    ready = pr(3, reviews=[approved_review()], review_decision="APPROVED", merge_state="CLEAN")
+    dashboard = build(
+        github=snapshot(mine=[ready], direct_requests=[small, big]),
+    )
+    act = panel(dashboard, "act.now").items
+    assert [(i.title, i.details[0]) for i in act] == [
+        (f"Merge: {ready.title}", "why: quick, closes acme/widgets#3"),
+        (f"Review: {small.title}", "why: quick, alice waiting"),
+        (f"Review: {big.title}", "why: bob waiting"),  # a day's review: no quick win
+    ]
