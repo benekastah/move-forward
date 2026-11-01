@@ -29,10 +29,47 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 ### 9. Slack, reading and pinging
 
 Slack becomes a source of work, not just a place pings go. It needs a Slack app with a
-*user* token (my DMs and mentions, my messages); the scopes are listed per feature on
-slack's page, and many workspaces need an admin to approve the app. Messages are kept as
-ids, who, when, the channel and a short snippet only, in kept tables pruned after
-`prune_days`. Nothing is ever sent without a click.
+*user* token (my DMs and mentions, my messages).
+
+**One internal app per workspace.** Workspaces that approve apps would otherwise approve
+one app per person. A Marketplace app needs hosting and Slack's review, and Slack
+rate-limits the history and replies methods for apps distributed outside the
+Marketplace, so the app stays internal. Hosting can come later if it's needed.
+
+- One person creates the app from a manifest checked into the slack plugin (JSON, so
+  reading it needs no new dependency) and gets it approved once. The manifest asks for
+  every feature's user scopes and no bot scopes. A test checks it against the scopes the
+  features below need.
+- Everyone else is added as a collaborator on the app, clicks "Install to Workspace" on
+  its settings page, and copies the user token (`xoxp-`) Slack shows them into
+  `token_env` or the keychain, where the token goes today. Slack runs the OAuth flow
+  itself, so `mfd` needs no redirect, client id or secret, and nothing new in code.
+- Check before building: that a collaborator's install gives them their own user token,
+  not the creator's, and how many collaborators an app can have.
+- Slack's page walks through both halves: creating and approving the app, and installing
+  it as a collaborator. It lists the scopes per feature.
+
+If the collaborator route doesn't work, `mfd serve` runs Slack's OAuth flow itself, from a
+"Connect Slack" button, using PKCE so no client secret is shared (the app's client id
+becomes a new `[slack]` key). Slack's console only takes `https://` redirect URLs, even
+for localhost, so the redirect is `https://127.0.0.1:<port>/slack/callback`, served by
+`mfd serve` with the standard library's `ssl`. Only the callback needs HTTPS, so it can
+be a second listener, leaving the page on plain HTTP.
+
+- The certificate is made at install (`install.sh`, or an `mfd` command it calls) and
+  lives next to the config. The browser has to trust it. With `mkcert` installed, it
+  makes a local CA and adds it to the system's and browsers' trust stores, so there's
+  no warning. Without `mkcert`, a self-signed certificate made with `openssl` works if
+  the person clicks through the browser's warning, which happens only when they connect.
+  Slack's page explains both, including Firefox, which keeps its own trust store.
+- `mfd check` says when the certificate is missing or about to expire.
+
+Turning PKCE on can't be undone, and Slack expires a PKCE app's refresh tokens after 30
+days, so someone who stays away that long connects again. If none of this works, the app
+moves to a hosted service.
+
+Messages are kept as ids, who, when, the channel and a short snippet only, in kept tables
+pruned after `prune_days`. Nothing is ever sent without a click.
 
 Each feature below is a setting in `[slack]`, so it can be turned off, or on only once the
 app has its scopes: `mentions`, `threads`, `saved`, `discussions`, `recognize_pings`,
