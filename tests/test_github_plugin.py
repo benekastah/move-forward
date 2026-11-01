@@ -41,7 +41,7 @@ def _context(**config: object) -> Context[GitHubConfig]:
     )
 
 
-def test_pr_entities_carry_state_ownership_tickets_and_team_names() -> None:
+def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
     mine = pr(1, requested_teams=["web-reviewers"])
     merged = pr(2, state="MERGED")
     closed = pr(3)  # the closed list, not the PR's own state, says it's closed
@@ -62,7 +62,7 @@ def test_pr_entities_carry_state_ownership_tickets_and_team_names() -> None:
     ]
     first = entities[mine.url]
     assert first.attrs["requested_teams"] == ["web"]
-    assert [r.id for r in first.refs] == ["APP-1"]
+    assert first.mentions == [mine.head, mine.title, mine.body]  # where ticket keys turn up
     assert first.attrs["review_blockers"] == []
     assert first.attrs["review_stale"] is True  # no review activity at all
     assert "review_blockers" not in entities[theirs.url].attrs

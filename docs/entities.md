@@ -28,7 +28,7 @@ pattern for its ids (`ticket`'s is a Jira key) is found in other entities'
 
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
-| `pr` | github | the PR's URL | `open`, `merged` or `closed` | `ticket` keys from its branch, title and body |
+| `pr` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket` keys its branch, title and body mention |
 | `person` | github: me, and everyone it knows an email for | GitHub login | | |
 | `repo` | git | GitHub `owner/name` | | |
 | `branch` | git | `<repo dir>\t<branch>` | | its `repo` |

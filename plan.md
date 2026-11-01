@@ -22,9 +22,9 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- Mentions (see Units of work): github publishes a PR's branch, title and body as
-  `mentions` instead of refs to `ticket`, and notes an entry's title, so neither finds Jira
-  keys itself.
+- Mentions in notes: an entry's title as `mentions` instead of finding Jira keys in it
+  itself (`markdown.links_in`), and the Add todo and Link actions, the prune and
+  `entry_for` reading tickets through the graph, so notes stops knowing the key pattern.
 - Icing anything, with hiding in core (see Icing anything): `notes.iced` declares that it
   hides what it covers, core leaves those items out of panels and Act now, and the
   consumers' own ice checks go. A notes migration renames the kinds stored in `notes_iced`
@@ -410,34 +410,12 @@ panel useful:
 4. **The docs follow the models.** `docs/entities.md` is generated from the kind models, or
    a test checks it against them.
 
-#### Units of work: linking kinds
+#### Units of work
 
-Today `Graph.related` treats `ticket` specially: a PR and a work entry that name APP-1 are
-related through it. That only helps people who use Jira, and core knows the kind by name.
-The generalization is to let a plugin declare a kind as **linking** on its kind model:
-
-- `jira.ticket` links what mentions its key: PRs by branch, title or body; entries by
-  title.
-- `notes.entry` links what it lists: its PRs, tickets and branches (from `notes_links`),
-  and its todos' links. notes is always on, so every setup has a unit of work, Jira or
-  not. An entry can wrap a ticket, or stand alone for work with no ticket.
-
-Mentions need an owner once kinds are namespaced: github shouldn't point at `jira.ticket`
-by name, and jira can't see PRs when it publishes. So a publisher records what an entity
-mentions as plain text, `mentions` (github: the keys in a PR's branch, title and body), and
-a linking kind declares the pattern of its ids (`jira.ticket`: `[A-Z][A-Z0-9]+-\d+`).
-Core, building the graph, links an entity to every linking entity whose id it mentions,
-and to linking entities that don't exist yet, so `url_for` still makes ticket links
-without Jira's data.
-
-`related(ref, kind)` then follows any linking kind, not just `ticket`: entities are related
-when one points at the other, or when both are linked by the same ticket or entry. Core
-stops knowing `ticket` by name. A future tool's work item (a Linear issue, a GitHub issue)
-declares its kind as linking and joins in without core changes.
-
-Work isn't one kind that every plugin must know: it's whatever linking kinds the enabled
-plugins publish. Act now merges nominations through them too (a ticket, its PR and its
-entry's todo become one item).
+Linking kinds are in (see `docs/graph.md`). What's left: work isn't one kind that every
+plugin must know, it's whatever linking kinds the enabled plugins publish, so Act now
+merges nominations through them too (a ticket, its PR and its entry's todo become one
+item).
 
 #### Icing anything
 

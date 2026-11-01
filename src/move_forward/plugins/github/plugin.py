@@ -20,7 +20,6 @@ from .prs import (
     changes_requested,
     last_review_activity,
     review_blockers,
-    ticket_keys,
 )
 from .snapshots import DerivedRepository, PrRepository
 from .tables import MIGRATIONS
@@ -32,7 +31,6 @@ DERIVED = "derived"
 suggestions. Its status is recorded under that name; what it found goes to its tables."""
 PERSON = "person"
 REPO = "repo"
-TICKET = "ticket"
 
 
 def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
@@ -143,7 +141,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             title=pr.title,
             url=pr.url,
             state=state,
-            refs=[Ref(kind=TICKET, id=key) for key in ticket_keys(pr)],
+            mentions=[pr.head, pr.title, pr.body],
             attrs=attrs(pr_attrs),
         )
 
