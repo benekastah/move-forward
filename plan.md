@@ -22,9 +22,10 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- Icing anything, with hiding in core (see Icing anything): `notes.iced` declares that it
-  hides what it covers, core leaves those items out of panels and Act now, and the
-  consumers' own ice checks go. A notes migration renames the kinds stored in `notes_iced`
+- Icing anything (see Icing anything): core hides what a `hides` kind covers (done);
+  notes publishes an `iced` entity per act of icing, declared in `hides`, pointing at what
+  it covers, including the PRs of iced branches (found in `after_collect`, since nothing
+  in the graph ties a PR to its branch), and the consumers' own ice checks go. A notes migration renames the kinds stored in `notes_iced`
   and `notes_links` to their namespaced names. notes also stores each iced item's name (it parses
   git's branch ids for them today, to show a stack after git deleted its branches), so
   ids stay opaque to everyone but their publisher.

@@ -176,3 +176,34 @@ def test_an_entity_that_doesnt_fit_its_kind_is_left_out(
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
     assert [t.ref.id for t in graph.of_kind("ticket")] == ["APP-1"]
     assert "published a bad ticket APP-2" in caplog.text
+
+
+class _VeilAttrs(Model):
+    pass
+
+
+class _Veiling(Hooked):
+    """Jira, plus a hiding `veil` over PR 1 and ticket APP-3."""
+
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {**JiraPlugin.kinds, "veil": _VeilAttrs}
+    hides: ClassVar[list[str]] = ["veil"]
+
+    def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
+        veil = Entity(
+            ref=Ref(kind="veil", id="1"),
+            title="veil",
+            refs=[Ref(kind="pr", id=pr(1).url), Ref(kind="ticket", id="APP-3")],
+        )
+        return [*super().entities(ctx, snapshot), veil]
+
+
+def test_core_leaves_out_items_about_what_a_hiding_kind_covers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plugins = [_Veiling() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    mine = [pr(n, merge_state="DIRTY") for n in (1, 2, 3)]
+    built = dashboard(github=snapshot(mine=mine), jira_site="https://j")
+    # PR 1 directly; PR 3 through APP-3, which its body mentions.
+    assert [i.title for i in built.panel("conflicts").items] == ["PR 2"]
+    assert dashboard(github=snapshot(mine=mine)).panel("conflicts").items  # no veil, no hiding

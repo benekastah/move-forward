@@ -89,11 +89,14 @@ class Graph:
         url_for: UrlFor = _no_url,
         fetch: Fetch = _no_fetch,
         linking: Mapping[str, str | None] | None = None,
+        hiding: Iterable[str] = (),
     ):
         """`linking` names the kinds that link what they're about (see `related`), each with
         the pattern of its ids, for finding them in entities' `mentions`; None for a kind
-        whose entities point at what they link themselves."""
+        whose entities point at what they link themselves. `hiding` names the kinds whose
+        entities hide what they point at (see `hidden`)."""
         self._linking = dict(linking or {})
+        self._hiding = set(hiding)
         self._patterns = {k: re.compile(p) for k, p in self._linking.items() if p is not None}
         entities = [_with_mentions(e, self._patterns) for e in entities]
         self._by_ref: dict[Ref, Entity] = {}
@@ -143,6 +146,22 @@ class Graph:
             if candidate.ref.kind == kind and candidate.ref != ref:
                 found.setdefault(candidate.ref, candidate)
         return list(found.values())
+
+    def hides(self, kind: str) -> bool:
+        """Whether entities of `kind` hide what they point at, e.g. notes' ice."""
+        return kind in self._hiding
+
+    def hidden(self, ref: Ref) -> bool:
+        """Whether a hiding entity covers `ref`: points at it, or at a linking entity next to
+        it (an iced ticket hides the PRs that mention it, an iced entry the PRs it names)."""
+        if self.hides(ref.kind):
+            return False
+        linkers = [n.ref for n in self._neighbours(ref) if n.ref.kind in self._linking]
+        entity = self._by_ref.get(ref)
+        linkers += [r for r in entity.refs if r.kind in self._linking] if entity else []
+        return any(
+            self.hides(e.ref.kind) for r in [ref, *linkers] for e in self._pointing_at.get(r, [])
+        )
 
     def named(self, text: str) -> list[Ref]:
         """The linking entities `text` names by id, as an entity's `mentions` would find them,

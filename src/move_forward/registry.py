@@ -128,4 +128,5 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         return found
 
     linking = {kind: p for e in plugins for kind, p in e.plugin.linking.items()}
-    return Graph(entities, url_for, fetch, linking)
+    hiding = [kind for e in plugins for kind in e.plugin.hides]
+    return Graph(entities, url_for, fetch, linking, hiding)

@@ -128,6 +128,18 @@ def _no_item_actions(item: Item) -> list[Action]:
     return []
 
 
+Hidden = Callable[[Item], bool]
+"""Whether an item is about something hidden, e.g. on ice, and so left off the page."""
+
+
+def _nothing_hidden(item: Item) -> bool:
+    return False
+
+
+def _without_hidden(panel: Panel, hidden: Hidden) -> Panel:
+    return panel.model_copy(update={"items": [i for i in panel.items if not hidden(i)]})
+
+
 def _with_item_actions(panel: Panel, item_actions: ItemActions) -> Panel:
     """Each item, and each of its focus-mode parts, with the plugins' buttons added."""
 
@@ -148,14 +160,15 @@ def build(
     sources: dict[str, SourceStatus],
     login: str = "",
     item_actions: ItemActions = _no_item_actions,
+    hidden: Hidden = _nothing_hidden,
 ) -> Dashboard:
-    """The dashboard: the plugins' panels in their groups, each item with the plugins' buttons,
-    sorted."""
+    """The dashboard: the plugins' panels in their groups, without hidden items, each item with
+    the plugins' buttons, sorted."""
     return Dashboard(
         generated_at=now,
         login=login,
         panels=[
-            _sorted(_with_item_actions(panel, item_actions))
+            _sorted(_with_item_actions(_without_hidden(panel, hidden), item_actions))
             for plugin in plugins
             for panel in plugin.panels
         ],

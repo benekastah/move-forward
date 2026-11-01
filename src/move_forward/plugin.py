@@ -103,6 +103,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """Of its kinds, the ones that link what they're about (see `Graph.related`): each with the
     pattern of its ids, so the graph finds them in other entities' `mentions` (a ticket's
     key), or None when its entities point at what they link themselves (a work entry)."""
+    hides: ClassVar[list[str]] = []
+    """Of its kinds, the ones whose entities hide what they point at (see `Graph.hidden`):
+    core leaves items about hidden things out of every panel but the hiding plugin's own
+    items about the hiding entity, e.g. notes' On ice."""
     requires: ClassVar[list[str]] = []
     """Plugins whose entities this one is built on, e.g. `["git"]`; the config must enable
     them too."""

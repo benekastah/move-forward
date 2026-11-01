@@ -97,6 +97,7 @@ graph.get("pr", url)  # one entity, or None
 graph.of_kind("pr")  # every entity of a kind
 graph.related(ref, "entry")  # see below
 graph.named("APP-1: fix it")  # the linking entities a text names, see below
+graph.hidden(ref)  # whether something on ice covers it, see below
 graph.url_for("ticket", "APP-1")
 ```
 
@@ -165,6 +166,18 @@ in the graph, so the publisher needn't know the kind. Without the plugin that de
 the pattern (Jira not set up), mentions link nothing. `graph.named(text)` finds the same
 refs in any text, for a plugin reading text of its own (notes finds the tickets a todo
 names with it).
+
+### Hidden entities
+
+A plugin can declare kinds whose entities **hide** what they point at, in `hides`. notes'
+ice is meant to be one: what's on ice stays off the page until it's thawed.
+`graph.hidden(ref)` says whether a hiding entity covers `ref`, directly or through a
+linking entity next to it: icing a ticket hides the PRs that mention it, icing a work entry
+hides the PRs it names. It doesn't go the other way: icing a PR leaves its ticket alone.
+
+Core, building the page, leaves out of every panel (and so of Act now and focus mode) each
+item with a hidden subject. Items about the hiding entity itself, like an On ice panel's,
+stay. So plugins never check for ice themselves.
 
 ### URLs, and entities not in the graph
 

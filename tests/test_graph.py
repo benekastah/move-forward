@@ -129,3 +129,28 @@ def test_named_finds_linking_ids_in_any_text() -> None:
         TICKET,
     ]
     assert Graph().named("APP-1") == []  # no plugin declares a pattern
+
+
+def test_a_hiding_entity_hides_what_it_covers_and_what_its_linkers_link() -> None:
+    ice = Ref(kind="ice", id="1")
+    branch = Ref(kind="branch", id="b")
+
+    def graph(covers: list[Ref]) -> Graph:
+        return Graph(
+            [
+                Entity(ref=PR, title="pr 1", refs=[TICKET]),
+                Entity(ref=OTHER_PR, title="pr 2"),
+                Entity(ref=ENTRY, title="work", refs=[OTHER_PR]),
+                Entity(ref=branch, title="b"),
+                Entity(ref=ice, title="on ice", refs=covers),
+            ],
+            linking=LINKING,
+            hiding=["ice"],
+        )
+
+    assert graph([branch]).hidden(branch) and not graph([branch]).hidden(PR)
+    assert graph([TICKET]).hidden(PR)  # PR 1 mentions the iced ticket
+    assert graph([ENTRY]).hidden(OTHER_PR)  # the iced entry names PR 2
+    assert not graph([PR]).hidden(TICKET)  # icing a PR doesn't ice its ticket
+    assert not graph([ENTRY]).hidden(ice)  # what hides is never hidden
+    assert not Graph(graph([branch]).of_kind("ice")).hidden(branch)  # no kind declared hiding

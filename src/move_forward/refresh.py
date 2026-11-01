@@ -110,7 +110,13 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
     def item_actions(item: Item) -> list[Action]:
         return [a for e in plugins for a in e.plugin.item_actions(e.ctx, item, graph)]
 
-    return panels.build(now, plugin_panels, sources, me.id if me else "", item_actions)
+    def hidden(item: Item) -> bool:
+        """About something hidden, unless it's about what hides it (an On ice item)."""
+        if any(graph.hides(s.kind) for s in item.subjects):
+            return False
+        return any(graph.hidden(s) for s in item.subjects)
+
+    return panels.build(now, plugin_panels, sources, me.id if me else "", item_actions, hidden)
 
 
 def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[str]]) -> str | None:
