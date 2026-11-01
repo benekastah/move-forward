@@ -18,6 +18,8 @@ PR = "pr"
 TICKET = "ticket"
 ENTRY = "entry"
 ICED = "iced"
+TODOS = "todos"
+"""The todos panel's key."""
 BRANCH = "branch"
 TODO_ADD = "notes/todo_add"
 PR_STATES: dict[str, PrState] = {"open": "open", "merged": "merged", "closed": "closed"}
@@ -362,7 +364,7 @@ class Builder:
                 )
             )
         return Panel(
-            key="todos",
+            key=TODOS,
             priority=0,  # 0b. reconcile the work notes
             title="Todos from the work notes",
             description="Easy close-outs first; blocked work last.",

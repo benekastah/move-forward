@@ -183,10 +183,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
         or a pass over the graph does that here, once, and returns the per-item function."""
         return lambda item: self.item_actions(ctx, item, graph)
 
-    def kept_item(self, ctx: Context[C], graph: Graph, key: str) -> Item | None:
+    def kept_item(self, ctx: Context[C], graph: Graph, key: str) -> tuple[str, Item] | None:
         """An item one of this plugin's actions asked to keep on the focus page after changing
         it (its result's `KEPT` parameter, `<plugin>:<key>`), e.g. a todo just ticked off,
-        shown with its box ticked so the tick can be undone."""
+        shown with its box ticked so the tick can be undone; with the key of the plugin's
+        panel it belongs to."""
         return None
 
     def pages(self) -> dict[str, PageHandler]:

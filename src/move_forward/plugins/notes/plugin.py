@@ -17,7 +17,7 @@ from . import actions, cli, prune
 from .config import NotesConfig
 from .covers import covers
 from .kinds import EntryAttrs, IcedAttrs
-from .panels import ENTRY, ICED, Builder, entities
+from .panels import ENTRY, ICED, TODOS, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 
@@ -64,9 +64,12 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         builder = _builder(ctx, graph)
         return lambda item: [a for a in (builder.put_on_ice(item), builder.add_todo(item)) if a]
 
-    def kept_item(self, ctx: Context[NotesConfig], graph: Graph, key: str) -> Item | None:
+    def kept_item(
+        self, ctx: Context[NotesConfig], graph: Graph, key: str
+    ) -> tuple[str, Item] | None:
         """The todo `todo_done` just ticked off, by id, with its box ticked."""
-        return _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
+        todo = _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
+        return (TODOS, todo) if todo else None
 
     def prune(self, ctx: Context[NotesConfig], graph: Graph) -> list[str]:
         cutoff = ctx.now - timedelta(days=ctx.prune_days)

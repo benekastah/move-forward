@@ -138,8 +138,9 @@ def run_action(config: Config, db: Database, name: str, fields: dict[str, str]) 
     return perform_action(config, db, name, fields).notice
 
 
-def kept_item(config: Config, db: Database, kept: str) -> Item | None:
-    """The item an action asked to keep on the focus page, by its `KEPT` parameter."""
+def kept_item(config: Config, db: Database, kept: str) -> tuple[str, Item] | None:
+    """The item an action asked to keep on the focus page, by its `KEPT` parameter, with the
+    key of its panel."""
     plugin_name, _, key = kept.partition(":")
     plugins = enabled(config, db, datetime.now(UTC))
     e = next((e for e in plugins if e.name == plugin_name), None)

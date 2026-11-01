@@ -288,8 +288,8 @@ def test_ticking_a_todo_off_redirects_back_with_it(
         ],
     )
 
-    def fake_kept(*_: object) -> Item:
-        return kept
+    def fake_kept(*_: object) -> tuple[str, Item]:
+        return "todos", kept
 
     monkeypatch.setattr(server, "kept_item", fake_kept)
     response = post(

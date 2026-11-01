@@ -281,14 +281,14 @@ def focus_page(
     category: str,
     index: int,
     notice: str = "",
-    done: Item | None = None,
+    done: tuple[str, Item] | None = None,
 ) -> str | None:
     """One item of a focus category with previous and next links; None for an unknown category.
 
     An index past the end (the list shrank since the link was made) shows the last item.
-    `notice` is the outcome of an action just run from this page. `done` is a todo just
-    ticked off from this page: it's shown in place of the item at `index` (which is now the
-    one after it), with its box ticked so the tick can be undone.
+    `notice` is the outcome of an action just run from this page. `done` is an item an action
+    just changed, e.g. a todo ticked off, with its panel's key: it's shown in place of the
+    item at `index` (which is now the one after it), so the change can be undone.
     """
     title = dashboard.focus_title(category)
     items = dashboard.focus_items(category)
@@ -309,9 +309,9 @@ def focus_page(
     index = max(0, min(index, len(items) - (0 if done else 1)))
     here = focus_url(category, index)
     if done is not None:
-        item = done
-        panel = dashboard.find_panel("todos")
-        panel_title, description = (panel.title, panel.description) if panel else ("Todos", "")
+        done_panel, item = done
+        panel = dashboard.find_panel(done_panel)
+        panel_title, description = (panel.title, panel.description) if panel else ("Done", "")
         position = f"done · {len(items) - index} to go"
         next_index = index
     else:

@@ -141,8 +141,10 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     ]
 
     config, db = stored(work_items=[noted])
-    done = kept_item(config, db, f"notes:{todo_id}")
-    assert done is not None
+    kept = kept_item(config, db, f"notes:{todo_id}")
+    assert kept is not None
+    panel_key, done = kept
+    assert panel_key == "todos"
     assert (done.title, done.subtitle) == ("small", "APP-2 mixed")
     assert done.url == "https://github.com/acme/widgets/pull/7"
     assert [(a.name, a.checked) for a in done.actions] == [("notes/todo_done", False)] + [
