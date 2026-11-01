@@ -6,6 +6,7 @@ import` reads the first two from the skill's `reviewer-map.md`.
 
 import argparse
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar, Literal
 from urllib.parse import quote
@@ -126,29 +127,34 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         slack = pinger(ctx, graph)
         return [slack.nudges(slack.pings())]
 
-    def item_actions(self, ctx: Context[SlackConfig], item: Item, graph: Graph) -> list[Action]:
+    def prepare_item_actions(
+        self, ctx: Context[SlackConfig], graph: Graph
+    ) -> Callable[[Item], list[Action]]:
         """A Ping link on any item about one of my open PRs: Bump once a target was pinged,
-        muted while the PR isn't in order."""
-        pr = item.subject("pr")
-        if pr is None:
-            return []
-        ping = pinger(ctx, graph).pings().get(pr.id)
-        if ping is None:
-            return []
-        blocked = bool(ping.blockers)
-        follow_up = any(t.ping_kind == "follow-up" for t in ping.targets)
-        return [
-            Action(
-                name="",
-                label="Ping…" if blocked else ("Bump" if follow_up else "Ping"),
-                fields={},
-                href=f"{PING_PATH}?pr={quote(ping.pr_url, safe='')}",
-                title="Not in order: " + ", ".join(ping.blockers)
-                if blocked
-                else "Send review pings",
-                muted=blocked,
-            )
-        ]
+        muted while the PR isn't in order. The pings are worked out once for the page."""
+        pings = pinger(ctx, graph).pings()
+
+        def ping_action(item: Item) -> list[Action]:
+            pr = item.subject("pr")
+            ping = pings.get(pr.id) if pr else None
+            if ping is None:
+                return []
+            blocked = bool(ping.blockers)
+            follow_up = any(t.ping_kind == "follow-up" for t in ping.targets)
+            return [
+                Action(
+                    name="",
+                    label="Ping…" if blocked else ("Bump" if follow_up else "Ping"),
+                    fields={},
+                    href=f"{PING_PATH}?pr={quote(ping.pr_url, safe='')}",
+                    title="Not in order: " + ", ".join(ping.blockers)
+                    if blocked
+                    else "Send review pings",
+                    muted=blocked,
+                )
+            ]
+
+        return ping_action
 
     def pages(self) -> dict[str, PageHandler]:
         def ping(

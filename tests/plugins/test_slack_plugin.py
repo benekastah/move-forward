@@ -20,13 +20,16 @@ from conftest import (
 
 from move_forward import render
 from move_forward.graph import Graph
+from move_forward.plugin import Context
 from move_forward.plugins.github.models import Check
+from move_forward.plugins.slack import plugin as slack_plugin
 from move_forward.plugins.slack.config import (
     DEFAULT_PING_FIRST,
     DEFAULT_PING_FOLLOW_UP,
     SlackConfig,
 )
 from move_forward.plugins.slack.models import Ping, TeamChannel
+from move_forward.plugins.slack.pings import Pinger
 from move_forward.plugins.slack.plugin import ping_page
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import enabled
@@ -179,3 +182,18 @@ def test_team_channel_must_be_a_channel_with_the_team_in_it() -> None:
     with pytest.raises(ValueError, match="must be a channel name with"):
         SlackConfig(team_channel="#team")
     assert SlackConfig(team_channel="#t-{team}").guessed_channel("web") == "#t-web"
+
+
+def test_pings_are_worked_out_once_per_page_not_per_item(monkeypatch: pytest.MonkeyPatch) -> None:
+    built_pingers: list[Pinger] = []
+
+    def counted(ctx: Context[SlackConfig], graph: Graph) -> Pinger:
+        built_pingers.append(found := original(ctx, graph))
+        return found
+
+    original = slack_plugin.pinger
+    monkeypatch.setattr(slack_plugin, "pinger", counted)
+    mine = [pr(n, merge_state="DIRTY", requested_users=["alice"]) for n in (1, 2, 3)]
+    built = dashboard(slack=True, github=snapshot(mine=mine))
+    assert len(built.panel("conflicts").items) == 3
+    assert len(built_pingers) == 2  # the Nudge panel's, and the Ping links'
