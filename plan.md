@@ -2,9 +2,9 @@
 
 What's left to build in move-forward. Only what's still to do lives here: when a step or
 section is done, remove it in the same PR, and delete this file once it's empty. The code,
-`AGENTS.md` and `docs/` are the reference for what's built (so far, steps 1–4b of the
-plugin rearchitecture: core, the github, git, jira, slack and notes plugins, and
-git_stack).
+`AGENTS.md` and `docs/` are the reference for what's built (so far, steps 1–5b of the
+plugin rearchitecture: core, the github, git, jira, slack and notes plugins, git_stack,
+authentication, CI on Linux, and the notes in their own tables behind `mfd notes`).
 
 ## Goal
 
@@ -153,7 +153,7 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   its teams check names slack, github and jira. The check could cover every section with a
   `teams` table instead.
 - **CI on macOS and Windows.** After Windows: the tests on macOS and Windows runners too
-  (free for this public repo); Linux CI comes in step 4d.
+  (free for this public repo), next to the Linux job that runs now.
 - **Icing and git-stack groups.** Putting a stack on ice walks the stack's parents only;
   git_stack doesn't publish groups, so a group's other stacks aren't iced with it.
 
