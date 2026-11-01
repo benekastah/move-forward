@@ -32,7 +32,7 @@ PLUGINS: list[Plugin[Any, Any]] = [
     SlackPlugin(),
     NotesPlugin(),
 ]
-"""Every built-in plugin, in page order. Each one's name is a field of `Config`."""
+"""Every built-in plugin. Each one's name is a field of `Config`."""
 
 
 @dataclass(frozen=True)

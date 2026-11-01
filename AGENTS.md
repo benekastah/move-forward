@@ -2,8 +2,9 @@
 
 Notes for agents (and people) changing this repo. The README says what the
 dashboard does; `docs/entities.md` is the contract between plugins,
-`docs/graph.md` explains the graph they go through, and `docs/plugins.md`
-draws how the plugins use each other's entities; `plan.md`
+`docs/graph.md` explains the graph they go through, `docs/plugins.md`
+draws how the plugins use each other's entities, and `docs/writing-a-plugin.md`
+walks through making one; `plan.md`
 is what's left to build.
 
 ## Shape of the code
