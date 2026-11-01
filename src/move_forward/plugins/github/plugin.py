@@ -12,7 +12,7 @@ from ...graph import Entity, Graph, Ref, attrs
 from ...page import Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
 from ...shell import CommandError
-from . import cli, client, derive, notifications
+from . import cli, client, derive, notifications, pushes
 from .config import GitHubConfig
 from .kinds import PersonAttrs, PrAttrs
 from .models import GitHubSnapshot, PullRequest
@@ -38,6 +38,8 @@ NOTIFICATIONS_SEEN = "notifications_last_modified"
 """The kv key of the notifications' last `Last-Modified`, for `changed`."""
 NOTIFICATIONS_WAIT = "notifications_poll_after"
 """The kv key of when GitHub lets `changed` poll the notifications again."""
+BRANCHES_SEEN = "pr_branches_seen"
+"""The kv key of where my open PRs' local branches were at the last check (`pushes.tips`)."""
 
 
 def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
@@ -65,11 +67,25 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
         PrRepository(ctx.db).replace(snapshot)
 
-    change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
+    change_check_seconds: ClassVar[int | None] = 10
 
     def changed(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
+        """Whether a branch of one of my open PRs moved (see `pushes`), checked every time,
+        or I have a notification about something in the org, polled as often as GitHub
+        allows."""
+        moved = self._branches_moved(ctx, graph)
+        return self._notified(ctx) or moved
+
+    def _branches_moved(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
+        now = pushes.tips(graph, PR, REPO)
+        before = ctx.kv.get(BRANCHES_SEEN)
+        if now != before:
+            ctx.kv.set(BRANCHES_SEEN, now)
+        return before is not None and now != before
+
+    def _notified(self, ctx: Context[GitHubConfig]) -> bool:
         """Whether I have a notification about something in the org (a review requested, a
-        comment, a review, CI) newer than the last check. A "not modified" answer is cheap,
+        comment, a review, CI) newer than the last look. A "not modified" answer is cheap,
         and GitHub's poll interval is kept to."""
         wait = ctx.kv.get(NOTIFICATIONS_WAIT)
         if wait and ctx.now < datetime.fromisoformat(wait):

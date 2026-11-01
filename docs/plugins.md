@@ -38,6 +38,7 @@ flowchart LR
 
     repo -. "checkouts: team PR scores, reviewer suggestions" .-> github
     entry -. "merge conditions (Held)" .-> github
+    branch -. "my PRs' branches moving: refresh now" .-> github
     pr -. "a branch's PR" .-> git
     ice -. "its branches' commits, before deleting them" .-> git
     branch -. "which checkouts to scan" .-> git_stack
