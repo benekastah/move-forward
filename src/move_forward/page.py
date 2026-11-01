@@ -81,6 +81,12 @@ class Panel(Model):
     items: list[Item]
     actions: list[Action] = Field(default_factory=list)
     """Panel-wide buttons, e.g. "delete all"."""
+    priority: int = 100
+    """Where it goes by default, lowest first: the skill's step order, e.g. 0 for the todos
+    the skill starts its check-in with, 10 for reviews asked of me, 130 for what to pick up
+    next. The page's layout, once someone has dragged things about, overrides it."""
+    act_now: bool = False
+    """In core's Act now group rather than its plugin's: work that needs doing first."""
 
 
 class SourceStatus(Model):
