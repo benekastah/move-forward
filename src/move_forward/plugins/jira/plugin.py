@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
-from ...page import Item, Link, Panel, age
+from ...page import Item, Link, Panel, Signals, age
 from ...plugin import Context, Plugin
 from . import client
 from .config import JiraConfig
@@ -57,22 +57,22 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
         prs = [p for p in graph.view_related(ticket_ref(issue.key), PR, _PrView) if p.mine]
         open_prs = [p for p in prs if p.state == "open"]
         merged = [p for p in prs if p.state == "merged"]
-        proposal = None
+        proposal, to = None, None
         if (
             issue.status == config.status_in_progress
             and open_prs
             and all(not p.draft for p in open_prs)
         ):
-            proposal = f"{config.status_in_progress} → {config.status_in_review}: all PRs open and non-draft"
+            to = config.status_in_review
+            proposal = f"{config.status_in_progress} → {to}: all PRs open and non-draft"
         elif issue.status == config.status_in_review and merged and not open_prs:
-            proposal = f"{config.status_in_review} → {config.status_closed}: all PRs merged"
+            to = config.status_closed
+            proposal = f"{config.status_in_review} → {to}: all PRs merged"
         elif issue.status == config.status_in_review and any(
             p.draft or p.changes_requested for p in open_prs
         ):
-            proposal = (
-                f"{config.status_in_review} → {config.status_in_progress}:"
-                " a PR is draft or has changes requested"
-            )
+            to = config.status_in_progress
+            proposal = f"{config.status_in_review} → {to}: a PR is draft or has changes requested"
         elif issue.status_category == "new" and prs:
             proposal = f"still {issue.status} but has PRs"
         if proposal:
@@ -83,11 +83,17 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                     subtitle=proposal,
                     links=[Link(text=f"#{p.number}", url=p.url or p.id) for p in prs],
                     subjects=[ticket_ref(issue.key)],
+                    signals=Signals(
+                        verb=f"Move to {to}" if to else "Update the status",
+                        effort="minutes",
+                        closes=issue.key if to == config.status_closed else None,
+                    ),
                 )
             )
     return Panel(
         key="jira_transitions",
         priority=120,  # 12. Jira updates
+        act_now=True,
         title="Jira transitions",
         description="Status changes the PR states suggest.",
         items=items,

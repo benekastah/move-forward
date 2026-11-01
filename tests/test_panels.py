@@ -371,6 +371,7 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
         "github.ci_failures",
         "github.conflicts",
         "github.ready_to_merge",
+        "jira.jira_transitions",
     }
 
 

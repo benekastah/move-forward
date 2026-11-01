@@ -60,3 +60,13 @@ def test_jira_next_ranks_incidents_then_bugs_then_unblocked_work() -> None:
     badges = {i.title.split()[0]: i.badges for i in panel(dashboard, "jira.jira_next").items}
     assert badges["APP-5"] == ["incident, escalated (3)"]
     assert badges["APP-2"] == ["blocked by APP-9"]
+
+
+def test_a_ticket_whose_prs_merged_is_nominated_to_close() -> None:
+    dashboard = build(
+        github=snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)]),
+        jira=JiraSnapshot(issues=[issue("APP-1", status="In Review")]),
+    )
+    [closing] = [i for i in panel(dashboard, "act.now").items if "APP-1" in i.title]
+    assert closing.title == "Move to Closed: APP-1 Do the thing"
+    assert closing.details[0] == "why: quick, closes APP-1"
