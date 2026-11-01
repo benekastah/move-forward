@@ -67,12 +67,13 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
         PrRepository(ctx.db).replace(snapshot)
 
-    change_check_seconds: ClassVar[int | None] = 10
+    change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
+    watches: ClassVar[list[str]] = ["git"]
 
     def changed(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
-        """Whether a branch of one of my open PRs moved (see `pushes`), checked every time,
-        or I have a notification about something in the org, polled as often as GitHub
-        allows."""
+        """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
+        refresh of git, which it watches), or I have a notification about something in the
+        org, polled as often as GitHub allows."""
         moved = self._branches_moved(ctx, graph)
         return self._notified(ctx) or moved
 

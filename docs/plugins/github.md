@@ -10,9 +10,9 @@ It also refreshes soon after I get a notification about something in the org (a 
 requested, a review, a comment, CI): it polls my notifications as often as GitHub allows
 (every 60 seconds, usually), and GitHub answers "not modified" cheaply when there's nothing
 new. And it refreshes within seconds of a commit or push on the local branch of one of my
-open PRs: GitHub notifies nobody of their own pushes, so every 10 seconds it compares
-where git's `branch` entities for those PRs' heads stand (their commit, and how far ahead
-of or behind their upstream). Other changes that notify nobody, like a PR falling into
+open PRs: GitHub notifies nobody of their own pushes, so github watches git, and after each
+refresh of git it compares where git's `branch` entities for those PRs' heads stand (their
+commit, and how far ahead of or behind their upstream) with what it saw last. Other changes that notify nobody, like a PR falling into
 conflict, wait for `refresh_seconds`.
 
 `[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
