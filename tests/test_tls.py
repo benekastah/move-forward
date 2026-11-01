@@ -145,3 +145,11 @@ def test_without_certutil_it_says_what_to_install(
     monkeypatch.setattr(tls.shutil, "which", which)
     [said] = tls.trust(paths, tmp_path / "home")
     assert "certutil" in said and str(paths.ca) in said
+
+
+def test_on_macos_the_authority_is_trusted_for_tls_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tls.sys, "platform", "darwin")
+    command = tls.system_trust_command(tls.Paths(tmp_path))
+    assert command is not None and command[command.index("-p") + 1] == "ssl"

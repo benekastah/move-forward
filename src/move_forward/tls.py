@@ -133,7 +133,7 @@ def make(paths: Paths, now: datetime | None = None) -> None:
         )
         .sign(ca_key, hashes.SHA256())
     )
-    paths.dir.mkdir(parents=True, exist_ok=True)
+    paths.dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     paths.ca.write_bytes(ca.public_bytes(serialization.Encoding.PEM))
     # The server certificate carries its chain, so a browser that trusts the authority
     # needn't be given it.
@@ -215,6 +215,8 @@ def system_trust_command(paths: Paths) -> list[str] | None:
             "add-trusted-cert",
             "-r",
             "trustRoot",
+            "-p",
+            "ssl",  # for TLS only, not code signing and the rest
             "-k",
             str(keychain),
             str(paths.ca),
