@@ -22,7 +22,11 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- Icing anything (see Icing anything): icing entries, tickets and PRs. A notes migration renames the kinds stored in `notes_iced`
+- Icing anything (see Icing anything): icing entries, tickets and PRs.
+- jira's key pattern matches `UTF-8`, `SHA-256` and the like in PR titles and bodies, so
+  those become `ticket` refs: PRs mentioning one are related, and an entry naming one is
+  never pruned (Jira can't say it's resolved). Restrict the pattern to the project keys
+  jira sees (from its snapshot, or a `[jira] projects` key). A notes migration renames the kinds stored in `notes_iced`
   and `notes_links` to their namespaced names. notes also stores each iced item's name (it parses
   git's branch ids for them today, to show a stack after git deleted its branches), so
   ids stay opaque to everyone but their publisher.

@@ -75,7 +75,9 @@ is what's left to build.
   prefixed with its name.
 - **A plugin table is fetched or kept**, and its comment says which.
   Fetched tables hold what `collect` brings back; `store` replaces them
-  wholesale, so they're never pruned. Kept tables hold what only the dashboard
+  wholesale, so they're never pruned. A table computed from the graph in
+  `after_collect` (github's reviewer suggestions, notes' ice covers) is
+  replaced the same way, and counts as fetched (or says "derived"). Kept tables hold what only the dashboard
   knows (notes, pings sent, looked-up emails); they survive refreshes, a
   migration that reshapes them copies their rows, and the plugin's `prune`
   clears what's finished.
