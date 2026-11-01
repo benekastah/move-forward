@@ -91,7 +91,11 @@ def install() -> None:
     run("git", "config", "core.hooksPath", "git_hooks")
     print("set this repository's hooks to git_hooks/")
     if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
-        print(f"warning: {bin_dir} isn't on your PATH; add it", file=sys.stderr)
+        if sys.platform == "win32":
+            _add_to_user_path(bin_dir)
+            print(f"added {bin_dir} to your PATH; open a new terminal for `mfd`")
+        else:
+            print(f"warning: {bin_dir} isn't on your PATH; add it", file=sys.stderr)
     base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     config = Path(base) / "move-forward" / "config.toml"
     if config.exists():
@@ -101,6 +105,23 @@ def install() -> None:
         run(tool("mfd"), "init")
     else:
         print(f"no config at {config}; run `mfd init` to write one")
+
+
+def _add_to_user_path(folder: Path) -> None:
+    """Add `folder` to my user's PATH, as Windows' environment variables dialog would; new
+    terminals see it."""
+    if sys.platform != "win32":
+        return
+    import winreg
+
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_ALL_ACCESS) as key:
+        try:
+            current, kind = winreg.QueryValueEx(key, "Path")
+        except FileNotFoundError:
+            current, kind = "", winreg.REG_EXPAND_SZ
+        parts = [p for p in str(current).split(";") if p]
+        if str(folder) not in parts:
+            winreg.SetValueEx(key, "Path", 0, kind, ";".join([*parts, str(folder)]))
 
 
 def _git(*args: str, stdin: bytes | None = None) -> bytes:
