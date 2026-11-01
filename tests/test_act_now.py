@@ -55,7 +55,8 @@ def test_one_item_per_subject_with_the_others_mentioned() -> None:
 
 def test_no_plugin_fills_more_than_its_share_and_the_list_is_short() -> None:
     many = [Nomination("github", _item(f"g{n}", effort="minutes")) for n in range(5)]
-    ranked = act_now.panel([*many, Nomination("jira", _item("j"))], size=4, per_plugin=3)
+    config = act_now.ActNowConfig(size=4, per_plugin=3)
+    ranked = act_now.panel([*many, Nomination("jira", _item("j"))], config)
     assert _titles(ranked) == ["g0", "g1", "g2", "j"]
 
 

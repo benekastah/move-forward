@@ -119,7 +119,14 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
 
     layout = LayoutRepository(db).load()
     return panels.build(
-        now, plugin_panels, sources, me.id if me else "", item_actions, hidden, layout
+        now,
+        plugin_panels,
+        sources,
+        me.id if me else "",
+        item_actions,
+        hidden,
+        layout,
+        config.act_now,
     )
 
 

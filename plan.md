@@ -26,7 +26,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   them (jira closing a ticket, git deleting a merged branch, slack bumping a review, a
   notes entry's last quick todo). `importance`, `due` and merging across tools through
   the graph come after.
-- `[act_now]` (`size`, `per_plugin`, `weights`), in all four places a config key goes.
 - The `act_now_feedback` table: snooze, dismiss, pin.
 
 ### 7. Worktrees

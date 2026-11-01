@@ -7,17 +7,37 @@ keeps one item per subject and a few per plugin, and says on each item why it's 
 
 from dataclasses import dataclass
 
+from pydantic import Field
+
 from .graph import Ref
 from .page import Item, Panel, Signals
+from .strict import Strict
 
 KEY = "now"
 """The Act now panel's key within core's Act now group."""
-SIZE = 7
-"""How many items the panel shows."""
-PER_PLUGIN = 3
-"""How many of them one plugin may fill, so one busy tool can't take the whole list."""
-WEIGHTS = {"closes": 3.0, "minutes": 2.0, "hour": 1.0, "waiting": 2.0}
-"""What each signal adds to an item's score."""
+
+
+class Weights(Strict):
+    """What each signal adds to an item's score."""
+
+    closes: float = 3
+    """Doing it finishes something: a PR merged, a ticket closed."""
+    minutes: float = 2
+    """It takes minutes."""
+    hour: float = 1
+    """It takes about an hour."""
+    waiting: float = 2
+    """Someone is waiting on me for it."""
+
+
+class ActNowConfig(Strict):
+    """`[act_now]`: how core ranks the plugins' nominations."""
+
+    size: int = Field(default=7, ge=1)
+    """How many items Act now shows."""
+    per_plugin: int = Field(default=3, ge=1)
+    """How many of them one plugin may fill, so one busy tool can't take the whole list."""
+    weights: Weights = Field(default_factory=Weights)
 
 
 @dataclass(frozen=True)
@@ -32,14 +52,14 @@ class Nomination:
         return self.item.signals or Signals()
 
 
-def score(signals: Signals, weights: dict[str, float]) -> float:
+def score(signals: Signals, weights: Weights) -> float:
     """Finishing beats starting, quick beats slow, and someone waiting adds urgency. Unknown
     effort adds nothing, so an item of unknown size never takes a quick win's place."""
     return (
-        weights.get("closes", 0) * (signals.closes is not None)
-        + weights.get("minutes", 0) * (signals.effort == "minutes")
-        + weights.get("hour", 0) * (signals.effort == "hour")
-        + weights.get("waiting", 0) * bool(signals.waiting)
+        weights.closes * (signals.closes is not None)
+        + weights.minutes * (signals.effort == "minutes")
+        + weights.hour * (signals.effort == "hour")
+        + weights.waiting * bool(signals.waiting)
     )
 
 
@@ -63,15 +83,12 @@ def _subject(nomination: Nomination, n: int) -> tuple[str, str] | Ref:
     return subjects[0] if subjects else (nomination.plugin, str(n))
 
 
-def panel(
-    nominations: list[Nomination],
-    size: int = SIZE,
-    per_plugin: int = PER_PLUGIN,
-    weights: dict[str, float] = WEIGHTS,
-) -> Panel:
+def panel(nominations: list[Nomination], config: ActNowConfig | None = None) -> Panel:
     """The Act now panel: nominations not blocked, best first (by score, then the plugin's
     own rank, then the order they came in), one per subject (the others mentioned on it),
     at most `per_plugin` from one plugin, `size` in all."""
+    config = config or ActNowConfig()
+    size, per_plugin, weights = config.size, config.per_plugin, config.weights
     candidates = [(n, nom) for n, nom in enumerate(nominations) if not nom.signals.blocked]
     candidates.sort(key=lambda c: (-score(c[1].signals, weights), -c[1].item.rank, c[0]))
     kept: dict[tuple[str, str] | Ref, tuple[Nomination, list[str]]] = {}

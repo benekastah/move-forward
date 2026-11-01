@@ -11,6 +11,7 @@ from typing import cast
 from pydantic import Field, field_validator, model_validator
 
 from . import registry
+from .act_now import ActNowConfig
 from .db import DEFAULT_KEEP_BACKUPS
 from .plugins.git.config import GitConfig
 from .plugins.git_stack.config import GitStackConfig
@@ -64,6 +65,8 @@ class Config(Strict):
     prune_days: int = DEFAULT_PRUNE_DAYS
     """Work finished this long ago (merged PRs, closed tickets, done todos) is cleared from
     the notes, and old pings from the database, by a daily job."""
+    act_now: ActNowConfig = Field(default_factory=ActNowConfig)
+    """`[act_now]`: how core ranks what the plugins nominate for Act now."""
     github: GitHubConfig | None = None
     git: GitConfig | None = None
     git_stack: GitStackConfig | None = None

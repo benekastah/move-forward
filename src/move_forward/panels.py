@@ -203,10 +203,11 @@ def build(
     item_actions: ItemActions = _no_item_actions,
     hidden: Hidden = _nothing_hidden,
     layout: Layout | None = None,
+    ranking: act_now.ActNowConfig | None = None,
 ) -> Dashboard:
     """The dashboard: Act now, ranked from the plugins' nominations, then the plugins' panels in
     their groups, without hidden items, each item with the plugins' buttons, sorted, in the
-    `layout`'s order. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
+    `layout`'s order. `ranking` is `[act_now]`. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
     so two plugins' panels never clash."""
     plugins = [
         PluginPanels(
@@ -223,7 +224,7 @@ def build(
         for item in plugin.nominations
         if not hidden(item)
     ]
-    ranked = act_now.panel(nominations).model_copy(update={"key": ACT_NOW_PANEL})
+    ranked = act_now.panel(nominations, ranking).model_copy(update={"key": ACT_NOW_PANEL})
     return Dashboard(
         generated_at=now,
         login=login,

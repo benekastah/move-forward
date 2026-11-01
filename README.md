@@ -36,6 +36,11 @@ refreshes), `refresh_on_load_seconds` (a page load refreshes data older than
 this) and `prune_days`. Everything about a tool is
 in that tool's plugin section; see [Plugins](#plugins).
 
+`[act_now]` tunes how Act now ranks what the plugins nominate: `size` (7,
+the items shown), `per_plugin` (3, the most one plugin may fill) and `weights`
+(what each signal adds to an item's score: `closes = 3`, `minutes = 2`,
+`hour = 1`, `waiting = 2`).
+
 Teams are named once, at the top level. A plugin that has its own idea of a
 team maps the names in a `teams` table of its section: `[github.teams]` gives
 a team's GitHub slug where it isn't the name, `[slack.teams]` the channel its

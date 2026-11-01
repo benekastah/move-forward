@@ -73,6 +73,11 @@ my-team = "#team-my-team"
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
 
+# [act_now]                             # how Act now ranks what the plugins nominate
+# size = 7                               # items shown
+# per_plugin = 3                         # so one busy tool can't fill the list
+# weights = { closes = 3, minutes = 2, hour = 1, waiting = 2 }  # what each signal adds
+
 """
 
 

@@ -31,6 +31,12 @@ OPTIONAL_SETTINGS = """\
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                        # clear work finished this long ago from the notes
 """
+OPTIONAL_ACT_NOW_SETTINGS = """\
+# [act_now]                             # how Act now ranks what the plugins nominate
+# size = 7                               # items shown
+# per_plugin = 3                         # so one busy tool can't fill the list
+# weights = { closes = 3, minutes = 2, hour = 1, waiting = 2 }  # what each signal adds
+"""
 OPTIONAL_GITHUB_SETTINGS = """\
 # history_days = 14                      # how far back merged and closed PRs are fetched
 # review_checks = []                     # checks that report review status, not CI, e.g. ["review-policy"]
@@ -160,7 +166,7 @@ def render_config(
             "\n# [jira]                                # uncomment to show tickets\n"
             '# site = "https://example.atlassian.net"\n' + OPTIONAL_JIRA_SETTINGS
         )
-    return text
+    return text + "\n" + OPTIONAL_ACT_NOW_SETTINGS
 
 
 Check = Callable[[str], str]

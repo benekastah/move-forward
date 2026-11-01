@@ -134,3 +134,14 @@ def test_plugin_migrations_run_when_migrated_not_on_every_page(
     registry.migrate(loaded, db)
     assert "jira" in calls
     assert db.query("SELECT * FROM jira_seen") == []
+
+
+def test_act_now_ranking_is_tuned_in_its_section(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text('email = "me@x"\n[act_now]\nsize = 3\nweights = { waiting = 5 }\n')
+    loaded = config.load(path)
+    assert (loaded.act_now.size, loaded.act_now.per_plugin) == (3, 3)
+    assert (loaded.act_now.weights.waiting, loaded.act_now.weights.closes) == (5, 3)
+    path.write_text('email = "me@x"\n[act_now]\nweights = { speed = 1 }\n')
+    with pytest.raises(ValidationError, match="speed"):
+        config.load(path)
