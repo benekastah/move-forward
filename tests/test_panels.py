@@ -399,3 +399,17 @@ def test_a_layout_orders_groups_and_panels_with_act_now_first_and_new_ones_in_pl
         ["notes.todos", "notes.iced"],
     ]
     assert panels.laid_out(defaults, panels.Layout()) == defaults
+
+
+def test_a_close_out_entry_is_nominated_to_finish() -> None:
+    built = dashboard(
+        work_items=[
+            entry("APP-1 Almost", [todo("tick the box", "quick")]),
+            entry("APP-2 Big", [todo("write it", "big")]),
+            entry("APP-3 Stuck", [todo("ship", "quick")], **{"Blocked on": ["infra"]}),
+        ]
+    )
+    act = built.panel("act.now").items
+    assert [(i.title, i.details[0]) for i in act] == [
+        ("tick the box: APP-1 Almost", "why: quick, closes APP-1 Almost")
+    ]

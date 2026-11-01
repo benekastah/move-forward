@@ -56,6 +56,16 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         builder = _builder(ctx, graph)
         return [builder.todos(), builder.iced()]
 
+    def act_now(
+        self,
+        ctx: Context[NotesConfig],
+        snapshot: BaseModel | None,
+        graph: Graph,
+        panels: list[Panel],
+    ) -> list[Item]:
+        """Close-outs: entries whose open todos are all quick, finishing the entry."""
+        return [i for p in panels if p.key == TODOS for i in p.items if i.signals]
+
     def prepare_item_actions(
         self, ctx: Context[NotesConfig], graph: Graph
     ) -> Callable[[Item], list[Action]]:

@@ -7,7 +7,7 @@ from datetime import datetime
 
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
-from ...page import Action, Item, Link, Panel, PrState
+from ...page import Action, Item, Link, Panel, PrState, Signals
 from .kinds import EntryAttrs, IcedAttrs
 from .markdown import PR_URL_RE
 from .models import Entry, Ice, Todo
@@ -350,6 +350,17 @@ class Builder:
                     rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
                     actions=[add_todo_action(entry.title)],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
+                    # Only a close-out has signals: what notes nominates for Act now.
+                    signals=Signals(
+                        verb=ordered[0].text
+                        if len(ordered) == 1
+                        else f"Finish {len(quick)} quick todos",
+                        effort="minutes",
+                        closes=entry.title,
+                        blocked=blocked,
+                    )
+                    if close_out
+                    else None,
                     parts=[
                         _todo_part(
                             entry.title,

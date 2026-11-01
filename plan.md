@@ -22,10 +22,9 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 6b. Act now
 
-- Plugins' signals: verbs and effort for their Act now panels, and nominations beyond
-  them (jira closing a ticket, git deleting a merged branch, slack bumping a review, a
-  notes entry's last quick todo). `importance`, `due` and merging across tools through
-  the graph come after.
+- After living with the first version: `importance` (jira's escalations), `waiting_since`
+  and `due` in the signals and the score, and merging nominations across tools through
+  the graph ("Merge PR 330, then close APP-12").
 - The `act_now_feedback` table: snooze, dismiss, pin.
 
 ### 7. Worktrees

@@ -178,7 +178,8 @@ plugin nominates its own items. github nominates reviews (quick when up to
 waiting), CI failures, merge conflicts, and PRs ready to merge (quick, and it
 closes the PR); jira the status changes its PRs suggest (quick, closing the
 ticket when it goes to Closed); git the branches Cleanup lists (quick to
-delete); slack the reviews to nudge (a quick ping or bump). Below it is a collapsible group per
+delete); slack the reviews to nudge (a quick ping or bump); notes the
+entries whose open todos are all quick (closing the entry). Below it is a collapsible group per
 enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
 their most urgent panel: notes (todos), git, git_stack, github, slack, jira.
