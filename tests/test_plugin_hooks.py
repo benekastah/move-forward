@@ -1,6 +1,7 @@
 """Core's hooks for plugins: buttons on other plugins' items, pages and commands."""
 
 import argparse
+from collections.abc import Callable
 from pathlib import Path
 from typing import ClassVar
 
@@ -265,3 +266,33 @@ class _Narrowed(JiraPlugin):
 def test_a_plugin_can_narrow_its_linking_patterns(monkeypatch: pytest.MonkeyPatch) -> None:
     graph = _graph_with(_Narrowed(), monkeypatch)
     assert graph.named("APP-1 and OPS-2") == [Ref(kind="ticket", id="OPS-2")]
+
+
+class _Prepared(JiraPlugin):
+    """Jira, adding a Look link to PR items from work it does once per page."""
+
+    prepared = 0
+
+    def prepare_item_actions(
+        self, ctx: Context[JiraConfig], graph: Graph
+    ) -> Callable[[Item], list[Action]]:
+        _Prepared.prepared += 1
+        prs = {e.ref.id for e in graph.of_kind("pr")}
+
+        def actions(item: Item) -> list[Action]:
+            pr = item.subject("pr")
+            if pr is None or pr.id not in prs:
+                return []
+            return [Action(name="", label="Look", fields={}, href=f"/look?pr={pr.id}")]
+
+        return actions
+
+
+def test_a_plugin_prepares_its_item_actions_once_per_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    plugins = [_Prepared() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    mine = [pr(1, merge_state="DIRTY"), pr(2, merge_state="DIRTY")]
+    built = dashboard(github=snapshot(mine=mine), jira_site="https://j")
+    assert _Prepared.prepared == 1
+    looks = [a.href for i in built.panel("conflicts").items for a in i.actions if a.href]
+    assert looks == [f"/look?pr={pr(1).url}", f"/look?pr={pr(2).url}"]

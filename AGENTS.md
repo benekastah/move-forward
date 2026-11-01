@@ -38,7 +38,9 @@ is what's left to build.
   `collect` or `after_collect`, or in `collect_after` for a plugin that
   needs other plugins' entities to know what to fetch. Rare work (the daily
   prune) can ask the owning plugin for entities its snapshot no longer holds
-  with `graph.fetch`.
+  with `graph.fetch`. Buttons on other plugins' items come from
+  `item_actions`, called per item; a plugin that reads its tables for them
+  does so once per page in `prepare_item_actions`.
 
 ## Rules for changes
 

@@ -178,6 +178,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Buttons the plugin adds to another plugin's item, e.g. "add todo" on a PR."""
         return []
 
+    def prepare_item_actions(self, ctx: Context[C], graph: Graph) -> Callable[[Item], list[Action]]:
+        """`item_actions` for every item of one page: a plugin whose buttons need its tables
+        or a pass over the graph does that here, once, and returns the per-item function."""
+        return lambda item: self.item_actions(ctx, item, graph)
+
     def kept_item(self, ctx: Context[C], graph: Graph, key: str) -> Item | None:
         """An item one of this plugin's actions asked to keep on the focus page after changing
         it (its result's `KEPT` parameter, `<plugin>:<key>`), e.g. a todo just ticked off,

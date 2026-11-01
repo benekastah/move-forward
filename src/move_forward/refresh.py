@@ -107,8 +107,10 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         for source, row in SnapshotRepository(db).all().items()
     }
 
+    prepared = [e.plugin.prepare_item_actions(e.ctx, graph) for e in plugins]
+
     def item_actions(item: Item) -> list[Action]:
-        return [a for e in plugins for a in e.plugin.item_actions(e.ctx, item, graph)]
+        return [a for actions in prepared for a in actions(item)]
 
     def hidden(item: Item) -> bool:
         """About something hidden, unless it's about what hides it (an On ice item)."""
