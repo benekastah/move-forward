@@ -484,6 +484,7 @@ the ones holding branches.
 - **A second code host.** With `github.pr` owned by github, a GitLab plugin would publish
   `gitlab.pr`, and every consumer would read both. If that gets repetitive, `pr` could
   become a contract that several plugins publish to. That can wait for the second host.
+
 ### Schema
 
 Core's `layout` table is migrated already (for step 6); `act_now_feedback` (see Act now)
