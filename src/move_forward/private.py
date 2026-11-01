@@ -17,6 +17,10 @@ from pathlib import Path
 from .shell import run
 
 WINDOWS = sys.platform == "win32"
+SYSTEM_HOLDERS = {"nt authority\\system", "builtin\\administrators", "owner rights"}
+"""Who may hold access on Windows besides me: the system itself, administrators (who can
+take any file anyway) and the file's owner (me). Python grants them when it makes a private
+file; what matters is that no other user, nor the Users group, is listed."""
 
 
 def _me() -> str:
@@ -38,10 +42,11 @@ def make_private(path: Path) -> None:
 
 def is_private(path: Path) -> bool:
     """Whether only I can read `path`: no group or other mode bits, or on Windows an access
-    list naming no one else."""
+    list naming no other user (see `SYSTEM_HOLDERS`)."""
     if not WINDOWS:
         return stat.S_IMODE(path.stat().st_mode) & 0o077 == 0
-    return set(_holders(run(["icacls", str(path)]), str(path))) <= {_me().lower()}
+    holders = set(_holders(run(["icacls", str(path)]), str(path)))
+    return holders <= {_me().lower(), *SYSTEM_HOLDERS}
 
 
 def _holders(listing: str, path: str) -> list[str]:

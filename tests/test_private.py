@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from move_forward import private
 
 
@@ -35,3 +37,29 @@ def test_icacls_listings_are_read_for_whom_they_grant() -> None:
     )
     holders = private._holders(listing, path)  # pyright: ignore[reportPrivateUsage]
     assert holders == ["acme\\jane", "nt authority\\system", "builtin\\users"]
+
+
+def test_on_windows_only_me_and_the_system_may_hold_access(monkeypatch: pytest.MonkeyPatch) -> None:
+    def listing(path: str, *holders: str) -> str:
+        first, *rest = holders
+        lines = [f"{path} {first}:(F)", *(f"            {h}:(F)" for h in rest)]
+        return "\n".join([*lines, "", "Successfully processed 1 files"]) + "\n"
+
+    answers = {
+        "mine": listing(
+            "mine", "ACME\\jane", "NT AUTHORITY\\SYSTEM", "BUILTIN\\Administrators", "OWNER RIGHTS"
+        ),
+        "shared": listing("shared", "ACME\\jane", "BUILTIN\\Users"),
+    }
+
+    def icacls(args: list[str]) -> str:
+        return answers[args[1]]
+
+    def me() -> str:
+        return "ACME\\jane"
+
+    monkeypatch.setattr(private, "WINDOWS", True)
+    monkeypatch.setattr(private, "_me", me)
+    monkeypatch.setattr(private, "run", icacls)
+    assert private.is_private(Path("mine"))
+    assert not private.is_private(Path("shared"))  # the Users group can read it
