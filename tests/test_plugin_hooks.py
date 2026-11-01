@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import pytest
-from conftest import NOW, dashboard, pr, snapshot
+from conftest import NOW, dashboard, issue, pr, snapshot, stored
 from pydantic import BaseModel
 
 from move_forward import cli, refresh, registry, render
@@ -207,3 +207,49 @@ def test_core_leaves_out_items_about_what_a_hiding_kind_covers(
     # PR 1 directly; PR 3 through APP-3, which its body mentions.
     assert [i.title for i in built.panel("conflicts").items] == ["PR 2"]
     assert dashboard(github=snapshot(mine=mine)).panel("conflicts").items  # no veil, no hiding
+
+
+class _Unruly(JiraPlugin):
+    """Jira, publishing a ticket twice, one of github's PRs, and a kind it never declared."""
+
+    def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
+        [ticket] = super().entities(ctx, snapshot)
+        return [
+            ticket,
+            ticket.model_copy(update={"title": "again"}),
+            Entity(ref=Ref(kind="pr", id=pr(1).url), title="not mine to publish"),
+            Entity(ref=Ref(kind="thing", id="1"), title="undeclared"),
+        ]
+
+
+class _Claiming(JiraPlugin):
+    """Jira, declaring github's `pr` too."""
+
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {**JiraPlugin.kinds, "pr": _VeilAttrs}
+
+
+def _graph_with(plugin: JiraPlugin, monkeypatch: pytest.MonkeyPatch) -> Graph:
+    plugins = [plugin if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config, db = stored(github=snapshot(mine=[pr(1)]), jira=JiraSnapshot(issues=[issue("APP-1")]))
+    return refresh.stored_graph(db, registry.enabled(config, db, NOW))[0]
+
+
+def test_a_plugin_publishes_only_the_kinds_it_owns_and_each_ref_once(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    graph = _graph_with(_Unruly(), monkeypatch)
+    assert [e.title for e in graph.of_kind("ticket")] == ["APP-1 Do the thing"]
+    assert [e.title for e in graph.of_kind("pr")] == [pr(1).title]  # github's own
+    assert graph.of_kind("thing") == []
+    assert "jira published ticket APP-1 twice" in caplog.text
+    assert f"jira published pr {pr(1).url}, a kind it doesn't own" in caplog.text
+    assert "jira published thing 1, a kind it doesn't own" in caplog.text
+
+
+def test_a_kind_two_plugins_declare_is_the_first_ones(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    graph = _graph_with(_Claiming(), monkeypatch)
+    assert [e.title for e in graph.of_kind("pr")] == [pr(1).title]
+    assert "github and jira both declare pr; jira's are left out" in caplog.text

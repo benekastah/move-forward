@@ -67,19 +67,6 @@ def _with_mentions(entity: Entity, patterns: dict[str, re.Pattern[str]]) -> Enti
     return entity.model_copy(update={"refs": refs}) if len(refs) != len(entity.refs) else entity
 
 
-def _merge(first: Entity, second: Entity) -> Entity:
-    """One entity from two plugins' views of it, should two publish the same ref.
-    The first plugin's fields win; refs and attributes are combined."""
-    return first.model_copy(
-        update={
-            "url": first.url or second.url,
-            "state": first.state or second.state,
-            "refs": [*first.refs, *(r for r in second.refs if r not in first.refs)],
-            "attrs": {**second.attrs, **first.attrs},
-        }
-    )
-
-
 class Graph:
     """Every enabled plugin's entities, indexed by ref and by the refs pointing at them."""
 
@@ -104,11 +91,10 @@ class Graph:
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
         self._url_for = url_for
         self._fetch = fetch
-        merged: dict[Ref, Entity] = {}
         for entity in entities:
-            first = merged.get(entity.ref)
-            merged[entity.ref] = _merge(first, entity) if first else entity
-        for ref, entity in merged.items():
+            if entity.ref in self._by_ref:
+                continue  # a plugin bug, which `build_graph` logs: the first one stands
+            ref = entity.ref
             self._by_ref[ref] = entity
             self._by_kind[ref.kind].append(entity)
             for target in entity.refs:

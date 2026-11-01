@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ValidationError
 
 from .db import Database
-from .graph import Entity, Graph
+from .graph import Entity, Graph, Ref
 from .plugin import Context, Plugin
 from .plugins.git.plugin import GitPlugin
 from .plugins.git_stack.plugin import GitStackPlugin
@@ -97,20 +97,35 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
 
 
 def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) -> Graph:
-    """The graph of every plugin's entities."""
+    """The graph of every plugin's entities. A plugin publishes only the kinds it declares,
+    and owns them unless an earlier plugin declared them first; each entity must fit its
+    kind's model, and be the only one of its ref. One that isn't is a plugin bug: it's
+    logged and left out, and the page goes on without it."""
+    owners: dict[str, str] = {}
+    for e in plugins:
+        for kind in e.plugin.kinds:
+            owner = owners.setdefault(kind, e.name)
+            if owner != e.name:
+                log.error(
+                    "%s and %s both declare %s; %s's are left out", owner, e.name, kind, e.name
+                )
     entities: list[Entity] = []
+    seen: set[Ref] = set()
     for e in plugins:
         for entity in e.plugin.entities(e.ctx, snapshots.get(e.name)):
-            model = e.plugin.kinds.get(entity.ref.kind)
-            try:
-                if model is not None:
-                    model.model_validate(entity.attrs)
-            except ValidationError as error:
-                # A plugin bug; tests catch it. The page goes on without the entity.
-                log.error(
-                    "%s published a bad %s %s: %s", e.name, entity.ref.kind, entity.ref.id, error
-                )
+            ref = entity.ref
+            if owners.get(ref.kind) != e.name:
+                log.error("%s published %s %s, a kind it doesn't own", e.name, ref.kind, ref.id)
                 continue
+            if ref in seen:
+                log.error("%s published %s %s twice", e.name, ref.kind, ref.id)
+                continue
+            try:
+                e.plugin.kinds[ref.kind].model_validate(entity.attrs)
+            except ValidationError as error:
+                log.error("%s published a bad %s %s: %s", e.name, ref.kind, ref.id, error)
+                continue
+            seen.add(ref)
             entities.append(entity)
 
     def url_for(kind: str, id: str) -> str | None:

@@ -53,11 +53,10 @@ slack reads their emails.
 flowchart TB
     tables[("each plugin's tables")] -->|"Plugin.load"| snapshot["snapshot<br/>(the plugin's model)"]
     snapshot -->|"Plugin.entities"| published["entities, per plugin"]
-    published --> check{"fits the model the plugin<br/>declared for its kind?"}
+    published --> check{"a kind the plugin owns, a ref not<br/>seen yet, fitting the kind's model?"}
     check -->|no| dropped["left out, logged:<br/>a plugin bug"]
     check -->|yes| mentions["mentions of linking ids<br/>become refs"]
-    mentions --> merge["one entity per ref<br/>(two publishers' merged)"]
-    merge --> index["indexed by ref, by kind,<br/>and by the refs pointing at each"]
+    mentions --> index["indexed by ref, by kind,<br/>and by the refs pointing at each"]
     index --> built(["Graph"])
 ```
 
@@ -65,15 +64,13 @@ flowchart TB
    that (and its other tables) into entities.
 2. A plugin declares the kinds it publishes in `kinds`, each with a model of its
    attributes, and builds its entities' attributes from those models (with `attrs` from
-   `move_forward.graph`). Core
-   checks every entity against its kind's model; one that doesn't fit is left out and
-   logged, so the page goes on without it.
+   `move_forward.graph`). A plugin owns the kinds it declares (the first plugin to declare
+   one, should two), and only it publishes them, each ref once. Core checks every entity
+   for that and against its kind's model; one that fails is left out and logged, so the
+   page goes on without it.
 3. Text an entity `mentions` that matches a linking kind's id pattern becomes a ref to it
    (see [related entities](#related-entities)).
-4. Two plugins publishing the same ref would be merged, the first plugin's fields winning;
-   no plugin does any more (git_stack publishes its own `stack_branch` instead of adding to
-   git's `branch`), and the merging is due to go.
-5. The graph indexes entities by ref, by kind, and by the refs pointing at each, for the
+4. The graph indexes entities by ref, by kind, and by the refs pointing at each, for the
    lookups below.
 
 During a refresh the graph is built twice:

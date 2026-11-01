@@ -11,9 +11,9 @@ from every enabled plugin's entities on each refresh and page load.
 file is the contract. Adding a kind or an attribute, or changing what one
 means, is a deliberate change: update this file in the same commit.
 
-When two plugins publish the same ref, the graph merges them: the first plugin's title, URL and state win,
-refs and attributes are combined, and the first plugin's attribute wins a
-clash.
+Each kind has one publisher: the plugin that declares it (the first, should two
+declare one). An entity of a kind its plugin doesn't own, or a second entity of
+the same ref, is left out of the graph and logged.
 
 Some kinds are **linking**: their entities stand for a unit of work, and link
 what's about it. `ticket` (jira) and `entry` (notes) are. `Graph.related(ref,

@@ -26,7 +26,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   those become `ticket` refs: PRs mentioning one are related, and an entry naming one is
   never pruned (Jira can't say it's resolved). Restrict the pattern to the project keys
   jira sees (from its snapshot, or a `[jira] projects` key).
-- Once no plugin publishes another's kind, the graph can stop merging refs from two plugins.
 - Core: `item_actions` is called once per item, and slack rebuilds every ping and notes
   rereads its tables on each call. Plugins get a `prepare_item_actions(ctx, graph)` hook
   that does that work once per page and returns the per-item function.
