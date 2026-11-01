@@ -377,11 +377,16 @@ class NotesRepository:
         ices: list[Ice],
         sections: list[Section],
     ) -> None:
-        """Replace everything with what an import read, in one transaction. The given ids are
-        ignored; rows get new ones."""
+        """Replace everything with what an import read, in one transaction, but the PRs,
+        tickets and entries on ice: `on-ice.md` holds only stacks, so an import can't have
+        read them. The given ids are ignored; rows get new ones."""
         with self._db.transaction() as conn:
-            for table in ("notes_entries", "notes_ice", "notes_sections"):
+            for table in ("notes_entries", "notes_sections"):
                 conn.execute(f"DELETE FROM {table}")
+            conn.execute(
+                "DELETE FROM notes_ice WHERE NOT EXISTS"
+                " (SELECT 1 FROM notes_iced WHERE ice_id = notes_ice.id AND kind != 'branch')"
+            )
             for entry in entries:
                 cursor = conn.execute(
                     "INSERT INTO notes_entries (title, status, location, blocked_on, updated_on)"

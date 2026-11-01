@@ -119,3 +119,20 @@ def test_branches_iced_before_names_were_kept_get_theirs_from_their_ids() -> Non
     assert ice.items == [
         IcedItem(kind="branch", ref_id="/src/w\tme/b", name="me/b", repo_dir="/src/w", sha="a1")
     ]
+
+
+def test_an_import_replaces_stacks_on_ice_but_not_what_was_iced_on_its_own(
+    notes: NotesRepository,
+) -> None:
+    stack = [IcedItem(kind="branch", ref_id="/w\tme/a", name="me/a", repo_dir="/w")]
+    ticket = [IcedItem(kind="ticket", ref_id="APP-1", name="APP-1 Fix")]
+    notes.add_ice("me/a", DAY, None, stack)
+    notes.add_ice("APP-1 Fix", DAY, None, ticket)
+    imported = Ice(
+        id=0,
+        title="me/b",
+        iced_on=DAY,
+        items=[stack[0].model_copy(update={"ref_id": "/w\tme/b", "name": "me/b"})],
+    )
+    notes.replace_all([], [imported], [])
+    assert [i.title for i in notes.ices()] == ["APP-1 Fix", "me/b"]
