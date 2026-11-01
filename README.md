@@ -326,7 +326,7 @@ error status):
 
 `entry` is a work entry's title exactly as the page shows it. `todo` is a todo's
 id, which `mfd dump` lists in the `fields` of a todo's actions under the todos
-panel's items' `parts`. `repo` is one of `[git] repos`. For example:
+panel's items' `parts`. `repo` is one of `[git] repos`, or for git's buttons any worktree of one. For example:
 
 ```sh
 curl -s -o /dev/null -w '%{redirect_url}\n' -X POST http://127.0.0.1:8765/actions/notes/todo_done \
