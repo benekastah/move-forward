@@ -4,6 +4,7 @@ from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref
 from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes import prune as notes_prune
+from move_forward.plugins.notes.models import IcedItem
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
@@ -120,3 +121,26 @@ def test_without_jira_ticket_keys_hold_no_entry() -> None:
         "cleared entry No ticket, no PR, stale",
     ]
     assert [kind for kind, _ in asked] == ["pr"]
+
+
+def test_what_is_on_ice_goes_when_its_work_is_over_but_stacks_stay() -> None:
+    db = _seeded()
+    notes = NotesRepository(db)
+
+    def ice(kind: str, ref_id: str) -> None:
+        notes.add_ice(ref_id, NOW.date(), None, [IcedItem(kind=kind, ref_id=ref_id, name=ref_id)])
+
+    ice("pr", PR + "1")  # closed long ago
+    ice("pr", PR + "4")  # closed recently
+    ice("ticket", "APP-1")  # resolved long ago
+    ice("ticket", "APP-3")  # not resolved
+    ice("entry", "No ticket, no PR, stale")  # cleared by this prune
+    ice("branch", "/src/w\tme/x")  # a stack: kept for its commits
+    graph, _ = _graph()
+    notices = notes_prune.prune(notes, graph, CUTOFF)
+    assert [n for n in notices if "off ice" in n] == [
+        f"took {PR}1 off ice: its work is over",
+        "took APP-1 off ice: its work is over",
+        "took No ticket, no PR, stale off ice: its work is over",
+    ]
+    assert [i.title for i in notes.ices()] == [PR + "4", "APP-3", "/src/w\tme/x"]

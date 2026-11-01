@@ -22,9 +22,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- On ice keeps what's over: an iced PR that merged, a ticket resolved, an entry the prune
-  cleared stay listed (hiding nothing) until reopened. notes' prune should thaw acts whose
-  items are all over or gone, as it clears entries.
 - Core: `item_actions` is called once per item, and slack rebuilds every ping and notes
   rereads its tables on each call. Plugins get a `prepare_item_actions(ctx, graph)` hook
   that does that work once per page and returns the per-item function.

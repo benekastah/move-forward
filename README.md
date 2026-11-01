@@ -311,8 +311,9 @@ Once a day, after a refresh, work finished more than `prune_days` (90) days
 ago is cleared: todos done that long ago are dropped from the notes, an
 entry goes when every PR it names was merged or closed and every ticket in
 its title resolved that long ago and it has no open todos (an entry with
-neither is cleared `prune_days` after it last changed), and pings that
-old leave the database. PR and ticket dates come from `gh pr view` and
+neither is cleared `prune_days` after it last changed), a PR, ticket or
+entry on ice comes off it once its work is over the same way (a stack stays
+until it's reopened), and pings that old leave the database. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
 ## How it stores things
