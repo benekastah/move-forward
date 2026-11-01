@@ -55,7 +55,7 @@ def test_mfd_slack_import(tmp_path: Path, capsys: pytest.CaptureFixture[str]) ->
     (notes_dir / markdown.REVIEWER_MAP_FILE).write_text(REVIEWER_MAP)
     (notes_dir / markdown.WORK_NOTES_FILE).write_text(WORK_NOTES)
     config = tmp_path / "config.toml"
-    config.write_text(f'email = "me@x"\ndb_path = "{tmp_path / "d.db"}"\n\n[slack]\n')
+    config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
     assert cli.main(["-c", str(config), "slack", "import", str(notes_dir)]) == 0
     assert "logged nudges" in capsys.readouterr().out
     slack = SlackRepository(Database(tmp_path / "d.db"))

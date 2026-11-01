@@ -144,7 +144,7 @@ def test_collects_in_the_repos_git_has_branches_in(monkeypatch: pytest.MonkeyPat
     git_stack = next(e for e in plugins if e.name == "git_stack")
     collected = git_stack.plugin.collect_after(git_stack.ctx, graph)
     assert asked == [Path("/src/widgets")]
-    assert [r.dir for r in collected.repos] == ["/src/widgets"]
+    assert [r.dir for r in collected.repos] == [str(Path("/src/widgets"))]
 
 
 def test_git_stack_offers_to_untrack_iced_branches_it_tracks() -> None:

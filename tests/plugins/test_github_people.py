@@ -39,7 +39,7 @@ def test_mfd_github_import(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     (tmp_path / "reviewer-map.md").write_text(REVIEWER_MAP)
     config = tmp_path / "config.toml"
     config.write_text(
-        f'email = "me@x"\ndb_path = "{tmp_path / "d.db"}"\n\n[github]\norg = "acme"\n'
+        f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[github]\norg = "acme"\n'
     )
     assert cli.main(["-c", str(config), "github", "import", str(tmp_path)]) == 0
     emails = read_reviewer_map(REVIEWER_MAP)

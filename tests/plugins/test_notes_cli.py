@@ -25,7 +25,7 @@ Run = Callable[..., tuple[int, str, str]]
 def config(tmp_path: Path) -> Path:
     path = tmp_path / "config.toml"
     path.write_text(
-        f'email = "me@x"\ndb_path = "{tmp_path / "dashboard.db"}"\n\n'
+        f'email = "me@x"\ndb_path = "{(tmp_path / "dashboard.db").as_posix()}"\n\n'
         '[jira]\nsite = "https://j.example"\n\n[git]\nrepos = []\n'
     )
     db = Database(tmp_path / "dashboard.db")
@@ -175,7 +175,7 @@ def test_a_plugin_command_needs_its_section(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     config = tmp_path / "config.toml"
-    config.write_text(f'email = "me@x"\ndb_path = "{tmp_path / "d.db"}"\n')
+    config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n')
     assert cli.main(["-c", str(config), "notes", "list", "--json"]) == 0
     assert json.loads(capsys.readouterr().out) == []  # notes is always on
 

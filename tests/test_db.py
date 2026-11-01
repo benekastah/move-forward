@@ -1,10 +1,10 @@
 import sqlite3
-import stat
 from pathlib import Path
 
 import pytest
 
 from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database
+from move_forward.private import is_private
 from move_forward.repositories import KvRepository
 
 CREATE_A = "CREATE TABLE p_a (x INTEGER);"
@@ -162,9 +162,9 @@ def test_the_database_and_its_backups_are_mine_alone(tmp_path: Path) -> None:
     db = Database(path)
     db.migrate("test", ["CREATE TABLE t (x);"])
     db.execute("INSERT INTO t VALUES (1)")
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert is_private(path)
     again = Database(path)
     again.migrate("test", ["CREATE TABLE t (x);", "CREATE TABLE u (y);"])  # backs up first
     [backup] = (path.parent / "backups").iterdir()
-    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
-    assert stat.S_IMODE((path.parent / "backups").stat().st_mode) == 0o700
+    assert is_private(backup)
+    assert is_private(path.parent / "backups")

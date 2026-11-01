@@ -100,7 +100,7 @@ def test_a_plugin_adds_an_mfd_command(
     monkeypatch.setattr(registry, "PLUGINS", plugins)
     config = tmp_path / "config.toml"
     db = tmp_path / "dashboard.db"
-    config.write_text(f'email = "me@x"\ndb_path = "{db}"\n')
+    config.write_text(f'email = "me@x"\ndb_path = "{db.as_posix()}"\n')
     assert cli.main(["-c", str(config), "jira", "tickets"]) == 1
     assert "[jira] isn't in" in capsys.readouterr().err
     config.write_text(config.read_text() + '\n[jira]\nsite = "https://j"\n')

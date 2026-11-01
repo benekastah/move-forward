@@ -154,7 +154,8 @@ def _expanded(repo_dir: str) -> str:
 
 def _tilde(repo_dir: str) -> str:
     path, home = Path(repo_dir), Path.home()
-    return "~/" + str(path.relative_to(home)) if path.is_relative_to(home) else repo_dir
+    # Forward slashes on every system: the skill reads the file, and Path reads them back.
+    return "~/" + path.relative_to(home).as_posix() if path.is_relative_to(home) else repo_dir
 
 
 def read_on_ice(text: str, today: date) -> tuple[list[Ice], date | None]:

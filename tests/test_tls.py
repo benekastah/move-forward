@@ -1,7 +1,6 @@
 """The dashboard's certificate, and serving over HTTPS with it."""
 
 import ssl
-import stat
 import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -15,6 +14,7 @@ from move_forward import server, tls
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.plugins.github.config import GitHubConfig
+from move_forward.private import is_private
 from move_forward.registry import migrate
 
 TOKEN = "s3cret"
@@ -26,7 +26,7 @@ def test_the_certificate_names_only_this_machine_and_its_authority_only_vouches_
     paths = tls.Paths(tmp_path / "tls")
     tls.make(paths)
     [(first, first_key), *_] = paths.certs()
-    assert all(stat.S_IMODE(key.stat().st_mode) == 0o600 for _, key in paths.certs())
+    assert all(is_private(key) for _, key in paths.certs())
     cert = x509.load_pem_x509_certificate(first.read_bytes())
     names = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
     assert names.get_values_for_type(x509.DNSName) == ["localhost"]

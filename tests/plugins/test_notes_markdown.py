@@ -92,7 +92,7 @@ def test_stacks_on_ice_round_trip() -> None:
 @pytest.fixture
 def config(tmp_path: Path) -> Path:
     path = tmp_path / "config.toml"
-    path.write_text(f'email = "me@x"\ndb_path = "{tmp_path / "dashboard.db"}"\n')
+    path.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "dashboard.db").as_posix()}"\n')
     return path
 
 

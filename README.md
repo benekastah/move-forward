@@ -223,7 +223,7 @@ slack plugin's, and reviewers' emails in the github plugin's (from `mfd github
 import`, or looked up from commits). It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.
 The server's token sits next to it, in `token`, and the HTTPS certificate in `tls/`. The
-database, its backups, the token and the certificate's key are readable by you alone.
+database, its backups, the token and the certificate's key are readable by you alone (on Windows, by their access lists).
 
 The schema is built by migrations: core and each plugin own a list, applied in
 order at start-up and counted in `schema_versions`, so an older database

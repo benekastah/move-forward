@@ -9,9 +9,10 @@ import hmac
 import logging
 import os
 import secrets
-import stat
 import tempfile
 from pathlib import Path
+
+from .private import is_private, make_private
 
 log = logging.getLogger(__name__)
 
@@ -29,16 +30,18 @@ def token_path(db_path: Path) -> Path:
 
 
 def _draft(path: Path) -> Path:
-    """A new token in a private file of its own beside `path` (mode 0600), to put in place."""
+    """A new token in a private file of its own beside `path`, to put in place. The file is
+    made private before the token is written to it."""
     fd, draft = tempfile.mkstemp(dir=path.parent, prefix=f".{TOKEN_FILE}.")
+    make_private(Path(draft))
     with os.fdopen(fd, "w") as f:
         f.write(secrets.token_urlsafe(TOKEN_BYTES) + "\n")
     return Path(draft)
 
 
 def load_or_create(path: Path) -> str:
-    """The token in `path`, made on first use. The file is mine alone (mode 0600); one that
-    others could read is made private again, with a warning.
+    """The token in `path`, made on first use. The file is mine alone (see `private`); one
+    that others could read is made private again, with a warning.
 
     A new token is written to a private file of its own first and then linked into place,
     so a process starting at the same moment never reads it half written: it either finds
@@ -55,10 +58,9 @@ def load_or_create(path: Path) -> str:
             os.unlink(draft)
     if not path.read_text().strip():  # left empty by a crash: replace it, in one step
         os.replace(_draft(path), path)
-    mode = stat.S_IMODE(path.stat().st_mode)
-    if mode & 0o077:
-        log.warning("%s was readable by others (mode %o); making it private", path, mode)
-        path.chmod(0o600)
+    if not is_private(path):
+        log.warning("%s was readable by others; making it private", path)
+        make_private(path)
     return path.read_text().strip()
 
 

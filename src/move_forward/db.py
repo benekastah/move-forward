@@ -15,6 +15,8 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .private import make_private
+
 log = logging.getLogger(__name__)
 
 CORE = "core"
@@ -148,7 +150,7 @@ def _private(path: Path) -> None:
     what the plugins fetched are mine, not other users' of this machine. SQLite gives its
     -wal and -shm files the database's permissions."""
     os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
-    path.chmod(0o600)
+    make_private(path)
 
 
 class Database:
@@ -224,6 +226,7 @@ class Database:
         self._backed_up = True
         backups = self._path.parent / BACKUPS_DIR
         backups.mkdir(mode=0o700, exist_ok=True)
+        make_private(backups)
         stamp = datetime.now(UTC).strftime(BACKUP_TIME_FORMAT)
         target = backups / f"{self._path.name}.{stamp}"
         _private(target)

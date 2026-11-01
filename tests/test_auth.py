@@ -1,22 +1,18 @@
 """The server's token file, and `mfd open` signing the browser in with it."""
 
-import stat
 import threading
 from pathlib import Path
 
 import pytest
 
 from move_forward import auth, cli
-
-
-def _mode(path: Path) -> int:
-    return stat.S_IMODE(path.stat().st_mode)
+from move_forward.private import is_private
 
 
 def test_the_token_is_made_once_and_only_i_can_read_it(tmp_path: Path) -> None:
     path = auth.token_path(tmp_path / "data" / "dashboard.db")
     token = auth.load_or_create(path)
-    assert len(token) >= 40 and _mode(path) == 0o600
+    assert len(token) >= 40 and is_private(path)
     assert auth.load_or_create(path) == token
 
 
@@ -25,14 +21,14 @@ def test_a_token_file_others_can_read_is_made_private(tmp_path: Path) -> None:
     path.write_text("abc\n")
     path.chmod(0o644)
     assert auth.load_or_create(path) == "abc"
-    assert _mode(path) == 0o600
+    assert is_private(path)
 
 
 def test_an_empty_token_file_gets_a_new_token(tmp_path: Path) -> None:
     path = tmp_path / auth.TOKEN_FILE
     path.write_text("")
     assert auth.load_or_create(path)
-    assert _mode(path) == 0o600
+    assert is_private(path)
 
 
 def test_a_request_carries_the_token_as_a_bearer_header_or_a_cookie() -> None:
@@ -49,7 +45,9 @@ def test_a_request_carries_the_token_as_a_bearer_header_or_a_cookie() -> None:
 
 def test_mfd_open_opens_the_login_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = tmp_path / "config.toml"
-    config.write_text(f'email = "me@x"\nport = 9999\ndb_path = "{tmp_path / "dashboard.db"}"\n')
+    config.write_text(
+        f'email = "me@x"\nport = 9999\ndb_path = "{(tmp_path / "dashboard.db").as_posix()}"\n'
+    )
     opened: list[str] = []
 
     def fake_open(url: str) -> bool:

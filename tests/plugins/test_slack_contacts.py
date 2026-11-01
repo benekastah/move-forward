@@ -45,7 +45,7 @@ def test_setting_by_hand_checks_the_ids_and_wins_over_imports() -> None:
 
 def test_mfd_slack_contacts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config = tmp_path / "config.toml"
-    config.write_text(f'email = "me@x"\ndb_path = "{tmp_path / "d.db"}"\n\n[slack]\n')
+    config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
 
     def mfd(*args: str) -> int:
         return cli.main(["-c", str(config), "slack", *args])

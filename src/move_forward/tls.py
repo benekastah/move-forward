@@ -31,6 +31,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+from .private import make_private
 from .shell import CommandError, run
 
 VALID_DAYS = 825
@@ -132,6 +133,7 @@ def make(paths: Paths, now: datetime | None = None) -> None:
         .sign(ca_key, hashes.SHA256())
     )
     paths.dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    make_private(paths.dir)
     paths.ca.write_bytes(ca.public_bytes(serialization.Encoding.PEM))
     for (cert_path, key_path), (start, end) in zip(paths.certs(), windows, strict=True):
         key = ec.generate_private_key(ec.SECP256R1())
@@ -175,6 +177,7 @@ def _write_private(path: Path, data: bytes) -> None:
     """Write `data` readable by me only, from the moment the file exists."""
     path.unlink(missing_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    make_private(path)  # on Windows the mode means nothing: before any key is in it
     with os.fdopen(fd, "wb") as f:
         f.write(data)
 
