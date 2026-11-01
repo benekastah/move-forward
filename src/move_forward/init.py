@@ -50,6 +50,8 @@ OPTIONAL_GIT_SETTINGS = """\
 OPTIONAL_SLACK_SETTINGS = """\
 # ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 # ping_follow_up = "Gentle bump on this review request"
+# token_env = "SLACK_API_TOKEN"          # a token with users:read.email, to find Slack ids by email
+# keychain_service = "move-forward-slack" # else the macOS keychain item for your email
 # team_channel = ""                      # a team's channel when none is set, e.g. "#team-{team}"
 """
 OPTIONAL_JIRA_SETTINGS = """\

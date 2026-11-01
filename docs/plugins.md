@@ -44,6 +44,7 @@ flowchart LR
     pr -. "pings, nudges" .-> slack([slack])
     iced -. "don't ping iced PRs" .-> slack
     repo -. "a PR's checkout, for iced checks" .-> slack
+    person -. "emails, to look up Slack ids" .-> slack
     pr -. "todo link states" .-> notes
     ticket -. "Add todo titles" .-> notes
     branch -. "the stack to ice" .-> notes

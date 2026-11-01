@@ -6,12 +6,14 @@ import re
 from ... import render
 from ...graph import Graph
 from ...plugin import ActionError, Context
+from . import client
 from .config import SlackConfig
 from .pings import strings
-from .repository import DASHBOARD, SlackRepository
+from .repository import DASHBOARD, IMPORTED, LOOKED_UP, SlackRepository
 
 CONTACTS_PATH = "/slack/contacts"
 PR = "pr"
+PERSON = "person"
 SLACK_ID_RE = re.compile(r"^[UW][A-Z0-9]{6,}$")
 CHANNEL_ID_RE = re.compile(r"^[CG][A-Z0-9]{6,}$")
 CHANNEL_NAME_RE = re.compile(r"^#[\w-]+$")
@@ -97,7 +99,9 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
 
     def how(target: str) -> str:
         source = sources.get(target)
-        return "set by hand" if source == DASHBOARD else "imported" if source else "not known"
+        return {DASHBOARD: "set by hand", IMPORTED: "imported", LOOKED_UP: "looked up"}.get(
+            source or "", "not known"
+        )
 
     people_rows = "".join(
         f"<tr><td>{e(login)}</td><td>{e(how(f'user:{login}'))}</td><td>"
@@ -137,3 +141,26 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
         f"<table>{team_rows}</table></article>"
     )
     return render.page("Where pings go", "slack contacts", body)
+
+
+def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
+    """Find, through Slack's API, the Slack ids of people my open PRs ask to review whom
+    nothing names a Slack id for, by the email github knows for them. Each is looked up once:
+    a miss is remembered too. Returns whom it found. Without a token, does nothing."""
+    api_token = client.token(ctx.config, ctx.email)
+    if api_token is None:
+        return []
+    slack = SlackRepository(ctx.db)
+    known = slack.contacts()
+    users, _ = _requested(graph)
+    found: list[str] = []
+    for login in sorted(users - set(known)):
+        person = graph.get(PERSON, login)
+        email = person.attrs.get("email") if person else None
+        if not isinstance(email, str):
+            continue
+        slack_id = client.lookup_by_email(api_token, email)
+        slack.save_looked_up(login, slack_id)
+        if slack_id:
+            found.append(login)
+    return found

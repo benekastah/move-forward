@@ -188,7 +188,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     PeopleRepository(db).replace_imported({u.login: u.email for u in reviewers.values() if u.email})
     if enable_slack:
         SlackRepository(db).replace_imported(
-            [Contact(login=u.login, slack_id=u.slack_id) for u in reviewers.values()],
+            [Contact(login=u.login, slack_id=u.slack_id) for u in reviewers.values() if u.slack_id],
             list(channels.values()),
             pings,
         )

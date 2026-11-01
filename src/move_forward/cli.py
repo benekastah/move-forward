@@ -54,6 +54,8 @@ repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are foun
 workspace_url = "https://example.slack.com"
 # ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 # ping_follow_up = "Gentle bump on this review request"
+# token_env = "SLACK_API_TOKEN"           # a token with users:read.email, to find Slack ids by email
+# keychain_service = "move-forward-slack"
 # team_channel = "#team-{team}"           # a team's channel when none is set
 
 [slack.teams]                         # where review pings to a team go

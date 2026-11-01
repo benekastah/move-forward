@@ -2,9 +2,10 @@
 
 What's left to build in move-forward. Only what's still to do lives here: when a step or
 section is done, remove it in the same PR, and delete this file once it's empty. The code,
-`AGENTS.md` and `docs/` are the reference for what's built (so far, steps 1–5b of the
+`AGENTS.md` and `docs/` are the reference for what's built (so far, steps 1–5c of the
 plugin rearchitecture: core, the github, git, jira, slack and notes plugins, git_stack,
-authentication, CI on Linux, and the notes in their own tables behind `mfd notes`).
+authentication, CI on Linux, the notes in their own tables behind `mfd notes`, and slack's
+and github's own tables).
 
 ## Goal
 
@@ -18,18 +19,6 @@ SQLite, behind a CLI and the HTTP API.
 
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
-
-### 5c. slack and github tables
-
-- The reviewer map fills itself in, and can be viewed and edited when needed. Once the
-  notes cut over, the dashboard reads `reviewer-map.md` only when asked: `mfd slack import`
-  and `mfd github import`.
-  - Automatically: github already looks up reviewers' emails from their commits. Slack
-    member ids and team channels need a source: the Slack API by email
-    (`users.lookupByEmail`, with a token in the keychain like Jira's), or a convention for
-    team channels (e.g. `#team-<slug>`), or both. Open question.
-  - Viewable and editable: done (`/slack/contacts`, `mfd slack contact|team`); once there's
-    an automatic source, the page should say which values came from it.
 
 ### 5d. Prune without the clients
 

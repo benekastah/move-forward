@@ -6,11 +6,14 @@ from typing import Literal
 from ...db import Database
 from .models import Contact, Ping, TeamChannel
 
-Source = Literal["import", "dashboard"]
+Source = Literal["import", "dashboard", "lookup"]
 IMPORTED: Source = "import"
 """Rows `mfd slack import` read from the skill's markdown; an import replaces them."""
 DASHBOARD: Source = "dashboard"
-"""Rows the dashboard wrote, e.g. pings marked as sent; an import leaves them."""
+"""Rows set from the dashboard, e.g. a Slack id set by hand or a ping marked as sent; an
+import leaves them."""
+LOOKED_UP: Source = "lookup"
+"""Slack ids found through Slack's API by email; an import or a hand overrides them."""
 
 MIGRATIONS = [
     """
@@ -47,7 +50,18 @@ MIGRATIONS = [
         SELECT pr_url, target, kind, message, sent_at,
             CASE source WHEN 'dashboard' THEN 'dashboard' ELSE 'import' END
         FROM pings;
+    """,
     """
+    -- Slack ids looked up through Slack's API, too. A CHECK can't be changed in place.
+    CREATE TABLE slack_contacts_new (  -- kept: where a person's pings go
+        login TEXT PRIMARY KEY,
+        slack_id TEXT,                 -- NULL: looked up, and nobody has their email
+        source TEXT NOT NULL CHECK (source IN ('import', 'dashboard', 'lookup'))
+    );
+    INSERT INTO slack_contacts_new SELECT login, slack_id, source FROM slack_contacts;
+    DROP TABLE slack_contacts;
+    ALTER TABLE slack_contacts_new RENAME TO slack_contacts;
+    """,
 ]
 """The slack plugin's migrations. Every table is kept: only the dashboard knows these."""
 
@@ -79,6 +93,12 @@ class SlackRepository:
             " UNION ALL SELECT 'team:' || team, source FROM slack_team_channels"
         )
         return {row["target"]: row["source"] for row in rows}
+
+    def save_looked_up(self, login: str, slack_id: str | None) -> None:
+        """Remember what a lookup found, or that it found nobody, unless the login is known."""
+        self._db.execute(
+            "INSERT OR IGNORE INTO slack_contacts VALUES (?, ?, ?)", (login, slack_id, LOOKED_UP)
+        )
 
     def set_contact(self, login: str, slack_id: str | None) -> None:
         """Set a person's Slack id by hand; it wins over imports from now on."""
@@ -147,9 +167,11 @@ class SlackRepository:
         with self._db.transaction() as conn:
             for table in ("slack_contacts", "slack_team_channels", "slack_pings"):
                 conn.execute(f"DELETE FROM {table} WHERE source = ?", (IMPORTED,))
-            conn.executemany(
-                "INSERT OR IGNORE INTO slack_contacts VALUES (?, ?, ?)",
-                [(c.login, c.slack_id, IMPORTED) for c in contacts],
+            conn.executemany(  # over a lookup, but not over a value set by hand
+                "INSERT INTO slack_contacts VALUES (?, ?, ?) ON CONFLICT (login) DO UPDATE"
+                " SET slack_id = excluded.slack_id, source = excluded.source"
+                " WHERE slack_contacts.source = ?",
+                [(c.login, c.slack_id, IMPORTED, LOOKED_UP) for c in contacts],
             )
             conn.executemany(
                 "INSERT OR IGNORE INTO slack_team_channels VALUES (?, ?, ?, ?)",

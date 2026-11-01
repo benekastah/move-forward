@@ -108,7 +108,12 @@ team nothing else names one for. Its page is `/ping?pr=<PR URL>`, and its one ac
 skill's `reviewer-map.md`, read with `mfd slack import <dir>` (which also picks
 up the nudges the skill logged in `work-notes.md`), or are set by hand on
 `/slack/contacts` or with `mfd slack contact|team set`; what's set by hand
-wins over a later import.
+wins over a later import. With a Slack token (`token_env`, default
+`SLACK_API_TOKEN`, else the macOS keychain item `keychain_service` for your
+email), each refresh also looks up the Slack id of every reviewer my open PRs
+ask for whom nothing names one for, by the email github knows for them. The
+token needs the `users:read.email` scope; a lookup that finds nobody isn't
+tried again, and an import or a value set by hand wins over a lookup.
 
 `[jira]` needs `site`, an `https://` URL (the requests carry your token). `token_env` and `keychain_service` say where its token
 is (see [Jira](#jira)). `status_in_progress`, `status_in_review` and
