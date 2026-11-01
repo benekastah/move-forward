@@ -89,3 +89,11 @@ def test_a_consumer_reads_entities_through_its_own_view() -> None:
     assert graph.view_one("pr", "https://pr/9", _PrView) is None
     with pytest.raises(ValidationError, match="head"):
         graph.view("pr", _PrView)  # the second PR has no head: loud, not quiet
+
+
+def test_related_entities_through_a_view() -> None:
+    class Titled(Model):
+        id: str
+        title: str
+
+    assert _graph().view_related(TICKET, "pr", Titled) == [Titled(id=PR.id, title="pr 1")]

@@ -133,6 +133,10 @@ class Graph:
         a publisher's change that breaks a consumer fails its tests, not quietly the page."""
         return [_as(entity, model) for entity in self.of_kind(kind)]
 
+    def view_related[V: BaseModel](self, ref: Ref, kind: str, model: type[V]) -> list[V]:
+        """`related(ref, kind)`, each as `model` (see `view`)."""
+        return [_as(entity, model) for entity in self.related(ref, kind)]
+
     def view_one[V: BaseModel](self, kind: str, id: str, model: type[V]) -> V | None:
         """One entity as `model` (see `view`); None when the graph doesn't have it."""
         entity = self.get(kind, id)
