@@ -8,6 +8,7 @@ from legacy import save_json_snapshot
 
 from move_forward import https
 from move_forward.db import Database
+from move_forward.graph import Graph
 from move_forward.plugin import Context
 from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
@@ -198,3 +199,38 @@ def test_a_ticket_a_search_found_twice_is_kept_once() -> None:
         (first.key, first.summary),
         ("APP-3", first.summary),
     ]
+
+
+def _ctx(db: Database) -> Context[JiraConfig]:
+    return Context(
+        config=JiraConfig(site="https://j"),
+        email="me@x",
+        teams=[],
+        prune_days=90,
+        now=datetime(2026, 10, 30, tzinfo=UTC),
+        db=db,
+        kv=KvRepository(db, "jira"),
+    )
+
+
+def test_ticket_keys_are_only_those_of_projects_my_tickets_have_been_in() -> None:
+    db = Database(":memory:")
+    db.migrate("jira", MIGRATIONS)
+    plugin = JiraPlugin()
+    assert plugin.linking_patterns(_ctx(db)) == {"ticket": None}  # nothing seen yet
+    first = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
+    repo = IssueRepository(db)
+    repo.replace(JiraSnapshot(issues=[first.model_copy(update={"key": "OPS_2-7"})]))
+    repo.replace(JiraSnapshot(issues=[first]))  # OPS_2's last ticket is gone: still known
+    assert repo.projects() == ["APP", "OPS_2"]
+    graph = Graph(linking=plugin.linking_patterns(_ctx(db)))
+    found = graph.named("APP-1, OPS_2-9, UTF-8, SHA-256, XAPP-3")
+    assert [r.id for r in found] == ["APP-1", "OPS_2-9"]
+
+
+def test_projects_are_remembered_from_the_tickets_kept_before() -> None:
+    db = Database(":memory:")
+    first = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
+    save_json_snapshot(db, "jira", JiraSnapshot(issues=[first]))
+    db.migrate("jira", MIGRATIONS)  # the tickets move to their table, then their projects
+    assert IssueRepository(db).projects() == ["APP"]

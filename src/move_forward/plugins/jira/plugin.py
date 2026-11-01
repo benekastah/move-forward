@@ -1,5 +1,6 @@
 """The Jira plugin: my open tickets, the status changes their PRs suggest, and what's next."""
 
+import re
 from datetime import datetime
 from typing import ClassVar
 
@@ -128,6 +129,14 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
     )
 
 
+def key_pattern(projects: list[str]) -> str | None:
+    """A pattern for the keys of tickets in `projects`, or None when there are none."""
+    if not projects:
+        return None
+    alternatives = "|".join(re.escape(p) for p in sorted(projects, key=len, reverse=True))
+    return rf"\b(?:{alternatives})-\d+\b"
+
+
 class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     name = "jira"
     title = "Jira"
@@ -135,7 +144,8 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
-    linking: ClassVar[dict[str, str | None]] = {TICKET: r"\b[A-Z][A-Z0-9]+-\d+\b"}
+    linking: ClassVar[dict[str, str | None]] = {TICKET: None}
+    """Tickets link; `linking_patterns` gives the pattern of their keys."""
 
     def collect(self, ctx: Context[JiraConfig]) -> JiraSnapshot:
         return client.collect(ctx.config, ctx.email)
@@ -145,6 +155,11 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
 
     def load(self, ctx: Context[JiraConfig]) -> JiraSnapshot | None:
         return IssueRepository(ctx.db).load()
+
+    def linking_patterns(self, ctx: Context[JiraConfig]) -> dict[str, str | None]:
+        """Keys of the projects my tickets have been in, so `UTF-8` or `SHA-256` in a PR
+        isn't taken for a ticket; none at all before jira has seen a ticket of mine."""
+        return {TICKET: key_pattern(IssueRepository(ctx.db).projects())}
 
     def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
         return [

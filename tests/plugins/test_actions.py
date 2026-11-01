@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
+from conftest import know_jira_projects
 
 from move_forward import refresh
 from move_forward.config import Config
@@ -75,6 +76,8 @@ def _stored(config: Config) -> Database:
     the notes hold from earlier actions."""
     db = Database(config.db_path)
     migrate(config, db)
+    if config.jira:
+        know_jira_projects(db, "APP")
     if config.git:
         # Just the branches: notes checks a repo is configured by the graph having its branches.
         repos = [

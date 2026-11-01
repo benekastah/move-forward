@@ -20,7 +20,8 @@ what's about it. `ticket` (jira) and `entry` (notes) are. `Graph.related(ref,
 kind)` finds entities of `kind` one hop from `ref` in either direction, or
 linked with it by a linking entity: a work entry naming APP-1 is related to
 every PR whose branch, title or body mentions APP-1. A linking kind with a
-pattern for its ids (`ticket`'s is a Jira key) is found in other entities'
+pattern for its ids (`ticket`'s: a key in a project jira has seen a ticket of
+mine in, e.g. `APP-12`, so `UTF-8` isn't one) is found in other entities'
 `mentions`, so they point at it without their plugin knowing the kind; see
 [graph.md](graph.md#related-entities).
 

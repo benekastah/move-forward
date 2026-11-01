@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from legacy import save_json_snapshot
+from conftest import know_jira_projects
 
 from move_forward import cli
+from move_forward.config import load
 from move_forward.db import Database
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
+from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.notes.repository import NotesRepository
+from move_forward.registry import migrate
 
 PR = "https://github.com/acme/widgets/pull/5"
 Run = Callable[..., tuple[int, str, str]]
@@ -25,6 +28,9 @@ def config(tmp_path: Path) -> Path:
         f'email = "me@x"\ndb_path = "{tmp_path / "dashboard.db"}"\n\n'
         '[jira]\nsite = "https://j.example"\n\n[git]\nrepos = []\n'
     )
+    db = Database(tmp_path / "dashboard.db")
+    migrate(load(path), db)
+    know_jira_projects(db, "APP")
     return path
 
 
@@ -151,7 +157,7 @@ def test_ice_a_branch_and_thaw_it(run: Run, config: Path) -> None:
         worktrees=[],
         branches=[Branch(name="feature", committed_at=datetime.now(UTC))],
     )
-    save_json_snapshot(_db(config), "git", LocalSnapshot(repos=[repo]))
+    LocalRepository(_db(config)).replace(LocalSnapshot(repos=[repo]))
     assert run("ice", "--branch", "/src/app", "nope")[0] == 1
     assert run("ice", "--branch", "/elsewhere", "feature")[0] == 1
     assert run("ice", "--branch", "/src/app", "feature", "--note", "waiting on infra")[0] == 0

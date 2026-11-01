@@ -181,6 +181,8 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         }
     )
     migrate(config, db)
+    if enable_jira:
+        know_jira_projects(db, "APP")
     for e in enabled(config, db, NOW):  # kept as a refresh keeps them
         if e.name in snapshots:
             e.plugin.store(e.ctx, snapshots[e.name])
@@ -301,3 +303,10 @@ def local_branch(name: str, **overrides: object) -> Branch:
     fields: dict[str, object] = {"name": name, "committed_at": NOW - timedelta(days=1)}
     fields.update(overrides)
     return Branch.model_validate(fields)
+
+
+def know_jira_projects(db: Database, *keys: str) -> None:
+    """jira remembers these projects, as if it had seen a ticket of mine in each, so their keys
+    link (see `JiraPlugin.linking_patterns`)."""
+    for key in keys:
+        db.execute("INSERT OR IGNORE INTO jira_projects VALUES (?)", (key,))

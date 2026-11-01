@@ -134,7 +134,10 @@ a pattern from what it has seen, as jira does to the project keys it knows):
 
 ```python
 class JiraPlugin(Plugin[JiraConfig]):
-    linking = {"ticket": r"\b[A-Z][A-Z0-9]+-\d+\b"}
+    linking = {"ticket": None}
+
+    def linking_patterns(self, ctx):  # keys of the projects my tickets have been in
+        return {"ticket": key_pattern(IssueRepository(ctx.db).projects())}
 
 
 class NotesPlugin(Plugin[NotesConfig]):

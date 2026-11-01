@@ -1,4 +1,5 @@
-"""The jira plugin's tables: my open tickets, as the last refresh found them."""
+"""The jira plugin's tables: my open tickets, as the last refresh found them, and every
+project they've been in."""
 
 from collections import defaultdict
 from datetime import datetime
@@ -54,7 +55,14 @@ MIGRATIONS = [
         FROM snapshots, json_each(snapshots.payload, '$.issues') AS issue,
             json_each(issue.value, '$.open_blockers') AS blocker
         WHERE snapshots.source = 'jira' AND snapshots.payload IS NOT NULL;
+    """,
     """
+    CREATE TABLE jira_projects (       -- kept: every project a ticket of mine has been in, so
+        key TEXT PRIMARY KEY           -- its keys still link once its last ticket closes; a
+    );                                 -- handful of rows, never pruned
+    INSERT OR IGNORE INTO jira_projects
+        SELECT substr(key, 1, instr(key, '-') - 1) FROM jira_issues WHERE instr(key, '-') > 1;
+    """,
 ]
 """The jira plugin's migrations."""
 
@@ -68,7 +76,8 @@ class IssueRepository:
         self._db = db
 
     def replace(self, snapshot: JiraSnapshot) -> None:
-        """Keep the tickets a refresh found, in place of the last refresh's."""
+        """Keep the tickets a refresh found, in place of the last refresh's, and remember
+        their projects."""
         # A search's pages can overlap: the same ticket twice is kept once, at its first place.
         firsts: dict[str, JiraIssue] = {}
         for issue in snapshot.issues:
@@ -104,6 +113,14 @@ class IssueRepository:
                 "INSERT INTO jira_issue_blockers VALUES (?, ?, ?)",
                 [(i.key, n, key) for i in issues for n, key in enumerate(i.open_blockers)],
             )
+            conn.executemany(
+                "INSERT OR IGNORE INTO jira_projects VALUES (?)",
+                [(project,) for i in issues if (project := i.key.rpartition("-")[0])],
+            )
+
+    def projects(self) -> list[str]:
+        """The keys of every project a ticket of mine has been in, e.g. `APP`."""
+        return [row["key"] for row in self._db.query("SELECT key FROM jira_projects ORDER BY key")]
 
     def load(self) -> JiraSnapshot:
         labels: defaultdict[str, list[str]] = defaultdict(list)

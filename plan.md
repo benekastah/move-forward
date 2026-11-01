@@ -22,10 +22,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- jira's key pattern matches `UTF-8`, `SHA-256` and the like in PR titles and bodies, so
-  those become `ticket` refs: PRs mentioning one are related, and an entry naming one is
-  never pruned (Jira can't say it's resolved). Restrict the pattern to the project keys
-  jira sees (from its snapshot, or a `[jira] projects` key).
 - Core: `item_actions` is called once per item, and slack rebuilds every ping and notes
   rereads its tables on each call. Plugins get a `prepare_item_actions(ctx, graph)` hook
   that does that work once per page and returns the per-item function.
@@ -129,7 +125,7 @@ Built in, in the package (`move_forward/plugins/<name>/`):
 | `github` | `[github]` | open, requested, reviewed, team, merged and closed PRs; derived team scores and reviewer suggestions | `github_prs` and its child tables, `github_team_members`, `github_reviewer_suggestions`, `github_team_scores` | `github_people` | `github.pr`, `github.person` | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
 | `git` | `[git]` | local repos: worktrees, branches, my dirs | `git_repos`, `git_worktrees`, `git_branches`, `git_my_dirs` | none | `git.repo`, `git.branch` | Local work, Cleanup |
 | `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in git's checkouts | `git_stack_branches` | none | `git_stack.stack_branch` | Stacks |
-| `jira` | `[jira]` | my open tickets | `jira_issues`, `jira_issue_labels`, `jira_issue_blockers` | none | `jira.ticket` | Jira transitions, What next |
+| `jira` | `[jira]` | my open tickets | `jira_issues`, `jira_issue_labels`, `jira_issue_blockers`, `jira_projects` | none | `jira.ticket` | Jira transitions, What next |
 | `slack` | `[slack]` | nothing | none | `slack_contacts`, `slack_team_channels`, `slack_pings` | nothing | Nudge reviewers; the ping page |
 | `notes` | `[notes]`, always on | nothing | none | `notes_entries` and its child tables, `notes_sections`, `notes_ice`, `notes_iced` | `notes.entry`, `notes.iced` | Todos, On ice |
 

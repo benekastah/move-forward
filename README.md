@@ -70,7 +70,7 @@ fails to load without it, saying which (e.g. "[git_stack] needs [git]").
 | `github` | `[github]` | my open, merged and closed PRs, review requests, PRs I reviewed, my teams' PRs (with `gh`) | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
 | `git` | `[git]` | each repo's worktrees and branches | Local work, Cleanup |
 | `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in each of git's repos | Stacks |
-| `jira` | `[jira]` | my open tickets | Jira transitions, What next |
+| `jira` | `[jira]` | my open tickets, and remembers every project they've been in: only those projects' keys (`APP-12`) count as tickets in PRs and notes, so `UTF-8` doesn't | Jira transitions, What next |
 | `slack` | `[slack]` | nothing; reads my PRs from the graph, and where pings go from its own tables | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
 | `notes` | `[notes]`, optional: always on | nothing: work entries, todos and what's on ice live in the database | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket, and Put on ice on every item about a local branch, one of my open PRs, a ticket or a work entry |
 
@@ -143,7 +143,7 @@ before the command's name.
 | `mfd notes add-entry <title> [--link <PR URL or ticket key>]... [--status S] [--where W]` | Add an entry. A ticket key in the title makes it about that ticket (with `[jira]`). |
 | `mfd notes remove <entry>` | Remove an entry with its todos, for finished work. |
 | `mfd notes set <entry> status\|where\|blocked-on <text>` | Set an entry's status, where the work lives (repo, branches, PRs), or what it's blocked on. |
-| `mfd notes link <entry> <PR URL or ticket key>` | Say an entry is about a PR or ticket. A key needs a plugin that knows tickets, e.g. `[jira]`. |
+| `mfd notes link <entry> <PR URL or ticket key>` | Say an entry is about a PR or ticket. A key needs `[jira]`, and a project jira has seen a ticket of mine in. |
 | `mfd notes todo add <entry> <text> [--size quick\|big] [--link <PR URL or ticket key>]...` | Add a todo; PR URLs in the text are linked. Prints its id. |
 | `mfd notes todo done\|undone\|delete <id>` | Tick a todo off, reopen it, or drop it without recording it as done. |
 | `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
