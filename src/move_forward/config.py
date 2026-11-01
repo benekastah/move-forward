@@ -57,9 +57,10 @@ class Config(Strict):
     migrations change the database; the oldest go first. 0 takes none."""
     port: int = DEFAULT_PORT
     """The localhost port `mfd serve` listens on."""
-    https: bool = True
+    https: bool = False
     """Serve over HTTPS with the certificate `mfd cert` makes (until there is one, plain
-    HTTP); false keeps plain HTTP."""
+    HTTP). Off by default: the dashboard only listens on localhost, and nothing it does needs
+    HTTPS."""
     refresh_on_load_seconds: int = DEFAULT_REFRESH_ON_LOAD_SECONDS
     """A page load starts a background refresh if the last one began longer ago than this."""
     prune_days: int = DEFAULT_PRUNE_DAYS

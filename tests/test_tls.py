@@ -52,7 +52,10 @@ def test_check_says_when_the_certificate_is_missing_or_ending(tmp_path: Path) ->
 @pytest.fixture
 def https(tmp_path: Path) -> Iterator[tuple[HTTPSConnection, tls.Paths]]:
     config = Config(
-        email="me@x", db_path=tmp_path / "dashboard.db", github=GitHubConfig(org="acme")
+        email="me@x",
+        https=True,
+        db_path=tmp_path / "dashboard.db",
+        github=GitHubConfig(org="acme"),
     )
     db = Database(config.db_path)
     migrate(config, db)
@@ -94,7 +97,7 @@ def test_the_dashboard_answers_over_https_with_a_secure_sign_in_cookie(
 
 
 def test_without_a_certificate_the_dashboard_stays_on_plain_http(tmp_path: Path) -> None:
-    config = Config(email="me@x", db_path=tmp_path / "dashboard.db")
+    config = Config(email="me@x", https=True, db_path=tmp_path / "dashboard.db")
     assert server.scheme(config) == "http"
     tls.make(tls.Paths.beside(config.db_path))
     assert server.scheme(config) == "https"
@@ -188,7 +191,9 @@ def test_the_server_moves_to_the_next_certificate_by_itself(
 
     monkeypatch.setattr(server.tls, "context", context)
     monkeypatch.setattr(server, "TLS_RECHECK_SECONDS", 0)
-    app = server.App(Config(email="me@x", db_path=tmp_path / "d.db"), Database(":memory:"), TOKEN)
+    app = server.App(
+        Config(email="me@x", https=True, db_path=tmp_path / "d.db"), Database(":memory:"), TOKEN
+    )
     httpd = server._TLSServer(  # pyright: ignore[reportPrivateUsage]
         ("127.0.0.1", 0), server.make_handler(app), paths, clock=lambda: moments[-1]
     )
@@ -201,7 +206,7 @@ def test_the_server_moves_to_the_next_certificate_by_itself(
 
 
 def test_the_page_says_when_there_is_no_certificate_or_it_ends_soon(tmp_path: Path) -> None:
-    config = Config(email="me@x", db_path=tmp_path / "dashboard.db")
+    config = Config(email="me@x", https=True, db_path=tmp_path / "dashboard.db")
     db = Database(config.db_path)
     migrate(config, db)
     app = server.App(config, db, TOKEN)
@@ -227,7 +232,7 @@ def test_renewing_gets_louder_as_the_last_certificate_nears_its_end(tmp_path: Pa
 def test_the_banner_is_on_the_dashboard_and_focus_pages(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config = Config(email="me@x", db_path=tmp_path / "dashboard.db")
+    config = Config(email="me@x", https=True, db_path=tmp_path / "dashboard.db")
     db = Database(config.db_path)
     migrate(config, db)
     tls.make(tls.Paths.beside(config.db_path))

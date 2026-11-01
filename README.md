@@ -20,9 +20,11 @@ the `git_stack` plugin).
 ```sh
 python3 ~/src/move-forward/dev.py install  # .venv, `mfd` on PATH, git hooks, then `mfd init`
                                 # (on Windows: py dev.py install)
-mfd cert --trust                # a certificate for https://127.0.0.1, trusted by your browsers
 mfd serve --open
 ```
+
+The dashboard listens only on localhost, over plain HTTP. To serve it over HTTPS
+instead, set `https = true` and run `mfd cert --trust`.
 
 `mfd cert` makes certificates for `127.0.0.1` and `localhost`, signed by a local
 authority that can vouch for nothing else (its key signs them and is thrown away), so `mfd
@@ -32,7 +34,7 @@ and a half years without renewing. `--trust` adds the authority (`tls/ca.pem`, n
 database) to macOS's keychain or Windows's user store, and, where NSS's `certutil` is
 installed (`libnss3-tools`, `nss-tools`), to Firefox's profiles and Chrome's store on
 Linux; elsewhere, import it as an authority in the browser's certificate settings.
-Without a certificate, or with `https = false`, the dashboard stays on plain HTTP. The page's
+With `https = false` (the default), or without a certificate, the dashboard stays on plain HTTP. The page's
 header and `mfd check` warn 30 days before the last certificate ends, and a banner across
 every page from 14 days: blue, yellow from 7, red from 3; `mfd cert --force --trust` then makes a new authority
 and chain, trusted again.
@@ -50,7 +52,7 @@ example without asking; `--force` replaces an existing file.
 
 The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
-`https` (serve over HTTPS with `mfd cert`'s certificate; default true),
+`https` (serve over HTTPS with `mfd cert`'s certificate; default false),
 `db_path`, `db_backups`, `refresh_on_load_seconds` (a page load refreshes
 plugins whose data is older than this) and `prune_days`. Each plugin that
 fetches refreshes on its own schedule, the `refresh_seconds` in its section
