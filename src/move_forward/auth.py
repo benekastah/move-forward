@@ -10,6 +10,7 @@ import logging
 import os
 import secrets
 import stat
+import tempfile
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -29,24 +30,30 @@ def token_path(db_path: Path) -> Path:
 
 def load_or_create(path: Path) -> str:
     """The token in `path`, made on first use. The file is mine alone (mode 0600); one that
-    others could read is made private again, with a warning."""
+    others could read is made private again, with a warning.
+
+    A new token is written to a private file of its own first and then linked into place,
+    so a process starting at the same moment never reads it half written: it either finds
+    the whole token or makes the file itself.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        mode = stat.S_IMODE(path.stat().st_mode)
-        if mode & 0o077:
-            log.warning("%s was readable by others (mode %o); making it private", path, mode)
-            path.chmod(0o600)
-        token = path.read_text().strip()
-        if token:
-            return token
-        path.unlink()
-        return load_or_create(path)
-    token = secrets.token_urlsafe(TOKEN_BYTES)
-    with os.fdopen(fd, "w") as f:
-        f.write(token + "\n")
-    return token
+    if not path.exists() or not path.read_text().strip():
+        path.unlink(missing_ok=True)  # an empty file is left from a crash; start again
+        token = secrets.token_urlsafe(TOKEN_BYTES)
+        fd, draft = tempfile.mkstemp(dir=path.parent, prefix=f".{TOKEN_FILE}.")  # mode 0600
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(token + "\n")
+            os.link(draft, path)  # fails if another process got there first; theirs stands
+        except FileExistsError:
+            pass
+        finally:
+            os.unlink(draft)
+    mode = stat.S_IMODE(path.stat().st_mode)
+    if mode & 0o077:
+        log.warning("%s was readable by others (mode %o); making it private", path, mode)
+        path.chmod(0o600)
+    return path.read_text().strip()
 
 
 def matches(token: str, given: str | None) -> bool:

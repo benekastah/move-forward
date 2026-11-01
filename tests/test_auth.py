@@ -1,6 +1,7 @@
 """The server's token file, and `mfd open` signing the browser in with it."""
 
 import stat
+import threading
 from pathlib import Path
 
 import pytest
@@ -59,3 +60,17 @@ def test_mfd_open_opens_the_login_url(tmp_path: Path, monkeypatch: pytest.Monkey
     assert cli.main(["-c", str(config), "open"]) == 0
     token = (tmp_path / auth.TOKEN_FILE).read_text().strip()
     assert opened == [f"http://127.0.0.1:9999/login?token={token}"]
+
+
+def test_two_processes_making_the_token_at_once_agree(tmp_path: Path) -> None:
+    path = auth.token_path(tmp_path / "dashboard.db")
+    tokens: list[str] = []
+    threads = [
+        threading.Thread(target=lambda: tokens.append(auth.load_or_create(path))) for _ in range(8)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(set(tokens)) == 1 and tokens[0] == path.read_text().strip()
+    assert [p.name for p in tmp_path.iterdir()] == ["token"]  # no drafts left behind
