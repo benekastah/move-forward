@@ -5,11 +5,11 @@ The repo must be one git has branches in, i.e. one of `[git] repos`.
 
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ...graph import Graph
 from ...plugin import ActionError, Context
-from ...shell import git
+from ...shell import CommandError, git
 from .config import GitStackConfig
 from .panels import STACK_BRANCH, StackBranchView, iced_stacks, repo_dirs
 
@@ -29,28 +29,44 @@ class _Event(BaseModel):
     """On an `untracked` event, the commit the deleted branch was at; None if it was kept."""
 
 
-class _CleanReport(BaseModel):
-    """`git stack clean --json`'s output: what happened, in order."""
+class _Report(BaseModel):
+    """The last line `git stack --json` prints: `result` or `error`, with every event it
+    reported, so it alone says what happened."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
+    type: str
+    message: str = ""
+    """Why it failed, on an `error`."""
     events: list[_Event]
 
 
-def cleaned(out: str) -> str:
-    """What `git stack clean --json` did, in words: the branches deleted, those untracked but
-    kept (checked out in another worktree, say), and its warnings."""
-    events = _CleanReport.model_validate_json(out).events
+def report(out: str) -> _Report:
+    """The report a `git stack ... --json` run ends with: it prints a JSON object per line,
+    each event as it happens, then the report."""
+    lines = [line for line in out.splitlines() if line.strip()]
+    if not lines:
+        raise ActionError("git stack printed no report; does its clean take --json?")
+    try:
+        return _Report.model_validate_json(lines[-1])
+    except ValidationError as e:
+        raise ActionError(f"couldn't read git stack's report: {e}") from e
+
+
+def cleaned(events: list[_Event]) -> str:
+    """What `git stack clean` did, in words: the branches deleted, those untracked but kept
+    (checked out in another worktree, say), and its warnings."""
     untracked = [(e.branch, e.deleted_tip) for e in events if e.type == "untracked" and e.branch]
     deleted = [branch for branch, tip in untracked if tip]
     kept = [branch for branch, tip in untracked if not tip]
     parts = [f"deleted {', '.join(deleted)}"] if deleted else []
     parts += [f"untracked {', '.join(kept)}"] if kept else []
     parts += [f"warning: {e.message}" for e in events if e.warning]
-    return "; ".join(parts) or "nothing merged to clean"
+    return "; ".join(parts)
 
 
 def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:
-    """`git stack clean -d local`: untrack merged branches in every stack and delete them.
+    """`git stack clean -d local --json`: untrack merged branches in every stack and delete
+    them, saying what it did, or how far it got before it failed.
 
     Refused while the repo has iced branches, since clean touches every stack (the skill's
     rule).
@@ -62,8 +78,19 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
     if iced:
         names = ", ".join(sorted(iced))
         raise ActionError(f"{repo} has iced stacks ({names}); clean per stack instead")
-    out = git(repo, "stack", "clean", "-d", "local", "--json", timeout=STACK_CLEAN_TIMEOUT_SECONDS)
-    return f"cleaned {repo}: {cleaned(out)}"
+    command = ["stack", "clean", "-d", "local", "--json"]
+    try:
+        out = git(repo, *command, timeout=STACK_CLEAN_TIMEOUT_SECONDS)
+    except CommandError as e:
+        if not e.stdout.strip():
+            raise
+        failed = report(e.stdout)
+        done = cleaned(failed.events)
+        raise ActionError(
+            f"git stack clean failed: {failed.message or e}"
+            + (f" (after it {done})" if done else "")
+        ) from e
+    return f"cleaned {repo}: {cleaned(report(out).events) or 'nothing merged to clean'}"
 
 
 def untrack(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:

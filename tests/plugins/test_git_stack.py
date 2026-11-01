@@ -1,6 +1,8 @@
 """The git-stack plugin: its Stacks panel, the stack entities it adds to git's branches, and
 `git stack clean`."""
 
+import json
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import pytest
@@ -28,6 +30,7 @@ from move_forward.plugins.git_stack.models import StackBranch, StackRepo
 from move_forward.plugins.git_stack.panels import repo_dirs
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 from move_forward.registry import enabled
+from move_forward.shell import CommandError
 
 ICED = iced("me/x", "/src/widgets")
 
@@ -214,41 +217,82 @@ def test_iced_stack_branches_are_left_out_of_the_stacks_panel() -> None:
     ]
 
 
-CLEAN_JSON = """{
-  "events": [
-    {"type": "fetching", "message": "fetching origin, and pruning its deleted branches",
-     "warning": false, "remote": "origin"},
-    {"type": "untracked", "message": "me/a was merged into main; deleted it (was 1234)",
-     "warning": false, "branch": "me/a", "parent": "main", "children": [], "deleted_tip": "1234"},
-    {"type": "not-deleted-in-other-worktree", "message": "me/b is checked out in /wt",
-     "warning": true, "branch": "me/b", "path": "/wt"},
-    {"type": "untracked", "message": "me/b was merged into main", "warning": false,
-     "branch": "me/b", "parent": "main", "children": [], "deleted_tip": null}
-  ],
-  "result": [{"name": "me/undeleted-thing", "parent": "main"}],
-  "error": null
-}"""
+JsonEvent = dict[str, object]
+FETCHING: JsonEvent = {
+    "type": "fetching",
+    "message": "fetching origin, and pruning its deleted branches",
+    "warning": False,
+    "remote": "origin",
+}
+DELETED_A: JsonEvent = {
+    "type": "untracked",
+    "message": "me/a was merged into main; deleted it (was 1234)",
+    "warning": False,
+    "branch": "me/a",
+    "parent": "main",
+    "children": [],
+    "deleted_tip": "1234",
+}
+KEPT_B: list[JsonEvent] = [
+    {
+        "type": "not-deleted-in-other-worktree",
+        "message": "me/b is checked out in /wt",
+        "warning": True,
+        "branch": "me/b",
+        "path": "/wt",
+    },
+    {
+        "type": "untracked",
+        "message": "me/b was merged into main",
+        "warning": False,
+        "branch": "me/b",
+        "parent": "main",
+        "children": [],
+        "deleted_tip": None,
+    },
+]
 
 
-def test_stack_clean_says_what_it_deleted_from_its_json_report(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    ran: list[tuple[str, ...]] = []
+def _json_lines(events: Sequence[JsonEvent], last: Mapping[str, object]) -> str:
+    """What `git stack clean --json` prints: each event, then the last line with them all."""
+    return "\n".join(json.dumps(e) for e in [*events, {**last, "events": events}]) + "\n"
 
-    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
-        ran.append(args)
-        return CLEAN_JSON
 
+def _clean_with(monkeypatch: pytest.MonkeyPatch, fake_git: Callable[..., str]) -> str:
     monkeypatch.setattr(actions, "git", fake_git)
     config, db = stored(
         local=local_snapshot(branches=[local_branch("main")]),
         stacks=stacks(StackBranch(name="me/a", parent="main")),
     )
-    notice = refresh.run_action(config, db, "git_stack/stack_clean", {"repo": "/src/widgets"})
+    return refresh.run_action(config, db, "git_stack/stack_clean", {"repo": "/src/widgets"})
+
+
+def test_stack_clean_says_what_it_did_from_its_json_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ran: list[tuple[str, ...]] = []
+    tree = {"type": "result", "stacks": [{"name": "me/undeleted-thing", "parent": "main"}]}
+
+    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
+        ran.append(args)
+        return _json_lines([FETCHING, DELETED_A, *KEPT_B], tree)
+
+    notice = _clean_with(monkeypatch, fake_git)
     assert ran == [("stack", "clean", "-d", "local", "--json")]
     assert notice == (
         "cleaned /src/widgets: deleted me/a; untracked me/b; warning: me/b is checked out in /wt"
     )
-    assert (
-        actions.cleaned('{"events": [], "result": [], "error": null}') == "nothing merged to clean"
-    )
+
+    def nothing(repo: Path, *args: str, timeout: int = 0) -> str:
+        return _json_lines([FETCHING], {"type": "result", "stacks": []})
+
+    assert _clean_with(monkeypatch, nothing) == "cleaned /src/widgets: nothing merged to clean"
+
+
+def test_a_clean_that_fails_partway_says_how_far_it_got(monkeypatch: pytest.MonkeyPatch) -> None:
+    def failing(repo: Path, *args: str, timeout: int = 0) -> str:
+        out = _json_lines([FETCHING, DELETED_A], {"type": "error", "message": "rebase conflict"})
+        raise CommandError("git stack clean: rebase conflict", out)
+
+    with pytest.raises(ActionError, match=r"failed: rebase conflict \(after it deleted me/a\)"):
+        _clean_with(monkeypatch, failing)
