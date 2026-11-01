@@ -20,11 +20,6 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
 
-### 6. Layout
-
-- `priority` on panels; the `layout` table (already migrated) with drag and drop on group
-  and panel summaries, `POST /layout`, and Reset layout in the footer.
-
 ### 6b. Act now
 
 - A first version: the `act_now` hook, `Item.signals` with `effort`, `closes`, `waiting`,
@@ -120,29 +115,6 @@ it, so worktrees made or removed since (e.g. a second checkout at `~/src/app2`) 
 without a config change. A path in `repos` that turns out to be a worktree of another
 listed repo is folded into that repo, so listing both doesn't double up. Actions accept any
 worktree of a configured repo, not only the listed path.
-
-### Page layout and ordering
-
-The page has one collapsible group per enabled plugin, holding its panels, below
-**Act now**: a single ranked panel that core builds from what each plugin nominates through
-its `act_now` hook (see Act now below). Act now is core, not a plugin; each plugin decides
-what of its own belongs there.
-
-Order is configured by **drag and drop** on the page:
-
-- Each group summary and each panel summary gets a drag handle. Dragging a group reorders
-  groups (Act now stays first); dragging a panel reorders it within its group. A small script (HTML5 drag and drop, about 60 lines) posts the new order to
-  `POST /layout` and the server stores it.
-- The stored layout is the order of everything on the page and in focus mode's "All".
-  Defaults come from each panel's `priority` (the skill's step order), so a fresh install
-  looks like today's page.
-- A panel or group the layout doesn't mention (a new plugin, a new panel) goes where its
-  default priority puts it. "Reset layout" in the footer clears the stored order.
-- Without JavaScript the page still renders in the stored or default order; only
-  reordering needs it.
-
-Layout lives in the database, not the config file: it's changed from the page, per
-machine, and the config stays hand-editable without the page rewriting it.
 
 ### Act now
 
@@ -354,8 +326,7 @@ What's left of it:
 
 ### Schema
 
-Core's `layout` table is migrated already (for step 6); `act_now_feedback` (see Act now)
-comes with step 6b.
+`act_now_feedback` (see Act now) comes with step 6b.
 
 ### Upkeep
 

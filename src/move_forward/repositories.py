@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from .db import Database
+from .panels import Layout
 
 
 class SnapshotRow(BaseModel):
@@ -63,3 +64,36 @@ class KvRepository:
 
     def set(self, key: str, value: str) -> None:
         self._db.execute("INSERT OR REPLACE INTO kv VALUES (?, ?, ?)", (self._owner, key, value))
+
+
+class LayoutRepository:
+    """The page's order as someone dragged it (`layout`): kept, never pruned, cleared by
+    Reset layout."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def load(self) -> Layout:
+        groups: list[str] = []
+        panels: dict[str, list[str]] = {}
+        for row in self._db.query("SELECT * FROM layout ORDER BY kind, parent, position"):
+            if row["kind"] == "group":
+                groups.append(row["key"])
+            else:
+                panels.setdefault(row["parent"], []).append(row["key"])
+        return Layout(groups=groups, panels=panels)
+
+    def save(self, layout: Layout) -> None:
+        """Replace the stored order with `layout`."""
+        rows = [("group", key, None, n) for n, key in enumerate(dict.fromkeys(layout.groups))]
+        rows += [
+            ("panel", key, group, n)
+            for group, keys in layout.panels.items()
+            for n, key in enumerate(dict.fromkeys(keys))
+        ]
+        with self._db.transaction() as conn:
+            conn.execute("DELETE FROM layout")
+            conn.executemany("INSERT OR IGNORE INTO layout VALUES (?, ?, ?, ?)", rows)
+
+    def reset(self) -> None:
+        self._db.execute("DELETE FROM layout")

@@ -30,10 +30,10 @@ def test_open_query_parameter_overrides_the_defaults() -> None:
     html = render.dashboard_page(
         _dashboard(), refreshing=False, open_keys={"github", "github.feedback"}
     )
-    assert "<details class='group' data-key='github' open>" in html
+    assert "<details class='group' data-key='github' data-drag open>" in html
     assert "<details class='group' data-key='act'>" in html
-    assert "<details class='panel empty' data-key='github.feedback' open>" in html
-    assert "<details class='panel' data-key='slack.nudges'>" in html
+    assert "<details class='panel empty' data-key='github.feedback' data-drag open>" in html
+    assert "<details class='panel' data-key='slack.nudges' data-drag>" in html
     everything_closed = render.dashboard_page(_dashboard(), refreshing=False, open_keys=set())
     assert " open>" not in everything_closed
 
@@ -42,7 +42,7 @@ def test_only_act_now_is_open_by_default() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=False)
     assert "<details class='group' data-key='act' open><summary><h2>Act now</h2>" in html
     assert (
-        "<details class='group' data-key='slack'><summary><h2>Slack</h2>"
+        "<details class='group' data-key='slack' data-drag><summary><h2>Slack</h2>"
         "<span class='count'>1</span>" in html
     )
     keys = re.findall(r"<details class='group' data-key='(\w+)'", html)
@@ -66,8 +66,8 @@ def test_refreshing_disables_the_button_and_reloads_sooner() -> None:
 def test_sections_carry_keys_for_the_open_state_script() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=False)
     assert "<details class='group' data-key='act' open>" in html
-    assert "<details class='panel' data-key='slack.nudges' open>" in html
-    assert "<details class='panel empty' data-key='github.needs_reviewer'>" in html
+    assert "<details class='panel' data-key='slack.nudges' data-drag open>" in html
+    assert "<details class='panel empty' data-key='github.needs_reviewer' data-drag>" in html
     assert "details[data-key]" in html and "'?open=' + open" in html
     assert "if (open === saved) return;" in html
     # No [git_stack], so the Stacks panel is absent and git's group still renders.

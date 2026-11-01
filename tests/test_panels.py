@@ -18,6 +18,7 @@ from conftest import (
 )
 
 from move_forward import panels
+from move_forward.page import Group
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
@@ -362,3 +363,26 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
         "github.ci_failures",
         "github.conflicts",
     }
+
+
+def test_a_layout_orders_groups_and_panels_with_act_now_first_and_new_ones_in_place() -> None:
+    act = Group(key="act", title="Act now", panel_keys=["a.x", "a.y"], open=True)
+    defaults = [
+        act,
+        Group(key="notes", title="Notes", panel_keys=["notes.todos", "notes.iced"]),
+        Group(key="git", title="Git", panel_keys=["git.local_work", "git.cleanup"]),
+        Group(key="jira", title="Jira", panel_keys=["jira.next"]),
+    ]
+    layout = panels.Layout(
+        groups=["git", "act", "notes"],  # jira is new to it; Act now stays first anyway
+        panels={"act": ["a.y", "a.x"], "git": ["git.cleanup"]},  # local_work is new
+    )
+    laid = panels.laid_out(defaults, layout)
+    assert [g.key for g in laid] == ["act", "git", "jira", "notes"]  # jira after git, as before
+    assert [g.panel_keys for g in laid] == [
+        ["a.y", "a.x"],
+        ["git.local_work", "git.cleanup"],  # first by default, so first still
+        ["jira.next"],
+        ["notes.todos", "notes.iced"],
+    ]
+    assert panels.laid_out(defaults, panels.Layout()) == defaults

@@ -10,11 +10,15 @@ from pathlib import Path
 from typing import cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+from pydantic import ValidationError
+
 from . import auth, render, shell
 from .config import Config
 from .db import Database
+from .panels import Layout
 from .plugin import KEPT, ActionError
 from .refresh import build_dashboard, kept_item, perform_action, plugin_page, refresh
+from .repositories import LayoutRepository
 
 log = logging.getLogger(__name__)
 
@@ -283,6 +287,18 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if url.path == "/refresh":
                 app.request_refresh()
                 self._redirect(_back_to_page(url.query))
+            elif url.path == "/layout":
+                try:
+                    layout = Layout.model_validate_json(self._read_body())
+                except ValidationError:
+                    self._html(HTTPStatus.BAD_REQUEST, "<p>Not a layout.</p>")
+                    return
+                LayoutRepository(app.db).save(layout)
+                self.send_response(HTTPStatus.NO_CONTENT)
+                self.end_headers()
+            elif url.path == "/layout/reset":
+                LayoutRepository(app.db).reset()
+                self._redirect(_back_to_page(url.query, "layout reset"))
             elif url.path.startswith("/actions/"):
                 name = url.path[len("/actions/") :]
                 fields = _form_fields(self._read_body())

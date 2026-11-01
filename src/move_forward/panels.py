@@ -8,6 +8,9 @@ step order); focus mode goes through them as the page shows them.
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Annotated
+
+from pydantic import Field
 
 from .domain import Model
 from .page import Action, Group, Item, Panel, SourceStatus
@@ -44,6 +47,45 @@ def groups(plugins: list[PluginPanels]) -> list[Group]:
     for plugin, panels in rest:
         result.append(Group(key=plugin.key, title=plugin.title, panel_keys=_by_priority(panels)))
     return result
+
+
+MAX_LAYOUT_KEYS = 500
+"""More groups or panels than any page has: a bound on what `POST /layout` stores."""
+
+
+class Layout(Model):
+    """The page's order, as someone dragged it: groups in order, and each group's panels."""
+
+    groups: list[Annotated[str, Field(max_length=200)]] = Field(
+        default_factory=list[str], max_length=MAX_LAYOUT_KEYS
+    )
+    panels: dict[str, list[Annotated[str, Field(max_length=200)]]] = Field(
+        default_factory=dict[str, list[str]], max_length=MAX_LAYOUT_KEYS
+    )
+
+
+def _arranged(default: list[str], stored: list[str]) -> list[str]:
+    """`default` in the `stored` order. One `stored` doesn't mention (a new plugin or panel)
+    stays right after the one before it in `default`, or first if it was first."""
+    position = {key: n for n, key in enumerate(stored)}
+    keyed: list[tuple[float, int, str]] = []
+    last = -1.0
+    for n, key in enumerate(default):
+        last = position[key] if key in position else last + 0.001
+        keyed.append((last, n, key))
+    return [key for _, _, key in sorted(keyed)]
+
+
+def laid_out(groups: list[Group], layout: Layout) -> list[Group]:
+    """`groups` in the layout's order, Act now first whatever it says, each with its panels
+    in the layout's order."""
+    act_now = [g for g in groups if g.key == ACT_NOW]
+    rest = {g.key: g for g in groups if g.key != ACT_NOW}
+    ordered = [rest[key] for key in _arranged(list(rest), layout.groups)]
+    return [
+        g.model_copy(update={"panel_keys": _arranged(g.panel_keys, layout.panels.get(g.key, []))})
+        for g in act_now + ordered
+    ]
 
 
 FOCUS_ALL = "all"
@@ -149,10 +191,11 @@ def build(
     login: str = "",
     item_actions: ItemActions = _no_item_actions,
     hidden: Hidden = _nothing_hidden,
+    layout: Layout | None = None,
 ) -> Dashboard:
     """The dashboard: the plugins' panels in their groups, without hidden items, each item with
-    the plugins' buttons, sorted. A panel's key is its plugin's name and its own, e.g.
-    `github.conflicts`, so two plugins' panels never clash."""
+    the plugins' buttons, sorted, in the `layout`'s order. A panel's key is its plugin's name
+    and its own, e.g. `github.conflicts`, so two plugins' panels never clash."""
     plugins = [
         PluginPanels(
             plugin.key,
@@ -169,6 +212,6 @@ def build(
             for plugin in plugins
             for panel in plugin.panels
         ],
-        groups=groups(plugins),
+        groups=laid_out(groups(plugins), layout or Layout()),
         sources=sources,
     )

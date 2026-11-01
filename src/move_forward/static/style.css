@@ -66,6 +66,10 @@ header h1 a { color: inherit; text-decoration: none; }
 
 footer { color: var(--muted); font-size: 12px; flex-wrap: wrap; justify-content: flex-start; }
 footer .error { color: var(--warn); }
+footer form { margin: 0 0 0 auto; }
+footer button { font-size: 12px; }
+
+details[data-drag] > summary[draggable="true"] { cursor: grab; }
 
 main { padding: 0 16px 16px; }
 main.single { max-width: 720px; margin: 0 auto; padding-top: 16px; }

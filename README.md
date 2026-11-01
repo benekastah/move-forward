@@ -167,6 +167,10 @@ The page has **Act now** (reviews for me, conflicts, feedback, CI) on top,
 then a collapsible group per enabled plugin holding the rest of its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
 their most urgent panel: notes (todos), git, git_stack, github, slack, jira.
+Drag a group's or a panel's title to move it (a panel within its group; Act
+now stays first); the order is kept in the database, and focus mode follows
+it. A group or panel new since then goes after the one it followed by default.
+Reset layout, in the footer, goes back to the default order.
 Only Act now starts expanded; each panel inside a group collapses too.
 
 - **Reviews for me**: PRs requesting my review as a person, and PRs I reviewed
@@ -267,6 +271,10 @@ Pages (GET, HTML):
 
 Plugins can add pages of their own; the [Plugins](#plugins) section lists them.
 
+`POST /layout` (JSON, sent by the page's drag script) stores the page's order:
+`{"groups": [group keys], "panels": {group key: [panel keys]}}`. It answers
+`204 No Content`, or `400` for a body that isn't one.
+
 Forms (POST, `application/x-www-form-urlencoded`). A plugin's buttons post to
 `/actions/<plugin>/<action>`; the rest are core's. Each answers `303 See Other`
 to `/`, or to the `back` query parameter when it's a local path, with
@@ -276,6 +284,7 @@ error status):
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/refresh` | | Starts a background refresh. |
+| `/layout/reset` | | Forgets the dragged order of groups and panels. |
 | `/actions/notes/todo_add` | `entry`, `text` (or `input`), optional `size` (`quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds an open todo at the end of the entry's; with `create`, a missing entry is created first, with `where` as its `Where`. |
 | `/actions/notes/todo_done` | `todo` (its id) | Records the todo as done today; redirects with `kept=notes:<id>`, so the focus page keeps it, ticked, to undo. |
 | `/actions/notes/todo_undone` | `todo` | Reopens a done todo. |
@@ -320,7 +329,7 @@ Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
 `dashboard.db` holds what each plugin last fetched, in that plugin's own
 tables (kept when a refresh fails, with the error shown alongside), the
-notes in the notes plugin's tables, where pings go and the pings sent in the
+notes in the notes plugin's tables, the page's dragged order (core's `layout`), where pings go and the pings sent in the
 slack plugin's, and reviewers' emails in the github plugin's (from `mfd github
 import`, or looked up from commits). It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.

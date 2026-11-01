@@ -4,7 +4,7 @@ from html import escape
 from urllib.parse import urlencode
 
 from .page import Action, Group, Item, Link, Panel, age
-from .panels import FOCUS_ALL, Dashboard
+from .panels import ACT_NOW, FOCUS_ALL, Dashboard
 
 PAGE_RELOAD_SECONDS = 60
 REFRESHING_RELOAD_SECONDS = 10
@@ -32,6 +32,37 @@ OPEN_SECTIONS_SCRIPT = (
     " });"
 )
 """Keeps the open sections in the URL across reloads and button presses; see inside."""
+LAYOUT_SCRIPT = (
+    # Dragging a group's or a panel's summary moves it among its siblings (a panel stays in
+    # its group, and Act now, which has no data-drag, stays first), then posts the page's
+    # whole order to /layout. Without the script the page keeps its order.
+    "document.addEventListener('DOMContentLoaded', () => {"
+    " let dragged = null;"
+    " const save = () => {"
+    "  const groups = [...document.querySelectorAll('main > details.group')];"
+    "  const panels = {};"
+    "  for (const g of groups) panels[g.dataset.key] ="
+    "   [...g.querySelectorAll(':scope > .panels > details.panel')].map((p) => p.dataset.key);"
+    "  fetch('/layout', { method: 'POST', headers: { 'Content-Type': 'application/json' },"
+    "   body: JSON.stringify({ groups: groups.map((g) => g.dataset.key), panels }) }); };"
+    " for (const el of document.querySelectorAll('details[data-drag]')) {"
+    "  const summary = el.querySelector(':scope > summary');"
+    "  summary.draggable = true;"
+    "  summary.addEventListener('dragstart', (e) => { dragged = el;"
+    "   e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', el.dataset.key); });"
+    "  summary.addEventListener('dragend', () => { dragged = null; });"
+    "  const sibling = () => dragged && dragged !== el && dragged.parentElement === el.parentElement;"
+    "  el.addEventListener('dragover', (e) => { if (sibling()) e.preventDefault(); });"
+    "  el.addEventListener('drop', (e) => {"
+    "   if (!sibling()) return;"
+    "   e.preventDefault(); e.stopPropagation();"
+    "   const box = el.getBoundingClientRect();"
+    "   el.parentElement.insertBefore(dragged, e.clientY > box.top + box.height / 2 ? el.nextSibling : el);"
+    "   save(); });"
+    " }"
+    " });"
+)
+"""Reorders groups and panels by dragging their summaries, and stores the order; see inside."""
 FOCUS_KEYS_SCRIPT = (
     "document.addEventListener('keydown', (e) => {"
     " if (e.target.closest('input, textarea')) return;"
@@ -73,7 +104,7 @@ def _head(title: str, reload_seconds: int | None) -> str:
     if reload_seconds:
         reload = (
             f'<noscript><meta http-equiv="refresh" content="{reload_seconds}"></noscript>'
-            f"<script>{OPEN_SECTIONS_SCRIPT}</script>"
+            f"<script>{OPEN_SECTIONS_SCRIPT}</script><script>{LAYOUT_SCRIPT}</script>"
         )
         body = f"<body data-reload='{reload_seconds}'>"
     else:
@@ -179,7 +210,7 @@ def _panel(panel: Panel, open_keys: set[str] | None) -> str:
     items = "".join(_item(item) for item in panel.items)
     return (
         f"<details class='panel{'' if panel.items else ' empty'}' data-key='{_e(panel.key)}'"
-        f"{open_attr}>"
+        f" data-drag{open_attr}>"
         f"<summary><h2>{_e(panel.title)}</h2><span class='count'>{len(panel.items)}</span>"
         f"<span class='description'>{_e(panel.description)}</span></summary>"
         f"{_actions(panel.actions)}<ul class='items'>{items}</ul></details>"
@@ -191,7 +222,9 @@ def _group(group: Group, dashboard: Dashboard, open_keys: set[str] | None) -> st
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
     count = sum(len(panel.items) for panel in panels)
     return (
-        f"<details class='group' data-key='{_e(group.key)}'{_open(group.key, group.open, open_keys)}>"
+        f"<details class='group' data-key='{_e(group.key)}'"
+        + (" data-drag" if group.key != ACT_NOW else "")
+        + f"{_open(group.key, group.open, open_keys)}>"
         f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span></summary>"
         "<div class='panels'>"
         + "".join(_panel(panel, open_keys) for panel in panels)
@@ -240,7 +273,9 @@ def dashboard_page(
         "<main>"
         + "".join(_group(group, dashboard, open_keys) for group in dashboard.groups)
         + "</main>"
-        f"<footer>{_sources(dashboard)}</footer></body></html>"
+        f"<footer>{_sources(dashboard)}<form method='post' action='/layout/reset'>"
+        "<button type='submit' class='secondary'>Reset layout</button></form></footer>"
+        "</body></html>"
     )
 
 

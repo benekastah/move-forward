@@ -17,7 +17,7 @@ from .page import Action, Item, SourceStatus
 from .plugin import ActionError, ActionResult, collect_into
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, enabled
-from .repositories import SnapshotRepository
+from .repositories import LayoutRepository, SnapshotRepository
 from .shell import CommandError
 
 log = logging.getLogger(__name__)
@@ -118,7 +118,10 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
             return False
         return any(graph.hidden(s) for s in item.subjects)
 
-    return panels.build(now, plugin_panels, sources, me.id if me else "", item_actions, hidden)
+    layout = LayoutRepository(db).load()
+    return panels.build(
+        now, plugin_panels, sources, me.id if me else "", item_actions, hidden, layout
+    )
 
 
 def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[str]]) -> str | None:

@@ -12,12 +12,14 @@ from move_forward import server
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.page import Action, Item
+from move_forward.panels import Layout
 from move_forward.plugin import KEPT, ActionError, ActionResult
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import migrate
+from move_forward.repositories import LayoutRepository
 
 
 @pytest.fixture
@@ -227,7 +229,7 @@ def test_actions_run_and_redirect_with_a_notice(
 
 def test_open_parameter_is_rendered_and_kept_through_refresh(client: HTTPConnection) -> None:
     body = get(client, "/?open=github").read().decode()
-    assert "<details class='group' data-key='github' open>" in body
+    assert "<details class='group' data-key='github' data-drag open>" in body
     assert "<details class='group' data-key='act'>" in body
     response = post(client, "/refresh?open=", {})
     assert response.getheader("Location") == "/?open="
@@ -381,3 +383,47 @@ def test_the_token_stays_out_of_the_log(
     with caplog.at_level("DEBUG", logger="move_forward.server"):
         get(client, f"/login?token={TOKEN}", {}).read()
     assert "/login?token=" in caplog.text and TOKEN not in caplog.text
+
+
+def _post_layout(
+    client: HTTPConnection, body: str, headers: dict[str, str] | None = None
+) -> HTTPResponse:
+    client.request(
+        "POST",
+        "/layout",
+        body=body,
+        headers={"Content-Type": "application/json", **SIGNED_IN, **(headers or {})},
+    )
+    return client.getresponse()
+
+
+def test_the_page_keeps_the_order_dragged_into_it_until_reset(
+    client: HTTPConnection, app: server.App
+) -> None:
+    panels = '["github.held", "github.metadata", "github.needs_reviewer", "github.team_prs"]'
+    layout = f'{{"groups": ["slack", "github"], "panels": {{"github": {panels}}}}}'
+    response = _post_layout(client, layout)
+    assert response.status == 204
+    response.read()
+    page = get(client, "/").read().decode()
+    assert page.index("data-key='slack'") < page.index("data-key='github'")
+    assert page.index("data-key='github.held'") < page.index("data-key='github.metadata'")
+    response = post(client, "/layout/reset", {})
+    assert response.status == 303 and response.getheader("Location") == "/?notice=layout+reset"
+    response.read()
+    assert LayoutRepository(app.db).load() == Layout()
+
+
+def test_a_layout_is_refused_from_another_site_without_the_token_or_malformed(
+    client: HTTPConnection, app: server.App
+) -> None:
+    layout = '{"groups": ["slack"]}'
+    for headers in ({"Origin": "https://evil.example"}, {"Authorization": "Bearer wrong"}):
+        response = _post_layout(client, layout, headers)
+        assert response.status in (401, 403)
+        response.read()
+    for body in ("not json", '{"groups": "slack"}', '{"groups": ["' + "x" * 300 + '"]}'):
+        response = _post_layout(client, body)
+        assert response.status == 400
+        response.read()
+    assert LayoutRepository(app.db).load() == Layout()
