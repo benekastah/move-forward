@@ -1,10 +1,13 @@
-"""The dashboard's certificate, so `mfd serve` can answer on https://127.0.0.1.
+"""The dashboard's certificates, so `mfd serve` can answer on https://127.0.0.1.
 
-`mfd cert` makes a local certificate authority and, with it, a server certificate for
-`127.0.0.1`, `localhost` and `::1`. The authority can only vouch for those names (its name
-constraints say so), and its private key is never written down: it signs the server
-certificate and is dropped, so nothing on disk can make a certificate the browser would
-trust for anything else. Renewing makes a new authority, to trust again.
+`mfd cert` makes a local certificate authority and, with it, a chain of server
+certificates for `127.0.0.1`, `localhost` and `::1`, each starting a little before the one
+before it ends, so they cover years between them. The authority can only vouch for those
+names (its name constraints say so), and its private key is never written down: it signs
+the certificates, future ones included, and is dropped, so nothing on disk can make a
+certificate the browser would trust for anything else. `mfd serve` uses whichever is
+current, switching to the next as one nears its end; once the last ends, `mfd cert --force`
+makes a new authority, to trust again.
 
 The browser has to trust the authority (`ca.pem`) once. `mfd cert --trust` adds it to the
 system's store for my user on macOS (the login keychain) and Windows (the user's root
@@ -31,16 +34,21 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from .shell import CommandError, run
 
 VALID_DAYS = 825
-"""How long a server certificate lasts: the longest Apple's platforms accept."""
+"""How long each server certificate lasts: the longest Apple's platforms accept."""
+CHAIN_LENGTH = 3
+"""How many certificates `mfd cert` signs ahead: about six and a half years between them."""
+OVERLAP_DAYS = 25
+"""Each certificate starts this long before the one before it ends, so `mfd serve` moves to
+it well before the old one does."""
 RENEW_WITHIN_DAYS = 30
-"""`mfd check` warns when the certificate ends sooner than this."""
+"""`mfd check` and the page warn when the last certificate ends sooner than this."""
 NAMES = ["localhost"]
 ADDRESSES = [ipaddress.ip_address("127.0.0.1"), ipaddress.ip_address("::1")]
 
 
 @dataclass(frozen=True)
 class Paths:
-    """Where the certificate lives: `tls/` next to the database (and its sign-in token)."""
+    """Where the certificates live: `tls/` next to the database (and its sign-in token)."""
 
     dir: Path
 
@@ -52,26 +60,35 @@ class Paths:
     def ca(self) -> Path:
         return self.dir / "ca.pem"
 
-    @property
-    def cert(self) -> Path:
-        return self.dir / "cert.pem"
-
-    @property
-    def key(self) -> Path:
-        return self.dir / "key.pem"
+    def certs(self) -> list[tuple[Path, Path]]:
+        """Each certificate of the chain with its key, the first first."""
+        return [
+            (self.dir / f"cert-{n}.pem", self.dir / f"key-{n}.pem")
+            for n in range(1, CHAIN_LENGTH + 1)
+        ]
 
     def ready(self) -> bool:
-        return self.cert.exists() and self.key.exists()
+        return any(cert.exists() and key.exists() for cert, key in self.certs())
 
 
 def _name(common_name: str) -> x509.Name:
     return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
 
 
+def _windows(now: datetime) -> list[tuple[datetime, datetime]]:
+    """When each certificate of a chain made `now` is valid."""
+    start = now - timedelta(minutes=5)
+    step = timedelta(days=VALID_DAYS - OVERLAP_DAYS)
+    return [
+        (start + n * step, start + n * step + timedelta(days=VALID_DAYS))
+        for n in range(CHAIN_LENGTH)
+    ]
+
+
 def make(paths: Paths, now: datetime | None = None) -> None:
-    """Make a new authority and server certificate in `paths`, replacing any there."""
+    """Make a new authority and chain of certificates in `paths`, replacing any there."""
     now = now or datetime.now(UTC)
-    until = now + timedelta(days=VALID_DAYS)
+    windows = _windows(now)
     ca_key = ec.generate_private_key(ec.SECP256R1())
     ca_name = _name(f"move-forward local CA {now:%Y-%m-%d}")
     ca = (
@@ -80,8 +97,8 @@ def make(paths: Paths, now: datetime | None = None) -> None:
         .issuer_name(ca_name)
         .public_key(ca_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(minutes=5))
-        .not_valid_after(until)
+        .not_valid_before(windows[0][0])
+        .not_valid_after(windows[-1][1])
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
         .add_extension(
             x509.KeyUsage(
@@ -111,43 +128,44 @@ def make(paths: Paths, now: datetime | None = None) -> None:
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), False)
         .sign(ca_key, hashes.SHA256())
     )
-    key = ec.generate_private_key(ec.SECP256R1())
-    cert = (
-        x509.CertificateBuilder()
-        .subject_name(_name("move-forward"))
-        .issuer_name(ca_name)
-        .public_key(key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(minutes=5))
-        .not_valid_after(until)
-        .add_extension(
-            x509.SubjectAlternativeName(
-                [*(x509.DNSName(name) for name in NAMES), *map(x509.IPAddress, ADDRESSES)]
-            ),
-            critical=False,
-        )
-        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-        .add_extension(
-            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), False
-        )
-        .sign(ca_key, hashes.SHA256())
-    )
     paths.dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     paths.ca.write_bytes(ca.public_bytes(serialization.Encoding.PEM))
-    # The server certificate carries its chain, so a browser that trusts the authority
-    # needn't be given it.
-    paths.cert.write_bytes(
-        cert.public_bytes(serialization.Encoding.PEM) + ca.public_bytes(serialization.Encoding.PEM)
-    )
-    _write_private(
-        paths.key,
-        key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        ),
-    )
+    for (cert_path, key_path), (start, end) in zip(paths.certs(), windows, strict=True):
+        key = ec.generate_private_key(ec.SECP256R1())
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(_name("move-forward"))
+            .issuer_name(ca_name)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(start)
+            .not_valid_after(end)
+            .add_extension(
+                x509.SubjectAlternativeName(
+                    [*(x509.DNSName(name) for name in NAMES), *map(x509.IPAddress, ADDRESSES)]
+                ),
+                critical=False,
+            )
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+            .add_extension(
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), False
+            )
+            .sign(ca_key, hashes.SHA256())
+        )
+        # Each carries its chain, so a browser that trusts the authority needn't be given it.
+        cert_path.write_bytes(
+            cert.public_bytes(serialization.Encoding.PEM)
+            + ca.public_bytes(serialization.Encoding.PEM)
+        )
+        _write_private(
+            key_path,
+            key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption(),
+            ),
+        )
 
 
 def _write_private(path: Path, data: bytes) -> None:
@@ -158,28 +176,57 @@ def _write_private(path: Path, data: bytes) -> None:
         f.write(data)
 
 
+def _window(cert: Path) -> tuple[datetime, datetime]:
+    loaded = x509.load_pem_x509_certificate(cert.read_bytes())
+    return loaded.not_valid_before_utc, loaded.not_valid_after_utc
+
+
+def current(paths: Paths, now: datetime | None = None) -> tuple[Path, Path] | None:
+    """The certificate (and key) to serve with now: of those valid now, the one with the
+    most time left, so the next takes over as soon as it starts; None when none is."""
+    now = now or datetime.now(UTC)
+    valid = [
+        (end, (cert, key))
+        for cert, key in paths.certs()
+        if cert.exists() and key.exists()
+        for start, end in [_window(cert)]
+        if start <= now < end
+    ]
+    return max(valid)[1] if valid else None
+
+
 def expires(paths: Paths) -> datetime:
-    """When the server certificate ends."""
-    return x509.load_pem_x509_certificate(paths.cert.read_bytes()).not_valid_after_utc
+    """When the last certificate of the chain ends: when `mfd cert` must run again."""
+    return max(_window(cert)[1] for cert, _ in paths.certs() if cert.exists())
 
 
 def problem(paths: Paths, now: datetime | None = None) -> str | None:
-    """What's wrong with the certificate, for `mfd check`: missing, ended, or ending soon."""
+    """What's wrong with the certificates, for `mfd check` and the page: missing, ended, or
+    the last ending soon."""
     if not paths.ready():
         return f"no certificate in {paths.dir}; `mfd cert` makes one (until then, plain HTTP)"
-    left = expires(paths) - (now or datetime.now(UTC))
-    if left <= timedelta(0):
-        return "the certificate has ended; `mfd cert` makes a new one (trust it again)"
+    now = now or datetime.now(UTC)
+    left = expires(paths) - now
+    if left <= timedelta(0) or current(paths, now) is None:
+        return "the certificates have ended; `mfd cert --force --trust` makes new ones"
     if left < timedelta(days=RENEW_WITHIN_DAYS):
-        return f"the certificate ends in {left.days} days; `mfd cert` makes a new one"
+        return (
+            f"the last certificate ends in {left.days} days; `mfd cert --force --trust` makes"
+            " new ones"
+        )
     return None
 
 
-def context(paths: Paths) -> ssl.SSLContext:
-    """A server context with the certificate, TLS 1.2 or newer."""
+def context(paths: Paths, now: datetime | None = None) -> ssl.SSLContext:
+    """A server context with the current certificate, TLS 1.2 or newer; with none current,
+    the one that ended last, so the browser says why."""
+    chosen = current(paths, now) or max(
+        ((cert, key) for cert, key in paths.certs() if cert.exists()),
+        key=lambda pair: _window(pair[0])[1],
+    )
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-    ctx.load_cert_chain(paths.cert, paths.key)
+    ctx.load_cert_chain(*chosen)
     return ctx
 
 

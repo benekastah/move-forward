@@ -267,16 +267,18 @@ def dashboard_page(
     refreshing: bool,
     notice: str = "",
     open_keys: set[str] | None = None,
+    warning: str = "",
 ) -> str:
     """The page.
 
     `notice` is the outcome of an action just run, shown in the header. `open_keys` are the
     sections the `open` query parameter says are open; None means the parameter was absent
-    and the defaults apply.
+    and the defaults apply. `warning` is something to fix, e.g. certificates ending soon.
     """
     status = "refreshing…" if refreshing else f"built {dashboard.generated_at:%H:%M}"
     reload_seconds = REFRESHING_RELOAD_SECONDS if refreshing else PAGE_RELOAD_SECONDS
     notice_html = f"<span class='notice'>{_e(notice)}</span>" if notice else ""
+    notice_html += f"<span class='notice warn'>{_e(warning)}</span>" if warning else ""
     return (
         _head("Move forward", reload_seconds) + f"<header><h1>{LOGO}</h1><div class='header-right'>"
         f"{notice_html}<span>{_e(status)}</span>"

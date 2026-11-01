@@ -5,6 +5,8 @@ import re
 import ssl
 import threading
 import time
+from collections.abc import Callable
+from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +34,8 @@ STATIC_FILES = {
 """Served paths to the file in `STATIC_DIR` and its content type."""
 MAX_BODY_BYTES = 64 * 1024
 TLS_HANDSHAKE_SECONDS = 10
+TLS_RECHECK_SECONDS = 3600
+"""How often the HTTPS server looks for a newer certificate in the chain."""
 """A connection that hasn't finished its TLS handshake by then is dropped."""
 LOGIN_PATH = "/login"
 NOT_SIGNED_IN = "<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
@@ -114,8 +118,9 @@ class App:
     def dashboard_page(self, notice: str = "", open_keys: set[str] | None = None) -> str:
         """The page from stored data; a page load also refreshes stale data in the background."""
         self.refresh_if_stale()
+        warning = tls.problem(tls.Paths.beside(self.config.db_path)) if self.config.https else None
         return render.dashboard_page(
-            build_dashboard(self.config, self.db), self.refreshing, notice, open_keys
+            build_dashboard(self.config, self.db), self.refreshing, notice, open_keys, warning or ""
         )
 
     def run_action(self, name: str, fields: dict[str, str]) -> tuple[str, dict[str, str]]:
@@ -329,21 +334,35 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
 
 class _TLSServer(ThreadingHTTPServer):
     """Serves HTTPS: each connection's handshake happens in its own thread, so a client that
-    stalls in it holds up only itself."""
+    stalls in it holds up only itself. It serves with the chain's current certificate,
+    looking again every `TLS_RECHECK_SECONDS`, so it moves to the next by itself."""
 
     def __init__(
         self,
         address: tuple[str, int],
         handler: type[BaseHTTPRequestHandler],
-        context: ssl.SSLContext,
+        paths: tls.Paths,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ):
-        self._context = context
+        self._paths = paths
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._context = tls.context(paths, clock())
+        self._checked = time.monotonic()
         super().__init__(address, handler)
+
+    def context(self) -> ssl.SSLContext:
+        """The context for a new connection: with the certificate current now."""
+        with self._lock:
+            if time.monotonic() - self._checked >= TLS_RECHECK_SECONDS:
+                self._context = tls.context(self._paths, self._clock())
+                self._checked = time.monotonic()
+            return self._context
 
     def finish_request(self, request: Any, client_address: Any) -> None:
         request.settimeout(TLS_HANDSHAKE_SECONDS)
         try:
-            tls_request = self._context.wrap_socket(request, server_side=True)
+            tls_request = self.context().wrap_socket(request, server_side=True)
         except (ssl.SSLError, OSError):  # plain HTTP to the HTTPS port, a scan, a timeout
             return
         tls_request.settimeout(None)
@@ -366,8 +385,8 @@ def serve(config: Config, db: Database, token: str, port: int | None = None) -> 
     threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
     address = ("127.0.0.1", port or config.port)
     if served == "https":
-        context = tls.context(tls.Paths.beside(config.db_path))
-        server: ThreadingHTTPServer = _TLSServer(address, make_handler(app), context)
+        paths = tls.Paths.beside(config.db_path)
+        server: ThreadingHTTPServer = _TLSServer(address, make_handler(app), paths)
     else:
         if config.https:
             log.warning("no certificate yet, so plain HTTP: `mfd cert` makes one")

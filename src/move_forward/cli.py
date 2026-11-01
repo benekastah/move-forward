@@ -135,12 +135,18 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
 
 
 def _cert(paths: tls.Paths, force: bool, trust: bool) -> int:
-    """`mfd cert`: make the certificate unless one is there, and trust it if asked."""
+    """`mfd cert`: make the certificates unless they're there, and trust them if asked."""
     if paths.ready() and not force:
-        print(f"{paths.cert} is there (until {tls.expires(paths):%Y-%m-%d}); --force replaces it")
+        print(
+            f"certificates in {paths.dir} cover until {tls.expires(paths):%Y-%m-%d};"
+            " --force replaces them"
+        )
     else:
         tls.make(paths)
-        print(f"made {paths.cert}, until {tls.expires(paths):%Y-%m-%d}; `mfd serve` uses it")
+        print(
+            f"made certificates in {paths.dir} covering until {tls.expires(paths):%Y-%m-%d};"
+            " `mfd serve` moves from one to the next by itself"
+        )
     if trust:
         for line in tls.trust(paths):
             print(line)

@@ -23,15 +23,17 @@ mfd cert --trust                # a certificate for https://127.0.0.1, trusted b
 mfd serve --open
 ```
 
-`mfd cert` makes a certificate for `127.0.0.1` and `localhost`, signed by a local
-authority that can vouch for nothing else (its key is used once and thrown away), so `mfd
-serve` answers on `https://`. `--trust` adds the authority (`tls/ca.pem`, next to the
+`mfd cert` makes certificates for `127.0.0.1` and `localhost`, signed by a local
+authority that can vouch for nothing else (its key signs them and is thrown away), so `mfd
+serve` answers on `https://`. It signs three ahead, each starting 25 days before the one
+before it ends, and `mfd serve` moves to the next by itself, without a restart: about six
+and a half years without renewing. `--trust` adds the authority (`tls/ca.pem`, next to the
 database) to macOS's keychain or Windows's user store, and, where NSS's `certutil` is
 installed (`libnss3-tools`, `nss-tools`), to Firefox's profiles and Chrome's store on
 Linux; elsewhere, import it as an authority in the browser's certificate settings.
-Without a certificate, or with `https = false`, the dashboard stays on plain HTTP. The
-certificate lasts 825 days; `mfd check` warns before it ends, and `mfd cert --force` makes
-a new one (trust it again).
+Without a certificate, or with `https = false`, the dashboard stays on plain HTTP. The page
+and `mfd check` warn 30 days before the last certificate ends; `mfd cert --force --trust`
+then makes a new authority and chain, trusted again.
 
 `install.sh` ends with `mfd init` when there is no config yet: it asks for
 your email, which plugins to set up (github, git, and git_stack when it's
@@ -97,7 +99,7 @@ before the command's name.
 | `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`; `--open` opens it signed in, like `mfd open`. It restarts when the config file changes, once the new config passes `mfd check` (run in a separate process); if it fails, the error is logged, the running server carries on, and the next change tries again. |
 | `mfd open [--port N]` | Open the running dashboard in a browser, signed in (see [API](#api)). |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
-| `mfd cert [--trust] [--force]` | Make the certificate `mfd serve` uses for HTTPS, unless one is there (`--force` replaces it); `--trust` adds its authority to the system's and browsers' stores. |
+| `mfd cert [--trust] [--force]` | Make the certificates `mfd serve` uses for HTTPS, unless they're there (`--force` replaces them); `--trust` adds their authority to the system's and browsers' stores. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |

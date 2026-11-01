@@ -25,8 +25,9 @@ def test_the_certificate_names_only_this_machine_and_its_authority_only_vouches_
 ) -> None:
     paths = tls.Paths(tmp_path / "tls")
     tls.make(paths)
-    assert stat.S_IMODE(paths.key.stat().st_mode) == 0o600
-    cert = x509.load_pem_x509_certificate(paths.cert.read_bytes())
+    [(first, first_key), *_] = paths.certs()
+    assert all(stat.S_IMODE(key.stat().st_mode) == 0o600 for _, key in paths.certs())
+    cert = x509.load_pem_x509_certificate(first.read_bytes())
     names = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
     assert names.get_values_for_type(x509.DNSName) == ["localhost"]
     assert [str(a) for a in names.get_values_for_type(x509.IPAddress)] == ["127.0.0.1", "::1"]
@@ -34,8 +35,7 @@ def test_the_certificate_names_only_this_machine_and_its_authority_only_vouches_
     constraints = ca.extensions.get_extension_for_class(x509.NameConstraints)
     assert constraints.critical and constraints.value.permitted_subtrees is not None
     assert not list(paths.dir.glob("*ca*key*"))  # the authority's key isn't kept
-    left = tls.expires(paths) - datetime.now(UTC)
-    assert timedelta(days=tls.VALID_DAYS - 1) < left <= timedelta(days=tls.VALID_DAYS)
+    assert first_key.exists()
 
 
 def test_check_says_when_the_certificate_is_missing_or_ending(tmp_path: Path) -> None:
@@ -43,10 +43,10 @@ def test_check_says_when_the_certificate_is_missing_or_ending(tmp_path: Path) ->
     assert tls.problem(paths) is not None and "mfd cert" in (tls.problem(paths) or "")
     tls.make(paths)
     assert tls.problem(paths) is None
-    soon = datetime.now(UTC) + timedelta(days=tls.VALID_DAYS - 10)
-    assert "ends in" in (tls.problem(paths, soon) or "")
-    later = datetime.now(UTC) + timedelta(days=tls.VALID_DAYS + 1)
-    assert "has ended" in (tls.problem(paths, later) or "")
+    last = tls.expires(paths)
+    assert tls.problem(paths, datetime.now(UTC) + timedelta(days=tls.VALID_DAYS + 1)) is None
+    assert "ends in" in (tls.problem(paths, last - timedelta(days=10)) or "")
+    assert "have ended" in (tls.problem(paths, last + timedelta(days=1)) or "")
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ def https(tmp_path: Path) -> Iterator[tuple[HTTPSConnection, tls.Paths]]:
     assert server.scheme(config) == "https"
     app = server.App(config, db, TOKEN, "https")
     httpd = server._TLSServer(  # pyright: ignore[reportPrivateUsage]
-        ("127.0.0.1", 0), server.make_handler(app), tls.context(paths)
+        ("127.0.0.1", 0), server.make_handler(app), paths
     )
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     trusting = ssl.create_default_context(cafile=paths.ca)  # verifies the name, too
@@ -153,3 +153,60 @@ def test_on_macos_the_authority_is_trusted_for_tls_only(
     monkeypatch.setattr(tls.sys, "platform", "darwin")
     command = tls.system_trust_command(tls.Paths(tmp_path))
     assert command is not None and command[command.index("-p") + 1] == "ssl"
+
+
+def test_the_chain_covers_years_and_each_certificate_takes_over_before_the_last_ends(
+    tmp_path: Path,
+) -> None:
+    now = datetime(2026, 11, 1, tzinfo=UTC)
+    paths = tls.Paths(tmp_path / "tls")
+    tls.make(paths, now)
+    first, second, third = paths.certs()
+    step = timedelta(days=tls.VALID_DAYS - tls.OVERLAP_DAYS)
+    assert tls.current(paths, now) == first
+    assert tls.current(paths, now + step - timedelta(days=1)) == first
+    assert tls.current(paths, now + step + timedelta(days=1)) == second  # during the overlap
+    assert tls.current(paths, now + 2 * step + timedelta(days=1)) == third
+    end = tls.expires(paths)
+    assert end - now > timedelta(days=6 * 365)
+    assert tls.current(paths, end + timedelta(days=1)) is None
+
+
+def test_the_server_moves_to_the_next_certificate_by_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime.now(UTC)
+    paths = tls.Paths(tmp_path / "tls")
+    tls.make(paths, now)
+    moments = [now]
+    chosen: list[tuple[Path, Path] | None] = []
+    real_context = tls.context
+
+    def context(paths: tls.Paths, when: datetime | None = None) -> ssl.SSLContext:
+        chosen.append(tls.current(paths, when))
+        return real_context(paths, when)
+
+    monkeypatch.setattr(server.tls, "context", context)
+    monkeypatch.setattr(server, "TLS_RECHECK_SECONDS", 0)
+    app = server.App(Config(email="me@x", db_path=tmp_path / "d.db"), Database(":memory:"), TOKEN)
+    httpd = server._TLSServer(  # pyright: ignore[reportPrivateUsage]
+        ("127.0.0.1", 0), server.make_handler(app), paths, clock=lambda: moments[-1]
+    )
+    try:
+        moments.append(now + timedelta(days=tls.VALID_DAYS - tls.OVERLAP_DAYS + 1))
+        httpd.context()
+        assert chosen == [paths.certs()[0], paths.certs()[1]]
+    finally:
+        httpd.server_close()
+
+
+def test_the_page_says_when_there_is_no_certificate_or_it_ends_soon(tmp_path: Path) -> None:
+    config = Config(email="me@x", db_path=tmp_path / "dashboard.db")
+    db = Database(config.db_path)
+    migrate(config, db)
+    app = server.App(config, db, TOKEN)
+    assert "<span class='notice warn'>no certificate" in app.dashboard_page()
+    tls.make(tls.Paths.beside(config.db_path))
+    assert "notice warn" not in app.dashboard_page()
+    elsewhere = config.model_copy(update={"https": False, "db_path": tmp_path / "x" / "d.db"})
+    assert "notice warn" not in server.App(elsewhere, db, TOKEN).dashboard_page()  # off
