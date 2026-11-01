@@ -22,8 +22,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5e. Plugin tables instead of JSON
 
-- Core: `store` and `load` hooks on `Plugin`, with JSON defaults, called by `refresh` and
-  `Enabled.snapshot` in place of writing `snapshots.payload` directly.
 - One branch per plugin, moving its fetched data into its own tables: github (including
   what was the `github.derived` snapshot), git, git_stack, jira. Each migration copies the
   stored JSON snapshot into the new tables, so the page isn't empty until the next refresh.

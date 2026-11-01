@@ -17,6 +17,10 @@ is what's left to build.
 - Plugins never import each other or read each other's config, snapshots or
   tables. What one needs from another goes through the graph. A plugin that's
   built on another declares it in `requires`.
+- A plugin keeps what `collect` fetched with `store` and reads it back with
+  `load`. The default is JSON in core's `snapshots`; a plugin with tables of
+  its own overrides both, and core keeps only when it last fetched and why it
+  failed.
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database
   reads beyond what the plugin passes in. Everything slow happens in
   `collect` or `after_collect`, or in `collect_after` for a plugin that

@@ -33,10 +33,18 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
 def _collect_all(
     db: Database, plugins: list[Enabled], now: datetime, collect: Callable[[Enabled], BaseModel]
 ) -> None:
-    """Store each plugin's snapshot from `collect`, in parallel."""
+    """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
+    plugin's `store`."""
     with ThreadPoolExecutor(max_workers=max(1, len(plugins))) as pool:
         for e in plugins:
-            pool.submit(collect_into, db, e.name, now, lambda e=e: collect(e))
+            pool.submit(
+                collect_into,
+                db,
+                e.name,
+                now,
+                lambda e=e: collect(e),
+                lambda snapshot, e=e: e.plugin.store(e.ctx, snapshot),
+            )
 
 
 def refresh(config: Config, db: Database, now: datetime | None = None) -> None:

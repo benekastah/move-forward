@@ -13,7 +13,7 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, ClassVar, Protocol
+from typing import Any, ClassVar, Protocol, cast
 
 from pydantic import BaseModel
 
@@ -115,6 +115,18 @@ class Plugin[C: BaseModel, S: BaseModel]:
         the error is shown and the last good snapshot kept."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
+    def store(self, ctx: Context[C], snapshot: S) -> None:
+        """Keep what `collect` fetched, replacing what the last good collect kept, in one
+        transaction. The default keeps it as JSON in core's `snapshots`; a plugin with its
+        own tables overrides this and `load`."""
+        SnapshotRepository(ctx.db).save(self.name, ctx.now, snapshot)
+
+    def load(self, ctx: Context[C]) -> S | None:
+        """What the last good collect kept, for `entities` and `panels`; None before one."""
+        if self.snapshot_model is None:
+            return None
+        return cast(S | None, SnapshotRepository(ctx.db).get(self.name, self.snapshot_model))
+
     def collect_after(self, ctx: Context[C], graph: Graph) -> S:
         """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
         repos git found. Runs once their snapshots are stored, in parallel with other
@@ -187,10 +199,15 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
 
 def collect_into[T: BaseModel](
-    db: Database, source: str, now: datetime, collector: Callable[[], T]
+    db: Database,
+    source: str,
+    now: datetime,
+    collector: Callable[[], T],
+    store: Callable[[T], None] | None = None,
 ) -> T | None:
-    """Run a collector and store its result as the `source` snapshot, or its error next to
-    the last good result. Returns the result, or None if it failed."""
+    """Run a collector and keep its result: with `store` (into a plugin's tables, in one
+    transaction), else as the `source` snapshot's JSON. A failure is recorded as the source's
+    error, next to the last good result. Returns the result, or None if it failed."""
     snapshots = SnapshotRepository(db)
     try:
         result = collector()
@@ -201,5 +218,9 @@ def collect_into[T: BaseModel](
         log.debug("%s", traceback.format_exc())
         snapshots.save_error(source, now, f"{type(e).__name__}: {e}")
         return None
-    snapshots.save(source, now, result)
+    if store is None:
+        snapshots.save(source, now, result)
+    else:
+        store(result)
+        snapshots.save_fetched(source, now)
     return result

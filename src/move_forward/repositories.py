@@ -28,6 +28,15 @@ class SnapshotRepository:
             (source, fetched_at.isoformat(), payload.model_dump_json()),
         )
 
+    def save_fetched(self, source: str, fetched_at: datetime) -> None:
+        """Record a good refresh whose result the plugin stored in its own tables: the time,
+        and no error. Any payload stays as it was."""
+        self._db.execute(
+            "INSERT INTO snapshots (source, fetched_at) VALUES (?, ?)"
+            " ON CONFLICT (source) DO UPDATE SET fetched_at = excluded.fetched_at, error = NULL",
+            (source, fetched_at.isoformat()),
+        )
+
     def save_error(self, source: str, fetched_at: datetime, error: str) -> None:
         """Record a failed refresh. The previous payload, if any, is kept."""
         self._db.execute(

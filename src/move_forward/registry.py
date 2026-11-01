@@ -16,7 +16,7 @@ from .plugins.github.plugin import GitHubPlugin
 from .plugins.jira.plugin import JiraPlugin
 from .plugins.notes.plugin import NotesPlugin
 from .plugins.slack.plugin import SlackPlugin
-from .repositories import KvRepository, SnapshotRepository
+from .repositories import KvRepository
 
 if TYPE_CHECKING:
     # Only for annotations: `Config` checks `unmet_requirements` as it loads.
@@ -47,8 +47,7 @@ class Enabled:
         return self.plugin.name
 
     def snapshot(self) -> BaseModel | None:
-        model = self.plugin.snapshot_model
-        return SnapshotRepository(self.ctx.db).get(self.name, model) if model else None
+        return self.plugin.load(self.ctx)
 
 
 def enabled_names(config: "Config") -> list[str]:
