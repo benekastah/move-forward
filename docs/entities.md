@@ -6,6 +6,7 @@ entities, each named by a `Ref` (a kind and an id), with a title, an optional
 URL and state, the refs it points at, and attributes. Core builds the graph
 from every enabled plugin's entities on each refresh and page load.
 
+[graph.md](graph.md) explains how the graph is built and read, and
 [plugins.md](plugins.md) draws who publishes and who reads each kind. This
 file is the contract. Adding a kind or an attribute, or changing what one
 means, is a deliberate change: update this file in the same commit.

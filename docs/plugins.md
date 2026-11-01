@@ -1,7 +1,8 @@
 # How the plugins interact
 
 Plugins never import or call each other. Each one publishes entities to the graph and
-reads what the others publish; [entities.md](entities.md) lists every kind and attribute.
+reads what the others publish; [graph.md](graph.md) explains the graph, and
+[entities.md](entities.md) lists every kind and attribute.
 These diagrams show who publishes and who reads what. Keep them in step with the code: a
 change to what a plugin publishes or reads, to its item actions or to its `requires`
 updates this file in the same commit.

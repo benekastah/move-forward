@@ -1,8 +1,9 @@
 # Working on move-forward
 
 Notes for agents (and people) changing this repo. The README says what the
-dashboard does; `docs/entities.md` is the contract between plugins, and
-`docs/plugins.md` draws how the plugins use each other's entities; `plan.md`
+dashboard does; `docs/entities.md` is the contract between plugins,
+`docs/graph.md` explains the graph they go through, and `docs/plugins.md`
+draws how the plugins use each other's entities; `plan.md`
 is what's left to build.
 
 ## Shape of the code
@@ -48,6 +49,8 @@ is what's left to build.
     one means or who publishes it.
   - `docs/plugins.md`: a change to what a plugin publishes or reads, its item
     actions, its `requires`, or the phase it collects in.
+  - `docs/graph.md`: a change to how the graph is built or read (its methods,
+    views, kinds, `related`, `fetch`), or to the kinds in its overview diagram.
   - this file, when the shape of the code or a rule here changes, e.g. a new
     plugin hook.
   - docstrings and comments on the code you touch.
