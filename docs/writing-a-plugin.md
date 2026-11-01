@@ -228,8 +228,12 @@ default `signals`, and its items are nominated:
 Panel(..., act_now=True, signals=Signals(verb="Triage", effort="minutes"))
 ```
 
-An item can carry its own `signals` (`effort`, `closes`, `waiting`, `blocked`, `verb`),
-and a plugin can override `act_now(ctx, snapshot, graph, panels)` to nominate precisely.
+An item can carry its own `signals` (`effort`, `closes`, `waiting` and `waiting_since`,
+`importance` from 0 to 2, `due`, `blocked`, `verb`), and a plugin can override
+`act_now(ctx, snapshot, graph, panels)` to nominate precisely. Map your tool's own idea of
+importance (a priority, an escalation) onto `importance`, in the plugin. An item whose main
+subject is a unit of work (a linking kind, like a ticket) joins the best item about
+something in that unit, so give such items a `verb` that reads well after another's.
 Set `Item.fingerprint` to what would make a snoozed or dismissed item worth another look.
 
 ## Buttons, pages and commands

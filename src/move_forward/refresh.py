@@ -5,8 +5,9 @@ import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, time, timedelta
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from . import act_now, localtime, panels, shell
 from .act_now import Feedback
@@ -172,6 +173,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         layout,
         config.act_now,
         FeedbackRepository(db).all(),
+        graph.units,
     )
 
 
@@ -208,28 +210,41 @@ def kept_item(config: Config, db: Database, kept: str) -> tuple[str, Item] | Non
     return panels.panel_key(e.name, panel), item
 
 
+_MEMBERS = TypeAdapter(
+    Annotated[list[tuple[str, str, str, str]], Field(max_length=act_now.MAX_MEMBERS)]
+)
+"""An Act now button's `also`: the items joined to its own, as kind, id, verb, fingerprint."""
+
+
 def _act_now_action(db: Database, action: str, fields: dict[str, str]) -> ActionResult:
     """Act now's own buttons: snooze an item until tomorrow, dismiss it, or pin or unpin it,
-    by its main subject and verb."""
+    by its main subject and verb, and the items joined to it (`also`) alike."""
     now = datetime.now(UTC)
     try:
-        key = (fields["kind"], fields["id"], fields["verb"])
-        fingerprint = fields["fingerprint"]
+        members = [(fields["kind"], fields["id"], fields["verb"], fields["fingerprint"])]
+        members += _MEMBERS.validate_json(fields.get("also") or "[]")
     except KeyError as err:
         raise ActionError(f"missing field {err}") from err
+    except ValidationError as err:
+        raise ActionError("malformed `also`") from err
     feedback = FeedbackRepository(db)
     if action == "unpin":
-        feedback.forget(key)
+        for kind, id, verb, _ in members:
+            feedback.forget((kind, id, verb))
         return ActionResult("unpinned")
     if action == "snooze":
         local = localtime.local(now)
         tomorrow = datetime.combine(local.date() + timedelta(days=1), time(), local.tzinfo)
-        feedback.say(key, Feedback(action="snooze", fingerprint=fingerprint, until=tomorrow), now)
-        return ActionResult("snoozed until tomorrow")
-    if action in ("dismiss", "pin"):
-        feedback.say(key, Feedback(action=action, fingerprint=fingerprint), now)
-        return ActionResult("dismissed" if action == "dismiss" else "pinned")
-    raise ActionError(f"unknown action {act_now.ACTIONS}/{action}")
+        said = [Feedback(action="snooze", fingerprint=f, until=tomorrow) for *_, f in members]
+        result = "snoozed until tomorrow"
+    elif action in ("dismiss", "pin"):
+        said = [Feedback(action=action, fingerprint=f) for *_, f in members]
+        result = "dismissed" if action == "dismiss" else "pinned"
+    else:
+        raise ActionError(f"unknown action {act_now.ACTIONS}/{action}")
+    for (kind, id, verb, _), one in zip(members, said, strict=True):
+        feedback.say((kind, id, verb), one, now)
+    return ActionResult(result)
 
 
 def perform_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> ActionResult:

@@ -9,9 +9,13 @@ from conftest import (
     panel,
     pr,
     snapshot,
+    stored,
+    thread,
 )
 
+from move_forward import refresh
 from move_forward.plugins.jira.models import JiraSnapshot
+from move_forward.refresh import build_dashboard
 
 build = dashboard
 
@@ -100,3 +104,17 @@ def test_incidents_escalated_bugs_and_tickets_due_this_week_are_nominated() -> N
     assert titles[0] == "Look at the incident: APP-5 Do the thing"
     next_badges = {i.title.split()[0]: i.badges for i in panel(dashboard, "jira.jira_next").items}
     assert next_badges["APP-2"] == ["unblocked", "due Nov 2"]
+
+
+def test_a_transition_joins_its_prs_act_now_item_and_is_set_aside_with_it() -> None:
+    mine = pr(2, threads=[thread("bob")])  # its branch names APP-2
+    config, db = stored(
+        github=snapshot(mine=[mine]),
+        jira=JiraSnapshot(issues=[issue("APP-2", status="In Progress")]),
+    )
+    [item] = build_dashboard(config, db, NOW).act_now()
+    assert item.title == f"Reply: {mine.title}"
+    assert "then: Move to In Review: APP-2 Do the thing" in item.details
+    snooze = next(a for a in item.actions if a.label == "Snooze")
+    assert refresh.run_action(config, db, snooze.name, snooze.fields) == "snoozed until tomorrow"
+    assert build_dashboard(config, db, NOW).act_now() == []  # the ticket's move too

@@ -129,7 +129,9 @@ do and why it's there ("quick, closes APP-12, alice waiting"), and anything
 else due on the same subject ("also: Fix CI"). Finishing something counts
 most, then quick work, then someone waiting (more the longer they've waited);
 important work and a nearing due date add to that ("critical, alice waiting 3d,
-due in 2d"); blocked work is left out. Each
+due in 2d"); blocked work is left out. An item about a unit of work (moving a
+ticket, a work entry's todo) joins the best item about something in it, to do
+after it, with its buttons: "Reply: PR 330", then "Move to In Review: APP-12". Each
 plugin nominates its own items; its page says which. Each item has Snooze
 (until tomorrow), Dismiss and Pin (first until unpinned); a snoozed or
 dismissed item comes back once it changes (its title, badges or details).
@@ -207,7 +209,7 @@ over 64 KiB):
 | --- | --- | --- |
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
-| `/actions/act_now/<snooze\|dismiss\|pin\|unpin>` | `kind`, `id` (the item's main subject), `verb`, `fingerprint` | Snoozes an Act now item until tomorrow, dismisses it, or pins or unpins it. |
+| `/actions/act_now/<snooze\|dismiss\|pin\|unpin>` | `kind`, `id` (the item's main subject), `verb`, `fingerprint`; `also` (optional: the items joined to it, as a JSON list of `[kind, id, verb, fingerprint]`) | Snoozes an Act now item (and the items joined to it) until tomorrow, dismisses it, or pins or unpins it. |
 
 For example, ticking off a todo ([notes](docs/plugins/notes.md#buttons)):
 

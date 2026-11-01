@@ -1,5 +1,6 @@
 """Core's Act now: ranking the plugins' nominations into a short list, and saying why."""
 
+import json
 from datetime import datetime, timedelta
 
 from conftest import NOW
@@ -8,7 +9,7 @@ from move_forward import act_now
 from move_forward.act_now import Feedback, FeedbackKey, Nomination
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
-from move_forward.page import Item, Panel, Signals
+from move_forward.page import Action, Item, Panel, Signals
 from move_forward.plugin import Context
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
@@ -213,3 +214,38 @@ def test_act_now_is_split_by_plugin_in_its_best_items_order_and_numbered_overall
         [("review", "#2"), ("unknown", "#3")],
     ]
     assert [p.key for p in act_now.panels([])] == ["now"]  # one empty panel says so
+
+
+def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it() -> None:
+    ticket, entry = Ref(kind="ticket", id="APP-1"), Ref(kind="entry", id="9")
+    units = {("pr", "1"): [ticket], ("pr", "2"): [ticket], ("ticket", "APP-1"): [ticket]}
+    units[("entry", "9")] = [entry]
+    move = Item(
+        title="APP-1 Do it",
+        url="https://jira/APP-1",
+        subjects=[ticket],
+        signals=Signals(verb="Move to In Review", effort="minutes"),
+        actions=[Action(name="jira/transition", label="Move", fields={"key": "APP-1"})],
+    )
+    todo = Item(title="Write it up", subjects=[entry], signals=Signals(effort="minutes"))
+    panels = act_now.panels(
+        [
+            Nomination(
+                "github", _item("PR 1", "1", verb="Reply", effort="minutes", waiting=["al"])
+            ),
+            Nomination("github", _item("PR 2", "2", verb="Fix CI", effort="hour")),
+            Nomination("jira", move),
+            Nomination("notes", todo),
+        ],
+        now=NOW,
+        units=lambda ref: units.get((ref.kind, ref.id), []),
+    )
+    items = sorted((i for p in panels for i in p.items), key=lambda i: -i.rank)
+    assert [i.title for i in items] == ["Reply: PR 1", "Write it up", "Fix CI: PR 2"]
+    joined = items[0]
+    assert joined.details == ["why: quick, al waiting", "then: Move to In Review: APP-1 Do it"]
+    assert [a.label for a in joined.actions] == ["Move", "Snooze", "Dismiss", "Pin"]
+    assert [link.url for link in joined.links] == ["https://jira/APP-1"]
+    also = json.loads(joined.actions[1].fields["also"])
+    assert also == [["ticket", "APP-1", "Move to In Review", Nomination("jira", move).fingerprint]]
+    assert [p.key for p in panels] == ["github", "notes"]  # the ticket's item went with its PR

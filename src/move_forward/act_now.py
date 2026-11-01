@@ -2,13 +2,16 @@
 
 Each plugin nominates items through its `act_now` hook, each with `Signals` saying how long
 it takes, what it finishes and who's waiting. Core drops what's blocked, scores the rest,
-keeps one item per subject and a few per plugin, and says on each item why it's there.
+keeps one item per subject, joins an item about a unit of work (a ticket, a work entry) to
+the best item about something in it (its PR), keeps a few per plugin, and says on each
+item why it's there.
 """
 
 import hashlib
 import json
 import math
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Literal
 
@@ -16,7 +19,7 @@ from pydantic import Field
 
 from .domain import Model
 from .graph import Ref
-from .page import Action, Item, Panel, Signals, age
+from .page import Action, Item, Link, Panel, Signals, age
 from .strict import Strict
 
 KEY = "now"
@@ -28,6 +31,10 @@ DUE_HORIZON = timedelta(days=7)
 DUE_MOST = 4.0
 """What a due date adds (times its weight) once it's past; it rises to that over
 `DUE_HORIZON`."""
+MAX_MEMBERS = 20
+"""More items than one Act now item ever joins: a bound on the `also` a button posts."""
+Units = Callable[[Ref], list[Ref]]
+"""The units of work a subject is part of (see `Graph.units`)."""
 FeedbackKey = tuple[str, str, str]
 """An item's main subject's kind and id, and its verb: what feedback is kept by."""
 
@@ -164,6 +171,59 @@ def why(signals: Signals, now: datetime | None = None) -> str:
     return ", ".join(parts)
 
 
+@dataclass
+class _Group:
+    """One Act now item: its best nomination, what else is due on the same subject (by
+    verb), and the items about a unit of work it's in that joined it, to do after it."""
+
+    position: int
+    """Its best member's place in the ranking."""
+    nomination: Nomination
+    also: list[str]
+    then: list[Nomination] = field(default_factory=list[Nomination])
+
+
+def no_units(ref: Ref) -> list[Ref]:
+    """No units of work: nothing joins (without a graph)."""
+    return []
+
+
+def _merged(kept: list[tuple[Nomination, list[str]]], units: Units) -> list[_Group]:
+    """`kept` (best first) with each item about a unit of work (its main subject a ticket
+    or an entry) joined to the best item about something in that unit, which isn't one
+    itself (a PR the ticket links): "Ping the reviewers, then move APP-12 to In Review". An
+    item about a unit with nothing in it to join stays as it is, and two items about things
+    in the same unit (two PRs of one ticket) stay apart. In each group's best member's
+    order."""
+
+    def subject(nomination: Nomination) -> Ref | None:
+        return nomination.item.subjects[0] if nomination.item.subjects else None
+
+    def is_unit(ref: Ref | None) -> bool:
+        return ref is not None and ref in units(ref)
+
+    groups: list[_Group] = []
+    host_of: dict[Ref, _Group] = {}
+    for position, (nomination, also) in enumerate(kept):
+        ref = subject(nomination)
+        if is_unit(ref):
+            continue
+        group = _Group(position, nomination, also)
+        groups.append(group)
+        for unit in units(ref) if ref else []:
+            host_of.setdefault(unit, group)
+    for position, (nomination, also) in enumerate(kept):
+        ref = subject(nomination)
+        if ref is None or not is_unit(ref):
+            continue
+        if (host := host_of.get(ref)) is None:
+            groups.append(_Group(position, nomination, also))
+        else:
+            host.position = min(host.position, position)
+            host.then.append(nomination)
+    return sorted(groups, key=lambda group: group.position)
+
+
 def _subject(nomination: Nomination, n: int) -> tuple[str, str] | Ref:
     """What the item is about, for one item per subject; an item about nothing is its own."""
     subjects = nomination.item.subjects
@@ -176,6 +236,7 @@ def panels(
     feedback: dict[FeedbackKey, Feedback] | None = None,
     now: datetime | None = None,
     titles: dict[str, str] | None = None,
+    units: Units = no_units,
 ) -> list[Panel]:
     """Act now's panels: nominations not blocked, snoozed or dismissed, pinned ones first and
     then the best (by score, then the plugin's own rank, then the order they came in), one
@@ -217,13 +278,15 @@ def panels(
     per: dict[str, int] = {}
     by_plugin: dict[str, list[Item]] = {}
     place = 0
-    for nomination, also in kept.values():
+    for group in _merged(list(kept.values()), units):
+        nomination = group.nomination
         if place == size:
             break
         if per.get(nomination.plugin, 0) == per_plugin:
             continue
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1
-        shown = _shown(nomination, also, place, size, pinned(nomination), now)
+        is_pinned = any(pinned(n) for n in [nomination, *group.then])
+        shown = _shown(group, place, size, is_pinned, now)
         by_plugin.setdefault(nomination.plugin, []).append(shown)
         place += 1
     if not by_plugin:
@@ -240,12 +303,16 @@ def panels(
     ]
 
 
-def _buttons(nomination: Nomination, pinned: bool) -> list[Action]:
-    """Snooze until tomorrow, dismiss, and pin or unpin; none for an item about nothing."""
+def _buttons(nomination: Nomination, then: list[Nomination], pinned: bool) -> list[Action]:
+    """Snooze until tomorrow, dismiss, and pin or unpin; none for an item about nothing. They
+    act on the items joined to it (`then`) too, posted as `also`."""
     if nomination.key is None:
         return []
     kind, id, verb = nomination.key
     fields = {"kind": kind, "id": id, "verb": verb, "fingerprint": nomination.fingerprint}
+    members = [[*n.key, n.fingerprint] for n in then if n.key is not None]
+    if members:
+        fields["also"] = json.dumps(members)
 
     def button(action: str, label: str) -> Action:
         return Action(name=f"{ACTIONS}/{action}", label=label, fields=fields)
@@ -257,31 +324,42 @@ def _buttons(nomination: Nomination, pinned: bool) -> list[Action]:
     ]
 
 
-def _shown(
-    nomination: Nomination,
-    also: list[str],
-    place: int,
-    size: int,
-    pinned: bool,
-    now: datetime | None,
-) -> Item:
+def _shown(group: _Group, place: int, size: int, pinned: bool, now: datetime | None) -> Item:
     """The item as Act now shows it: its verb first, its place overall as a badge, why it's
-    here, what else is due on the same subject, and the buttons to set it aside. Ranked by
-    its place, since the panels keep their own order."""
+    here, what else is due on the same subject, the items joined to it with their buttons,
+    and the buttons to set it aside. Ranked by its place, since the panels keep their own
+    order."""
+    nomination, then = group.nomination, group.then
     item, signals = nomination.item, nomination.signals
     reason = ("pinned, " if pinned else "") + why(signals, now)
     reason = reason.removesuffix(", ")
     details = [f"why: {reason}"] if reason else []
     details += item.details
-    details += [f"also: {', '.join(also)}"] if also else []
+    details += [f"also: {', '.join(group.also)}"] if group.also else []
+    details += [f"then: {_titled(joined)}" for joined in then]
+    links = [*item.links]
+    links += [
+        Link(text=joined.item.title, url=joined.item.url) for joined in then if joined.item.url
+    ]
     return item.model_copy(
         update={
-            "title": f"{signals.verb}: {item.title}" if signals.verb else item.title,
+            "title": _titled(nomination),
             "details": details,
             "badges": [f"#{place + 1}", *item.badges],
+            "links": links,
             "rank": size - place,
             "draft": False,
             "parts": [],
-            "actions": [*item.actions, *_buttons(nomination, pinned)],
+            "actions": [
+                *item.actions,
+                *(action for joined in then for action in joined.item.actions),
+                *_buttons(nomination, then, pinned),
+            ],
         }
     )
+
+
+def _titled(nomination: Nomination) -> str:
+    """ "Verb: title", or the title of an item without a verb."""
+    verb, title = nomination.signals.verb, nomination.item.title
+    return f"{verb}: {title}" if verb else title
