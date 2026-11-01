@@ -1,6 +1,6 @@
 """The jira plugin's data: my open tickets."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import Field
 
@@ -24,6 +24,8 @@ class JiraIssue(Model):
     """Keys of unfinished issues this one "is blocked by"."""
     resolved: datetime | None = None
     """Jira's resolution date, once the ticket is done."""
+    due: date | None = None
+    """Its due date, if it has one."""
     url: str
 
 

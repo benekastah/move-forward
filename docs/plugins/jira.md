@@ -43,10 +43,12 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
 ## Panels
 
 - **Jira transitions**: status changes the PR states suggest.
-- **What next**: my tickets, incidents (by escalation label, if configured), then bugs,
+- **What next**: my tickets (with their due dates), incidents (by escalation label, if configured), then bugs,
   then unblocked work.
 
 ## Act now
 
 jira nominates the status changes its PRs suggest, quick, closing the ticket when it goes
-to Closed.
+to Closed. From What next it nominates incidents (important, critical once escalated),
+escalated bugs (important) and tickets due within the week (the due date counting more as
+the end of its day nears); a ticket with open blockers is left out.

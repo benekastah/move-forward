@@ -5,7 +5,7 @@ import json
 import re
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import date, datetime
 from http import HTTPStatus
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,6 +29,7 @@ FIELDS = [
     "parent",
     "issuelinks",
     "resolutiondate",
+    "duedate",
 ]
 
 
@@ -79,6 +80,7 @@ class _Fields(_Raw):
     parent: _Named | None = None
     issuelinks: list[_IssueLink] = []
     resolutiondate: datetime | None = None
+    duedate: date | None = None
 
 
 class RawIssue(_Raw):
@@ -122,6 +124,7 @@ def to_issue(raw: RawIssue, site: str) -> JiraIssue:
         parent=f.parent.key if f.parent else None,
         open_blockers=open_blockers,
         resolved=f.resolutiondate,
+        due=f.duedate,
         url=f"{site.rstrip('/')}/browse/{raw.key}",
     )
 

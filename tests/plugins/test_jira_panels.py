@@ -1,5 +1,7 @@
 """The Jira plugin's panels, built as core builds the page."""
 
+from datetime import timedelta
+
 from conftest import (
     NOW,
     dashboard,
@@ -70,3 +72,31 @@ def test_a_ticket_whose_prs_merged_is_nominated_to_close() -> None:
     [closing] = [i for i in dashboard.act_now() if "APP-1" in i.title]
     assert closing.title == "Move to Closed: APP-1 Do the thing"
     assert closing.details[0] == "why: quick, closes APP-1"
+
+
+def test_incidents_escalated_bugs_and_tickets_due_this_week_are_nominated() -> None:
+    dashboard = build(
+        jira=JiraSnapshot(
+            issues=[
+                issue("APP-1", type="Task"),
+                issue("APP-2", type="Task", due=(NOW + timedelta(days=3)).date()),
+                issue("APP-3", type="Task", due=(NOW + timedelta(days=30)).date()),
+                issue("APP-5", type="Incident", labels=["esc-vp"]),
+                issue("APP-6", type="Bug", labels=["esc-manager"]),
+                issue("APP-7", type="Bug"),
+                issue("APP-8", type="Incident", open_blockers=["APP-9"]),
+            ]
+        ),
+        escalation_label_prefix="esc-",
+        escalation_levels=["manager", "director", "vp"],
+    )
+    why = {i.title.split(": ", 1)[1].split()[0]: i.details[0] for i in dashboard.act_now()}
+    assert why == {  # not APP-7 (a bug not escalated) nor APP-8 (blocked)
+        "APP-5": "why: critical",
+        "APP-6": "why: important",
+        "APP-2": "why: due in 3d",  # the end of its day, local time (UTC in tests): 3d 12h
+    }
+    titles = [i.title for i in dashboard.act_now()]
+    assert titles[0] == "Look at the incident: APP-5 Do the thing"
+    next_badges = {i.title.split()[0]: i.badges for i in panel(dashboard, "jira.jira_next").items}
+    assert next_badges["APP-2"] == ["unblocked", "due Nov 2"]

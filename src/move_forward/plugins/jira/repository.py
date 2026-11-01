@@ -3,7 +3,7 @@ project jira has seen a ticket in."""
 
 import sqlite3
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 
 from ...db import Database
 from .models import JiraIssue, JiraSnapshot
@@ -64,6 +64,9 @@ MIGRATIONS = [
     INSERT OR IGNORE INTO jira_projects
         SELECT substr(key, 1, instr(key, '-') - 1) FROM jira_issues WHERE instr(key, '-') > 1;
     """,
+    """
+    ALTER TABLE jira_issues ADD COLUMN due TEXT;  -- its due date, YYYY-MM-DD; NULL: none
+    """,
 ]
 """The jira plugin's migrations."""
 
@@ -94,7 +97,7 @@ class IssueRepository:
         with self._db.transaction() as conn:
             conn.execute("DELETE FROM jira_issues")  # and, by cascade, their labels and blockers
             conn.executemany(
-                "INSERT INTO jira_issues VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jira_issues VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (
                         i.key,
@@ -109,6 +112,7 @@ class IssueRepository:
                         i.updated.isoformat(),
                         _iso(i.resolved),
                         i.url,
+                        i.due.isoformat() if i.due else None,
                     )
                     for n, i in enumerate(issues)
                 ],
@@ -155,6 +159,7 @@ class IssueRepository:
                     open_blockers=blockers[row["key"]],
                     resolved=datetime.fromisoformat(row["resolved"]) if row["resolved"] else None,
                     url=row["url"],
+                    due=date.fromisoformat(row["due"]) if row["due"] else None,
                 )
                 for row in self._db.query("SELECT * FROM jira_issues ORDER BY position")
             ]

@@ -2,11 +2,13 @@
 
 import math
 import re
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from typing import ClassVar
 
 from pydantic import BaseModel
 
+from ... import localtime
+from ...act_now import due_pressure
 from ...asking import Asker, InitSetup
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
@@ -105,7 +107,15 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
     )
 
 
+def end_of(day: date, now: datetime) -> datetime:
+    """When a due date runs out: the end of that day where I am."""
+    return datetime.combine(day + timedelta(days=1), time(), localtime.local(now).tzinfo)
+
+
 def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Panel:
+    """My open tickets in the order to take them, each with signals for Act now: an incident
+    is important, critical once escalated, and an escalated bug important; a due date
+    counts, and a ticket with open blockers is blocked."""
     items: list[Item] = []
     for issue in snapshot.issues:
         kind = issue.type.lower()
@@ -113,24 +123,35 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
         if any(t in kind for t in config.incident_types):
             rank = 3000 + level * 100
             why = "incident" + (f", escalated ({level})" if level else "")
+            importance, verb = (2 if level else 1), "Look at the incident"
         elif any(t in kind for t in config.bug_types):
             rank = 2000 + level * 100
             why = "bug" + (f", escalated ({level})" if level else "")
+            importance, verb = (1 if level else 0), "Fix the bug"
         elif not issue.open_blockers:
             rank = 1000
             why = "unblocked" + (f", under {issue.parent}" if issue.parent else "")
+            importance, verb = 0, "Work on it"
         else:
             rank = 0
             why = "blocked by " + ", ".join(issue.open_blockers)
+            importance, verb = 0, "Work on it"
         rank += min(999, (now - issue.created).days)
+        badges = [why] + ([f"due {issue.due:%b} {issue.due.day}"] if issue.due else [])
         items.append(
             Item(
                 title=f"{issue.key} {issue.summary}",
                 url=issue.url,
                 subtitle=f"{issue.status} · {issue.priority or ''} · {age(now, issue.created)} old",
-                badges=[why],
+                badges=badges,
                 rank=rank,
                 subjects=[ticket_ref(issue.key)],
+                signals=Signals(
+                    verb=verb,
+                    importance=importance,
+                    due=end_of(issue.due, now) if issue.due else None,
+                    blocked=bool(issue.open_blockers),
+                ),
             )
         )
     return Panel(
@@ -246,3 +267,23 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         if snapshot is None:
             return []
         return [transitions(ctx.config, snapshot, graph), what_next(ctx.config, snapshot, ctx.now)]
+
+    def act_now(
+        self,
+        ctx: Context[JiraConfig],
+        snapshot: JiraSnapshot | None,
+        graph: Graph,
+        panels: list[Panel],
+    ) -> list[Item]:
+        """Its transitions, and the tickets in What next that matter now: important ones
+        (incidents, escalated bugs) and those due within the week."""
+        nominated = super().act_now(ctx, snapshot, graph, panels)
+        for panel in panels:
+            if panel.key != "jira_next":
+                continue
+            for item in panel.items:
+                signals = item.signals or Signals()
+                due_soon = signals.due is not None and due_pressure(signals.due, ctx.now) > 0
+                if signals.importance or due_soon:
+                    nominated.append(item)
+        return nominated

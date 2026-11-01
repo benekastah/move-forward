@@ -1,5 +1,5 @@
 import urllib.error
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from email.message import Message
 
 import pytest
@@ -129,8 +129,9 @@ def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
     db.migrate("jira", MIGRATIONS)
     repo = IssueRepository(db)
     assert repo.load() == JiraSnapshot(issues=[labelled, bare])
-    repo.replace(JiraSnapshot(issues=[bare]))
-    assert repo.load() == JiraSnapshot(issues=[bare])
+    due = bare.model_copy(update={"due": date(2026, 11, 5)})
+    repo.replace(JiraSnapshot(issues=[due]))
+    assert repo.load() == JiraSnapshot(issues=[due])
     assert db.query("SELECT * FROM jira_issue_labels") == []  # gone with their tickets
 
 
