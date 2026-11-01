@@ -25,7 +25,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 - After living with the first version: `importance` (jira's escalations), `waiting_since`
   and `due` in the signals and the score, and merging nominations across tools through
   the graph ("Merge PR 330, then close APP-12").
-- The `act_now_feedback` table: snooze, dismiss, pin.
 
 ### 7. Worktrees
 

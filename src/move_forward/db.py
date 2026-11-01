@@ -110,7 +110,27 @@ DROP TABLE iced_stacks;
 """
 """Core's copies of the markdown notes; the notes plugin's own tables hold them now."""
 
-CORE_MIGRATIONS = [V1_SCHEMA, _V2_KV_AND_LAYOUT, _V3_PLUGIN_SOURCES, _V4_NOTES_IN_THE_NOTES_PLUGIN]
+_V5_ACT_NOW_FEEDBACK = """
+CREATE TABLE act_now_feedback (        -- kept: what I said of an Act now item; pruned
+    subject_kind TEXT NOT NULL,        -- after prune_days, snoozes once they're over
+    subject_id TEXT NOT NULL,
+    verb TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('snooze', 'dismiss', 'pin')),
+    until TEXT,                        -- for a snooze
+    fingerprint TEXT NOT NULL,         -- the item's when it was snoozed or dismissed
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (subject_kind, subject_id, verb)
+);
+"""
+"""Snoozing, dismissing and pinning Act now's items."""
+
+CORE_MIGRATIONS = [
+    V1_SCHEMA,
+    _V2_KV_AND_LAYOUT,
+    _V3_PLUGIN_SOURCES,
+    _V4_NOTES_IN_THE_NOTES_PLUGIN,
+    _V5_ACT_NOW_FEEDBACK,
+]
 
 _SCHEMA_VERSIONS = """
 CREATE TABLE IF NOT EXISTS schema_versions (

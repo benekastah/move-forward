@@ -4,11 +4,12 @@ stored."""
 import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 
 from pydantic import BaseModel
 
-from . import panels, shell
+from . import act_now, panels, shell
+from .act_now import Feedback
 from .config import Config
 from .db import Database
 from .domain import Model
@@ -17,7 +18,7 @@ from .page import Action, Item, SourceStatus
 from .plugin import ActionError, ActionResult, collect_into
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, enabled
-from .repositories import LayoutRepository, SnapshotRepository
+from .repositories import FeedbackRepository, LayoutRepository, SnapshotRepository
 from .shell import CommandError
 
 log = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
         if shell.stopping():
             return
         graph, _ = stored_graph(db, plugins)
-    prune_if_due(db, now, lambda: _prune_plugins(plugins, graph))
+    prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
         try:
             e.plugin.after_collect(e.ctx, graph)
@@ -79,9 +80,14 @@ def refresh(config: Config, db: Database, now: datetime | None = None) -> None:
             log.exception("%s: after_collect failed", e.name)
 
 
-def _prune_plugins(plugins: list[Enabled], graph: Graph) -> list[str]:
-    """Every plugin's daily prune, each failing on its own; what they did, by plugin."""
+def _prune_plugins(
+    plugins: list[Enabled], graph: Graph, db: Database, now: datetime, days: int
+) -> list[str]:
+    """Every plugin's daily prune, each failing on its own, and Act now's feedback that's over
+    or older than `days`; what they did, by plugin."""
     notices: list[str] = []
+    if dropped := FeedbackRepository(db).prune(now, now - timedelta(days=days)):
+        notices.append(f"act_now: forgot {dropped} snooze(s), dismissal(s) or pin(s)")
     for e in plugins:
         try:
             notices += [f"{e.name}: {notice}" for notice in e.plugin.prune(e.ctx, graph)]
@@ -127,6 +133,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         hidden,
         layout,
         config.act_now,
+        FeedbackRepository(db).all(),
     )
 
 
@@ -163,9 +170,36 @@ def kept_item(config: Config, db: Database, kept: str) -> tuple[str, Item] | Non
     return panels.panel_key(e.name, panel), item
 
 
+def _act_now_action(db: Database, action: str, fields: dict[str, str]) -> ActionResult:
+    """Act now's own buttons: snooze an item until tomorrow, dismiss it, or pin or unpin it,
+    by its main subject and verb."""
+    now = datetime.now(UTC)
+    try:
+        key = (fields["kind"], fields["id"], fields["verb"])
+        fingerprint = fields["fingerprint"]
+    except KeyError as err:
+        raise ActionError(f"missing field {err}") from err
+    feedback = FeedbackRepository(db)
+    if action == "unpin":
+        feedback.forget(key)
+        return ActionResult("unpinned")
+    if action == "snooze":
+        local = now.astimezone()
+        tomorrow = datetime.combine(local.date() + timedelta(days=1), time(), local.tzinfo)
+        feedback.say(key, Feedback(action="snooze", fingerprint=fingerprint, until=tomorrow), now)
+        return ActionResult("snoozed until tomorrow")
+    if action in ("dismiss", "pin"):
+        feedback.say(key, Feedback(action=action, fingerprint=fingerprint), now)
+        return ActionResult("dismissed" if action == "dismiss" else "pinned")
+    raise ActionError(f"unknown action {act_now.ACTIONS}/{action}")
+
+
 def perform_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> ActionResult:
-    """Run a plugin's action, `<plugin>/<action>`; raises `ActionError` when it can't."""
+    """Run a plugin's action, `<plugin>/<action>`, or Act now's, `act_now/<action>`; raises
+    `ActionError` when it can't."""
     plugin_name, _, action_name = name.partition("/")
+    if plugin_name == act_now.ACTIONS:
+        return _act_now_action(db, action_name, fields)
     plugins = enabled(config, db, datetime.now(UTC))
     e = next((e for e in plugins if e.name == plugin_name), None)
     handler = e.plugin.actions().get(action_name) if e else None

@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from .act_now import Feedback, FeedbackKey
 from .db import Database
 from .panels import Layout
 
@@ -97,3 +98,42 @@ class LayoutRepository:
 
     def reset(self) -> None:
         self._db.execute("DELETE FROM layout")
+
+
+class FeedbackRepository:
+    """What I said of Act now's items (`act_now_feedback`): kept, pruned with `prune`."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def all(self) -> dict[FeedbackKey, Feedback]:
+        return {
+            (row["subject_kind"], row["subject_id"], row["verb"]): Feedback(
+                action=row["action"],
+                fingerprint=row["fingerprint"],
+                until=datetime.fromisoformat(row["until"]) if row["until"] else None,
+            )
+            for row in self._db.query("SELECT * FROM act_now_feedback")
+        }
+
+    def say(self, key: FeedbackKey, feedback: Feedback, now: datetime) -> None:
+        """Keep `feedback` on the item, in place of anything said of it before."""
+        until = feedback.until.isoformat() if feedback.until else None
+        self._db.execute(
+            "INSERT OR REPLACE INTO act_now_feedback VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (*key, feedback.action, until, feedback.fingerprint, now.isoformat()),
+        )
+
+    def forget(self, key: FeedbackKey) -> None:
+        self._db.execute(
+            "DELETE FROM act_now_feedback WHERE subject_kind = ? AND subject_id = ? AND verb = ?",
+            key,
+        )
+
+    def prune(self, now: datetime, before: datetime) -> int:
+        """Drop snoozes that are over, and anything said before `before`; how many went."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM act_now_feedback WHERE until < ? OR created_at < ?",
+                (now.isoformat(), before.isoformat()),
+            ).rowcount

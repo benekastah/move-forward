@@ -1,9 +1,11 @@
 """Core's Act now: ranking the plugins' nominations into a short list, and saying why."""
 
+from datetime import datetime, timedelta
+
 from conftest import NOW
 
 from move_forward import act_now
-from move_forward.act_now import Nomination
+from move_forward.act_now import Feedback, FeedbackKey, Nomination
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.page import Item, Panel, Signals
@@ -89,3 +91,52 @@ def test_by_default_a_plugin_nominates_its_act_now_panels_items_with_their_signa
         ("own", Signals(verb="Merge")),
         ("plain", Signals(verb="Review", effort="minutes")),
     ]
+
+
+def _feedback(
+    action: str, item: Item, until: datetime | None = None
+) -> dict[FeedbackKey, Feedback]:
+    nomination = Nomination("github", item)
+    assert nomination.key is not None
+    return {
+        nomination.key: Feedback.model_validate(
+            {"action": action, "fingerprint": nomination.fingerprint, "until": until}
+        )
+    }
+
+
+def test_dismissed_and_snoozed_items_stay_away_until_they_change_or_wake() -> None:
+    review = _item("PR 1", "u1", verb="Review")
+    other = _item("PR 2", "u2")
+    nominations = [Nomination("github", review), Nomination("github", other)]
+    dismissed = _feedback("dismiss", review)
+    assert _titles(act_now.panel(nominations, feedback=dismissed, now=NOW)) == ["PR 2"]
+    changed = review.model_copy(update={"badges": ["+400 lines"]})
+    again = [Nomination("github", changed), Nomination("github", other)]
+    assert _titles(act_now.panel(again, feedback=dismissed, now=NOW)) == ["Review: PR 1", "PR 2"]
+    snoozed = _feedback("snooze", review, until=NOW + timedelta(hours=1))
+    assert _titles(act_now.panel(nominations, feedback=snoozed, now=NOW)) == ["PR 2"]
+    later = NOW + timedelta(hours=2)
+    assert _titles(act_now.panel(nominations, feedback=snoozed, now=later))[0] == "Review: PR 1"
+
+
+def test_a_pinned_item_comes_first_and_says_so() -> None:
+    plain = _item("PR 1", "u1")
+    quick = _item("PR 2", "u2", effort="minutes")
+    ranked = act_now.panel(
+        [Nomination("github", plain), Nomination("github", quick)],
+        feedback=_feedback("pin", plain),
+        now=NOW,
+    )
+    assert _titles(ranked) == ["PR 1", "PR 2"]
+    assert ranked.items[0].details == ["why: pinned"]
+    assert [a.label for a in ranked.items[0].actions] == ["Snooze", "Dismiss", "Unpin"]
+    assert [a.label for a in ranked.items[1].actions] == ["Snooze", "Dismiss", "Pin"]
+    assert ranked.items[1].actions[0].fields == {
+        "kind": "pr",
+        "id": "u2",
+        "verb": "",
+        "fingerprint": Nomination("github", quick).fingerprint,
+    }
+    nothing = act_now.panel([Nomination("notes", Item(title="about nothing"))])
+    assert nothing.items[0].actions == []  # no subject to keep feedback by

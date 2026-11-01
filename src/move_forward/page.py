@@ -84,6 +84,9 @@ class Item(Model):
     plugins add their buttons by them."""
     signals: Signals | None = None
     """What Act now ranks it by, should its plugin nominate it; None takes its panel's."""
+    fingerprint: str | None = None
+    """What would make it worth another look once snoozed or dismissed in Act now, e.g. a
+    PR's head and review count; None hashes its title, badges and details."""
     parts: list["Item"] = Field(default_factory=list)
     """Pieces focus mode shows one at a time instead of this item, e.g. a work item's todos.
 

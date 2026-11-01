@@ -179,7 +179,9 @@ waiting), CI failures, merge conflicts, and PRs ready to merge (quick, and it
 closes the PR); jira the status changes its PRs suggest (quick, closing the
 ticket when it goes to Closed); git the branches Cleanup lists (quick to
 delete); slack the reviews to nudge (a quick ping or bump); notes the
-entries whose open todos are all quick (closing the entry). Below it is a collapsible group per
+entries whose open todos are all quick (closing the entry). Each item has
+Snooze (until tomorrow), Dismiss and Pin (first until unpinned); a snoozed or
+dismissed item comes back once it changes (its title, badges or details). Below it is a collapsible group per
 enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
 their most urgent panel: notes (todos), git, git_stack, github, slack, jira.
@@ -301,6 +303,7 @@ error status):
 | --- | --- | --- |
 | `/refresh` | | Starts a background refresh. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
+| `/actions/act_now/<snooze\|dismiss\|pin\|unpin>` | `kind`, `id` (the item's main subject), `verb`, `fingerprint` | Snoozes an Act now item until tomorrow, dismisses it, or pins or unpins it. |
 | `/actions/notes/todo_add` | `entry`, `text` (or `input`), optional `size` (`quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds an open todo at the end of the entry's; with `create`, a missing entry is created first, with `where` as its `Where`. |
 | `/actions/notes/todo_done` | `todo` (its id) | Records the todo as done today; redirects with `kept=notes:<id>`, so the focus page keeps it, ticked, to undo. |
 | `/actions/notes/todo_undone` | `todo` | Reopens a done todo. |
@@ -338,14 +341,15 @@ entry goes when every PR it names was merged or closed and every ticket in
 its title resolved that long ago and it has no open todos (an entry with
 neither is cleared `prune_days` after it last changed), a PR, ticket or
 entry on ice comes off it once its work is over the same way (a stack stays
-until it's reopened), and pings that old leave the database. PR and ticket dates come from `gh pr view` and
+until it's reopened), pings that old leave the database, and so do Act now's
+snoozes once over, and its dismissals and pins that old. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
 ## How it stores things
 
 `dashboard.db` holds what each plugin last fetched, in that plugin's own
 tables (kept when a refresh fails, with the error shown alongside), the
-notes in the notes plugin's tables, the page's dragged order (core's `layout`), where pings go and the pings sent in the
+notes in the notes plugin's tables, the page's dragged order (core's `layout`), what you snoozed, dismissed or pinned in Act now (core's `act_now_feedback`), where pings go and the pings sent in the
 slack plugin's, and reviewers' emails in the github plugin's (from `mfd github
 import`, or looked up from commits). It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.
