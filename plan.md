@@ -24,15 +24,13 @@ the plugin change that needs them (see `AGENTS.md`), `dev.py check` green and th
 Slack becomes a source of work, not just a place pings go. It needs a Slack app with a
 *user* token (my DMs and mentions, my messages).
 
-**The app is optional.** Without it (not set up, not connected, or the dashboard on plain
-HTTP, where Slack's sign-in can't return), slack does all it does today: the reviewer map
-and Slack ids (imported, set by hand, or looked up by email with today's token), team
-channels, the ping page and recorded pings. None of the features below show, and nothing
-breaks. With the app connected, they turn on, each behind its own setting. "Connect
-Slack" is offered only when the page is served over HTTPS and the app's client id is
-set; on plain HTTP, slack's page says what's missing (`mfd cert`, then connect) instead of
-a button that can't work. If the app's token stops working (expired, revoked), slack falls
-back to today's behaviour and the page asks to connect again.
+**The app is optional.** Without it (not set up, or not connected), slack does all it does
+today: the reviewer map and Slack ids (imported, set by hand, or looked up by email with
+today's token), team channels, the ping page and recorded pings. None of the features
+below show, and nothing breaks. With the app connected, they turn on, each behind its own
+setting. "Connect Slack" is offered once the app's client id is set. If the app's token
+stops working (expired, revoked), slack falls back to today's behaviour and the page asks
+to connect again.
 
 **One internal app per workspace.** Workspaces that approve apps would otherwise approve
 one app per person. A Marketplace app needs hosting and Slack's review, and Slack
@@ -45,11 +43,16 @@ Marketplace, so the app stays internal. Hosting can come later if it's needed.
   features below need.
 - Everyone signs in to that one app with Slack's OAuth flow, from a "Connect Slack"
   button `mfd serve` shows, and gets their own user token. It uses PKCE, so no client
-  secret is shared; the app's client id becomes a new `[slack]` key. Slack only takes
-  `https://` redirect URLs, even for localhost, so the redirect is
-  `https://127.0.0.1:<port>/slack/callback`, on the dashboard served over HTTPS (`mfd cert
-  --trust`). The token goes in the system's secret store, as `mfd token set` stores
-  tokens today.
+  secret is shared; the app's client id becomes a new `[slack]` key. For a PKCE app,
+  Slack treats a redirect to `localhost` as a desktop app's and takes `http://`, so the
+  redirect is `http://localhost:<port>/slack/callback` (`https://` when the dashboard
+  serves HTTPS), and the dashboard needs no certificate. The app lists the redirect URLs
+  for the default port; someone on another port adds theirs.
+- Tokens rotate: a PKCE app's access token lasts 12 hours and its refresh token 30 days,
+  and each refresh replaces the refresh token. Both go in the system's secret store, as
+  `mfd token set` stores tokens today, and the access token is refreshed before it runs
+  out. (Slack's docs disagree on whether a PKCE refresh needs the client secret; the
+  PKCE guide says not. Try it with the first real app.)
 - Not collaborators: a collaborator can manage the app (its scopes, its redirect URLs, its
   credentials), so making a whole company collaborators isn't something to ask an admin
   for, and Slack documents no cap on them either way.
@@ -100,9 +103,10 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   schedule I set) to me or a standup channel.
 - **Focus sets my status**: entering focus mode sets "Focusing" and Do Not Disturb for a
   while, and leaving it clears them.
-- **Changes as they happen**: Socket Mode, a connection the dashboard opens itself, brings
-  Slack's events as they happen, so slack implements `changed` (see the other plugins)
-  without polling.
+- **Polled, not pushed.** Socket Mode can't serve one app shared by many people's
+  dashboards: an app has at most 10 connections, each event goes to any one of them, and
+  connecting takes the app-level token, a secret everyone would share. So slack polls on
+  its own `refresh_seconds`, and its `changed` checks cheaply in between.
 - **Following github**: slack `watches` github, so right after each github refresh its
   `changed(ctx, graph)` compares my open PRs and their requested reviewers with what it
   saw last. A new review request or a new reviewer has slack look at once for the pings
