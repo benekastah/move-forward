@@ -138,6 +138,12 @@ Reset layout, in the footer, goes back to the default order.
 Only Act now starts expanded; each panel inside a group collapses too. Each
 plugin's page lists its panels.
 
+A group's title bar also says when its plugin last refreshed (in local time,
+with the date when it wasn't today), "refreshing…" while it does, or "refresh
+failed" with the reason on hover. Its Refresh button refreshes just that plugin,
+and the plugins that collect after it (git_stack after git); the header's
+Refresh refreshes them all. The footer lists only plugins without a group.
+
 ## Focus mode
 
 The Focus button in the header opens a list of categories: All, each group
@@ -187,12 +193,13 @@ Plugins add pages and buttons of their own, listed on their pages (see
 Forms (POST, `application/x-www-form-urlencoded`). A plugin's buttons post to
 `/actions/<plugin>/<action>`; the rest are core's. Each answers `303 See Other`
 to `/`, or to the `back` query parameter when it's a local path, with
-`notice=<outcome>` added; a failure is `notice=failed: <reason>`, never an
-error status):
+`notice=<outcome>` added; an action that fails is `notice=failed: <reason>`,
+not an error status. A malformed request gets one: `400`, or `413` for a body
+over 64 KiB):
 
 | Path | Fields | Does |
 | --- | --- | --- |
-| `/refresh` | | Starts a background refresh. |
+| `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
 | `/actions/act_now/<snooze\|dismiss\|pin\|unpin>` | `kind`, `id` (the item's main subject), `verb`, `fingerprint` | Snoozes an Act now item until tomorrow, dismisses it, or pins or unpins it. |
 

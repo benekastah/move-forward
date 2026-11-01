@@ -27,6 +27,7 @@ from .refresh import (
     plugin_page,
     refresh,
     refresh_seconds,
+    to_collect,
 )
 from .registry import enabled
 from .repositories import LayoutRepository
@@ -83,13 +84,20 @@ class App:
         """"https" when serving with the certificate (see `tls`), else "http"."""
         self._refresh_lock = threading.Lock()
         self._wake = threading.Event()
-        self.refreshing = False
+        self.refreshing: frozenset[str] = frozenset()
+        """The plugins the refresh running now collects; empty when none is running."""
         self.last_refreshed: dict[str, float] = {}
         """`time.monotonic()` when each plugin's last refresh started."""
         self._pending: set[str] | None = set()
         """Plugins asked for since the loop last ran: by a page load (stale ones) or the
-        Refresh button (None: all of them)."""
+        Refresh buttons (None: all of them)."""
         self._pending_lock = threading.Lock()
+
+    def refreshable(self) -> set[str]:
+        """The plugins a refresh can be asked for: those that collect."""
+        plugins = enabled(self.config, self.db, datetime.now(UTC))
+        first, after = to_collect(plugins)
+        return {e.name for e in first + after}
 
     def intervals(self) -> dict[str, int]:
         """How often each plugin that refreshes on its own does: its `refresh_seconds`."""
@@ -112,13 +120,14 @@ class App:
         if not self._refresh_lock.acquire(blocking=False):
             return False
         try:
-            self.refreshing = True
+            first, after = to_collect(enabled(self.config, self.db, datetime.now(UTC)), only)
+            self.refreshing = frozenset(e.name for e in first + after)
             started = time.monotonic()
             for name in self.intervals() if only is None else only:
                 self.last_refreshed[name] = started
             refresh(self.config, self.db, None, only)
         finally:
-            self.refreshing = False
+            self.refreshing = frozenset()
             self._refresh_lock.release()
         return True
 
@@ -274,7 +283,8 @@ def _int(query_params: dict[str, list[str]], name: str) -> int:
 
 def _form_fields(body: bytes) -> dict[str, str]:
     """The first value of each form field."""
-    return {k: v[0] for k, v in parse_qs(body.decode(), keep_blank_values=True).items()}
+    fields = parse_qs(body.decode(errors="replace"), keep_blank_values=True)
+    return {k: v[0] for k, v in fields.items()}
 
 
 def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
@@ -396,7 +406,14 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 return
             url = urlsplit(self.path)
             if url.path == "/refresh":
-                app.request_refresh()
+                plugin = _form_fields(body).get("plugin")
+                if plugin is None:
+                    app.request_refresh()
+                elif plugin in app.refreshable():
+                    app.request_refresh({plugin})
+                else:
+                    self._html(HTTPStatus.BAD_REQUEST, "<p>No such plugin to refresh.</p>")
+                    return
                 self._redirect(_back_to_page(url.query))
             elif url.path == "/layout":
                 try:

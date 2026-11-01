@@ -1,4 +1,5 @@
 import re
+from datetime import timedelta
 from urllib.parse import quote
 
 from conftest import ME, NOW, dashboard, entry, pr, snapshot, stored, todo
@@ -16,11 +17,10 @@ def _dashboard() -> panels.Dashboard:
 
 
 def test_dashboard_page_escapes_and_links() -> None:
-    html = render.dashboard_page(_dashboard(), refreshing=False)
+    html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert "Fix &lt;script&gt; &amp; stuff" in html
     assert "<script" not in html.split("<main>")[1].split("</main>")[0]
     assert "href='https://github.com/acme/widgets/pull/1'" in html
-    assert "<strong>github:</strong> 0m ago" in html
     assert "built 12:00" in html
     assert "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>" in html
     assert html.count("<a href='/' class='logo'") == 1
@@ -28,18 +28,18 @@ def test_dashboard_page_escapes_and_links() -> None:
 
 def test_open_query_parameter_overrides_the_defaults() -> None:
     html = render.dashboard_page(
-        _dashboard(), refreshing=False, open_keys={"github", "github.feedback"}
+        _dashboard(), refreshing=frozenset(), open_keys={"github", "github.feedback"}
     )
     assert "<details class='group' data-key='github' data-drag open>" in html
     assert "<details class='group' data-key='act'>" in html
     assert "<details class='panel empty' data-key='github.feedback' data-drag open>" in html
     assert "<details class='panel' data-key='slack.nudges' data-drag>" in html
-    everything_closed = render.dashboard_page(_dashboard(), refreshing=False, open_keys=set())
+    everything_closed = render.dashboard_page(_dashboard(), refreshing=frozenset(), open_keys=set())
     assert " open>" not in everything_closed
 
 
 def test_only_act_now_is_open_by_default() -> None:
-    html = render.dashboard_page(_dashboard(), refreshing=False)
+    html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert "<details class='group' data-key='act' open><summary><h2>Act now</h2>" in html
     assert (
         "<details class='group' data-key='slack' data-drag><summary><h2>Slack</h2>"
@@ -50,8 +50,26 @@ def test_only_act_now_is_open_by_default() -> None:
     assert len(re.findall(r"class='group' data-key='\w+' open>", html)) == 1
 
 
-def test_refreshing_disables_the_button_and_reloads_sooner() -> None:
-    html = render.dashboard_page(_dashboard(), refreshing=True)
+def test_each_plugin_says_when_it_last_refreshed_and_refreshes_on_a_click() -> None:
+    built = _dashboard()
+    html = render.dashboard_page(built, refreshing=frozenset())
+    github = html.split("data-key='github'")[1].split("</summary>")[0]
+    assert "<span class='refreshed' title='0m ago'>refreshed 12:00</span>" in github
+    assert "<input type='hidden' name='plugin' value='github'>" in github
+    assert "<strong>github:</strong>" not in html  # the footer leaves it to the summary
+    yesterday = page.SourceStatus(fetched_at=NOW - timedelta(days=1, hours=2))
+    failed = page.SourceStatus(fetched_at=NOW, error="gh: <not logged in>")
+    built = built.model_copy(update={"sources": {"github": yesterday, "slack": failed}})
+    html = render.dashboard_page(built, refreshing=frozenset())
+    assert ">refreshed Oct 29 10:00</span>" in html
+    assert "title='gh: &lt;not logged in&gt;'>refresh failed</span>" in html
+    act_now = html.split("data-key='act'")[1].split("</summary>")[0]
+    assert "refresh" not in act_now  # Act now isn't a plugin
+
+
+def test_refreshing_disables_the_buttons_and_reloads_sooner() -> None:
+    html = render.dashboard_page(_dashboard(), refreshing=frozenset({"github"}))
+    assert ">refreshing…</span>" in html.split("data-key='github'")[1].split("</summary>")[0]
     assert "disabled" in html
     assert f"<body data-reload='{render.REFRESHING_RELOAD_SECONDS}'>" in html
     assert (
@@ -59,12 +77,12 @@ def test_refreshing_disables_the_button_and_reloads_sooner() -> None:
         in html
     )
     assert f"<body data-reload='{render.PAGE_RELOAD_SECONDS}'>" in render.dashboard_page(
-        _dashboard(), refreshing=False
+        _dashboard(), refreshing=frozenset()
     )
 
 
 def test_sections_carry_keys_for_the_open_state_script() -> None:
-    html = render.dashboard_page(_dashboard(), refreshing=False)
+    html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert "<details class='group' data-key='act' open>" in html
     assert "<details class='panel' data-key='slack.nudges' data-drag open>" in html
     assert "<details class='panel empty' data-key='github.needs_reviewer' data-drag>" in html
@@ -101,7 +119,7 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
         groups=[page.Group(key="g", title="G", panel_keys=["cleanup"], open=True)],
         sources={},
     )
-    html = render.dashboard_page(dashboard, refreshing=False, notice="deleted 1 <branch>")
+    html = render.dashboard_page(dashboard, refreshing=frozenset(), notice="deleted 1 <branch>")
     assert "<form method='post' action='/actions/delete_branch' class='action'" in html
     assert "onsubmit='return confirm(&#x27;Sure?&#x27;)'" in html
     assert "<input type='hidden' name='branch' value='a&#x27;b'>" in html
@@ -162,7 +180,7 @@ def test_focus_page_actions_come_back_to_it() -> None:
     assert "action='/actions/delete_branch?back=%2Ffocus%3Fcat%3Dcleanup%26i%3D0'" in html
     assert "<span class='notice'>done</span>" in html
     assert "/actions/delete_branch' class='action'" in render.dashboard_page(
-        dashboard, refreshing=False
+        dashboard, refreshing=frozenset()
     )
 
 

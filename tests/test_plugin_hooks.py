@@ -54,7 +54,7 @@ def test_a_plugin_adds_buttons_to_another_plugins_items() -> None:
     built = dashboard(github=snapshot(mine=[pr(1, merge_state="DIRTY")]), jira_site="https://j")
     [item] = built.panel("github.conflicts").items
     assert [a.href for a in item.actions if a.href] == [f"/hello?pr={pr(1).url}"]
-    html = render.dashboard_page(built, refreshing=False)
+    html = render.dashboard_page(built, refreshing=frozenset())
     assert f"<a class='button link-action' href='/hello?pr={pr(1).url}'>Look</a>" in html
     assert all(not a.href for a in built.panel("notes.todos").actions)
 

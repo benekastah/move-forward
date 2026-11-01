@@ -1,10 +1,12 @@
 """Server-side HTML for the dashboard and focus mode, and the frame of plugins' pages."""
 
+from collections.abc import Set as AbstractSet
+from datetime import datetime
 from html import escape
 from urllib.parse import urlencode
 
 from . import localtime
-from .page import Action, Group, Item, Link, Panel, age
+from .page import Action, Group, Item, Link, Panel, SourceStatus, age
 from .panels import ACT_NOW, FOCUS_ALL, Dashboard
 
 PAGE_RELOAD_SECONDS = 60
@@ -239,15 +241,48 @@ def _panel(panel: Panel, open_keys: set[str] | None) -> str:
     )
 
 
-def _group(group: Group, dashboard: Dashboard, open_keys: set[str] | None) -> str:
-    """A group section; panel keys the dashboard left out (e.g. Stacks without git-stack) are skipped."""
+def _when(now: datetime, then: datetime) -> str:
+    """`then` in local time: the time of day if it was on `now`'s day, else the date too."""
+    local = localtime.local(then)
+    if local.date() == localtime.local(now).date():
+        return f"{local:%H:%M}"
+    return f"{local:%b} {local.day} {local:%H:%M}"
+
+
+def _refreshed(name: str, status: SourceStatus, now: datetime, refreshing: AbstractSet[str]) -> str:
+    """When a plugin last refreshed (or that it's refreshing, or why its last refresh
+    failed), and a button to refresh it now, for its group's summary."""
+    if name in refreshing:
+        text, cls, title = "refreshing…", "refreshed", ""
+    elif status.error:
+        text, cls, title = "refresh failed", "refreshed error", status.error
+    else:
+        text = f"refreshed {_when(now, status.fetched_at)}" if status.fetched_at else "not yet"
+        cls, title = "refreshed", f"{age(now, status.fetched_at)} ago" if status.fetched_at else ""
+    return (
+        f"<span class='{cls}' title='{_e(title)}'>{_e(text)}</span>"
+        "<form method='post' action='/refresh' class='refresh'>"
+        f"<input type='hidden' name='plugin' value='{_e(name)}'>"
+        f"<button type='submit' class='small secondary' title='Refresh {_e(name)} now'"
+        f"{' disabled' if refreshing else ''}>Refresh</button></form>"
+    )
+
+
+def _group(
+    group: Group, dashboard: Dashboard, open_keys: set[str] | None, refreshing: AbstractSet[str]
+) -> str:
+    """A group section; panel keys the dashboard left out (e.g. Stacks without git-stack) are
+    skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click."""
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
     count = sum(len(panel.items) for panel in panels)
+    status = dashboard.sources.get(group.key)
+    refreshed = _refreshed(group.key, status, dashboard.generated_at, refreshing) if status else ""
     return (
         f"<details class='group' data-key='{_e(group.key)}'"
         + (" data-drag" if group.key != ACT_NOW else "")
         + f"{_open(group.key, group.open, open_keys)}>"
-        f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span></summary>"
+        f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span>{refreshed}"
+        "</summary>"
         "<div class='panels'>"
         + "".join(_panel(panel, open_keys) for panel in panels)
         + "</div></details>"
@@ -255,8 +290,13 @@ def _group(group: Group, dashboard: Dashboard, open_keys: set[str] | None) -> st
 
 
 def _sources(dashboard: Dashboard) -> str:
+    """The footer: how fresh the data of plugins without a group of their own is (the
+    others' summaries say), and who I am."""
+    grouped = {group.key for group in dashboard.groups}
     spans: list[str] = []
     for name, status in dashboard.sources.items():
+        if name in grouped:
+            continue
         if status.error:
             spans.append(
                 f"<span class='error'><strong>{_e(name)}:</strong> error ({_e(status.error)})</span>"
@@ -273,7 +313,7 @@ def _sources(dashboard: Dashboard) -> str:
 
 def dashboard_page(
     dashboard: Dashboard,
-    refreshing: bool,
+    refreshing: AbstractSet[str],
     notice: str = "",
     open_keys: set[str] | None = None,
     warning: str = "",
@@ -281,7 +321,8 @@ def dashboard_page(
 ) -> str:
     """The page.
 
-    `notice` is the outcome of an action just run, shown in the header. `open_keys` are the
+    `refreshing` are the plugins a refresh running now collects. `notice` is the outcome of
+    an action just run, shown in the header. `open_keys` are the
     sections the `open` query parameter says are open; None means the parameter was absent
     and the defaults apply. `warning` is something to fix, e.g. certificates ending soon,
     shown in the header, and across the page too with an `urgency` (see `banner`).
@@ -300,7 +341,7 @@ def dashboard_page(
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
         + banner(warning, urgency)
         + "<main>"
-        + "".join(_group(group, dashboard, open_keys) for group in dashboard.groups)
+        + "".join(_group(group, dashboard, open_keys, refreshing) for group in dashboard.groups)
         + "</main>"
         f"<footer>{_sources(dashboard)}<form method='post' action='/layout/reset'>"
         "<button type='submit' class='secondary'>Reset layout</button></form></footer>"

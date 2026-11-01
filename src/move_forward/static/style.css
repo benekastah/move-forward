@@ -110,6 +110,10 @@ main.single { max-width: 720px; margin: 0 auto; padding-top: 16px; }
   font-size: 12px;
   color: var(--muted);
 }
+/* When the plugin last refreshed, and its Refresh button, at the summary's right end. */
+.group > summary .refreshed { margin-left: auto; color: var(--muted); font-size: 12px; }
+.group > summary .refreshed.error { color: var(--warn); }
+.group > summary form.refresh { margin: 0; }
 /* Panels flow down columns (CSS multi-column), so a short panel is followed by the next one
    instead of blank space. */
 .panels {

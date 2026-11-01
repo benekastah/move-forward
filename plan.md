@@ -124,10 +124,6 @@ Each plugin refreshes on its own `refresh_seconds` now. What's left:
 
 ## Follow-ups
 
-- **Refresh a plugin by hand, and show when it last did.** Each plugin's group on the
-  page gets a refresh button that refreshes just that plugin (and those built on it, as
-  the server's loop does), and its `<summary>` shows when the plugin last refreshed, in
-  local time (with its error, if the last one failed).
 - **GitHub Enterprise.** github assumes github.com: a `host` key, passed to every `gh`
   call (`--hostname`) and used for PR URLs, would let it work with an Enterprise server.
   `mfd init`'s org question already takes a pasted org URL; it would fill in both the host

@@ -66,6 +66,28 @@ def refresh_seconds(e: Enabled) -> int | None:
     return seconds if isinstance(seconds, int) else None
 
 
+def to_collect(
+    plugins: list[Enabled], only: set[str] | None = None
+) -> tuple[list[Enabled], list[Enabled]]:
+    """What a refresh of `only` (None: every plugin) collects: first the plugins that collect
+    on their own, then those that collect after the graph, including any whose `requires`
+    are among the first."""
+    collecting = [e for e in plugins if e.plugin.snapshot_model is not None]
+    first = [
+        e
+        for e in collecting
+        if not e.plugin.collects_after_graph and (only is None or e.name in only)
+    ]
+    names = {e.name for e in first}
+    after = [
+        e
+        for e in collecting
+        if e.plugin.collects_after_graph
+        and (only is None or e.name in only or names.intersection(e.plugin.requires))
+    ]
+    return first, after
+
+
 def refresh(
     config: Config, db: Database, now: datetime | None = None, only: set[str] | None = None
 ) -> None:
@@ -75,20 +97,8 @@ def refresh(
     and those that collect nothing (they work from the others' data)."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
-    collecting = [e for e in plugins if e.plugin.snapshot_model is not None]
-    first = [
-        e
-        for e in collecting
-        if not e.plugin.collects_after_graph and (only is None or e.name in only)
-    ]
-    collected = {e.name for e in first}
-    after = [
-        e
-        for e in collecting
-        if e.plugin.collects_after_graph
-        and (only is None or e.name in only or collected.intersection(e.plugin.requires))
-    ]
-    collected |= {e.name for e in after}
+    first, after = to_collect(plugins, only)
+    collected = {e.name for e in first + after}
     _collect_all(db, first, now, lambda e: e.plugin.collect(e.ctx))
     if shell.stopping():
         return

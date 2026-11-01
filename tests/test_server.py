@@ -243,6 +243,18 @@ def test_refresh_wakes_the_loop(client: HTTPConnection, app: server.App) -> None
     assert app.refreshed == [True]  # type: ignore[attr-defined]
 
 
+def test_refresh_can_be_asked_for_one_plugin(client: HTTPConnection, app: server.App) -> None:
+    assert app.refreshable() == {"github"}  # slack collects nothing
+    assert post(client, "/refresh", {"plugin": "github"}).status == 303
+    assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
+    response = post(client, "/refresh", {"plugin": "jira"})  # not enabled
+    assert response.status == 400
+    response.read()
+    assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
+    assert post(client, "/refresh", {}).status == 303
+    assert app._pending is None  # pyright: ignore[reportPrivateUsage]
+
+
 def test_focus_pages(client: HTTPConnection) -> None:
     body = get(client, "/focus").read().decode()
     assert "What to focus on?" in body and "href='/focus?cat=all&amp;i=0'" in body
