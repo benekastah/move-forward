@@ -177,7 +177,8 @@ plugin nominates its own items. github nominates reviews (quick when up to
 100 lines, with the author waiting), feedback to reply to (the thread authors
 waiting), CI failures, merge conflicts, and PRs ready to merge (quick, and it
 closes the PR); jira the status changes its PRs suggest (quick, closing the
-ticket when it goes to Closed). Below it is a collapsible group per
+ticket when it goes to Closed); git the branches Cleanup lists (quick to
+delete). Below it is a collapsible group per
 enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
 their most urgent panel: notes (todos), git, git_stack, github, slack, jira.

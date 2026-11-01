@@ -8,7 +8,7 @@ from datetime import datetime
 
 from ...domain import Model
 from ...graph import Graph, Ref
-from ...page import Action, Item, Panel, age
+from ...page import Action, Item, Panel, Signals, age
 from .config import GitConfig
 from .models import LocalSnapshot
 
@@ -173,6 +173,8 @@ class Builder:
         return Panel(
             key="cleanup",
             priority=100,  # 10. cleanup
+            act_now=True,
+            signals=Signals(verb="Delete the branch", effort="minutes"),
             title="Cleanup",
             description="Local branches whose PR merged or whose remote branch is gone.",
             items=items,
