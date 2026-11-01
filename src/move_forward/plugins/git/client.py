@@ -84,16 +84,20 @@ def _default_branch(repo: Path) -> str:
 
 
 def _my_dirs(repo: Path, default_branch: str, email: str, since_days: int) -> list[str]:
-    """Directories with commits of mine on the default branch within `since_days`."""
-    out = git(
-        repo,
-        "log",
-        f"origin/{default_branch}",
-        f"--since={since_days} days ago",
-        f"--author={email}",
-        "--name-only",
-        "--format=",
-    )
+    """Directories with commits of mine on the default branch within `since_days`; none
+    for a repo without `origin` (a local-only project)."""
+    try:
+        out = git(
+            repo,
+            "log",
+            f"origin/{default_branch}",
+            f"--since={since_days} days ago",
+            f"--author={email}",
+            "--name-only",
+            "--format=",
+        )
+    except CommandError:
+        return []
     return sorted({str(Path(path).parent) for path in out.splitlines() if path})
 
 

@@ -131,3 +131,13 @@ def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) 
     result = local.collect_repo(repo, "nobody@example.com", now, 30, [])  # the repo's email wins
     counted = {b.name: b.my_commits for b in result.branches}
     assert counted == {"main": None, "mine": 1, "stacked": 1, "theirs": 0}
+
+
+def test_a_repo_without_a_remote_is_collected(tmp_path: Path) -> None:
+    repo = tmp_path / "local-only"
+    _init_repo(repo)
+    _commit(repo, "a.txt")
+    git(repo, "checkout", "-q", "-b", "idea")
+    collected = local.collect_repo(repo, "me@example.com", datetime.now(UTC), 30, [])
+    assert collected.github_repo is None and collected.my_dirs == []
+    assert [b.name for b in collected.branches] == ["idea", "main"]
