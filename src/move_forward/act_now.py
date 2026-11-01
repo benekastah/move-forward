@@ -7,21 +7,27 @@ keeps one item per subject and a few per plugin, and says on each item why it's 
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from pydantic import Field
 
 from .domain import Model
 from .graph import Ref
-from .page import Action, Item, Panel, Signals
+from .page import Action, Item, Panel, Signals, age
 from .strict import Strict
 
 KEY = "now"
 """The Act now panel's key within core's Act now group."""
 ACTIONS = "act_now"
 """The prefix of Act now's own buttons, `act_now/<snooze|dismiss|pin|unpin>`."""
+DUE_HORIZON = timedelta(days=7)
+"""How far ahead a due date starts to count."""
+DUE_MOST = 4.0
+"""What a due date adds (times its weight) once it's past; it rises to that over
+`DUE_HORIZON`."""
 FeedbackKey = tuple[str, str, str]
 """An item's main subject's kind and id, and its verb: what feedback is kept by."""
 
@@ -46,7 +52,11 @@ class Weights(Strict):
     hour: float = 1
     """It takes about an hour."""
     waiting: float = 2
-    """Someone is waiting on me for it."""
+    """Someone is waiting on me for it. Each doubling of the days they've waited adds 1 more."""
+    importance: float = 3
+    """Per level of importance (1 high, 2 critical)."""
+    due: float = 1
+    """Times the due date's pressure: 0 a week or more ahead, rising to 4 once it's past."""
 
 
 class ActNowConfig(Strict):
@@ -95,20 +105,46 @@ def _set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime)
     return feedback.action == "snooze" and feedback.until is not None and feedback.until > now
 
 
-def score(signals: Signals, weights: Weights) -> float:
-    """Finishing beats starting, quick beats slow, and someone waiting adds urgency. Unknown
-    effort adds nothing, so an item of unknown size never takes a quick win's place."""
-    return (
+def _days(since: timedelta) -> float:
+    return max(since.total_seconds(), 0) / 86400
+
+
+def due_pressure(due: datetime, now: datetime) -> float:
+    """0 while `due` is `DUE_HORIZON` or more away, rising to `DUE_MOST` as it arrives."""
+    left = due - now
+    if left >= DUE_HORIZON:
+        return 0.0
+    return DUE_MOST * (1 - max(left, timedelta()) / DUE_HORIZON)
+
+
+def score(signals: Signals, weights: Weights, now: datetime | None = None) -> float:
+    """Finishing beats starting, quick beats slow, importance counts, someone waiting adds
+    urgency (more the longer they've waited), and so does a due date drawing near. Unknown
+    effort adds nothing, so an item of unknown size never takes a quick win's place. Without
+    `now`, how long someone has waited and how near a date is don't count."""
+    total = (
         weights.closes * (signals.closes is not None)
         + weights.minutes * (signals.effort == "minutes")
         + weights.hour * (signals.effort == "hour")
         + weights.waiting * bool(signals.waiting)
+        + weights.importance * signals.importance
     )
+    if now is not None and signals.waiting and signals.waiting_since is not None:
+        total += math.log2(1 + _days(now - signals.waiting_since))
+    if now is not None and signals.due is not None:
+        total += weights.due * due_pressure(signals.due, now)
+    return total
 
 
-def why(signals: Signals) -> str:
-    """The signals that scored, in words: "quick, closes APP-12, alice waiting"."""
+IMPORTANCE_WORDS = {1: "important", 2: "critical"}
+
+
+def why(signals: Signals, now: datetime | None = None) -> str:
+    """The signals that scored, in words: "critical, quick, closes APP-12, alice waiting 2d,
+    due in 3d"."""
     parts: list[str] = []
+    if signals.importance in IMPORTANCE_WORDS:
+        parts.append(IMPORTANCE_WORDS[signals.importance])
     if signals.effort == "minutes":
         parts.append("quick")
     elif signals.effort == "hour":
@@ -116,7 +152,15 @@ def why(signals: Signals) -> str:
     if signals.closes:
         parts.append(f"closes {signals.closes}")
     if signals.waiting:
-        parts.append(f"{', '.join(signals.waiting)} waiting")
+        waited = ""
+        if now is not None and signals.waiting_since is not None:
+            waited = f" {age(now, signals.waiting_since)}"
+        parts.append(f"{', '.join(signals.waiting)} waiting{waited}")
+    if now is not None and signals.due is not None and due_pressure(signals.due, now) > 0:
+        if signals.due <= now:
+            parts.append(f"overdue by {age(now, signals.due)}")
+        else:
+            parts.append(f"due in {age(signals.due, now)}")
     return ", ".join(parts)
 
 
@@ -158,7 +202,7 @@ def panels(
     candidates.sort(
         key=lambda c: (
             not pinned(c[1]),
-            -score(c[1].signals, weights),
+            -score(c[1].signals, weights, now),
             -c[1].item.rank,
             c[0],
         )
@@ -179,7 +223,7 @@ def panels(
         if per.get(nomination.plugin, 0) == per_plugin:
             continue
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1
-        shown = _shown(nomination, also, place, size, pinned(nomination))
+        shown = _shown(nomination, also, place, size, pinned(nomination), now)
         by_plugin.setdefault(nomination.plugin, []).append(shown)
         place += 1
     if not by_plugin:
@@ -213,12 +257,19 @@ def _buttons(nomination: Nomination, pinned: bool) -> list[Action]:
     ]
 
 
-def _shown(nomination: Nomination, also: list[str], place: int, size: int, pinned: bool) -> Item:
+def _shown(
+    nomination: Nomination,
+    also: list[str],
+    place: int,
+    size: int,
+    pinned: bool,
+    now: datetime | None,
+) -> Item:
     """The item as Act now shows it: its verb first, its place overall as a badge, why it's
     here, what else is due on the same subject, and the buttons to set it aside. Ranked by
     its place, since the panels keep their own order."""
     item, signals = nomination.item, nomination.signals
-    reason = ("pinned, " if pinned else "") + why(signals)
+    reason = ("pinned, " if pinned else "") + why(signals, now)
     reason = reason.removesuffix(", ")
     details = [f"why: {reason}"] if reason else []
     details += item.details

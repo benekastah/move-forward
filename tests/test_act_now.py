@@ -55,6 +55,50 @@ def test_finishing_beats_quick_beats_unknown_and_blocked_is_out() -> None:
     assert [i.rank for i in ranked.items] == [7, 6, 5, 4]  # the panel keeps its order
 
 
+def test_importance_time_waited_and_a_nearing_due_date_raise_an_item() -> None:
+    ranked = _ranked(
+        [
+            Nomination("github", _item("quick", effort="minutes")),
+            Nomination("jira", _item("critical", importance=2)),
+            Nomination(
+                "github",
+                _item("waited a week", waiting=["bob"], waiting_since=NOW - timedelta(days=7)),
+            ),
+            Nomination(
+                "github",
+                _item("waited an hour", waiting=["al"], waiting_since=NOW - timedelta(hours=1)),
+            ),
+            Nomination("jira", _item("overdue", due=NOW - timedelta(days=1))),
+            Nomination("jira", _item("due in 3 days", due=NOW + timedelta(days=3))),
+            Nomination("jira", _item("due in a month", due=NOW + timedelta(days=30))),
+        ],
+        act_now.ActNowConfig(per_plugin=7),
+        now=NOW,
+    )
+    # critical 6; waited a week 2 + log2(8) = 5; overdue 4; waited an hour ~2.06;
+    # due in 3 days 4 * 4/7 ~ 2.3; quick 2; a month away 0.
+    assert _titles(ranked) == [
+        "critical",
+        "waited a week",
+        "overdue",
+        "due in 3 days",
+        "waited an hour",
+        "quick",
+        "due in a month",
+    ]
+    why = {i.title: i.details for i in ranked.items}
+    assert why["critical"] == ["why: critical"]
+    assert why["waited a week"] == ["why: bob waiting 7d"]
+    assert why["overdue"] == ["why: overdue by 1d"] and why["due in 3 days"] == ["why: due in 3d"]
+    assert why["due in a month"] == []  # too far off to count, or to mention
+
+
+def test_without_now_time_does_not_count() -> None:
+    since = NOW - timedelta(days=30)
+    assert act_now.score(Signals(waiting=["a"], waiting_since=since), act_now.Weights()) == 2
+    assert act_now.why(Signals(waiting=["a"], waiting_since=since, due=since)) == "a waiting"
+
+
 def test_one_item_per_subject_with_the_others_mentioned() -> None:
     ranked = _ranked(
         [

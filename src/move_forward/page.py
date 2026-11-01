@@ -61,6 +61,14 @@ class Signals(Model):
     """Who is waiting on me for it: logins, names, "customer"."""
     blocked: bool = False
     """Not doable now: waiting on someone else, on CI, or for a decision."""
+    importance: int = Field(default=0, ge=0, le=2)
+    """0 normal, 1 high, 2 critical: how much it matters beyond its size. The plugin maps its
+    tool's idea of it (an escalation, a priority) onto these."""
+    waiting_since: datetime | None = None
+    """Since when `waiting` have waited (a review requested, a question unanswered): the
+    longer, the higher it ranks."""
+    due: datetime | None = None
+    """A deadline, or when it goes stale: it ranks higher as that nears, most once past."""
     verb: str = ""
     """What to do, as a short imperative: "Reply to 2 threads", "Merge", "Review"."""
 

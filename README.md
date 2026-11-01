@@ -62,7 +62,9 @@ in that tool's plugin section; see [Plugins](#plugins).
 `[act_now]` tunes how Act now ranks what the plugins nominate: `size` (7,
 the items shown), `per_plugin` (3, the most one plugin may fill) and `weights`
 (what each signal adds to an item's score: `closes = 3`, `minutes = 2`,
-`hour = 1`, `waiting = 2`).
+`hour = 1`, `waiting = 2` (plus 1 for each doubling of the days they've waited),
+`importance = 3` per level (high, critical), and `due = 1` times the due date's
+pressure, 0 a week or more ahead and rising to 4 once it's past).
 
 Teams are named once, at the top level. A plugin that has its own idea of a
 team maps the names in a `teams` table of its section: `[github.teams]` gives
@@ -125,7 +127,9 @@ first, and each is badged with its place overall (`#1`, `#2`, ...); focus mode's
 Act now goes through them in that order. Each says what to
 do and why it's there ("quick, closes APP-12, alice waiting"), and anything
 else due on the same subject ("also: Fix CI"). Finishing something counts
-most, then quick work, then someone waiting; blocked work is left out. Each
+most, then quick work, then someone waiting (more the longer they've waited);
+important work and a nearing due date add to that ("critical, alice waiting 3d,
+due in 2d"); blocked work is left out. Each
 plugin nominates its own items; its page says which. Each item has Snooze
 (until tomorrow), Dismiss and Pin (first until unpinned); a snoozed or
 dismissed item comes back once it changes (its title, badges or details).
