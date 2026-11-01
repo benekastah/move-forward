@@ -24,6 +24,10 @@ class Ref(Model):
     kind: str
     id: str
 
+    def __hash__(self) -> int:
+        # Pydantic hashes frozen models already, but type checkers can't see that it does.
+        return hash((self.kind, self.id))
+
 
 class Entity(Model):
     ref: Ref

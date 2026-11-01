@@ -218,8 +218,12 @@ def test_act_now_is_split_by_plugin_in_its_best_items_order_and_numbered_overall
 
 def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it() -> None:
     ticket, entry = Ref(kind="ticket", id="APP-1"), Ref(kind="entry", id="9")
-    units = {("pr", "1"): [ticket], ("pr", "2"): [ticket], ("ticket", "APP-1"): [ticket]}
-    units[("entry", "9")] = [entry]
+    units = {
+        Ref(kind="pr", id="1"): [ticket],
+        Ref(kind="pr", id="2"): [ticket],
+        ticket: [ticket],
+        entry: [entry],
+    }
     move = Item(
         title="APP-1 Do it",
         url="https://jira/APP-1",
@@ -238,7 +242,7 @@ def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it(
             Nomination("notes", todo),
         ],
         now=NOW,
-        units=lambda ref: units.get((ref.kind, ref.id), []),
+        units=lambda ref: units.get(ref, []),
     )
     items = sorted((i for p in panels for i in p.items), key=lambda i: -i.rank)
     assert [i.title for i in items] == ["Reply: PR 1", "Write it up", "Fix CI: PR 2"]
