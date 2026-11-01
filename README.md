@@ -137,9 +137,9 @@ before the command's name.
 
 | Command | Does |
 | --- | --- |
-| `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`; `--open` opens it signed in, like `mfd open`. |
+| `mfd serve [--open] [--port N]` | Serve the page, refreshing every `refresh_seconds`; `--open` opens it signed in, like `mfd open`. It restarts when the config file changes, once the new config passes `mfd check` (run in a separate process); if it fails, the error is logged, the running server carries on, and the next change tries again. |
 | `mfd open [--port N]` | Open the running dashboard in a browser, signed in (see [API](#api)). |
-| `mfd serve --reload` | Development: also restart when a source file of the dashboard or the config file changes (`--open` isn't repeated on restart). The new code and config are checked first, with `mfd check` in a separate process; if that fails, the error is logged, the running server carries on, and the next change tries again. |
+| `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |

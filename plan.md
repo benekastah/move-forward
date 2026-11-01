@@ -41,14 +41,12 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ## Follow-ups
 
-- **Config edits apply without `--reload`.** `mfd serve --reload` restarts on a config
-  change that passes `mfd check`; plain `mfd serve` keeps the config it started with. It
-  should reload the file in place when it changes: validate it, keep the old config (and
-  say why on the page) when it's invalid, migrate plugins newly enabled, and say that
-  `port` and `db_path` need a restart.
-- **Settings from the page.** Once config edits apply live, a settings page can change
-  them by writing the config file (keeping its comments and hand edits), so the file stays
-  the one source of truth: `[act_now]` weights first, then plugins' sections.
+- **Settings from the page.** `mfd serve` restarts when the config changes (and passes
+  `mfd check`), so a settings page can change settings by writing the config file
+  (keeping its comments and hand edits), and the file stays the one source of truth:
+  `[act_now]` weights first, then plugins' sections. If the restart's second of downtime
+  gets in the way there, apply edits live instead: swap the config in place, migrate
+  plugins newly enabled, and restart only for `port` and `db_path`.
 - **One unknown key fails jira's whole fetch.** Jira rejects a `key in (...)` search naming
   a ticket that doesn't exist (mistyped, deleted, or in a project I can't see), so the
   prune learns nothing about any ticket that day and keeps every entry naming one. Fetch

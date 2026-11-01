@@ -1,7 +1,8 @@
-"""Restart the server when its source changes: `mfd serve --reload`, for development.
+"""Restart the server when its config changes, and with `mfd serve --reload` (for
+development) when its source changes too.
 
-A thread polls the modification times of the package's files and the config file. When one
-changes, the changed Python files are compiled, then `mfd check` runs in a separate process
+A thread polls the modification times of the config file, and with `--reload` the
+package's files. When one changes, the changed Python files are compiled, then `mfd check` runs in a separate process
 to import every module and load the config. Only if both pass does the process replace
 itself with the same command; otherwise the error is logged, the running server carries on,
 and the next change tries again.
@@ -31,7 +32,10 @@ CHECK_COMMAND = "check"
 CHECK_TIMEOUT_SECONDS = 60
 
 
-def watched_files(root: Path = PACKAGE_DIR) -> list[Path]:
+def watched_files(root: Path | None = PACKAGE_DIR) -> list[Path]:
+    """The source files under `root`; none without one."""
+    if root is None:
+        return []
     return sorted(p for p in root.rglob("*") if p.suffix in WATCHED_SUFFIXES and p.is_file())
 
 
@@ -41,7 +45,7 @@ def snapshot(files: list[Path]) -> dict[Path, float]:
 
 
 def changed(
-    before: dict[Path, float], root: Path = PACKAGE_DIR, extra: list[Path] | None = None
+    before: dict[Path, float], root: Path | None = PACKAGE_DIR, extra: list[Path] | None = None
 ) -> list[Path]:
     """Files added, removed or modified since `before`; `extra` are watched besides `root`'s."""
     now = snapshot(watched_files(root) + (extra or []))
@@ -105,7 +109,7 @@ def restart() -> None:
 
 def watch(
     restart: Callable[[], None] = restart,
-    root: Path = PACKAGE_DIR,
+    root: Path | None = PACKAGE_DIR,
     extra: list[Path] | None = None,
     check: Callable[[], bool] = passes_check,
 ) -> None:
@@ -126,8 +130,9 @@ def watch(
             restart()
 
 
-def start(config_path: Path) -> None:
-    """Watch the package and `config_path` in a daemon thread."""
+def start(config_path: Path, code: bool) -> None:
+    """Watch `config_path`, and with `code` the package's source, in a daemon thread."""
+    root = PACKAGE_DIR if code else None
     threading.Thread(
-        target=watch, kwargs={"extra": [config_path]}, name="reload", daemon=True
+        target=watch, kwargs={"root": root, "extra": [config_path]}, name="reload", daemon=True
     ).start()

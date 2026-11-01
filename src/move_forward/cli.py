@@ -101,7 +101,7 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     serve_parser.add_argument(
         "--reload",
         action="store_true",
-        help="development: restart when the dashboard's source files change",
+        help="development: restart when the dashboard's source files change, not just its config",
     )
 
     open_parser = commands.add_parser("open", help="open the running dashboard, signed in")
@@ -195,8 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         port = args.port or config.port
         if args.open:
             _open(auth.login_url(port, token))
-        if args.reload:
-            reload.start(config_path)
+        reload.start(config_path, code=args.reload)
         serve(config, db, token, port)
     return 0
 

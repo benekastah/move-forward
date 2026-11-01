@@ -131,3 +131,27 @@ def test_passes_check_runs_mfd_check_in_a_fresh_process(tmp_path: Path) -> None:
     assert reload.passes_check(["mfd", "-c", str(config), "serve"])
     config.write_text('email = "me@x"\nrepos = []\n')
     assert not reload.passes_check(["mfd", "-c", str(config), "serve"])
+
+
+def test_without_reload_only_the_config_is_watched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text("")
+    polls = 0
+
+    def sleep(_: float) -> None:
+        nonlocal polls
+        polls += 1
+        if polls == 2:
+            os.utime(config, (2, 2))
+        elif polls > 10:
+            pytest.fail("never restarted")
+
+    def restart() -> None:
+        raise Restarted
+
+    monkeypatch.setattr(reload.time, "sleep", sleep)
+    assert reload.watched_files(None) == []
+    with pytest.raises(Restarted):
+        reload.watch(restart, None, extra=[config], check=lambda: True)
