@@ -562,12 +562,14 @@ class _TLSServer(ThreadingHTTPServer):
 
 def scheme(config: Config) -> str:
     """ "https" when `https` is on and the certificate is there (`mfd cert`), else "http"."""
-    return "https" if config.https and tls.Paths.beside(config.db_path).ready() else "http"
+    return tls.scheme(config.https, config.db_path)
 
 
 def serve(config: Config, db: Database, token: str, port: int | None = None) -> None:
     """Serve forever on localhost, refreshing in the background: over HTTPS with the
     certificate, else plain HTTP."""
+    if port and port != config.port:  # `--port`: plugins build URLs back to the dashboard
+        config = config.model_copy(update={"port": port})
     served = scheme(config)
     app = App(config, db, token, served)
     threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()

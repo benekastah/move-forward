@@ -47,6 +47,10 @@ class Context[C: BaseModel]:
     """For the plugin's own repository over its own tables, which its migrations made."""
     kv: KvRepository
     """Key/value state in the plugin's namespace."""
+    dashboard_url: str = ""
+    """Where the dashboard is served, e.g. `http://localhost:8765`, for a tool's sign-in to
+    come back to. It's `localhost`, which is what such sign-ins take for an app on this
+    machine; the dashboard sends it on to 127.0.0.1, where its sign-in cookie is."""
 
     @property
     def today(self) -> date:

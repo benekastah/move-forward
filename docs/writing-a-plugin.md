@@ -66,6 +66,9 @@ class LinearConfig(Strict):
 - Secrets never go in the config. Give the section `token_env` and `keychain_service`, as
   jira and slack do, and read the token with `keychain.token(config, email)`: then
   `mfd token set <plugin>` stores it and `mfd token check` finds it. Anything sent with a token must go over HTTPS (`move_forward.https`).
+- A tool whose sign-in sends the browser back to the dashboard (OAuth) is given
+  `ctx.dashboard_url` (`http://localhost:8765`, or `https://` when it serves HTTPS) to
+  build its redirect URL from, and a page of the plugin's to land on.
 
 ## Collecting and storing
 

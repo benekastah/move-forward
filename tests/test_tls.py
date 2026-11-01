@@ -15,7 +15,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.private import is_private
-from move_forward.registry import migrate
+from move_forward.registry import enabled, migrate
 
 TOKEN = "s3cret"
 
@@ -102,6 +102,20 @@ def test_without_a_certificate_the_dashboard_stays_on_plain_http(tmp_path: Path)
     tls.make(tls.Paths.beside(config.db_path))
     assert server.scheme(config) == "https"
     assert server.scheme(config.model_copy(update={"https": False})) == "http"
+
+
+def test_plugins_know_where_the_dashboard_is_served(tmp_path: Path) -> None:
+    config = Config(
+        email="me@x", https=True, port=9001, db_path=tmp_path / "d.db", github=GitHubConfig(org="a")
+    )
+
+    def url(config: Config) -> str:
+        [github, *_] = enabled(config, Database(":memory:"), datetime.now(UTC))
+        return github.ctx.dashboard_url
+
+    assert url(config) == "http://localhost:9001"  # no certificate yet
+    tls.make(tls.Paths.beside(config.db_path))
+    assert url(config) == "https://localhost:9001"
 
 
 def test_trusting_adds_the_authority_to_firefoxs_and_chromes_stores(

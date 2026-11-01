@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
+from . import tls
 from .db import Database
 from .graph import Entity, Graph, Ref
 from .plugin import Context, Plugin
@@ -91,6 +92,7 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
             now=now,
             db=db,
             kv=KvRepository(db, plugin.name),
+            dashboard_url=f"{tls.scheme(config.https, config.db_path)}://localhost:{config.port}",
         )
         result.append(Enabled(plugin, ctx))
     return result

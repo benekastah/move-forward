@@ -315,3 +315,9 @@ def trust(paths: Paths, home: Path | None = None) -> list[str]:
     if not done:
         done.append(f"import {paths.ca} as an authority in your browser's certificate settings")
     return done
+
+
+def scheme(https: bool, db_path: Path) -> str:
+    """ "https" when `https` is on and the certificate is there (`mfd cert`), else "http":
+    how the dashboard is served."""
+    return "https" if https and Paths.beside(db_path).ready() else "http"
