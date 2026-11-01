@@ -119,10 +119,10 @@ worktree of a configured repo, not only the listed path.
 
 ### Act now
 
-The top of the page should answer one question for any set of tools: what should I do
-next? Today "Act now" is a fixed list of four GitHub panels. This note proposes making it
-generic: every plugin describes its items in a shared vocabulary, and one ranking turns
-those descriptions into a short list of the best next actions, whatever the tools.
+The first version is built (see the README's Panels and `act_now.py`): plugins nominate
+items with `Signals`, core ranks them, and Snooze, Dismiss and Pin are kept in
+`act_now_feedback`. What follows is the design the later version (step 6b's last bullet)
+fills in: `importance`, `waiting_since` and `due`, and merging across tools.
 
 #### What makes something worth doing now
 
@@ -231,74 +231,6 @@ Then:
 - **Explanations.** Every item says why it's there, from the signals that scored: "quick,
   closes APP-12, Alice waiting 2 days". This is what makes the ranking trustworthy and
   tunable.
-
-#### Feedback from the person using it
-
-- **Snooze** an item until tomorrow or a date; **dismiss** it for good. Stored in the
-  core's `act_now_feedback` table, keyed by the item's main subject (its kind
-  and id) and verb. A changed item comes back: `Item.fingerprint` is a string the
-  plugin sets from what would make the item worth another look (github: the head sha and
-  the count of reviews and comments; jira: the status and `updated`), defaulting to a hash
-  of the item's title, badges and details. Feedback whose fingerprint no longer matches is
-  ignored.
-- **Pin** an item to keep it at the top until it's done.
-- Optionally later: count which items get acted on from the list versus skipped, and
-  nudge the weights. Not needed for a first version; the explanations plus config weights
-  get most of the value without any learning.
-
-#### Where it lives
-
-In core, not in a plugin. Each plugin decides what of its own it nominates, through one
-hook in the plugin protocol:
-
-```python
-def act_now(self, ctx: Context[C], snapshot: S | None, graph: Graph) -> list[Item]:
-    """This plugin's candidates for Act now, each with `signals` filled in."""
-```
-
-The plugin knows its tool best: which of its items are actionable, how long they take,
-what they close and how important they are. Core knows nothing about any tool; it only
-combines the nominations. Core then:
-
-1. collects every enabled plugin's nominations,
-2. drops blocked items and ones the person snoozed or dismissed,
-3. merges nominations about the same subject, or about subjects the graph links (a PR and
-   its ticket), into one item with all their actions,
-4. scores, caps per plugin, and keeps the top `size`,
-5. renders the result as the first panel on the page and as focus mode's "Act now".
-
-A nominated item is usually also in one of the plugin's own panels; nominating doesn't move
-it. A plugin that implements no `act_now` contributes nothing, and the fallback below lets
-it opt in cheaply. Core owns one table for the person's feedback:
-
-```sql
-CREATE TABLE act_now_feedback (
-    subject_kind TEXT NOT NULL,
-    subject_id TEXT NOT NULL,
-    verb TEXT NOT NULL,
-    action TEXT NOT NULL CHECK (action IN ('snooze', 'dismiss', 'pin')),
-    until TEXT,                        -- for snooze
-    fingerprint TEXT NOT NULL,         -- Item.fingerprint when snoozed or dismissed
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (subject_kind, subject_id, verb)
-);
-```
-
-The urgent panels of today (Reviews for me, Feedback, CI failures, Merge conflicts) go back to
-their plugins' groups, and the top of the page is this one ranked panel. Focus mode gets
-an "Act now" category that walks the same list.
-
-#### A version that doesn't depend on every plugin filling in signals
-
-Plugins will fill in signals unevenly, especially third-party ones. A fallback keeps the
-panel useful:
-
-- `Plugin.act_now` by default nominates every item in the plugin's panels marked
-  `actionable` (today's urgent panels), with the panel's default effort and verb for items
-  that carry no signals of their own.
-- Items in non-actionable panels never appear unless the plugin nominates them itself.
-- So a minimal plugin gets into Act now by setting two fields on a panel, and a careful
-  plugin overrides `act_now` to nominate precisely and rank better.
 
 #### Open questions
 
