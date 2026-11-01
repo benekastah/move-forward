@@ -86,6 +86,8 @@ is what's left to build.
   from core's table if it's still there; core never writes into a plugin's
   tables.
 - **Add tests** with every change, and make sure they would fail without it.
+  A plugin's tests go in `tests/plugins/`, named after it (`test_github_*.py`);
+  core's stay in `tests/`.
   Panel tests build the page as core does (`conftest.dashboard(...)`) and
   assert on panel contents; plugin contract tests assert on the entities a
   plugin publishes. Tests touching git make real repos in `tmp_path`; tests
