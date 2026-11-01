@@ -1,20 +1,4 @@
 #!/bin/sh
-# Run ./check.sh before pushing, unless the push only deletes remote branches.
-# Skip it with `git push --no-verify`.
-#
-# git passes each ref being pushed on stdin as
-# "<local ref> <local sha> <remote ref> <remote sha>"; a deletion's local sha
-# is all zeros.
-
-set -eu
-
-pushes_commits=false
-while read -r _ local_sha _ _; do
-    case "$local_sha" in
-        *[!0]*) pushes_commits=true ;;
-    esac
-done
-
-if [ "$pushes_commits" = true ]; then
-    exec ./check.sh -q
-fi
+# Run every check before pushing (skip with `git push --no-verify`); see dev.py's pre_push.
+if command -v py > /dev/null 2>&1; then exec py -3 dev.py pre-push; fi
+exec python3 dev.py pre-push

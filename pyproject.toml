@@ -31,7 +31,7 @@ target-version = "py312"
 extend-select = ["I", "UP", "B", "C4", "SIM"]
 
 [tool.basedpyright]
-include = ["src", "tests"]
+include = ["src", "tests", "dev.py"]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
 reportMissingModuleSource = false

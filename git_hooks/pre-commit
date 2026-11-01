@@ -1,36 +1,5 @@
 #!/bin/sh
-# Before each commit, format the staged Python files with Ruff and apply its
-# safe lint fixes (e.g. import sorting). The staged version of each file is
-# fixed and staged in its place, so a file that's only partly staged commits
-# just its staged part, fixed; the working copy is fixed too. Lint errors Ruff
-# can't fix stop the commit.
-#
-# install.sh makes git use this directory's hooks, with
-# `git config core.hooksPath git_hooks`.
-
-set -eu
-
-staged_python=$(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
-if [ -z "$staged_python" ]; then
-    exit 0
-fi
-
-# Ruff comes from .venv; set it up, or bring it up to date.
-./dev-venv.sh
-
-scratch=$(mktemp)
-trap 'rm -f "$scratch"' EXIT
-
-echo "$staged_python" | while IFS= read -r path; do
-    # Into a file first, so a file Ruff can't format (e.g. a syntax error)
-    # stops the commit rather than being staged empty.
-    git show ":$path" \
-        | .venv/bin/ruff check --fix --quiet --stdin-filename "$path" - \
-        | .venv/bin/ruff format --quiet --stdin-filename "$path" - > "$scratch"
-    mode=$(git ls-files --stage -- "$path" | cut -d ' ' -f 1)
-    git update-index --cacheinfo "$mode,$(git hash-object -w "$scratch"),$path"
-    if [ -f "$path" ]; then
-        .venv/bin/ruff check --fix --quiet -- "$path"
-        .venv/bin/ruff format --quiet -- "$path"
-    fi
-done
+# Format and lint-fix the staged Python files; see dev.py's pre_commit. git runs hooks with
+# sh even on Windows, where `py` is the Python to run (`python3` may be a store stub).
+if command -v py > /dev/null 2>&1; then exec py -3 dev.py pre-commit; fi
+exec python3 dev.py pre-commit

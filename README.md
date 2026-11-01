@@ -19,6 +19,7 @@ the `git_stack` plugin).
 
 ```sh
 ~/src/move-forward/install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
+                                # (on Windows: py dev.py install)
 mfd cert --trust                # a certificate for https://127.0.0.1, trusted by your browsers
 mfd serve --open
 ```
