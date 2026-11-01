@@ -46,8 +46,13 @@ def test_suggest_reviewers_counts_recent_committers_with_known_logins(tmp_path: 
     _commit(repo, "me@x", "api/d.py")
     _commit(repo, "carol@x", "web/e.py")
     _commit(repo, "nobody@x", "api/f.py")
-    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
-    local = derive.Checkout(github_repo="acme/widgets", dir=str(repo), default_branch="main")
+    git(repo, "update-ref", "refs/remotes/upstream/main", "HEAD")
+    local = derive.Checkout(
+        github_repo="acme/widgets",
+        dir=str(repo),
+        default_branch="main",
+        default_refs=["upstream/main"],
+    )
     emails = {
         "alice": "alice@x",
         "bob": "bob@x",

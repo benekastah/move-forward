@@ -7,6 +7,7 @@ from move_forward import asking, config, init
 from move_forward.plugins.git import setup as git_setup
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.github import setup as github_setup
+from move_forward.shell import git
 
 
 def scripted(answers: dict[str, str | list[str]]) -> asking.Prompt:
@@ -199,6 +200,29 @@ def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> No
 def test_guesses_cope_without_git_or_gh(tmp_path: Path) -> None:
     assert asking.checkout(tmp_path) is None and github_setup.guess_org(tmp_path) == ""
     assert github_setup.guess_teams("") == [] and github_setup.org_team_examples("") == []
+
+
+def test_the_org_is_guessed_from_the_remote_the_branch_tracks(tmp_path: Path) -> None:
+    org = tmp_path / "org"
+    git(tmp_path, "init", "-q", "-b", "main", str(org))
+    git(
+        org,
+        "-c",
+        "user.email=me@x",
+        "-c",
+        "user.name=Me",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "a",
+    )
+    repo = tmp_path / "repo"
+    git(tmp_path, "clone", "-q", "-o", "upstream", str(org), str(repo))
+    git(repo, "remote", "add", "a-fork", "https://github.com/me/widgets.git")
+    assert github_setup.guess_org(repo) == "me"  # main tracks upstream, which isn't on GitHub
+    git(repo, "remote", "set-url", "upstream", "git@github.com:acme/widgets.git")
+    assert github_setup.guess_org(repo) == "acme"  # the tracked one first
 
 
 def test_without_github_the_teams_are_asked_by_name(

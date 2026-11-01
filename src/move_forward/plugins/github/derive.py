@@ -21,6 +21,8 @@ class Checkout(Model):
     """owner/name."""
     dir: str
     default_branch: str
+    default_refs: list[str] = Field(default_factory=list)
+    """The default branch on each of its remotes, as refs `git log` takes in `dir`."""
     my_dirs: list[str] = Field(default_factory=list)
     """Directories I committed to recently."""
 
@@ -64,11 +66,13 @@ def suggest_reviewers(
     `emails` are by login.
     """
     dirs = sorted({str(Path(path).parent) for path in files}) or ["."]
+    if not repo.default_refs:
+        return []
     try:
         out = git(
             Path(repo.dir),
             "log",
-            f"origin/{repo.default_branch}",
+            *repo.default_refs,
             f"--since={since_days} days ago",
             "--format=%ae",
             "--",

@@ -22,12 +22,17 @@ TEMPLATE = """\
 
 
 def guess_org(cwd: Path) -> str:
-    """The GitHub org of the origin remote of the checkout `cwd` is in, if any."""
+    """The GitHub org of the checkout `cwd` is in, if any: from the remote its current
+    branch tracks (`upstream` in a fork, often), else from the first remote on GitHub."""
     top = checkout(cwd)
     if top is None:
         return ""
-    match = GITHUB_REMOTE_RE.search(quiet(["git", "remote", "get-url", "origin"], top))
-    return match.group(1) if match else ""
+    tracked = quiet(["git", "rev-parse", "--abbrev-ref", "@{upstream}"], top).split("/")[0]
+    remotes = quiet(["git", "remote"], top).split()
+    for remote in sorted(remotes, key=lambda name: name != tracked):
+        if match := GITHUB_REMOTE_RE.search(quiet(["git", "remote", "get-url", remote], top)):
+            return match.group(1)
+    return ""
 
 
 def guess_teams(org: str) -> list[str]:
