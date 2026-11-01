@@ -525,3 +525,25 @@ def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
     assert _GitHubWithChecks.answers == [True]
     assert app.check_for_changes(2030.0) == set() and _GitHubWithChecks.answers == [True]
     assert app.check_for_changes(2060.0) == {"github"}
+
+
+class _GitHubWatchingGit(_GitHubWithChecks):
+    change_check_seconds: ClassVar[int | None] = None
+    watches: ClassVar[list[str]] = ["git"]
+
+
+def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    swap = {"github": _GitHubWatchingGit()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    app.config = app.config.model_copy(update={"git": GitConfig(repos=[])})
+    migrate(app.config, app.db)
+    monkeypatch.setattr(_GitHubWatchingGit, "answers", [True, False, False])
+    app.refresh_now({"git"})
+    assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
+    app._pending = set()  # pyright: ignore[reportPrivateUsage]
+    app.refresh_now({"github"})  # its own refresh: asked only to forget what it did
+    app.refresh_now({"git"})  # nothing of github's moved
+    assert app._pending == set() and _GitHubWatchingGit.answers == []  # pyright: ignore[reportPrivateUsage]
+    assert app.check_for_changes() == set()  # no change_check_seconds: never polled

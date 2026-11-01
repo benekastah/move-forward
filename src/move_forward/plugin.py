@@ -147,6 +147,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     change_check_seconds: ClassVar[int | None] = None
     """How often `mfd serve` asks `changed`; None for a plugin without such a check."""
+    watches: ClassVar[list[str]] = []
+    """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
+    each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
+    rather than waiting for `change_check_seconds`."""
 
     def changed(self, ctx: Context[C], graph: Graph) -> bool:
         """Whether what the plugin collects has changed since this was last asked, by a check

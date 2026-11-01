@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from . import auth, render, shell, tls
 from .config import Config
 from .db import Database
+from .graph import Graph
 from .panels import Layout
 from .plugin import KEPT, ActionError
 from .refresh import (
@@ -131,32 +132,53 @@ class App:
             for name in self.intervals() if only is None else only:
                 self.last_refreshed[name] = started
             refresh(self.config, self.db, None, only)
-            self._rebaseline(self.refreshing)
+            self._after_refresh(self.refreshing)
         finally:
             self.refreshing = frozenset()
             self._refresh_lock.release()
         return True
 
-    def _rebaseline(self, names: frozenset[str]) -> None:
-        """Ask the plugins just refreshed whether they `changed`, ignoring the answer, so
-        what the refresh did itself isn't taken for a change."""
+    def _after_refresh(self, names: frozenset[str]) -> None:
+        """Ask the plugins just refreshed whether they `changed`, ignoring the answer, so what
+        the refresh did itself isn't taken for a change; and ask the plugins that watch them
+        (`Plugin.watches`) at once, refreshing those that did."""
         now = time.monotonic()
         plugins = enabled(self.config, self.db, datetime.now(UTC))
-        checked = [e for e in plugins if e.name in names and e.plugin.change_check_seconds]
-        graph = stored_graph(self.db, plugins)[0] if checked else None
-        for e in checked:
+        refreshed = [
+            e
+            for e in plugins
+            if e.name in names and (e.plugin.change_check_seconds or e.plugin.watches)
+        ]
+        watchers = [
+            e for e in plugins if e.name not in names and names.intersection(e.plugin.watches)
+        ]
+        if not refreshed and not watchers:
+            return
+        graph, _ = stored_graph(self.db, plugins)
+        for e in refreshed:
             self._last_checked[e.name] = now
-            if graph is not None:
-                try:
-                    e.plugin.changed(e.ctx, graph)
-                except Exception:
-                    log.debug("%s: change check failed", e.name, exc_info=True)
+            self._changed(e, graph)
+        changed = {e.name for e in watchers if self._changed(e, graph)}
+        if changed:
+            log.info(
+                "changed with %s: %s; refreshing",
+                ", ".join(sorted(names)),
+                ", ".join(sorted(changed)),
+            )
+            self.request_refresh(changed)
+
+    def _changed(self, e: Enabled, graph: Graph) -> bool:
+        """`e.plugin.changed`, False when it fails: logged at debug, since the plugin's
+        refresh shows the error, and tried again next time."""
+        try:
+            return e.plugin.changed(e.ctx, graph)
+        except Exception:
+            log.debug("%s: change check failed", e.name, exc_info=True)
+            return False
 
     def check_for_changes(self, now: float | None = None) -> set[str]:
         """Ask each plugin whose `change_check_seconds` have passed whether it `changed`,
-        except those refreshing now, and ask for a refresh of those that did; returns them.
-        A check that fails is logged (at debug: its refresh shows the error) and tried again
-        next time."""
+        except those refreshing now, and ask for a refresh of those that did; returns them."""
         now = time.monotonic() if now is None else now
         plugins = enabled(self.config, self.db, datetime.now(UTC))
         due: list[Enabled] = []
@@ -173,11 +195,8 @@ class App:
         changed: set[str] = set()
         for e in due:
             self._last_checked[e.name] = now
-            try:
-                if e.plugin.changed(e.ctx, graph):
-                    changed.add(e.name)
-            except Exception:
-                log.debug("%s: change check failed", e.name, exc_info=True)
+            if self._changed(e, graph):
+                changed.add(e.name)
         if changed:
             log.info("changed: %s; refreshing", ", ".join(sorted(changed)))
             self.request_refresh(changed)

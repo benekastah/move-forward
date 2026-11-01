@@ -94,7 +94,10 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   `change_check_seconds` and implements `changed(ctx, graph)`: the server asks that often, and refreshes the plugin as soon as it says
   True. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
   the server asks once more and ignores the answer, so what the refresh did itself isn't
-  taken for a change. With `changed`, `refresh_seconds` can be long.
+  taken for a change. With `changed`, `refresh_seconds` can be long. A `changed` that
+  reads another plugin's entities from the graph names that plugin in `watches`: the
+  server asks it right after each refresh of that plugin (github watches git, to see my
+  PRs' branches move), whether or not it also has `change_check_seconds`.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with

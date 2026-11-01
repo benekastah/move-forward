@@ -41,8 +41,9 @@ is what's left to build.
   reads beyond what the plugin passes in. Everything slow happens in
   `collect` or `after_collect`, or in `collect_after` for a plugin that
   needs other plugins' entities to know what to fetch; `changed(ctx, graph)`, polled
-  every `change_check_seconds`, is a cheap check that its tool has something
-  new, so the plugin refreshes sooner. Rare work (the daily
+  every `change_check_seconds` and right after each refresh of a plugin it
+  `watches`, is a cheap check that its tool has something new, so the plugin
+  refreshes sooner. Rare work (the daily
   prune) can ask the owning plugin for entities its snapshot no longer holds
   with `graph.fetch`. Buttons on other plugins' items come from
   `item_actions`, called per item; a plugin that reads its tables for them
