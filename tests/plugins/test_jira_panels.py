@@ -30,7 +30,9 @@ def test_jira_transitions_from_pr_states() -> None:
             ]
         ),
     )
-    subtitles = {i.title.split()[0]: i.subtitle for i in panel(dashboard, "jira_transitions").items}
+    subtitles = {
+        i.title.split()[0]: i.subtitle for i in panel(dashboard, "jira.jira_transitions").items
+    }
     assert subtitles == {
         "APP-1": "In Review → Closed: all PRs merged",
         "APP-2": "In Progress → In Review: all PRs open and non-draft",
@@ -53,8 +55,8 @@ def test_jira_next_ranks_incidents_then_bugs_then_unblocked_work() -> None:
         escalation_label_prefix="esc-",
         escalation_levels=["manager", "director", "vp"],
     )
-    keys = [i.title.split()[0] for i in panel(dashboard, "jira_next").items]
+    keys = [i.title.split()[0] for i in panel(dashboard, "jira.jira_next").items]
     assert keys == ["APP-5", "APP-4", "APP-6", "APP-3", "APP-1", "APP-2"]
-    badges = {i.title.split()[0]: i.badges for i in panel(dashboard, "jira_next").items}
+    badges = {i.title.split()[0]: i.badges for i in panel(dashboard, "jira.jira_next").items}
     assert badges["APP-5"] == ["incident, escalated (3)"]
     assert badges["APP-2"] == ["blocked by APP-9"]

@@ -58,7 +58,7 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
         local=local,
         iced_stacks=[iced("me/iced", "/src/widgets")],
     )
-    items = {i.title: i for i in panel(dashboard, "local_work").items}
+    items = {i.title: i for i in panel(dashboard, "git.local_work").items}
     assert set(items) == {
         "me/APP-1-branch: 2 modified, 1 untracked",
         "me/APP-1-branch: 3 unpushed commits",
@@ -93,8 +93,11 @@ def test_cleanup_lists_merged_and_gone_branches() -> None:
         ]
     )
     dashboard = build(github=snapshot(merged_recent=[merged]), local=local)
-    cleanup = panel(dashboard, "cleanup")
-    assert titles(dashboard, "cleanup") == ["me/done: PR merged 1d ago", "me/gone: upstream gone"]
+    cleanup = panel(dashboard, "git.cleanup")
+    assert titles(dashboard, "git.cleanup") == [
+        "me/done: PR merged 1d ago",
+        "me/gone: upstream gone",
+    ]
     assert [a.fields for item in cleanup.items for a in item.actions] == [
         {"repo": "/src/widgets", "branch": "me/done"},
         {"repo": "/src/widgets", "branch": "me/gone"},
@@ -118,17 +121,17 @@ def test_branch_prefixes_limit_cleanup_and_local_work_to_my_branches() -> None:
     dashboard = build(
         github=snapshot(merged_recent=[merged]), local=local, my_branch_prefixes=["me/"]
     )
-    assert sorted(titles(dashboard, "cleanup")) == [
+    assert sorted(titles(dashboard, "git.cleanup")) == [
         "me/gone: upstream gone",
         "theirs/merged-by-me: PR merged 1d ago",
     ]
-    assert titles(dashboard, "local_work") == ["me/unpushed: 3 commits, never pushed"]
+    assert titles(dashboard, "git.local_work") == ["me/unpushed: 3 commits, never pushed"]
 
 
 def test_a_branch_iced_in_another_repo_is_not_iced_here() -> None:
     local = local_snapshot(branches=[local_branch("main"), local_branch("me/x", ahead=1)])
     elsewhere = iced("me/x", "/src/other")
-    [item] = panel(build(local=local, iced_stacks=[elsewhere]), "local_work").items
+    [item] = panel(build(local=local, iced_stacks=[elsewhere]), "git.local_work").items
     assert "iced" not in item.badges
     assert "notes/ice" in [a.name for a in item.actions]
 
@@ -136,12 +139,12 @@ def test_a_branch_iced_in_another_repo_is_not_iced_here() -> None:
 def test_git_offers_to_delete_iced_branches_on_the_on_ice_item_only() -> None:
     local = local_snapshot(branches=[local_branch("main"), local_branch("me/x", ahead=1)])
     built = build(local=local, iced_stacks=[iced("me/x"), iced("me/gone")])
-    on_ice = {item.title: item for item in panel(built, "iced").items}
+    on_ice = {item.title: item for item in panel(built, "notes.iced").items}
     [delete] = [a for a in on_ice["me/x"].actions if a.name == "git/delete_together"]
     assert delete.fields == {"targets": "/src/widgets\tme/x"} and delete.confirm
     # A branch git no longer has can't be deleted again.
     assert [a.name for a in on_ice["me/gone"].actions] == ["notes/thaw"]
-    assert panel(built, "local_work").items == []  # me/x is on ice: hidden
+    assert panel(built, "git.local_work").items == []  # me/x is on ice: hidden
 
 
 def test_git_keeps_its_snapshot_in_its_tables() -> None:

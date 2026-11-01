@@ -25,6 +25,11 @@ class PluginPanels:
     panels: list[Panel]
 
 
+def panel_key(plugin: str, key: str) -> str:
+    """A panel's key on the page: its plugin's name, then the key the plugin gave it."""
+    return f"{plugin}.{key}"
+
+
 def _by_priority(panels: list[Panel]) -> list[str]:
     return [p.key for p in sorted(panels, key=lambda p: p.priority)]
 
@@ -146,7 +151,16 @@ def build(
     hidden: Hidden = _nothing_hidden,
 ) -> Dashboard:
     """The dashboard: the plugins' panels in their groups, without hidden items, each item with
-    the plugins' buttons, sorted."""
+    the plugins' buttons, sorted. A panel's key is its plugin's name and its own, e.g.
+    `github.conflicts`, so two plugins' panels never clash."""
+    plugins = [
+        PluginPanels(
+            plugin.key,
+            plugin.title,
+            [p.model_copy(update={"key": panel_key(plugin.key, p.key)}) for p in plugin.panels],
+        )
+        for plugin in plugins
+    ]
     return Dashboard(
         generated_at=now,
         login=login,

@@ -33,7 +33,7 @@ def test_todos_put_close_outs_first_and_blocked_last() -> None:
     unblocked = entry("APP-4 fine", [todo("x", "quick")], **{"Blocked on": ["nothing"]})
     done = entry("APP-5 done", [])
     dashboard = build(work_items=[mixed, blocked, close_out, done, unblocked])
-    items = panel(dashboard, "todos").items
+    items = panel(dashboard, "notes.todos").items
     assert [i.title for i in items] == ["APP-1 almost", "APP-4 fine", "APP-2 mixed", "APP-3 stuck"]
     assert items[0].badges == ["close-out: 1 quick todo(s)"]
     assert items[2].details == ["[quick] small", "[big] big one"]
@@ -49,7 +49,7 @@ def test_every_panel_is_in_exactly_one_group() -> None:
     )
     grouped = [key for group in dashboard.groups for key in group.panel_keys]
     assert sorted(grouped) == sorted(p.key for p in dashboard.panels)
-    assert dashboard.panel("feedback").key == "feedback"
+    assert dashboard.panel("github.feedback").key == "github.feedback"
 
 
 def test_build_with_nothing_stored() -> None:
@@ -61,11 +61,20 @@ def test_build_with_nothing_stored() -> None:
 def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
     dashboard = build(local=local_snapshot(), stacks=stacks(StackBranch(name="main")))
     assert [(g.key, g.panel_keys) for g in dashboard.groups] == [
-        ("act", ["reviews_for_me", "conflicts", "feedback", "ci_failures"]),
-        ("notes", ["todos", "iced"]),  # by each group's most urgent panel: todos are step 0b
-        ("git", ["local_work", "cleanup"]),
-        ("git_stack", ["stacks"]),
-        ("github", ["metadata", "needs_reviewer", "team_prs", "ready_to_merge", "held"]),
+        (
+            "act",
+            ["github.reviews_for_me", "github.conflicts", "github.feedback", "github.ci_failures"],
+        ),
+        ("notes", ["notes.todos", "notes.iced"]),  # by each group's most urgent panel: step 0b
+        ("git", ["git.local_work", "git.cleanup"]),
+        ("git_stack", ["git_stack.stacks"]),
+        (
+            "github",
+            [
+                f"github.{k}"
+                for k in ("metadata", "needs_reviewer", "team_prs", "ready_to_merge", "held")
+            ],
+        ),
     ]
     everything = dashboard.focus_items(panels.FOCUS_ALL)
     assert everything is not None  # every item's panel, in the page's order; all empty here
@@ -83,11 +92,18 @@ def test_focus_items_by_category() -> None:
     everything = dashboard.focus_items(panels.FOCUS_ALL)
     assert everything is not None
     keys = [panel.key for panel, _ in everything]
-    assert keys.index("reviews_for_me") < keys.index("conflicts") < keys.index("needs_reviewer")
-    assert [i.title for _, i in everything if _.key == "reviews_for_me"] == [pr(3).title]
+    assert (
+        keys.index("github.reviews_for_me")
+        < keys.index("github.conflicts")
+        < keys.index("github.needs_reviewer")
+    )
+    assert [i.title for _, i in everything if _.key == "github.reviews_for_me"] == [pr(3).title]
     act = dashboard.focus_items("act")
-    assert act is not None and [panel.key for panel, _ in act] == ["reviews_for_me", "conflicts"]
-    one = dashboard.focus_items("nudges")
+    assert act is not None and [panel.key for panel, _ in act] == [
+        "github.reviews_for_me",
+        "github.conflicts",
+    ]
+    one = dashboard.focus_items("slack.nudges")
     assert one is not None and [i.title for _, i in one] == [pr(1).title]
     assert dashboard.focus_items("nope") is None
     assert dashboard.focus_title("act") == "Act now"
@@ -103,8 +119,11 @@ def test_focus_shows_todos_one_at_a_time() -> None:
     )
     blocked = entry("APP-3 stuck", [todo("x")], **{"Blocked on": ["reviews"]})
     dashboard = build(work_items=[mixed, blocked])
-    assert titles(dashboard, "todos") == ["APP-2 mixed", "APP-3 stuck"]  # the page is unchanged
-    focused = dashboard.focus_items("todos")
+    assert titles(dashboard, "notes.todos") == [
+        "APP-2 mixed",
+        "APP-3 stuck",
+    ]  # the page is unchanged
+    focused = dashboard.focus_items("notes.todos")
     assert focused is not None
     assert [(i.title, i.subtitle, i.badges) for _, i in focused] == [
         ("small", "APP-2 mixed", ["quick"]),
@@ -122,7 +141,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         Where=["https://github.com/acme/widgets/pull/7"],
     )
     dashboard = build(work_items=[noted])
-    focused = dashboard.focus_items("todos")
+    focused = dashboard.focus_items("notes.todos")
     assert focused is not None
     [(_, part)] = focused
     assert [(a.name, a.checkbox, a.checked) for a in part.actions] == [
@@ -135,7 +154,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     assert part.actions[0].fields == {"todo": todo_id}  # addressed by id
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
     # The entry on the page gets the Add todo field and Put on ice, not the todo's own actions.
-    assert [a.name for a in panel(dashboard, "todos").items[0].actions] == [
+    assert [a.name for a in panel(dashboard, "notes.todos").items[0].actions] == [
         "notes/todo_add",
         "notes/ice_item",
     ]
@@ -144,7 +163,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     kept = kept_item(config, db, f"notes:{todo_id}")
     assert kept is not None
     panel_key, done = kept
-    assert panel_key == "todos"
+    assert panel_key == "notes.todos"
     assert (done.title, done.subtitle) == ("small", "APP-2 mixed")
     assert done.url == "https://github.com/acme/widgets/pull/7"
     assert [(a.name, a.checked) for a in done.actions] == [("notes/todo_done", False)] + [
@@ -169,7 +188,7 @@ def test_todo_parts_put_the_prs_they_mention_first_in_bold() -> None:
     github = snapshot(
         mine=[pr(222)], merged_recent=[pr(11, state="MERGED")], closed_recent=[pr(3333)]
     )
-    focused = build(work_items=[noted], github=github).focus_items("todos")
+    focused = build(work_items=[noted], github=github).focus_items("notes.todos")
     assert focused is not None
     parts = [part for _, part in focused]
     assert [link.pr_state for link in parts[0].links] == ["merged", "open", "closed"]
@@ -204,7 +223,7 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
     )
     github = snapshot(merged_recent=[pr(7, state="MERGED")])
     dashboard = build(work_items=[noted], github=github, jira_site="https://j.example/")
-    focused = dashboard.focus_items("todos")
+    focused = dashboard.focus_items("notes.todos")
     assert focused is not None
     [(_, part)] = focused
     # The PR named in the todo is one of the entry's PRs too; the todo's own come first.
@@ -224,7 +243,7 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
     ]
     assert part.actions[2].input == "Jira key or PR URL"
     # Without a Jira site, keys aren't linked.
-    [(_, part)] = build(work_items=[noted]).focus_items("todos") or []
+    [(_, part)] = build(work_items=[noted]).focus_items("notes.todos") or []
     assert [l.text for l in part.links] == ["PR 4", "PR 7"]
 
 
@@ -253,26 +272,26 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
         assert action.input == ADD_TODO_INPUT
         return action.fields
 
-    assert add("needs_reviewer", covered.title) == {"entry": "APP-1 Fix"}
-    assert add("needs_reviewer", by_url.title) == {"entry": "Some PR work"}
-    assert add("needs_reviewer", "Do y") == {
+    assert add("github.needs_reviewer", covered.title) == {"entry": "APP-1 Fix"}
+    assert add("github.needs_reviewer", by_url.title) == {"entry": "Some PR work"}
+    assert add("github.needs_reviewer", "Do y") == {
         "entry": "APP-3 Why not",
         "create": "1",
         "where": fresh.url,
     }
-    assert add("needs_reviewer", "Plain") == {
+    assert add("github.needs_reviewer", "Plain") == {
         "entry": f"{no_key.url} Plain",
         "create": "1",
         "where": no_key.url,
     }
-    assert add("jira_next", "APP-8 Next") == {
+    assert add("jira.jira_next", "APP-8 Next") == {
         "entry": "APP-8 Next",
         "create": "1",
         "where": "https://jira/browse/APP-8",
     }
-    assert add("todos", "APP-1 Fix") == {"entry": "APP-1 Fix"}
+    assert add("notes.todos", "APP-1 Fix") == {"entry": "APP-1 Fix"}
     # Other people's PRs don't get one.
-    review = next(i for i in panel(dashboard, "reviews_for_me").items)
+    review = next(i for i in panel(dashboard, "github.reviews_for_me").items)
     assert [a.name for a in review.actions] == []
 
 
@@ -300,11 +319,11 @@ def test_naming_settings_drive_pings_labels_and_jira() -> None:
     dashboard = build(**settings)
     [target] = pings(**settings)[pr(1).url].targets
     assert target.message == f"Please look at {pr(1).url}"
-    assert titles(dashboard, "metadata") == [pr(1).title]
-    assert "needs-team" in panel(dashboard, "metadata").items[0].details[0]
-    [transition] = panel(dashboard, "jira_transitions").items
+    assert titles(dashboard, "github.metadata") == [pr(1).title]
+    assert "needs-team" in panel(dashboard, "github.metadata").items[0].details[0]
+    [transition] = panel(dashboard, "jira.jira_transitions").items
     assert transition.subtitle == "Doing → Checking: all PRs open and non-draft"
-    by_key = {i.title.split()[0]: i.badges[0] for i in panel(dashboard, "jira_next").items}
+    by_key = {i.title.split()[0]: i.badges[0] for i in panel(dashboard, "jira.jira_next").items}
     assert by_key["XY-2"].startswith("incident, escalated (2)")  # vp is the 2nd level
     assert by_key["XY-3"].startswith("bug")
 
@@ -319,27 +338,27 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
     )
     by_priority = [p.key for p in sorted(built.panels, key=lambda p: p.priority)]
     assert by_priority == [
-        "todos",
-        "reviews_for_me",
-        "conflicts",
-        "feedback",
-        "ci_failures",
-        "local_work",
-        "stacks",
-        "metadata",
-        "needs_reviewer",
-        "team_prs",
-        "nudges",
-        "ready_to_merge",
-        "held",
-        "cleanup",
-        "jira_transitions",
-        "jira_next",
-        "iced",
+        "notes.todos",
+        "github.reviews_for_me",
+        "github.conflicts",
+        "github.feedback",
+        "github.ci_failures",
+        "git.local_work",
+        "git_stack.stacks",
+        "github.metadata",
+        "github.needs_reviewer",
+        "github.team_prs",
+        "slack.nudges",
+        "github.ready_to_merge",
+        "github.held",
+        "git.cleanup",
+        "jira.jira_transitions",
+        "jira.jira_next",
+        "notes.iced",
     ]
     assert {p.key for p in built.panels if p.act_now} == {
-        "reviews_for_me",
-        "feedback",
-        "ci_failures",
-        "conflicts",
+        "github.reviews_for_me",
+        "github.feedback",
+        "github.ci_failures",
+        "github.conflicts",
     }

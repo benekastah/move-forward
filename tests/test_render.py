@@ -27,11 +27,13 @@ def test_dashboard_page_escapes_and_links() -> None:
 
 
 def test_open_query_parameter_overrides_the_defaults() -> None:
-    html = render.dashboard_page(_dashboard(), refreshing=False, open_keys={"github", "feedback"})
+    html = render.dashboard_page(
+        _dashboard(), refreshing=False, open_keys={"github", "github.feedback"}
+    )
     assert "<details class='group' data-key='github' open>" in html
     assert "<details class='group' data-key='act'>" in html
-    assert "<details class='panel empty' data-key='feedback' open>" in html
-    assert "<details class='panel' data-key='nudges'>" in html
+    assert "<details class='panel empty' data-key='github.feedback' open>" in html
+    assert "<details class='panel' data-key='slack.nudges'>" in html
     everything_closed = render.dashboard_page(_dashboard(), refreshing=False, open_keys=set())
     assert " open>" not in everything_closed
 
@@ -64,8 +66,8 @@ def test_refreshing_disables_the_button_and_reloads_sooner() -> None:
 def test_sections_carry_keys_for_the_open_state_script() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=False)
     assert "<details class='group' data-key='act' open>" in html
-    assert "<details class='panel' data-key='nudges' open>" in html
-    assert "<details class='panel empty' data-key='needs_reviewer'>" in html
+    assert "<details class='panel' data-key='slack.nudges' open>" in html
+    assert "<details class='panel empty' data-key='github.needs_reviewer'>" in html
     assert "details[data-key]" in html and "'?open=' + open" in html
     assert "if (open === saved) return;" in html
     # No [git_stack], so the Stacks panel is absent and git's group still renders.
@@ -113,7 +115,7 @@ def test_focus_categories_page_lists_counts_and_links_non_empty_ones() -> None:
         "<li class='category'><a href='/focus?cat=all&amp;i=0'>All</a><span class='count'>1" in html
     )
     assert "<a href='/focus?cat=slack&amp;i=0'>Slack</a>" in html
-    assert "<li class='category sub'><a href='/focus?cat=nudges&amp;i=0'>" in html
+    assert "<li class='category sub'><a href='/focus?cat=slack.nudges&amp;i=0'>" in html
     assert "<li class='category empty'><span>Act now</span><span class='count'>0</span>" in html
     assert "<li class='category sub empty'><span>Feedback to address</span>" in html
 
@@ -139,7 +141,7 @@ def test_focus_page_steps_through_items() -> None:
     assert "disabled next" in last
     assert "/ping?pr=" + quote(pr(1).url, safe="") in last
 
-    empty = render.focus_page(built, "feedback", 0)
+    empty = render.focus_page(built, "github.feedback", 0)
     assert empty is not None and "Nothing here" in empty
     assert render.focus_page(built, "nope", 0) is None
 
@@ -166,13 +168,13 @@ def test_focus_page_actions_come_back_to_it() -> None:
 
 def test_checkbox_actions_and_the_done_todo_view() -> None:
     built = dashboard(work_items=[entry("APP-2", [todo("a", "quick"), todo("b", "big")])])
-    html = render.focus_page(built, "todos", 0)
+    html = render.focus_page(built, "notes.todos", 0)
     assert html is not None
     assert (
         "<label class='check'><input type='checkbox' onchange='this.form.requestSubmit()'> Done"
         in html
     )
-    assert "action='/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0'" in html
+    assert "action='/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0'" in html
     assert "<input type='hidden' name='todo' value='" in html
     assert "1 of 2" in html
 
@@ -182,19 +184,19 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
     NotesRepository(db).set_done(todo_a, NOW.date())
     done = kept_item(config, db, f"notes:{todo_a}")
     assert done is not None
-    html = render.focus_page(built, "todos", 0, done=done)
+    html = render.focus_page(built, "notes.todos", 0, done=done)
     assert html is not None
     assert (
         "<input type='checkbox' checked onchange" in html and "/actions/notes/todo_undone?" in html
     )
     assert "<span class='badge'>done</span>" in html
     assert "<span class='focus-position'>done · 2 to go</span>" in html
-    assert "<a class='button secondary next' href='/focus?cat=todos&amp;i=0'>" in html
+    assert "<a class='button secondary next' href='/focus?cat=notes.todos&amp;i=0'>" in html
     assert "Delete todo" not in html
 
     # Ticking the last item off leaves nothing else, but still shows the done one.
     empty = dashboard()
-    html = render.focus_page(empty, "todos", 0, done=done)
+    html = render.focus_page(empty, "notes.todos", 0, done=done)
     assert html is not None and "Nothing here" not in html and "done · 0 to go" in html
     assert "disabled next" in html
 

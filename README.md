@@ -261,7 +261,7 @@ Pages (GET, HTML):
 | --- | --- |
 | `/` | The dashboard. `?open=act,feedback` sets the open sections; `?notice=…` shows a message. |
 | `/focus` | Focus mode's category list. |
-| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key. `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
+| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
 | `/ping?pr=<PR URL>` | slack: the ping page for one of my PRs. |
 | `/slack/contacts` | slack: where people's and teams' pings go, imported or set by hand, with a form to change each; the ping page links to it. |
 

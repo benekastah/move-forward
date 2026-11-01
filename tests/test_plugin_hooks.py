@@ -50,16 +50,16 @@ def hooked(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_a_plugin_adds_buttons_to_another_plugins_items() -> None:
     built = dashboard(github=snapshot(mine=[pr(1, merge_state="DIRTY")]), jira_site="https://j")
-    [item] = built.panel("conflicts").items
+    [item] = built.panel("github.conflicts").items
     assert [a.href for a in item.actions if a.href] == [f"/hello?pr={pr(1).url}"]
     html = render.dashboard_page(built, refreshing=False)
     assert f"<a class='button link-action' href='/hello?pr={pr(1).url}'>Look</a>" in html
-    assert all(not a.href for a in built.panel("todos").actions)
+    assert all(not a.href for a in built.panel("notes.todos").actions)
 
 
 def test_without_its_section_a_plugin_adds_nothing() -> None:
     built = dashboard(github=snapshot(mine=[pr(1, merge_state="DIRTY")]))
-    [item] = built.panel("conflicts").items
+    [item] = built.panel("github.conflicts").items
     assert not any(a.href for a in item.actions)
 
 
@@ -206,8 +206,10 @@ def test_core_leaves_out_items_about_what_a_hiding_kind_covers(
     mine = [pr(n, merge_state="DIRTY") for n in (1, 2, 3)]
     built = dashboard(github=snapshot(mine=mine), jira_site="https://j")
     # PR 1 directly; PR 3 through APP-3, which its body mentions.
-    assert [i.title for i in built.panel("conflicts").items] == ["PR 2"]
-    assert dashboard(github=snapshot(mine=mine)).panel("conflicts").items  # no veil, no hiding
+    assert [i.title for i in built.panel("github.conflicts").items] == ["PR 2"]
+    assert (
+        dashboard(github=snapshot(mine=mine)).panel("github.conflicts").items
+    )  # no veil, no hiding
 
 
 class _Unruly(JiraPlugin):
@@ -294,5 +296,5 @@ def test_a_plugin_prepares_its_item_actions_once_per_page(monkeypatch: pytest.Mo
     mine = [pr(1, merge_state="DIRTY"), pr(2, merge_state="DIRTY")]
     built = dashboard(github=snapshot(mine=mine), jira_site="https://j")
     assert _Prepared.prepared == 1
-    looks = [a.href for i in built.panel("conflicts").items for a in i.actions if a.href]
+    looks = [a.href for i in built.panel("github.conflicts").items for a in i.actions if a.href]
     assert looks == [f"/look?pr={pr(1).url}", f"/look?pr={pr(2).url}"]

@@ -147,7 +147,11 @@ def kept_item(config: Config, db: Database, kept: str) -> tuple[str, Item] | Non
     if e is None:
         return None
     graph, _ = stored_graph(db, plugins)
-    return e.plugin.kept_item(e.ctx, graph, key)
+    kept_item = e.plugin.kept_item(e.ctx, graph, key)
+    if kept_item is None:
+        return None
+    panel, item = kept_item
+    return panels.panel_key(e.name, panel), item
 
 
 def perform_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> ActionResult:

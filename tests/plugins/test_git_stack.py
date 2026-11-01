@@ -44,14 +44,14 @@ def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
             StackBranch(name="me/no-pr", parent="main", status="up-to-date"),
         ),
     )
-    assert sorted(titles(built, "stacks")) == [
+    assert sorted(titles(built, "git_stack.stacks")) == [
         "me/APP-2-branch: needs-restack",
         "me/APP-3-branch: merged",
         "me/no-pr: tracked, no PR",
     ]
-    restack = next(i for i in panel(built, "stacks").items if "restack" in i.title)
+    restack = next(i for i in panel(built, "git_stack.stacks").items if "restack" in i.title)
     assert restack.url == pr(2).url
-    clean = panel(built, "stacks").actions
+    clean = panel(built, "git_stack.stacks").actions
     assert [(a.name, a.fields, a.label) for a in clean] == [
         ("git_stack/stack_clean", {"repo": "/src/widgets"}, "Clean 1 merged in widgets")
     ]
@@ -64,15 +64,15 @@ def test_stack_clean_is_not_offered_while_the_repo_has_iced_stacks() -> None:
         stacks=stacks(StackBranch(name="me/old", parent="main", status="merged")),
         iced_stacks=[ICED],
     )
-    assert panel(built, "stacks").actions == []
-    assert "1 merged stack branches not cleaned" in titles(built, "stacks")
+    assert panel(built, "git_stack.stacks").actions == []
+    assert "1 merged stack branches not cleaned" in titles(built, "git_stack.stacks")
     # Once git has deleted the iced branch, and git-stack doesn't track it, clean can't touch
     # it.
     gone = dashboard(
         stacks=stacks(StackBranch(name="me/old", parent="main", status="merged")),
         iced_stacks=[ICED],
     )
-    assert [a.name for a in panel(gone, "stacks").actions] == ["git_stack/stack_clean"]
+    assert [a.name for a in panel(gone, "git_stack.stacks").actions] == ["git_stack/stack_clean"]
 
 
 def test_without_its_section_there_is_no_stacks_panel() -> None:
@@ -153,11 +153,13 @@ def test_git_stack_offers_to_untrack_iced_branches_it_tracks() -> None:
         stacks=stacks(StackBranch(name="main"), StackBranch(name="me/x", parent="main")),
         iced_stacks=[iced("me/x")],
     )
-    [item] = panel(built, "iced").items
+    [item] = panel(built, "notes.iced").items
     [untrack] = [a for a in item.actions if a.name == "git_stack/untrack"]
     assert untrack.fields == {"targets": "/src/widgets\tme/x"} and untrack.confirm
     untracked = dashboard(local=local_snapshot(), stacks=stacks(), iced_stacks=[iced("me/x")])
-    assert "git_stack/untrack" not in [a.name for a in panel(untracked, "iced").items[0].actions]
+    assert "git_stack/untrack" not in [
+        a.name for a in panel(untracked, "notes.iced").items[0].actions
+    ]
 
 
 def test_untrack_takes_only_branches_git_stack_tracks() -> None:
@@ -191,7 +193,7 @@ def test_an_iced_branch_git_has_deleted_can_still_be_untracked() -> None:
         stacks=stacks(StackBranch(name="main"), StackBranch(name="me/x", parent="main")),
         iced_stacks=[iced("me/x")],
     )
-    [item] = panel(built, "iced").items
+    [item] = panel(built, "notes.iced").items
     names = [a.name for a in item.actions]
     assert "git_stack/untrack" in names and "git/delete_together" not in names
     [untrack] = [a for a in item.actions if a.name == "git_stack/untrack"]
@@ -206,4 +208,7 @@ def test_iced_stack_branches_are_left_out_of_the_stacks_panel() -> None:
         ),
         iced_stacks=[ICED],
     )
-    assert sorted(titles(built, "stacks")) == ["me/y: needs-restack", "me/y: tracked, no PR"]
+    assert sorted(titles(built, "git_stack.stacks")) == [
+        "me/y: needs-restack",
+        "me/y: tracked, no PR",
+    ]

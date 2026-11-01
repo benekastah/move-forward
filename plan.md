@@ -24,7 +24,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 - `priority` on panels; the `layout` table (already migrated) with drag and drop on group
   and panel summaries, `POST /layout`, and Reset layout in the footer.
-- Panel keys namespaced as `<plugin>.<panel>`.
 
 ### 6b. Act now
 

@@ -137,7 +137,7 @@ def _work() -> tuple[Config, Database]:
 def _shown(config: Config, db: Database) -> set[str]:
     """Every item's title, but On ice's."""
     built = build_dashboard(config, db, NOW)
-    return {i.title.split()[0] for p in built.panels if p.key != "iced" for i in p.items}
+    return {i.title.split()[0] for p in built.panels if p.key != "notes.iced" for i in p.items}
 
 
 def _ice_item(config: Config, db: Database, kind: str, ref_id: str) -> str:
@@ -151,8 +151,8 @@ def test_icing_a_ticket_hides_the_prs_mentioning_it_and_the_entry_about_it() -> 
     shown = _shown(config, db)
     assert "APP-1" not in shown and "APP-2" in shown  # the entry and the ticket's own items
     built = build_dashboard(config, db, NOW)
-    assert titles(built, "conflicts") == ["PR 2"]
-    [on_ice] = panel(built, "iced").items
+    assert titles(built, "github.conflicts") == ["PR 2"]
+    [on_ice] = panel(built, "notes.iced").items
     assert (on_ice.title, on_ice.url) == ("APP-1 Do the thing", "https://jira/browse/APP-1")
 
 
@@ -160,16 +160,16 @@ def test_icing_an_entry_hides_it_and_what_its_tickets_link() -> None:
     config, db = _work()
     _ice_item(config, db, "entry", "APP-1 Fix")
     built = build_dashboard(config, db, NOW)
-    assert titles(built, "conflicts") == ["PR 2"]
-    assert titles(built, "todos") == []
+    assert titles(built, "github.conflicts") == ["PR 2"]
+    assert titles(built, "notes.todos") == []
 
 
 def test_icing_a_pr_hides_only_it() -> None:
     config, db = _work()
     _ice_item(config, db, "pr", pr(1).url)
     built = build_dashboard(config, db, NOW)
-    assert titles(built, "conflicts") == ["PR 2"]
-    assert titles(built, "todos") == ["APP-1 Fix"]  # its ticket and entry aren't on ice
+    assert titles(built, "github.conflicts") == ["PR 2"]
+    assert titles(built, "notes.todos") == ["APP-1 Fix"]  # its ticket and entry aren't on ice
 
 
 def test_ice_item_refuses_other_kinds_unknown_ids_and_what_is_on_ice() -> None:
@@ -195,9 +195,9 @@ def test_put_on_ice_is_offered_on_my_open_prs_tickets_and_entries() -> None:
     def ice_fields(key: str) -> list[dict[str, str]]:
         return [a.fields for i in panel(built, key).items for a in i.actions if a.name == ICE]
 
-    assert ice_fields("conflicts") == [{"kind": "pr", "id": mine.url}]
-    assert ice_fields("todos") == [{"kind": "entry", "id": "APP-1 Fix"}]
-    assert ice_fields("reviews_for_me") == []  # not mine
+    assert ice_fields("github.conflicts") == [{"kind": "pr", "id": mine.url}]
+    assert ice_fields("notes.todos") == [{"kind": "entry", "id": "APP-1 Fix"}]
+    assert ice_fields("github.reviews_for_me") == []  # not mine
 
 
 def test_export_writes_only_stacks_to_on_ice_md(tmp_path: Path) -> None:
@@ -222,5 +222,7 @@ def test_notes_reads_its_tables_once_per_page_for_its_buttons(
     monkeypatch.setattr(notes_plugin, "_builder", counted)
     mine = [pr(n, merge_state="DIRTY") for n in (1, 2, 3)]
     built = dashboard(github=snapshot(mine=mine))
-    assert all(any(a.name == ICE for a in i.actions) for i in panel(built, "conflicts").items)
+    assert all(
+        any(a.name == ICE for a in i.actions) for i in panel(built, "github.conflicts").items
+    )
     assert len(builders) == 2  # its panels', and its buttons'

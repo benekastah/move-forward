@@ -51,8 +51,8 @@ def test_reviews_for_me_includes_direct_requests_and_changed_prs() -> None:
             reviewed_by_me=[pushed_after, unchanged, re_requested],
         )
     )
-    assert sorted(titles(dashboard, "reviews_for_me")) == ["PR 1", "PR 2", "PR 4"]
-    details = {i.title: i.details for i in panel(dashboard, "reviews_for_me").items}
+    assert sorted(titles(dashboard, "github.reviews_for_me")) == ["PR 1", "PR 2", "PR 4"]
+    details = {i.title: i.details for i in panel(dashboard, "github.reviews_for_me").items}
     assert details["PR 4"] == ["review re-requested"]
     assert details["PR 2"][0].startswith("pushed")
 
@@ -61,8 +61,8 @@ def test_drafts_sort_last_in_every_panel() -> None:
     newest_draft = pr(1, author="alice", is_draft=True, updated_at=NOW)
     older = pr(2, author="alice", updated_at=NOW - timedelta(days=3))
     dashboard = build(github=snapshot(direct_requests=[newest_draft, older]))
-    assert titles(dashboard, "reviews_for_me") == ["PR 2", "PR 1"]
-    assert [i.draft for i in panel(dashboard, "reviews_for_me").items] == [False, True]
+    assert titles(dashboard, "github.reviews_for_me") == ["PR 2", "PR 1"]
+    assert [i.draft for i in panel(dashboard, "github.reviews_for_me").items] == [False, True]
 
 
 # Needs a reviewer
@@ -80,7 +80,7 @@ def test_needs_reviewer_lists_team_only_and_unrequested_prs_with_suggestions() -
             suggestions={team_only.url: [ReviewerSuggestion(login="carol", commits=4)]}
         ),
     )
-    items = {i.title: i for i in panel(dashboard, "needs_reviewer").items}
+    items = {i.title: i for i in panel(dashboard, "github.needs_reviewer").items}
     assert set(items) == {"PR 1", "PR 2"}
     assert items["PR 1"].details == [
         "requested from team: core",
@@ -115,7 +115,7 @@ def test_feedback_collects_threads_changes_requested_and_unanswered_comments() -
     )
     clean = pr(4)
     dashboard = build(github=snapshot(mine=[with_thread, changes, answered, clean]))
-    items = {i.title: i for i in panel(dashboard, "feedback").items}
+    items = {i.title: i for i in panel(dashboard, "github.feedback").items}
     assert set(items) == {"PR 1", "PR 2"}
     assert items["PR 1"].details == ["alice on src/x.py: Please rename this"]
     assert [link.text for link in items["PR 1"].links] == ["thread 1"]
@@ -124,7 +124,7 @@ def test_feedback_collects_threads_changes_requested_and_unanswered_comments() -
 
 def test_feedback_marks_outdated_threads() -> None:
     dashboard = build(github=snapshot(mine=[pr(1, threads=[thread(outdated=True)])]))
-    assert panel(dashboard, "feedback").items[0].details[0].startswith("(outdated) ")
+    assert panel(dashboard, "github.feedback").items[0].details[0].startswith("(outdated) ")
 
 
 # CI, conflicts, ready
@@ -149,7 +149,7 @@ def test_ci_failures_show_failing_checks_and_recent_queue_removals() -> None:
         github=snapshot(mine=[failing, evicted, old_eviction, draft, review_only]),
         review_checks=["review-policy/approvals"],
     )
-    items = {i.title: i for i in panel(dashboard, "ci_failures").items}
+    items = {i.title: i for i in panel(dashboard, "github.ci_failures").items}
     assert set(items) == {"PR 1", "PR 2"}
     assert items["PR 1"].details == ["tests: FAILURE"]
     assert items["PR 1"].links[0].url == "https://ci/1"
@@ -160,7 +160,7 @@ def test_conflicts() -> None:
     dashboard = build(
         github=snapshot(mine=[pr(1, mergeable="CONFLICTING"), pr(2, merge_state="DIRTY"), pr(3)])
     )
-    assert sorted(titles(dashboard, "conflicts")) == ["PR 1", "PR 2"]
+    assert sorted(titles(dashboard, "github.conflicts")) == ["PR 1", "PR 2"]
 
 
 def test_ready_to_merge_requires_everything_and_respects_merge_conditions() -> None:
@@ -185,9 +185,11 @@ def test_ready_to_merge_requires_everything_and_respects_merge_conditions() -> N
         github=snapshot(mine=[ready, held, stacked, threads, pending, queued, unapproved]),
         work_items=[condition],
     )
-    assert titles(dashboard, "ready_to_merge") == ["PR 1"]
-    assert titles(dashboard, "held") == ["PR 2"]
-    assert panel(dashboard, "held").items[0].details == ["held: don't merge until PR 1 is in"]
+    assert titles(dashboard, "github.ready_to_merge") == ["PR 1"]
+    assert titles(dashboard, "github.held") == ["PR 2"]
+    assert panel(dashboard, "github.held").items[0].details == [
+        "held: don't merge until PR 1 is in"
+    ]
 
 
 # Metadata
@@ -207,7 +209,7 @@ def test_metadata_flags_labels_links_and_ready_looking_drafts() -> None:
         ticket_link_prefix="Link",
         jira_site="https://jira",  # so PR 5 and the entry are linked through APP-5
     )
-    items = {i.title: i.details for i in panel(dashboard, "metadata").items}
+    items = {i.title: i.details for i in panel(dashboard, "github.metadata").items}
     assert items == {
         "PR 1": ["needs-team", "needs-risk"],
         "PR 2": ["no Link line for APP-2"],
@@ -233,11 +235,11 @@ def test_team_prs_rank_by_codeowners_and_skip_direct_requests() -> None:
             }
         ),
     )
-    assert titles(dashboard, "team_prs") == ["PR 2", "PR 3", "PR 4"]
-    assert panel(dashboard, "team_prs").items[0].details == [
+    assert titles(dashboard, "github.team_prs") == ["PR 2", "PR 3", "PR 4"]
+    assert panel(dashboard, "github.team_prs").items[0].details == [
         "2 files owned by my teams (1 required), 1 in dirs I work in"
     ]
-    assert "waiting on core" in panel(dashboard, "team_prs").description
+    assert "waiting on core" in panel(dashboard, "github.team_prs").description
 
 
 def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
@@ -247,10 +249,11 @@ def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
         iced_stacks=[iced(parked.head, "x")],
     )
     for key in ("conflicts", "feedback", "needs_reviewer", "metadata"):
+        key = f"github.{key}"
         assert titles(dashboard, key) == []
-    assert titles(dashboard, "iced") == [parked.head]
+    assert titles(dashboard, "notes.iced") == [parked.head]
     # Reopen is notes'; git adds Delete branches only for branches it still has.
-    actions = panel(dashboard, "iced").items[0].actions
+    actions = panel(dashboard, "notes.iced").items[0].actions
     assert [(a.name, a.label) for a in actions] == [("notes/thaw", "Reopen")]
 
 
@@ -264,8 +267,8 @@ def test_a_pr_is_hidden_only_by_icing_in_its_own_repos_checkout() -> None:
     here = build(
         github=snapshot(mine=[mine]), local=local_snapshot(), iced_stacks=[iced_in("/src/widgets")]
     )
-    assert titles(here, "conflicts") == []
+    assert titles(here, "github.conflicts") == []
     elsewhere = build(
         github=snapshot(mine=[mine]), local=local_snapshot(), iced_stacks=[iced_in("/src/other")]
     )
-    assert titles(elsewhere, "conflicts") == [mine.title]
+    assert titles(elsewhere, "github.conflicts") == [mine.title]

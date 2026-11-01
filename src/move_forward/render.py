@@ -11,7 +11,7 @@ REFRESHING_RELOAD_SECONDS = 10
 """Reload faster while a refresh runs, so the new data shows up soon after it lands."""
 OPEN_SECTIONS_SCRIPT = (
     # The server renders each <details> open or closed from the `open` query parameter
-    # (`?open=act,feedback`). This keeps that parameter current: one debounced
+    # (`?open=act,github.feedback`). This keeps that parameter current: one debounced
     # replaceState per burst of toggles (browsers throttle rapid history updates), and
     # only when the state changed (browsers fire toggle at load for sections that start
     # open); the query is carried along when a button's form posts (so the redirect back

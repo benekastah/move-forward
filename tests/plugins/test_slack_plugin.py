@@ -120,19 +120,19 @@ def test_nudge_blockers_and_staleness() -> None:
     assert found[approved.url].blockers == ["already approved"]
     assert found[nobody.url].blockers == ["no reviewers requested"]
     assert draft.url not in found
-    assert sorted(titles(dashboard(slack=True, **stored), "nudges")) == ["PR 2", "PR 3"]
+    assert sorted(titles(dashboard(slack=True, **stored), "slack.nudges")) == ["PR 2", "PR 3"]
 
 
 def test_ping_links_appear_on_my_prs_wherever_they_are_and_only_with_slack() -> None:
     conflicted = pr(1, merge_state="DIRTY", requested_users=["alice"])
     for slack, expected in ((True, ["Ping…"]), (False, [])):
         built = dashboard(github=snapshot(mine=[conflicted]), **({"slack": True} if slack else {}))
-        [item] = built.panel("conflicts").items
+        [item] = built.panel("github.conflicts").items
         assert [a.label for a in item.actions if a.href] == expected
     built = dashboard(
         slack=True, github=snapshot(mine=[pr(2, requested_users=["alice"], threads=[thread()])])
     )
-    [link] = [a for a in built.panel("feedback").items[0].actions if a.href]
+    [link] = [a for a in built.panel("github.feedback").items[0].actions if a.href]
     assert link.label == "Ping…" and link.muted and link.title == "Not in order: unresolved threads"
 
 
@@ -195,5 +195,5 @@ def test_pings_are_worked_out_once_per_page_not_per_item(monkeypatch: pytest.Mon
     monkeypatch.setattr(slack_plugin, "pinger", counted)
     mine = [pr(n, merge_state="DIRTY", requested_users=["alice"]) for n in (1, 2, 3)]
     built = dashboard(slack=True, github=snapshot(mine=mine))
-    assert len(built.panel("conflicts").items) == 3
+    assert len(built.panel("github.conflicts").items) == 3
     assert len(built_pingers) == 2  # the Nudge panel's, and the Ping links'

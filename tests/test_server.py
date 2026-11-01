@@ -289,25 +289,27 @@ def test_ticking_a_todo_off_redirects_back_with_it(
     )
 
     def fake_kept(*_: object) -> tuple[str, Item]:
-        return "todos", kept
+        return "notes.todos", kept
 
     monkeypatch.setattr(server, "kept_item", fake_kept)
     response = post(
         client,
-        "/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",
+        "/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0",
         {"todo": "7"},
     )
     assert response.getheader("Location") == (
-        "/focus?cat=todos&i=0&kept=notes%3A7&notice=notes%2Ftodo_done+7"
+        "/focus?cat=notes.todos&i=0&kept=notes%3A7&notice=notes%2Ftodo_done+7"
     )
-    body = get(client, "/focus?cat=todos&i=0&kept=notes%3A7").read().decode()
+    body = get(client, "/focus?cat=notes.todos&i=0&kept=notes%3A7").read().decode()
     assert "<input type='checkbox' checked" in body and "x y" in body
     response = post(
         client,
-        "/actions/notes/todo_undone?back=%2Ffocus%3Fcat%3Dtodos%26i%3D0",
+        "/actions/notes/todo_undone?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0",
         {"todo": "7"},
     )
-    assert response.getheader("Location") == "/focus?cat=todos&i=0&notice=notes%2Ftodo_undone+7"
+    assert (
+        response.getheader("Location") == "/focus?cat=notes.todos&i=0&notice=notes%2Ftodo_undone+7"
+    )
 
 
 def test_ctrl_c_shuts_down_quietly(
