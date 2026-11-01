@@ -19,6 +19,49 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `dev.py check` green and the page working.
 
+### git-stack: agreeing with what git-stack does
+
+Checked against the code here and in `../git-stack` (details in `git-stack-issues.md`),
+most severe first:
+
+1. **Ice a stack's whole group.** git-stack's stack is every stack in the branch's group:
+   `restack`, `sync`, `push` and `prs` (`selected_stacks`) act on all of them, so a `sync`
+   from another stack of the group restacks and force-pushes an iced one. notes'
+   `_stack_branches` walks only the branch's own stack. git_stack keeps each branch's
+   `stack_group` but doesn't publish it: publish it on `stack_branch` (entities.md), and
+   have `_stack_branches` take in the group's other stacks.
+2. **Only iced branches git-stack tracks block Clean.** `iced_stacks` counts every iced
+   branch git still has, but `git stack clean` only goes through tracked branches, so a
+   stack untracked with On ice's Untrack button can't be touched by it and shouldn't
+   block it: count only iced branches with a `stack_branch`.
+3. **Don't name a command that doesn't exist.** The refusal says "clean per stack instead"
+   and the panel says clean "is left to you", but `git stack clean` takes no stacks. Say
+   what works: `git stack sync <branch>` or `sync -g <group>` (which also restack and
+   push), or untracking the merged branches by hand.
+4. **Count deleted branches right.** `stack_clean` counts stdout lines with "deleted", but
+   clean always prints "fetching origin, and pruning its deleted branches" (one too many
+   when nothing was deleted) and ends with the stacks' tree (a branch named `*deleted*`
+   counts). Match `; deleted it (was ` until clean has `--json`.
+5. **Say what Clean will do.** Its count comes from `git stack info --offline`, while clean
+   fetches, fast-forwards the roots and asks GitHub, so it can untrack a different set:
+   say "about N". The confirm says it fast-forwards main, but it's every stack's root; and
+   it doesn't mention that clean refuses with uncommitted changes to tracked files, so the
+   button often just fails. Say so (or check it first and show why, rather than offer a
+   button that will fail).
+
+In git-stack itself (`../git-stack`), which the items above would then build on:
+
+- **Narrow clean's clean-worktree check.** `clean` calls `ensure_clean_worktree()` up front,
+  but only touches the working tree to fast-forward a checked-out root, or (with `-d local`
+  or `both`) to switch off a checked-out branch it deletes. Checking only those two cases,
+  still before anything changes, keeps the protection and lets clean run from a feature
+  branch with work in progress, the dashboard's usual case.
+- **`git stack clean <branch>...` / `-g <group>`**: clean only the named stacks, as `sync`
+  takes them. The dashboard could then offer Clean in a repo with iced stacks (cleaning the
+  others), and "clean per stack" becomes true.
+- **`git stack clean --json`** (and perhaps `sync --json`): what was untracked, deleted and
+  warned about, so callers don't scrape human-readable lines (item 4).
+
 ### 9. Slack, reading and pinging
 
 Slack becomes a source of work, not just a place pings go. It needs a Slack app with a
@@ -188,9 +231,6 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   built-in plugin's copy has shipped, or it stays as harmless dead data.
 - **Config sections from the registry.** `Config` lists a field per built-in plugin; it
   could build them from the registry, so adding a plugin needn't change core.
-- **Icing and git-stack groups.** Putting a stack on ice walks the stack's parents only;
-  git_stack doesn't publish groups, so a group's other stacks aren't iced with it.
-
 ## Design for the remaining steps
 
 ### Data model
