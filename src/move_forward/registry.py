@@ -1,5 +1,6 @@
 """The built-in plugins, and the enabled ones with their contexts."""
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -20,6 +21,8 @@ from .repositories import KvRepository, SnapshotRepository
 if TYPE_CHECKING:
     # Only for annotations: `Config` checks `unmet_requirements` as it loads.
     from .config import Config
+
+log = logging.getLogger(__name__)
 
 PLUGINS: list[Plugin[Any, Any]] = [
     GitHubPlugin(),
@@ -104,6 +107,14 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         return next((url for e in plugins if (url := e.plugin.url_for(e.ctx, kind, id))), None)
 
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
-        return [entity for e in plugins for entity in e.plugin.fetch(e.ctx, kind, ids)]
+        """Each plugin's answer; one that fails is logged and left out, so its entities just
+        aren't known (the prune keeps what it can't check)."""
+        found: list[Entity] = []
+        for e in plugins:
+            try:
+                found += e.plugin.fetch(e.ctx, kind, ids)
+            except Exception:
+                log.exception("%s: fetching %s failed", e.name, kind)
+        return found
 
     return Graph(entities, url_for, fetch)

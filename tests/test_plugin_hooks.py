@@ -129,3 +129,18 @@ def test_the_graph_fetches_through_the_plugin_that_owns_the_kind(
     assert graph.fetch("ticket", []) == {}
     assert graph.fetch("pr", ["https://pr/1"]) == {}
     assert _Fetching.asked == [["APP-1", "APP-2"], ["https://pr/1"]]
+
+
+class _Failing(JiraPlugin):
+    def fetch(self, ctx: Context[JiraConfig], kind: str, ids: list[str]) -> list[Entity]:
+        raise RuntimeError("no Jira token")
+
+
+def test_a_plugin_failing_to_fetch_is_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    plugins = [_Failing() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config = Config.model_validate({"email": "me@x", "jira": {"site": "https://j"}})
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    assert graph.fetch("ticket", ["APP-1"]) == {}
