@@ -8,7 +8,7 @@ from ...asking import Asker, InitSetup
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
-from . import actions, client
+from . import actions, changes, client
 from .config import GitConfig
 from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
@@ -18,6 +18,8 @@ from .setup import TEMPLATE, questions
 
 REPO = "repo"
 BRANCH = "branch"
+FINGERPRINT = "refs_fingerprint"
+"""The kv key of the last `changes.fingerprint` of the repos."""
 
 
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
@@ -43,6 +45,17 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
     def store(self, ctx: Context[GitConfig], snapshot: LocalSnapshot) -> None:
         LocalRepository(ctx.db).replace(snapshot)
+
+    change_check_seconds: ClassVar[int | None] = 5
+
+    def changed(self, ctx: Context[GitConfig]) -> bool:
+        """Whether a repo's refs moved (see `changes`): reading a few files' times, cheap
+        enough to do every few seconds."""
+        now = changes.fingerprint(ctx.config.repos)
+        before = ctx.kv.get(FINGERPRINT)
+        if now != before:
+            ctx.kv.set(FINGERPRINT, now)
+        return before is not None and now != before
 
     def load(self, ctx: Context[GitConfig]) -> LocalSnapshot | None:
         return LocalRepository(ctx.db).load()
