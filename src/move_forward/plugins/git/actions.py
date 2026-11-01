@@ -6,6 +6,7 @@ notice for the page. Nothing here ever forces a push, resets, or stashes.
 
 from pathlib import Path
 
+from ...domain import Model
 from ...graph import Graph
 from ...plugin import ActionError, Context
 from ...shell import CommandError, git
@@ -14,6 +15,12 @@ from .config import GitConfig
 from .panels import ICED_BRANCH, TARGET_SEPARATOR, branch_ref
 
 WIP_MESSAGE = "WIP"
+
+
+class _IcedView(Model):
+    """What git reads of an `iced_branch` (notes'): the commit it was iced at."""
+
+    sha: str | None = None
 
 
 def repo_path(config: GitConfig, repo_dir: str) -> Path:
@@ -45,9 +52,9 @@ def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
         raise ActionError(f"{branch} doesn't exist in {repo}")
     if worktree := checked_out_in(repo, branch):
         raise ActionError(f"{branch} is checked out in {worktree}; switch it away first")
-    iced = graph.get(ICED_BRANCH, branch_ref(str(repo), branch).id)
-    iced_sha = iced.attrs.get("sha") if iced else None
-    if isinstance(iced_sha, str) and git(repo, "rev-parse", branch).strip() != iced_sha:
+    iced = graph.view_one(ICED_BRANCH, branch_ref(str(repo), branch).id, _IcedView)
+    iced_sha = iced.sha if iced else None
+    if iced_sha and git(repo, "rev-parse", branch).strip() != iced_sha:
         raise ActionError(f"{branch} has commits since it was iced; thaw it, or ice it again")
 
 

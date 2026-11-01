@@ -6,7 +6,8 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 
 from datetime import datetime
 
-from ...graph import Entity, Graph, Ref
+from ...domain import Model
+from ...graph import Graph, Ref
 from ...page import Action, Item, Panel, age
 from .config import GitConfig
 from .models import LocalSnapshot
@@ -22,6 +23,22 @@ def action(name: str, label: str, fields: dict[str, str], confirm: str | None = 
     return Action(name=f"git/{name}", label=label, fields=fields, confirm=confirm)
 
 
+class _PrView(Model):
+    """What git reads of a `pr` (github's): whose, from which branch, and its state."""
+
+    id: str
+    url: str | None = None
+    state: str | None = None
+    repo: str
+    head: str
+    mine: bool
+    merged_at: str | None = None
+
+    @property
+    def subject(self) -> Ref:
+        return Ref(kind=PR, id=self.id)
+
+
 class Builder:
     def __init__(
         self, config: GitConfig, now: datetime, snapshot: LocalSnapshot | None, graph: Graph
@@ -29,14 +46,13 @@ class Builder:
         self.config = config
         self.now = now
         self.local = snapshot
-        self.prs_by_branch: dict[tuple[str, str], list[Entity]] = {}
-        for pr in graph.of_kind(PR):
-            if pr.attrs.get("mine"):
-                key = (str(pr.attrs.get("repo")), str(pr.attrs.get("head")))
-                self.prs_by_branch.setdefault(key, []).append(pr)
+        self.prs_by_branch: dict[tuple[str, str], list[_PrView]] = {}
+        for pr in graph.view(PR, _PrView):
+            if pr.mine:
+                self.prs_by_branch.setdefault((pr.repo, pr.head), []).append(pr)
         self.iced_branches = {e.ref.id for e in graph.of_kind(ICED_BRANCH)}
 
-    def _pr(self, repo: str | None, branch: str, state: str) -> Entity | None:
+    def _pr(self, repo: str | None, branch: str, state: str) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
         prs = self.prs_by_branch.get((repo or "", branch), [])
         return next((pr for pr in prs if pr.state == state), None)
@@ -71,7 +87,7 @@ class Builder:
                             rank=2,
                             actions=actions,
                             subjects=([branch_ref(repo.dir, wt.branch)] if wt.branch else [])
-                            + ([pr.ref] if pr else []),
+                            + ([pr.subject] if pr else []),
                         )
                     )
             for branch in repo.branches:
@@ -101,7 +117,7 @@ class Builder:
                         badges=(["iced"] if iced else []) + (["has PR"] if pr else ["no PR"]),
                         rank=0 if iced else 1,
                         actions=actions,
-                        subjects=[branch_ref(repo.dir, branch.name)] + ([pr.ref] if pr else []),
+                        subjects=[branch_ref(repo.dir, branch.name)] + ([pr.subject] if pr else []),
                     )
                 )
         return Panel(
@@ -118,8 +134,7 @@ class Builder:
             for b in repo.branches:
                 merged = self._pr(repo.github_repo, b.name, "merged")
                 if merged:
-                    merged_at = merged.attrs.get("merged_at")
-                    when = datetime.fromisoformat(merged_at) if isinstance(merged_at, str) else None
+                    when = datetime.fromisoformat(merged.merged_at) if merged.merged_at else None
                     title = f"{b.name}: PR merged {age(self.now, when)} ago"
                     subtitle = repo.dir
                 elif b.gone and not b.ahead and self._is_my_branch(repo.github_repo, b.name):
@@ -142,7 +157,7 @@ class Builder:
                                 confirm=f"Delete local branch {b.name}?",
                             )
                         ],
-                        subjects=[merged.ref] if merged else [],
+                        subjects=[merged.subject] if merged else [],
                     )
                 )
         actions = (

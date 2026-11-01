@@ -7,6 +7,7 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 
 from pathlib import Path
 
+from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Panel
 from .kinds import StackBranchAttrs
@@ -24,11 +25,49 @@ def branch_ref(repo_dir: str, branch: str) -> Ref:
     return Ref(kind=BRANCH, id=f"{repo_dir}{BRANCH_ID_SEPARATOR}{branch}")
 
 
+class BranchView(Model):
+    """What git_stack reads of a `branch`: git's checkout, and whether git-stack tracks it
+    (its own `stack_parent`, merged in)."""
+
+    id: str
+    repo_dir: str | None = None
+    """None for a branch only git-stack still tracks, e.g. one deleted locally."""
+    stack_parent: str | None = None
+
+
+class _RepoView(Model):
+    """What git_stack reads of a `repo` (git's): GitHub's name for a checkout."""
+
+    id: str
+    dir: str
+
+
+class _PrView(Model):
+    """What git_stack reads of a `pr` (github's)."""
+
+    id: str
+    url: str | None = None
+    state: str | None = None
+    repo: str
+    head: str
+    mine: bool
+
+    @property
+    def subject(self) -> Ref:
+        return Ref(kind=PR, id=self.id)
+
+
+class IcedView(Model):
+    """What git_stack reads of an `iced_branch` (notes')."""
+
+    id: str
+    repo_dir: str
+    stack: str
+
+
 def repo_dirs(graph: Graph) -> list[str]:
     """The checkouts git has branches in, i.e. `[git] repos`."""
-    return sorted(
-        {d for b in graph.of_kind(BRANCH) if isinstance(d := b.attrs.get("repo_dir"), str)}
-    )
+    return sorted({d for b in graph.view(BRANCH, BranchView) if (d := b.repo_dir)})
 
 
 def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
@@ -48,19 +87,16 @@ def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
 class Builder:
     def __init__(self, snapshot: GitStackSnapshot | None, graph: Graph):
         self.snapshot = snapshot
-        self.github_repos = {
-            str(r.attrs.get("dir")): r.ref.id for r in graph.of_kind(REPO) if r.attrs.get("dir")
-        }
-        self.my_prs: dict[tuple[str, str], list[Entity]] = {}
-        for pr in graph.of_kind(PR):
-            if pr.attrs.get("mine"):
-                key = (str(pr.attrs.get("repo")), str(pr.attrs.get("head")))
-                self.my_prs.setdefault(key, []).append(pr)
-        iced = graph.of_kind(ICED_BRANCH)
-        self.iced_branches = {e.ref.id for e in iced}
-        self.iced_repo_dirs = {str(e.attrs.get("repo_dir")) for e in iced}
+        self.github_repos = {r.dir: r.id for r in graph.view(REPO, _RepoView)}
+        self.my_prs: dict[tuple[str, str], list[_PrView]] = {}
+        for pr in graph.view(PR, _PrView):
+            if pr.mine:
+                self.my_prs.setdefault((pr.repo, pr.head), []).append(pr)
+        iced = graph.view(ICED_BRANCH, IcedView)
+        self.iced_branches = {e.id for e in iced}
+        self.iced_repo_dirs = {e.repo_dir for e in iced}
 
-    def _pr(self, repo_dir: str, branch: str, state: str) -> Entity | None:
+    def _pr(self, repo_dir: str, branch: str, state: str) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
         prs = self.my_prs.get((self.github_repos.get(repo_dir, ""), branch), [])
         return next((pr for pr in prs if pr.state == state), None)
@@ -101,7 +137,7 @@ class Builder:
                         subtitle=f"{repo.dir} · on {b.parent}",
                         badges=badges,
                         rank=0 if badges else 1,
-                        subjects=[pr.ref] if pr else [],
+                        subjects=[pr.subject] if pr else [],
                     )
                 )
             for b in repo.branches:
@@ -135,8 +171,8 @@ def untrack_iced_action(item: Item, graph: Graph) -> Action | None:
         ref.id
         for ref in item.subjects
         if ref.kind == ICED_BRANCH
-        and (e := graph.get(BRANCH, ref.id)) is not None
-        and e.attrs.get("stack_parent")
+        and (b := graph.view_one(BRANCH, ref.id, BranchView)) is not None
+        and b.stack_parent
     ]
     if not tracked:
         return None

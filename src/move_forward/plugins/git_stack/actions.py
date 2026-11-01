@@ -9,7 +9,7 @@ from ...graph import Graph
 from ...plugin import ActionError, Context
 from ...shell import git
 from .config import GitStackConfig
-from .panels import BRANCH, BRANCH_ID_SEPARATOR, ICED_BRANCH, repo_dirs
+from .panels import BRANCH, BRANCH_ID_SEPARATOR, ICED_BRANCH, BranchView, IcedView, repo_dirs
 
 STACK_CLEAN_TIMEOUT_SECONDS = 600
 """`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
@@ -24,11 +24,7 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
     if fields["repo"] not in repo_dirs(graph):
         raise ActionError(f"{fields['repo']} is not a configured repo")
     repo = Path(fields["repo"])
-    iced = sorted(
-        str(e.attrs.get("stack") or e.ref.id)
-        for e in graph.of_kind(ICED_BRANCH)
-        if Path(str(e.attrs.get("repo_dir", ""))) == repo
-    )
+    iced = sorted(e.stack for e in graph.view(ICED_BRANCH, IcedView) if Path(e.repo_dir) == repo)
     if iced:
         names = ", ".join(dict.fromkeys(iced))
         raise ActionError(f"{repo} has iced stacks ({names}); clean per stack instead")
@@ -45,8 +41,8 @@ def untrack(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) 
         repo_dir, _, branch = line.partition(BRANCH_ID_SEPARATOR)
         if not branch:
             continue
-        entity = graph.get(BRANCH, line)
-        if entity is None or not entity.attrs.get("stack_parent"):
+        tracked = graph.view_one(BRANCH, line, BranchView)
+        if tracked is None or not tracked.stack_parent:
             raise ActionError(f"git-stack doesn't track {branch} in {repo_dir}")
         by_repo.setdefault(repo_dir, []).append(branch)
     if not by_repo:
