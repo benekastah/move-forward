@@ -47,6 +47,7 @@ class _StackBranchView(Model):
     repo_dir: str
     name: str
     stack_parent: str
+    stack_group: str | None = None
 
 
 def _branches(graph: Graph, repo: Path) -> dict[str, _BranchView]:
@@ -66,31 +67,42 @@ def _repo(graph: Graph, repo_dir: str) -> Path:
 
 
 def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
-    """The branch's whole stack, bottom first, from git_stack's `stack_branch`es; just the
-    branch when it isn't in a stack (or git_stack isn't on). Only branches git still has
-    are iced."""
+    """The branch's whole stack as git-stack sees it, from git_stack's `stack_branch`es: its
+    stack, and the other stacks in its group, since git-stack's `restack`, `sync` and
+    `push` act on all of them. Each stack bottom first, the branch's own first of all; just
+    the branch when it isn't in a stack (or git_stack isn't on). Only branches git still
+    has are iced."""
     here = _branches(graph, repo)
-    parents = {
-        b.name: b.stack_parent
+    tracked = [
+        b
         for b in graph.view(STACK_BRANCH, _StackBranchView)
         if Path(b.repo_dir) == repo and b.name in here
-    }
+    ]
+    parents = {b.name: b.stack_parent for b in tracked}
     if branch not in parents:
         return [branch]
     bottom, seen = branch, {branch}
     while parents[bottom] in parents and parents[bottom] not in seen:  # up to the root
         bottom = parents[bottom]
         seen.add(bottom)
+    groups = {b.name: b.stack_group for b in tracked if b.stack_group}
+    group = groups.get(bottom)
+    bottoms = [bottom] + sorted(
+        name
+        for name, other in groups.items()
+        if group is not None and other == group and name != bottom and parents[name] not in parents
+    )
     children: dict[str, list[str]] = {}
     for name, parent in parents.items():
         children.setdefault(parent, []).append(name)
     stack: list[str] = []
-    pending = [bottom]
-    while pending:
-        name = pending.pop()
-        if name not in stack:
-            stack.append(name)
-            pending += reversed(children.get(name, []))
+    for start in bottoms:
+        pending = [start]
+        while pending:
+            name = pending.pop()
+            if name not in stack:
+                stack.append(name)
+                pending += reversed(children.get(name, []))
     return stack
 
 

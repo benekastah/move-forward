@@ -293,6 +293,30 @@ def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -
     assert [i.ref_id.partition("\t")[2] for i in ice.items] == ["done", "wip", "top", "beside"]
 
 
+def test_ice_takes_the_other_stacks_in_the_group_as_git_stack_would(
+    config: Config, repo: Path
+) -> None:
+    for name in ("other", "other-top", "apart"):
+        git(repo, "branch", name, "main")
+    config = config.model_copy(update={"git_stack": GitStackConfig()})
+    db = _stored(config)
+    tracked = [
+        StackBranch(name="main"),
+        StackBranch(name="done", parent="main", group="g"),
+        StackBranch(name="wip", parent="done"),
+        StackBranch(name="other", parent="main", group="g"),  # another stack in the group
+        StackBranch(name="other-top", parent="other"),
+        StackBranch(name="apart", parent="main"),  # a stack of its own
+    ]
+    snapshot = GitStackSnapshot(repos=[StackRepo(dir=str(repo), branches=tracked)])
+    StackRepository(db).replace(snapshot)
+    assert refresh.run_action(config, db, "notes/ice", {"repo": str(repo), "branch": "wip"}) == (
+        "put done on ice (4 branches)"
+    )
+    [ice] = NotesRepository(db).ices()
+    assert [i.ref_id.partition("\t")[2] for i in ice.items] == ["done", "wip", "other", "other-top"]
+
+
 def test_a_branch_iced_in_another_repo_can_be_iced_here(config: Config, repo: Path) -> None:
     db = _stored(config)
     other = markdown.read_on_ice(

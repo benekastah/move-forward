@@ -29,7 +29,7 @@ names are related through it.
 
 notes adds an Add todo field to every item about one of my open PRs or a ticket (the todo
 goes to the entry covering it, or creates one), and Put on ice to every item about a local
-branch (with its git-stack stack), one of my open PRs, a ticket or a work entry.
+branch (with its git-stack stack and group), one of my open PRs, a ticket or a work entry.
 
 In focus mode, work entries are split into their todos, one per page, quick ones first.
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number)
@@ -58,7 +58,7 @@ unless it's blocked.
 | `/actions/notes/todo_undone` | `todo` | Reopens a done todo. |
 | `/actions/notes/todo_delete` | `todo` | Drops the todo without recording it. |
 | `/actions/notes/todo_link` | `todo`, `input` (Jira key or PR URL) | Links the todo to the ticket or PR; a key in a project jira hasn't seen yet is looked up in Jira. |
-| `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack when git_stack knows it, recording each branch's commit. |
+| `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack and the other stacks in its git-stack group when git_stack knows them (git-stack's `restack`, `sync` and `push` act on the whole group), recording each branch's commit. |
 | `/actions/notes/ice_item` | `kind` (`pr`, `ticket` or `entry`), `id`, optional `note` | Puts the PR, ticket or work entry on ice, with what it links. |
 | `/actions/notes/thaw` | `ice` (its id, as the On ice panel's buttons have it) | Takes what's on ice off it. |
 
@@ -80,7 +80,7 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
 | `mfd notes condition add\|remove <entry> <text>` | Add or remove a merge condition. |
 | `mfd notes decline <entry> <text>` | Record that something offered for an entry (a nudge, say) was turned down today. |
-| `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack, on ice, or a `pr` (by URL), `ticket` (by key) or `entry` (by title); needs a refresh first, so the graph has it. |
+| `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack and group, on ice, or a `pr` (by URL), `ticket` (by key) or `entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
 | `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database. Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`, which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |

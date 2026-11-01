@@ -52,7 +52,7 @@ flowchart LR
     repo -. "an iced branch's checkout" .-> notes
     stack_branch -. "what tracks an iced branch" .-> notes
     ticket -. "Add todo titles" .-> notes
-    stack_branch -. "the stack to ice" .-> notes
+    stack_branch -. "the stack to ice, with its group" .-> notes
     person -. "who I am" .-> core([core])
 ```
 
