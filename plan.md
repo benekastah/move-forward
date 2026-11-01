@@ -42,10 +42,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   token and same-site checks, writing only the config file), with the browser's
   autocomplete for what can be fetched as it's filled in (the org's teams once the org is
   given, like `mfd init`'s tab completion).
-- **One unknown key fails jira's whole fetch.** Jira rejects a `key in (...)` search naming
-  a ticket that doesn't exist (mistyped, deleted, or in a project I can't see), so the
-  prune learns nothing about any ticket that day and keeps every entry naming one. Fetch
-  key by key when the batch is refused, or find whether the search API can warn instead.
 - **Which branches are mine.** `my_branch_prefixes` is a hint, not the test. Stronger
   signals, for the git plugin: my commits ahead of the default branch (`git rev-list
   --count --author=<my emails> origin/<default>..<branch>`, limited to recently active

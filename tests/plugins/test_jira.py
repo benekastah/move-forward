@@ -1,4 +1,6 @@
+import urllib.error
 from datetime import UTC, datetime
+from email.message import Message
 
 import pytest
 from legacy import save_json_snapshot
@@ -178,3 +180,30 @@ def test_projects_are_remembered_from_the_tickets_kept_before() -> None:
     save_json_snapshot(db, "jira", JiraSnapshot(issues=[first]))
     db.migrate("jira", MIGRATIONS)  # the tickets move to their table, then their projects
     assert IssueRepository(db).projects() == ["APP"]
+
+
+def test_a_key_jira_doesnt_know_leaves_out_only_that_ticket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    known = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
+    asked: list[str] = []
+
+    def fake_search(_config: object, _email: str, jql: str, _token: str) -> list[JiraIssue]:
+        asked.append(jql)
+        if "APP-404" in jql:
+            raise urllib.error.HTTPError("https://j", 400, "Bad Request", Message(), None)
+        return [known] if "APP-1" in jql else []
+
+    monkeypatch.setattr(jira, "search", fake_search)
+    config = JiraConfig(site="https://j")
+    assert jira.tickets(config, "me@x", ["APP-1", "APP-404"], "t") == [known]
+    assert asked == ["key in (APP-1, APP-404)", "key in (APP-1)", "key in (APP-404)"]
+
+
+def test_other_jira_errors_still_fail_the_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_search(_config: object, _email: str, jql: str, _token: str) -> list[JiraIssue]:
+        raise urllib.error.HTTPError("https://j", 401, "Unauthorized", Message(), None)
+
+    monkeypatch.setattr(jira, "search", fake_search)
+    with pytest.raises(urllib.error.HTTPError):
+        jira.tickets(JiraConfig(site="https://j"), "me@x", ["APP-1", "APP-2"], "t")

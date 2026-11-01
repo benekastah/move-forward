@@ -4,8 +4,10 @@ import base64
 import json
 import os
 import re
+import urllib.error
 import urllib.request
 from datetime import datetime
+from http import HTTPStatus
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -182,7 +184,16 @@ def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> 
     keys = [k for k in keys if is_key(k)]
     if not keys:
         return []
-    return search(config, email, f"key in ({', '.join(keys)})", api_token)
+    try:
+        return search(config, email, f"key in ({', '.join(keys)})", api_token)
+    except urllib.error.HTTPError as e:
+        # Jira refuses a whole `key in` search naming one ticket it doesn't know (mistyped,
+        # deleted, or in a project I can't see): ask key by key, and leave those out.
+        if e.code != HTTPStatus.BAD_REQUEST:
+            raise
+        if len(keys) == 1:
+            return []
+        return [issue for key in keys for issue in tickets(config, email, [key], api_token)]
 
 
 def collect(config: JiraConfig, email: str) -> JiraSnapshot:
