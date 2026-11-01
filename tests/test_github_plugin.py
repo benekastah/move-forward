@@ -7,12 +7,15 @@ import pytest
 from conftest import ME, NOW, pr, snapshot
 
 from move_forward.db import Database
+from move_forward.domain import Review, Thread, TimelineEvent
 from move_forward.plugin import Context
 from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
-from move_forward.plugins.github.people import MIGRATIONS, PeopleRepository
+from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.github.plugin import GitHubPlugin
-from move_forward.repositories import KvRepository
+from move_forward.plugins.github.snapshots import SnapshotRepository as GitHubSnapshots
+from move_forward.plugins.github.tables import MIGRATIONS
+from move_forward.repositories import KvRepository, SnapshotRepository
 from move_forward.shell import CommandError
 
 
@@ -88,3 +91,44 @@ def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) 
         ("https://pr/2", "open", None),
     ]
     assert GitHubPlugin().fetch(_context(), "ticket", ["APP-1"]) == []
+
+
+def test_the_snapshot_moves_from_json_and_round_trips() -> None:
+    full = pr(
+        1,
+        labels=["bug", "ui"],
+        requested_users=["alice"],
+        requested_teams=["web", "core"],
+        reviews=[Review(author="bob", state="APPROVED", submitted_at=NOW)],
+        threads=[
+            Thread(
+                resolved=False,
+                outdated=True,
+                path="a.py",
+                author="bob",
+                body="hm",
+                url="https://c/1",
+                created_at=NOW,
+            )
+        ],
+        events=[
+            TimelineEvent(type="ReviewRequestedEvent", at=NOW, reviewer_kind="team", reviewer="web")
+        ],
+        files=["a.py", "b.py"],
+        merged_at=NOW,
+        in_merge_queue=True,
+    )
+    gh = snapshot(
+        mine=[full, pr(2)],
+        team_requests=[full.model_copy(update={"files": ["only/here.py"]})],
+        merged_recent=[pr(3, state="MERGED")],
+    )
+    db = Database(":memory:")
+    SnapshotRepository(db).save("github", NOW, gh)
+    db.migrate("github", MIGRATIONS)
+    store = GitHubSnapshots(db)
+    assert store.load() == gh
+    smaller = snapshot(mine=[pr(4)], team_members=["x"])
+    store.replace(smaller)
+    assert store.load() == smaller
+    assert db.query("SELECT * FROM github_pr_files") == []  # gone with their PRs

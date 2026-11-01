@@ -8,7 +8,8 @@ from skill_notes import REVIEWER_MAP
 
 from move_forward import cli
 from move_forward.db import Database
-from move_forward.plugins.github.people import MIGRATIONS, PeopleRepository, read_reviewer_map
+from move_forward.plugins.github.people import PeopleRepository, read_reviewer_map
+from move_forward.plugins.github.tables import MIGRATIONS
 
 
 def test_the_migration_copies_emails_core_held() -> None:

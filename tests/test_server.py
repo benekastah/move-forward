@@ -1,6 +1,5 @@
 import threading
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPResponse
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -15,10 +14,10 @@ from move_forward.db import Database
 from move_forward.page import Action, Item
 from move_forward.plugin import KEPT, ActionError, ActionResult
 from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.snapshots import SnapshotRepository as GitHubSnapshots
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import migrate
-from move_forward.repositories import SnapshotRepository
 
 
 @pytest.fixture
@@ -32,10 +31,8 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
     )
     db = Database(":memory:")
     migrate(config, db)
-    SnapshotRepository(db).save(
-        "github",
-        datetime.now(UTC),
-        snapshot(mine=[pr(1, requested_users=["alice"], requested_teams=["web"])]),
+    GitHubSnapshots(db).replace(
+        snapshot(mine=[pr(1, requested_users=["alice"], requested_teams=["web"])])
     )
     refreshed: list[bool] = []
 

@@ -13,13 +13,15 @@ from ...shell import CommandError
 from . import cli, client, derive
 from .config import GitHubConfig
 from .panels import PR, Builder
-from .people import MIGRATIONS, PeopleRepository
+from .people import PeopleRepository
 from .prs import (
     changes_requested,
     last_review_activity,
     review_blockers,
     ticket_keys,
 )
+from .snapshots import SnapshotRepository as PrSnapshots
+from .tables import MIGRATIONS
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +46,12 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def collect(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot:
         return client.collect(ctx.config.org, _team_slugs(ctx), ctx.config.history_days, ctx.now)
+
+    def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
+        PrSnapshots(ctx.db).replace(snapshot)
+
+    def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
+        return PrSnapshots(ctx.db).load()
 
     def _email_domains(self, ctx: Context[GitHubConfig]) -> list[str]:
         if ctx.config.email_domains:
@@ -72,7 +80,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def after_collect(self, ctx: Context[GitHubConfig], graph: Graph) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the
         local checkouts the graph's `repo` entities describe."""
-        gh = SnapshotRepository(ctx.db).get(self.name, GitHubSnapshot)
+        gh = self.load(ctx)
         if gh is None:
             return
         self._lookup_emails(ctx, gh)

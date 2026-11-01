@@ -13,22 +13,6 @@ LOOKED_UP: Source = "lookup"
 """Found in the person's commits; never overwrites an imported email."""
 REVIEWER_MAP_FILE = "reviewer-map.md"
 
-MIGRATIONS = [
-    """
-    CREATE TABLE github_people (       -- kept: logins and their commit emails
-        login TEXT PRIMARY KEY,
-        email TEXT,                    -- NULL: looked up, and none found
-        source TEXT NOT NULL CHECK (source IN ('import', 'lookup'))
-    );
-    -- The emails core's reviewer table held for github before it had its own; core keeps the
-    -- table, emptied.
-    INSERT INTO github_people
-        SELECT login, email, CASE source WHEN 'lookup' THEN 'lookup' ELSE 'import' END
-        FROM reviewer_users WHERE email IS NOT NULL OR source = 'lookup';
-    """
-]
-"""The github plugin's migrations."""
-
 
 def read_reviewer_map(text: str) -> dict[str, str]:
     """Emails by login, from the Users table of `reviewer-map.md` (login, email, Slack id)."""
