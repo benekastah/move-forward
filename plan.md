@@ -114,10 +114,6 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   conditions included, and move the skill onto them.
 - **Finished entries are never pruned by the dashboard.** Prune deletes only entries
   finished 90 days ago; the skill clears finished ones itself with `mfd notes remove`.
-- **Restoring deleted iced branches.** A stack on ice keeps the commit of each branch, but
-  once git deletes them there's no button to bring them back. git could add Restore
-  branches on the On ice item, recreating each at its commit; and Reopen on a stack whose
-  branches are gone could confirm first, since the commits are forgotten with it.
 - **Stale JSON in `snapshots.payload`.** Core no longer writes it, but the last JSON each
   plugin stored stays there, unused once that plugin's migration has copied it. A plugin
   can't clear core's table, so this needs a core migration that runs only after every

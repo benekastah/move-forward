@@ -174,3 +174,17 @@ def test_a_merged_branch_still_here_is_nominated_to_delete() -> None:
     assert [(i.title, i.details[0]) for i in act] == [
         ("Delete the branch: me/done: PR merged 1d ago", "why: quick")
     ]
+
+
+def test_reopening_a_stack_whose_branches_are_gone_asks_first() -> None:
+    local = local_snapshot(branches=[local_branch("main"), local_branch("me/x", ahead=1)])
+    built = build(local=local, iced_stacks=[iced("me/x"), iced("me/gone")])
+    reopen = {
+        item.title: next(a for a in item.actions if a.name == "notes/thaw")
+        for item in panel(built, "notes.iced").items
+    }
+    assert reopen["me/x"].confirm is None
+    assert (
+        reopen["me/gone"].confirm is not None
+        and "me/gone no longer exist" in reopen["me/gone"].confirm
+    )

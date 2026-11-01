@@ -390,6 +390,16 @@ class Builder:
             where = next((i.repo_dir for i in branches if i.repo_dir), None)
             where = where or ", ".join(dict.fromkeys(i.kind for i in others)) or "?"
             first = others[0] if others else None
+            gone = [i.name for i in branches if self.graph.get(BRANCH, i.ref_id) is None]
+            reopen = Action(
+                name="notes/thaw",
+                label="Reopen",
+                fields={"ice": str(ice.id)},
+                confirm=f"{', '.join(gone)} no longer exist; reopening forgets the commits"
+                " they were iced at. Restore the branches first to keep them."
+                if gone
+                else None,
+            )
             items.append(
                 Item(
                     title=ice.title,
@@ -397,9 +407,7 @@ class Builder:
                     subtitle=f"{where} · iced {ice.iced_on.isoformat()}",
                     details=[ice.note] if ice.note else [],
                     badges=[f"{len(branches)} branches"] if branches else [],
-                    actions=[
-                        Action(name="notes/thaw", label="Reopen", fields={"ice": str(ice.id)})
-                    ],
+                    actions=[reopen],
                     # The `iced` keeps the item on the page; git and git_stack add deleting
                     # and untracking the branches. Not the PRs, tickets or entries iced: the
                     # item isn't about them for other plugins' buttons.

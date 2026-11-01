@@ -21,7 +21,8 @@ names are related through it.
   last. While the notes are empty (just upgraded, say), it says how to import them.
 - **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw); git adds
   Delete branches and git_stack Untrack for a stack. The stack stays on ice with the
-  commits it was iced at until it's reopened. Everything on ice is left out of the other
+  commits it was iced at until it's reopened; Reopen asks first when its branches are
+  gone, since the commits are forgotten with it. Everything on ice is left out of the other
   panels, with what it links: a stack's PRs, the PRs that mention an iced ticket, and an
   iced entry's PRs and tickets. Iced PRs, tickets and entries come off ice by themselves
   once their work is over (see the README's daily clean-up).
