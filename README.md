@@ -144,8 +144,9 @@ before the command's name.
 | `mfd notes ice --branch <repo> <branch> [--note N]` | Put a branch, with its git-stack stack, on ice; needs a refresh first, so git knows the branch. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
-| `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database, and the emails in its `reviewer-map.md` (for reviewer suggestions). Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`; the reviewer map can be imported again any time. |
+| `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database. Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`. |
 | `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. |
+| `mfd github import <dir>` | Read reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions; they win over emails looked up from commits. Run it again whenever the map changes. |
 | `mfd slack import <dir>` | Read people's Slack ids and teams' channels from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 
@@ -302,8 +303,8 @@ Jira; without Jira, entries with ticket keys are kept.
 `dashboard.db` holds each plugin's latest snapshot as JSON, under the
 plugin's name (kept when a refresh fails, with the error alongside), the
 notes in the notes plugin's tables, where pings go and the pings sent in the
-slack plugin's, and reviewers' emails (from `mfd notes import`, or looked up
-from commits). It's the
+slack plugin's, and reviewers' emails in the github plugin's (from `mfd github
+import`, or looked up from commits). It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.
 The server's token sits next to it, in `token`.
 

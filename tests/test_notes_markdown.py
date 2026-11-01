@@ -12,7 +12,6 @@ from move_forward.db import Database
 from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.models import Link
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
-from move_forward.repositories import ReviewerRepository
 
 TODAY = date(2026, 10, 31)
 PR_12 = "https://github.com/acme/widgets/pull/12"
@@ -112,13 +111,12 @@ def test_mfd_notes_import_then_export(
 ) -> None:
     notes_dir = _notes_dir(tmp_path)
     assert cli.main(["-c", str(config), "notes", "import", str(notes_dir)]) == 0
-    assert "imported 2 entries, 3 todos, 2 stacks on ice" in capsys.readouterr().out
+    assert "imported 2 entries, 3 todos and 2 stacks on ice" in capsys.readouterr().out
     db = Database(tmp_path / "dashboard.db")
     assert [e.title for e in NotesRepository(db).entries()] == [
         "APP-1 Fix the widget",
         "Thing without ticket (inferred)",
     ]
-    assert ReviewerRepository(db).users()
 
     assert cli.main(["-c", str(config), "notes", "import", str(notes_dir)]) == 1
     assert "--replace" in capsys.readouterr().err

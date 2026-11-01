@@ -28,6 +28,7 @@ from move_forward.domain import (
 )
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
+from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.models import Entry, Ice, IcedItem, Size, Todo
 from move_forward.plugins.notes.repository import MIGRATIONS as NOTES_MIGRATIONS
@@ -40,7 +41,7 @@ from move_forward.plugins.slack.plugin import pinger
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.refresh import build_dashboard, stored_graph
 from move_forward.registry import enabled, migrate
-from move_forward.repositories import ReviewerRepository, SnapshotRepository
+from move_forward.repositories import SnapshotRepository
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
 ME = "me"
@@ -150,7 +151,6 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     )
     reviewers = cast(dict[str, ReviewerUser], o.pop("users", {}))
     channels = cast(dict[str, TeamChannel], o.pop("teams", {}))
-    ReviewerRepository(db).replace_imported(list(reviewers.values()), list(channels.values()))
     pings = cast(list[Ping], o.pop("pings", []))
     github: dict[str, object] = {"org": "acme"}
     for key in ("review_checks", "placeholder_labels", "ticket_link_prefix", "stale_review_hours"):
@@ -188,6 +188,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         }
     )
     migrate(config, db)
+    PeopleRepository(db).replace_imported({u.login: u.email for u in reviewers.values() if u.email})
     if enable_slack:
         SlackRepository(db).replace_imported(
             [Contact(login=u.login, slack_id=u.slack_id) for u in reviewers.values()],

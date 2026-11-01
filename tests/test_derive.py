@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from move_forward.domain import ReviewerUser
 from move_forward.plugins.github import codeowners, derive
 from move_forward.shell import git
 
@@ -49,11 +48,11 @@ def test_suggest_reviewers_counts_recent_committers_with_known_logins(tmp_path: 
     _commit(repo, "nobody@x", "api/f.py")
     git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
     local = derive.Checkout(github_repo="acme/widgets", dir=str(repo), default_branch="main")
-    users = {
-        "alice": ReviewerUser(login="alice", email="alice@x"),
-        "bob": ReviewerUser(login="bob", email="bob@x"),
-        "carol": ReviewerUser(login="carol", email="carol@x"),
-        "me": ReviewerUser(login="me", email="me@x"),
+    emails = {
+        "alice": "alice@x",
+        "bob": "bob@x",
+        "carol": "carol@x",
+        "me": "me@x",
     }
-    suggestions = derive.suggest_reviewers(local, ["api/new.py"], 30, users, exclude={"me"})
+    suggestions = derive.suggest_reviewers(local, ["api/new.py"], 30, emails, exclude={"me"})
     assert [(s.login, s.commits) for s in suggestions] == [("alice", 2), ("bob", 1)]

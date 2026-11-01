@@ -5,6 +5,7 @@ skill logged in `work-notes.md`."""
 import re
 from datetime import UTC, datetime
 
+from ...markdown import cell, tables
 from .models import Contact, Ping, TeamChannel
 
 REVIEWER_MAP_FILE = "reviewer-map.md"
@@ -18,44 +19,20 @@ _SLACK_ID_RE = re.compile(r"\(([CGDU][A-Z0-9]{6,})\)")
 _CHANNEL_RE = re.compile(r"#[\w-]+")
 
 
-def _tables(text: str) -> dict[str, list[list[str]]]:
-    """Each `##` section's first markdown table, as body rows of cells (header and divider
-    skipped), by heading."""
-    sections: dict[str, list[str]] = {}
-    heading: str | None = None
-    for line in text.splitlines():
-        if line.startswith("## "):
-            heading = line[3:].strip()
-            sections[heading] = []
-        elif heading is not None and line.strip().startswith("|"):
-            sections[heading].append(line)
-    return {
-        name: [
-            [cell.strip().strip("`").strip() for cell in row.strip().strip("|").split("|")]
-            for row in rows[2:]
-        ]
-        for name, rows in sections.items()
-    }
-
-
-def _cell(row: list[str], index: int) -> str:
-    return row[index] if index < len(row) else ""
-
-
 def read_reviewer_map(text: str) -> tuple[list[Contact], list[TeamChannel]]:
     """People's Slack ids (the Users table: login, email, Slack id) and teams' channels (the
     Teams table: team, channel as `#name (C0123456)`)."""
-    tables = _tables(text)
+    by_heading = tables(text)
     contacts = [
-        Contact(login=login, slack_id=_cell(row, 2) or None)
-        for row in tables.get("Users", [])
-        if (login := _cell(row, 0))
+        Contact(login=login, slack_id=cell(row, 2) or None)
+        for row in by_heading.get("Users", [])
+        if (login := cell(row, 0))
     ]
     teams: list[TeamChannel] = []
-    for row in tables.get("Teams", []):
-        if not (slug := _cell(row, 0)):
+    for row in by_heading.get("Teams", []):
+        if not (slug := cell(row, 0)):
             continue
-        channel = _cell(row, 1)
+        channel = cell(row, 1)
         id_match = _SLACK_ID_RE.search(channel)
         name_match = _CHANNEL_RE.search(channel)
         teams.append(

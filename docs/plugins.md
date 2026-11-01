@@ -90,9 +90,3 @@ flowchart TB
 ```
 
 slack and notes have no snapshot, so they don't collect.
-
-## Not through the graph yet
-
-Until github has a table of its own, reviewers' emails live in core's reviewer table:
-`mfd notes import` fills it from the skill's `reviewer-map.md`, and github adds the
-emails it looks up from commits.

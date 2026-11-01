@@ -1,6 +1,7 @@
 """Derived data that needs local checkouts: CODEOWNERS scores and reviewer suggestions."""
 
 from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
 
 from pydantic import Field
@@ -10,7 +11,6 @@ from ...domain import (
     GitHubSnapshot,
     Model,
     ReviewerSuggestion,
-    ReviewerUser,
     TeamPrScore,
 )
 from ...shell import CommandError, git
@@ -60,12 +60,13 @@ def suggest_reviewers(
     repo: Checkout,
     files: list[str],
     since_days: int,
-    users: dict[str, ReviewerUser],
+    emails: Mapping[str, str | None],
     exclude: set[str],
 ) -> list[ReviewerSuggestion]:
     """People who recently committed to the PR's directories, by commit count.
 
-    Only authors whose email is known (so they map to a GitHub login) are suggested.
+    Only authors whose email is known (so they map to a GitHub login) are suggested;
+    `emails` are by login.
     """
     dirs = sorted({str(Path(path).parent) for path in files}) or ["."]
     try:
@@ -81,7 +82,7 @@ def suggest_reviewers(
     except CommandError:
         return []
     by_email = Counter(out.split())
-    login_by_email = {u.email: login for login, u in users.items() if u.email}
+    login_by_email = {email: login for login, email in emails.items() if email}
     counts: Counter[str] = Counter()
     for email, count in by_email.items():
         login = login_by_email.get(email)
@@ -96,7 +97,7 @@ def suggest_reviewers(
 def collect(
     github: GitHubSnapshot,
     checkouts: list[Checkout],
-    users: dict[str, ReviewerUser],
+    emails: Mapping[str, str | None],
     org: str,
     teams: list[str],
     commit_history_days: int,
@@ -120,7 +121,7 @@ def collect(
     }
     suggestions = {
         pr.url: suggest_reviewers(
-            repos[pr.repo], pr.files, commit_history_days, users, {github.login}
+            repos[pr.repo], pr.files, commit_history_days, emails, {github.login}
         )
         for pr in github.mine
         if pr.repo in repos

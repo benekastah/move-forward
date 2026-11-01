@@ -12,10 +12,8 @@ from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
-from ... import notes as skill_notes
 from ...graph import Graph
 from ...plugin import ActionError, ActionResult, CliHandler, Context
-from ...repositories import ReviewerRepository
 from . import actions, markdown
 from .config import NotesConfig
 from .models import Entry, Ice, Size, Todo
@@ -26,10 +24,9 @@ LAST_ASKED_ICE = "last_asked_ice"
 
 
 def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> str:
-    """Read `work-notes.md`, `on-ice.md` and `reviewer-map.md` from `notes_dir` into the
-    tables. Refuses to replace notes already there unless `replace`. The reviewer map and
-    the skill's nudges go to core's tables, where slack reads them, and can be imported
-    again at any time."""
+    """Read `work-notes.md` and `on-ice.md` from `notes_dir` into the tables. Refuses to
+    replace notes already there unless `replace`. (`mfd slack import` and `mfd github
+    import` read the reviewer map.)"""
 
     def read(name: str) -> str:
         path = notes_dir / name
@@ -45,11 +42,9 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
         repo.replace_all(entries, ices, sections)
     if last_asked:
         ctx.kv.set(LAST_ASKED_ICE, last_asked.isoformat())
-    users, teams = skill_notes.parse_reviewer_map(read(skill_notes.REVIEWER_MAP_FILE))
-    ReviewerRepository(ctx.db).replace_imported(users, teams)
     return (
-        f"imported {len(entries)} entries, {sum(len(e.todos) for e in entries)} todos,"
-        f" {len(ices)} stacks on ice, {len(users)} reviewers and {len(teams)} teams"
+        f"imported {len(entries)} entries, {sum(len(e.todos) for e in entries)} todos"
+        f" and {len(ices)} stacks on ice"
     )
 
 
@@ -331,9 +326,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     ice.add_argument("--branch", nargs=2, metavar=("REPO", "BRANCH"), required=True)
     ice.add_argument("--note")
     add("thaw", "take what's on ice off it").add_argument("ice", type=int)
-    import_parser = add(
-        "import", "read work-notes.md, on-ice.md and reviewer-map.md from a directory"
-    )
+    import_parser = add("import", "read work-notes.md and on-ice.md from a directory")
     import_parser.add_argument("dir", type=Path)
     import_parser.add_argument(
         "--replace", action="store_true", help="replace the notes already imported"

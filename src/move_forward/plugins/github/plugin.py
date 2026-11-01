@@ -1,15 +1,18 @@
 """The GitHub plugin."""
 
+import argparse
 import logging
+from typing import ClassVar
 
-from ...domain import DerivedSnapshot, GitHubSnapshot, PullRequest, ReviewerUser
+from ...domain import DerivedSnapshot, GitHubSnapshot, PullRequest
 from ...graph import Entity, Graph, Ref
 from ...page import Panel
-from ...plugin import Context, Plugin, collect_into
-from ...repositories import ReviewerRepository, SnapshotRepository
-from . import client, derive
+from ...plugin import CliHandler, Context, Plugin, collect_into
+from ...repositories import SnapshotRepository
+from . import cli, client, derive
 from .config import GitHubConfig
 from .panels import PR, Builder
+from .people import MIGRATIONS, PeopleRepository
 from .prs import (
     changes_requested,
     last_review_activity,
@@ -34,6 +37,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     name = "github"
     title = "GitHub"
     config_model = GitHubConfig
+    migrations: ClassVar[list[str]] = MIGRATIONS
+    cli_help = "import reviewers' emails from the skill's reviewer map"
     snapshot_model = GitHubSnapshot
 
     def collect(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot:
@@ -49,8 +54,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         domains = self._email_domains(ctx)
         if not domains:
             return
-        reviewers = ReviewerRepository(ctx.db)
-        known = reviewers.users()
+        people = PeopleRepository(ctx.db)
+        known = people.emails()
         for pr in gh.mine:
             for login in pr.requested_users:
                 if login in known:
@@ -60,8 +65,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 except Exception as e:  # noqa: BLE001
                     log.warning("email lookup for %s failed: %s", login, e)
                     continue
-                reviewers.save_looked_up_email(login, email)
-                known[login] = ReviewerUser(login=login, email=email)
+                people.save_looked_up(login, email)
+                known[login] = email
 
     def after_collect(self, ctx: Context[GitHubConfig], graph: Graph) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the
@@ -81,7 +86,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             lambda: derive.collect(
                 gh,
                 checkouts,
-                ReviewerRepository(ctx.db).users(),
+                PeopleRepository(ctx.db).emails(),
                 ctx.config.org,
                 _team_slugs(ctx),
                 ctx.config.reviewer_history_days,
@@ -156,6 +161,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def url_for(self, ctx: Context[GitHubConfig], kind: str, id: str) -> str | None:
         return id if kind == PR else None
+
+    def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        return cli.add_commands(parser)
 
     def panels(
         self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None, graph: Graph
