@@ -140,7 +140,7 @@ before the command's name.
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd notes list [--open]` | The entries with their open todos (`--open`: only those with some). Every `mfd notes` command works on the database without the server, and prints JSON with `--json`, for scripts and the skill. |
 | `mfd notes show <entry>` | One entry with its todos, merge conditions and links. An entry is named by its id, its title, or a PR URL or ticket key it's about. |
-| `mfd notes add-entry <title> [--link <PR URL or ticket key>]... [--status S] [--where W]` | Add an entry; a ticket key in the title is linked. |
+| `mfd notes add-entry <title> [--link <PR URL or ticket key>]... [--status S] [--where W]` | Add an entry. A ticket key in the title makes it about that ticket (with `[jira]`). |
 | `mfd notes remove <entry>` | Remove an entry with its todos, for finished work. |
 | `mfd notes set <entry> status\|where\|blocked-on <text>` | Set an entry's status, where the work lives (repo, branches, PRs), or what it's blocked on. |
 | `mfd notes link <entry> <PR URL or ticket key>` | Say an entry is about a PR or ticket. A key needs a plugin that knows tickets, e.g. `[jira]`. |
@@ -310,7 +310,7 @@ entry goes when every PR it names was merged or closed and every ticket in
 its title resolved that long ago and it has no open todos (an entry with
 neither is cleared `prune_days` after it last changed), and pings that
 old leave the database. PR and ticket dates come from `gh pr view` and
-Jira; without Jira, entries with ticket keys are kept.
+Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
 ## How it stores things
 

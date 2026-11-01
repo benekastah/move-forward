@@ -22,9 +22,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5f. Plugin-owned, typed entity kinds
 
-- Mentions in notes: an entry's title as `mentions` instead of finding Jira keys in it
-  itself (`markdown.links_in`), and the Add todo and Link actions, the prune and
-  `entry_for` reading tickets through the graph, so notes stops knowing the key pattern.
 - Icing anything, with hiding in core (see Icing anything): `notes.iced` declares that it
   hides what it covers, core leaves those items out of panels and Act now, and the
   consumers' own ice checks go. A notes migration renames the kinds stored in `notes_iced`

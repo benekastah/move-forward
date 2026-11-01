@@ -9,7 +9,7 @@ from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Link, Panel, PrState
 from .kinds import EntryAttrs, IcedBranchAttrs
-from .markdown import JIRA_KEY_RE, PR_URL_RE
+from .markdown import PR_URL_RE
 from .models import Entry, Ice, Todo
 
 NOT_BLOCKED_RE = re.compile(r"^\s*(nothing|none|no|-|n/a)\b", re.IGNORECASE)
@@ -73,16 +73,16 @@ def add_todo_action(entry: str | None, new_title: str = "", where: str = "") -> 
     )
 
 
-def entry_for(entries: list[Entry], url: str | None, keys: list[str]) -> str | None:
-    """The entry that covers a PR or ticket: one that names the URL, else one whose title has
-    one of the ticket keys."""
+def entry_for(entries: list[Entry], url: str | None, keys: list[str], graph: Graph) -> str | None:
+    """The entry that covers a PR or ticket: one that names the URL, else one about one of
+    the tickets."""
     if url:
         for entry in entries:
             if url in _entry_urls(entry):
                 return entry.title
     for key in keys:
         for entry in entries:
-            if key in _entry_keys(entry):
+            if key in entry_keys(entry, graph):
                 return entry.title
     return None
 
@@ -103,7 +103,7 @@ def _todo_links(
     text = todo.text
     own_prs = [*PR_URL_RE.findall(text), *(link.ref for link in todo.links if link.kind == PR)]
     own_keys = [
-        *JIRA_KEY_RE.findall(text),
+        *(r.id for r in graph.named(text) if r.kind == TICKET),
         *(link.ref for link in todo.links if link.kind == TICKET),
     ]
     links: list[Link] = []
@@ -153,13 +153,16 @@ def _entry_urls(entry: Entry) -> list[str]:
     return sorted(link.ref for link in entry.links if link.kind == PR)
 
 
-def _entry_keys(entry: Entry) -> list[str]:
-    return sorted(link.ref for link in entry.links if link.kind == TICKET)
+def entry_keys(entry: Entry, graph: Graph) -> list[str]:
+    """The tickets an entry is about: linked to it, or named in its title."""
+    named = [r.id for r in graph.named(entry.title) if r.kind == TICKET]
+    return sorted({*named, *(link.ref for link in entry.links if link.kind == TICKET)})
 
 
 def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
-    """`entry` per work entry, pointing at the PRs and tickets it and its todos are about, and
-    `iced_branch` per branch on ice."""
+    """`entry` per work entry, pointing at the PRs and tickets it and its todos are linked to
+    and mentioning its title (for the tickets it names), and `iced_branch` per branch on
+    ice."""
     result: list[Entity] = []
     for entry in entries:
         links = [*entry.links, *(link for todo in entry.open_todos for link in todo.links)]
@@ -170,6 +173,7 @@ def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
                     "ref": Ref(kind=ENTRY, id=entry.title),
                     "title": entry.title,
                     "refs": refs,
+                    "mentions": [entry.title],
                     "attrs": attrs(
                         EntryAttrs(
                             merge_conditions=entry.conditions,
@@ -250,7 +254,7 @@ class Builder:
             if pr is None or entity is None or not (pr.mine and pr.state == "open"):
                 return None
             keys = [r.id for r in entity.refs if r.kind == TICKET]
-            entry = entry_for(self.entries, pr.id, keys)
+            entry = entry_for(self.entries, pr.id, keys, self.graph)
             ticket = self.graph.view_one(TICKET, keys[0], _TicketView) if keys else None
             summary = ticket.summary if ticket else None
             title = f"{keys[0]} {summary or pr.title}" if keys else f"{pr.id} {pr.title}"
@@ -258,7 +262,7 @@ class Builder:
         ticket = self.graph.view_one(TICKET, ref.id, _TicketView)
         if ticket is None:
             return None
-        entry = entry_for(self.entries, ticket.url, [ticket.id])
+        entry = entry_for(self.entries, ticket.url, [ticket.id], self.graph)
         title = f"{ticket.id} {ticket.summary}" if ticket.summary else ticket.id
         return add_todo_action(entry, title, ticket.url or "")
 
@@ -309,7 +313,7 @@ class Builder:
             if not open_todos:
                 continue
             urls = _entry_urls(entry)
-            keys = _entry_keys(entry)
+            keys = entry_keys(entry, self.graph)
             blocked = _is_blocked(entry)
             quick = [t for t in open_todos if t.size == "quick"]
             close_out = len(quick) == len(open_todos)

@@ -12,7 +12,7 @@ from ...domain import Model
 from ...graph import Graph
 from ...plugin import KEPT, ActionError, ActionHandler, ActionResult, Context
 from .config import NotesConfig
-from .markdown import JIRA_KEY_RE, links_in
+from .markdown import links_in
 from .models import Entry, IcedItem, Link, Size, Todo
 from .repository import NotesRepository
 
@@ -22,7 +22,6 @@ TARGET_SEPARATOR = "\t"
 BRANCH = "branch"
 STACK_BRANCH = "stack_branch"
 PR = "pr"
-TICKET = "ticket"
 INFERRED = "inferred"
 """The status of an entry the dashboard made, rather than the skill."""
 
@@ -175,15 +174,14 @@ def todo_delete(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str])
 
 
 def link_for(graph: Graph, value: str) -> Link:
-    """A ticket key or a PR URL as a link; a key needs a plugin that knows tickets."""
-    if JIRA_KEY_RE.fullmatch(value):
-        if graph.url_for(TICKET, value) is None:
-            raise ActionError("no [jira] site configured to link ticket keys")
-        return Link(kind=TICKET, ref=value)
+    """A ticket key (or another linking entity's id a plugin declares) or a PR URL as a link."""
+    named = graph.named(value)
+    if [r.id for r in named] == [value]:
+        return Link(kind=named[0].kind, ref=value)
     found = links_in(value)
-    if len(found) == 1 and found[0].kind == PR and found[0].ref == value:
+    if len(found) == 1 and found[0].ref == value:
         return found[0]
-    raise ActionError(f"{value!r} is neither a Jira key nor a PR URL")
+    raise ActionError(f"{value!r} is neither a PR URL nor a ticket key (with [jira] set up)")
 
 
 def todo_link(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
@@ -214,9 +212,7 @@ def todo_add(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) ->
     entry_id = notes.entry_id(title)
     if entry_id is None and fields.get("create"):
         where = fields.get("where", "")
-        entry_id = notes.add_entry(
-            title, ctx.now.date(), INFERRED, where or None, links_in(where, title)
-        )
+        entry_id = notes.add_entry(title, ctx.now.date(), INFERRED, where or None, links_in(where))
     if entry_id is None:
         raise ActionError(f"no work-notes entry titled {title}")
     sized: Size | None = "quick" if size == "quick" else "big" if size == "big" else None

@@ -20,11 +20,9 @@ ON_ICE_TITLE = "# Stacks on ice"
 BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""
 PR = "pr"
-TICKET = "ticket"
 BRANCH = "branch"
 
 PR_URL_RE = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
-JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 _FIELD_RE = re.compile(r"^- ([^:]+?):\s*(.*)$")
 _DATED_RE = re.compile(r"^(Done|Declined) (\d{4}-\d{2}-\d{2})$")
 _CHILD_RE = re.compile(r"^\s+- (.*)$")
@@ -33,11 +31,10 @@ _ICE_HEADING_RE = re.compile(r"^(\S+)\s+\((.+)\)$")
 _LAST_ASKED_RE = re.compile(r"^Last asked:\s*(\d{4}-\d{2}-\d{2})\s*$", re.MULTILINE)
 
 
-def links_in(text: str, title: str = "") -> list[Link]:
-    """The PRs `text` names by URL and the tickets `title` names by key, each once."""
-    prs = dict.fromkeys(PR_URL_RE.findall(text))
-    keys = dict.fromkeys(JIRA_KEY_RE.findall(title))
-    return [Link(kind=PR, ref=url) for url in prs] + [Link(kind=TICKET, ref=k) for k in keys]
+def links_in(text: str) -> list[Link]:
+    """The PRs `text` names by URL, each once. The tickets it names aren't links: the graph
+    finds them (see `Graph.named`)."""
+    return [Link(kind=PR, ref=url) for url in dict.fromkeys(PR_URL_RE.findall(text))]
 
 
 def _sized(text: str) -> tuple[str, Size | None]:
@@ -131,7 +128,7 @@ def _entry(title: str, lines: list[str]) -> Entry:
         conditions=conditions,
         declined=declined,
         lines=kept,
-        links=links_in(text, title),
+        links=links_in(text),
     )
 
 

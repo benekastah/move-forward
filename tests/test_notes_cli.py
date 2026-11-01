@@ -77,7 +77,7 @@ def test_add_entries_and_todos_then_list_and_show(run: Run, config: Path) -> Non
         ("ticket", "APP-2"),
     ]
     text = run("show", "1")[1]
-    assert "#1 [quick] reply to the thread" in text and "about: APP-1" in text
+    assert "#1 [quick] reply to the thread" in text
     assert f"#2 [open] review {PR}  {PR}  APP-2" in text
 
 
@@ -85,7 +85,7 @@ def test_entries_are_found_by_id_title_pr_or_ticket(run: Run) -> None:
     run("add-entry", "APP-1 Fix", "--link", PR)
     run("add-entry", "APP-3 Other", "--link", PR)
     assert run("show", "APP-3 Other")[0] == 0 and run("show", "2")[0] == 0
-    assert run("show", "APP-3")[0] == 0  # the ticket key in its title is a link
+    assert run("show", "APP-3")[0] == 0  # by the ticket its title names
     code, _, err = run("show", PR)
     assert code == 1 and "about 2 entries" in err
     assert run("show", "nope")[2] == "mfd notes show: no entry 'nope'\n"
@@ -114,7 +114,7 @@ def test_set_link_conditions_and_decline(run: Run, config: Path) -> None:
     assert [(d.text, d.on) for d in entry.declined] == [
         ("nudge the reviewers", datetime.now(UTC).date())
     ]
-    assert [link.ref for link in entry.links] == [PR, "APP-1"]  # by kind, then ref
+    assert [link.ref for link in entry.links] == [PR]
     assert entry.updated_on == datetime.now(UTC).date()
 
 

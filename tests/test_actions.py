@@ -333,7 +333,7 @@ def test_todo_delete_and_errors(config: Config, work_notes: None) -> None:
 
 def test_todo_link_links_a_jira_ticket_or_a_pr(config: Config, work_notes: None) -> None:
     fields = {**_todo(config, "get it merged"), "input": " APP-9 "}
-    with pytest.raises(ActionError, match="no \\[jira\\] site"):
+    with pytest.raises(ActionError, match="nor a ticket key"):  # no jira: not a key
         run("notes/todo_link", config, fields)
     config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
     assert run("notes/todo_link", config, fields) == "linked APP-9"
@@ -343,7 +343,7 @@ def test_todo_link_links_a_jira_ticket_or_a_pr(config: Config, work_notes: None)
     run("notes/todo_link", config, {**fields, "input": pr})
     [todo] = [t for t in _entry(config).todos if t.text == "get it merged"]
     assert [(link.kind, link.ref) for link in todo.links] == [("pr", pr), ("ticket", "APP-9")]
-    with pytest.raises(ActionError, match="neither a Jira key nor a PR URL"):
+    with pytest.raises(ActionError, match="neither a PR URL nor a ticket key"):
         run("notes/todo_link", config, {**fields, "input": "something else"})
 
 
@@ -376,7 +376,6 @@ def test_todo_add_can_create_the_entry(config: Config, work_notes: None) -> None
     entry = _entry(config, "APP-7 New thing")
     assert (entry.status, entry.where) == ("inferred", "https://github.com/acme/widgets/pull/9")
     assert [(link.kind, link.ref) for link in entry.links] == [
-        ("pr", "https://github.com/acme/widgets/pull/9"),
-        ("ticket", "APP-7"),
+        ("pr", "https://github.com/acme/widgets/pull/9"),  # APP-7, in its title, isn't a link
     ]
     assert _open(config, "APP-7 New thing") == ["[None] start", "[None] again"]

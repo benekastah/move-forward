@@ -34,7 +34,7 @@ pattern for its ids (`ticket`'s is a Jira key) is found in other entities'
 | `branch` | git | `<repo dir>\t<branch>` | | its `repo` |
 | `stack_branch` | git_stack | its `branch`'s id | | its `branch`, which git may have deleted |
 | `ticket` (linking) | jira | the issue key, e.g. `APP-1` | the issue's status | |
-| `entry` (linking) | notes | the entry's title | | the `pr` URLs and `ticket` keys it names |
+| `entry` (linking) | notes | the entry's title | | the `pr` URLs and `ticket` keys linked to it and its open todos, and the `ticket` keys its title mentions |
 | `iced_branch` | notes | `<repo dir>\t<branch>`, like `branch` | | |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github

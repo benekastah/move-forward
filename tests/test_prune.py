@@ -86,7 +86,8 @@ def _graph(with_jira: bool = True) -> tuple[Graph, list[tuple[str, list[str]]]]:
             ]
         return []
 
-    return Graph(fetch=fetch), asked
+    linking: dict[str, str | None] = {"ticket": r"\bAPP-\d+\b"} if with_jira else {}
+    return Graph(fetch=fetch, linking=linking), asked
 
 
 def test_finished_entries_and_old_done_todos_go() -> None:
@@ -110,14 +111,16 @@ def test_finished_entries_and_old_done_todos_go() -> None:
     assert notes_prune.prune(NotesRepository(db), graph, CUTOFF) == []
 
 
-def test_entries_with_tickets_are_kept_without_jira() -> None:
-    graph, _ = _graph(with_jira=False)
+def test_without_jira_ticket_keys_hold_no_entry() -> None:
+    graph, asked = _graph(with_jira=False)
     notices = notes_prune.prune(NotesRepository(_seeded()), graph, CUTOFF)
     assert notices == [
-        "dropped 1 old done todo(s) from APP-1 long done",  # kept: its ticket can't be checked
+        "cleared entry APP-1 long done",
         "dropped 1 old done todo(s) from APP-2 done but still has a todo",
+        "cleared entry APP-3 PR merged long ago, ticket open",  # its PR is all notes knows of
         "cleared entry No ticket, no PR, stale",
     ]
+    assert [kind for kind, _ in asked] == ["pr"]
 
 
 def test_plugins_prune_once_a_day() -> None:

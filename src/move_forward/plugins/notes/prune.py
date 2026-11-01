@@ -2,8 +2,8 @@
 was all over that long ago (every PR merged or closed, every ticket resolved, no open todos).
 
 When PRs closed and tickets were resolved comes from `graph.fetch`, asking github and jira,
-since the work is usually long gone from their snapshots. Without jira, entries naming a
-ticket are kept: nothing can say it's resolved.
+since the work is usually long gone from their snapshots. Without jira, ticket keys aren't
+known as such, so an entry naming only tickets goes once it hasn't been updated that long.
 """
 
 from datetime import UTC, date, datetime
@@ -11,6 +11,7 @@ from datetime import UTC, date, datetime
 from ...domain import Model
 from ...graph import Entity, Graph
 from .models import Entry
+from .panels import entry_keys
 from .repository import NotesRepository
 
 PR = "pr"
@@ -39,13 +40,17 @@ def _over_by(entity: Entity | None, cutoff: datetime) -> bool:
 
 
 def _finished(
-    entry: Entry, cutoff: datetime, prs: dict[str, Entity], tickets: dict[str, Entity]
+    entry: Entry,
+    keys: list[str],
+    cutoff: datetime,
+    prs: dict[str, Entity],
+    tickets: dict[str, Entity],
 ) -> bool:
-    """Whether an entry's work was all over by `cutoff`, so the entry can go."""
+    """Whether an entry's work (its PRs, and `keys`, its tickets) was all over by `cutoff`, so
+    the entry can go."""
     if entry.open_todos:
         return False
     urls = [link.ref for link in entry.links if link.kind == PR]
-    keys = [link.ref for link in entry.links if link.kind == TICKET]
     if not urls and not keys:
         return _by(entry.updated_on, cutoff)
     return all(_over_by(prs.get(u), cutoff) for u in urls) and all(
@@ -56,13 +61,14 @@ def _finished(
 def prune(notes: NotesRepository, graph: Graph, cutoff: datetime) -> list[str]:
     """Drop finished entries, and todos done by `cutoff`; returns what was done."""
     entries = notes.entries()
+    keys = {e.id: entry_keys(e, graph) for e in entries}
     candidates = [e for e in entries if not e.open_todos]
-    links = [link for e in candidates for link in e.links]
-    prs = graph.fetch(PR, sorted({link.ref for link in links if link.kind == PR}))
-    tickets = graph.fetch(TICKET, sorted({link.ref for link in links if link.kind == TICKET}))
+    urls = {link.ref for e in candidates for link in e.links if link.kind == PR}
+    prs = graph.fetch(PR, sorted(urls))
+    tickets = graph.fetch(TICKET, sorted({k for e in candidates for k in keys[e.id]}))
     notices: list[str] = []
     for entry in entries:
-        if _finished(entry, cutoff, prs, tickets):
+        if _finished(entry, keys[entry.id], cutoff, prs, tickets):
             notes.delete_entry(entry.id)
             notices.append(f"cleared entry {entry.title}")
             continue

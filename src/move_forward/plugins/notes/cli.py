@@ -14,7 +14,7 @@ from pathlib import Path
 
 from ...graph import Graph
 from ...plugin import ActionError, ActionResult, CliHandler, Context
-from . import actions, markdown
+from . import actions, markdown, panels
 from .config import NotesConfig
 from .models import Entry, Ice, Size, Todo
 from .repository import NotesRepository
@@ -77,11 +77,15 @@ class Result:
         self.data = data if data is not None else {"notice": text}
 
 
-def find_entry(entries: list[Entry], ref: str) -> Entry:
+def find_entry(entries: list[Entry], ref: str, graph: Graph) -> Entry:
     """The entry `ref` names: by id or title, else by a PR URL or ticket key it's about."""
     ref = ref.strip()
     found = [e for e in entries if str(e.id) == ref or e.title == ref]
-    found = found or [e for e in entries if any(link.ref == ref for link in e.links)]
+    found = found or [
+        e
+        for e in entries
+        if any(link.ref == ref for link in e.links) or ref in panels.entry_keys(e, graph)
+    ]
     if not found:
         raise ValueError(f"no entry {ref!r}")
     if len(found) > 1:
@@ -136,7 +140,7 @@ def cmd_list(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) 
 
 
 def cmd_show(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
-    entry = find_entry(_entries(ctx), args.entry)
+    entry = find_entry(_entries(ctx), args.entry, graph)
     return Result(_entry_text(entry), entry.model_dump(mode="json"))
 
 
@@ -149,7 +153,7 @@ def cmd_add_entry(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namesp
     notes = NotesRepository(ctx.db)
     if notes.entry_id(args.title) is not None:
         raise ValueError(f"there is already an entry titled {args.title!r}")
-    links = [*markdown.links_in("", args.title), *(actions.link_for(graph, v) for v in args.link)]
+    links = [actions.link_for(graph, v) for v in args.link]
     entry_id = notes.add_entry(
         args.title, ctx.now.date(), args.status, args.where, list(dict.fromkeys(links))
     )
@@ -158,14 +162,14 @@ def cmd_add_entry(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namesp
 
 def cmd_remove(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry)
+    entry = find_entry(notes.entries(), args.entry, graph)
     notes.delete_entry(entry.id)
     return Result(f"removed {entry.title}")
 
 
 def cmd_set(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry)
+    entry = find_entry(notes.entries(), args.entry, graph)
     if args.field == "status":
         notes.set_status(entry.id, args.text)
     elif args.field == "where":
@@ -178,7 +182,7 @@ def cmd_set(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -
 
 def cmd_link(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry)
+    entry = find_entry(notes.entries(), args.entry, graph)
     link = actions.link_for(graph, args.ref)
     if not notes.link_entry(entry.id, link):
         raise ValueError(f"{entry.title} is already about {link.ref}")
@@ -188,7 +192,7 @@ def cmd_link(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) 
 
 def cmd_todo_add(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry)
+    entry = find_entry(notes.entries(), args.entry, graph)
     text = args.text.strip()
     if not text:
         raise ValueError("the todo is empty")
@@ -217,7 +221,7 @@ def cmd_todo(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) 
 
 def cmd_condition(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry)
+    entry = find_entry(notes.entries(), args.entry, graph)
     text = args.text.strip()
     if args.condition_command == "add":
         if not notes.add_condition(entry.id, text):
@@ -230,7 +234,7 @@ def cmd_condition(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namesp
 
 def cmd_decline(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry)
+    entry = find_entry(notes.entries(), args.entry, graph)
     notes.add_declined(entry.id, ctx.now.date(), args.text.strip())
     return Result(f"{entry.title}: declined for today")
 
