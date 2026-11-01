@@ -431,6 +431,20 @@ def test_a_layout_is_refused_from_another_site_without_the_token_or_malformed(
     assert LayoutRepository(app.db).load() == Layout()
 
 
+@pytest.mark.parametrize("length", [str(server.MAX_BODY_BYTES + 1), "-1", "lots"])
+def test_a_post_whose_length_is_too_large_or_not_a_length_is_refused(
+    client: HTTPConnection, length: str
+) -> None:
+    client.putrequest("POST", "/layout")
+    for name, value in SIGNED_IN.items():
+        client.putheader(name, value)
+    client.putheader("Content-Length", length)
+    client.endheaders()
+    response = client.getresponse()
+    assert response.status == 413 and response.getheader("Connection") == "close"
+    response.read()
+
+
 def test_localhost_goes_to_127_0_0_1_where_the_sign_in_cookie_is(client: HTTPConnection) -> None:
     host = f"localhost:{client.port}"
     response = get(client, "/focus?cat=all&i=2", {"Host": host})

@@ -288,6 +288,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
+            if self.close_connection:
+                self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(data)
 
@@ -371,12 +373,26 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             else:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
 
-        def _read_body(self) -> bytes:
-            length = int(self.headers.get("Content-Length") or 0)
-            return self.rfile.read(min(length, MAX_BODY_BYTES))
+        def _read_body(self) -> bytes | None:
+            """The request's body, read whole before anything is answered, refusals
+            included: Windows resets a connection closed with a body unread, and the client
+            can lose the answer. None when its Content-Length isn't a number from 0 to
+            `MAX_BODY_BYTES`, which is answered with the connection closed."""
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = -1
+            if not 0 <= length <= MAX_BODY_BYTES:
+                self.close_connection = True
+                return None
+            return self.rfile.read(length)
 
         def do_POST(self) -> None:
+            body = self._read_body()
             if self._refuse_other_sites(check_origin=True) or self._refuse_strangers():
+                return
+            if body is None:
+                self._html(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "<p>Too large.</p>")
                 return
             url = urlsplit(self.path)
             if url.path == "/refresh":
@@ -384,7 +400,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._redirect(_back_to_page(url.query))
             elif url.path == "/layout":
                 try:
-                    layout = Layout.model_validate_json(self._read_body())
+                    layout = Layout.model_validate_json(body)
                 except ValidationError:
                     self._html(HTTPStatus.BAD_REQUEST, "<p>Not a layout.</p>")
                     return
@@ -396,7 +412,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._redirect(_back_to_page(url.query, "layout reset"))
             elif url.path.startswith("/actions/"):
                 name = url.path[len("/actions/") :]
-                fields = _form_fields(self._read_body())
+                fields = _form_fields(body)
                 notice, extra = app.run_action(name, fields)
                 self._redirect(_back_to_page(url.query, notice, extra))
             else:
