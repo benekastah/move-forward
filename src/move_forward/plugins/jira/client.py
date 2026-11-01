@@ -11,8 +11,7 @@ from http import HTTPStatus
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ... import https
-from ...shell import CommandError, run
+from ... import https, keychain
 from .config import JiraConfig
 from .models import JiraIssue, JiraSnapshot
 
@@ -94,26 +93,15 @@ class RawSearchResponse(_Raw):
 
 
 def token(config: JiraConfig, email: str) -> str:
-    """The API token from the configured env var, else the macOS keychain item for `email`."""
-    if value := os.environ.get(config.token_env):
+    """The API token from the configured env var, else the system's secret store (the macOS
+    keychain, Windows' Credential Manager, the desktop keyring) under `keychain_service` for
+    `email`."""
+    if value := os.environ.get(config.token_env) or keychain.read(config.keychain_service, email):
         return value
-    try:
-        return run(
-            [
-                "security",
-                "find-generic-password",
-                "-s",
-                config.keychain_service,
-                "-a",
-                email,
-                "-w",
-            ]
-        ).strip()
-    except (CommandError, FileNotFoundError) as e:
-        raise RuntimeError(
-            f"no Jira token: set ${config.token_env} or run `security add-generic-password"
-            f" -s {config.keychain_service} -a {email} -w <token>`"
-        ) from e
+    raise RuntimeError(
+        f"no Jira token: set ${config.token_env} or run"
+        f" `{keychain.how_to_store(config.keychain_service, email)}`"
+    )
 
 
 def to_issue(raw: RawIssue, site: str) -> JiraIssue:

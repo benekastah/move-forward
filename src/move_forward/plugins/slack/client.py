@@ -5,8 +5,7 @@ import os
 import urllib.request
 from urllib.parse import urlencode
 
-from ... import https
-from ...shell import CommandError, run
+from ... import https, keychain
 from .config import SlackConfig
 
 LOOKUP_BY_EMAIL = "https://slack.com/api/users.lookupByEmail"
@@ -14,27 +13,10 @@ NOT_FOUND = "users_not_found"
 
 
 def token(config: SlackConfig, email: str) -> str | None:
-    """The API token from `token_env`, else the macOS keychain item for `email`; None when
-    neither has one, so there are no lookups."""
-    if value := os.environ.get(config.token_env):
-        return value
-    try:
-        return (
-            run(
-                [
-                    "security",
-                    "find-generic-password",
-                    "-s",
-                    config.keychain_service,
-                    "-a",
-                    email,
-                    "-w",
-                ]
-            ).strip()
-            or None
-        )
-    except (CommandError, FileNotFoundError):
-        return None
+    """The API token from `token_env`, else the system's secret store (the macOS keychain,
+    Windows' Credential Manager, the desktop keyring) under `keychain_service` for `email`;
+    None when neither has one, so there are no lookups."""
+    return os.environ.get(config.token_env) or keychain.read(config.keychain_service, email)
 
 
 def lookup_by_email(api_token: str, email: str) -> str | None:

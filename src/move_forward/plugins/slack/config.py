@@ -26,8 +26,9 @@ class SlackConfig(Strict):
     """The environment variable holding a Slack token with the `users:read.email` scope, for
     finding requested reviewers' Slack ids by their email. No token, no lookups."""
     keychain_service: str = DEFAULT_SLACK_KEYCHAIN_SERVICE
-    """The macOS keychain item's service holding that token, when `token_env` isn't set; its
-    account is the top-level `email`."""
+    """The service that token is stored under in the system's secret store (the macOS
+    keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;
+    its account is the top-level `email`."""
     team_channel: str = ""
     """The channel of a team nothing else names one for, from its name: e.g. `#team-{team}`.
     Empty means no guess."""

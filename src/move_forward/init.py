@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
-from . import asking, registry
+from . import asking, keychain, registry
 from . import config as config_module
 from .asking import Asker, Complete, InitSetup, Prompt, choices, quiet
 from .config import Config
@@ -176,7 +176,7 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
         next_steps += (
             "\n\nFor Jira, create an API token at"
             " https://id.atlassian.com/manage-profile/security/api-tokens, then either"
-            f" export {DEFAULT_JIRA_TOKEN_ENV} or store it in the keychain:\n"
-            f"  security add-generic-password -s {service} -a <jira email> -w <token>"
+            f" export {DEFAULT_JIRA_TOKEN_ENV} or store it in the system's secret store:\n"
+            f"  {keychain.how_to_store(service, '<jira email>')}"
         )
     return next_steps

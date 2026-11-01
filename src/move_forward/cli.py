@@ -66,7 +66,7 @@ my-team = "#team-my-team"
 # [jira]
 # site = "https://example.atlassian.net"
 # refresh_seconds = 900
-# token_env = "JIRA_API_TOKEN"            # else the macOS keychain item for my email
+# token_env = "JIRA_API_TOKEN"            # else the system's secret store, for my email
 # keychain_service = "move-forward-jira"
 # status_in_progress = "In Progress"      # workflow names the transitions panel uses
 # status_in_review = "In Review"

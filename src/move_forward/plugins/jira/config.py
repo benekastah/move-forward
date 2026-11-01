@@ -19,7 +19,7 @@ class JiraConfig(Strict):
     """`[jira]`: Jira Cloud access and the workflow's names. Optional.
 
     Requests authenticate as the top-level `email` with the API token from `token_env`,
-    else the macOS keychain.
+    else the system's secret store.
     """
 
     refresh_seconds: int = Field(default=900, ge=10)
@@ -30,8 +30,9 @@ class JiraConfig(Strict):
     token_env: str = DEFAULT_JIRA_TOKEN_ENV
     """The environment variable holding the API token."""
     keychain_service: str = DEFAULT_JIRA_KEYCHAIN_SERVICE
-    """The macOS keychain item's service, when `token_env` isn't set; its account is the
-    top-level `email`."""
+    """The service the token is stored under in the system's secret store (the macOS
+    keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;
+    its account is the top-level `email`."""
     status_in_progress: str = DEFAULT_STATUS_IN_PROGRESS
     """Workflow status names, for the transitions the Jira panel proposes."""
     status_in_review: str = DEFAULT_STATUS_IN_REVIEW
