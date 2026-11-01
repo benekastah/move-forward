@@ -157,7 +157,7 @@ def cmd_add_entry(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namesp
         raise ValueError(f"there is already an entry titled {args.title!r}")
     links = [*markdown.links_in("", args.title), *(actions.link_for(graph, v) for v in args.link)]
     entry_id = notes.add_entry(
-        args.title, ctx.now.date(), args.status, None, list(dict.fromkeys(links))
+        args.title, ctx.now.date(), args.status, args.where, list(dict.fromkeys(links))
     )
     return Result(f"added entry {entry_id}", {"notice": f"added {args.title}", "id": entry_id})
 
@@ -167,6 +167,8 @@ def cmd_set(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -
     entry = find_entry(notes.entries(), args.entry)
     if args.field == "status":
         notes.set_status(entry.id, args.text)
+    elif args.field == "where":
+        notes.set_where(entry.id, args.text)
     else:
         notes.set_blocked_on(entry.id, args.text)
     notes.touch(entry.id, ctx.now.date())
@@ -286,9 +288,10 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     add_entry.add_argument("title")
     add_entry.add_argument("--link", action="append", default=[], help="a PR URL or ticket key")
     add_entry.add_argument("--status")
-    set_parser = add("set", "set an entry's status or what it's blocked on")
+    add_entry.add_argument("--where", help="where the work lives: repo, branches, PRs")
+    set_parser = add("set", "set an entry's status, where it lives, or what it's blocked on")
     set_parser.add_argument("entry")
-    set_parser.add_argument("field", choices=["status", "blocked-on"])
+    set_parser.add_argument("field", choices=["status", "where", "blocked-on"])
     set_parser.add_argument("text")
     link = add("link", "say an entry is about a PR or ticket")
     link.add_argument("entry")

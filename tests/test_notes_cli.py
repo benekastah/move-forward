@@ -49,7 +49,7 @@ def _db(config: Path) -> Database:
 
 
 def test_add_entries_and_todos_then_list_and_show(run: Run, config: Path) -> None:
-    assert run("add-entry", "APP-1 Fix the widget", "--status", "in review") == (
+    assert run("add-entry", "APP-1 Fix the widget", "--status", "in review", "--where", "repo") == (
         0,
         "added entry 1\n",
         "",
@@ -95,6 +95,7 @@ def test_set_link_conditions_and_decline(run: Run, config: Path) -> None:
     run("add-entry", "APP-1 Fix")
     assert run("set", "APP-1", "status", "in review")[1] == "APP-1 Fix: status is now in review\n"
     run("set", "APP-1", "blocked-on", "design review")
+    run("set", "APP-1", "where", "engineering, branch me/app-1")
     assert run("link", "APP-1", PR)[0] == 0
     code, _, err = run("link", "APP-1", PR)
     assert code == 1 and "already about" in err
@@ -108,6 +109,7 @@ def test_set_link_conditions_and_decline(run: Run, config: Path) -> None:
 
     [entry] = NotesRepository(_db(config)).entries()
     assert (entry.status, entry.blocked_on) == ("in review", "design review")
+    assert entry.where == "engineering, branch me/app-1"
     assert entry.conditions == ["wait for the release"]
     assert [(d.text, d.on) for d in entry.declined] == [
         ("nudge the reviewers", datetime.now(UTC).date())

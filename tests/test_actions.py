@@ -309,8 +309,10 @@ def test_todo_done_and_undone(config: Config, work_notes: None) -> None:
     assert result.params == {KEPT: f"notes:{fields['todo']}"}  # kept on the focus page
     entry = _entry(config)
     assert _open(config) == ["[big] get it merged", "[None] no size here"]
-    assert [t.done_on for t in entry.todos if t.text == "reply to the thread"] == [date.today()]
-    assert entry.updated_on == date.today()
+    assert [t.done_on for t in entry.todos if t.text == "reply to the thread"] == [
+        datetime.now(UTC).date()
+    ]
+    assert entry.updated_on == datetime.now(UTC).date()
     assert _open(config, "APP-2 Other") == ["[quick] only one"]
 
     assert run("notes/todo_undone", config, fields) == "reopened: reply to the thread"

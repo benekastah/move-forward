@@ -200,6 +200,9 @@ class NotesRepository:
     def set_status(self, entry_id: int, status: str | None) -> None:
         self._db.execute("UPDATE notes_entries SET status = ? WHERE id = ?", (status, entry_id))
 
+    def set_where(self, entry_id: int, where: str | None) -> None:
+        self._db.execute("UPDATE notes_entries SET location = ? WHERE id = ?", (where, entry_id))
+
     def set_blocked_on(self, entry_id: int, blocked_on: str | None) -> None:
         self._db.execute(
             "UPDATE notes_entries SET blocked_on = ? WHERE id = ?", (blocked_on, entry_id)

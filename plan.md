@@ -19,17 +19,6 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
 
-### 5b. Notes CLI and the skill
-
-- The CLI is built (see the README), except two parts of the design: `mfd notes ice <entry|
-  url|key>`, icing anything, which comes with "Icing anything" below, and `mfd notes
-  condition add|remove --pr <url>`: merge conditions have no per-PR column yet (a new
-  migration would add one), so they apply to the whole entry.
-- The move-forward skill's SKILL.md switches from editing the markdown to the CLI, in the
-  skill's repository, the same week.
-- The skill sends the dashboard's token (`Authorization: Bearer`, from the `token` file)
-  wherever it calls the HTTP API.
-
 ### 5c. slack and github tables
 
 - slack gets its own tables (`slack_contacts`, `slack_team_channels`, `slack_pings`) and
@@ -782,5 +771,5 @@ top-level setting.
 - **Notes migration loses information the parser doesn't model** (free-text lines,
   `Done` history formats). The importer keeps any line it doesn't understand as an
   entry-level note, and `export` lets you compare before deleting the files.
-- **The skill and the dashboard drift.** The CLI's JSON output is the contract; the
-  skill change lands in the same week as step 5b.
+- **The skill and the dashboard drift.** The CLI's JSON output is the contract the
+  move-forward skill is written against; change it deliberately, with the skill.
