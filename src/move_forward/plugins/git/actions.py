@@ -26,10 +26,15 @@ class _IcedView(Model):
 
 
 def repo_path(config: GitConfig, repo_dir: str) -> Path:
+    """`repo_dir`, if it's one of `[git] repos` or a worktree of one: branches are shared
+    by a repo's worktrees, so any of them will do."""
     path = Path(repo_dir)
-    if path not in config.repos:
-        raise ActionError(f"{repo_dir} is not a configured repo")
-    return path
+    if path in config.repos:
+        return path
+    for repo in config.repos:
+        if repo.exists() and path.resolve() in {w.resolve() for w in worktrees(repo)}:
+            return path
+    raise ActionError(f"{repo_dir} is neither a configured repo nor a worktree of one")
 
 
 def worktrees(repo: Path) -> list[Path]:

@@ -29,7 +29,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 ### 7. Worktrees
 
 - A path in `[git] repos` that's a worktree of another listed repo is folded into it.
-- Actions accept any worktree of a configured repo, not only the listed path.
 
 ### 8. Init and docs
 

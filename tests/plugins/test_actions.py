@@ -130,7 +130,7 @@ def test_delete_refuses_checked_out_missing_and_unknown_repo(config: Config, rep
         run("git/delete_branch", config, {"repo": str(repo), "branch": "main"})
     with pytest.raises(ActionError, match="doesn't exist"):
         run("git/delete_branch", config, {"repo": str(repo), "branch": "nope"})
-    with pytest.raises(ActionError, match="not a configured repo"):
+    with pytest.raises(ActionError, match="nor a worktree of one"):
         run("git/delete_branch", config, {"repo": "/elsewhere", "branch": "done"})
     with pytest.raises(ActionError, match="missing field"):
         run("git/delete_branch", config, {"repo": str(repo)})
@@ -230,7 +230,7 @@ def test_deleting_together_checks_every_branch_before_deleting_any(
     with pytest.raises(ActionError, match="checked out"):
         run("git/delete_together", config, {"targets": targets})
     assert git(repo, "branch", "--list", "done").strip() == "done"
-    with pytest.raises(ActionError, match="not a configured repo"):
+    with pytest.raises(ActionError, match="nor a worktree of one"):
         run("git/delete_together", config, {"targets": "/elsewhere\tdone"})
 
 
@@ -423,3 +423,16 @@ def test_linking_a_ticket_in_a_project_new_to_jira_fetches_it_and_jira_learns_th
         run("notes/todo_link", config, {**fields, "input": "NEW-404"})
     assert asked == [["OPS-5"], ["NEW-404"]]
     assert graph(config).named("see OPS-6") == [Ref(kind="ticket", id="OPS-6")]
+
+
+def test_a_worktree_of_a_configured_repo_will_do_for_its_branches(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    second = tmp_path / "repo2"
+    git(repo, "worktree", "add", "-q", "-b", "side", str(second))
+    notice = run("git/delete_branch", config, {"repo": str(second), "branch": "done"})
+    assert notice == f"deleted done in {second}"
+    assert git(repo, "branch", "--list", "done").strip() == ""
+    (second / "a.txt").write_text("changed")
+    run("git/wip_commit", config, {"repo": str(second), "worktree": str(second)})
+    assert git(second, "log", "-1", "--format=%s").strip() == "WIP"
