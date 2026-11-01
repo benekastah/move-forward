@@ -18,7 +18,11 @@ have deleted), with its parent, status and, on a stack's bottom branch, its grou
 
 - **Stacks**: `git stack info` statuses other than up-to-date, and tracked branches with
   no PR, with a button per repo that runs `git stack clean -d local` for its merged
-  branches (not offered while the repo has iced stacks, since clean touches every stack).
+  branches. Its count is about right: it comes from the last offline `git stack info`,
+  while clean fetches and asks GitHub. It isn't offered while git-stack tracks an iced
+  stack in the repo, since clean covers every stack; untracking the iced stack (On ice's
+  Untrack) brings it back. Clean refuses while tracked files in the repo's checkout have
+  uncommitted changes.
 
 On notes' On ice panel, git_stack adds Untrack to a stack while git-stack tracks its
 branches.
@@ -28,4 +32,4 @@ branches.
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/actions/git_stack/untrack` | `targets` (lines of `<repo dir>\t<branch>`) | `git stack untrack --json` for each repo's, saying which branches still stacked on them now start their own stacks. |
-| `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local --json`, saying which branches it deleted, which it untracked but kept, and its warnings, or, when it fails, what it did first; refused while the repo has iced stacks. |
+| `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local --json`, saying which branches it deleted, which it untracked but kept, and its warnings, or, when it fails, what it did first; refused while git-stack tracks an iced stack in the repo. |

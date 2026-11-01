@@ -56,26 +56,30 @@ def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
     assert restack.url == pr(2).url
     clean = panel(built, "git_stack.stacks").actions
     assert [(a.name, a.fields, a.label) for a in clean] == [
-        ("git_stack/stack_clean", {"repo": "/src/widgets"}, "Clean 1 merged in widgets")
+        ("git_stack/stack_clean", {"repo": "/src/widgets"}, "Clean about 1 merged in widgets")
     ]
-    assert clean[0].confirm is not None
+    confirm = clean[0].confirm or ""
+    assert "each stack's root" in confirm and "uncommitted changes" in confirm
 
 
-def test_stack_clean_is_not_offered_while_the_repo_has_iced_stacks() -> None:
+def test_stack_clean_is_not_offered_while_git_stack_tracks_an_iced_stack() -> None:
+    merged = StackBranch(name="me/old", parent="main", status="merged")
+    local = local_snapshot(branches=[local_branch("main"), local_branch("me/x")])
     built = dashboard(
-        local=local_snapshot(branches=[local_branch("main"), local_branch("me/x")]),
-        stacks=stacks(StackBranch(name="me/old", parent="main", status="merged")),
+        local=local,
+        stacks=stacks(merged, StackBranch(name="me/x", parent="main")),
         iced_stacks=[ICED],
     )
     assert panel(built, "git_stack.stacks").actions == []
     assert "1 merged stack branches not cleaned" in titles(built, "git_stack.stacks")
-    # Once git has deleted the iced branch, and git-stack doesn't track it, clean can't touch
-    # it.
-    gone = dashboard(
-        stacks=stacks(StackBranch(name="me/old", parent="main", status="merged")),
-        iced_stacks=[ICED],
-    )
-    assert [a.name for a in panel(gone, "git_stack.stacks").actions] == ["git_stack/stack_clean"]
+    # Once git-stack doesn't track the iced branch (Untrack), clean can't touch it, whether
+    # git still has the branch or not.
+    for untracked in (
+        dashboard(local=local, stacks=stacks(merged), iced_stacks=[ICED]),
+        dashboard(stacks=stacks(merged), iced_stacks=[ICED]),
+    ):
+        actions = panel(untracked, "git_stack.stacks").actions
+        assert [a.name for a in actions] == ["git_stack/stack_clean"]
 
 
 def test_without_its_section_there_is_no_stacks_panel() -> None:
@@ -128,7 +132,7 @@ def test_stack_clean_refuses_unknown_repos_and_repos_with_iced_stacks() -> None:
         stacks=stacks(StackBranch(name="me/x", parent="main")),  # git-stack still tracks it
         iced_stacks=[ICED],
     )
-    with pytest.raises(ActionError, match=r"iced stacks \(me/x\)"):
+    with pytest.raises(ActionError, match=r"iced stacks \(me/x\); .*git stack sync <branch>"):
         refresh.run_action(config, db, "git_stack/stack_clean", {"repo": "/src/widgets"})
     with pytest.raises(ActionError, match="not a configured repo"):
         refresh.run_action(config, db, "git_stack/stack_clean", {"repo": "/elsewhere"})

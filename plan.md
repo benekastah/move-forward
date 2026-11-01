@@ -21,25 +21,7 @@ the plugin change that needs them (see `AGENTS.md`), `dev.py check` green and th
 
 ### git-stack: agreeing with what git-stack does
 
-Checked against the code here and in `../git-stack` (details in `git-stack-issues.md`),
-most severe first:
-
-1. **Only iced branches git-stack tracks block Clean.** `iced_stacks` counts every iced
-   branch git still has, but `git stack clean` only goes through tracked branches, so a
-   stack untracked with On ice's Untrack button can't be touched by it and shouldn't
-   block it: count only iced branches with a `stack_branch`.
-2. **Don't name a command that doesn't exist.** The refusal says "clean per stack instead"
-   and the panel says clean "is left to you", but `git stack clean` takes no stacks. Say
-   what works: `git stack sync <branch>` or `sync -g <group>` (which also restack and
-   push), or untracking the merged branches by hand.
-3. **Say what Clean will do.** Its count comes from `git stack info --offline`, while clean
-   fetches, fast-forwards the roots and asks GitHub, so it can untrack a different set:
-   say "about N". The confirm says it fast-forwards main, but it's every stack's root; and
-   it doesn't mention that clean refuses with uncommitted changes to tracked files, so the
-   button often just fails. Say so (or check it first and show why, rather than offer a
-   button that will fail).
-
-In git-stack itself (`../git-stack`), which the items above would then build on:
+Left to do, in git-stack itself (`../git-stack`; see `git-stack-issues.md`):
 
 - **Narrow clean's clean-worktree check.** `clean` calls `ensure_clean_worktree()` up front,
   but only touches the working tree to fast-forward a checked-out root, or (with `-d local`
