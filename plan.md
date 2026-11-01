@@ -88,7 +88,7 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   `github.com/acme/widgets` so they can't collide, and `git` parsing any host. A shared
   base for code-host plugins (PR panels over a normalized PR) can wait for that second host.
 - **Windows.** Once the plugin steps are done, make it run on Windows: the Jira token's
-  fallback is the macOS keychain (`security`); `dev-install.sh`, `dev-venv.sh`, `check.sh`
+  fallback (and the Slack token's) is the macOS keychain (`security`); `dev-install.sh`, `dev-venv.sh`, `check.sh`
   and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
   separators) and stored in `notes_ice`.
@@ -100,7 +100,8 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   `decline` items with those reserved texts; the once-a-day ice question and the per-PR
   "offered" dates live in its gitignored `daily.json`; merge conditions apply to a whole
   entry, so a PR's URL goes in the condition text; `reviewer-map.md` is read only through
-  `mfd notes import` (until step 5c). Give the notes real fields or tables for these, per-PR
+  `mfd slack import` and `mfd github import`, so the skill should set Slack ids with `mfd
+  slack contact set` rather than editing the map. Give the notes real fields or tables for these, per-PR
   conditions included, and move the skill onto them.
 - **Finished entries are never pruned by the dashboard.** Prune deletes only entries
   finished 90 days ago; the skill clears finished ones itself with `mfd notes remove`.
@@ -108,6 +109,13 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   once git deletes them there's no button to bring them back. git could add Restore
   branches on the On ice item, recreating each at its commit; and Reopen on a stack whose
   branches are gone could confirm first, since the commits are forgotten with it.
+- **Slack lookups that found nobody are never retried.** A reviewer whose email had no
+  Slack account when looked up keeps an empty id until set by hand, even after they join.
+  Misses could be looked up again after `prune_days`, or slack's prune could clear them.
+- **Stale JSON in `snapshots.payload`.** Core no longer writes it, but the last JSON each
+  plugin stored stays there, unused once that plugin's migration has copied it. A plugin
+  can't clear core's table, so this needs a core migration that runs only after every
+  built-in plugin's copy has shipped, or it stays as harmless dead data.
 - **Signing in on `localhost`.** `mfd open` signs in at `127.0.0.1`, and cookies are per
   host, so the dashboard at `localhost:<port>` answers 401. The server could redirect
   `localhost` to `127.0.0.1`.
