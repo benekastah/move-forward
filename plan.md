@@ -122,9 +122,8 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   plugin stored stays there, unused once that plugin's migration has copied it. A plugin
   can't clear core's table, so this needs a core migration that runs only after every
   built-in plugin's copy has shipped, or it stays as harmless dead data.
-- **Config sections from the registry.** `Config` lists a field per built-in plugin, and
-  its teams check names slack, github and jira. The check could cover every section with a
-  `teams` table instead.
+- **Config sections from the registry.** `Config` lists a field per built-in plugin; it
+  could build them from the registry, so adding a plugin needn't change core.
 - **CI on macOS and Windows.** After Windows: the tests on macOS and Windows runners too
   (free for this public repo), next to the Linux job that runs now.
 - **Icing and git-stack groups.** Putting a stack on ice walks the stack's parents only;

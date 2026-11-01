@@ -94,15 +94,13 @@ class Config(Strict):
 
     @model_validator(mode="after")
     def _known_teams(self) -> "Config":
-        sections: dict[str, dict[str, str]] = {}
-        if self.slack:
-            sections["slack"] = self.slack.teams
-        if self.github:
-            sections["github"] = self.github.teams
-        if self.jira:
-            sections["jira"] = self.jira.teams
-        for name, teams in sections.items():
-            unknown = sorted(set(teams) - set(self.teams))
+        """Every plugin section's `teams` table names only top-level teams."""
+        for plugin in registry.PLUGINS:
+            teams: object = getattr(getattr(self, plugin.name, None), "teams", None)
+            if not isinstance(teams, dict):
+                continue
+            name = plugin.name
+            unknown = sorted(set(cast(dict[str, object], teams)) - set(self.teams))
             if unknown:
                 raise ValueError(
                     f"[{name}.teams] has {', '.join(unknown)}, which the top-level teams don't"
