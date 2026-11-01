@@ -6,6 +6,7 @@ ones are appended, never edited.
 """
 
 import logging
+import os
 import re
 import sqlite3
 import threading
@@ -142,6 +143,14 @@ CREATE TABLE IF NOT EXISTS schema_versions (
 Params = tuple[object, ...]
 
 
+def _private(path: Path) -> None:
+    """Make `path` a file only I can read, creating it empty if it isn't there: the notes and
+    what the plugins fetched are mine, not other users' of this machine. SQLite gives its
+    -wal and -shm files the database's permissions."""
+    os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
+    path.chmod(0o600)
+
+
 class Database:
     """One SQLite connection, shared between threads under a lock."""
 
@@ -150,6 +159,7 @@ class Database:
         self._path = None if path == ":memory:" else Path(path)
         if self._path:
             self._path.parent.mkdir(parents=True, exist_ok=True)
+            _private(self._path)
         self._keep_backups = keep_backups
         self._backed_up = not (self._path and self._path.exists() and self._path.stat().st_size)
         """Whether there's no need for a backup: one was taken, or there's nothing to lose."""
@@ -213,9 +223,10 @@ class Database:
             return
         self._backed_up = True
         backups = self._path.parent / BACKUPS_DIR
-        backups.mkdir(exist_ok=True)
+        backups.mkdir(mode=0o700, exist_ok=True)
         stamp = datetime.now(UTC).strftime(BACKUP_TIME_FORMAT)
         target = backups / f"{self._path.name}.{stamp}"
+        _private(target)
         copy = sqlite3.connect(target)
         try:
             self._conn.backup(copy)

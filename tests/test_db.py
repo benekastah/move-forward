@@ -1,4 +1,5 @@
 import sqlite3
+import stat
 from pathlib import Path
 
 import pytest
@@ -154,3 +155,16 @@ def test_foreign_keys_cascade(tmp_path: Path) -> None:
 def test_a_file_database_lets_another_process_read_while_one_writes(tmp_path: Path) -> None:
     db = Database(tmp_path / "a.db")
     assert db.query("PRAGMA journal_mode")[0][0] == "wal"
+
+
+def test_the_database_and_its_backups_are_mine_alone(tmp_path: Path) -> None:
+    path = tmp_path / "data" / "dashboard.db"
+    db = Database(path)
+    db.migrate("test", ["CREATE TABLE t (x);"])
+    db.execute("INSERT INTO t VALUES (1)")
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    again = Database(path)
+    again.migrate("test", ["CREATE TABLE t (x);", "CREATE TABLE u (y);"])  # backs up first
+    [backup] = (path.parent / "backups").iterdir()
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
+    assert stat.S_IMODE((path.parent / "backups").stat().st_mode) == 0o700
