@@ -54,8 +54,8 @@ Marketplace, so the app stays internal. Hosting can come later if it's needed.
   button `mfd serve` shows, and gets their own user token. It uses PKCE, so no client
   secret is shared; the app's client id becomes a new `[slack]` key. Slack only takes
   `https://` redirect URLs, even for localhost, so the redirect is
-  `https://127.0.0.1:<port>/slack/callback`, on the dashboard served over HTTPS (the
-  `https-serve` stack: `mfd cert --trust`). The token goes where tokens go today (the
+  `https://127.0.0.1:<port>/slack/callback`, on the dashboard served over HTTPS (`mfd cert
+  --trust`). The token goes where tokens go today (the
   keychain, or a file readable only by me).
 - Not collaborators: a collaborator can manage the app (its scopes, its redirect URLs, its
   credentials), so making a whole company collaborators isn't something to ask an admin
