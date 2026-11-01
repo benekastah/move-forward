@@ -26,6 +26,40 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   and `due` in the signals and the score, and merging nominations across tools through
   the graph ("Merge PR 330, then close APP-12").
 
+### 9. Slack, reading and pinging
+
+Slack becomes a source of work, not just a place pings go. It needs a Slack app with a
+*user* token (my DMs and mentions, my messages); the scopes are listed per feature on
+slack's page, and many workspaces need an admin to approve the app. Messages are kept as
+ids, who, when, the channel and a short snippet only, in kept tables pruned after
+`prune_days`. Nothing is ever sent without a click.
+
+- **Waiting on me** (Act now): messages that @-mention me and DMs whose last word isn't
+  mine, as "Reply to alice" (quick, alice waiting); threads I'm in or started with replies
+  since I last read them; Slack's saved-for-later items and reminders (with their due
+  dates once Act now has `due`).
+- **Messages in the graph**: slack publishes a `message` kind mentioning its text, so a
+  message pasting a PR URL or naming a ticket key relates to it: PR items show "discussed
+  in #team-web", linking there.
+- **Pings recognized**: a message *I* sent (DM, thread or team channel) linking one of my
+  PRs is recorded as a ping to whoever it reached (first or follow-up, with when), so a
+  PR nudged by hand counts as pinged and the next suggestion is a bump; "mark as sent"
+  goes. A request for review posted by someone else in a channel shows on the PR.
+- **Reviewer availability**: before suggesting a ping, the reviewer's status (out of
+  office, vacation), Do Not Disturb and time zone: "alice is out until Monday; consider
+  bob", and nudges held until their working hours.
+- **Pinging from the page**: Slack links can open a DM or channel but not pre-fill a
+  message, so the ping page copies the message and opens the DM or channel in Slack; the
+  ping is recognized once sent (above).
+- **Reactions to pings**: any reaction to my ping but 👎 acknowledges it (no bump); ✅
+  shows on the PR as "alice ✅ in Slack" and ❌ as "alice ❌ in Slack", and both stop the
+  nudges. Slack's reactions never stand for GitHub's review state: Ready to merge still
+  goes by GitHub's approval.
+- **Daily summary**: what's in Act now and what got done, sent (on a click, or on a
+  schedule I set) to me or a standup channel.
+- **Focus sets my status**: entering focus mode sets "Focusing" and Do Not Disturb for a
+  while, and leaving it clears them.
+
 ## Follow-ups
 
 - **GitHub Enterprise.** github assumes github.com: a `host` key, passed to every `gh`
