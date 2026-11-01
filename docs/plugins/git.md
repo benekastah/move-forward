@@ -27,7 +27,8 @@ see [entities.md](../entities.md).
 
 On notes' On ice panel, git adds Delete branches to a stack: the local ones, all or none,
 after a confirmation; refused for a branch with commits since it was iced; remote branches
-and PRs are untouched.
+and PRs are untouched. Once they're gone, Restore branches recreates them at the commits
+they were iced at (refused for one that exists again, or whose commit is gone).
 
 ## Act now
 
@@ -44,3 +45,4 @@ git nominates the branches Cleanup lists, quick to delete.
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. Refused for a checked-out branch, or an iced one with commits since it was iced. |
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
 | `/actions/git/delete_together` | `targets` | Deletes all of them or, if any can't go, none. |
+| `/actions/git/restore_together` | `targets` | Recreates each iced branch at the commit it was iced at: all of them or, if any can't be, none. |

@@ -12,7 +12,7 @@ from . import actions, client
 from .config import GitConfig
 from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
-from .panels import Builder, branch_ref, delete_iced_action
+from .panels import Builder, branch_ref, delete_iced_action, restore_iced_action
 from .repository import MIGRATIONS, LocalRepository
 from .setup import TEMPLATE, questions
 
@@ -94,14 +94,15 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
 
     def item_actions(self, ctx: Context[GitConfig], item: Item, graph: Graph) -> list[Action]:
-        action = delete_iced_action(item, graph)
-        return [action] if action else []
+        found = (delete_iced_action(item, graph), restore_iced_action(item, graph))
+        return [action for action in found if action]
 
     def actions(self) -> dict[str, ActionHandler]:
         return {
             "delete_branch": actions.delete_branch,
             "delete_branches": actions.delete_branches,
             "delete_together": actions.delete_together,
+            "restore_together": actions.restore_together,
             "push_branch": actions.push_branch,
             "wip_commit": actions.wip_commit,
         }

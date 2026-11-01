@@ -189,6 +189,19 @@ def branch_ref(repo_dir: str, branch: str) -> Ref:
     return Ref(kind=BRANCH, id=f"{repo_dir}{TARGET_SEPARATOR}{branch}")
 
 
+def restore_iced_action(item: Item, graph: Graph) -> Action | None:
+    """A Restore branches button for notes' On ice item whose branches git no longer has: it
+    recreates them at the commits they were iced at."""
+    if not any(graph.hides(ref.kind) for ref in item.subjects):
+        return None
+    gone = [
+        ref.id for ref in item.subjects if ref.kind == BRANCH and graph.get(BRANCH, ref.id) is None
+    ]
+    if not gone:
+        return None
+    return action("restore_together", "Restore branches", {"targets": "\n".join(gone)})
+
+
 def delete_iced_action(item: Item, graph: Graph) -> Action | None:
     """A Delete branches button for an item about what hides its branches, i.e. notes' On ice
     item: the ones still here, all or none, each checked for commits since it was iced."""

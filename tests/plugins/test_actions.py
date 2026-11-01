@@ -436,3 +436,21 @@ def test_a_worktree_of_a_configured_repo_will_do_for_its_branches(
     (second / "a.txt").write_text("changed")
     run("git/wip_commit", config, {"repo": str(second), "worktree": str(second)})
     assert git(second, "log", "-1", "--format=%s").strip() == "WIP"
+
+
+def test_deleted_iced_branches_are_restored_at_the_commits_they_were_iced_at(
+    config: Config, repo: Path
+) -> None:
+    wip = git(repo, "rev-parse", "wip").strip()
+    _ice(config, repo, "wip")
+    run("git/delete_together", config, {"targets": f"{repo}\twip"})
+    built = refresh.build_dashboard(config, _stored(config))
+    [on_ice] = built.panel("notes.iced").items
+    [restore] = [a for a in on_ice.actions if a.name == "git/restore_together"]
+    assert restore.fields == {"targets": f"{repo}\twip"}
+    assert run("git/restore_together", config, restore.fields) == "restored wip"
+    assert git(repo, "rev-parse", "wip").strip() == wip
+    with pytest.raises(ActionError, match="already exists"):
+        run("git/restore_together", config, restore.fields)
+    with pytest.raises(ActionError, match="isn't on ice"):
+        run("git/restore_together", config, {"targets": f"{repo}\t--force"})

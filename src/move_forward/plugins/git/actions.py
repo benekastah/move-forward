@@ -67,9 +67,7 @@ def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
         raise ActionError(f"{branch} doesn't exist in {repo}")
     if worktree := checked_out_in(repo, branch):
         raise ActionError(f"{branch} is checked out in {worktree}; switch it away first")
-    ref = branch_ref(str(repo), branch)
-    iced = graph.view_related(ref, ICED, _IcedView)
-    iced_sha = next((i.shas[ref.id] for i in iced if ref.id in i.shas), None)
+    iced_sha = _iced_sha(graph, repo, branch)
     if iced_sha and git(repo, "rev-parse", branch).strip() != iced_sha:
         raise ActionError(f"{branch} has commits since it was iced; thaw it, or ice it again")
 
@@ -97,6 +95,41 @@ def delete_together(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str
     for repo, branch in targets:
         git(repo, "branch", "-D", branch)
     return f"deleted {', '.join(branch for _, branch in targets)}"
+
+
+def _iced_sha(graph: Graph, repo: Path, branch: str) -> str | None:
+    """The commit the branch was iced at, if it's on ice."""
+    ref = branch_ref(str(repo), branch)
+    return next(
+        (i.shas[ref.id] for i in graph.view_related(ref, ICED, _IcedView) if ref.id in i.shas), None
+    )
+
+
+def restore_together(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Recreate every `<repo>\t<branch>` line of `targets` at the commit it was iced at, or
+    none: each must be on ice, gone, and its commit still in the repo. For a stack on ice
+    whose branches were deleted."""
+    targets: list[tuple[Path, str, str]] = []
+    for line in fields.get("targets", "").splitlines():
+        repo_dir, _, branch = line.partition(TARGET_SEPARATOR)
+        if not branch:
+            continue
+        repo = repo_path(ctx.config, repo_dir)
+        sha = _iced_sha(graph, repo, branch)
+        if sha is None:
+            raise ActionError(f"{branch} isn't on ice with a commit to restore it at")
+        if branch_exists(repo, branch):
+            raise ActionError(f"{branch} already exists in {repo}")
+        try:
+            git(repo, "cat-file", "-e", f"{sha}^{{commit}}")
+        except CommandError as e:
+            raise ActionError(f"{branch}'s commit {sha[:12]} is gone from {repo}") from e
+        targets.append((repo, branch, sha))
+    if not targets:
+        raise ActionError("no branches to restore")
+    for repo, branch, sha in targets:
+        git(repo, "branch", branch, sha)
+    return f"restored {', '.join(branch for _, branch, _ in targets)}"
 
 
 def delete_branches(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:

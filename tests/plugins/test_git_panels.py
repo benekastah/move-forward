@@ -142,8 +142,8 @@ def test_git_offers_to_delete_iced_branches_on_the_on_ice_item_only() -> None:
     on_ice = {item.title: item for item in panel(built, "notes.iced").items}
     [delete] = [a for a in on_ice["me/x"].actions if a.name == "git/delete_together"]
     assert delete.fields == {"targets": "/src/widgets\tme/x"} and delete.confirm
-    # A branch git no longer has can't be deleted again.
-    assert [a.name for a in on_ice["me/gone"].actions] == ["notes/thaw"]
+    # A branch git no longer has can't be deleted again, but can be restored.
+    assert [a.name for a in on_ice["me/gone"].actions] == ["notes/thaw", "git/restore_together"]
     assert panel(built, "git.local_work").items == []  # me/x is on ice: hidden
 
 
