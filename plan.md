@@ -111,6 +111,15 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
 
 ## Follow-ups
 
+- **An opt-in fetch in git.** git never fetches, so remote branches only move when I fetch
+  (by hand, `git pull`, an editor's auto-fetch). PR checkouts that fell behind already show
+  without fetching (from github's PR heads), but branches without a PR don't, and remote
+  branches deleted after a merge linger until a `fetch --prune`, so Cleanup's "remote
+  gone" lags. A `fetch_seconds` setting (off by default) would run `git fetch --prune
+  --quiet` per repo on its own schedule: without credential prompts (`GIT_TERMINAL_PROMPT=0`),
+  with a timeout, failing per repo without failing the refresh. git's change check sees
+  what it brings, and github follows. It's the first time the dashboard would write to the
+  repos without a click (only remote-tracking refs), hence opt-in.
 - **git_stack watches git instead of riding along with it.** git_stack collects after git
   and `requires` it, so every git refresh (once a minute for uncommitted edits, and after
   every local change) runs `git stack info` in every repo, even when no branch moved. It
