@@ -163,7 +163,8 @@ class SlackRepository:
         self, contacts: list[Contact], teams: list[TeamChannel], pings: list[Ping]
     ) -> None:
         """Replace what an earlier import read with these; what the dashboard wrote stays, and
-        wins where both name the same person or team."""
+        wins where both name the same person or team. People without a Slack id are left out,
+        so they can still be looked up."""
         with self._db.transaction() as conn:
             for table in ("slack_contacts", "slack_team_channels", "slack_pings"):
                 conn.execute(f"DELETE FROM {table} WHERE source = ?", (IMPORTED,))
@@ -171,7 +172,7 @@ class SlackRepository:
                 "INSERT INTO slack_contacts VALUES (?, ?, ?) ON CONFLICT (login) DO UPDATE"
                 " SET slack_id = excluded.slack_id, source = excluded.source"
                 " WHERE slack_contacts.source = ?",
-                [(c.login, c.slack_id, IMPORTED, LOOKED_UP) for c in contacts],
+                [(c.login, c.slack_id, IMPORTED, LOOKED_UP) for c in contacts if c.slack_id],
             )
             conn.executemany(
                 "INSERT OR IGNORE INTO slack_team_channels VALUES (?, ?, ?, ?)",

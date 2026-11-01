@@ -66,6 +66,9 @@ def test_requested_reviewers_are_looked_up_once_each(monkeypatch: pytest.MonkeyP
     # An import replaces a lookup; setting by hand beats both.
     repo.replace_imported([Contact(login="alice", slack_id="U999999")], [], [])
     assert repo.contacts()["alice"].slack_id == "U999999"
+    # Someone the import names without a Slack id is still looked up, and a lookup stays.
+    repo.replace_imported([Contact(login="bob"), Contact(login="erin")], [], [])
+    assert "erin" not in repo.contacts() and repo.sources()["user:bob"] == "lookup"
     repo.set_contact("alice", "U000000")
     repo.replace_imported([Contact(login="alice", slack_id="U999999")], [], [])
     assert repo.contacts()["alice"].slack_id == "U000000"
