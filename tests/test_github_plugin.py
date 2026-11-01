@@ -7,12 +7,20 @@ import pytest
 from conftest import ME, NOW, pr, snapshot
 
 from move_forward.db import Database
-from move_forward.domain import Review, Thread, TimelineEvent
+from move_forward.domain import (
+    DerivedSnapshot,
+    Review,
+    ReviewerSuggestion,
+    TeamPrScore,
+    Thread,
+    TimelineEvent,
+)
 from move_forward.plugin import Context
 from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.github.plugin import GitHubPlugin
+from move_forward.plugins.github.snapshots import DerivedRepository
 from move_forward.plugins.github.snapshots import SnapshotRepository as GitHubSnapshots
 from move_forward.plugins.github.tables import MIGRATIONS
 from move_forward.repositories import KvRepository, SnapshotRepository
@@ -132,3 +140,22 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
     store.replace(smaller)
     assert store.load() == smaller
     assert db.query("SELECT * FROM github_pr_files") == []  # gone with their PRs
+
+
+def test_derived_data_moves_from_json_and_round_trips() -> None:
+    derived = DerivedSnapshot(
+        suggestions={
+            pr(1).url: [
+                ReviewerSuggestion(login="bob", commits=3),
+                ReviewerSuggestion(login="al", commits=1),
+            ]
+        },
+        team_scores={pr(2).url: TeamPrScore(owned_files=2, required_files=1, my_files=0)},
+    )
+    db = Database(":memory:")
+    SnapshotRepository(db).save("github.derived", NOW, derived)
+    db.migrate("github", MIGRATIONS)
+    store = DerivedRepository(db)
+    assert store.load() == derived
+    store.replace(DerivedSnapshot())
+    assert store.load() == DerivedSnapshot()

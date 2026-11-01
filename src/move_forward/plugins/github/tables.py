@@ -169,5 +169,32 @@ MIGRATIONS = [
         AND list.key IN ('mine', 'direct_requests', 'reviewed_by_me', 'team_requests',
             'merged_recent', 'closed_recent');
     """,
+    """
+    CREATE TABLE github_reviewer_suggestions (  -- fetched: whom to ask, for my team-requested PRs
+        pr_url TEXT NOT NULL,
+        position INTEGER NOT NULL,     -- most commits first
+        login TEXT NOT NULL,
+        commits INTEGER NOT NULL,
+        PRIMARY KEY (pr_url, position)
+    );
+    CREATE TABLE github_team_scores (  -- fetched: how much of a team-requested PR is my teams'
+        pr_url TEXT PRIMARY KEY,
+        owned_files INTEGER NOT NULL,
+        required_files INTEGER NOT NULL,
+        my_files INTEGER NOT NULL
+    );
+    -- What the last refresh kept as JSON in core's snapshots, so the page has it at once.
+    INSERT OR IGNORE INTO github_reviewer_suggestions
+        SELECT pr.key, suggestion.key, json_extract(suggestion.value, '$.login'),
+            json_extract(suggestion.value, '$.commits')
+        FROM snapshots, json_each(snapshots.payload, '$.suggestions') AS pr,
+            json_each(pr.value) AS suggestion
+        WHERE snapshots.source = 'github.derived' AND snapshots.payload IS NOT NULL;
+    INSERT OR IGNORE INTO github_team_scores
+        SELECT score.key, json_extract(score.value, '$.owned_files'),
+            json_extract(score.value, '$.required_files'), json_extract(score.value, '$.my_files')
+        FROM snapshots, json_each(snapshots.payload, '$.team_scores') AS score
+        WHERE snapshots.source = 'github.derived' AND snapshots.payload IS NOT NULL;
+    """,
 ]
 """The github plugin's migrations."""

@@ -22,9 +22,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5e. Plugin tables instead of JSON
 
-- github's fetched data into its own tables, including what was the `github.derived`
-  snapshot (git's, git_stack's and jira's are done). Its migration copies the stored JSON
-  snapshot into the new tables, so the page isn't empty until the next refresh.
 - Each plugin's models move from core's `domain.py` into the plugin (`models.py`), next to
   its tables. Core's `domain.py` keeps only `Model`.
 - Core: once no plugin uses the JSON defaults, they go, and `snapshots` becomes

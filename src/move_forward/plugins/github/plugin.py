@@ -4,11 +4,10 @@ import argparse
 import logging
 from typing import ClassVar
 
-from ...domain import DerivedSnapshot, GitHubSnapshot, PullRequest
+from ...domain import GitHubSnapshot, PullRequest
 from ...graph import Entity, Graph, Ref
 from ...page import Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
-from ...repositories import SnapshotRepository
 from ...shell import CommandError
 from . import cli, client, derive
 from .config import GitHubConfig
@@ -20,13 +19,15 @@ from .prs import (
     review_blockers,
     ticket_keys,
 )
+from .snapshots import DerivedRepository
 from .snapshots import SnapshotRepository as PrSnapshots
 from .tables import MIGRATIONS
 
 log = logging.getLogger(__name__)
 
 DERIVED = "derived"
-"""The snapshot part `after_collect` stores: team scores and reviewer suggestions."""
+"""`after_collect`'s part of the refresh, `github.derived`: team scores and reviewer
+suggestions. Its status is recorded under that name; what it found goes to its tables."""
 PERSON = "person"
 REPO = "repo"
 TICKET = "ticket"
@@ -101,6 +102,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 ctx.config.reviewer_history_days,
                 ctx.config.required_owner_marker,
             ),
+            DerivedRepository(ctx.db).replace,
         )
 
     def _pr_entity(
@@ -206,5 +208,5 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def panels(
         self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None, graph: Graph
     ) -> list[Panel]:
-        derived = SnapshotRepository(ctx.db).get(f"{self.name}.{DERIVED}", DerivedSnapshot)
+        derived = DerivedRepository(ctx.db).load()
         return Builder(ctx.config, ctx.teams, ctx.now, snapshot, derived, graph).panels()

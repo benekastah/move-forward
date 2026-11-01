@@ -5,7 +5,17 @@ from datetime import datetime
 from typing import Literal, cast
 
 from ...db import Database, Params
-from ...domain import Check, GitHubSnapshot, PullRequest, Review, Thread, TimelineEvent
+from ...domain import (
+    Check,
+    DerivedSnapshot,
+    GitHubSnapshot,
+    PullRequest,
+    Review,
+    ReviewerSuggestion,
+    TeamPrScore,
+    Thread,
+    TimelineEvent,
+)
 
 ListName = Literal[
     "mine", "direct_requests", "reviewed_by_me", "team_requests", "merged_recent", "closed_recent"
@@ -229,3 +239,49 @@ class SnapshotRepository:
             )
         members = [r["login"] for r in self._db.query("SELECT login FROM github_team_members")]
         return GitHubSnapshot(login=account[0]["login"], team_members=members, **lists)
+
+
+class DerivedRepository:
+    """Reviewer suggestions and team scores, as `after_collect` last worked them out."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def replace(self, derived: DerivedSnapshot) -> None:
+        with self._db.transaction() as conn:
+            conn.execute("DELETE FROM github_reviewer_suggestions")
+            conn.execute("DELETE FROM github_team_scores")
+            conn.executemany(
+                "INSERT INTO github_reviewer_suggestions VALUES (?, ?, ?, ?)",
+                [
+                    (url, i, s.login, s.commits)
+                    for url, found in derived.suggestions.items()
+                    for i, s in enumerate(found)
+                ],
+            )
+            conn.executemany(
+                "INSERT INTO github_team_scores VALUES (?, ?, ?, ?)",
+                [
+                    (url, s.owned_files, s.required_files, s.my_files)
+                    for url, s in derived.team_scores.items()
+                ],
+            )
+
+    def load(self) -> DerivedSnapshot:
+        suggestions: defaultdict[str, list[ReviewerSuggestion]] = defaultdict(list)
+        query = "SELECT * FROM github_reviewer_suggestions ORDER BY pr_url, position"
+        for row in self._db.query(query):
+            suggestions[row["pr_url"]].append(
+                ReviewerSuggestion(login=row["login"], commits=row["commits"])
+            )
+        return DerivedSnapshot(
+            suggestions=dict(suggestions),
+            team_scores={
+                row["pr_url"]: TeamPrScore(
+                    owned_files=row["owned_files"],
+                    required_files=row["required_files"],
+                    my_files=row["my_files"],
+                )
+                for row in self._db.query("SELECT * FROM github_team_scores")
+            },
+        )
