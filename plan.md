@@ -106,24 +106,18 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   schedule I set) to me or a standup channel.
 - **Focus sets my status**: entering focus mode sets "Focusing" and Do Not Disturb for a
   while, and leaving it clears them.
-
-### 10. Refresh in smaller steps
-
-Each plugin refreshes on its own `refresh_seconds` now. What's left:
-
-- **Change signals instead of webhooks.** Webhooks would need GitHub, Jira and Slack to
-  reach `127.0.0.1`, i.e. a public tunnel: another service, and an opening onto the
-  machine. Cheap signals that something changed get most of the benefit, so the heavy
-  fetches can run rarely:
-  - github: poll the notifications API (built for it: `X-Poll-Interval`, and a 304 when
-    nothing's new is cheap); a notification about one of my PRs refreshes github at once.
-  - git: watch `.git/HEAD` and the refs for changes, and refresh when they move.
-  - jira: search only for tickets `updated` since the last check.
-  - slack: Socket Mode, once the app exists (step 9): events come over a connection the
-    dashboard opens itself.
+- **Changes as they happen**: Socket Mode, a connection the dashboard opens itself, brings
+  Slack's events as they happen, so slack implements `changed` (see the other plugins)
+  without polling.
 
 ## Follow-ups
 
+- **Update what changed, not the whole plugin.** A change check now refreshes the whole
+  plugin. jira's check could ask for the changed tickets' fields and store just those,
+  and git's fingerprint could be kept per repo, so only the repo that moved is read
+  again. github's notifications name their PRs, but its panels come from searches, so
+  storing one PR means placing it in those lists by hand; that one can wait. The
+  periodic full refresh keeps any of these honest.
 - **GitHub Enterprise.** github assumes github.com: a `host` key, passed to every `gh`
   call (`--hostname`) and used for PR URLs, would let it work with an Enterprise server.
   `mfd init`'s org question already takes a pasted org URL; it would fill in both the host

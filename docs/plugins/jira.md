@@ -21,6 +21,9 @@ keychain, Windows' Credential Manager, or on Linux the desktop keyring through
 ## Config
 
 `refresh_seconds` (900) is how often it refreshes in the background: tickets change slowly.
+It also refreshes within a minute or two of a change to a ticket assigned to me: every
+minute it searches for one of my tickets updated since it last looked, a search that
+returns at most one key.
 
 `[jira]` needs `site`, an `https://` URL (the requests carry your token). `token_env` and
 `keychain_service` say where its token is. `status_in_progress`, `status_in_review` and

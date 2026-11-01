@@ -126,28 +126,33 @@ def to_issue(raw: RawIssue, site: str) -> JiraIssue:
     )
 
 
-def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[JiraIssue]:
+def _search_page(config: JiraConfig, email: str, api_token: str, body: dict[str, object]) -> bytes:
+    """One page of a JQL search: the response to `body`."""
     url = config.site.rstrip("/") + SEARCH_PATH
     https.require_https(url, "the Jira token")
     auth = base64.b64encode(f"{email}:{api_token}".encode()).decode()
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": f"Basic {auth}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    with https.opener.open(request, timeout=60) as response:
+        return response.read()
+
+
+def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[JiraIssue]:
     issues: list[JiraIssue] = []
     next_token: str | None = None
     while True:
         body: dict[str, object] = {"jql": jql, "fields": FIELDS, "maxResults": PAGE_SIZE}
         if next_token:
             body["nextPageToken"] = next_token
-        request = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode(),
-            headers={
-                "Authorization": f"Basic {auth}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-            method="POST",
-        )
-        with https.opener.open(request, timeout=60) as response:
-            page = RawSearchResponse.model_validate_json(response.read())
+        page = RawSearchResponse.model_validate_json(_search_page(config, email, api_token, body))
         issues.extend(to_issue(raw, config.site) for raw in page.issues)
         if not page.next_page_token:
             return issues
@@ -178,6 +183,23 @@ def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> 
         if len(keys) == 1:
             return []
         return [issue for key in keys for issue in tickets(config, email, [key], api_token)]
+
+
+class _Keys(_Raw):
+    issues: list[dict[str, object]] = []
+
+
+def updated_within(config: JiraConfig, email: str, minutes: int) -> bool:
+    """Whether a ticket assigned to me, open or not, was updated in the last `minutes`:
+    a search for one ticket's key, cheap enough to run every minute. Jira takes a relative
+    time (`-5m`), so no time zone is involved."""
+    body: dict[str, object] = {
+        "jql": f"assignee = currentUser() AND updated >= -{minutes}m",
+        "fields": ["key"],
+        "maxResults": 1,
+    }
+    page = _Keys.model_validate_json(_search_page(config, email, token(config, email), body))
+    return bool(page.issues)
 
 
 def collect(config: JiraConfig, email: str) -> JiraSnapshot:

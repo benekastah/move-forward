@@ -1,5 +1,6 @@
 """The Jira plugin: my open tickets, the status changes their PRs suggest, and what's next."""
 
+import math
 import re
 from datetime import datetime
 from typing import ClassVar
@@ -20,6 +21,8 @@ from .setup import EXAMPLE, TEMPLATE, questions
 
 TICKET = "ticket"
 PR = "pr"
+CHECKED = "changes_checked_at"
+"""The kv key of when `changed` last looked."""
 
 
 def ticket_ref(key: str) -> Ref:
@@ -172,6 +175,20 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
 
     def store(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot) -> None:
         IssueRepository(ctx.db).replace(snapshot)
+
+    change_check_seconds: ClassVar[int | None] = 60
+
+    def changed(self, ctx: Context[JiraConfig]) -> bool:
+        """Whether a ticket of mine was updated since the last look (and a minute before
+        it, as Jira counts in whole minutes): a one-result search."""
+        checked = ctx.kv.get(CHECKED)
+        found = False
+        if checked is not None:
+            seconds = (ctx.now - datetime.fromisoformat(checked)).total_seconds()
+            minutes = math.ceil(seconds / 60) + 1
+            found = client.updated_within(ctx.config, ctx.email, minutes)
+        ctx.kv.set(CHECKED, ctx.now.isoformat())
+        return found
 
     def load(self, ctx: Context[JiraConfig]) -> JiraSnapshot | None:
         return IssueRepository(ctx.db).load()
