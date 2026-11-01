@@ -6,21 +6,23 @@ notice for the page. Nothing here ever forces a push, resets, or stashes.
 
 from pathlib import Path
 
+from pydantic import Field
+
 from ...domain import Model
 from ...graph import Graph
 from ...plugin import ActionError, Context
 from ...shell import CommandError, git
 from . import client
 from .config import GitConfig
-from .panels import ICED_BRANCH, TARGET_SEPARATOR, branch_ref
+from .panels import ICED, TARGET_SEPARATOR, branch_ref
 
 WIP_MESSAGE = "WIP"
 
 
 class _IcedView(Model):
-    """What git reads of an `iced_branch` (notes'): the commit it was iced at."""
+    """What git reads of an `iced` (notes'): the commits its branches were iced at."""
 
-    sha: str | None = None
+    shas: dict[str, str] = Field(default_factory=dict[str, str])
 
 
 def repo_path(config: GitConfig, repo_dir: str) -> Path:
@@ -52,8 +54,9 @@ def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
         raise ActionError(f"{branch} doesn't exist in {repo}")
     if worktree := checked_out_in(repo, branch):
         raise ActionError(f"{branch} is checked out in {worktree}; switch it away first")
-    iced = graph.view_one(ICED_BRANCH, branch_ref(str(repo), branch).id, _IcedView)
-    iced_sha = iced.sha if iced else None
+    ref = branch_ref(str(repo), branch)
+    iced = graph.view_related(ref, ICED, _IcedView)
+    iced_sha = next((i.shas[ref.id] for i in iced if ref.id in i.shas), None)
     if iced_sha and git(repo, "rev-parse", branch).strip() != iced_sha:
         raise ActionError(f"{branch} has commits since it was iced; thaw it, or ice it again")
 

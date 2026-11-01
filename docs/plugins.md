@@ -38,7 +38,7 @@ flowchart LR
     repo -. "checkouts: team PR scores, reviewer suggestions" .-> github
     entry -. "merge conditions (Held)" .-> github
     pr -. "a branch's PR" .-> git
-    iced -. "iced badge" .-> git
+    ice -. "its branches' commits, before deleting them" .-> git
     branch -. "which checkouts to scan" .-> git_stack
     repo -. "checkout → owner/name" .-> git_stack
     pr -. "a stack branch's PR" .-> git_stack
@@ -79,7 +79,7 @@ flowchart TB
         prItems["items about a pr<br/>(github, git, git_stack, slack)"]
         ticketItems["items about a ticket<br/>(jira)"]
         branchItems["items about a branch<br/>(git's Local work)"]
-        icedItems["items about iced branches<br/>(notes' On ice)"]
+        icedItems["items about an iced, with its branches<br/>(notes' On ice)"]
     end
     slack([slack]) -- "Ping / Bump link" --> prItems
     notes([notes]) -- "Add todo" --> prItems

@@ -16,7 +16,7 @@ TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
 PR = "pr"
 BRANCH = "branch"
-ICED_BRANCH = "iced_branch"
+ICED = "iced"
 
 
 def action(name: str, label: str, fields: dict[str, str], confirm: str | None = None) -> Action:
@@ -50,7 +50,6 @@ class Builder:
         for pr in graph.view(PR, _PrView):
             if pr.mine:
                 self.prs_by_branch.setdefault((pr.repo, pr.head), []).append(pr)
-        self.iced_branches = {e.ref.id for e in graph.of_kind(ICED_BRANCH)}
 
     def _pr(self, repo: str | None, branch: str, state: str) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
@@ -103,7 +102,6 @@ class Builder:
                 if not reason:
                     continue
                 pr = self._pr(repo.github_repo, branch.name, "open")
-                iced = branch_ref(repo.dir, branch.name).id in self.iced_branches
                 actions = []
                 if not branch.behind:
                     actions.append(
@@ -114,8 +112,7 @@ class Builder:
                         title=f"{branch.name}: {reason}",
                         url=pr.url if pr else None,
                         subtitle=f"{repo.dir} · last commit {age(self.now, branch.committed_at)} ago",
-                        badges=(["iced"] if iced else []) + (["has PR"] if pr else ["no PR"]),
-                        rank=0 if iced else 1,
+                        badges=["has PR"] if pr else ["no PR"],
                         actions=actions,
                         subjects=[branch_ref(repo.dir, branch.name)] + ([pr.subject] if pr else []),
                     )
@@ -189,11 +186,12 @@ def branch_ref(repo_dir: str, branch: str) -> Ref:
 
 
 def delete_iced_action(item: Item, graph: Graph) -> Action | None:
-    """A Delete branches button for an item about iced branches, i.e. notes' On ice item: the
-    ones still here, all or none, each checked for commits since it was iced. An
-    `iced_branch`'s id is its branch's."""
-    iced = [ref for ref in item.subjects if ref.kind == ICED_BRANCH]
-    here = [ref.id for ref in iced if graph.get(BRANCH, ref.id) is not None]
+    """A Delete branches button for an item about what hides its branches, i.e. notes' On ice
+    item: the ones still here, all or none, each checked for commits since it was iced."""
+    if not any(graph.hides(ref.kind) for ref in item.subjects):
+        return None
+    branches = [ref for ref in item.subjects if ref.kind == BRANCH]
+    here = [ref.id for ref in branches if graph.get(BRANCH, ref.id) is not None]
     if not here:
         return None
     names = ", ".join(ref_id.partition(TARGET_SEPARATOR)[2] for ref_id in here)
