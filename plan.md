@@ -20,13 +20,6 @@ SQLite, behind a CLI and the HTTP API.
 Each step is its own stacked branch, with core changes in a branch of their own ahead of
 the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the page working.
 
-### 5f. Plugin-owned, typed entity kinds
-
-- Namespace the kinds (`github.pr`, `git.branch`, ...), after linking kinds and mentions, so
-  github never has to name `jira.ticket`. Every plugin already declares its kinds and reads
-  others' through views, so this is a rename, plus a notes migration renaming the kinds
-  stored in `notes_iced`, `notes_ice_covers` and `notes_links`.
-
 ### 6. Layout
 
 - `priority` on panels; the `layout` table (already migrated) with drag and drop on group
@@ -112,26 +105,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
   git_stack doesn't publish groups, so a group's other stacks aren't iced with it.
 
 ## Design for the remaining steps
-
-### Plugins, with their tables and kinds after step 5f
-
-Built in, in the package (`move_forward/plugins/<name>/`):
-
-| Plugin | Config section | Fetches | Fetched tables | Kept tables | Publishes | Panels |
-| --- | --- | --- | --- | --- | --- | --- |
-| `github` | `[github]` | open, requested, reviewed, team, merged and closed PRs; derived team scores and reviewer suggestions | `github_prs` and its child tables, `github_team_members`, `github_reviewer_suggestions`, `github_team_scores` | `github_people` | `github.pr`, `github.person` | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
-| `git` | `[git]` | local repos: worktrees, branches, my dirs | `git_repos`, `git_worktrees`, `git_branches`, `git_my_dirs` | none | `git.repo`, `git.branch` | Local work, Cleanup |
-| `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in git's checkouts | `git_stack_branches` | none | `git_stack.stack_branch` | Stacks |
-| `jira` | `[jira]` | my open tickets | `jira_issues`, `jira_issue_labels`, `jira_issue_blockers`, `jira_projects` | none | `jira.ticket` | Jira transitions, What next |
-| `slack` | `[slack]` | nothing | none | `slack_contacts`, `slack_team_channels`, `slack_pings` | nothing | Nudge reviewers; the ping page |
-| `notes` | `[notes]`, always on | nothing | none | `notes_entries` and its child tables, `notes_sections`, `notes_ice`, `notes_iced` | `notes.entry`, `notes.iced` | Todos, On ice |
-
-A plugin is enabled when its config section exists. `notes` is always enabled (with
-defaults), so the smallest setup is a config with just `email` and no sections: a todo
-list.
-
-GitHub stacked PRs (`gh` stacks), once `gh` has a stable command for them, could be a
-second source of stack data next to git-stack; until then only git-stack is read.
 
 ### Config
 
@@ -289,7 +262,7 @@ Then:
 #### Feedback from the person using it
 
 - **Snooze** an item until tomorrow or a date; **dismiss** it for good. Stored in the
-  core's `act_now_feedback` table, keyed by the item's main subject (its namespaced kind
+  core's `act_now_feedback` table, keyed by the item's main subject (its kind
   and id) and verb. A changed item comes back: `Item.fingerprint` is a string the
   plugin sets from what would make the item worth another look (github: the head sha and
   the count of reviews and comments; jira: the status and `updated`), defaulting to a hash
@@ -368,49 +341,16 @@ panel useful:
 
 ### Data model
 
-#### Where things stand
+What's left of it:
 
-- **Untyped entities.** The graph is built in memory on every page load and never stored.
-  `Ref.kind` is any string and `Entity.attrs` is a `dict[str, JsonValue]`. Consumers read
-  attributes defensively (`str(pr.attrs.get("head"))`), so if a publisher renames an
-  attribute, consumers quietly get `"None"`, `False` or `[]`. The contract is only the
-  prose in `docs/entities.md`.
-- **Shared kinds.** Two plugins can publish the same ref and the graph merges them:
-  git_stack adds `stack_parent` to git's `branch`. Core knows two kinds by name: `ticket`
-  (`Graph.related`) and `person` (finding `me`).
-
-#### Principles
-
-1. **Entity kinds are plugin-owned, one publisher per kind.** The publishing plugin
-   declares each of its kinds as a typed model, and kinds are namespaced like panel keys:
-   `github.pr`, `git.branch`. Core validates every published entity against its kind's
-   model when it builds the graph.
-2. **Extend by pointing, not by merging.** A plugin that knows more about another's entity
-   publishes its own kind with a ref to it: git_stack publishes `git_stack.stack_branch`
-   pointing at the `git.branch`. The graph's merging of one ref from two plugins goes
-   away.
-3. **Consumers declare what they read.** Plugins still can't import each other, so a
-   consumer describes the fields it uses as its own small model, e.g. slack's `PrView`
-   with `head`, `draft` and `requested_users`. `graph.of_kind("github.pr", PrView)` returns
-   validated instances, and a mismatch raises. If a publisher renames an attribute, that
-   consumer's tests fail instead of the page quietly showing less.
-4. **The docs follow the models.** A test checks `docs/entities.md` against the kind
-   models.
-
-#### Units of work
-
-Linking kinds are in (see `docs/graph.md`). What's left: work isn't one kind that every
-plugin must know, it's whatever linking kinds the enabled plugins publish, so Act now
-merges nominations through them too (a ticket, its PR and its entry's todo become one
-item).
-
-#### Open questions
-
+- **Units of work in Act now.** Work isn't one kind every plugin must know, it's whatever
+  linking kinds the enabled plugins publish (see `docs/graph.md`), so Act now merges
+  nominations through them (a ticket, its PR and its entry's todo become one item).
 - **Finding `me`.** `refresh` finds `me` among `person` entities by name. Like linking
   kinds, this could become a declaration on a kind model.
-- **A second code host.** With `github.pr` owned by github, a GitLab plugin would publish
-  `gitlab.pr`, and every consumer would read both. If that gets repetitive, `pr` could
-  become a contract that several plugins publish to. That can wait for the second host.
+- **A second code host.** A GitLab plugin would publish its own kind of PR (one plugin per
+  kind), and every consumer would read both. If that gets repetitive, a PR could become a
+  contract several plugins publish to. That can wait for the second host.
 
 ### Schema
 

@@ -202,17 +202,18 @@ def todo_delete(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str])
 
 
 def link_for(graph: Graph, value: str) -> Link:
-    """A ticket key (or another linking entity's id a plugin declares) or a PR URL as a link."""
+    """A ticket key (or another linking entity's id a plugin declares) or a PR URL as a link.
+    A key the graph doesn't know yet is fetched, so a ticket in a project new to jira is
+    found (and jira knows that project's keys from then on)."""
     named = graph.named(value)
     if [r.id for r in named] == [value]:
         return Link(kind=named[0].kind, ref=value)
     found = links_in(value)
     if len(found) == 1 and found[0].ref == value:
         return found[0]
-    raise ActionError(
-        f"{value!r} is neither a PR URL nor a ticket key: a key needs [jira], and a project"
-        " jira has seen a ticket of mine in"
-    )
+    if value in graph.fetch(TICKET, [value]):
+        return Link(kind=TICKET, ref=value)
+    raise ActionError(f"{value!r} is neither a PR URL nor a ticket key Jira knows")
 
 
 def todo_link(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:

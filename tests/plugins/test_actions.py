@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from conftest import know_jira_projects
+from conftest import issue, know_jira_projects
 
 from move_forward import refresh
 from move_forward.config import Config
@@ -16,7 +16,9 @@ from move_forward.plugins.git_stack.config import GitStackConfig
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 from move_forward.plugins.git_stack.repository import StackRepository
 from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.jira import client as jira_client
 from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.models import JiraIssue
 from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.actions import ICED_FROM_DASHBOARD_NOTE
 from move_forward.plugins.notes.models import Entry, Link
@@ -383,3 +385,26 @@ def test_todo_add_can_create_the_entry(config: Config, work_notes: None) -> None
         ("pr", "https://github.com/acme/widgets/pull/9"),  # APP-7, in its title, isn't a link
     ]
     assert _open(config, "APP-7 New thing") == ["[None] start", "[None] again"]
+
+
+def test_linking_a_ticket_in_a_project_new_to_jira_fetches_it_and_jira_learns_the_project(
+    config: Config, work_notes: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
+    asked: list[list[str]] = []
+
+    def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
+        asked.append(keys)
+        return [issue(key) for key in keys if key == "OPS-5"]
+
+    def token(config: JiraConfig, email: str) -> str:
+        return "t"
+
+    monkeypatch.setattr(jira_client, "token", token)
+    monkeypatch.setattr(jira_client, "tickets", tickets)
+    fields = {**_todo(config, "get it merged"), "input": "OPS-5"}
+    assert run("notes/todo_link", config, fields) == "linked OPS-5"
+    with pytest.raises(ActionError, match="nor a ticket key Jira knows"):
+        run("notes/todo_link", config, {**fields, "input": "NEW-404"})
+    assert asked == [["OPS-5"], ["NEW-404"]]
+    assert graph(config).named("see OPS-6") == [Ref(kind="ticket", id="OPS-6")]
