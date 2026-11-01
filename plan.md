@@ -34,6 +34,15 @@ slack's page, and many workspaces need an admin to approve the app. Messages are
 ids, who, when, the channel and a short snippet only, in kept tables pruned after
 `prune_days`. Nothing is ever sent without a click.
 
+Each feature below is a setting in `[slack]`, so it can be turned off, or on only once the
+app has its scopes: `mentions`, `threads`, `saved`, `discussions`, `recognize_pings`,
+`availability`, `reactions` (reading, on by default once there's a token), and
+`summary` (with where it goes and an optional schedule) and `focus_status` (sending or
+changing something: off by default). A feature whose scopes the token lacks says so on the
+page (and in `mfd check`), naming the scope, instead of failing in the log. Like every
+config key, each goes in the model, slack's page, `mfd init`'s commented defaults and
+`mfd init --example`.
+
 - **Waiting on me** (Act now): messages that @-mention me and DMs whose last word isn't
   mine, as "Reply to alice" (quick, alice waiting); threads I'm in or started with replies
   since I last read them; Slack's saved-for-later items and reminders (with their due
