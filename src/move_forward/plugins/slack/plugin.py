@@ -18,7 +18,7 @@ from ...asking import Asker, InitSetup
 from ...graph import Graph
 from ...page import Action, Item, Panel, age
 from ...plugin import ActionError, ActionHandler, CliHandler, Context, PageHandler, Plugin
-from . import cli, contacts
+from . import account, cli, contacts, oauth
 from .config import SlackConfig
 from .models import Ping, TeamChannel
 from .pings import Pinger, PingTarget, PrPing
@@ -181,7 +181,15 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         ) -> str | None:
             return contacts.contacts_page(ctx, graph)
 
-        return {PING_PATH: ping, contacts.CONTACTS_PATH: where_pings_go}
+        return {
+            PING_PATH: ping,
+            contacts.CONTACTS_PATH: where_pings_go,
+            account.SLACK_PATH: account.page,
+            oauth.CONNECT_PATH: account.connect,
+            oauth.CALLBACK_PATH: account.callback,
+        }
+
+    sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK_PATH})
 
     def after_collect(self, ctx: Context[SlackConfig], graph: Graph) -> None:
         """Look up the Slack ids of requested reviewers nothing names one for."""
@@ -214,6 +222,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             "mark_sent": mark_sent,
             "set_contact": contacts.set_contact_action,
             "set_team_channel": contacts.set_team_channel_action,
+            "disconnect": account.disconnect_action,
         }
 
     def prune(self, ctx: Context[SlackConfig], graph: Graph) -> list[str]:

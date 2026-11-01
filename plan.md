@@ -24,44 +24,13 @@ the plugin change that needs them (see `AGENTS.md`), `dev.py check` green and th
 Slack becomes a source of work, not just a place pings go. It needs a Slack app with a
 *user* token (my DMs and mentions, my messages).
 
-**The app is optional.** Without it (not set up, or not connected), slack does all it does
-today: the reviewer map and Slack ids (imported, set by hand, or looked up by email with
-today's token), team channels, the ping page and recorded pings. None of the features
-below show, and nothing breaks. With the app connected, they turn on, each behind its own
-setting. "Connect Slack" is offered once the app's client id is set. If the app's token
-stops working (expired, revoked), slack falls back to today's behaviour and the page asks
-to connect again.
-
-**One internal app per workspace.** Workspaces that approve apps would otherwise approve
-one app per person. A Marketplace app needs hosting and Slack's review, and Slack
-rate-limits the history and replies methods for apps distributed outside the
-Marketplace, so the app stays internal. Hosting can come later if it's needed.
-
-- One person creates the app from a manifest checked into the slack plugin (JSON, so
-  reading it needs no new dependency) and gets it approved once. The manifest asks for
-  every feature's user scopes and no bot scopes. A test checks it against the scopes the
-  features below need.
-- Everyone signs in to that one app with Slack's OAuth flow, from a "Connect Slack"
-  button `mfd serve` shows, and gets their own user token. It uses PKCE, so no client
-  secret is shared; the app's client id becomes a new `[slack]` key. For a PKCE app,
-  Slack treats a redirect to `localhost` as a desktop app's and takes `http://`, so the
-  redirect is `http://localhost:<port>/slack/callback` (`https://` when the dashboard
-  serves HTTPS), and the dashboard needs no certificate. The app lists the redirect URLs
-  for the default port; someone on another port adds theirs.
-- Tokens rotate: a PKCE app's access token lasts 12 hours and its refresh token 30 days,
-  and each refresh replaces the refresh token. Both go in the system's secret store, as
-  `mfd token set` stores tokens today, and the access token is refreshed before it runs
-  out. (Slack's docs disagree on whether a PKCE refresh needs the client secret; the
-  PKCE guide says not. Try it with the first real app.)
-- Not collaborators: a collaborator can manage the app (its scopes, its redirect URLs, its
-  credentials), so making a whole company collaborators isn't something to ask an admin
-  for, and Slack documents no cap on them either way.
-- Slack's page walks through creating and approving the app, connecting, and the scopes
-  per feature. On Enterprise Grid, an org-ready app installs across the organization.
-
-Turning PKCE on can't be undone, and Slack expires a PKCE app's refresh tokens after 30
-days, so someone who stays away that long connects again. If none of this works, the app
-moves to a hosted service.
+The app, signing in to it (Connect on `/slack`, PKCE, rotating tokens in the secret
+store) and its fallback to today's behaviour are built; see `docs/plugins/slack.md`. Each
+feature below adds its user scopes to `scopes.py` and `manifest.json` (a test keeps them
+the same), and runs only when the connection was granted them; `/slack` names what's
+missing. Someone first trying it with a real app should check that a PKCE refresh works
+without the client secret (Slack's docs disagree), and whether a refreshed user token
+comes back at the top level or in `authed_user` (slack takes either).
 
 Messages are kept as ids, who, when, the channel and a short snippet only, in kept tables
 pruned after `prune_days`. Nothing is ever sent without a click.

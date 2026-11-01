@@ -7,7 +7,7 @@ from ... import render
 from ...domain import Model
 from ...graph import Graph
 from ...plugin import ActionError, Context
-from . import client
+from . import client, oauth, scopes
 from .config import SlackConfig
 from .pings import my_open_prs
 from .repository import DASHBOARD, IMPORTED, LOOKED_UP, SlackRepository
@@ -152,8 +152,12 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
 def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
     """Find, through Slack's API, the Slack ids of people my open PRs ask to review whom
     nothing names a Slack id for, by the email github knows for them. Each is looked up once:
-    a miss is remembered too. Returns whom it found. Without a token, does nothing."""
-    api_token = client.token(ctx.config, ctx.email)
+    a miss is remembered too. Returns whom it found. Without a token, or with the app
+    connected without the scopes, does nothing."""
+    found_connection = oauth.connection(ctx)
+    if found_connection and scopes.missing("lookups", found_connection.scopes):
+        return []
+    api_token = oauth.token(ctx)
     if api_token is None:
         return []
     slack = SlackRepository(ctx.db)

@@ -15,6 +15,10 @@ class SlackConfig(Strict):
 
     workspace_url: str = ""
     """Base URL for Slack links, e.g. https://example.slack.com. Empty means no links."""
+    client_id: str = ""
+    """The workspace's Slack app's client id (Basic Information), to connect to it from
+    slack's page; empty until someone has made the app (see docs/plugins/slack.md). It isn't
+    a secret: the app signs in with PKCE, and has no client secret to share."""
     ping_first: str = DEFAULT_PING_FIRST
     """The first review reminder; `{url}` is the PR."""
     ping_follow_up: str = DEFAULT_PING_FOLLOW_UP
@@ -24,7 +28,8 @@ class SlackConfig(Strict):
     Overrides the reviewer map."""
     token_env: str = DEFAULT_SLACK_TOKEN_ENV
     """The environment variable holding a Slack token with the `users:read.email` scope, for
-    finding requested reviewers' Slack ids by their email. No token, no lookups."""
+    finding requested reviewers' Slack ids by their email, when the app isn't connected. No
+    token, no lookups."""
     keychain_service: str = DEFAULT_SLACK_KEYCHAIN_SERVICE
     """The service that token is stored under in the system's secret store (the macOS
     keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;

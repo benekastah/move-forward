@@ -11,7 +11,8 @@ import pytest
 from conftest import NOW, Reviewer, pr, snapshot, stored
 
 from move_forward import https
-from move_forward.plugins.slack import client, contacts
+from move_forward.plugin import Context
+from move_forward.plugins.slack import client, contacts, oauth
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.models import Contact
 from move_forward.plugins.slack.repository import SlackRepository
@@ -19,10 +20,10 @@ from move_forward.refresh import stored_graph
 from move_forward.registry import enabled
 
 
-def _token(value: str | None) -> Callable[[SlackConfig, str], str | None]:
-    """Stands in for `client.token`: the token found, whatever the config and email."""
+def _token(value: str | None) -> Callable[[Context[SlackConfig]], str | None]:
+    """Stands in for `oauth.token`: the token found, whatever the context."""
 
-    def token(config: SlackConfig, email: str) -> str | None:
+    def token(ctx: Context[SlackConfig]) -> str | None:
         return value
 
     return token
@@ -36,7 +37,7 @@ def _lookups(monkeypatch: pytest.MonkeyPatch, ids: dict[str, str | None]) -> lis
         asked.append(email)
         return ids.get(email)
 
-    monkeypatch.setattr(client, "token", _token("xoxb-test"))
+    monkeypatch.setattr(oauth, "token", _token("xoxb-test"))
     monkeypatch.setattr(client, "lookup_by_email", lookup)
     return asked
 
@@ -77,7 +78,7 @@ def test_requested_reviewers_are_looked_up_once_each(monkeypatch: pytest.MonkeyP
 
 
 def test_without_a_token_nothing_is_looked_up(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(client, "token", _token(None))
+    monkeypatch.setattr(oauth, "token", _token(None))
     config, db = stored(github=snapshot(mine=[pr(1, requested_users=["alice"])]), slack=True)
     plugins = enabled(config, db, NOW)
     graph, _ = stored_graph(db, plugins)
@@ -87,16 +88,16 @@ def test_without_a_token_nothing_is_looked_up(monkeypatch: pytest.MonkeyPatch) -
 
 def test_the_client_reads_slacks_answers(monkeypatch: pytest.MonkeyPatch) -> None:
     answers: list[dict[str, object]] = []
-    urls: list[str] = []
+    sent: list[tuple[str, object, str | None]] = []
 
     def fake_open(request: urllib.request.Request, timeout: int) -> io.BytesIO:
-        urls.append(request.full_url)
+        sent.append((request.full_url, request.data, request.get_header("Authorization")))
         return io.BytesIO(json.dumps(answers.pop(0)).encode())
 
     monkeypatch.setattr(https.opener, "open", fake_open)
     answers.append({"ok": True, "user": {"id": "U111111"}})
     assert client.lookup_by_email("t", "a+b@x") == "U111111"
-    assert urls == ["https://slack.com/api/users.lookupByEmail?email=a%2Bb%40x"]
+    assert sent == [("https://slack.com/api/users.lookupByEmail", b"email=a%2Bb%40x", "Bearer t")]
     answers.append({"ok": False, "error": "users_not_found"})
     assert client.lookup_by_email("t", "a@x") is None
     answers.append({"ok": False, "error": "missing_scope"})
