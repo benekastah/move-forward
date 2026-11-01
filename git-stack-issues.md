@@ -39,7 +39,7 @@ could suggest untracking the iced stacks first.
 nothing reports "1 deleted". It ends by printing every stack as a tree, so a branch whose
 name has "deleted" in it is counted too. The lines for deleted branches read
 "<branch> was merged into <parent>; deleted it (was <sha>)"; matching "; deleted it (was "
-fixes it until git-stack has a structured output (see `clean --json` below).
+fixes it, but `clean --json` (below) is the better fix.
 
 ## Clean's button can promise more, or less, than it does
 
@@ -47,42 +47,29 @@ fixes it until git-stack has a structured output (see `clean --json` below).
   locally against the roots as of the last fetch. `git stack clean` fetches, fast-forwards
   the roots and asks GitHub, so it can untrack a different set.
 - The confirm text says it fast-forwards main; it fast-forwards every stack's root.
-- `git stack clean` refuses to run with uncommitted changes (staged or not; untracked files
-  are fine), which the confirm text doesn't mention, so the button often just fails. See
-  "clean's clean-worktree check" below.
+- `git stack clean -d local` refuses uncommitted changes when the checked-out branch is a
+  stack's root or a tracked branch, which the confirm text doesn't mention. See "clean's
+  clean-worktree check" below.
 
 ## git-stack additions
 
-**`git stack clean --json`** (added in git-stack): stdout is one JSON object with
-`events` (each with a stable `type`, its `message`, whether it's a `warning`, and its
-fields), `result` (every stack, as `info --json` lists them) and `error`. The messages go
-to stderr. If it fails partway, it still prints what happened, with `error` set, and exits
-non-zero. Counting `untracked` events with a non-null `deleted_tip` fixes the count above.
-Other commands get `--json` when something needs it; `sync` is the likely next one.
+**`--json`** on `clean`, `sync`, `push`, `prs` and `autocreate` (added in git-stack):
+stdout is JSON Lines, an object per event as it happens (each with a stable `type`, its
+`message`, whether it's a `warning`, and its fields), then a last line that's
+`{"type": "result", "stacks": [...], ...}` or `{"type": "error", "message": ...}` (with
+exit status 1). git's own output goes to stderr. Counting `untracked` events with a
+non-null `deleted_tip` fixes the count above; reading the lines as they arrive would let
+the dashboard show progress during a long clean.
 
 `show-stack --json` isn't needed: `git stack info <branch> --json` already gives a branch's
 whole stack, groups included.
 
 ## clean's clean-worktree check
 
-`git stack clean` calls `ensure_clean_worktree()` up front. It only touches the working tree
-in two places:
-
-1. Fast-forwarding a root that's checked out (`git merge --ff-only`).
-2. With `-d local` or `-d both`, deleting the checked-out branch, which first switches to a
-   child or the parent.
-
-Both can fail with uncommitted changes that conflict, and the second happens partway
-through `remove_merged`, after the children have been moved onto the new parent, which would
-leave the metadata half-updated. The up-front check avoids that by refusing before anything
-changes.
-
-But it's broader than needed: when the checked-out branch is neither a stack's root nor
-(with `-d local`/`both`) a tracked branch, clean never touches the working tree, and the
-check refuses for nothing. That's the usual case from the dashboard: on a feature branch
-with work in progress, cleaning other merged branches. Narrowing the check to those two
-cases (still before anything changes) would keep the protection and let the button work
-far more often.
+Fixed in git-stack: `git stack clean` now only refuses uncommitted changes when you're on a
+stack's root (which it fast-forwards) or, with `-d local` or `-d both`, on a tracked branch
+(which it could delete). From a feature branch with work in progress, the Clean button
+works.
 
 ## Icing could be partly git-stack's
 

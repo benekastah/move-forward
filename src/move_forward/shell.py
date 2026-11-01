@@ -11,7 +11,12 @@ _stopping = threading.Event()
 
 
 class CommandError(RuntimeError):
-    """A command exited non-zero; the message holds its stderr."""
+    """A command exited non-zero; the message holds its stderr, and `stdout` what it printed
+    there, for a command that reports in its output how far it got (`--json`)."""
+
+    def __init__(self, message: str, stdout: str = ""):
+        super().__init__(message)
+        self.stdout = stdout
 
 
 def stop() -> None:
@@ -46,7 +51,7 @@ def run(
         shown = " ".join(args)
         if len(shown) > MAX_COMMAND_IN_ERROR:
             shown = shown[:MAX_COMMAND_IN_ERROR] + "…"
-        raise CommandError(f"{shown}: {result.stderr.strip() or result.returncode}")
+        raise CommandError(f"{shown}: {result.stderr.strip() or result.returncode}", result.stdout)
     return result.stdout
 
 
