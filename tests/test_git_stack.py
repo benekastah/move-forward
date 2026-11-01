@@ -17,6 +17,7 @@ from conftest import (
     stored,
     titles,
 )
+from legacy import save_json_snapshot
 
 from move_forward import refresh
 from move_forward.db import Database
@@ -26,7 +27,6 @@ from move_forward.plugins.git_stack import client
 from move_forward.plugins.git_stack.panels import repo_dirs
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 from move_forward.registry import enabled
-from move_forward.repositories import SnapshotRepository
 
 ICED = iced("me/x", "/src/widgets")
 
@@ -160,7 +160,7 @@ def test_the_migration_keeps_the_last_snapshot_and_store_replaces_it() -> None:
         StackBranch(name="main"),
         StackBranch(name="me/a", parent="main", status="needs-restack", current=True, group="g"),
     )
-    SnapshotRepository(db).save("git_stack", NOW, first)
+    save_json_snapshot(db, "git_stack", first)
     db.migrate("git_stack", MIGRATIONS)
     repo = StackRepository(db)
     assert repo.load() == first

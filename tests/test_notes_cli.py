@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from legacy import save_json_snapshot
 
 from move_forward import cli
 from move_forward.db import Database
 from move_forward.domain import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.notes.repository import NotesRepository
-from move_forward.repositories import SnapshotRepository
 
 PR = "https://github.com/acme/widgets/pull/5"
 Run = Callable[..., tuple[int, str, str]]
@@ -151,7 +151,7 @@ def test_ice_a_branch_and_thaw_it(run: Run, config: Path) -> None:
         worktrees=[],
         branches=[Branch(name="feature", committed_at=datetime.now(UTC))],
     )
-    SnapshotRepository(_db(config)).save("git", datetime.now(UTC), LocalSnapshot(repos=[repo]))
+    save_json_snapshot(_db(config), "git", LocalSnapshot(repos=[repo]))
     assert run("ice", "--branch", "/src/app", "nope")[0] == 1
     assert run("ice", "--branch", "/elsewhere", "feature")[0] == 1
     assert run("ice", "--branch", "/src/app", "feature", "--note", "waiting on infra")[0] == 0

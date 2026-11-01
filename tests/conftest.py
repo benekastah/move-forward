@@ -10,10 +10,10 @@ from move_forward.db import Database
 from move_forward.domain import (
     Branch,
     Check,
+    DerivedSnapshot,
     GitHubSnapshot,
     GitStackSnapshot,
     JiraIssue,
-    JiraSnapshot,
     LocalRepo,
     LocalSnapshot,
     Model,
@@ -27,6 +27,7 @@ from move_forward.domain import (
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
 from move_forward.plugins.github.people import PeopleRepository
+from move_forward.plugins.github.snapshots import DerivedRepository
 from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.models import Entry, Ice, IcedItem, Size, Todo
 from move_forward.plugins.notes.repository import MIGRATIONS as NOTES_MIGRATIONS
@@ -131,7 +132,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     enable_slack = any(key in o for key in SLACK_OVERRIDES)
     o.pop("slack", None)
     db = Database(":memory:")
-    snapshots = SnapshotRepository(db)
+    snapshots: dict[str, BaseModel] = {}
     for source, key in (
         ("github", "github"),
         ("git", "local"),
@@ -139,9 +140,8 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         ("jira", "jira"),
     ):
         if (value := o.pop(key, None)) is not None:
-            snapshots.save(source, NOW, cast(BaseModel, value))
-    if (derived := o.pop("derived", None)) is not None:
-        snapshots.save("github.derived", NOW, cast(BaseModel, derived))
+            snapshots[source] = cast(BaseModel, value)
+    derived = cast(DerivedSnapshot | None, o.pop("derived", None))
     db.migrate("notes", NOTES_MIGRATIONS)
     NotesRepository(db).replace_all(
         cast(list[Entry], o.pop("work_items", [])), cast(list[Ice], o.pop("iced_stacks", [])), []
@@ -166,8 +166,8 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             jira[key] = o.pop(key)
     if (statuses := o.pop("jira_statuses", None)) is not None:
         jira.update({f"status_{k}": v for k, v in cast(dict[str, str], statuses).items()})
-    enable_git_stack = snapshots.get("git_stack", GitStackSnapshot) is not None
-    enable_jira = bool(jira) or snapshots.get("jira", JiraSnapshot) is not None
+    enable_git_stack = "git_stack" in snapshots
+    enable_jira = bool(jira) or "jira" in snapshots
     if enable_jira:
         jira.setdefault("site", "https://jira")
     teams = o.pop("my_teams", ["core"])
@@ -185,6 +185,13 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         }
     )
     migrate(config, db)
+    for e in enabled(config, db, NOW):  # kept as a refresh keeps them
+        if e.name in snapshots:
+            e.plugin.store(e.ctx, snapshots[e.name])
+            SnapshotRepository(db).save_fetched(e.name, NOW)
+    if derived is not None:
+        DerivedRepository(db).replace(derived)
+        SnapshotRepository(db).save_fetched("github.derived", NOW)
     PeopleRepository(db).replace_imported({u.login: u.email for u in reviewers.values() if u.email})
     if enable_slack:
         SlackRepository(db).replace_imported(

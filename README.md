@@ -313,8 +313,8 @@ Jira; without Jira, entries with ticket keys are kept.
 
 ## How it stores things
 
-`dashboard.db` holds each plugin's latest snapshot as JSON, under the
-plugin's name (kept when a refresh fails, with the error alongside), the
+`dashboard.db` holds what each plugin last fetched, in that plugin's own
+tables (kept when a refresh fails, with the error shown alongside), the
 notes in the notes plugin's tables, where pings go and the pings sent in the
 slack plugin's, and reviewers' emails in the github plugin's (from `mfd github
 import`, or looked up from commits). It's the

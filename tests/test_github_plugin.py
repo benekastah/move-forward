@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 from conftest import ME, NOW, pr, snapshot
+from legacy import save_json_snapshot
 
 from move_forward.db import Database
 from move_forward.domain import (
@@ -20,10 +21,9 @@ from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.github.plugin import GitHubPlugin
-from move_forward.plugins.github.snapshots import DerivedRepository
-from move_forward.plugins.github.snapshots import SnapshotRepository as GitHubSnapshots
+from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository
 from move_forward.plugins.github.tables import MIGRATIONS
-from move_forward.repositories import KvRepository, SnapshotRepository
+from move_forward.repositories import KvRepository
 from move_forward.shell import CommandError
 
 
@@ -132,9 +132,9 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
         merged_recent=[pr(3, state="MERGED")],
     )
     db = Database(":memory:")
-    SnapshotRepository(db).save("github", NOW, gh)
+    save_json_snapshot(db, "github", gh)
     db.migrate("github", MIGRATIONS)
-    store = GitHubSnapshots(db)
+    store = PrRepository(db)
     assert store.load() == gh
     smaller = snapshot(mine=[pr(4)], team_members=["x"])
     store.replace(smaller)
@@ -153,7 +153,7 @@ def test_derived_data_moves_from_json_and_round_trips() -> None:
         team_scores={pr(2).url: TeamPrScore(owned_files=2, required_files=1, my_files=0)},
     )
     db = Database(":memory:")
-    SnapshotRepository(db).save("github.derived", NOW, derived)
+    save_json_snapshot(db, "github.derived", derived)
     db.migrate("github", MIGRATIONS)
     store = DerivedRepository(db)
     assert store.load() == derived

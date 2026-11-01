@@ -19,8 +19,7 @@ from .prs import (
     review_blockers,
     ticket_keys,
 )
-from .snapshots import DerivedRepository
-from .snapshots import SnapshotRepository as PrSnapshots
+from .snapshots import DerivedRepository, PrRepository
 from .tables import MIGRATIONS
 
 log = logging.getLogger(__name__)
@@ -49,10 +48,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return client.collect(ctx.config.org, _team_slugs(ctx), ctx.config.history_days, ctx.now)
 
     def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
-        PrSnapshots(ctx.db).replace(snapshot)
+        PrRepository(ctx.db).replace(snapshot)
 
     def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
-        return PrSnapshots(ctx.db).load()
+        return PrRepository(ctx.db).load()
 
     def _email_domains(self, ctx: Context[GitHubConfig]) -> list[str]:
         if ctx.config.email_domains:

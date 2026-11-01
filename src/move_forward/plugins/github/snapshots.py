@@ -52,7 +52,7 @@ Key = tuple[str, str]
 """A PR as one search found it: (list, url)."""
 
 
-class SnapshotRepository:
+class PrRepository:
     def __init__(self, db: Database):
         self._db = db
 

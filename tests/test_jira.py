@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
+from legacy import save_json_snapshot
 
 from move_forward import https
 from move_forward.db import Database
@@ -13,7 +14,7 @@ from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.jira.repository import MIGRATIONS, IssueRepository
-from move_forward.repositories import KvRepository, SnapshotRepository
+from move_forward.repositories import KvRepository
 
 RAW: dict[str, object] = {
     "key": "APP-1",
@@ -177,9 +178,7 @@ def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
     db = Database(":memory:")
     labelled = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
     bare = labelled.model_copy(update={"key": "APP-3", "labels": [], "open_blockers": []})
-    SnapshotRepository(db).save(
-        "jira", datetime(2026, 10, 30, tzinfo=UTC), JiraSnapshot(issues=[labelled, bare])
-    )
+    save_json_snapshot(db, "jira", JiraSnapshot(issues=[labelled, bare]))
     db.migrate("jira", MIGRATIONS)
     repo = IssueRepository(db)
     assert repo.load() == JiraSnapshot(issues=[labelled, bare])

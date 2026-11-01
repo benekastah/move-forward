@@ -13,7 +13,7 @@ from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref
 from move_forward.page import Action, Item
 from move_forward.plugin import CliHandler, Context, PageHandler
-from move_forward.plugins.github.snapshots import SnapshotRepository as GitHubSnapshots
+from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
 
@@ -65,7 +65,7 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
     )
     db = Database(":memory:")
     registry.migrate(config, db)
-    GitHubSnapshots(db).replace(snapshot(mine=[pr(1, title="Fix <it>")]))
+    PrRepository(db).replace(snapshot(mine=[pr(1, title="Fix <it>")]))
     page = refresh.plugin_page(config, db, "/hello", {"pr": [pr(1).url]})
     assert page is not None and "Fix &lt;it&gt;" in page and "/ hello</h1>" in page
     assert refresh.plugin_page(config, db, "/hello", {"pr": ["nope"]}) is None

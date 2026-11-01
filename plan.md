@@ -24,8 +24,6 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 - Each plugin's models move from core's `domain.py` into the plugin (`models.py`), next to
   its tables. Core's `domain.py` keeps only `Model`.
-- Core: once no plugin uses the JSON defaults, they go, and `snapshots` becomes
-  `collections` (status only), with a migration.
 
 ### 5f. Plugin-owned, typed entity kinds
 

@@ -91,7 +91,7 @@ def test_a_plugin_can_keep_its_snapshot_itself(
     registry.migrate(config, db)
     refresh.refresh(config, db, NOW)
     status = SnapshotRepository(db).all()["git"]
-    assert (status.payload, status.error) == (None, None)  # not core's JSON: the plugin's
+    assert status.error is None and status.fetched_at == NOW
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
     assert graph.get("repo", "acme/widgets") is not None
     # A failed collect keeps what the last good one stored, and says why.

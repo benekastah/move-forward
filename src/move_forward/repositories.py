@@ -8,29 +8,21 @@ from .db import Database
 
 
 class SnapshotRow(BaseModel):
-    """A collector's latest result. `payload` is None until its first success."""
+    """A collector's last run: when, and why it failed if it did."""
 
     fetched_at: datetime
-    payload: str | None
-    """The snapshot model as JSON."""
     error: str | None
 
 
 class SnapshotRepository:
-    """The latest result of each collector, as JSON."""
+    """When each collector last ran, and its error. What they fetched lives in the plugins'
+    tables; the old `payload` column stays only for the plugins' migrations to copy from."""
 
     def __init__(self, db: Database):
         self._db = db
 
-    def save(self, source: str, fetched_at: datetime, payload: BaseModel) -> None:
-        self._db.execute(
-            "INSERT OR REPLACE INTO snapshots VALUES (?, ?, ?, NULL)",
-            (source, fetched_at.isoformat(), payload.model_dump_json()),
-        )
-
     def save_fetched(self, source: str, fetched_at: datetime) -> None:
-        """Record a good refresh whose result the plugin stored in its own tables: the time,
-        and no error. Any payload stays as it was."""
+        """Record a good run: the time, and no error."""
         self._db.execute(
             "INSERT INTO snapshots (source, fetched_at) VALUES (?, ?)"
             " ON CONFLICT (source) DO UPDATE SET fetched_at = excluded.fetched_at, error = NULL",
@@ -38,7 +30,7 @@ class SnapshotRepository:
         )
 
     def save_error(self, source: str, fetched_at: datetime, error: str) -> None:
-        """Record a failed refresh. The previous payload, if any, is kept."""
+        """Record a failed run; what the last good one kept stays."""
         self._db.execute(
             "INSERT INTO snapshots (source, fetched_at, error) VALUES (?, ?, ?)"
             " ON CONFLICT (source) DO UPDATE SET fetched_at = excluded.fetched_at,"
@@ -49,18 +41,10 @@ class SnapshotRepository:
     def all(self) -> dict[str, SnapshotRow]:
         return {
             row["source"]: SnapshotRow(
-                fetched_at=datetime.fromisoformat(row["fetched_at"]),
-                payload=row["payload"],
-                error=row["error"],
+                fetched_at=datetime.fromisoformat(row["fetched_at"]), error=row["error"]
             )
             for row in self._db.query("SELECT * FROM snapshots")
         }
-
-    def get[T: BaseModel](self, source: str, model: type[T]) -> T | None:
-        rows = self._db.query("SELECT payload FROM snapshots WHERE source = ?", (source,))
-        if not rows or rows[0]["payload"] is None:
-            return None
-        return model.model_validate_json(rows[0]["payload"])
 
 
 class KvRepository:

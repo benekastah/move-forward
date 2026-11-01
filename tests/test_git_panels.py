@@ -14,6 +14,7 @@ from conftest import (
     stored,
     titles,
 )
+from legacy import save_json_snapshot
 
 from move_forward import refresh
 from move_forward.db import Database
@@ -22,7 +23,6 @@ from move_forward.domain import (
 )
 from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
 from move_forward.registry import enabled
-from move_forward.repositories import SnapshotRepository
 
 build = dashboard
 
@@ -162,7 +162,7 @@ def test_git_keeps_its_snapshot_in_its_tables() -> None:
         my_dirs=["api", "web"],
     )
     db = Database(":memory:")
-    SnapshotRepository(db).save("git", NOW, first)
+    save_json_snapshot(db, "git", first)
     db.migrate("git", MIGRATIONS)
     repo = LocalRepository(db)
     assert repo.load() == first

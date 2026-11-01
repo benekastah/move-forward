@@ -14,7 +14,7 @@ from move_forward.db import Database
 from move_forward.page import Action, Item
 from move_forward.plugin import KEPT, ActionError, ActionResult
 from move_forward.plugins.github.config import GitHubConfig
-from move_forward.plugins.github.snapshots import SnapshotRepository as GitHubSnapshots
+from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import migrate
@@ -31,7 +31,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
     )
     db = Database(":memory:")
     migrate(config, db)
-    GitHubSnapshots(db).replace(
+    PrRepository(db).replace(
         snapshot(mine=[pr(1, requested_users=["alice"], requested_teams=["web"])])
     )
     refreshed: list[bool] = []
