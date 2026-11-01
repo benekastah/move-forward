@@ -225,6 +225,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The section's required settings, commented out, for a section `mfd init` writes
     commented out because the plugin wasn't chosen."""
 
+    init_finds_teams: ClassVar[bool] = False
+    """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
+
     def init_suggested(self) -> bool:
         """Whether `mfd init` offers to set the plugin up by default."""
         return True

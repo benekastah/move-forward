@@ -124,7 +124,7 @@ def test_bad_answers_are_asked_again_with_the_reason(
         path,
         scripted(
             {
-                "Plugins": ["github, gitlab", "github, git, jira, slack"],
+                "Plugins": ["github, gitlab", "github, git_stack", "github, git, jira, slack"],
                 "organization": ["acme corp", "acme"],
                 "Port": ["lots", "70000", "9000"],
                 "workspace URL": ["acme.slack.com", "https://acme.slack.com"],
@@ -134,7 +134,7 @@ def test_bad_answers_are_asked_again_with_the_reason(
         cwd=tmp_path,
     )
     out = capsys.readouterr().out
-    assert "no plugin named 'gitlab'" in out
+    assert "no plugin named 'gitlab'" in out and "git_stack needs git too" in out
     assert "'acme corp' isn't a GitHub organization" in out
     assert "'lots' isn't a port number" in out and "'70000' isn't a port number" in out
     assert "'acme.slack.com' isn't a URL starting with https://" in out
@@ -205,9 +205,15 @@ def test_without_github_the_teams_are_asked_by_name(
     tmp_path: Path, no_machine_guesses: None
 ) -> None:
     path = tmp_path / "config.toml"
-    init.init(path, scripted({"Plugins": "git", "Teams": "web, api"}), cwd=tmp_path)
+    answers: dict[str, str | list[str]] = {
+        "Plugins": "git, slack",
+        "Teams": "web, api",
+        "pings to web": "#web",
+    }
+    init.init(path, scripted(answers), cwd=tmp_path)
     loaded = config.load(path)
     assert loaded.github is None and loaded.teams == ["web", "api"]
+    assert loaded.slack is not None and loaded.slack.teams == {"web": "#web"}
     assert "# [github]" in path.read_text()
 
 

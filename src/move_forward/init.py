@@ -120,11 +120,15 @@ def render_config(answers: dict[str, object], sections: dict[str, dict[str, obje
 
 
 def _plugins(answer: str) -> str:
-    """A plugin `mfd init` offers, by name."""
-    names = [p.name for p in offered()]
-    if answer.strip() not in names:
-        raise ValueError(f"no plugin named {answer.strip()!r}; pick from {', '.join(names)}")
-    return answer.strip()
+    """Plugins `mfd init` offers, by name, comma-separated, each with those it requires."""
+    by_name = {p.name: p for p in offered()}
+    chosen = [part.strip() for part in answer.split(",") if part.strip()]
+    for name in chosen:
+        if name not in by_name:
+            raise ValueError(f"no plugin named {name!r}; pick from {', '.join(by_name)}")
+        if missing := [r for r in by_name[name].requires if r not in chosen]:
+            raise ValueError(f"{name} needs {', '.join(missing)} too")
+    return ", ".join(chosen)
 
 
 def interview(prompt: Prompt, cwd: Path) -> str:
@@ -136,23 +140,20 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     )
     email = ask("Your work email (e.g. jane@acme.com)", guess_email(), asking.email)
     setup = InitSetup(email=email, cwd=cwd)
-    chosen = ask.list(
+    answer = ask(
         f"Plugins to set up, comma-separated ({', '.join(p.name for p in offered())})",
-        [p.name for p in offered() if p.init_suggested()],
+        ", ".join(p.name for p in offered() if p.init_suggested()),
         _plugins,
         choices([p.name for p in offered()]),
     )
-    sections = {
-        plugin.name: plugin.init_questions(ask, setup)
-        for plugin in offered()
-        if plugin.name in chosen
-    }
-    if not setup.teams:
+    chosen = [p for p in offered() if p.name in answer.split(", ")]
+    if not any(p.init_finds_teams for p in chosen):  # else that plugin asks for them
         setup.teams = ask.list(
             "Teams you're on or review for, by name, comma-separated (blank for none)",
             [],
             asking.word("team name"),
         )
+    sections = {plugin.name: plugin.init_questions(ask, setup) for plugin in chosen}
     port = ask(
         "Port for the local server (e.g. 8765)", str(config_module.DEFAULT_PORT), asking.port
     )
