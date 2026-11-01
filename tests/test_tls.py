@@ -210,3 +210,40 @@ def test_the_page_says_when_there_is_no_certificate_or_it_ends_soon(tmp_path: Pa
     assert "notice warn" not in app.dashboard_page()
     elsewhere = config.model_copy(update={"https": False, "db_path": tmp_path / "x" / "d.db"})
     assert "notice warn" not in server.App(elsewhere, db, TOKEN).dashboard_page()  # off
+
+
+def test_renewing_gets_louder_as_the_last_certificate_nears_its_end(tmp_path: Path) -> None:
+    paths = tls.Paths(tmp_path / "tls")
+    assert tls.urgency(paths) is None  # none yet: the header says how to make them
+    tls.make(paths)
+    last = tls.expires(paths)
+    assert tls.urgency(paths, last - timedelta(days=20)) is None  # just the header
+    assert tls.urgency(paths, last - timedelta(days=10)) == "soon"
+    assert tls.urgency(paths, last - timedelta(days=3)) == "now"
+    assert tls.urgency(paths, last + timedelta(days=1)) == "now"
+
+
+def test_the_banner_is_on_the_dashboard_and_focus_pages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = Config(email="me@x", db_path=tmp_path / "dashboard.db")
+    db = Database(config.db_path)
+    migrate(config, db)
+    tls.make(tls.Paths.beside(config.db_path))
+    app = server.App(config, db, TOKEN)
+    assert "class='banner" not in app.dashboard_page()
+    soon = tls.expires(tls.Paths.beside(config.db_path)) - timedelta(days=3)
+    real_urgency, real_problem = tls.urgency, tls.problem
+
+    def urgency(paths: tls.Paths) -> str | None:
+        return real_urgency(paths, soon)
+
+    def problem(paths: tls.Paths) -> str | None:
+        return real_problem(paths, soon)
+
+    monkeypatch.setattr(server.tls, "urgency", urgency)
+    monkeypatch.setattr(server.tls, "problem", problem)
+    banner = "<div class='banner now' role='alert'>the last certificate ends in 3 days"
+    assert banner in app.dashboard_page()
+    assert banner in (app.focus_page("", 0) or "")
+    assert banner in (app.focus_page("all", 0) or "")

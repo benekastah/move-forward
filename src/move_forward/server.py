@@ -118,10 +118,23 @@ class App:
     def dashboard_page(self, notice: str = "", open_keys: set[str] | None = None) -> str:
         """The page from stored data; a page load also refreshes stale data in the background."""
         self.refresh_if_stale()
-        warning = tls.problem(tls.Paths.beside(self.config.db_path)) if self.config.https else None
+        warning, urgency = self.certificate_warning()
         return render.dashboard_page(
-            build_dashboard(self.config, self.db), self.refreshing, notice, open_keys, warning or ""
+            build_dashboard(self.config, self.db),
+            self.refreshing,
+            notice,
+            open_keys,
+            warning,
+            urgency,
         )
+
+    def certificate_warning(self) -> tuple[str, str | None]:
+        """What's wrong with the HTTPS certificates, if `https` is on, and how loudly to say
+        it (see `tls.urgency`)."""
+        if not self.config.https:
+            return "", None
+        paths = tls.Paths.beside(self.config.db_path)
+        return tls.problem(paths) or "", tls.urgency(paths)
 
     def run_action(self, name: str, fields: dict[str, str]) -> tuple[str, dict[str, str]]:
         """Run a button's action and refresh afterwards, so the page reflects it soon.
@@ -154,9 +167,13 @@ class App:
         self.refresh_if_stale()
         dashboard = build_dashboard(self.config, self.db)
         if not category:
-            return render.focus_categories_page(dashboard)
+            return render.focus_categories_page(dashboard, self._alert())
         done_item = kept_item(self.config, self.db, kept) if kept else None
-        return render.focus_page(dashboard, category, index, notice, done_item)
+        return render.focus_page(dashboard, category, index, notice, done_item, self._alert())
+
+    def _alert(self) -> str:
+        """The certificate banner, for focus mode's pages."""
+        return render.banner(*self.certificate_warning())
 
 
 def _open_keys(query: str) -> set[str] | None:

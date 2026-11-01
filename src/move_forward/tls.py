@@ -41,7 +41,11 @@ OVERLAP_DAYS = 25
 """Each certificate starts this long before the one before it ends, so `mfd serve` moves to
 it well before the old one does."""
 RENEW_WITHIN_DAYS = 30
-"""`mfd check` and the page warn when the last certificate ends sooner than this."""
+"""`mfd check` and the page's header warn when the last certificate ends sooner than this."""
+BANNER_WITHIN_DAYS = 14
+"""Closer than this, a banner across every page says so."""
+RED_WITHIN_DAYS = 7
+"""Closer than this (or once they've ended), the banner is bright red."""
 NAMES = ["localhost"]
 ADDRESSES = [ipaddress.ip_address("127.0.0.1"), ipaddress.ip_address("::1")]
 
@@ -215,6 +219,19 @@ def problem(paths: Paths, now: datetime | None = None) -> str | None:
             " new ones"
         )
     return None
+
+
+def urgency(paths: Paths, now: datetime | None = None) -> str | None:
+    """How loudly the page says the certificates need renewing: "soon" (a banner) within
+    `BANNER_WITHIN_DAYS` of the last one ending, "now" (a red one) within `RED_WITHIN_DAYS` or
+    once they've ended, else None."""
+    if not paths.ready():
+        return None  # nothing to renew: the header says how to make them
+    now = now or datetime.now(UTC)
+    left = expires(paths) - now
+    if left < timedelta(days=RED_WITHIN_DAYS) or current(paths, now) is None:
+        return "now"
+    return "soon" if left < timedelta(days=BANNER_WITHIN_DAYS) else None
 
 
 def context(paths: Paths, now: datetime | None = None) -> ssl.SSLContext:
