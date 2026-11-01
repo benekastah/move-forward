@@ -427,3 +427,14 @@ def test_a_layout_is_refused_from_another_site_without_the_token_or_malformed(
         assert response.status == 400
         response.read()
     assert LayoutRepository(app.db).load() == Layout()
+
+
+def test_localhost_goes_to_127_0_0_1_where_the_sign_in_cookie_is(client: HTTPConnection) -> None:
+    host = f"localhost:{client.port}"
+    response = get(client, "/focus?cat=all&i=2", {"Host": host})
+    assert response.status == 302
+    assert response.getheader("Location") == f"http://127.0.0.1:{client.port}/focus?cat=all&i=2"
+    response.read()
+    response = get(client, "//evil.example/x", {"Host": host})
+    assert response.getheader("Location", "").startswith(f"http://127.0.0.1:{client.port}/")
+    response.read()

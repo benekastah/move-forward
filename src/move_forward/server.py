@@ -248,6 +248,16 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
         def do_GET(self) -> None:
             if self._refuse_other_sites(check_origin=False):
                 return
+            port = cast(HTTPServer, self.server).server_port
+            if self.headers.get("Host") == f"localhost:{port}":
+                # The sign-in cookie is 127.0.0.1's, and cookies are per host: send the
+                # browser there, to the same path. The host is ours, so this can't send it
+                # anywhere else.
+                self.send_response(HTTPStatus.FOUND)
+                self.send_header("Location", f"http://127.0.0.1:{port}{self.path}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             url = urlsplit(self.path)
             if url.path in STATIC_FILES:
                 name, content_type = STATIC_FILES[url.path]

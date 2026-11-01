@@ -139,7 +139,8 @@ goes to the dashboard. A request without the token gets `401 Unauthorized`;
 delete the file to make a new token, which signs every browser out.
 
 Requests must also name the server as `127.0.0.1:<port>` or `localhost:<port>`
-in their `Host` header, and a POST that carries an `Origin` header must come
+in their `Host` header (a page asked for at `localhost` is sent to the same path at
+`127.0.0.1`, where the sign-in cookie is), and a POST that carries an `Origin` header must come
 from one of those. So other web pages open in the browser can't use the
 dashboard's buttons, while scripts like `curl`, which send no `Origin`, work.
 Anything else gets `403 Forbidden`.

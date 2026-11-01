@@ -125,9 +125,6 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   plugin stored stays there, unused once that plugin's migration has copied it. A plugin
   can't clear core's table, so this needs a core migration that runs only after every
   built-in plugin's copy has shipped, or it stays as harmless dead data.
-- **Signing in on `localhost`.** `mfd open` signs in at `127.0.0.1`, and cookies are per
-  host, so the dashboard at `localhost:<port>` answers 401. The server could redirect
-  `localhost` to `127.0.0.1`.
 - **Config sections from the registry.** `Config` lists a field per built-in plugin, and
   its teams check names slack, github and jira. The check could cover every section with a
   `teams` table instead.
