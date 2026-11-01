@@ -181,21 +181,23 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         ]
 
     def fetch(self, ctx: Context[JiraConfig], kind: str, ids: list[str]) -> list[Entity]:
-        """The resolved ones among tickets by key, with `resolved_at`; open ones are left
-        out."""
-        if kind != TICKET:
+        """Tickets by key, open or resolved, with `resolved_at` (null while open). Their
+        projects are remembered, so their keys link from then on (see `linking_patterns`)."""
+        keys = [k for k in ids if client.is_key(k)]
+        if kind != TICKET or not keys:
             return []
         token = client.token(ctx.config, ctx.email)
-        resolved = client.resolved_at(ctx.config, ctx.email, ids, token)
+        found = client.tickets(ctx.config, ctx.email, keys, token)
+        IssueRepository(ctx.db).remember_projects([i.key for i in found])
         return [
             Entity(
-                ref=ticket_ref(key),
-                title=key,
-                url=self.url_for(ctx, TICKET, key),
-                state="done",
-                attrs={"resolved_at": at.isoformat()},
+                ref=ticket_ref(i.key),
+                title=f"{i.key} {i.summary}",
+                url=i.url,
+                state=i.status,
+                attrs={"resolved_at": i.resolved.isoformat() if i.resolved else None},
             )
-            for key, at in resolved.items()
+            for i in found
         ]
 
     def url_for(self, ctx: Context[JiraConfig], kind: str, id: str) -> str | None:

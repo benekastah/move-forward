@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import re
 import urllib.request
 from datetime import datetime
 
@@ -167,14 +168,21 @@ def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[Jir
         next_token = page.next_page_token
 
 
-def resolved_at(
-    config: JiraConfig, email: str, keys: list[str], api_token: str
-) -> dict[str, datetime]:
-    """When each of `keys` was resolved; tickets that aren't resolved are left out."""
+KEY_RE = re.compile(r"[A-Z][A-Z0-9_]*-[0-9]+")
+"""A ticket key, e.g. `APP-12`: the only thing let into a query by key."""
+
+
+def is_key(value: str) -> bool:
+    return KEY_RE.fullmatch(value) is not None
+
+
+def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
+    """The tickets with `keys`, open or resolved. Anything that isn't a ticket key is left
+    out, so nothing but keys reaches the query."""
+    keys = [k for k in keys if is_key(k)]
     if not keys:
-        return {}
-    jql = f"key in ({', '.join(keys)}) AND statusCategory = Done"
-    return {i.key: i.resolved for i in search(config, email, jql, api_token) if i.resolved}
+        return []
+    return search(config, email, f"key in ({', '.join(keys)})", api_token)
 
 
 def collect(config: JiraConfig, email: str) -> JiraSnapshot:

@@ -70,7 +70,7 @@ fails to load without it, saying which (e.g. "[git_stack] needs [git]").
 | `github` | `[github]` | my open, merged and closed PRs, review requests, PRs I reviewed, my teams' PRs (with `gh`) | Reviews for me, Feedback, CI failures, Merge conflicts, Needs a reviewer, Ready to merge, Held, PR housekeeping, Requested from my teams |
 | `git` | `[git]` | each repo's worktrees and branches | Local work, Cleanup |
 | `git_stack` | `[git_stack]`, needs `[git]` | `git stack info` in each of git's repos | Stacks |
-| `jira` | `[jira]` | my open tickets, and remembers every project they've been in: only those projects' keys (`APP-12`) count as tickets in PRs and notes, so `UTF-8` doesn't | Jira transitions, What next |
+| `jira` | `[jira]` | my open tickets, and remembers every project it has seen a ticket in (mine, or one linked from the notes): only those projects' keys (`APP-12`) count as tickets in PRs and notes, so `UTF-8` doesn't | Jira transitions, What next |
 | `slack` | `[slack]` | nothing; reads my PRs from the graph, and where pings go from its own tables | Nudge reviewers, plus a Ping link on every item about one of my open PRs and the ping page |
 | `notes` | `[notes]`, optional: always on | nothing: work entries, todos and what's on ice live in the database | Todos, On ice, plus an Add todo field on every item about one of my open PRs or a ticket, and Put on ice on every item about a local branch, one of my open PRs, a ticket or a work entry |
 

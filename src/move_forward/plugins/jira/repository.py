@@ -1,6 +1,7 @@
 """The jira plugin's tables: my open tickets, as the last refresh found them, and every
-project they've been in."""
+project jira has seen a ticket in."""
 
+import sqlite3
 from collections import defaultdict
 from datetime import datetime
 
@@ -71,6 +72,13 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
+def _remember(conn: sqlite3.Connection, keys: list[str]) -> None:
+    conn.executemany(
+        "INSERT OR IGNORE INTO jira_projects VALUES (?)",
+        [(project,) for key in keys if (project := key.rpartition("-")[0])],
+    )
+
+
 class IssueRepository:
     def __init__(self, db: Database):
         self._db = db
@@ -113,10 +121,12 @@ class IssueRepository:
                 "INSERT INTO jira_issue_blockers VALUES (?, ?, ?)",
                 [(i.key, n, key) for i in issues for n, key in enumerate(i.open_blockers)],
             )
-            conn.executemany(
-                "INSERT OR IGNORE INTO jira_projects VALUES (?)",
-                [(project,) for i in issues if (project := i.key.rpartition("-")[0])],
-            )
+            _remember(conn, [i.key for i in issues])
+
+    def remember_projects(self, keys: list[str]) -> None:
+        """Remember the projects of tickets seen some other way, e.g. fetched by key."""
+        with self._db.transaction() as conn:
+            _remember(conn, keys)
 
     def projects(self) -> list[str]:
         """The keys of every project a ticket of mine has been in, e.g. `APP`."""

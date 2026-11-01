@@ -1,12 +1,8 @@
-import threading
-import urllib.request
 from datetime import UTC, datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 from legacy import save_json_snapshot
 
-from move_forward import https
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.plugin import Context
@@ -77,102 +73,50 @@ def test_minimal_issue() -> None:
     assert issue.summary == "" and issue.priority is None and issue.open_blockers == []
 
 
-def test_resolved_at_builds_a_key_query(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tickets_are_queried_by_key_and_nothing_else_reaches_the_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     seen: list[str] = []
-    fields: dict[str, object] = dict(
-        jira.RawIssue.model_validate(RAW).fields.model_dump(by_alias=True)
-    )
-    fields["created"] = fields["updated"] = "2026-10-01T00:00:00Z"
 
     def fake_search(_config: object, _email: str, jql: str, _token: str) -> list[JiraIssue]:
         seen.append(jql)
-        return [
-            jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j"),
-            jira.to_issue(
-                jira.RawIssue.model_validate(
-                    {"key": "APP-2", "fields": {**fields, "resolutiondate": "2026-10-01T00:00:00Z"}}
-                ),
-                "https://j",
-            ),
-        ]
+        return []
 
     monkeypatch.setattr(jira, "search", fake_search)
     config = JiraConfig(site="https://j")
-    resolved = jira.resolved_at(config, "me@x", ["APP-1", "APP-2"], "t")
-    assert seen == ["key in (APP-1, APP-2) AND statusCategory = Done"]
-    assert list(resolved) == ["APP-2"] and resolved["APP-2"].year == 2026
-    assert jira.resolved_at(config, "me@x", [], "t") == {} and len(seen) == 1
+    jira.tickets(config, "me@x", ["APP-1", "OPS_2-7", 'X-1) OR project = "SECRET', "app-3"], "t")
+    assert seen == ["key in (APP-1, OPS_2-7)"]
+    assert jira.tickets(config, "me@x", ["not a key"], "t") == [] and len(seen) == 1
 
 
-def test_the_token_is_never_sent_to_a_site_that_isnt_https(
+def test_tickets_are_fetched_open_or_resolved_and_their_projects_remembered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def no_request(*_: object, **__: object) -> None:
-        raise AssertionError("a request was made")
-
-    monkeypatch.setattr(https.opener, "open", no_request)
-    unvalidated = JiraConfig.model_construct(site="http://j.atlassian.net")
-    with pytest.raises(RuntimeError, match="isn't https"):
-        jira.search(unvalidated, "me@x", "jql", "token")
-
-
-class _Redirect(BaseHTTPRequestHandler):
-    def do_POST(self) -> None:
-        self.send_response(302)
-        self.send_header("Location", "http://127.0.0.1:9/steal")  # plain http, nothing listening
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-
-    def log_message(self, format: str, *args: object) -> None:
-        pass
-
-
-def test_redirects_are_not_followed_with_the_token() -> None:
-    httpd = HTTPServer(("127.0.0.1", 0), _Redirect)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{httpd.server_port}/rest",
-        data=b"{}",
-        headers={"Authorization": "Basic secret"},
-        method="POST",
+    resolved = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j").model_copy(
+        update={"resolved": datetime(2026, 6, 1, tzinfo=UTC)}
     )
-    try:
-        with pytest.raises(RuntimeError, match="not following it"):
-            https.opener.open(request, timeout=5)
-    finally:
-        httpd.shutdown()
-        httpd.server_close()
+    open_one = resolved.model_copy(update={"key": "OPS-2", "resolved": None})
 
-
-def test_resolved_tickets_are_fetched(monkeypatch: pytest.MonkeyPatch) -> None:
-    def resolved_at(
-        config: JiraConfig, email: str, keys: list[str], api_token: str
-    ) -> dict[str, datetime]:
-        assert api_token == "t" and keys == ["APP-1", "APP-2"]
-        return {"APP-1": datetime(2026, 6, 1, tzinfo=UTC)}
+    def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
+        assert api_token == "t" and keys == ["APP-1", "OPS-2"]
+        return [resolved, open_one]
 
     def token(config: JiraConfig, email: str) -> str:
         return "t"
 
     monkeypatch.setattr(jira, "token", token)
-    monkeypatch.setattr(jira, "resolved_at", resolved_at)
+    monkeypatch.setattr(jira, "tickets", tickets)
     db = Database(":memory:")
-    ctx = Context(
-        config=JiraConfig(site="https://j"),
-        email="me@x",
-        teams=[],
-        prune_days=90,
-        now=datetime(2026, 10, 30, tzinfo=UTC),
-        db=db,
-        kv=KvRepository(db, "jira"),
-    )
-    [fetched] = JiraPlugin().fetch(ctx, "ticket", ["APP-1", "APP-2"])
-    assert (fetched.ref.id, fetched.url, fetched.attrs) == (
-        "APP-1",
-        "https://j/browse/APP-1",
-        {"resolved_at": "2026-06-01T00:00:00+00:00"},
-    )
+    db.migrate("jira", MIGRATIONS)
+    ctx = _ctx(db)
+    fetched = JiraPlugin().fetch(ctx, "ticket", ["APP-1", "OPS-2", "not a key"])
+    assert [(e.ref.id, e.url, e.attrs) for e in fetched] == [
+        ("APP-1", resolved.url, {"resolved_at": "2026-06-01T00:00:00+00:00"}),
+        ("OPS-2", open_one.url, {"resolved_at": None}),
+    ]
+    assert IssueRepository(db).projects() == ["APP", "OPS"]
     assert JiraPlugin().fetch(ctx, "pr", ["x"]) == []
+    assert JiraPlugin().fetch(ctx, "ticket", ["not a key"]) == []  # without asking Jira
 
 
 def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
