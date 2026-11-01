@@ -36,7 +36,8 @@ ids, who, when, the channel and a short snippet only, in kept tables pruned afte
 
 Each feature below is a setting in `[slack]`, so it can be turned off, or on only once the
 app has its scopes: `mentions`, `threads`, `saved`, `discussions`, `recognize_pings`,
-`availability`, `reactions` (reading, on by default once there's a token), and
+`availability`, `reactions`, `rebump_after_changes` (reading, on by default once there's
+a token), and
 `summary` (with where it goes and an optional schedule) and `focus_status` (sending or
 changing something: off by default). A feature whose scopes the token lacks says so on the
 page (and in `mfd check`), naming the scope, instead of failing in the log. Like every
@@ -63,7 +64,9 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
 - **Reactions to pings**: any reaction to my ping but 👎 acknowledges it (no bump); ✅
   shows on the PR as "alice ✅ in Slack" and ❌ as "alice ❌ in Slack", and both stop the
   nudges. Slack's reactions never stand for GitHub's review state: Ready to merge still
-  goes by GitHub's approval.
+  goes by GitHub's approval. A reaction holds nudges off only until the PR changes: a push
+  after it (after ✅, ❌ or an acknowledgement alike) makes the PR ready to bump again,
+  since it likely needs a fresh look or approval (`rebump_after_changes`, on by default).
 - **Daily summary**: what's in Act now and what got done, sent (on a click, or on a
   schedule I set) to me or a standup channel.
 - **Focus sets my status**: entering focus mode sets "Focusing" and Do Not Disturb for a
