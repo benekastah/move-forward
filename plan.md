@@ -31,6 +31,16 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 Slack becomes a source of work, not just a place pings go. It needs a Slack app with a
 *user* token (my DMs and mentions, my messages).
 
+**The app is optional.** Without it (not set up, not connected, or the dashboard on plain
+HTTP, where Slack's sign-in can't return), slack does all it does today: the reviewer map
+and Slack ids (imported, set by hand, or looked up by email with today's token), team
+channels, the ping page and recorded pings. None of the features below show, and nothing
+breaks. With the app connected, they turn on, each behind its own setting. "Connect
+Slack" is offered only when the page is served over HTTPS and the app's client id is
+set; on plain HTTP, slack's page says what's missing (`mfd cert`, then connect) instead of
+a button that can't work. If the app's token stops working (expired, revoked), slack falls
+back to today's behaviour and the page asks to connect again.
+
 **One internal app per workspace.** Workspaces that approve apps would otherwise approve
 one app per person. A Marketplace app needs hosting and Slack's review, and Slack
 rate-limits the history and replies methods for apps distributed outside the
