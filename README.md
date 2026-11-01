@@ -18,11 +18,11 @@ Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (for
 the `git_stack` plugin).
 
 ```sh
-~/src/move-forward/dev-install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
+~/src/move-forward/install.sh   # .venv, `mfd` on PATH, git hooks, then `mfd init`
 mfd serve --open
 ```
 
-`dev-install.sh` ends with `mfd init` when there is no config yet: it asks for
+`install.sh` ends with `mfd init` when there is no config yet: it asks for
 your email, which plugins to set up (github, git, and git_stack when it's
 installed, by default; jira and slack when you name them), then each chosen
 plugin's settings, with a guess from the machine as the default (the GitHub org
@@ -217,7 +217,7 @@ server and copy a backup over `dashboard.db`.
 .venv/bin/ruff format # fix formatting
 ```
 
-`dev-install.sh` points the repo at `git_hooks/`: `pre-commit` formats and
+`install.sh` points the repo at `git_hooks/`: `pre-commit` formats and
 lint-fixes staged Python, `pre-push` runs `check.sh`. GitHub Actions runs
 `check.sh` on Linux for every push and pull request
 (`.github/workflows/check.yml`).

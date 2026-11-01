@@ -100,7 +100,7 @@ config key, each goes in the model, slack's page, `mfd init`'s commented default
   `github.com/acme/widgets` so they can't collide, and `git` parsing any host. A shared
   base for code-host plugins (PR panels over a normalized PR) can wait for that second host.
 - **Windows.** Once the plugin steps are done, make it run on Windows: the Jira token's
-  fallback (and the Slack token's) is the macOS keychain (`security`); `dev-install.sh`, `dev-venv.sh`, `check.sh`
+  fallback (and the Slack token's) is the macOS keychain (`security`); `install.sh`, `dev-venv.sh`, `check.sh`
   and the git hooks are shell scripts; `shell` stops subprocesses on ctrl-c with POSIX
   process groups; the reload watcher; repo paths compared as `Path`s (case, `~`,
   separators) and stored in `notes_ice`.

@@ -14,7 +14,7 @@ echo "set up $clone/.venv"
 
 mkdir -p "$bin_dir"
 if [ -e "$bin_dir/mfd" ] && [ ! -L "$bin_dir/mfd" ]; then
-    echo "dev-install: $bin_dir/mfd exists and isn't a link; move it out of the way and rerun" >&2
+    echo "install: $bin_dir/mfd exists and isn't a link; move it out of the way and rerun" >&2
     exit 1
 fi
 ln -sfn "$clone/.venv/bin/mfd" "$bin_dir/mfd"

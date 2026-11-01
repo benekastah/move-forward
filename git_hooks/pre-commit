@@ -5,7 +5,7 @@
 # just its staged part, fixed; the working copy is fixed too. Lint errors Ruff
 # can't fix stop the commit.
 #
-# dev-install.sh makes git use this directory's hooks, with
+# install.sh makes git use this directory's hooks, with
 # `git config core.hooksPath git_hooks`.
 
 set -eu

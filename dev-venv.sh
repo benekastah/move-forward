@@ -2,7 +2,7 @@
 # Create .venv with the package (editable) and the dev dependencies from
 # pyproject.toml, or bring it up to date with them: they're reinstalled
 # whenever pyproject.toml has changed since they were last installed. check.sh,
-# dev-install.sh and the pre-commit hook run it; it's quick when there's
+# install.sh and the pre-commit hook run it; it's quick when there's
 # nothing to do.
 #
 # Uses uv when it's installed, else python3 -m venv and pip (25.1+ for --group).
