@@ -120,7 +120,10 @@ def test_nudge_blockers_and_staleness() -> None:
     assert found[approved.url].blockers == ["already approved"]
     assert found[nobody.url].blockers == ["no reviewers requested"]
     assert draft.url not in found
-    assert sorted(titles(dashboard(slack=True, **stored), "slack.nudges")) == ["PR 2", "PR 3"]
+    built = dashboard(slack=True, **stored)
+    assert sorted(titles(built, "slack.nudges")) == ["PR 2", "PR 3"]
+    nudged = [i.title for i in built.panel("act.now").items if "the reviewers" in i.title]
+    assert sorted(nudged) == ["Ping the reviewers: PR 2", "Ping the reviewers: PR 3"]
 
 
 def test_ping_links_appear_on_my_prs_wherever_they_are_and_only_with_slack() -> None:

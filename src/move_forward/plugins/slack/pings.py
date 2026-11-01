@@ -12,7 +12,7 @@ from pydantic import Field
 
 from ...domain import Model
 from ...graph import Graph, Ref
-from ...page import Item, Panel, age
+from ...page import Item, Panel, Signals, age
 from .config import SlackConfig
 from .models import Contact, Ping, TeamChannel
 
@@ -189,6 +189,7 @@ class Pinger:
             last = _datetime(pr.last_review_activity)
             details.append(f"last review activity {age(self.now, last)} ago")
             since = last or _datetime(pr.created_at) or self.now
+            follow_up = any(t.ping_kind == "follow-up" for t in ping.targets)
             items.append(
                 Item(
                     title=pr.title,
@@ -197,11 +198,16 @@ class Pinger:
                     details=details,
                     rank=-since.timestamp(),
                     subjects=[Ref(kind=PR, id=pr.id)],
+                    signals=Signals(
+                        verb="Bump the review" if follow_up else "Ping the reviewers",
+                        effort="minutes",
+                    ),
                 )
             )
         return Panel(
             key="nudges",
             priority=85,  # 8. stale reviews and nudges
+            act_now=True,
             title="Nudge reviewers",
             description="In order (green, no conflicts, no open threads) and quiet for a day.",
             items=items,

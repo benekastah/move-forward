@@ -116,7 +116,7 @@ def test_focus_categories_page_lists_counts_and_links_non_empty_ones() -> None:
     )
     assert "<a href='/focus?cat=slack&amp;i=0'>Slack</a>" in html
     assert "<li class='category sub'><a href='/focus?cat=slack.nudges&amp;i=0'>" in html
-    assert "<li class='category empty'><span>Act now</span><span class='count'>0</span>" in html
+    assert "<a href='/focus?cat=act&amp;i=0'>Act now</a><span class='count'>1</span>" in html
     assert "<li class='category sub empty'><span>Feedback to address</span>" in html
 
 
