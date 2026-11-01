@@ -163,8 +163,10 @@ before the command's name.
 
 ## Panels
 
-The page has **Act now** (reviews for me, feedback, CI, conflicts) on top,
+The page has **Act now** (reviews for me, conflicts, feedback, CI) on top,
 then a collapsible group per enabled plugin holding the rest of its panels.
+Panels go in the skill's step order (each panel's priority), and groups by
+their most urgent panel: notes (todos), git, git_stack, github, slack, jira.
 Only Act now starts expanded; each panel inside a group collapses too.
 
 - **Reviews for me**: PRs requesting my review as a person, and PRs I reviewed
@@ -218,9 +220,7 @@ Only Act now starts expanded; each panel inside a group collapses too.
 The Focus button in the header opens a list of categories: All, each group
 and each panel, with counts. Pick one to see a single item at a time, with
 Prev and Next (or the left and right arrow keys). All goes through the panels
-in the skill's step order: todos, reviews for me, conflicts, feedback, CI
-failures, local work, stacks, PR housekeeping, needs a reviewer, team PRs,
-nudges, ready to merge, held, cleanup, Jira transitions, what next, on ice.
+as the page shows them.
 Work-note entries are split into their todos, one per page, quick ones first.
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or
 bare number) first and in bold; merged PRs are purple and struck through,

@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 
 from conftest import (
-    REPO,
     dashboard,
     entry,
     issue,
@@ -19,7 +18,6 @@ from conftest import (
 )
 
 from move_forward import panels
-from move_forward.plugins.git.models import LocalRepo, LocalSnapshot
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
@@ -60,25 +58,18 @@ def test_build_with_nothing_stored() -> None:
     assert dashboard.generated_at == datetime(2026, 10, 30, 12, tzinfo=UTC)
 
 
-def test_focus_order_covers_every_panel_in_the_skills_order() -> None:
-    dashboard = build(
-        local=LocalSnapshot(
-            repos=[
-                LocalRepo(
-                    dir=REPO,
-                    github_repo="acme/widgets",
-                    default_branch="main",
-                    worktrees=[],
-                    branches=[],
-                )
-            ]
-        ),
-        stacks=stacks(StackBranch(name="main"), dir=REPO),
-    )
-    assert {p.key for p in dashboard.panels} <= set(panels.FOCUS_ORDER)
-    assert len(set(panels.FOCUS_ORDER)) == len(panels.FOCUS_ORDER)
-    assert panels.FOCUS_ORDER.index("reviews_for_me") < panels.FOCUS_ORDER.index("feedback")
-    assert panels.FOCUS_ORDER.index("cleanup") < panels.FOCUS_ORDER.index("iced")
+def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
+    dashboard = build(local=local_snapshot(), stacks=stacks(StackBranch(name="main")))
+    assert [(g.key, g.panel_keys) for g in dashboard.groups] == [
+        ("act", ["reviews_for_me", "conflicts", "feedback", "ci_failures"]),
+        ("notes", ["todos", "iced"]),  # by each group's most urgent panel: todos are step 0b
+        ("git", ["local_work", "cleanup"]),
+        ("git_stack", ["stacks"]),
+        ("github", ["metadata", "needs_reviewer", "team_prs", "ready_to_merge", "held"]),
+    ]
+    everything = dashboard.focus_items(panels.FOCUS_ALL)
+    assert everything is not None  # every item's panel, in the page's order; all empty here
+    assert dashboard.focus_items("github") == []
 
 
 def test_focus_items_by_category() -> None:

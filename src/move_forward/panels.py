@@ -1,7 +1,8 @@
 """The Dashboard: every enabled plugin's panels in groups, and focus mode's view of them.
 
-Act now is core's group: the most urgent panels, whichever plugin built them. Every other
-panel sits in its plugin's group, in the plugins' page order.
+Act now is core's group: the panels whose plugins flag them as needing acting on now. Every
+other panel sits in its plugin's group. Panels and groups go in priority order (the skill's
+step order); focus mode goes through them as the page shows them.
 """
 
 from collections.abc import Callable
@@ -11,12 +12,8 @@ from datetime import datetime
 from .domain import Model
 from .page import Action, Group, Item, Panel, SourceStatus
 
-ACT_NOW = Group(
-    key="act",
-    title="Act now",
-    panel_keys=["reviews_for_me", "feedback", "ci_failures", "conflicts"],
-    open=True,
-)
+ACT_NOW = "act"
+"""Act now's group key."""
 
 
 @dataclass(frozen=True)
@@ -28,36 +25,22 @@ class PluginPanels:
     panels: list[Panel]
 
 
+def _by_priority(panels: list[Panel]) -> list[str]:
+    return [p.key for p in sorted(panels, key=lambda p: p.priority)]
+
+
 def groups(plugins: list[PluginPanels]) -> list[Group]:
-    """Act now, then a group per plugin with panels outside Act now."""
-    result = [ACT_NOW]
-    for plugin in plugins:
-        keys = [p.key for p in plugin.panels if p.key not in ACT_NOW.panel_keys]
-        if keys:
-            result.append(Group(key=plugin.key, title=plugin.title, panel_keys=keys))
+    """Act now, then a group per plugin with panels outside Act now: panels by priority, and
+    groups by their most urgent panel's."""
+    act_now = [p for plugin in plugins for p in plugin.panels if p.act_now]
+    result = [Group(key=ACT_NOW, title="Act now", panel_keys=_by_priority(act_now), open=True)]
+    rest = [(plugin, [p for p in plugin.panels if not p.act_now]) for plugin in plugins]
+    rest = sorted([(pl, ps) for pl, ps in rest if ps], key=lambda r: min(p.priority for p in r[1]))
+    for plugin, panels in rest:
+        result.append(Group(key=plugin.key, title=plugin.title, panel_keys=_by_priority(panels)))
     return result
 
 
-FOCUS_ORDER = [
-    "todos",  # 0b. Reconcile work notes and check in
-    "reviews_for_me",  # 1. Reviews requested of me
-    "conflicts",  # 2. Sync stacks
-    "feedback",  # 3. Feedback on my PRs
-    "ci_failures",  # 4. CI failures and merge-queue evictions
-    "local_work",  # 5. Restack and push
-    "stacks",  # 6. Stacks without PRs
-    "metadata",  # 7. PR metadata
-    "needs_reviewer",  # 8a. Replace team review requests with a person
-    "team_prs",  # 8a, for the team's PRs
-    "nudges",  # 8. Stale reviews and nudges
-    "ready_to_merge",  # 9. Merge queue
-    "held",  # 9, with merge conditions
-    "cleanup",  # 10. Cleanup
-    "jira_transitions",  # 12. Jira updates
-    "jira_next",  # 13. What next
-    "iced",  # parked; the skill leaves these alone
-]
-"""Panel keys in the skill's step order. Focus mode's "All" goes through them in turn."""
 FOCUS_ALL = "all"
 """The focus category that covers every panel."""
 
@@ -93,13 +76,13 @@ class Dashboard(Model):
     def focus_items(self, category: str) -> list[tuple[Panel, Item]] | None:
         """The items focus mode steps through for a category, each with its panel.
 
-        Panels come in `FOCUS_ORDER`, items in their panel's order, and an item with `parts`
-        contributes those instead of itself; None for an unknown category.
+        Panels come as the page shows them, items in their panel's order, and an item with
+        `parts` contributes those instead of itself; None for an unknown category.
         """
         if category == FOCUS_ALL:
-            keys = FOCUS_ORDER
+            keys = [key for group in self.groups for key in group.panel_keys]
         elif (group := self.find_group(category)) is not None:
-            keys = [key for key in FOCUS_ORDER if key in group.panel_keys]
+            keys = group.panel_keys
         elif self.find_panel(category) is not None:
             keys = [category]
         else:
