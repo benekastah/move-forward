@@ -4,6 +4,7 @@
 """
 
 import argparse
+from collections.abc import Callable
 from datetime import timedelta
 from typing import ClassVar
 
@@ -55,9 +56,13 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         builder = _builder(ctx, graph)
         return [builder.todos(), builder.iced()]
 
-    def item_actions(self, ctx: Context[NotesConfig], item: Item, graph: Graph) -> list[Action]:
+    def prepare_item_actions(
+        self, ctx: Context[NotesConfig], graph: Graph
+    ) -> Callable[[Item], list[Action]]:
+        """Put on ice and Add todo on other plugins' items, from the notes read once for the
+        page."""
         builder = _builder(ctx, graph)
-        return [a for a in (builder.put_on_ice(item), builder.add_todo(item)) if a]
+        return lambda item: [a for a in (builder.put_on_ice(item), builder.add_todo(item)) if a]
 
     def kept_item(self, ctx: Context[NotesConfig], graph: Graph, key: str) -> Item | None:
         """The todo `todo_done` just ticked off, by id, with its box ticked."""
