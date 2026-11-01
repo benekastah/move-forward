@@ -162,6 +162,13 @@ def cmd_add_entry(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namesp
     return Result(f"added entry {entry_id}", {"notice": f"added {args.title}", "id": entry_id})
 
 
+def cmd_remove(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
+    notes = NotesRepository(ctx.db)
+    entry = find_entry(notes.entries(), args.entry)
+    notes.delete_entry(entry.id)
+    return Result(f"removed {entry.title}")
+
+
 def cmd_set(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry)
@@ -258,6 +265,7 @@ def _commands() -> dict[str, Command]:
         "show": cmd_show,
         "ices": cmd_ices,
         "add-entry": cmd_add_entry,
+        "remove": cmd_remove,
         "set": cmd_set,
         "link": cmd_link,
         "todo": cmd_todo,
@@ -289,6 +297,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     add_entry.add_argument("--link", action="append", default=[], help="a PR URL or ticket key")
     add_entry.add_argument("--status")
     add_entry.add_argument("--where", help="where the work lives: repo, branches, PRs")
+    add("remove", "remove an entry with its todos, for finished work").add_argument("entry")
     set_parser = add("set", "set an entry's status, where it lives, or what it's blocked on")
     set_parser.add_argument("entry")
     set_parser.add_argument("field", choices=["status", "where", "blocked-on"])

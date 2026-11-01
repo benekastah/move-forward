@@ -118,6 +118,16 @@ def test_set_link_conditions_and_decline(run: Run, config: Path) -> None:
     assert entry.updated_on == datetime.now(UTC).date()
 
 
+def test_remove_forgets_an_entry_with_its_todos(run: Run, config: Path) -> None:
+    run("add-entry", "APP-1 Fix")
+    run("add-entry", "APP-2 Keep")
+    run("todo", "add", "APP-1", "a")
+    assert run("remove", "APP-1")[1] == "removed APP-1 Fix\n"
+    assert run("remove", "APP-1")[0] == 1
+    assert [e.title for e in NotesRepository(_db(config)).entries()] == ["APP-2 Keep"]
+    assert _db(config).query("SELECT 1 FROM notes_todos") == []  # the todo went with it
+
+
 def test_todos_are_changed_by_id(run: Run, config: Path) -> None:
     run("add-entry", "APP-1 Fix")
     run("todo", "add", "APP-1", "a")

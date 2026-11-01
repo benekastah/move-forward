@@ -130,6 +130,7 @@ before the command's name.
 | `mfd notes list [--open]` | The entries with their open todos (`--open`: only those with some). Every `mfd notes` command works on the database without the server, and prints JSON with `--json`, for scripts and the skill. |
 | `mfd notes show <entry>` | One entry with its todos, merge conditions and links. An entry is named by its id, its title, or a PR URL or ticket key it's about. |
 | `mfd notes add-entry <title> [--link <PR URL or ticket key>]... [--status S] [--where W]` | Add an entry; a ticket key in the title is linked. |
+| `mfd notes remove <entry>` | Remove an entry with its todos, for finished work. |
 | `mfd notes set <entry> status\|where\|blocked-on <text>` | Set an entry's status, where the work lives (repo, branches, PRs), or what it's blocked on. |
 | `mfd notes link <entry> <PR URL or ticket key>` | Say an entry is about a PR or ticket. A key needs a plugin that knows tickets, e.g. `[jira]`. |
 | `mfd notes todo add <entry> <text> [--size quick\|big] [--link <PR URL or ticket key>]...` | Add a todo; PR URLs in the text are linked. Prints its id. |
