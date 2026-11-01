@@ -13,3 +13,7 @@ class StackBranchAttrs(Model):
     """The branch it's built on."""
     stack_status: str | None
     """e.g. `up-to-date`, `needs-restack`, `merged`."""
+    stack_group: str | None = None
+    """On a stack's bottom branch (the one on its root), the group its stack is in, when
+    the group has other stacks too. git-stack's commands (restack, sync, push) act on a
+    branch's whole group, not just its stack."""

@@ -99,7 +99,11 @@ def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
             refs=[branch_ref(repo.dir, b.name)],
             attrs=attrs(
                 StackBranchAttrs(
-                    repo_dir=repo.dir, name=b.name, stack_parent=b.parent, stack_status=b.status
+                    repo_dir=repo.dir,
+                    name=b.name,
+                    stack_parent=b.parent,
+                    stack_status=b.status,
+                    stack_group=b.group,
                 )
             ),
         )

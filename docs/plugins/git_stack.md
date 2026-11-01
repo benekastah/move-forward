@@ -11,7 +11,8 @@ hand to an older config. The Clean button needs a git-stack whose `clean` takes 
 ## Publishes
 
 `stack_branch` for each branch git-stack tracks, pointing at git's `branch` (which git may
-have deleted); see [entities.md](../entities.md).
+have deleted), with its parent, status and, on a stack's bottom branch, its group; see
+[entities.md](../entities.md).
 
 ## Panels
 

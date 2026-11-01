@@ -53,16 +53,18 @@ fixes it, but `clean --json` (below) is the better fix.
 
 ## git-stack additions
 
-**`--json`** on `clean`, `sync`, `push`, `prs` and `autocreate` (added in git-stack):
-stdout is JSON Lines, an object per event as it happens (each with a stable `type`, its
-`message`, whether it's a `warning`, and its fields), then a last line that's
-`{"type": "result", "stacks": [...], ...}` or `{"type": "error", "message": ...}` (with
-exit status 1). git's own output goes to stderr. Counting `untracked` events with a
-non-null `deleted_tip` fixes the count above; reading the lines as they arrive would let
-the dashboard show progress during a long clean.
+**`--json` on every git-stack command but `info`** (added in git-stack): stdout is JSON
+Lines, an object per event as it happens (each with a stable `type`, its `message`, whether
+it's a `warning`, and its fields), then a last line that's `{"type": "result", ...}` with
+the command's result, or `{"type": "error", "message": ...}` (with exit status 1). Either
+way the last line also has `events`, every event again, so reading only the last line is
+enough. git's own output goes to stderr. The README's "JSON output" section lists each
+command's result.
 
-`show-stack --json` isn't needed: `git stack info <branch> --json` already gives a branch's
-whole stack, groups included.
+For Clean, counting `untracked` events with a non-null `deleted_tip` fixes the count above,
+and reading the lines as they arrive would let the dashboard show progress. The rest are
+there for later buttons, e.g. Sync, Push or Open PRs (`prs`), or Untrack reading which
+children were left on an untracked branch.
 
 ## clean's clean-worktree check
 

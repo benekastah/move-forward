@@ -115,6 +115,7 @@ A branch git-stack tracks, including one git no longer has.
 | `repo_dir`, `name` | string | its checkout and name, as git's `branch` has them |
 | `stack_parent` | string | the branch it's built on |
 | `stack_status` | string or null | git-stack's status, e.g. `up-to-date`, `needs-restack`, `merged` |
+| `stack_group` | string or null | on a stack's bottom branch, the group its stack is in when the group has other stacks; git-stack's `restack`, `sync` and `push` act on the whole group |
 
 ### `ticket`
 

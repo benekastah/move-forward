@@ -87,7 +87,7 @@ def test_tracked_branches_are_stack_branches_pointing_at_gits() -> None:
         local=local_snapshot(branches=[local_branch("main"), local_branch("me/top", ahead=1)]),
         stacks=stacks(
             StackBranch(name="main"),
-            StackBranch(name="me/top", parent="main", status="needs-restack"),
+            StackBranch(name="me/top", parent="main", status="needs-restack", group="g"),
             StackBranch(name="me/gone", parent="main"),  # git deleted it; git-stack tracks it
         ),
     )
@@ -99,6 +99,7 @@ def test_tracked_branches_are_stack_branches_pointing_at_gits() -> None:
         "name": "me/top",
         "stack_parent": "main",
         "stack_status": "needs-restack",
+        "stack_group": "g",
     }
     # git's own branch is left as git published it, and a branch git deleted isn't git's.
     branch = graph.get("branch", "/src/widgets\tme/top")
