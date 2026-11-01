@@ -32,11 +32,15 @@ from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.models import Entry, Ice, IcedItem, Size, Todo
 from move_forward.plugins.notes.repository import MIGRATIONS as NOTES_MIGRATIONS
 from move_forward.plugins.notes.repository import NotesRepository
+from move_forward.plugins.slack.models import Contact
+from move_forward.plugins.slack.models import Ping as SlackPing
+from move_forward.plugins.slack.models import TeamChannel as SlackTeamChannel
 from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
+from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.refresh import build_dashboard, stored_graph
 from move_forward.registry import enabled, migrate
-from move_forward.repositories import PingRepository, ReviewerRepository, SnapshotRepository
+from move_forward.repositories import ReviewerRepository, SnapshotRepository
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
 ME = "me"
@@ -144,11 +148,10 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     NotesRepository(db).replace_all(
         cast(list[Entry], o.pop("work_items", [])), cast(list[Ice], o.pop("iced_stacks", [])), []
     )
-    ReviewerRepository(db).replace_imported(
-        list(cast(dict[str, ReviewerUser], o.pop("users", {})).values()),
-        list(cast(dict[str, TeamChannel], o.pop("teams", {})).values()),
-    )
-    PingRepository(db).replace_imported(cast(list[Ping], o.pop("pings", [])))
+    reviewers = cast(dict[str, ReviewerUser], o.pop("users", {}))
+    channels = cast(dict[str, TeamChannel], o.pop("teams", {}))
+    ReviewerRepository(db).replace_imported(list(reviewers.values()), list(channels.values()))
+    pings = cast(list[Ping], o.pop("pings", []))
     github: dict[str, object] = {"org": "acme"}
     for key in ("review_checks", "placeholder_labels", "ticket_link_prefix", "stale_review_hours"):
         if key in o:
@@ -185,6 +188,12 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         }
     )
     migrate(config, db)
+    if enable_slack:
+        SlackRepository(db).replace_imported(
+            [Contact(login=u.login, slack_id=u.slack_id) for u in reviewers.values()],
+            [SlackTeamChannel.model_validate(t.model_dump()) for t in channels.values()],
+            [SlackPing.model_validate(p.model_dump()) for p in pings],
+        )
     return config, db
 
 

@@ -16,8 +16,9 @@ from move_forward.page import Action, Item
 from move_forward.plugin import KEPT, ActionError, ActionResult
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import migrate
-from move_forward.repositories import PingRepository, SnapshotRepository
+from move_forward.repositories import SnapshotRepository
 
 
 @pytest.fixture
@@ -135,7 +136,7 @@ def test_mark_as_sent_records_a_ping_and_redirects(client: HTTPConnection, app: 
     assert response.getheader("Location") == "/?" + urlencode(
         {"notice": "marked the first ping to alice as sent"}
     )
-    pings = PingRepository(app.db).all()
+    pings = SlackRepository(app.db).pings()
     assert [(p.target, p.kind, p.message) for p in pings] == [("user:alice", "first", "hi <there>")]
     # The next page shows the follow-up.
     body = get(client, "/ping?pr=" + quote(pr(1).url, safe="")).read().decode()
@@ -152,7 +153,7 @@ def test_a_post_from_another_site_is_refused(client: HTTPConnection, app: server
     response = post(client, "/actions/slack/mark_sent", SENT, {"Origin": "null"})
     assert response.status == 403
     response.read()
-    assert PingRepository(app.db).all() == []
+    assert SlackRepository(app.db).pings() == []
 
 
 def test_a_post_from_the_dashboard_itself_is_served(
@@ -161,7 +162,7 @@ def test_a_post_from_the_dashboard_itself_is_served(
     origin = f"http://localhost:{client.port}"
     response = post(client, "/actions/slack/mark_sent", SENT, {"Origin": origin})
     assert response.status == 303
-    assert len(PingRepository(app.db).all()) == 1
+    assert len(SlackRepository(app.db).pings()) == 1
 
 
 def test_a_request_naming_another_host_is_refused(client: HTTPConnection) -> None:
@@ -182,7 +183,7 @@ def test_invalid_ping_form_is_rejected(client: HTTPConnection, app: server.App) 
         response = post(client, "/actions/slack/mark_sent", {**SENT, "target": target})
         assert "failed%3A+bad+ping" in (response.getheader("Location") or ""), target
         response.read()
-    assert PingRepository(app.db).all() == []
+    assert SlackRepository(app.db).pings() == []
 
 
 def test_page_load_refreshes_stale_data_in_the_background(
@@ -351,7 +352,7 @@ def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: ser
     response = post(client, "/actions/slack/mark_sent", SENT, {"Authorization": "Bearer wrong"})
     assert response.status == 401
     response.read()
-    assert PingRepository(app.db).all() == []
+    assert SlackRepository(app.db).pings() == []
 
 
 def test_static_files_need_no_token(client: HTTPConnection) -> None:

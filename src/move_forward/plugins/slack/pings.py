@@ -8,10 +8,11 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Literal, cast
 
-from ...domain import Model, Ping, ReviewerUser, TeamChannel
+from ...domain import Model
 from ...graph import Entity, Graph
 from ...page import Item, Panel, age
 from .config import SlackConfig
+from .models import Contact, Ping, TeamChannel
 
 PR = "pr"
 ICED_BRANCH = "iced_branch"
@@ -63,7 +64,7 @@ class Pinger:
         config: SlackConfig,
         now: datetime,
         graph: Graph,
-        users: dict[str, ReviewerUser],
+        users: dict[str, Contact],
         teams: dict[str, TeamChannel],
         pings: list[Ping],
     ):

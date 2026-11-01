@@ -93,10 +93,6 @@ slack and notes have no snapshot, so they don't collect.
 
 ## Not through the graph yet
 
-Until slack and github have tables of their own, some data is shared through core's
-tables instead:
-
-- core's reviewer map and pings tables, which `mfd notes import` fills from the skill's
-  markdown. slack reads them, and records pings as sent.
-- github saves reviewers' emails, looked up from their commits, into core's reviewer
-  table, which slack reads along with the reviewer map.
+Until github has a table of its own, reviewers' emails live in core's reviewer table:
+`mfd notes import` fills it from the skill's `reviewer-map.md`, and github adds the
+emails it looks up from commits.

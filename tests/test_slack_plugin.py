@@ -20,9 +20,10 @@ from move_forward import render
 from move_forward.domain import Check, Ping, ReviewerUser, TeamChannel
 from move_forward.graph import Graph
 from move_forward.plugins.slack.config import DEFAULT_PING_FIRST, DEFAULT_PING_FOLLOW_UP
+from move_forward.plugins.slack.models import Ping as SlackPing
 from move_forward.plugins.slack.plugin import ping_page
+from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import enabled
-from move_forward.repositories import PingRepository
 
 
 def _teams() -> dict[str, TeamChannel]:
@@ -138,12 +139,12 @@ def test_ping_page_has_a_form_per_target() -> None:
 
 def test_old_pings_are_pruned() -> None:
     config, db = stored(slack=True)
-    repo = PingRepository(db)
+    repo = SlackRepository(db)
     for when in (NOW - timedelta(days=100), NOW - timedelta(days=10)):
-        repo.add(Ping(pr_url="https://pr/1", target="user:a", kind="first", sent_at=when))
+        repo.add_ping(SlackPing(pr_url="https://pr/1", target="user:a", kind="first", sent_at=when))
     [slack] = [e for e in enabled(config, db, NOW) if e.name == "slack"]
     assert slack.plugin.prune(slack.ctx, Graph()) == ["deleted 1 old ping(s)"]
-    assert [p.sent_at for p in repo.all()] == [NOW - timedelta(days=10)]
+    assert [p.sent_at for p in repo.pings()] == [NOW - timedelta(days=10)]
 
 
 def test_iced_prs_get_no_pings() -> None:

@@ -15,7 +15,7 @@ from pathlib import Path
 from ... import notes as skill_notes
 from ...graph import Graph
 from ...plugin import ActionError, ActionResult, CliHandler, Context
-from ...repositories import PingRepository, ReviewerRepository
+from ...repositories import ReviewerRepository
 from . import actions, markdown
 from .config import NotesConfig
 from .models import Entry, Ice, Size, Todo
@@ -47,7 +47,6 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
         ctx.kv.set(LAST_ASKED_ICE, last_asked.isoformat())
     users, teams = skill_notes.parse_reviewer_map(read(skill_notes.REVIEWER_MAP_FILE))
     ReviewerRepository(ctx.db).replace_imported(users, teams)
-    PingRepository(ctx.db).replace_imported(skill_notes.parse_nudges(work_notes))
     return (
         f"imported {len(entries)} entries, {sum(len(e.todos) for e in entries)} todos,"
         f" {len(ices)} stacks on ice, {len(users)} reviewers and {len(teams)} teams"

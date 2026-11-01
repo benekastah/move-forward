@@ -1,23 +1,25 @@
-"""The Slack plugin.
+"""The Slack plugin: review pings, and where they go.
 
-The reviewer map (people's Slack ids, teams' channels) and the pings still live in core's
-tables, filled from the notes on every refresh, until the notes move into SQLite.
+People's Slack ids, teams' channels and the pings sent live in its own tables; `mfd slack
+import` reads the first two from the skill's `reviewer-map.md`.
 """
 
+import argparse
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import ClassVar, Literal
 from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 
 from ... import render
-from ...domain import Ping, TeamChannel
 from ...graph import Graph
 from ...page import Action, Item, Panel, age
-from ...plugin import ActionError, ActionHandler, Context, PageHandler, Plugin
-from ...repositories import PingRepository, ReviewerRepository
+from ...plugin import ActionError, ActionHandler, CliHandler, Context, PageHandler, Plugin
+from . import cli
 from .config import SlackConfig
+from .models import Ping, TeamChannel
 from .pings import Pinger, PingTarget, PrPing
+from .repository import MIGRATIONS, SlackRepository
 
 PING_PATH = "/ping"
 COPY_SCRIPT = (
@@ -51,14 +53,14 @@ def _team_channels(config: SlackConfig, known: dict[str, TeamChannel]) -> dict[s
 
 
 def pinger(ctx: Context[SlackConfig], graph: Graph) -> Pinger:
-    reviewers = ReviewerRepository(ctx.db)
+    slack = SlackRepository(ctx.db)
     return Pinger(
         ctx.config,
         ctx.now,
         graph,
-        reviewers.users(),
-        _team_channels(ctx.config, reviewers.teams()),
-        PingRepository(ctx.db).all(),
+        slack.contacts(),
+        _team_channels(ctx.config, slack.team_channels()),
+        slack.pings(),
     )
 
 
@@ -111,6 +113,8 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     name = "slack"
     title = "Slack"
     config_model = SlackConfig
+    migrations: ClassVar[list[str]] = MIGRATIONS
+    cli_help = "import the reviewer map from the skill's markdown"
 
     def panels(
         self, ctx: Context[SlackConfig], snapshot: BaseModel | None, graph: Graph
@@ -152,6 +156,9 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
 
         return {PING_PATH: ping}
 
+    def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        return cli.add_commands(parser)
+
     def actions(self) -> dict[str, ActionHandler]:
         def mark_sent(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
             """Record a ping as sent, so the next one to that target is a follow-up."""
@@ -159,7 +166,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
                 form = PingForm.model_validate(fields)
             except ValueError as e:
                 raise ActionError(f"bad ping: {e}") from e
-            PingRepository(ctx.db).add(
+            SlackRepository(ctx.db).add_ping(
                 Ping(
                     pr_url=form.pr_url,
                     target=form.target,
@@ -173,5 +180,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         return {"mark_sent": mark_sent}
 
     def prune(self, ctx: Context[SlackConfig], graph: Graph) -> list[str]:
-        deleted = PingRepository(ctx.db).delete_before(ctx.now - timedelta(days=ctx.prune_days))
+        cutoff = ctx.now - timedelta(days=ctx.prune_days)
+        deleted = SlackRepository(ctx.db).delete_pings_before(cutoff)
         return [f"deleted {deleted} old ping(s)"] if deleted else []

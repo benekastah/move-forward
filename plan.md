@@ -21,15 +21,15 @@ the plugin change that needs them (see `AGENTS.md`), `./check.sh` green and the 
 
 ### 5c. slack and github tables
 
-- slack gets its own tables (`slack_contacts`, `slack_team_channels`, `slack_pings`) and
-  github `github_people`, and the reviewer-map import goes. Each plugin's first migration
-  copies its rows from core's `reviewer_users`, `team_channels` or `pings` when that table
-  exists (see AGENTS.md: plugin migrations don't depend on order). Core drops those
-  tables in a later migration, once the copies have shipped; a plugin enabled after that
-  starts empty.
+- slack has its own tables and `mfd slack import`. github gets `github_people`, its first
+  migration copying the emails from core's `reviewer_users`, and `mfd github import <dir>`
+  for the emails in `reviewer-map.md`, which `mfd notes import` stops reading.
+- Then core stops using `reviewer_users`, `team_channels` and `pings`, and a migration
+  empties them rather than dropping them: plugin migrations copy from them in plain SQL,
+  which can't ask whether a table exists, so they stay, empty, for a plugin enabled later.
 - The reviewer map fills itself in, and can be viewed and edited when needed. Once the
-  notes cut over, nothing reads `reviewer-map.md` any more; until this step, `mfd notes
-  import` loads it into core's tables, and can be rerun for it.
+  notes cut over, the dashboard reads `reviewer-map.md` only when asked: `mfd slack import`
+  and (until github has its own) `mfd notes import`.
   - Automatically: github already looks up reviewers' emails from their commits. Slack
     member ids and team channels need a source: the Slack API by email
     (`users.lookupByEmail`, with a token in the keychain like Jira's), or a convention for
