@@ -14,8 +14,9 @@ from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, CliHandler, Context, Plugin
 from . import actions, cli, prune
 from .config import NotesConfig
-from .kinds import EntryAttrs, IcedBranchAttrs
-from .panels import ENTRY, ICED_BRANCH, Builder, entities
+from .covers import covers
+from .kinds import EntryAttrs, IcedAttrs, IcedBranchAttrs
+from .panels import ENTRY, ICED, ICED_BRANCH, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 
@@ -29,13 +30,24 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     title = "Notes"
     config_model = NotesConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {ENTRY: EntryAttrs, ICED_BRANCH: IcedBranchAttrs}
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {
+        ENTRY: EntryAttrs,
+        ICED: IcedAttrs,
+        ICED_BRANCH: IcedBranchAttrs,
+    }
     linking: ClassVar[dict[str, str | None]] = {ENTRY: None}
+    hides: ClassVar[list[str]] = [ICED]
     cli_help = "import the skill's markdown notes, or export them back"
 
     def entities(self, ctx: Context[NotesConfig], snapshot: BaseModel | None) -> list[Entity]:
         notes = NotesRepository(ctx.db)
-        return entities(notes.entries(), notes.ices())
+        return entities(notes.entries(), notes.ices(), notes.covers())
+
+    def after_collect(self, ctx: Context[NotesConfig], graph: Graph) -> None:
+        """Find again what each act of icing covers besides its items, e.g. new PRs from its
+        branches."""
+        notes = NotesRepository(ctx.db)
+        notes.replace_covers(covers(graph, notes.ices()))
 
     def panels(
         self, ctx: Context[NotesConfig], snapshot: BaseModel | None, graph: Graph

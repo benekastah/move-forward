@@ -63,18 +63,13 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
         "me/APP-1-branch: 2 modified, 1 untracked",
         "me/APP-1-branch: 3 unpushed commits",
         "me/new: 2 commits, never pushed",
-        "me/iced: 1 commits, never pushed",
-    }
+    }  # me/iced is on ice: hidden
     assert items["me/APP-1-branch: 3 unpushed commits"].url == pr(1).url
     assert items["me/APP-1-branch: 3 unpushed commits"].badges == ["has PR"]
-    assert items["me/iced: 1 commits, never pushed"].badges == ["iced", "no PR"]
     actions = items["me/APP-1-branch: 3 unpushed commits"].actions
     assert [(a.name, a.fields) for a in actions if a.name != "notes/todo_add"] == [
         ("git/push_branch", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
         ("notes/ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
-    ]
-    assert [a.name for a in items["me/iced: 1 commits, never pushed"].actions] == [
-        "git/push_branch"
     ]
     assert [a.name for a in items["me/new: 2 commits, never pushed"].actions] == [
         "git/push_branch",
@@ -146,8 +141,7 @@ def test_git_offers_to_delete_iced_branches_on_the_on_ice_item_only() -> None:
     assert delete.fields == {"targets": "/src/widgets\tme/x"} and delete.confirm
     # A branch git no longer has can't be deleted again.
     assert [a.name for a in on_ice["me/gone"].actions] == ["notes/thaw"]
-    [local_work] = panel(built, "local_work").items
-    assert "git/delete_together" not in [a.name for a in local_work.actions]
+    assert panel(built, "local_work").items == []  # me/x is on ice: hidden
 
 
 def test_git_keeps_its_snapshot_in_its_tables() -> None:

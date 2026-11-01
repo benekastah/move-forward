@@ -8,7 +8,7 @@ from datetime import datetime
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Link, Panel, PrState
-from .kinds import EntryAttrs, IcedBranchAttrs
+from .kinds import EntryAttrs, IcedAttrs, IcedBranchAttrs
 from .markdown import PR_URL_RE
 from .models import Entry, Ice, Todo
 
@@ -18,6 +18,7 @@ PR = "pr"
 TICKET = "ticket"
 ENTRY = "entry"
 ICED_BRANCH = "iced_branch"
+ICED = "iced"
 BRANCH = "branch"
 BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""
@@ -159,10 +160,10 @@ def entry_keys(entry: Entry, graph: Graph) -> list[str]:
     return sorted({*named, *(link.ref for link in entry.links if link.kind == TICKET)})
 
 
-def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
+def entities(entries: list[Entry], ices: list[Ice], covers: dict[int, list[Ref]]) -> list[Entity]:
     """`entry` per work entry, pointing at the PRs and tickets it and its todos are linked to
-    and mentioning its title (for the tickets it names), and `iced_branch` per branch on
-    ice."""
+    and mentioning its title (for the tickets it names); `iced` per act of icing, pointing at
+    what it covers and the `covers` found for it; and `iced_branch` per branch on ice."""
     result: list[Entity] = []
     for entry in entries:
         links = [*entry.links, *(link for todo in entry.open_todos for link in todo.links)]
@@ -184,6 +185,15 @@ def entities(entries: list[Entry], ices: list[Ice]) -> list[Entity]:
             )
         )
     for ice in ices:
+        own = [Ref(kind=item.kind, id=item.ref_id) for item in ice.items]
+        result.append(
+            Entity(
+                ref=Ref(kind=ICED, id=str(ice.id)),
+                title=ice.title,
+                refs=list(dict.fromkeys([*own, *covers.get(ice.id, [])])),
+                attrs=attrs(IcedAttrs(iced_on=ice.iced_on.isoformat(), note=ice.note)),
+            )
+        )
         for item in ice.items:
             if item.kind != BRANCH:
                 continue
@@ -272,7 +282,7 @@ class Builder:
         branch = self.graph.view_one(BRANCH, ref.id, _BranchView) if ref else None
         if branch is None or branch.repo_dir is None or branch.name is None:
             return None  # not one of git's
-        if self.graph.get(ICED_BRANCH, branch.id) is not None:
+        if self.graph.hidden(Ref(kind=BRANCH, id=branch.id)):
             return None
         return Action(
             name="notes/ice",
@@ -369,11 +379,15 @@ class Builder:
                     actions=[
                         Action(name="notes/thaw", label="Reopen", fields={"ice": str(ice.id)})
                     ],
-                    # git and git_stack add deleting and untracking the branches by these.
+                    # The `iced` keeps the item on the page; git and git_stack add deleting
+                    # and untracking the branches by the `iced_branch`es.
                     subjects=[
-                        Ref(kind=ICED_BRANCH, id=item.ref_id)
-                        for item in ice.items
-                        if item.kind == BRANCH
+                        Ref(kind=ICED, id=str(ice.id)),
+                        *(
+                            Ref(kind=ICED_BRANCH, id=item.ref_id)
+                            for item in ice.items
+                            if item.kind == BRANCH
+                        ),
                     ],
                 )
             )

@@ -6,7 +6,7 @@ import pytest
 from move_forward import refresh
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.graph import Graph
+from move_forward.graph import Graph, Ref
 from move_forward.plugin import KEPT, ActionError
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
@@ -180,6 +180,7 @@ def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     ]
     iced_wip = graph(config).get("iced_branch", f"{repo}\twip")
     assert iced_wip is not None and iced_wip.attrs["sha"] == ice.items[0].sha
+    assert graph(config).hidden(Ref(kind="branch", id=f"{repo}\twip"))
     with pytest.raises(ActionError, match="already on ice"):
         _ice(config, repo, "wip")
     assert run("notes/thaw", config, {"ice": str(ice.id)}) == "thawed wip"

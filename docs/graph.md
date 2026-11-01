@@ -40,6 +40,8 @@ flowchart LR
     branch["branch<br/>(git)"] -->|in| repo["repo<br/>(git)"]
     stack_branch["stack_branch<br/>(git_stack)"] -->|tracks| branch
     iced["iced_branch<br/>(notes)"] -. "same id as" .-> branch
+    ice["iced<br/>(notes)"] -->|hides| branch
+    ice -->|hides| pr
     person["person<br/>(github)"]
 ```
 
@@ -170,7 +172,9 @@ names with it).
 ### Hidden entities
 
 A plugin can declare kinds whose entities **hide** what they point at, in `hides`. notes'
-ice is meant to be one: what's on ice stays off the page until it's thawed.
+`iced` is one: what's on ice stays off the page until it's thawed. It points at the
+branches on ice and at what notes finds for them after each refresh: their PRs, and
+git_stack's `stack_branch`es.
 `graph.hidden(ref)` says whether a hiding entity covers `ref`, directly or through a
 linking entity next to it: icing a ticket hides the PRs that mention it, icing a work entry
 hides the PRs it names. It doesn't go the other way: icing a PR leaves its ticket alone.

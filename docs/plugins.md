@@ -21,6 +21,7 @@ flowchart LR
         ticket[ticket]
         entry[entry]
         iced[iced_branch]
+        ice[iced]
     end
 
     github([github]) -- publishes --> pr
@@ -31,6 +32,8 @@ flowchart LR
     jira([jira]) -- publishes --> ticket
     notes([notes]) -- publishes --> entry
     notes -- publishes --> iced
+    notes -- "publishes, pointing at what it hides" --> ice
+    ice -. "hides what it covers" .-> core([core])
 
     repo -. "checkouts: team PR scores, reviewer suggestions, iced checks" .-> github
     entry -. "merge conditions (Held)" .-> github
@@ -46,7 +49,9 @@ flowchart LR
     iced -. "don't ping iced PRs" .-> slack
     repo -. "a PR's checkout, for iced checks" .-> slack
     person -. "emails, to look up Slack ids" .-> slack
-    pr -. "todo link states" .-> notes
+    pr -. "todo link states; an iced branch's PRs" .-> notes
+    repo -. "an iced branch's checkout" .-> notes
+    stack_branch -. "what tracks an iced branch" .-> notes
     ticket -. "Add todo titles" .-> notes
     stack_branch -. "the stack to ice" .-> notes
     person -. "who I am" .-> core([core])

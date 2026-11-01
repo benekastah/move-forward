@@ -12,6 +12,7 @@ from ...domain import Model
 from ...graph import Graph
 from ...plugin import KEPT, ActionError, ActionHandler, ActionResult, Context
 from .config import NotesConfig
+from .covers import covers
 from .markdown import links_in
 from .models import Entry, IcedItem, Link, Size, Todo
 from .repository import NotesRepository
@@ -107,7 +108,8 @@ def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     for name in names:
         items.append(IcedItem(kind=BRANCH, ref_id=branches[name].id, sha=branches[name].sha))
     note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
-    notes.add_ice(names[0], ctx.now.date(), note, items)
+    ice_id = notes.add_ice(names[0], ctx.now.date(), note, items)
+    notes.replace_covers(covers(graph, notes.ices()), only=ice_id)
     return f"put {names[0]} on ice ({len(names)} branches)"
 
 

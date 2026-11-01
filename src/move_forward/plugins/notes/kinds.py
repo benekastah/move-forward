@@ -21,3 +21,12 @@ class IcedBranchAttrs(Model):
     """The title of the act of icing it's in: its stack's bottom branch."""
     sha: str | None
     """The commit it pointed at when iced."""
+
+
+class IcedAttrs(Model):
+    """An `iced`: one act of icing, by its id. It hides what it points at: its items, and
+    what else it covers, like its branches' PRs."""
+
+    iced_on: str
+    """ISO date."""
+    note: str | None = None

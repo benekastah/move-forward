@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import date
 
 from ...db import Database
+from ...graph import Ref
 from .models import Declined, Entry, Ice, IcedItem, Link, Section, Size, Todo
 
 MIGRATIONS = [
@@ -74,9 +75,19 @@ MIGRATIONS = [
         sha TEXT,
         PRIMARY KEY (kind, ref_id)
     );
+    """,
     """
+    CREATE TABLE notes_ice_covers (    -- derived: what else an act of icing hides, e.g. its
+        ice_id INTEGER NOT NULL        -- branches' PRs; replaced after every refresh
+            REFERENCES notes_ice ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        ref_id TEXT NOT NULL,
+        PRIMARY KEY (ice_id, kind, ref_id)
+    );
+    """,
 ]
-"""The notes plugin's migrations. Every table is kept: only the notes know what's in them."""
+"""The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
+only the notes know what's in them."""
 
 
 def _date(value: str | None) -> date | None:
@@ -160,6 +171,13 @@ class NotesRepository:
             )
             for row in self._db.query("SELECT * FROM notes_ice ORDER BY id")
         ]
+
+    def covers(self) -> dict[int, list[Ref]]:
+        """What else each act of icing hides, by its id, as `cover` last found it."""
+        found: defaultdict[int, list[Ref]] = defaultdict(list)
+        for row in self._db.query("SELECT * FROM notes_ice_covers ORDER BY ice_id, kind, ref_id"):
+            found[row["ice_id"]].append(Ref(kind=row["kind"], id=row["ref_id"]))
+        return dict(found)
 
     def sections(self) -> list[Section]:
         return [
@@ -312,6 +330,16 @@ class NotesRepository:
                 [(ice_id, i, item.kind, item.ref_id, item.sha) for i, item in enumerate(items)],
             )
         return ice_id
+
+    def replace_covers(self, covers: dict[int, list[Ref]], only: int | None = None) -> None:
+        """Replace what the acts of icing hide besides their own items, or only act `only`'s."""
+        rows = [(i, r.kind, r.id) for i, refs in covers.items() for r in refs if only in (None, i)]
+        with self._db.transaction() as conn:
+            if only is None:
+                conn.execute("DELETE FROM notes_ice_covers")
+            else:
+                conn.execute("DELETE FROM notes_ice_covers WHERE ice_id = ?", (only,))
+            conn.executemany("INSERT OR IGNORE INTO notes_ice_covers VALUES (?, ?, ?)", rows)
 
     def delete_ice(self, ice_id: int) -> None:
         """Thaw: forget the act of icing and what it covered."""
