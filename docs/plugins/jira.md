@@ -5,16 +5,18 @@ My open Jira tickets. Enabled by a `[jira]` section.
 ## Setup
 
 Add a `[jira]` section with `site`; requests log in as the top-level `email` with an API
-token. Either export `JIRA_API_TOKEN` (or the variable `token_env` names) or store a token
-in your system's secret store under `keychain_service`, with your email as the account:
+token. Create one at https://id.atlassian.com/manage-profile/security/api-tokens, then
+store it with
 
 ```sh
-security add-generic-password -s move-forward-jira -a me@example.com -w <token>   # macOS
-cmdkey /generic:move-forward-jira /user:me@example.com /pass:<token>              # Windows
-secret-tool store --label=move-forward-jira service move-forward-jira account me@example.com  # Linux
+mfd token set jira
 ```
 
-Create the token at https://id.atlassian.com/manage-profile/security/api-tokens.
+which asks for it without showing it and keeps it in your system's secret store (the macOS
+keychain, Windows' Credential Manager, or on Linux the desktop keyring through
+`secret-tool`) under `keychain_service`, with your email as the account. Or export
+`JIRA_API_TOKEN` (or the variable `token_env` names), which wins over the store.
+`mfd token check` says where it was found.
 
 ## Config
 

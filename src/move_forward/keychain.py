@@ -77,15 +77,6 @@ def write(service: str, account: str, secret: str) -> None:
         raise CommandError(f"the secret store didn't keep the token for {service}")
 
 
-def how_to_store(service: str, account: str) -> str:
-    """The command that stores a secret where `read` finds it, on this system."""
-    if sys.platform == "darwin":
-        return f"security add-generic-password -s {service} -a {account} -w <token>"
-    if sys.platform == "win32":
-        return f"cmdkey /generic:{service} /user:{account} /pass:<token>"
-    return f"secret-tool store --label={service} service {service} account {account}"
-
-
 if sys.platform == "win32":
     from ctypes import wintypes
 

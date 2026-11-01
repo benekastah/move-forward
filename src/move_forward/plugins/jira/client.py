@@ -2,7 +2,6 @@
 
 import base64
 import json
-import os
 import re
 import urllib.error
 import urllib.request
@@ -96,12 +95,9 @@ def token(config: JiraConfig, email: str) -> str:
     """The API token from the configured env var, else the system's secret store (the macOS
     keychain, Windows' Credential Manager, the desktop keyring) under `keychain_service` for
     `email`."""
-    if value := os.environ.get(config.token_env) or keychain.read(config.keychain_service, email):
+    if value := keychain.token(config, email):
         return value
-    raise RuntimeError(
-        f"no Jira token: set ${config.token_env} or run"
-        f" `{keychain.how_to_store(config.keychain_service, email)}`"
-    )
+    raise RuntimeError(f"no Jira token: run `mfd token set jira`, or set ${config.token_env}")
 
 
 def to_issue(raw: RawIssue, site: str) -> JiraIssue:

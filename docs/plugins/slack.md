@@ -16,7 +16,7 @@ People's Slack ids and teams' channels come from the skill's `reviewer-map.md`, 
 `work-notes.md`), or are set by hand on `/slack/contacts` or with
 `mfd slack contact|team set`; what's set by hand wins over a later import. With a Slack
 token (`token_env`, default `SLACK_API_TOKEN`, else the system's secret store under
-`keychain_service` for your email, stored as for jira's token), each refresh also looks up the Slack id of every
+`keychain_service` for your email, stored with `mfd token set slack`), each refresh also looks up the Slack id of every
 reviewer my open PRs ask for whom nothing names one for, by the email github knows for
 them. The token needs the `users:read.email` scope; a lookup that finds nobody is tried again
 once it's `prune_days` old (they may have joined Slack since), and an import or a value
