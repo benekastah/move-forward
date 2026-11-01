@@ -201,6 +201,7 @@ class Pinger:
             )
         return Panel(
             key="nudges",
+            priority=85,  # 8. stale reviews and nudges
             title="Nudge reviewers",
             description="In order (green, no conflicts, no open threads) and quiet for a day.",
             items=items,

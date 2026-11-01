@@ -363,6 +363,7 @@ class Builder:
             )
         return Panel(
             key="todos",
+            priority=0,  # 0b. reconcile the work notes
             title="Todos from the work notes",
             description="Easy close-outs first; blocked work last.",
             items=items,
@@ -397,6 +398,7 @@ class Builder:
             )
         return Panel(
             key="iced",
+            priority=1000,  # parked: the skill leaves these alone
             title="On ice",
             description="Stacks, PRs, tickets and work entries parked until they're reopened.",
             items=items,

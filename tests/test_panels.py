@@ -314,3 +314,39 @@ def test_naming_settings_drive_pings_labels_and_jira() -> None:
     by_key = {i.title.split()[0]: i.badges[0] for i in panel(dashboard, "jira_next").items}
     assert by_key["XY-2"].startswith("incident, escalated (2)")  # vp is the 2nd level
     assert by_key["XY-3"].startswith("bug")
+
+
+def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now() -> None:
+    built = dashboard(
+        github=snapshot(),
+        local=local_snapshot(),
+        stacks=stacks(),
+        jira=JiraSnapshot(issues=[]),
+        slack=True,
+    )
+    by_priority = [p.key for p in sorted(built.panels, key=lambda p: p.priority)]
+    assert by_priority == [
+        "todos",
+        "reviews_for_me",
+        "conflicts",
+        "feedback",
+        "ci_failures",
+        "local_work",
+        "stacks",
+        "metadata",
+        "needs_reviewer",
+        "team_prs",
+        "nudges",
+        "ready_to_merge",
+        "held",
+        "cleanup",
+        "jira_transitions",
+        "jira_next",
+        "iced",
+    ]
+    assert {p.key for p in built.panels if p.act_now} == {
+        "reviews_for_me",
+        "feedback",
+        "ci_failures",
+        "conflicts",
+    }

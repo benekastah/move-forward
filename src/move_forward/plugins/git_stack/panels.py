@@ -175,6 +175,7 @@ class Builder:
                     )
         return Panel(
             key="stacks",
+            priority=60,  # 6. stacks without PRs
             title="Stacks",
             description="git-stack branches that need a restack, were merged, or have no PR.",
             items=items,

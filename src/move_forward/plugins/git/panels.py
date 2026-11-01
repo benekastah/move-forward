@@ -119,6 +119,7 @@ class Builder:
                 )
         return Panel(
             key="local_work",
+            priority=50,  # 5. restack and push
             title="Local work",
             description="Uncommitted changes in worktrees, and branches with unpushed commits.",
             items=items,
@@ -171,6 +172,7 @@ class Builder:
         )
         return Panel(
             key="cleanup",
+            priority=100,  # 10. cleanup
             title="Cleanup",
             description="Local branches whose PR merged or whose remote branch is gone.",
             items=items,

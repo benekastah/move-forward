@@ -117,6 +117,8 @@ class Builder:
                     )
         return Panel(
             key="reviews_for_me",
+            priority=10,  # 1. reviews asked of me
+            act_now=True,
             title="Reviews for me",
             description="PRs asking for my review directly, or that changed since I reviewed them.",
             items=items,
@@ -142,6 +144,7 @@ class Builder:
             items.append(pr_item(self.now, pr, details=details, rank=-pr.created_at.timestamp()))
         return Panel(
             key="needs_reviewer",
+            priority=80,  # 8a. a person for each review
             title="Needs a reviewer",
             description="My open PRs with no person requested and no approval yet.",
             items=items,
@@ -164,6 +167,8 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=details, links=links, rank=len(details)))
         return Panel(
             key="feedback",
+            priority=30,  # 3. feedback on my PRs
+            act_now=True,
             title="Feedback to address",
             description="Unresolved review threads, changes requested, and comments since my last push.",
             items=items,
@@ -188,6 +193,8 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=details, links=links, rank=len(failing)))
         return Panel(
             key="ci_failures",
+            priority=40,  # 4. CI failures
+            act_now=True,
             title="CI failures",
             description="Failing checks and recent merge-queue evictions on my non-draft PRs.",
             items=items,
@@ -206,6 +213,8 @@ class Builder:
                 )
         return Panel(
             key="conflicts",
+            priority=20,  # 2. sync stacks
+            act_now=True,
             title="Merge conflicts",
             description="My open PRs that conflict with their base.",
             items=items,
@@ -240,12 +249,14 @@ class Builder:
         return (
             Panel(
                 key="ready_to_merge",
+                priority=90,  # 9. the merge queue
                 title="Ready to merge",
                 description="Approved, green, no open threads, based on the default branch.",
                 items=ready,
             ),
             Panel(
                 key="held",
+                priority=91,  # 9, with merge conditions
                 title="Held by merge conditions",
                 description="Would be ready, but the work notes hold them.",
                 items=held,
@@ -273,6 +284,7 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=problems))
         return Panel(
             key="metadata",
+            priority=70,  # 7. PR metadata
             title="PR housekeeping",
             description="Unknown labels, missing ticket links, drafts that look ready.",
             items=items,
@@ -303,6 +315,7 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=details, rank=rank))
         return Panel(
             key="team_prs",
+            priority=81,  # 8a, for my teams' PRs
             title="Requested from my teams",
             description=f"PRs waiting on {', '.join(self.teams) or 'my teams'}, ranked by"
             " CODEOWNERS and the paths I work in.",

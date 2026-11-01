@@ -87,6 +87,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
             )
     return Panel(
         key="jira_transitions",
+        priority=120,  # 12. Jira updates
         title="Jira transitions",
         description="Status changes the PR states suggest.",
         items=items,
@@ -123,6 +124,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
         )
     return Panel(
         key="jira_next",
+        priority=130,  # 13. what next
         title="What next",
         description="My open tickets: incidents by escalation, then bugs, then unblocked work.",
         items=items,
