@@ -181,9 +181,12 @@ def _action(action: Action, back: str = "") -> str:
     )
 
 
-def _actions(actions: list[Action], back: str = "") -> str:
-    buttons = "".join(_action(a, back) for a in actions if a.href is None)
-    return f"<div class='actions'>{buttons}</div>" if actions else ""
+def buttons(actions: list[Action], back: str = "") -> str:
+    """Buttons for `actions` (those that post, not links), each asking first if it has a
+    `confirm`, for plugins' pages as for the dashboard. `back` is where each redirects
+    afterwards; default the page they're on."""
+    forms = "".join(_action(a, back) for a in actions if a.href is None)
+    return f"<div class='actions'>{forms}</div>" if actions else ""
 
 
 def _link(link: Link) -> str:
@@ -218,7 +221,7 @@ def _item(item: Item, back: str = "") -> str:
     if item.links:
         links = "".join(_link(link) for link in item.links)
         parts.append(f"<div class='links'>{links}</div>")
-    parts.append(_actions(item.actions, back))
+    parts.append(buttons(item.actions, back))
     parts.append("</li>")
     return "".join(parts)
 
@@ -237,7 +240,7 @@ def _panel(panel: Panel, open_keys: set[str] | None) -> str:
         f" data-drag{open_attr}>"
         f"<summary><h2>{_e(panel.title)}</h2><span class='count'>{len(panel.items)}</span>"
         f"<span class='description'>{_e(panel.description)}</span></summary>"
-        f"{_actions(panel.actions)}<ul class='items'>{items}</ul></details>"
+        f"{buttons(panel.actions)}<ul class='items'>{items}</ul></details>"
     )
 
 
