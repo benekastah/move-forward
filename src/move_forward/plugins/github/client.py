@@ -164,11 +164,65 @@ class RawSearchResponse(_Raw):
     data: _RawData
 
 
-QUERY_PATH = Path(__file__).parent / "queries" / "search_prs.graphql"
+QUERIES = Path(__file__).parent / "queries"
+QUERY_PATH = QUERIES / "search_prs.graphql"
+FIELDS_PATH = QUERIES / "pr_fields.graphql"
 
 
 def _query_text() -> str:
-    return QUERY_PATH.read_text()
+    return QUERY_PATH.read_text() + FIELDS_PATH.read_text()
+
+
+class _RawRepoPr(_Raw):
+    pull_request: RawPullRequest | None = Field(default=None, alias="pullRequest")
+
+
+class RawPrsResponse(_Raw):
+    """The response to `fetch_prs`'s query: each PR under its alias, `pr<i>`."""
+
+    data: dict[str, _RawRepoPr | None]
+
+
+class PrId(BaseModel):
+    """A PR by where it is: `owner/name` and its number."""
+
+    model_config = ConfigDict(frozen=True)
+    repo: str
+    number: int
+
+    def __str__(self) -> str:
+        return f"{self.repo}#{self.number}"
+
+
+def fetch_prs(host: str, ids: list[PrId]) -> list[PullRequest]:
+    """These PRs, in one request, with the fields the searches fetch (files included).
+    Raises CommandError when GitHub can't answer for one (deleted, or out of reach): `gh`
+    fails on a response with errors."""
+    if not ids:
+        return []
+    params: list[str] = []
+    parts: list[str] = []
+    args = [*api(host), "graphql", "-F", "withFiles=true"]
+    for i, pr_id in enumerate(ids):
+        owner, _, name = pr_id.repo.partition("/")
+        params += [f"$o{i}: String!", f"$n{i}: String!", f"$p{i}: Int!"]
+        parts.append(
+            f"pr{i}: repository(owner: $o{i}, name: $n{i}) {{ pullRequest(number: $p{i}) {{"
+            " ...PrFields } }"
+        )
+        args += ["-f", f"o{i}={owner}", "-f", f"n{i}={name}", "-F", f"p{i}={pr_id.number}"]
+    query = (
+        f"query($withFiles: Boolean!, {', '.join(params)}) {{\n  "
+        + "\n  ".join(parts)
+        + "\n}\n"
+        + FIELDS_PATH.read_text()
+    )
+    response = RawPrsResponse.model_validate_json(_run_with_retry([*args, "-f", f"query={query}"]))
+    return [
+        to_pull_request(found.pull_request)
+        for found in response.data.values()
+        if found and found.pull_request
+    ]
 
 
 def _run_with_retry(args: list[str]) -> str:

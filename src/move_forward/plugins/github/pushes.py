@@ -18,6 +18,7 @@ class _MyPr(Model):
     id: str
     state: str | None = None
     repo: str
+    number: int
     head: str
     mine: bool
 
@@ -31,14 +32,22 @@ class _Branch(Model):
     behind: int = 0
 
 
-def tips(graph: Graph, pr_kind: str, repo_kind: str) -> str:
+def tips(graph: Graph, pr_kind: str, repo_kind: str) -> dict[str, str]:
     """Where the local branch of each open PR of mine is, and how it stands against its
-    upstream, as a string that changes when any of them moves."""
-    seen: list[str] = []
+    upstream, by the PR's `owner/name#number`: a value changes when its branch moves."""
+    seen: dict[str, str] = {}
     for pr in graph.view(pr_kind, _MyPr):
         if not pr.mine or pr.state != "open":
             continue
         for branch in graph.view_related(Ref(kind=repo_kind, id=pr.repo), BRANCH, _Branch):
             if branch.name == pr.head:
-                seen.append(json.dumps([pr.id, branch.sha, branch.ahead, branch.behind]))
-    return json.dumps(sorted(seen))
+                seen[f"{pr.repo}#{pr.number}"] = json.dumps(
+                    [branch.sha, branch.ahead, branch.behind]
+                )
+    return seen
+
+
+def moved(before: dict[str, str], now: dict[str, str]) -> set[str]:
+    """The PRs whose branch moved between `before` and `now`. One that came or went (a PR
+    opened or merged, a branch checked out or deleted) is github's own news, or none."""
+    return {pr for pr in before.keys() & now.keys() if before[pr] != now[pr]}

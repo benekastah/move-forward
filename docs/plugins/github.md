@@ -20,6 +20,13 @@ refresh of git it compares where git's `branch` entities for those PRs' heads st
 commit, and how far ahead of or behind their upstream) with what it saw last. Other changes that notify nobody, like a PR falling into
 conflict, wait for `refresh_seconds`.
 
+Such a refresh fetches only the PRs that changed, in one request, and places them in the
+lists the searches fill (mine, merged or closed; requesting my review or my team's;
+reviewed by me), keeping the rest as they were. Every search runs instead when
+`refresh_seconds` have passed since they last did, when a notification isn't about a PR
+(a CI run), and when fetching the PRs fails. A PR that newly concerns me without a
+notification (one I just opened, say) waits for that.
+
 `[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
 fetched. Its conventions that differ between organisations are off by default:
 `review_checks` (CI checks that really report review status), `required_owner_marker` (a

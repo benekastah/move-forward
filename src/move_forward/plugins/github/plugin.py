@@ -1,9 +1,10 @@
 """The GitHub plugin."""
 
 import argparse
+import json
 import logging
 from datetime import datetime, timedelta
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from pydantic import BaseModel
 
@@ -12,7 +13,7 @@ from ...graph import Entity, Graph, Ref, attrs
 from ...page import Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
 from ...shell import CommandError
-from . import cli, client, derive, notifications, pushes
+from . import cli, client, derive, notifications, placing, pushes
 from .config import GitHubConfig
 from .kinds import PersonAttrs, PrAttrs
 from .models import GitHubSnapshot, PullRequest
@@ -40,6 +41,17 @@ NOTIFICATIONS_WAIT = "notifications_poll_after"
 """The kv key of when GitHub lets `changed` poll the notifications again."""
 BRANCHES_SEEN = "pr_branches_seen"
 """The kv key of where my open PRs' local branches were at the last check (`pushes.tips`)."""
+CHANGED = "prs_changed"
+"""The kv key of the PRs (`owner/name#number`) `changed` saw change, for `collect`; with
+`EVERYTHING` among them when it saw a change it can't pin on a PR."""
+EVERYTHING = "*"
+LAST_FULL = "last_full_collect"
+"""The kv key of when every search last ran."""
+
+
+def _pr_id(changed: str) -> client.PrId:
+    repo, _, number = changed.rpartition("#")
+    return client.PrId(repo=repo, number=int(number))
 
 
 def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
@@ -62,10 +74,43 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     snapshot_model = GitHubSnapshot
 
     def collect(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot:
+        """Every search; or, after `changed` saw only some PRs change, just those PRs, placed
+        in the stored lists as the searches would find them. Every search runs when a full
+        collect is due (`refresh_seconds` since the last), so frequent changes can't put it
+        off, when a change wasn't about a PR (a CI run), and when fetching the PRs fails."""
         config = ctx.config
+        changed = self._take_changed(ctx)
+        previous = None if EVERYTHING in changed or self._full_due(ctx) else self.load(ctx)
+        if previous is not None and changed:
+            ids = [_pr_id(pr) for pr in sorted(changed)]
+            try:
+                fetched = client.fetch_prs(config.host, ids)
+            except CommandError as e:
+                log.warning("fetching the PRs that changed failed, so fetching all: %s", e)
+            else:
+                return placing.place(previous, fetched, _team_slugs(ctx))
+        ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         return client.collect(
             config.host, config.org, _team_slugs(ctx), config.history_days, ctx.now
         )
+
+    def _full_due(self, ctx: Context[GitHubConfig]) -> bool:
+        last = ctx.kv.get(LAST_FULL)
+        return (
+            last is None
+            or (ctx.now - datetime.fromisoformat(last)).total_seconds()
+            >= ctx.config.refresh_seconds
+        )
+
+    def _take_changed(self, ctx: Context[GitHubConfig]) -> set[str]:
+        changed = set(json.loads(ctx.kv.get(CHANGED) or "[]"))
+        ctx.kv.set(CHANGED, "[]")
+        return changed
+
+    def _note_changed(self, ctx: Context[GitHubConfig], prs: set[str]) -> None:
+        if prs:
+            pending = set(json.loads(ctx.kv.get(CHANGED) or "[]")) | prs
+            ctx.kv.set(CHANGED, json.dumps(sorted(pending)))
 
     def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
         PrRepository(ctx.db).replace(snapshot)
@@ -76,33 +121,43 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def changed(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
         refresh of git, which it watches), or I have a notification about something in the
-        org, polled as often as GitHub allows."""
-        moved = self._branches_moved(ctx, graph)
-        return self._notified(ctx) or moved
+        org, polled as often as GitHub allows. Which PRs changed is kept for `collect`, to
+        fetch just those."""
+        changed = self._branches_moved(ctx, graph) | self._notified(ctx)
+        self._note_changed(ctx, changed)
+        return bool(changed)
 
-    def _branches_moved(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
+    def _branches_moved(self, ctx: Context[GitHubConfig], graph: Graph) -> set[str]:
         now = pushes.tips(graph, PR, REPO)
-        before = ctx.kv.get(BRANCHES_SEEN)
+        stored = ctx.kv.get(BRANCHES_SEEN)
+        before: object = json.loads(stored) if stored else None
         if now != before:
-            ctx.kv.set(BRANCHES_SEEN, now)
-        return before is not None and now != before
+            ctx.kv.set(BRANCHES_SEEN, json.dumps(now))
+        if not isinstance(before, dict):  # the first look, or kept in an older form
+            return set()
+        return pushes.moved(cast(dict[str, str], before), now)
 
-    def _notified(self, ctx: Context[GitHubConfig]) -> bool:
-        """Whether I have a notification about something in the org (a review requested, a
-        comment, a review, CI) newer than the last look. A "not modified" answer is cheap,
-        and GitHub's poll interval is kept to."""
+    def _notified(self, ctx: Context[GitHubConfig]) -> set[str]:
+        """The PRs I have a notification about (a review requested, a comment, a review) in
+        the org, newer than the last look; `EVERYTHING` for one not about a PR (CI). A "not
+        modified" answer is cheap, and GitHub's poll interval is kept to."""
         wait = ctx.kv.get(NOTIFICATIONS_WAIT)
         if wait and ctx.now < datetime.fromisoformat(wait):
-            return False
+            return set()
         seen = ctx.kv.get(NOTIFICATIONS_SEEN)
         found = notifications.fetch(ctx.config.host, seen)
         if found is None:
-            return False
+            return set()
         ctx.kv.set(NOTIFICATIONS_SEEN, found.last_modified)
         ctx.kv.set(
             NOTIFICATIONS_WAIT, (ctx.now + timedelta(seconds=found.poll_seconds)).isoformat()
         )
-        return seen is not None and found.new_in(ctx.config.org, seen)
+        if seen is None:
+            return set()
+        return {
+            f"{n.repo}#{n.pr}" if n.pr is not None else EVERYTHING
+            for n in found.new_in(ctx.config.org, seen)
+        }
 
     def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
         return PrRepository(ctx.db).load()

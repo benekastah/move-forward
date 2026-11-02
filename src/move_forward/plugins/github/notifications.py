@@ -23,11 +23,35 @@ class _Owner(BaseModel):
 class _Repository(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
     owner: _Owner
+    full_name: str
+
+
+class _Subject(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+    type: str
+    url: str | None = None
+    """The API URL of what it's about, e.g. `.../repos/acme/widgets/pulls/7`; None for some
+    kinds (a CI run)."""
 
 
 class _Notification(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
     repository: _Repository
+    subject: _Subject
+    updated_at: datetime
+
+
+_PULL_NUMBER = re.compile(r"/pulls/(\d+)$")
+
+
+@dataclass(frozen=True)
+class Notification:
+    owner: str
+    """The repository's owner, an org or a user."""
+    repo: str
+    """`owner/name`."""
+    pr: int | None
+    """The number of the PR it's about; None when it isn't about a PR (an issue, a CI run)."""
     updated_at: datetime
 
 
@@ -42,13 +66,23 @@ class Notifications:
     """The response's `Last-Modified`, to send back as `If-Modified-Since`."""
     poll_seconds: int
     """How long GitHub asks to wait before polling again."""
-    updated: list[tuple[str, datetime]]
-    """Each notification's repository owner (an org or a user) and when it was updated."""
+    found: list[Notification]
 
-    def new_in(self, org: str, since: str) -> bool:
-        """Whether one in `org` was updated after `since`, an earlier `last_modified`."""
+    def new_in(self, org: str, since: str) -> list[Notification]:
+        """Those in `org` updated after `since`, an earlier `last_modified`."""
         after = parsedate_to_datetime(since)
-        return any(owner.lower() == org.lower() and when > after for owner, when in self.updated)
+        return [n for n in self.found if n.owner.lower() == org.lower() and n.updated_at > after]
+
+
+def _notification(raw: _Notification) -> Notification:
+    number = _PULL_NUMBER.search(raw.subject.url or "")
+    is_pr = raw.subject.type == "PullRequest" and number is not None
+    return Notification(
+        owner=raw.repository.owner.login,
+        repo=raw.repository.full_name,
+        pr=int(number.group(1)) if is_pr and number else None,
+        updated_at=raw.updated_at,
+    )
 
 
 def fetch(host: str, if_modified_since: str | None) -> Notifications | None:
@@ -74,7 +108,5 @@ def fetch(host: str, if_modified_since: str | None) -> Notifications | None:
     return Notifications(
         last_modified=headers["last-modified"],
         poll_seconds=int(interval) if interval.isdigit() else DEFAULT_POLL_SECONDS,
-        updated=[
-            (n.repository.owner.login, n.updated_at) for n in _NOTIFICATIONS.validate_json(body)
-        ],
+        found=[_notification(n) for n in _NOTIFICATIONS.validate_json(body)],
     )

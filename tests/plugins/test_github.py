@@ -211,3 +211,25 @@ def test_search_follows_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[0][:4] == ["gh", "api", "--hostname", "ghe.acme.com"]  # on its host
     assert "after=CURSOR" not in calls[0] and "after=CURSOR" in calls[1]
     assert "withFiles=true" in calls[0]
+
+
+def test_prs_are_fetched_by_repo_and_number_in_one_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **_: object) -> str:
+        calls.append(args)
+        found = {"pullRequest": {**RAW_PR, "number": 8}}
+        return json.dumps({"data": {"pr0": {"pullRequest": RAW_PR}, "pr1": found}})
+
+    monkeypatch.setattr(github, "run", fake_run)
+    ids = [github.PrId(repo="acme/widgets", number=7), github.PrId(repo="acme/gears", number=8)]
+    prs = github.fetch_prs("ghe.acme.com", ids)
+    assert [p.number for p in prs] == [7, 8]
+    [args] = calls
+    assert args[:4] == ["gh", "api", "--hostname", "ghe.acme.com"]
+    assert "o1=acme" in args and "n1=gears" in args and "p1=8" in args  # values, not query text
+    query = args[-1]
+    assert "pr1: repository(owner: $o1, name: $n1)" in query and "fragment PrFields" in query
+    assert github.fetch_prs("github.com", []) == [] and len(calls) == 1

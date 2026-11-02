@@ -1,7 +1,9 @@
 """The GitHub plugin's contract with the others: the `pr` and `person` entities it
 publishes."""
 
-from datetime import UTC, datetime
+import json
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from conftest import ME, NOW, pr, snapshot
@@ -14,6 +16,7 @@ from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import (
     DerivedSnapshot,
+    GitHubSnapshot,
     Review,
     ReviewerSuggestion,
     TeamPrScore,
@@ -21,7 +24,7 @@ from move_forward.plugins.github.models import (
     TimelineEvent,
 )
 from move_forward.plugins.github.people import PeopleRepository
-from move_forward.plugins.github.plugin import GitHubPlugin
+from move_forward.plugins.github.plugin import CHANGED, EVERYTHING, GitHubPlugin
 from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository
 from move_forward.plugins.github.tables import MIGRATIONS
 from move_forward.repositories import KvRepository
@@ -178,6 +181,51 @@ def test_a_pr_a_search_found_twice_is_kept_once_at_its_first_place() -> None:
 def test_github_says_who_i_am_by_my_login() -> None:
     assert GitHubPlugin().me(_context(), snapshot()) == ME
     assert GitHubPlugin().me(_context(), None) is None
+
+
+def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _context()
+    plugin = GitHubPlugin()
+    searched: list[datetime] = []
+    fetched: list[list[client.PrId]] = []
+    failing = False
+
+    def collect(host: str, org: str, teams: list[str], days: int, now: datetime) -> object:
+        searched.append(now)
+        return snapshot(mine=[pr(1), pr(2)])
+
+    def fetch_prs(host: str, ids: list[client.PrId]) -> list[object]:
+        fetched.append(ids)
+        if failing:
+            raise CommandError("gh: Could not resolve to a PullRequest")
+        return [pr(2, state="MERGED")]
+
+    monkeypatch.setattr(client, "collect", collect)
+    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
+
+    def refresh(minutes: int, *changed: str) -> GitHubSnapshot:
+        at = replace(ctx, now=NOW + timedelta(minutes=minutes))
+        at.kv.set(CHANGED, json.dumps(list(changed)))
+        gh = plugin.collect(at)
+        plugin.store(at, gh)
+        assert at.kv.get(CHANGED) == "[]"
+        return gh
+
+    refresh(0, "acme/widgets#2")  # nothing stored to place them in yet: everything
+    assert len(searched) == 1 and fetched == []
+    gh = refresh(1, "acme/widgets#2")
+    assert fetched == [[client.PrId(repo="acme/widgets", number=2)]] and len(searched) == 1
+    assert [p.number for p in gh.mine] == [1] and [p.number for p in gh.merged_recent] == [2]
+    refresh(2, "acme/widgets#2", EVERYTHING)  # a change not about a PR: everything
+    assert len(searched) == 2 and len(fetched) == 1
+    failing = True
+    refresh(3, "acme/widgets#2")  # fetching them failed: everything
+    assert len(searched) == 3 and len(fetched) == 2
+    failing = False
+    refresh(9, "acme/widgets#2")  # refresh_seconds (300) since everything last ran
+    assert len(searched) == 4 and len(fetched) == 2
 
 
 def test_the_daily_prune_looks_up_old_misses_again() -> None:

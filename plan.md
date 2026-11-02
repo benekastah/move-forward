@@ -102,11 +102,6 @@ Sending, off by default:
   git's change check sees what it brings, and github follows. It's the first time the
   dashboard would write to the repos without a click (only remote-tracking refs), hence
   opt-in.
-- **github: update the PRs that changed.** A change check refreshes github whole. Its
-  notifications name their PRs, but its panels come from searches, so storing one PR means
-  placing it in those lists by hand; worth it only if github's refresh gets slow. (git
-  already reads only the repos that moved; jira's full search is one request for most
-  people, so a targeted one would save nothing.)
 
 ### The page
 
