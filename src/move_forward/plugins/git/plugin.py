@@ -126,7 +126,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         worktree's uncommitted edits changed. Watched repos say so as it happens (see
         `watch`); the rest are polled, their refs by their files' times (see `changes`) and
         their edits every `status_seconds` by `git status`. Which repos moved is kept for
-        `collect`, to read just those."""
+        `collect`, to read just those, and asks for a refresh until it has."""
         watcher = self._watcher_for(ctx)
         moved_now, edited_now = watcher.take() if watcher else (set[Path](), set[Path]())
         watched: set[str] = (
@@ -144,10 +144,13 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         if before is not None:
             moved |= changes.moved(before, now)
         moved |= self._edited(ctx, edited_now, watcher.worktrees if watcher else set())
-        if moved:
-            pending = set(json.loads(ctx.kv.get(MOVED) or "[]")) | moved
+        pending = set(json.loads(ctx.kv.get(MOVED) or "[]"))
+        if moved - pending:
+            pending |= moved
             ctx.kv.set(MOVED, json.dumps(sorted(pending)))
-        return bool(moved) or (before is not None and set(before) != set(now))
+        # Pending until `collect` reads them: what's seen in the check core makes right after
+        # a refresh (whose answer it ignores) still asks for a refresh at the next one.
+        return bool(pending) or (before is not None and set(before) != set(now))
 
     def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:
         """The repos (common git directories) with a worktree whose uncommitted edits differ
