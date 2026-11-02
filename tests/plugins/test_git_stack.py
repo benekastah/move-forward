@@ -25,12 +25,14 @@ from move_forward import refresh
 from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.plugin import ActionError
+from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack import actions, client
 from move_forward.plugins.git_stack.models import StackBranch, StackRepo
 from move_forward.plugins.git_stack.panels import repo_dirs
+from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 from move_forward.registry import enabled
-from move_forward.shell import CommandError
+from move_forward.shell import CommandError, git
 
 ICED = iced("me/x", "/src/widgets")
 
@@ -311,3 +313,31 @@ def test_untrack_says_which_branches_now_start_their_own_stacks(
     notice = refresh.run_action(config, db, "git_stack/untrack", {"targets": "/src/widgets\tme/b"})
     assert ran == [("stack", "untrack", "me/b", "--json")]
     assert notice == "untracked me/b; me/c now starts its own stack"
+
+
+def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_record(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "widgets"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    config, db = stored(
+        local=local_snapshot(dir=str(repo), branches=[local_branch("me/a", sha="a" * 40)]),
+        stacks=stacks(StackBranch(name="me/a", parent="main"), dir=str(repo)),
+    )
+
+    def changed() -> bool:
+        plugins = enabled(config, db, NOW)
+        e = next(e for e in plugins if e.name == "git_stack")
+        return GitStackPlugin().changed(e.ctx, refresh.stored_graph(db, plugins)[0])
+
+    assert not changed()  # the first look notes where things stand
+    assert not changed()
+    LocalRepository(db).replace(
+        local_snapshot(dir=str(repo), branches=[local_branch("me/a", sha="b" * 40)])
+    )
+    assert changed()  # a commit on a tracked branch
+    git(repo, "config", "branch.me/a.stackParent", "develop")  # as `git stack` records it
+    assert changed()
+    assert not changed()
+    assert GitStackPlugin.watches == ["git"]

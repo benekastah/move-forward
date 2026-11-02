@@ -5,8 +5,11 @@ repos. Enabled by a `[git_stack]` section, which needs `[git]`.
 
 ## Config
 
-`[git_stack]` has no settings. `mfd init` adds it when git-stack is installed; add it by
-hand to an older config. Its buttons need a git-stack whose commands take `--json`.
+`[git_stack]` turns it on. `mfd init` adds it when git-stack is installed; add it by hand
+to an older config. `refresh_seconds` (300) is how often it refreshes regardless. It
+watches git: after each refresh of git it compares git's branches in its repos, and each
+repo's `.git/config` (where git-stack records each branch's parent, base and group), with
+what it saw last, and runs `git stack info` again only when they moved. Its buttons need a git-stack whose commands take `--json`.
 
 ## Publishes
 

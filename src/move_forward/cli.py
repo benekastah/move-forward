@@ -53,7 +53,8 @@ repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are foun
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # commit_history_days = 180
 
-[git_stack]                           # stacks from git-stack, in [git]'s repos; no settings
+[git_stack]                           # stacks from git-stack, in [git]'s repos
+# refresh_seconds = 300                  # how often it refreshes regardless of git's changes
 
 [slack]
 workspace_url = "https://example.slack.com"
