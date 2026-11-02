@@ -186,7 +186,7 @@ def wip_commit(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) ->
     worktree = Path(fields["worktree"])
     if worktree.resolve() not in {w.resolve() for w in worktrees(repo)}:
         raise ActionError(f"{worktree} is not a worktree of {repo}")
-    modified, _ = client.parse_status(git(worktree, "status", "--porcelain"))
+    modified, _ = client.worktree_status(worktree)
     if not modified:
         raise ActionError(f"{worktree} has no modified tracked files")
     git(worktree, "commit", "--all", "--quiet", "-m", WIP_MESSAGE)

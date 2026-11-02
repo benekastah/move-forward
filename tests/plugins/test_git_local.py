@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -187,3 +188,20 @@ def test_remotes_are_read_whatever_they_are_called(tmp_path: Path) -> None:
     db.migrate("git", MIGRATIONS)
     LocalRepository(db).replace(LocalSnapshot(repos=[collected]))
     assert LocalRepository(db).load().repos[0].default_refs == collected.default_refs
+
+
+def test_reading_a_worktrees_status_leaves_the_index_alone(tmp_path: Path) -> None:
+    """A plain `git status` rewrites the index under its lock, which would make a git
+    command run meanwhile fail."""
+    repo = tmp_path / "r"
+    _init_repo(repo)
+    (repo / "a.py").write_text("x\n")
+    git(repo, "add", "a.py")
+    git(repo, "commit", "-q", "-m", "a")
+    os.utime(repo / "a.py", ns=(1, 1))  # same content, new stat: the index is stale
+    (repo / "b.py").write_text("y\n")
+    index = repo / ".git" / "index"
+    before = index.stat()
+    assert local.worktree_status(repo) == (0, 1)
+    after = index.stat()
+    assert (after.st_mtime_ns, after.st_ino) == (before.st_mtime_ns, before.st_ino)

@@ -2,7 +2,8 @@
 branch made or deleted, a rebase, a push or a fetch. They all rewrite files git keeps its
 refs in, so the times, sizes and identities of those files say so, without running git.
 
-Edits not yet committed aren't seen: the plugin's `refresh_seconds` catches those. The index
+Edits not yet committed aren't seen: the plugin's `git status` every `status_seconds` catches
+those. The index
 is left out, because editors rewrite it whenever they ask git for the status.
 """
 

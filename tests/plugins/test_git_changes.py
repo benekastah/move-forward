@@ -1,5 +1,7 @@
-"""git telling that a repository moved, from its ref files' times."""
+"""git telling that a repository moved, from its ref files' times, or that its uncommitted
+edits changed, from `git status`."""
 
+import json
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -13,7 +15,7 @@ from move_forward.plugin import Context
 from move_forward.plugins.git import changes, client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalRepo
-from move_forward.plugins.git.plugin import GitPlugin
+from move_forward.plugins.git.plugin import MOVED, GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.repositories import KvRepository
 from move_forward.shell import git
@@ -67,6 +69,7 @@ def test_a_worktree_is_watched_through_its_main_repository(tmp_path: Path) -> No
 def test_the_plugin_says_changed_once_per_move_after_its_first_look(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r")
     db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
     ctx = Context(
         config=GitConfig(repos=[repo]),
         email="me@example.com",
@@ -129,3 +132,31 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     read.clear()
     refresh(11)  # ten minutes since every repo was read: all of them, whatever moved
     assert sorted(read) == ["a", "b"]
+
+
+def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None:
+    repo = _repo(tmp_path / "r")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    plugin = GitPlugin()
+
+    def ctx(seconds: int, status_seconds: int = 30) -> Context[GitConfig]:
+        return Context(
+            config=GitConfig(repos=[repo], status_seconds=status_seconds),
+            email="me@example.com",
+            teams=[],
+            prune_days=90,
+            now=NOW + timedelta(seconds=seconds),
+            db=db,
+            kv=KvRepository(db, "git"),
+        )
+
+    plugin.store(ctx(0), plugin.collect(ctx(0)))
+    assert not plugin.changed(ctx(0), Graph([]))  # as stored
+    (repo / "new.txt").write_text("x\n")
+    assert not plugin.changed(ctx(10), Graph([]))  # status_seconds not up yet
+    assert not plugin.changed(ctx(40, status_seconds=0), Graph([]))  # off
+    assert plugin.changed(ctx(40), Graph([]))
+    assert KvRepository(db, "git").get(MOVED) == json.dumps([str(changes.common_dir(repo))])
+    plugin.store(ctx(40), plugin.collect(ctx(40)))  # reads it, untracked file and all
+    assert not plugin.changed(ctx(80), Graph([]))

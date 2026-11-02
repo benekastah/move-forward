@@ -8,9 +8,15 @@ Enabled by a `[git]` section.
 `refresh_seconds` (300) is how often it refreshes in the background: it only reads local checkouts.
 It also refreshes within seconds of a commit, checkout, new or deleted branch, rebase,
 push or fetch in one of the repos: every 5 seconds it compares the times of the files git
-keeps its refs in, without running git. Edits not yet committed (and staging) wait for
-`refresh_seconds`. Such a refresh reads only the repos that moved, keeping the rest as
-they were, unless `refresh_seconds` have passed since every repo was last read.
+keeps its refs in, without running git. Edits not yet committed (and staging) are looked
+for every `status_seconds` (30; 0 leaves them to `refresh_seconds`), with `git status` in
+each worktree, which takes no lock, so it never gets in the way of your own git commands.
+Such a refresh reads only the repos that moved, keeping the rest as they were, unless
+`refresh_seconds` have passed since every repo was last read.
+
+In a very large repo, `git status` has to scan the worktree; git's own file watcher makes
+it cheap: `git config core.fsmonitor true` (built in on macOS and Windows; on Linux it
+takes Watchman) and `git config core.untrackedCache true`.
 
 `[git]` needs `repos`, your main checkouts; their other worktrees are found with
 `git worktree list`, and a listed path that's a worktree of another listed repo is folded
