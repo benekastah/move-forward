@@ -5,7 +5,7 @@ from datetime import date
 
 from ...db import Database
 from ...graph import Ref
-from .models import Declined, Entry, Ice, IcedItem, Link, Section, Size, Todo
+from .models import CheckIn, Declined, Entry, Ice, IcedItem, Link, Section, Size, Todo
 
 MIGRATIONS = [
     """
@@ -96,9 +96,23 @@ MIGRATIONS = [
     WHERE kind = 'branch' AND instr(ref_id, char(9)) > 0;
     UPDATE notes_iced SET name = ref_id WHERE name = '';
     """,
+    """
+    ALTER TABLE notes_entries ADD COLUMN checked_on TEXT;     -- the skill last checked in
+    ALTER TABLE notes_entries ADD COLUMN asked_done_on TEXT;  -- it last asked if it's done
+    UPDATE notes_entries SET
+        checked_on = (SELECT MAX(on_date) FROM notes_declined
+                      WHERE entry_id = notes_entries.id AND text = 'Checked'),
+        asked_done_on = (SELECT MAX(on_date) FROM notes_declined
+                         WHERE entry_id = notes_entries.id AND text = 'Asked-done');
+    DELETE FROM notes_declined WHERE text IN ('Checked', 'Asked-done');
+    """,
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
 only the notes know what's in them."""
+
+
+def _iso(value: date | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 def _date(value: str | None) -> date | None:
@@ -152,6 +166,8 @@ class NotesRepository:
                 where=row["location"],
                 blocked_on=row["blocked_on"],
                 updated_on=_date(row["updated_on"]),
+                checked_on=_date(row["checked_on"]),
+                asked_done_on=_date(row["asked_done_on"]),
                 todos=todos[row["id"]],
                 conditions=conditions[row["id"]],
                 declined=declined[row["id"]],
@@ -231,6 +247,14 @@ class NotesRepository:
                 [(entry_id, link.kind, link.ref) for link in links or []],
             )
         return entry_id
+
+    def set_check_in(self, entry_id: int, which: CheckIn, on: date) -> None:
+        """Record that the skill checked in on the entry (`checked`), or asked whether it's
+        done (`asked_done`), on `on`."""
+        column = {"checked": "checked_on", "asked_done": "asked_done_on"}[which]
+        self._db.execute(
+            f"UPDATE notes_entries SET {column} = ? WHERE id = ?", (on.isoformat(), entry_id)
+        )
 
     def set_status(self, entry_id: int, status: str | None) -> None:
         self._db.execute("UPDATE notes_entries SET status = ? WHERE id = ?", (status, entry_id))
@@ -389,14 +413,16 @@ class NotesRepository:
             )
             for entry in entries:
                 cursor = conn.execute(
-                    "INSERT INTO notes_entries (title, status, location, blocked_on, updated_on)"
-                    " VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO notes_entries (title, status, location, blocked_on, updated_on,"
+                    " checked_on, asked_done_on) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         entry.title,
                         entry.status,
                         entry.where,
                         entry.blocked_on,
-                        entry.updated_on.isoformat() if entry.updated_on else None,
+                        _iso(entry.updated_on),
+                        _iso(entry.checked_on),
+                        _iso(entry.asked_done_on),
                     ),
                 )
                 entry_id = cursor.lastrowid

@@ -16,7 +16,7 @@ from ...graph import Graph
 from ...plugin import ActionError, ActionResult, CliHandler, Context
 from . import actions, markdown, panels
 from .config import NotesConfig
-from .models import Entry, Ice, Size, Todo
+from .models import CheckIn, Entry, Ice, Size, Todo
 from .repository import NotesRepository
 
 LAST_ASKED_ICE = "last_asked_ice"
@@ -122,6 +122,8 @@ def _entry_text(entry: Entry) -> str:
     lines += [f"  about: {link.ref}" for link in entry.links]
     lines += [f"  merge condition: {text}" for text in entry.conditions]
     lines += [f"  declined {d.on}: {d.text}" for d in entry.declined]
+    lines += [f"  checked in: {entry.checked_on}"] if entry.checked_on else []
+    lines += [f"  asked if done: {entry.asked_done_on}"] if entry.asked_done_on else []
     lines += [_todo_line(todo) for todo in entry.todos]
     return "\n".join(lines)
 
@@ -246,6 +248,17 @@ def cmd_decline(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespac
     return Result(f"{entry.title}: declined for today")
 
 
+def _check_in(which: CheckIn, said: str) -> Command:
+    def cmd(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
+        notes = NotesRepository(ctx.db)
+        entry = find_entry(notes.entries(), args.entry, graph)
+        on = date.fromisoformat(args.on) if args.on else ctx.today
+        notes.set_check_in(entry.id, which, on)
+        return Result(f"{entry.title}: {said} {on}")
+
+    return cmd
+
+
 def cmd_ice(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     if args.item:
         kind, ref_id = args.item
@@ -280,6 +293,8 @@ def _commands() -> dict[str, Command]:
         "todo": cmd_todo,
         "condition": cmd_condition,
         "decline": cmd_decline,
+        "checked": _check_in("checked", "checked in"),
+        "asked-done": _check_in("asked_done", "asked if done"),
         "ice": cmd_ice,
         "thaw": cmd_thaw,
         "import": cmd_import,
@@ -337,6 +352,13 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     decline = add("decline", "record that something offered for an entry was turned down today")
     decline.add_argument("entry")
     decline.add_argument("text")
+    for name, help in (
+        ("checked", "record that the skill checked in on an entry"),
+        ("asked-done", "record that the skill asked whether an entry is done"),
+    ):
+        check_in = add(name, help)
+        check_in.add_argument("entry")
+        check_in.add_argument("--on", help="the day, YYYY-MM-DD (default: today)")
     ice = add(
         "ice",
         "put a branch (with its git-stack stack), a PR, a ticket or a work entry on ice"

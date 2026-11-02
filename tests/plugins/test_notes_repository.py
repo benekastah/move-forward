@@ -136,3 +136,22 @@ def test_an_import_replaces_stacks_on_ice_but_not_what_was_iced_on_its_own(
     )
     notes.replace_all([], [imported], [])
     assert [i.title for i in notes.ices()] == ["APP-1 Fix", "me/b"]
+
+
+def test_check_ins_written_as_declines_move_into_their_fields() -> None:
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS[:-1])
+    db.execute("INSERT INTO notes_entries (id, title) VALUES (1, 'APP-1 Fix it')")
+    for position, (on, text) in enumerate(
+        [
+            ("2026-10-01", "Checked"),
+            ("2026-10-05", "Checked"),
+            ("2026-10-03", "Asked-done"),
+            ("2026-10-04", "not today"),
+        ]
+    ):
+        db.execute("INSERT INTO notes_declined VALUES (1, ?, ?, ?)", (position, on, text))
+    db.migrate("notes", MIGRATIONS)
+    [entry] = NotesRepository(db).entries()
+    assert (entry.checked_on, entry.asked_done_on) == (date(2026, 10, 5), date(2026, 10, 3))
+    assert entry.declined == [Declined(on=date(2026, 10, 4), text="not today")]

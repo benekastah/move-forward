@@ -143,3 +143,16 @@ def test_a_branch_in_two_stacks_on_ice_imports_with_the_first(tmp_path: Path) ->
         for i in NotesRepository(db).ices()
     }
     assert stored["me/bottom"] == ["me/bottom", "me/top"] and stored["me/again"] == ["me/new"]
+
+
+def test_check_ins_the_skill_wrote_as_declines_are_read_into_their_fields() -> None:
+    text = (
+        "# Work notes\n\n## APP-3 Thing\n- Declined 2026-10-01: Checked\n"
+        "- Declined 2026-10-02: Checked\n- Declined 2026-10-02: Asked-done\n"
+        "- Declined 2026-10-02: nudging\n"
+    )
+    [entry], sections = markdown.read_work_notes(text)
+    assert (entry.checked_on, entry.asked_done_on) == (date(2026, 10, 2), date(2026, 10, 2))
+    assert [d.text for d in entry.declined] == ["nudging"]
+    again, _ = markdown.read_work_notes(markdown.write_work_notes([entry], sections))
+    assert again == [entry]  # written back as the skill wrote them, and read the same
