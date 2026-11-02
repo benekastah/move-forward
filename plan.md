@@ -139,9 +139,6 @@ Sending, off by default:
   it's changed to use them. Its `reviewer-map.md` is read only through `mfd slack import`
   and `mfd github import`, so it should set Slack ids with `mfd slack contact set` rather
   than editing the map.
-- **Clean-ups the daily prune lacks**: github dropping looked-up emails no PR has asked
-  about in `prune_days`. (Finished entries go after 90 days; the skill removes them sooner
-  with `mfd notes remove`.)
 - **Keep the skill and the dashboard in step.** The CLI's JSON output is the contract the
   skill is written against: change it deliberately, with the skill. The skill's own rule
   against cleaning while something's on ice no longer matches the dashboard, which cleans

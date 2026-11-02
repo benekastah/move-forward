@@ -8,6 +8,7 @@ from conftest import ME, NOW, pr, snapshot
 from legacy import save_json_snapshot
 
 from move_forward.db import Database
+from move_forward.graph import Graph
 from move_forward.plugin import Context
 from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
@@ -177,3 +178,12 @@ def test_a_pr_a_search_found_twice_is_kept_once_at_its_first_place() -> None:
 def test_github_says_who_i_am_by_my_login() -> None:
     assert GitHubPlugin().me(_context(), snapshot()) == ME
     assert GitHubPlugin().me(_context(), None) is None
+
+
+def test_the_daily_prune_looks_up_old_misses_again() -> None:
+    ctx = _context()
+    people = PeopleRepository(ctx.db)
+    people.save_looked_up("bob", None, NOW.replace(year=2025))
+    people.save_looked_up("alice", "a@x", NOW.replace(year=2025))
+    assert GitHubPlugin().prune(ctx, Graph()) == ["will look up 1 reviewer email(s) again"]
+    assert people.emails() == {"alice": "a@x"}

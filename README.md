@@ -243,7 +243,8 @@ neither is cleared `prune_days` after it last changed), a PR, ticket or
 entry on ice comes off it once its work is over the same way (a stack stays
 until it's reopened), the notes' offers and declines that old are forgotten,
 pings that old leave the database, and so do Act now's
-snoozes once over, and its dismissals and pins that old. PR and ticket dates come from `gh pr view` and
+snoozes once over, and its dismissals and pins that old. Reviewer email lookups that
+found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
 ## How it stores things

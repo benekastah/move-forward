@@ -196,5 +196,8 @@ MIGRATIONS = [
         FROM snapshots, json_each(snapshots.payload, '$.team_scores') AS score
         WHERE snapshots.source = 'github.derived' AND snapshots.payload IS NOT NULL;
     """,
+    """
+    ALTER TABLE github_people ADD COLUMN looked_up_at TEXT;  -- a lookup's time; NULL: before kept
+    """,
 ]
 """The github plugin's migrations."""
