@@ -275,13 +275,15 @@ def test_stack_clean_says_what_it_did_from_its_json_report(
     notice = _clean_with(monkeypatch, fake_git)
     assert ran == [("stack", "clean", "-d", "local", "--json")]
     assert notice == (
-        "cleaned /src/widgets: deleted me/a; untracked me/b; warning: me/b is checked out in /wt"
+        f"cleaned {Path('/src/widgets')}: deleted me/a; untracked me/b;"
+        " warning: me/b is checked out in /wt"
     )
 
     def nothing(repo: Path, *args: str, timeout: int = 0) -> str:
         return _json_lines([FETCHING], {"type": "result", "stacks": []})
 
-    assert _clean_with(monkeypatch, nothing) == "cleaned /src/widgets: nothing merged to clean"
+    cleaned = _clean_with(monkeypatch, nothing)
+    assert cleaned == f"cleaned {Path('/src/widgets')}: nothing merged to clean"
 
 
 def test_a_clean_that_fails_partway_says_how_far_it_got(monkeypatch: pytest.MonkeyPatch) -> None:
