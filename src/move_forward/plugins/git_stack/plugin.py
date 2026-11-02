@@ -19,7 +19,7 @@ from .repository import MIGRATIONS, StackRepository
 FINGERPRINT = "stacks_fingerprint"
 """The kv key of the last `changes.fingerprint`."""
 TEMPLATE = """\
-# refresh_seconds = 300                 # how often it refreshes regardless of git's changes
+# refresh_seconds = 1800                # how often it refreshes regardless of git's changes
 """
 
 

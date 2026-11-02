@@ -4,7 +4,7 @@ from pydantic import Field
 
 from ...strict import Strict
 
-DEFAULT_REFRESH_SECONDS = 300
+DEFAULT_REFRESH_SECONDS = 1800
 
 
 class GitStackConfig(Strict):
