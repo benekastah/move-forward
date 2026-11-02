@@ -103,6 +103,11 @@ Sending, off by default:
   dashboard would write to the repos without a click (only remote-tracking refs), hence
   opt-in.
 
+- **Faster fallback polling with git's fsmonitor.** A worktree git can't watch (over
+  Linux's inotify watch limit, say) has its `git status` polled every `status_seconds`. In
+  a repo with `core.fsmonitor` on, that status is cheap, so it could be polled more often
+  there. Only worth it once someone actually lands in the fallback.
+
 ### The page
 
 - **First-run setup in the browser.** `/settings` edits a config that's there; `mfd serve`
