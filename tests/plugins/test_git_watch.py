@@ -95,6 +95,9 @@ def test_edits_and_commits_are_seen_as_they_happen(tmp_path: Path, watcher: watc
     moved.clear()
     git(repo, "config", "branch.main.stackParent", "base")  # as git-stack tracks a branch
     assert _until(took_move)
+    moved.clear()  # a first worktree, detached: no ref moves
+    git(repo, "worktree", "add", "-q", "--detach", str(tmp_path / "wt"))
+    assert _until(took_move)
 
 
 def test_a_worktree_no_longer_found_stops_being_watched(

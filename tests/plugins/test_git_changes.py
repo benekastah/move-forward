@@ -68,7 +68,7 @@ def test_a_worktree_is_watched_through_its_main_repository(tmp_path: Path) -> No
     assert changes.common_dir(tmp_path) is None  # not a checkout
 
 
-def test_the_plugin_says_changed_once_per_move_after_its_first_look(tmp_path: Path) -> None:
+def test_the_plugin_says_changed_after_a_move_until_a_refresh_reads_it(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
@@ -85,6 +85,10 @@ def test_the_plugin_says_changed_once_per_move_after_its_first_look(tmp_path: Pa
     assert not plugin.changed(ctx, Graph([]))  # nothing to compare against yet
     git(repo, "commit", "-q", "--allow-empty", "-m", "second")
     assert plugin.changed(ctx, Graph([]))
+    # Still, until a refresh reads it: core ignores the check right after a refresh, and a
+    # move seen there mustn't wait for the next one.
+    assert plugin.changed(ctx, Graph([]))
+    plugin.store(ctx, plugin.collect(ctx))
     assert not plugin.changed(ctx, Graph([]))
 
 
