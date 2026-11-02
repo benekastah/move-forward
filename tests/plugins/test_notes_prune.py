@@ -144,3 +144,15 @@ def test_what_is_on_ice_goes_when_its_work_is_over_but_stacks_stay() -> None:
         "took No ticket, no PR, stale off ice: its work is over",
     ]
     assert [i.title for i in notes.ices()] == [PR + "4", "APP-3", "/src/w\tme/x"]
+
+
+def test_offers_last_made_before_the_cutoff_are_forgotten() -> None:
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS)
+    notes = NotesRepository(db)
+    notes.offered(PR + "1", "nudge", OLD)
+    notes.offered(PR + "1", "fresh-review", RECENT)
+    notes.offered(PR + "2", "nudge", OLD)
+    graph, _ = _graph()
+    assert notes_prune.prune(notes, graph, CUTOFF) == ["forgot 2 old offer(s)"]
+    assert [(o.pr, o.kind) for o in notes.offers()] == [(PR + "1", "fresh-review")]

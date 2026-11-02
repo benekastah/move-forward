@@ -82,6 +82,10 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes decline <entry> <text>` | Record that something offered for an entry (a nudge, say) was turned down today. |
 | `mfd notes checked <entry> [--on DATE]` | Record that the skill checked in on an entry (today by default); kept as its `checked_on`. |
 | `mfd notes asked-done <entry> [--on DATE]` | Record that the skill asked whether an entry is done; kept as its `asked_done_on`. |
+| `mfd notes offered <pr URL> nudge\|fresh-review` | Record that the skill offered to nudge a PR's reviewers, or a fresh review of a PR that changed since its reviewer's review; kept with the time, replacing the last one of that kind. The daily prune forgets those older than `prune_days`. |
+| `mfd notes offers [--pr URL]` | When the skill last offered each kind on each PR, newest first. |
+| `mfd notes asked <question> [--on DATE]` | Record that the skill asked a once-a-day question (e.g. `ice`, whether anything should go on ice) today. `ice`'s date is also `on-ice.md`'s `Last asked`, which import and export read and write. |
+| `mfd notes last-asked <question>` | When the skill last asked it, or `never`. |
 | `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack and group, on ice, or a `pr` (by URL), `ticket` (by key) or `entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |

@@ -1,6 +1,7 @@
 """The notes' daily clean-up: todos done more than `prune_days` ago, entries whose work was
-all over that long ago (every PR merged or closed, every ticket resolved, no open todos), and
-PRs, tickets and entries on ice whose work is over the same way.
+all over that long ago (every PR merged or closed, every ticket resolved, no open todos),
+PRs, tickets and entries on ice whose work is over the same way, and offers last made that
+long ago.
 
 When PRs closed and tickets were resolved comes from `graph.fetch`, asking github and jira,
 since the work is usually long gone from their snapshots. Without jira, ticket keys aren't
@@ -111,4 +112,6 @@ def prune(notes: NotesRepository, graph: Graph, cutoff: datetime) -> list[str]:
         if _ice_over(ice, left, cutoff, prs, tickets):
             notes.delete_ice(ice.id)
             notices.append(f"took {ice.title} off ice: its work is over")
+    if forgotten := notes.forget_offers_before(cutoff):
+        notices.append(f"forgot {forgotten} old offer(s)")
     return notices

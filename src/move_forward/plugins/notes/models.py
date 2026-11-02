@@ -1,6 +1,6 @@
 """The notes plugin's data, as its tables hold it."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import Field
@@ -64,6 +64,20 @@ class Entry(Model):
     @property
     def open_todos(self) -> list[Todo]:
         return [t for t in self.todos if t.done_on is None]
+
+
+OfferKind = Literal["nudge", "fresh-review"]
+"""What the skill offers about a PR: a nudge to its reviewers (once a day), or a fresh
+review (once it changed since the reviewer's last review)."""
+
+
+class Offer(Model):
+    """The last time the skill offered something about a PR."""
+
+    pr: str
+    """The PR's URL."""
+    kind: OfferKind
+    offered_at: datetime
 
 
 class IcedItem(Model):
