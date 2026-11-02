@@ -144,9 +144,11 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return pushes.moved(cast(dict[str, str], before), now)
 
     def _notified(self, ctx: Context[GitHubConfig]) -> set[str]:
-        """The PRs I have a notification about (a review requested, a comment, a review) in
-        the org, newer than the last look; `EVERYTHING` for one not about a PR (CI). A "not
-        modified" answer is cheap, and GitHub's poll interval is kept to."""
+        """The PRs I have a notification about in the org (a review requested, a comment, a
+        review), newer than the last look. A CI run names only its repo, so it stands for my
+        open PRs there; what no search shows (an issue, a release, an alert) for nothing; and
+        anything else for `EVERYTHING`. A "not modified" answer is cheap, and GitHub's poll
+        interval is kept to."""
         wait = ctx.kv.get(NOTIFICATIONS_WAIT)
         if wait and ctx.now < datetime.fromisoformat(wait):
             return set()
@@ -160,10 +162,20 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         )
         if seen is None:
             return set()
-        return {
-            f"{n.repo}#{n.pr}" if n.pr is not None else EVERYTHING
-            for n in found.new_in(ctx.config.org, seen)
-        }
+        prs: set[str] = set()
+        ci_repos: set[str] = set()
+        for n in found.new_in(ctx.config.org, seen):
+            if n.pr is not None:
+                prs.add(f"{n.repo}#{n.pr}")
+            elif n.kind == notifications.CHECK_SUITE:
+                ci_repos.add(n.repo.lower())
+            elif n.kind not in notifications.UNRELATED:
+                prs.add(EVERYTHING)
+        if ci_repos:
+            if (snapshot := self.load(ctx)) is None:
+                return prs | {EVERYTHING}
+            prs |= {f"{pr.repo}#{pr.number}" for pr in snapshot.mine if pr.repo.lower() in ci_repos}
+        return prs
 
     def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
         return PrRepository(ctx.db).load()

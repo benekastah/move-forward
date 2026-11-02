@@ -42,6 +42,23 @@ class _Notification(BaseModel):
 
 
 _PULL_NUMBER = re.compile(r"/pulls/(\d+)$")
+CHECK_SUITE = "CheckSuite"
+"""A workflow run (CI) on something I pushed. It names its repo but not its PR."""
+UNRELATED = frozenset(
+    {
+        "Issue",
+        "Discussion",
+        "TeamDiscussion",
+        "Release",
+        "Commit",
+        "RepositoryVulnerabilityAlert",
+        "RepositoryDependabotAlertsThread",
+        "RepositoryAdvisory",
+        "SecurityAdvisoryCredit",
+    }
+)
+"""What notifications can be about that no PR search shows: issues, discussions, releases,
+comments on commits, security alerts."""
 
 
 @dataclass(frozen=True)
@@ -50,6 +67,9 @@ class Notification:
     """The repository's owner, an org or a user."""
     repo: str
     """`owner/name`."""
+    kind: str
+    """What it's about: `PullRequest`, `CheckSuite`, `Issue` and so on (GitHub's subject
+    type)."""
     pr: int | None
     """The number of the PR it's about; None when it isn't about a PR (an issue, a CI run)."""
     updated_at: datetime
@@ -80,6 +100,7 @@ def _notification(raw: _Notification) -> Notification:
     return Notification(
         owner=raw.repository.owner.login,
         repo=raw.repository.full_name,
+        kind=raw.subject.type,
         pr=int(number.group(1)) if is_pr and number else None,
         updated_at=raw.updated_at,
     )
