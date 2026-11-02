@@ -13,6 +13,7 @@ from pathlib import Path
 from .models import (
     CHECK_IN_TEXTS,
     CheckIn,
+    Condition,
     Declined,
     Entry,
     Ice,
@@ -33,7 +34,8 @@ BRANCH_ID_SEPARATOR = "\t"
 PR = "pr"
 BRANCH = "branch"
 
-PR_URL_RE = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
+PR_URL_RE = re.compile(r"https://[\w.-]+(?::\d+)?/[\w.-]+/[\w.-]+/pull/\d+")
+"""A pull request's URL, on github.com or a GitHub Enterprise Server."""
 _FIELD_RE = re.compile(r"^- ([^:]+?):\s*(.*)$")
 _DATED_RE = re.compile(r"^(Done|Declined) (\d{4}-\d{2}-\d{2})$")
 _CHILD_RE = re.compile(r"^\s+- (.*)$")
@@ -46,6 +48,29 @@ def links_in(text: str) -> list[Link]:
     """The PRs `text` names by URL, each once. The tickets it names aren't links: the graph
     finds them (see `Graph.named`)."""
     return [Link(kind=PR, ref=url) for url in dict.fromkeys(PR_URL_RE.findall(text))]
+
+
+CONDITION_LINE = "- Merge condition: "
+"""How a condition that holds no PR is kept: as a line of its entry, as written."""
+
+
+def attach_conditions(texts: list[str], entry_prs: list[str]) -> tuple[list[Condition], list[str]]:
+    """Conditions written for a whole entry (as the skill writes them, and as the notes kept
+    them before each named its PR), each given its PR: the one its text names (dropping a
+    leading `<url>: `, as `entry_markdown` writes it); else each of the entry's PRs, which
+    keeps them all held as before. With no PR at all, it can't hold anything yet, so it's
+    kept as a line of the entry instead (`CONDITION_LINE`), to add again with its PR."""
+    conditions: list[Condition] = []
+    kept: list[str] = []
+    for text in texts:
+        named = list(dict.fromkeys(PR_URL_RE.findall(text)))
+        if len(named) == 1 and text.startswith(f"{named[0]}: "):
+            text = text.removeprefix(f"{named[0]}: ")
+        if prs := named or entry_prs:
+            conditions += [Condition(pr=pr, text=text) for pr in prs]
+        else:
+            kept.append(CONDITION_LINE + text)
+    return conditions, kept
 
 
 def _sized(text: str) -> tuple[str, Size | None]:
@@ -85,6 +110,7 @@ def _entry(title: str, lines: list[str]) -> Entry:
     known: dict[str, str] = {}
     todos: list[Todo] = []
     conditions: list[str] = []
+    """As written, for the whole entry; `attach_conditions` gives each its PR."""
     declined: list[Declined] = []
     check_ins: dict[CheckIn, date] = {}
     """The latest of each check-in, which the skill wrote as `Declined <date>: Checked`."""
@@ -132,6 +158,8 @@ def _entry(title: str, lines: list[str]) -> Entry:
             kept.append(line)
             block = "kept"
     text = "\n".join([title, *lines])
+    links = links_in(text)
+    attached, unattached = attach_conditions(conditions, [link.ref for link in links])
     return Entry(
         id=0,
         title=title,
@@ -142,10 +170,10 @@ def _entry(title: str, lines: list[str]) -> Entry:
         checked_on=check_ins.get("checked"),
         asked_done_on=check_ins.get("asked_done"),
         todos=todos,
-        conditions=conditions,
+        conditions=attached,
         declined=declined,
-        lines=kept,
-        links=links_in(text),
+        lines=kept + unattached,
+        links=links,
     )
 
 
@@ -238,7 +266,7 @@ def entry_markdown(entry: Entry) -> str:
         lines.append(f"- Blocked on: {entry.blocked_on}")
     if entry.conditions:
         lines.append("- Merge conditions:")
-        lines += [f"  - {c}" for c in entry.conditions]
+        lines += [f"  - {c.pr}: {c.text}" for c in entry.conditions]
     lines += [f"- Declined {d.on.isoformat()}: {d.text}" for d in entry.declined]
     for text, on in (("Checked", entry.checked_on), ("Asked-done", entry.asked_done_on)):
         if on is not None:  # as the skill wrote them

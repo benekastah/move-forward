@@ -130,7 +130,7 @@ A branch git-stack tracks, including one git no longer has.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `merge_conditions` | list of strings | what must happen before its PRs merge |
+| `merge_conditions` | object of lists of strings | what must happen before each of its PRs merges, by the PR's URL; a PR without conditions isn't in it |
 | `open_todos` | list of strings | its open todos' text |
 
 ### `iced`

@@ -5,7 +5,16 @@ from datetime import date
 import pytest
 
 from move_forward.db import Database
-from move_forward.plugins.notes.models import Declined, Entry, Ice, IcedItem, Link, Section, Todo
+from move_forward.plugins.notes.models import (
+    Condition,
+    Declined,
+    Entry,
+    Ice,
+    IcedItem,
+    Link,
+    Section,
+    Todo,
+)
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
 DAY = date(2026, 10, 30)
@@ -87,7 +96,7 @@ def test_replace_all_keeps_everything_an_import_read(notes: NotesRepository) -> 
             Todo(id=0, text="reply", size="quick", links=[PR]),
             Todo(id=0, text="x", done_on=DAY),
         ],
-        conditions=["after PR 2"],
+        conditions=[Condition(pr=PR.ref, text="after PR 2")],
         declined=[Declined(on=DAY, text="don't nudge")],
         lines=["- Odd: kept as is"],
         links=[PR],
@@ -155,3 +164,25 @@ def test_check_ins_written_as_declines_move_into_their_fields() -> None:
     [entry] = NotesRepository(db).entries()
     assert (entry.checked_on, entry.asked_done_on) == (date(2026, 10, 5), date(2026, 10, 3))
     assert entry.declined == [Declined(on=date(2026, 10, 4), text="not today")]
+
+
+def test_conditions_kept_before_they_named_their_pr_are_given_one_once() -> None:
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS[:-1])  # before conditions named their PR
+    one, two = "https://github.com/acme/w/pull/1", "https://github.com/acme/w/pull/2"
+    db.execute("INSERT INTO notes_entries (id, title) VALUES (1, 'APP-1 two PRs')")
+    db.execute("INSERT INTO notes_entries (id, title) VALUES (2, 'APP-2 no PR')")
+    for ref in (one, two):
+        db.execute("INSERT INTO notes_links VALUES (1, 'pr', ?)", (ref,))
+    db.execute("INSERT INTO notes_conditions VALUES (1, 0, ?)", (f"wait for {two} to deploy",))
+    db.execute("INSERT INTO notes_conditions VALUES (1, 1, 'after the release')")
+    db.execute("INSERT INTO notes_conditions VALUES (2, 0, 'ask Sam')")
+    db.migrate("notes", MIGRATIONS)
+    first, second = NotesRepository(db).entries()
+    assert first.conditions == [
+        Condition(pr=two, text=f"wait for {two} to deploy"),
+        Condition(pr=one, text="after the release"),
+        Condition(pr=two, text="after the release"),
+    ]
+    assert second.conditions == [] and second.lines == ["- Merge condition: ask Sam"]
+    assert NotesRepository(db).entries() == [first, second]  # once

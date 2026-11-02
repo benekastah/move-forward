@@ -33,7 +33,8 @@ ENTRY = "entry"
 class _EntryView(Model):
     """What github reads of an `entry` (notes')."""
 
-    merge_conditions: list[str] = Field(default_factory=list[str])
+    merge_conditions: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
+    """By PR URL."""
     open_todos: list[str] = Field(default_factory=list[str])
 
 
@@ -294,7 +295,7 @@ class Builder:
                 reasons.append(f"stacked on {pr.base}")
             if reasons:
                 continue
-            conditions = [c for e in self._entries(pr) for c in e.merge_conditions]
+            conditions = [c for e in self._entries(pr) for c in e.merge_conditions.get(pr.url, [])]
             if conditions:
                 held.append(pr_item(self.now, pr, details=[f"held: {c}" for c in conditions]))
             else:

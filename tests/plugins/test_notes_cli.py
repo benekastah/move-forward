@@ -14,6 +14,7 @@ from move_forward.config import load
 from move_forward.db import Database
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.repository import LocalRepository
+from move_forward.plugins.notes.models import Condition
 from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.registry import migrate
 
@@ -106,9 +107,11 @@ def test_set_link_conditions_and_decline(run: Run, config: Path) -> None:
     code, _, err = run("link", "APP-1", PR)
     assert code == 1 and "already about" in err
     assert run("link", "APP-1", "not a link")[0] == 1
-    run("condition", "add", "APP-1", "wait for the release")
-    assert run("condition", "add", "APP-1", "wait for the release")[0] == 1
-    run("condition", "add", "APP-1", "ask Sam")
+    assert run("condition", "add", "APP-1", "wait for the release")[0] == 1  # which PR?
+    assert run("condition", "add", "APP-1", "x", "--pr", "https://example.com/5")[0] == 1
+    run("condition", "add", "APP-1", "wait for the release", "--pr", PR)
+    assert run("condition", "add", "APP-1", "wait for the release", "--pr", PR)[0] == 1
+    run("condition", "add", "APP-1", "ask Sam", "--pr", PR)
     assert run("condition", "remove", "APP-1", "ask Sam")[0] == 0
     assert run("condition", "remove", "APP-1", "ask Sam")[0] == 1
     run("decline", "APP-1", "nudge the reviewers")
@@ -116,7 +119,7 @@ def test_set_link_conditions_and_decline(run: Run, config: Path) -> None:
     [entry] = NotesRepository(_db(config)).entries()
     assert (entry.status, entry.blocked_on) == ("in review", "design review")
     assert entry.where == "engineering, branch me/app-1"
-    assert entry.conditions == ["wait for the release"]
+    assert entry.conditions == [Condition(pr=PR, text="wait for the release")]
     assert [(d.text, d.on) for d in entry.declined] == [
         ("nudge the reviewers", datetime.now(UTC).date())
     ]

@@ -141,12 +141,12 @@ Sending, off by default:
 
 ### Notes and the skill
 
-- **Real fields for the skill's stand-ins.** The move-forward skill keeps some state
-  outside the database until the notes can hold it: merge conditions apply to a
-  whole entry, so a PR's URL goes in the condition text; `reviewer-map.md` is read only
-  through `mfd slack import` and `mfd github import`, so the skill should set Slack ids
-  with `mfd slack contact set` rather than editing the map. Give the notes real fields or
-  tables for these, per-PR conditions included, and move the skill onto them.
+- **Move the skill onto the notes' fields.** Check-ins, offers, once-a-day questions and
+  per-PR merge conditions are in the notes now (`mfd notes checked`, `asked-done`,
+  `offered`, `asked`, `condition add --pr`); the skill still keeps them its old way until
+  it's changed to use them. Its `reviewer-map.md` is read only through `mfd slack import`
+  and `mfd github import`, so it should set Slack ids with `mfd slack contact set` rather
+  than editing the map.
 - **Clean-ups the daily prune lacks**: notes dropping old declines, and github dropping
   looked-up emails no PR has asked about in `prune_days`. (Finished entries go after 90
   days; the skill removes them sooner with `mfd notes remove`.)

@@ -32,6 +32,14 @@ class Todo(Model):
     links: list[Link] = Field(default_factory=list)
 
 
+class Condition(Model):
+    """Something that must happen before a PR merges."""
+
+    pr: str
+    """The PR it holds, by URL."""
+    text: str
+
+
 class Declined(Model):
     """Something offered and turned down for the day, e.g. "don't nudge today"."""
 
@@ -54,8 +62,8 @@ class Entry(Model):
     asked_done_on: date | None = None
     """When the skill last asked whether it's done."""
     todos: list[Todo] = Field(default_factory=list)
-    conditions: list[str] = Field(default_factory=list)
-    """What must happen before its PRs merge."""
+    conditions: list[Condition] = Field(default_factory=list)
+    """What must happen before its PRs merge, each about one PR."""
     declined: list[Declined] = Field(default_factory=list)
     lines: list[str] = Field(default_factory=list)
     """Lines the notes don't model, kept as written."""
