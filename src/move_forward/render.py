@@ -346,6 +346,7 @@ def dashboard_page(
         _head("Move forward", reload_seconds) + f"<header><h1>{LOGO}</h1><div class='header-right'>"
         f"{notice_html}<span>{_e(status)}</span>"
         "<a class='button' href='/focus'>Focus</a>"
+        "<a class='button secondary' href='/settings'>Settings</a>"
         "<form method='post' action='/refresh'><button type='submit'"
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
         + banner(warning, urgency)

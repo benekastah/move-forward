@@ -110,16 +110,11 @@ Sending, off by default:
 
 ### The page
 
-- **Settings from the page.** `mfd serve` restarts when the config changes (and passes
-  `mfd check`), so a settings page can change settings by writing the config file
-  (keeping its comments and hand edits), and the file stays the one source of truth:
-  `[act_now]` weights first, then plugins' sections. If the restart's second of downtime
-  gets in the way, apply edits live instead: swap the config in place, migrate plugins
-  newly enabled, and restart only for `port` and `db_path`. The same form does first-run
-  setup: `mfd serve` without a config opens it (still behind the token and same-site
-  checks, writing only the config file), with the browser's autocomplete for what can be
-  fetched as it's filled in (the org's teams once the org is given, like `mfd init`'s tab
-  completion).
+- **First-run setup in the browser.** `/settings` edits a config that's there; `mfd serve`
+  without one could open a form to make it (still behind the token and same-site checks,
+  writing only the config file), filling in what can be fetched as it goes (the org's
+  teams once the org is given, like `mfd init`'s tab completion). Tables (`[github.teams]`,
+  `[slack.teams]`) could join the settings page then too.
 - **Act now, after living with it.** Questions to answer from use: whether quick wins
   should lead at the end of the day and important work in the morning (a weight profile
   per part of the day); whether someone waiting on my team should weigh more (the `person`
