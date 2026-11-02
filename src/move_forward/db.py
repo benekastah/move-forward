@@ -127,12 +127,21 @@ CREATE TABLE act_now_feedback (        -- kept: what I said of an Act now item; 
 """
 """Snoozing, dismissing and pinning Act now's items."""
 
+_V6_NO_SNAPSHOT_JSON = """
+UPDATE snapshots SET payload = NULL WHERE payload IS NOT NULL;
+"""
+"""Each plugin keeps what it fetched in its own tables now, and core no longer writes the
+JSON copy; what's left is the last one before that. It held only fetched data, which the
+next refresh brings back, so a plugin enabled later loses nothing it needs. The column
+stays: plugins' first migrations, which copied from it, still name it."""
+
 CORE_MIGRATIONS = [
     V1_SCHEMA,
     _V2_KV_AND_LAYOUT,
     _V3_PLUGIN_SOURCES,
     _V4_NOTES_IN_THE_NOTES_PLUGIN,
     _V5_ACT_NOW_FEEDBACK,
+    _V6_NO_SNAPSHOT_JSON,
 ]
 
 _SCHEMA_VERSIONS = """
