@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import ClassVar
 
 from pydantic import BaseModel
@@ -10,6 +11,7 @@ from ...asking import Asker, InitSetup
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
+from ...shell import CommandError
 from . import actions, changes, client
 from .config import GitConfig
 from .kinds import BranchAttrs, RepoAttrs
@@ -26,6 +28,8 @@ MOVED = "repos_moved"
 """The kv key of the repos (common git directories) `changed` saw move, for `collect`."""
 LAST_FULL = "last_full_collect"
 """The kv key of when every repo was last read."""
+LAST_STATUS = "last_status_check"
+"""The kv key of when `changed` last checked the worktrees' status."""
 
 
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
@@ -73,19 +77,41 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
     def changed(self, ctx: Context[GitConfig], graph: Graph) -> bool:
         """Whether a repo's refs moved (see `changes`): reading a few files' times, cheap
-        enough to do every few seconds. Which ones moved is kept for `collect`, to read just
-        those."""
+        enough to do every few seconds; or, every `status_seconds`, whether a worktree's
+        uncommitted edits changed, by its `git status`. Which repos moved is kept for
+        `collect`, to read just those."""
         now = changes.fingerprints(ctx.config.repos)
         stored = ctx.kv.get(FINGERPRINTS)
         before: dict[str, str] | None = json.loads(stored) if stored else None
         if now != before:
             ctx.kv.set(FINGERPRINTS, json.dumps(now))
-        if before is None:
-            return False
-        if moved := changes.moved(before, now):
+        moved: set[str] = changes.moved(before, now) if before is not None else set()
+        moved |= self._edited(ctx)
+        if moved:
             pending = set(json.loads(ctx.kv.get(MOVED) or "[]")) | moved
             ctx.kv.set(MOVED, json.dumps(sorted(pending)))
-        return bool(moved) or set(before) != set(now)
+        return bool(moved) or (before is not None and set(before) != set(now))
+
+    def _edited(self, ctx: Context[GitConfig]) -> set[str]:
+        """The repos (common git directories) with a worktree whose uncommitted edits differ
+        from the last refresh's, when `status_seconds` have passed since the last look."""
+        seconds = ctx.config.status_seconds
+        last = ctx.kv.get(LAST_STATUS)
+        if not seconds or (
+            last and (ctx.now - datetime.fromisoformat(last)).total_seconds() < seconds
+        ):
+            return set()
+        ctx.kv.set(LAST_STATUS, ctx.now.isoformat())
+        edited: set[str] = set()
+        for repo in snapshot.repos if (snapshot := self.load(ctx)) else []:
+            for wt in repo.worktrees:
+                try:
+                    status = client.worktree_status(Path(wt.path))
+                except CommandError:  # gone since; the next read finds out
+                    continue
+                if status != (wt.modified, wt.untracked):
+                    edited.add(str(changes.common_dir(Path(repo.dir))))
+        return edited
 
     def load(self, ctx: Context[GitConfig]) -> LocalSnapshot | None:
         return LocalRepository(ctx.db).load()
