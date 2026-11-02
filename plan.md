@@ -108,6 +108,20 @@ Sending, off by default:
   a repo with `core.fsmonitor` on, that status is cheap, so it could be polled more often
   there. Only worth it once someone actually lands in the fallback.
 
+- **Switch git's watching to watchfiles.** watchdog runs a thread per watched path, so
+  threads grow with each worktree's top-level directories, and each tracked top-level
+  directory is watched recursively, ignored trees inside it included
+  (`packages/*/node_modules`). watchfiles (1.3.0, on Rust's `notify`, with wheels for
+  Linux, macOS and Windows) watches any number of paths from one thread, which makes the
+  better shape affordable: every directory git tracks (from `git ls-files`), each watched
+  on its own, not recursively. On Linux that's one inotify watch per tracked directory and
+  none for ignored ones anywhere, which matters most in big repos, where
+  `fs.inotify.max_user_watches` is the limit; a new untracked directory still shows in its
+  parent's events. Its API takes every path up front, with one `recursive` for them all, so
+  the watch restarts when the paths change (a worktree, or a tracked directory, added or
+  gone); the git directories, watched recursively, take a second one. It replaces watchdog
+  as a dependency.
+
 ### The page
 
 - **First-run setup in the browser.** `/settings` edits a config that's there; `mfd serve`
