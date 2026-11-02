@@ -241,7 +241,8 @@ entry goes when every PR it names was merged or closed and every ticket in
 its title resolved that long ago and it has no open todos (an entry with
 neither is cleared `prune_days` after it last changed), a PR, ticket or
 entry on ice comes off it once its work is over the same way (a stack stays
-until it's reopened), pings that old leave the database, and so do Act now's
+until it's reopened), the notes' offers and declines that old are forgotten,
+pings that old leave the database, and so do Act now's
 snoozes once over, and its dismissals and pins that old. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
