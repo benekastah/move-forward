@@ -55,13 +55,14 @@ def watcher() -> Iterator[watch.Watcher]:
     found.stop()
 
 
-def test_ref_changes_are_refs_head_and_packed_refs() -> None:
-    assert watch.is_ref_change(Path("refs/heads/me/x"))
-    assert watch.is_ref_change(Path("HEAD")) and watch.is_ref_change(Path("packed-refs"))
-    assert watch.is_ref_change(Path("worktrees/wt/HEAD"))
-    assert not watch.is_ref_change(Path("index"))
-    assert not watch.is_ref_change(Path("objects/ab/cdef"))
-    assert not watch.is_ref_change(Path("worktrees/wt/index"))
+def test_refs_head_packed_refs_and_config_move_a_repo() -> None:
+    assert watch.moves_repo(Path("refs/heads/me/x"))
+    assert watch.moves_repo(Path("HEAD")) and watch.moves_repo(Path("packed-refs"))
+    assert watch.moves_repo(Path("worktrees/wt/HEAD"))
+    assert watch.moves_repo(Path("config"))  # e.g. git-stack tracking a branch
+    assert not watch.moves_repo(Path("index"))
+    assert not watch.moves_repo(Path("objects/ab/cdef"))
+    assert not watch.moves_repo(Path("worktrees/wt/index"))
 
 
 def test_edits_and_commits_are_seen_as_they_happen(tmp_path: Path, watcher: watch.Watcher) -> None:
@@ -90,6 +91,9 @@ def test_edits_and_commits_are_seen_as_they_happen(tmp_path: Path, watcher: watc
         return common in moved
 
     git(repo, "commit", "-q", "-am", "second")
+    assert _until(took_move)
+    moved.clear()
+    git(repo, "config", "branch.main.stackParent", "base")  # as git-stack tracks a branch
     assert _until(took_move)
 
 

@@ -8,16 +8,17 @@ Enabled by a `[git]` section.
 `refresh_seconds` (300) is how often it refreshes in the background: it only reads local checkouts.
 It also refreshes within seconds of a change: it watches each repo (with watchdog: inotify
 on Linux, FSEvents on macOS, `ReadDirectoryChangesW` on Windows), so a commit, checkout,
-new or deleted branch, rebase, push or fetch, or an edit that changes what `git status`
-counts, refreshes the repo it happened in, reading only that one. Every `refresh_seconds`
+new or deleted branch, rebase, push or fetch, a change to its config (an upstream set,
+git-stack tracking a branch), or an edit that changes what `git status` counts, refreshes
+the repo it happened in, reading only that one. Every `refresh_seconds`
 it reads every repo anyway.
 
 It watches each repo's refs, and each worktree's root and the top-level directories git
 tracks: ignored trees at the top (`node_modules`, `build`, `.venv`) aren't watched. On
 Linux each watched directory takes an inotify watch, counted against
 `fs.inotify.max_user_watches`. A repo or worktree it can't watch (over that limit, say) is
-polled instead, as it says in the log: its refs every 2 seconds by the times of the files
-git keeps them in, without running git, and its edits every `status_seconds` (30; 0 leaves
+polled instead, as it says in the log: its refs and config every 2 seconds by the times of
+the files git keeps them in, without running git, and its edits every `status_seconds` (30; 0 leaves
 them to `refresh_seconds`) by `git status`. `git status` takes no lock, so it never gets in
 the way of your own git commands; in a very large repo, git's own file watcher makes it
 cheap: `git config core.fsmonitor true` (built in on macOS and Windows; on Linux it takes

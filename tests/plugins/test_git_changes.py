@@ -31,7 +31,7 @@ def _repo(path: Path) -> Path:
     return path
 
 
-def test_commits_checkouts_and_branches_change_the_fingerprint_but_status_does_not(
+def test_commits_checkouts_branches_and_config_change_the_fingerprint_but_status_does_not(
     tmp_path: Path,
 ) -> None:
     repo = _repo(tmp_path / "r")
@@ -55,6 +55,8 @@ def test_commits_checkouts_and_branches_change_the_fingerprint_but_status_does_n
     git(repo, "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "other")
     assert moved()
     git(tmp_path / "wt", "commit", "-q", "--allow-empty", "-m", "in the worktree")
+    assert moved()
+    git(repo, "config", "branch.feature.stackParent", "main")  # as git-stack tracks it
     assert moved()
 
 
