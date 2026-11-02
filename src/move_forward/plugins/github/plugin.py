@@ -104,6 +104,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
         return PrRepository(ctx.db).load()
 
+    def me(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None) -> str | None:
+        """My GitHub login, as the last refresh found it."""
+        return snapshot.login if snapshot and snapshot.login else None
+
     def _email_domains(self, ctx: Context[GitHubConfig]) -> list[str]:
         if ctx.config.email_domains:
             return ctx.config.email_domains

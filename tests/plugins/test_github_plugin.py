@@ -172,3 +172,8 @@ def test_a_pr_a_search_found_twice_is_kept_once_at_its_first_place() -> None:
         (1, "PR 1"),
         (2, "PR 2"),
     ]
+
+
+def test_github_says_who_i_am_by_my_login() -> None:
+    assert GitHubPlugin().me(_context(), snapshot()) == ME
+    assert GitHubPlugin().me(_context(), None) is None
