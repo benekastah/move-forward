@@ -60,7 +60,8 @@ flowchart LR
 
 Plugins collect in two phases: `collect` first, in parallel, then `collect_after` for
 plugins that need the others' entities to know what to fetch. A plugin's `requires` must
-be enabled too. Plugins add buttons to each other's items by the items' `subjects`.
+be enabled too; one that collects after the graph is refreshed with them, unless it
+`watches` them, when its `changed` decides. Plugins add buttons to each other's items by the items' `subjects`.
 
 ```mermaid
 flowchart TB

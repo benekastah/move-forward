@@ -59,9 +59,9 @@ def _collect_all(
 
 def refresh_seconds(e: Enabled) -> int | None:
     """How often a plugin refreshes on its own: its section's `refresh_seconds`. None for a
-    plugin that doesn't collect, or that collects after the plugins it requires (git_stack,
-    after git)."""
-    if e.plugin.snapshot_model is None or e.plugin.collects_after_graph:
+    plugin that doesn't collect, or has no such setting (one that collects after the plugins
+    it requires may rely on being refreshed with them)."""
+    if e.plugin.snapshot_model is None:
         return None
     seconds: object = getattr(e.ctx.config, "refresh_seconds", None)
     return seconds if isinstance(seconds, int) else None
@@ -72,7 +72,8 @@ def to_collect(
 ) -> tuple[list[Enabled], list[Enabled]]:
     """What a refresh of `only` (None: every plugin) collects: first the plugins that collect
     on their own, then those that collect after the graph, including any whose `requires`
-    are among the first."""
+    are among the first, unless it `watches` them too: then its `changed` decides, right
+    after they refresh."""
     collecting = [e for e in plugins if e.plugin.snapshot_model is not None]
     first = [
         e
@@ -84,7 +85,11 @@ def to_collect(
         e
         for e in collecting
         if e.plugin.collects_after_graph
-        and (only is None or e.name in only or names.intersection(e.plugin.requires))
+        and (
+            only is None
+            or e.name in only
+            or names.intersection(set(e.plugin.requires) - set(e.plugin.watches))
+        )
     ]
     return first, after
 

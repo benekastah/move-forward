@@ -222,3 +222,37 @@ def test_each_plugin_refreshes_on_its_own_setting() -> None:
     plugins = registry.enabled(config, Database(":memory:"), NOW)
     seconds = {e.name: refresh.refresh_seconds(e) for e in plugins}
     assert seconds == {"github": 300, "git": 30, "notes": None}
+
+
+def test_a_plugin_watching_what_it_requires_isnt_refreshed_with_it_but_on_its_own(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class Git(GitPlugin):
+        def collect(self, ctx: Context[GitConfig]) -> LocalSnapshot:
+            calls.append("git")
+            return local_snapshot()
+
+    class JiraWatchingGit(JiraPlugin):
+        collects_after_graph: ClassVar[bool] = True
+        requires: ClassVar[list[str]] = ["git"]
+        watches: ClassVar[list[str]] = ["git"]
+
+        def collect_after(self, ctx: Context[JiraConfig], graph: Graph) -> JiraSnapshot:
+            calls.append("jira")
+            return JiraSnapshot(issues=[])
+
+    swap = {"git": Git(), "jira": JiraWatchingGit()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    config = Config.model_validate(
+        {"email": "me@x", "git": {"repos": []}, "jira": {"site": "https://j"}}
+    )
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    refresh.refresh(config, db, NOW, {"git"})
+    assert calls == ["git"]  # its change check decides, not the refresh
+    refresh.refresh(config, db, NOW, {"jira"})
+    assert calls == ["git", "jira"]
+    seconds = {e.name: refresh.refresh_seconds(e) for e in registry.enabled(config, db, NOW)}
+    assert seconds["jira"] == 900  # collecting after the graph, on its own setting
