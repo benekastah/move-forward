@@ -1,9 +1,10 @@
-# Runs every check (formatting, lint, types, tests) on Linux, macOS and Windows, on every
-# push and pull request.
+# Runs every check (formatting, lint, types, tests) on Linux, macOS and Windows: once per
+# pull request (on the merge GitHub would make), and on whatever lands on main.
 name: check
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:

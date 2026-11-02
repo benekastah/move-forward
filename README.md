@@ -276,5 +276,5 @@ python3 dev.py coverage  # the tests under coverage.py: what they miss, and html
 
 On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points the repo at
 `git_hooks/`: `pre-commit` formats and lint-fixes staged Python, `pre-push` runs
-`dev.py check`. GitHub Actions runs `dev.py check` on Linux, macOS and Windows for every
-push and pull request (`.github/workflows/check.yml`).
+`dev.py check`. GitHub Actions runs `dev.py check` on Linux, macOS and Windows once per
+pull request, and on every push to `main` (`.github/workflows/check.yml`).
