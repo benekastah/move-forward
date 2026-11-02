@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
-from . import tls
-from .db import Database
+from . import act_now, tls
+from .db import CORE, OWNER_RE, Database
 from .graph import Entity, Graph, Ref
 from .plugin import Context, Plugin
 from .plugins.git.plugin import GitPlugin
@@ -34,6 +34,24 @@ PLUGINS: list[Plugin[Any, Any]] = [
     NotesPlugin(),
 ]
 """Every built-in plugin. Each one's name is a field of `Config`."""
+
+
+def check_names(plugins: list[Plugin[Any, Any]]) -> None:
+    """Raise unless every plugin's name is its own and fit to be one. A name is the plugin's
+    config section, its kv namespace and migrations' owner, its tables' prefix and the
+    first part of its actions' paths, so two plugins sharing one would share all of those;
+    and it mustn't be core's (`core`) or Act now's (`act_now`), which use the same places."""
+    names = [p.name for p in plugins]
+    if duplicates := sorted({name for name in names if names.count(name) > 1}):
+        raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
+    for name in names:
+        if not OWNER_RE.match(name):
+            raise RuntimeError(f"plugin name {name!r}: use lower-case letters, digits and _")
+        if name in (CORE, act_now.ACTIONS):
+            raise RuntimeError(f"plugin name {name!r} is core's")
+
+
+check_names(PLUGINS)
 
 
 @dataclass(frozen=True)

@@ -16,7 +16,7 @@ from move_forward.db import Database
 from move_forward.domain import Model
 from move_forward.graph import Entity, Graph, Ref
 from move_forward.page import Action, Item
-from move_forward.plugin import CliHandler, Context, PageHandler
+from move_forward.plugin import CliHandler, Context, PageHandler, Plugin
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
@@ -315,3 +315,20 @@ def test_today_is_the_local_date(monkeypatch: pytest.MonkeyPatch) -> None:
         kv=KvRepository(Database(":memory:"), "jira"),
     )
     assert ctx.today == date(2026, 10, 30)
+
+
+def _named(name: str) -> Plugin[BaseModel, BaseModel]:
+    class Named(Plugin[BaseModel, BaseModel]):
+        pass
+
+    Named.name = name
+    return Named()
+
+
+def test_plugin_names_are_each_their_own_and_none_is_cores() -> None:
+    registry.check_names(registry.PLUGINS)  # the built-in ones are fine
+    for clash in ([*registry.PLUGINS, registry.PLUGINS[0]], [_named("core")], [_named("act_now")]):
+        with pytest.raises(RuntimeError, match="named github|core's"):
+            registry.check_names(clash)
+    with pytest.raises(RuntimeError, match="lower-case"):
+        registry.check_names([_named("My-Plugin")])

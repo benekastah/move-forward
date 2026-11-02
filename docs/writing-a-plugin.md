@@ -90,6 +90,10 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
         return IssueRepository(ctx.db).load()
 ```
 
+- `name` is the config section, the kv namespace and migrations' owner, the tables'
+  prefix and the first part of the actions' paths: lower-case letters, digits and `_`,
+  unique, and not `core` or `act_now`. The registry checks this when it's imported.
+
 - A plugin that collects has a `refresh_seconds` setting in its section (with a default
   that suits its tool): the server refreshes it that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
