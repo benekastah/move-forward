@@ -226,6 +226,9 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
     failing = False
     refresh(9, "acme/widgets#2")  # refresh_seconds (300) since everything last ran
     assert len(searched) == 4 and len(fetched) == 2
+    many = [f"acme/widgets#{n}" for n in range(client.PAGE_SIZE + 1)]
+    refresh(10, *many)  # more than one request should carry: everything
+    assert len(searched) == 5 and len(fetched) == 2
 
 
 def test_the_daily_prune_looks_up_old_misses_again() -> None:

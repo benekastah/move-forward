@@ -77,10 +77,12 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         """Every search; or, after `changed` saw only some PRs change, just those PRs, placed
         in the stored lists as the searches would find them. Every search runs when a full
         collect is due (`refresh_seconds` since the last), so frequent changes can't put it
-        off, when a change wasn't about a PR (a CI run), and when fetching the PRs fails."""
+        off, when a change wasn't about a PR (a CI run), when more PRs changed than a search
+        page holds (a request for them all would time out), and when fetching them fails."""
         config = ctx.config
         changed = self._take_changed(ctx)
-        previous = None if EVERYTHING in changed or self._full_due(ctx) else self.load(ctx)
+        everything = EVERYTHING in changed or len(changed) > client.PAGE_SIZE
+        previous = None if everything or self._full_due(ctx) else self.load(ctx)
         if previous is not None and changed:
             ids = [_pr_id(pr) for pr in sorted(changed)]
             try:
@@ -107,10 +109,13 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         ctx.kv.set(CHANGED, "[]")
         return changed
 
-    def _note_changed(self, ctx: Context[GitHubConfig], prs: set[str]) -> None:
-        if prs:
-            pending = set(json.loads(ctx.kv.get(CHANGED) or "[]")) | prs
+    def _note_changed(self, ctx: Context[GitHubConfig], prs: set[str]) -> set[str]:
+        """Add `prs` to those pending for `collect`; all that are pending."""
+        pending = set(json.loads(ctx.kv.get(CHANGED) or "[]"))
+        if prs - pending:
+            pending |= prs
             ctx.kv.set(CHANGED, json.dumps(sorted(pending)))
+        return pending
 
     def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
         PrRepository(ctx.db).replace(snapshot)
@@ -122,10 +127,11 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
         refresh of git, which it watches), or I have a notification about something in the
         org, polled as often as GitHub allows. Which PRs changed is kept for `collect`, to
-        fetch just those."""
+        fetch just those, and asks for a refresh until it has."""
         changed = self._branches_moved(ctx, graph) | self._notified(ctx)
-        self._note_changed(ctx, changed)
-        return bool(changed)
+        # Pending until `collect` fetches them: what's seen in the check core makes right
+        # after a refresh (whose answer it ignores) still asks for a refresh at the next one.
+        return bool(self._note_changed(ctx, changed))
 
     def _branches_moved(self, ctx: Context[GitHubConfig], graph: Graph) -> set[str]:
         now = pushes.tips(graph, PR, REPO)
