@@ -33,6 +33,7 @@ teams = ["my-team"]                   # the teams I'm on or review for, by name
 
 [github]
 org = "example-org"
+# host = "github.com"                    # a GitHub Enterprise Server's host instead
 # refresh_seconds = 300
 # history_days = 14
 # review_checks = []                     # checks that report review status, not CI

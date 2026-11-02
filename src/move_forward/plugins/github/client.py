@@ -3,7 +3,7 @@
 The `Raw*` models mirror the GraphQL response shape, dropping anything we didn't ask for.
 """
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal
@@ -181,14 +181,18 @@ def _run_with_retry(args: list[str]) -> str:
     raise AssertionError("unreachable")
 
 
-def search_prs(query: str, with_files: bool = False) -> list[PullRequest]:
+def api(host: str, *args: str) -> list[str]:
+    """`gh api` on `host` (github.com, or an Enterprise server), with `args`."""
+    return ["gh", "api", "--hostname", host, *args]
+
+
+def search_prs(host: str, query: str, with_files: bool = False) -> list[PullRequest]:
     """Run a PR search, following pagination, and return every PR it finds."""
     prs: list[PullRequest] = []
     after: str | None = None
     while True:
         args = [
-            "gh",
-            "api",
+            *api(host),
             "graphql",
             "-F",
             f"withFiles={'true' if with_files else 'false'}",
@@ -310,25 +314,24 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
     )
 
 
-def login() -> str:
-    return run(["gh", "api", "user", "--jq", ".login"]).strip()
+def login(host: str) -> str:
+    return run(api(host, "user", "--jq", ".login")).strip()
 
 
-def team_members(org: str, team: str) -> list[str]:
-    out = run(["gh", "api", "--paginate", f"orgs/{org}/teams/{team}/members", "--jq", ".[].login"])
+def team_members(host: str, org: str, team: str) -> list[str]:
+    out = run(api(host, "--paginate", f"orgs/{org}/teams/{team}/members", "--jq", ".[].login"))
     return out.split()
 
 
-def commit_email(org_repo: str, user: str, email_domains: list[str]) -> str | None:
+def commit_email(host: str, org_repo: str, user: str, email_domains: list[str]) -> str | None:
     """A user's commit email in one of `email_domains`, from their recent commits in `org_repo`."""
     out = run(
-        [
-            "gh",
-            "api",
+        api(
+            host,
             f"repos/{org_repo}/commits?author={user}&per_page={COMMIT_EMAIL_LOOKUP_COUNT}",
             "--jq",
             ".[].commit.author.email",
-        ]
+        )
     )
     return next((e for e in out.split() if e.rsplit("@", 1)[-1] in email_domains), None)
 
@@ -350,27 +353,30 @@ def pr_state(url: str) -> tuple[str, datetime | None]:
     return ("merged" if raw.merged_at else "closed"), raw.merged_at or raw.closed_at
 
 
-def collect(org: str, teams: list[str], history_days: int, now: datetime) -> GitHubSnapshot:
-    """Every PR search the panels need."""
+def collect(
+    host: str, org: str, teams: list[str], history_days: int, now: datetime
+) -> GitHubSnapshot:
+    """Every PR search the panels need, on `host`."""
     since = (now - timedelta(days=history_days)).date().isoformat()
     with ThreadPoolExecutor(max_workers=PARALLEL_REQUESTS) as pool:
-        login_future = pool.submit(login)
-        mine = pool.submit(search_prs, "is:pr is:open author:@me archived:false", True)
-        direct = pool.submit(search_prs, "is:pr is:open user-review-requested:@me archived:false")
-        reviewed = pool.submit(
-            search_prs, "is:pr is:open reviewed-by:@me -author:@me archived:false"
-        )
+
+        def search(query: str, with_files: bool = False) -> Future[list[PullRequest]]:
+            return pool.submit(search_prs, host, query, with_files)
+
+        login_future = pool.submit(login, host)
+        mine = search("is:pr is:open author:@me archived:false", True)
+        direct = search("is:pr is:open user-review-requested:@me archived:false")
+        reviewed = search("is:pr is:open reviewed-by:@me -author:@me archived:false")
         team_futures = [
-            pool.submit(
-                search_prs,
+            search(
                 f"is:pr is:open team-review-requested:{org}/{team} -author:@me archived:false",
                 True,
             )
             for team in teams
         ]
-        merged = pool.submit(search_prs, f"is:pr is:merged author:@me merged:>={since}")
-        closed = pool.submit(search_prs, f"is:pr is:closed is:unmerged author:@me closed:>={since}")
-        member_futures = [pool.submit(team_members, org, team) for team in teams]
+        merged = search(f"is:pr is:merged author:@me merged:>={since}")
+        closed = search(f"is:pr is:closed is:unmerged author:@me closed:>={since}")
+        member_futures = [pool.submit(team_members, host, org, team) for team in teams]
     team_requests: dict[str, PullRequest] = {}
     for future in team_futures:
         for pr in future.result():

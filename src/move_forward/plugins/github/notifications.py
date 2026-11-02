@@ -51,9 +51,10 @@ class Notifications:
         return any(owner.lower() == org.lower() and when > after for owner, when in self.updated)
 
 
-def fetch(if_modified_since: str | None) -> Notifications | None:
-    """My unread notifications, or None when nothing changed since `if_modified_since`."""
-    args = ["gh", "api", "--include", "notifications"]
+def fetch(host: str, if_modified_since: str | None) -> Notifications | None:
+    """My unread notifications on `host`, or None when nothing changed since
+    `if_modified_since`."""
+    args = ["gh", "api", "--hostname", host, "--include", "notifications"]
     if if_modified_since:
         args += ["-H", f"If-Modified-Since: {if_modified_since}"]
     try:

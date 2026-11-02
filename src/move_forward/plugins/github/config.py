@@ -4,6 +4,7 @@ from pydantic import Field
 
 from ...strict import Strict
 
+DEFAULT_HOST = "github.com"
 DEFAULT_HISTORY_DAYS = 14
 DEFAULT_REVIEW_CHECKS: list[str] = []
 DEFAULT_PLACEHOLDER_LABELS: list[str] = []
@@ -17,8 +18,11 @@ class GitHubConfig(Strict):
     refresh_seconds: int = Field(default=300, ge=10)
     """How often the dashboard refreshes this plugin's data in the background (GitHub's API is rate-limited)."""
 
+    host: str = DEFAULT_HOST
+    """GitHub's host: github.com, or a GitHub Enterprise Server's (e.g. `github.acme.com`),
+    which `gh` must be logged in to (`gh auth login --hostname <host>`)."""
     org: str
-    """The GitHub organization, as in github.com/<org>."""
+    """The GitHub organization, as in https://<host>/<org>."""
     history_days: int = DEFAULT_HISTORY_DAYS
     """How far back to fetch my merged and closed PRs (Jira transitions, cleanup, PR states)."""
     review_checks: list[str] = Field(default_factory=lambda: list(DEFAULT_REVIEW_CHECKS))
