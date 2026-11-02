@@ -115,7 +115,7 @@ is what's left to build.
   plugin publishes. Tests touching git make real repos in `tmp_path`; tests
   never touch the network.
 - **No new runtime dependencies.** pydantic, cryptography (for the HTTPS
-  certificate) and watchdog (git watching its repos) are the only ones; tools are
+  certificate) and watchfiles (git watching its repos) are the only ones; tools are
   reached through their CLIs (`gh`, `git`) or the standard library.
 - **Linux, macOS and Windows, with every change.** Each change must keep working
   on all three; CI runs `dev.py check` on each, and it must pass on all of them.
