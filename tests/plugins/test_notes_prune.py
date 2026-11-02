@@ -156,3 +156,18 @@ def test_offers_last_made_before_the_cutoff_are_forgotten() -> None:
     graph, _ = _graph()
     assert notes_prune.prune(notes, graph, CUTOFF) == ["forgot 2 old offer(s)"]
     assert [(o.pr, o.kind) for o in notes.offers()] == [(PR + "1", "fresh-review")]
+
+
+def test_declines_made_by_the_cutoff_are_dropped() -> None:
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS)
+    notes = NotesRepository(db)
+    entry = notes.add_entry("APP-5 in progress", NOW.date())
+    notes.add_todo(entry, "keep going")
+    notes.add_declined(entry, OLD.date(), "Ping alice")
+    notes.add_declined(entry, CUTOFF.date(), "Ping bob")
+    notes.add_declined(entry, RECENT.date(), "Ping carol")
+    graph, _ = _graph()
+    assert notes_prune.prune(notes, graph, CUTOFF) == ["dropped 2 old decline(s)"]
+    [kept] = notes.entries()
+    assert [d.text for d in kept.declined] == ["Ping carol"]

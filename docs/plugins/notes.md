@@ -79,7 +79,7 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes todo done\|undone\|delete <id>` | Tick a todo off, reopen it, or drop it without recording it as done. |
 | `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
 | `mfd notes condition add <entry> <text> --pr <URL>` / `remove <entry> <text> [--pr <URL>]` | Add a merge condition holding one of the entry's PRs, or remove one (from that PR, or from every PR it holds). Conditions kept before each named its PR, and those the import reads, are given one: the PR their text names, else each of the entry's PRs; one with no PR to hold becomes a line of its entry, `- Merge condition: …`, to add again with `--pr`. |
-| `mfd notes decline <entry> <text>` | Record that something offered for an entry (a nudge, say) was turned down today. |
+| `mfd notes decline <entry> <text>` | Record that something offered for an entry (a nudge, say) was turned down today. The daily prune drops those older than `prune_days`. |
 | `mfd notes checked <entry> [--on DATE]` | Record that the skill checked in on an entry (today by default); kept as its `checked_on`. |
 | `mfd notes asked-done <entry> [--on DATE]` | Record that the skill asked whether an entry is done; kept as its `asked_done_on`. |
 | `mfd notes offered <pr URL> nudge\|fresh-review` | Record that the skill offered to nudge a PR's reviewers, or a fresh review of a PR that changed since its reviewer's review; kept with the time, replacing the last one of that kind. The daily prune forgets those older than `prune_days`. |

@@ -317,6 +317,13 @@ class NotesRepository:
                 "DELETE FROM notes_offers WHERE offered_at < ?", (cutoff.isoformat(),)
             ).rowcount
 
+    def forget_declines_by(self, day: date) -> int:
+        """Delete declines made on or before `day`; how many went."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM notes_declined WHERE on_date <= ?", (day.isoformat(),)
+            ).rowcount
+
     def set_status(self, entry_id: int, status: str | None) -> None:
         self._db.execute("UPDATE notes_entries SET status = ? WHERE id = ?", (status, entry_id))
 
