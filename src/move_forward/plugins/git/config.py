@@ -6,6 +6,7 @@ from pydantic import Field, field_validator
 
 from ...strict import Strict
 
+DEFAULT_REFRESH_SECONDS = 300
 DEFAULT_COMMIT_HISTORY_DAYS = 180
 DEFAULT_IGNORED_WORKTREE_GLOBS = ["*/.claude/worktrees/*"]
 
@@ -13,7 +14,7 @@ DEFAULT_IGNORED_WORKTREE_GLOBS = ["*/.claude/worktrees/*"]
 class GitConfig(Strict):
     """`[git]`: the repos I work in on this machine."""
 
-    refresh_seconds: int = Field(default=60, ge=10)
+    refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
     """How often the dashboard refreshes this plugin's data in the background (it only reads local checkouts)."""
 
     repos: list[Path]

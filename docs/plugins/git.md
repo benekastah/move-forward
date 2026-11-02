@@ -5,7 +5,7 @@ Enabled by a `[git]` section.
 
 ## Config
 
-`refresh_seconds` (60) is how often it refreshes in the background: it only reads local checkouts.
+`refresh_seconds` (300) is how often it refreshes in the background: it only reads local checkouts.
 It also refreshes within seconds of a commit, checkout, new or deleted branch, rebase,
 push or fetch in one of the repos: every 5 seconds it compares the times of the files git
 keeps its refs in, without running git. Edits not yet committed (and staging) wait for
