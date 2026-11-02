@@ -1,38 +1,45 @@
-"""Watching the repos as they change, with watchdog (inotify on Linux, FSEvents on macOS,
-`ReadDirectoryChangesW` on Windows), so `GitPlugin.changed` knows at once which repos
-moved and which worktrees were edited, instead of polling.
+"""Watching the repos as they change, with watchfiles (Rust's `notify`: inotify on Linux,
+FSEvents on macOS, `ReadDirectoryChangesW` on Windows), so `GitPlugin.changed` knows at once
+which repos moved and which worktrees were edited, instead of polling.
 
-A repo's refs and config are watched in its common git directory, recursively: one
-watch, and FSEvents reports a new `worktrees/<name>/HEAD` without its parent directories
-being created. Of what changes there, only refs, `HEAD`s, `packed-refs` and `config` count
-(see `moves_repo`); objects, logs and the index don't.
+A repo's refs and config are watched in its common git directory, recursively: FSEvents
+reports a new `worktrees/<name>/HEAD` without its parent directories being created. Of
+what changes there, only refs, `HEAD`s, `packed-refs` and `config` count (see
+`moves_repo`), and each worktree's index (`git add` writes nothing else), which counts as
+an edit to that worktree.
 
-A worktree's edits are watched in its root (not recursively) and in each top-level
-directory git tracks (recursively), so the big ignored trees usually at the top
-(`node_modules`, `build`, `.venv`) cost no watches; a new untracked directory shows in the
-root's events. watchdog runs a thread per watched path, which is why it's these few and not
-every directory.
+A worktree's edits are watched where git tracks files. On Linux, where inotify watches a
+directory at a time, that's each directory in the index, on its own: ignored trees
+(`node_modules`, `build`, `.venv`, wherever they are) cost no watches, and a new untracked
+directory shows in its parent's events. On macOS and Windows, whose watches cover a tree
+at once, it's the worktree, recursively.
 
 An edit only says a worktree may have changed: `changed` asks its `git status` whether the
-counts the page shows did. A repo or worktree with a path that can't be watched
-(inotify's watch limit, say) is left to the polling in `changes` and `status_seconds`, all
-of it: half-watched would miss changes.
+counts the page shows did. Each set of paths is watched by one `RustNotify` read by one
+thread, however many paths: one for the git directories, recursively, and on Linux one for
+the worktrees' directories. When either can't be watched (inotify's watch limit, say),
+what it covers is left to the polling in `changes` and `status_seconds`.
 """
 
 import logging
+import sys
 import threading
-from pathlib import Path
+from collections.abc import Callable, Iterable
+from pathlib import Path, PurePosixPath
 
-from watchdog.events import FileSystemEvent, FileSystemEventHandler
-from watchdog.observers import Observer
-from watchdog.observers.api import BaseObserver, ObservedWatch
+from watchfiles._rust_notify import RustNotify
 
 from ...shell import CommandError, git
 
 log = logging.getLogger(__name__)
 
-_IGNORED_EVENTS = {"opened", "closed_no_write"}
-"""Reads, not changes: git's own `git status` opens files."""
+DEBOUNCE_MS = 200
+"""How long a burst of changes is gathered before it's handed over."""
+STEP_MS = 50
+TIMEOUT_MS = 1000
+"""How often a watching thread looks up from waiting, to see whether it should stop."""
+PER_DIRECTORY = sys.platform == "linux"
+"""Whether worktrees are watched a directory at a time (inotify) rather than as a tree."""
 
 
 def _within(path: Path, root: Path) -> Path | None:
@@ -58,41 +65,87 @@ def moves_repo(relative: Path) -> bool:
     return parts[0] == "worktrees" and len(parts) == 3 and parts[2] == "HEAD"
 
 
-def tracked_top_dirs(worktree: Path) -> list[Path]:
-    """The top-level directories git tracks in `worktree`, as of its `HEAD`; none in a
-    repo without commits."""
+def git_dir(worktree: Path) -> Path | None:
+    """A worktree's own git directory: `.git` in the main worktree, or for a linked one the
+    directory its `.git` file names. None when it isn't a checkout."""
+    dot = worktree / ".git"
+    if dot.is_dir():
+        return dot
+    if not dot.is_file():
+        return None
+    text = dot.read_text().strip()
+    if not text.startswith("gitdir:"):
+        return None
+    return (worktree / text.removeprefix("gitdir:").strip()).resolve()
+
+
+def tracked_dirs(worktree: Path) -> set[Path]:
+    """The worktree and every directory in its index, i.e. with a file git tracks or a new
+    one staged."""
     try:
-        out = git(worktree, "ls-tree", "-d", "--name-only", "-z", "HEAD")
+        out = git(worktree, "ls-files", "-z")
     except CommandError:
-        return []
-    return [worktree / name for name in out.split("\0") if name]
+        return {worktree}
+    found = {worktree}
+    for name in out.split("\0"):
+        for parent in PurePosixPath(name).parents:
+            if parent.parts:
+                found.add(worktree.joinpath(*parent.parts))
+    return found
 
 
-class Watcher(FileSystemEventHandler):
+class _Watch:
+    """One `RustNotify` over a set of paths, and the thread handing over its changes."""
+
+    def __init__(
+        self, paths: frozenset[Path], recursive: bool, on_change: Callable[[list[Path]], None]
+    ):
+        self.paths = paths
+        self._on_change = on_change
+        self._stop = threading.Event()
+        self._notify = RustNotify(sorted(str(p) for p in paths), False, False, 0, recursive, True)
+        self._thread = threading.Thread(target=self._run, name="git-watch", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            changes = self._notify.watch(DEBOUNCE_MS, STEP_MS, TIMEOUT_MS, self._stop)
+            if isinstance(changes, set):
+                self._on_change([Path(path) for _, path in changes])
+
+    def close(self) -> None:
+        self._stop.set()
+        self._thread.join()
+        self._notify.close()
+
+
+class Watcher:
     """Watches repos and their worktrees, collecting which moved and which were edited
-    until `take` hands them over.
+    until `take` hands them over."""
 
-    watchdog calls `on_any_event` holding its own lock, so the observer is only scheduled
-    and unscheduled outside `_lock`, which guards what the events are matched against."""
-
-    def __init__(self, observer: BaseObserver | None = None):
-        self._observer = observer or Observer()
-        self._observer.start()
+    def __init__(self) -> None:
         self._sync_lock = threading.Lock()
         """One `sync` at a time."""
-        self._places: dict[tuple[Path, bool], ObservedWatch] = {}
-        """Each watched path, and whether recursively; only `sync` touches it."""
+        self._watches: dict[bool, _Watch] = {}
+        """The watch of the paths watched recursively (True), and of those that aren't."""
+        self._listed: dict[Path, tuple[tuple[int, int], set[Path]]] = {}
+        """Each worktree's tracked directories, with the index's time and size when they
+        were listed, to list them again only once it changed."""
         self._lock = threading.Lock()
         self._repos: set[Path] = set()
-        """The common git directories whose refs are all watched."""
+        """The common git directories whose refs are watched."""
         self._worktrees: dict[Path, Path] = {}
-        """The worktrees whose edits are all watched, with their common git directories."""
+        """The worktrees whose edits are watched, with their common git directories."""
+        self._indexes: dict[Path, Path] = {}
+        """Each watched worktree, by its index file."""
         self._moved: set[Path] = set()
         self._edited: set[Path] = set()
 
     def stop(self) -> None:
-        self._observer.stop()
-        self._observer.join()
+        with self._sync_lock:
+            for watch in self._watches.values():
+                watch.close()
+            self._watches.clear()
 
     @property
     def repos(self) -> set[Path]:
@@ -106,30 +159,57 @@ class Watcher(FileSystemEventHandler):
 
     def sync(self, worktrees: dict[Path, Path]) -> None:
         """Watch exactly these worktrees (each with its common git directory, all resolved)
-        and their repos: what's new is added, what's gone dropped, and a worktree whose
-        tracked top-level directories changed (a checkout, a commit) follows them."""
+        and their repos, following what each tracks."""
         with self._sync_lock:
-            wanted: dict[Path, list[tuple[Path, bool]]] = {}
-            for common in set(worktrees.values()):
-                wanted[common] = [(common, True)]
+            commons = frozenset(c for c in worktrees.values() if c.is_dir())
+            if PER_DIRECTORY:
+                repos_ok = self._ensure(True, commons)
+                dirs = frozenset(d for w in worktrees for d in self._tracked(w) if d.is_dir())
+                worktrees_ok = self._ensure(False, dirs) and repos_ok
+            else:
+                trees = commons | {w for w in worktrees if w.is_dir()}
+                repos_ok = worktrees_ok = self._ensure(True, trees)
+            indexes: dict[Path, Path] = {}
             for worktree in worktrees:
-                wanted[worktree] = [(worktree, False)] + [
-                    (d, True) for d in tracked_top_dirs(worktree)
-                ]
-            places = {place for found in wanted.values() for place in found if place[0].is_dir()}
-            for place in set(self._places) - places:
-                self._observer.unschedule(self._places.pop(place))
-            for place in places - set(self._places):
-                if watch := self._schedule(*place):
-                    self._places[place] = watch
-            watched = {
-                key
-                for key, found in wanted.items()
-                if all(place in self._places for place in found if place[0].is_dir())
-            }
+                if (own := git_dir(worktree)) is not None:
+                    indexes[(own / "index").resolve()] = worktree
             with self._lock:
-                self._repos = {c for c in set(worktrees.values()) if c in watched}
-                self._worktrees = {w: c for w, c in worktrees.items() if w in watched}
+                self._repos = set(commons) if repos_ok else set()
+                self._worktrees = dict(worktrees) if worktrees_ok else {}
+                self._indexes = indexes if worktrees_ok else {}
+
+    def _tracked(self, worktree: Path) -> set[Path]:
+        """`tracked_dirs`, listed again only when the worktree's index changed."""
+        own = git_dir(worktree)
+        try:
+            stat = (own / "index").stat() if own else None
+        except OSError:
+            stat = None
+        if stat is None:
+            return tracked_dirs(worktree)
+        key = (stat.st_mtime_ns, stat.st_size)
+        listed = self._listed.get(worktree)
+        if listed is None or listed[0] != key:
+            listed = (key, tracked_dirs(worktree))
+            self._listed[worktree] = listed
+        return listed[1]
+
+    def _ensure(self, recursive: bool, paths: frozenset[Path]) -> bool:
+        """Watch `paths` (recursively or not), unless they already are; whether they are."""
+        current = self._watches.get(recursive)
+        if current is not None and current.paths == paths:
+            return True
+        if current is not None:
+            current.close()
+            del self._watches[recursive]
+        if not paths:
+            return True
+        try:
+            self._watches[recursive] = _Watch(paths, recursive, self._note)
+        except (OSError, RuntimeError) as e:  # the watch limit, or a path gone since
+            log.warning("can't watch %d paths, so polling them: %s", len(paths), e)
+            return False
+        return True
 
     def take(self) -> tuple[set[Path], set[Path]]:
         """The repos (common git directories) that moved and the worktrees edited since
@@ -139,34 +219,27 @@ class Watcher(FileSystemEventHandler):
             self._moved, self._edited = set(), set()
         return moved, edited
 
-    def _schedule(self, path: Path, recursive: bool) -> ObservedWatch | None:
-        try:
-            return self._observer.schedule(self, str(path), recursive=recursive)
-        except OSError as e:  # the watch limit, or a path that's gone
-            log.warning("can't watch %s, so polling it: %s", path, e)
-            return None
-
-    def on_any_event(self, event: FileSystemEvent) -> None:
-        if event.event_type in _IGNORED_EVENTS:
-            return
-        paths = [event.src_path, event.dest_path] if event.dest_path else [event.src_path]
-        for raw in paths:
-            self._note(Path(raw if isinstance(raw, str) else raw.decode()))
-
-    def _note(self, path: Path) -> None:
+    def _note(self, paths: Iterable[Path]) -> None:
         with self._lock:
-            for common in self._repos:
-                if (relative := _within(path, common)) is not None:
-                    if moves_repo(relative):
-                        self._moved.add(common)
-                    return
-            worktree = max(
-                (w for w in self._worktrees if _within(path, w) is not None),
-                key=lambda w: len(w.parts),
-                default=None,
-            )
-            if worktree is None:
+            for path in paths:
+                self._note_one(path)
+
+    def _note_one(self, path: Path) -> None:
+        if (worktree := self._indexes.get(path)) is not None:
+            self._edited.add(worktree)
+            return
+        for common in self._repos:
+            if (relative := _within(path, common)) is not None:
+                if moves_repo(relative):
+                    self._moved.add(common)
                 return
-            relative = _within(path, worktree)
-            if relative is not None and relative.parts[:1] != (".git",):
-                self._edited.add(worktree)
+        worktree = max(
+            (w for w in self._worktrees if _within(path, w) is not None),
+            key=lambda w: len(w.parts),
+            default=None,
+        )
+        if worktree is None:
+            return
+        relative = _within(path, worktree)
+        if relative is not None and relative.parts[:1] != (".git",):
+            self._edited.add(worktree)
