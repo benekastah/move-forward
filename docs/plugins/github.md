@@ -22,10 +22,13 @@ conflict, wait for `refresh_seconds`.
 
 Such a refresh fetches only the PRs that changed, in one request, and places them in the
 lists the searches fill (mine, merged or closed; requesting my review or my team's;
-reviewed by me), keeping the rest as they were. Every search runs instead when
-`refresh_seconds` have passed since they last did, when a notification isn't about a PR
-(a CI run), and when fetching the PRs fails. A PR that newly concerns me without a
-notification (one I just opened, say) waits for that.
+reviewed by me), keeping the rest as they were. A CI run's notification names its repo,
+not its PR, so it fetches my open PRs in that repo; one about what no search shows (an
+issue, a discussion, a release, a commit comment, a security alert) fetches nothing. Every
+search runs instead when `refresh_seconds` have passed since they last did, for a
+notification about anything else, when more PRs changed than a search page holds (25), and
+when fetching the PRs fails. A PR that newly concerns me without a notification (one I
+just opened, say) waits for that.
 
 `[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
 fetched. Its conventions that differ between organisations are off by default:

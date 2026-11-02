@@ -4,7 +4,7 @@ import json
 from datetime import timedelta
 
 import pytest
-from conftest import NOW
+from conftest import NOW, pr, snapshot
 
 from move_forward.db import Database
 from move_forward.graph import Graph
@@ -12,6 +12,8 @@ from move_forward.plugin import Context
 from move_forward.plugins.github import notifications
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import CHANGED, EVERYTHING, GitHubPlugin
+from move_forward.plugins.github.snapshots import PrRepository
+from move_forward.plugins.github.tables import MIGRATIONS
 from move_forward.repositories import KvRepository
 from move_forward.shell import CommandError
 
@@ -19,14 +21,17 @@ FIRST = "Fri, 30 Oct 2026 11:00:00 GMT"
 SECOND = "Fri, 30 Oct 2026 12:02:00 GMT"
 THIRD = "Fri, 30 Oct 2026 12:03:00 GMT"
 FOURTH = "Fri, 30 Oct 2026 12:05:00 GMT"
+FIFTH = "Fri, 30 Oct 2026 12:06:00 GMT"
+SIXTH = "Fri, 30 Oct 2026 12:07:00 GMT"
 
 
-def _note(owner: str, when: str, pr: int | None = 7) -> str:
-    """A notification about PR `pr` of `owner`/widgets, or about a CI run when None."""
+def _note(owner: str, when: str, pr: int | None = 7, kind: str = "PullRequest") -> str:
+    """A notification about PR `pr` of `owner`/widgets, or with `pr` None about a `kind` of
+    thing that isn't a PR."""
     subject = (
-        {"type": "PullRequest", "url": f"https://api.github.com/repos/{owner}/widgets/pulls/{pr}"}
+        {"type": kind, "url": f"https://api.github.com/repos/{owner}/widgets/pulls/{pr}"}
         if pr is not None
-        else {"type": "CheckSuite", "url": None}
+        else {"type": kind, "url": None}
     )
     return json.dumps(
         {
@@ -59,7 +64,9 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
         _answer(
             THIRD, _note("ACME", "2026-10-30T12:02:30Z", 8), _note("acme", "2026-10-30T10:00:00Z")
         ),
-        _answer(FOURTH, _note("acme", "2026-10-30T12:04:30Z", None)),
+        _answer(FOURTH, _note("acme", "2026-10-30T12:04:30Z", None, "CheckSuite")),
+        _answer(FIFTH, _note("acme", "2026-10-30T12:05:30Z", None, "Issue")),
+        _answer(SIXTH, _note("acme", "2026-10-30T12:06:30Z", None, "SomethingNew")),
     ]
     asked: list[list[str]] = []
 
@@ -72,8 +79,16 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
 
     monkeypatch.setattr(notifications, "run", run)
     db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    PrRepository(db).replace(snapshot(mine=[pr(1)], direct_requests=[pr(2, author="alice")]))
     plugin = GitHubPlugin()
     kv = KvRepository(db, "github")
+
+    def taken() -> list[str]:
+        """What `collect` would fetch, taken as it takes it."""
+        found = json.loads(kv.get(CHANGED) or "[]")
+        kv.set(CHANGED, "[]")
+        return found
 
     def changed(minutes: int) -> bool:
         ctx = Context(
@@ -93,9 +108,12 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
     assert asked[-1][-2:] == ["-H", f"If-Modified-Since: {FIRST}"]
     assert not changed(2)  # new, but not in the org
     assert changed(3)  # new in the org, whatever the case of its name
-    assert json.loads(kv.get(CHANGED) or "") == ["ACME/widgets#8"]  # what collect fetches
-    assert changed(5)  # a CI run: not a PR, so everything
-    assert json.loads(kv.get(CHANGED) or "") == [EVERYTHING, "ACME/widgets#8"]
+    assert taken() == ["ACME/widgets#8"]
+    assert changed(5)  # a CI run names its repo, not its PR: my open PRs there
+    assert taken() == ["acme/widgets#1"]
+    assert not changed(6)  # an issue: no PR search shows it
+    assert changed(7)  # something new to us: everything
+    assert taken() == [EVERYTHING]
     assert answers == []
 
 
