@@ -13,33 +13,34 @@ PAGE_RELOAD_SECONDS = 60
 REFRESHING_RELOAD_SECONDS = 10
 """Reload faster while a refresh runs, so the new data shows up soon after it lands."""
 OPEN_SECTIONS_SCRIPT = (
-    # The server renders each <details> open or closed from the `open` query parameter
-    # (`?open=act,github.feedback`). This keeps that parameter current: one debounced
-    # replaceState per burst of toggles (browsers throttle rapid history updates), and
-    # only when the state changed (browsers fire toggle at load for sections that start
-    # open); the query is carried along when a button's form posts (so the redirect back
-    # keeps it), and by the periodic reload.
-    "document.addEventListener('DOMContentLoaded', () => {"
+    # The server renders each <details> in its default state. This restores the state the
+    # browser last saw, from localStorage, and keeps it current on each toggle. Only
+    # sections it has a state for are touched, so a new panel keeps its default. Browsers
+    # fire toggle at load for sections that start open, and for the ones restored here;
+    # saving then just writes the same state again. Without localStorage (a private window,
+    # say) the sections stay as rendered. Runs again on `mfd:replaced`, when RELOAD_SCRIPT
+    # swaps in a new page: it binds only the new elements, so nothing piles up.
+    "const initOpenSections = () => {"
     " const sections = [...document.querySelectorAll('details[data-key]')];"
-    " const state = () => sections.filter((s) => s.open).map((s) => s.dataset.key).join(',');"
-    " let saved = state();"  # browsers fire toggle for <details open> at load; ignore those
-    " let pending = 0;"
-    " const save = () => { clearTimeout(pending); pending = setTimeout(() => {"
-    "  const open = state(); if (open === saved) return; saved = open;"
-    "  history.replaceState(null, '', '?open=' + open); }, 100); };"
+    " const read = () => {"
+    "  try { return JSON.parse(localStorage.getItem('mfd.open') || '{}'); } catch { return {}; } };"
+    " const saved = read();"
+    " for (const s of sections) if (s.dataset.key in saved) s.open = saved[s.dataset.key];"
+    " const save = () => { try { localStorage.setItem('mfd.open',"
+    "  JSON.stringify(Object.fromEntries(sections.map((s) => [s.dataset.key, s.open])))); }"
+    "  catch {} };"
     " for (const s of sections) s.addEventListener('toggle', save);"
-    " for (const f of document.forms) f.addEventListener('submit', () => {"
-    "  f.action = f.action.split('?')[0] + location.search; });"
-    " const seconds = Number(document.body.dataset.reload);"
-    " if (seconds) setTimeout(() => location.reload(), seconds * 1000);"
-    " });"
+    "};"
+    "document.addEventListener('DOMContentLoaded', initOpenSections);"
+    "document.addEventListener('mfd:replaced', initOpenSections);"
 )
-"""Keeps the open sections in the URL across reloads and button presses; see inside."""
+"""Restores the open sections from localStorage and keeps them saved there; see inside."""
 LAYOUT_SCRIPT = (
     # Dragging a group's or a panel's summary moves it among its siblings (a panel stays in
     # its group, and Act now, which has no data-drag, stays first), then posts the page's
-    # whole order to /layout. Without the script the page keeps its order.
-    "document.addEventListener('DOMContentLoaded', () => {"
+    # whole order to /layout. Without the script the page keeps its order. Like
+    # OPEN_SECTIONS_SCRIPT, it binds the new elements again on `mfd:replaced`.
+    "const initLayout = () => {"
     " let dragged = null;"
     " const save = () => {"
     "  const groups = [...document.querySelectorAll('main > details.group')];"
@@ -52,8 +53,10 @@ LAYOUT_SCRIPT = (
     "  const summary = el.querySelector(':scope > summary');"
     "  summary.draggable = true;"
     "  summary.addEventListener('dragstart', (e) => { dragged = el;"
+    "   document.documentElement.dataset.dragging = '1';"
     "   e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', el.dataset.key); });"
-    "  summary.addEventListener('dragend', () => { dragged = null; });"
+    "  summary.addEventListener('dragend', () => {"
+    "   dragged = null; delete document.documentElement.dataset.dragging; });"
     "  const sibling = () => dragged && dragged !== el && dragged.parentElement === el.parentElement;"
     "  el.addEventListener('dragover', (e) => { if (sibling()) e.preventDefault(); });"
     "  el.addEventListener('drop', (e) => {"
@@ -63,9 +66,53 @@ LAYOUT_SCRIPT = (
     "   el.parentElement.insertBefore(dragged, e.clientY > box.top + box.height / 2 ? el.nextSibling : el);"
     "   save(); });"
     " }"
-    " });"
+    "};"
+    "document.addEventListener('DOMContentLoaded', initLayout);"
+    "document.addEventListener('mfd:replaced', initLayout);"
 )
 """Reorders groups and panels by dragging their summaries, and stores the order; see inside."""
+RELOAD_SCRIPT = (
+    # Every `data-reload` seconds, fetches the page again in the background and swaps its
+    # body in, so the scroll position and the focus stay. The server may be restarting just
+    # then: a failed fetch (or one that takes over FETCH_MS) is retried, after 1, 2, 4 and
+    # 8 seconds, and when all fail, the next round tries again. One timer is pending at a
+    # time, and each fetch has its own AbortController and timeout, cleared when it ends.
+    # The swap waits while something is being dragged or typed in. The old elements go with
+    # their listeners; the other scripts bind the new ones on `mfd:replaced`.
+    "(() => {"
+    " const FETCH_MS = 15000, RETRIES = 4;"
+    " const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));"
+    " const get = async () => {"
+    "  const abort = new AbortController();"
+    "  const timer = setTimeout(() => abort.abort(), FETCH_MS);"
+    "  try {"
+    "   const r = await fetch(location.href, { cache: 'no-store', signal: abort.signal,"
+    "    headers: { Accept: 'text/html' } });"
+    "   if (!r.ok) throw new Error(r.status);"
+    "   return new DOMParser().parseFromString(await r.text(), 'text/html');"
+    "  } finally { clearTimeout(timer); } };"
+    " const fetchPage = async () => {"
+    "  for (let i = 0; ; i++) {"
+    "   try { return await get(); } catch (err) { if (i === RETRIES) return null; }"
+    "   await wait(1000 * 2 ** i); } };"
+    " const busy = () => document.documentElement.dataset.dragging"
+    "  || document.activeElement?.closest('input, textarea');"
+    " const swap = (next) => {"
+    "  document.title = next.title;"
+    "  document.body.dataset.reload = next.body.dataset.reload || '';"
+    "  document.body.replaceChildren(...[...next.body.childNodes].map((n) => document.adoptNode(n)));"
+    "  document.dispatchEvent(new Event('mfd:replaced')); };"
+    " const round = async () => {"
+    "  const next = await fetchPage();"
+    "  if (next && next.body.dataset.reload && !busy()) swap(next);"
+    "  schedule(); };"
+    " const schedule = () => {"
+    "  const seconds = Number(document.body.dataset.reload);"
+    "  if (seconds) setTimeout(round, seconds * 1000); };"
+    " document.addEventListener('DOMContentLoaded', schedule);"
+    "})();"
+)
+"""Reloads the page in the background and swaps it in, retrying; see inside."""
 FOCUS_KEYS_SCRIPT = (
     "document.addEventListener('keydown', (e) => {"
     " if (e.target.closest('input, textarea')) return;"
@@ -101,13 +148,14 @@ def page(title: str, crumb: str, body: str, script: str = "") -> str:
 def _head(title: str, reload_seconds: int | None) -> str:
     """Up to and including the `<body>` tag.
 
-    With `reload_seconds`, the page reloads itself from JavaScript, which keeps the URL
-    fragment (and so the open sections); `<noscript>` falls back to a meta refresh.
+    With `reload_seconds`, the page fetches itself again from JavaScript and swaps the new
+    body in (see `RELOAD_SCRIPT`); `<noscript>` falls back to a meta refresh.
     """
     if reload_seconds:
         reload = (
             f'<noscript><meta http-equiv="refresh" content="{reload_seconds}"></noscript>'
             f"<script>{OPEN_SECTIONS_SCRIPT}</script><script>{LAYOUT_SCRIPT}</script>"
+            f"<script>{RELOAD_SCRIPT}</script>"
         )
         body = f"<body data-reload='{reload_seconds}'>"
     else:
@@ -232,14 +280,13 @@ def _item(item: Item, back: str = "") -> str:
     return "".join(parts)
 
 
-def _open(key: str, default: bool, open_keys: set[str] | None) -> str:
-    """The `open` attribute: from the `open` query parameter when given, else the default."""
-    is_open = default if open_keys is None else key in open_keys
-    return " open" if is_open else ""
+def _open(default: bool) -> str:
+    """The `open` attribute, for a section open by default."""
+    return " open" if default else ""
 
 
-def _panel(panel: Panel, open_keys: set[str] | None) -> str:
-    open_attr = _open(panel.key, bool(panel.items), open_keys)
+def _panel(panel: Panel) -> str:
+    open_attr = _open(bool(panel.items))
     items = "".join(_item(item) for item in panel.items)
     return (
         f"<details class='panel{'' if panel.items else ' empty'}' data-key='{_e(panel.key)}'"
@@ -277,9 +324,7 @@ def _refreshed(name: str, status: SourceStatus, now: datetime, refreshing: Abstr
     )
 
 
-def _group(
-    group: Group, dashboard: Dashboard, open_keys: set[str] | None, refreshing: AbstractSet[str]
-) -> str:
+def _group(group: Group, dashboard: Dashboard, refreshing: AbstractSet[str]) -> str:
     """A group section; panel keys the dashboard left out (e.g. Stacks without git-stack) are
     skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click."""
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
@@ -289,12 +334,10 @@ def _group(
     return (
         f"<details class='group' data-key='{_e(group.key)}'"
         + (" data-drag" if group.key != ACT_NOW else "")
-        + f"{_open(group.key, group.open, open_keys)}>"
+        + f"{_open(group.open)}>"
         f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span>{refreshed}"
         "</summary>"
-        "<div class='panels'>"
-        + "".join(_panel(panel, open_keys) for panel in panels)
-        + "</div></details>"
+        "<div class='panels'>" + "".join(_panel(panel) for panel in panels) + "</div></details>"
     )
 
 
@@ -324,16 +367,13 @@ def dashboard_page(
     dashboard: Dashboard,
     refreshing: AbstractSet[str],
     notice: str = "",
-    open_keys: set[str] | None = None,
     warning: str = "",
     urgency: str | None = None,
 ) -> str:
     """The page.
 
     `refreshing` are the plugins a refresh running now collects. `notice` is the outcome of
-    an action just run, shown in the header. `open_keys` are the
-    sections the `open` query parameter says are open; None means the parameter was absent
-    and the defaults apply. `warning` is something to fix, e.g. certificates ending soon,
+    an action just run, shown in the header. `warning` is something to fix, e.g. certificates ending soon,
     shown in the header, and across the page too with an `urgency` (see `banner`).
     """
     status = (
@@ -351,7 +391,7 @@ def dashboard_page(
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
         + banner(warning, urgency)
         + "<main>"
-        + "".join(_group(group, dashboard, open_keys, refreshing) for group in dashboard.groups)
+        + "".join(_group(group, dashboard, refreshing) for group in dashboard.groups)
         + "</main>"
         f"<footer>{_sources(dashboard)}<form method='post' action='/layout/reset'>"
         "<button type='submit' class='secondary'>Reset layout</button></form></footer>"

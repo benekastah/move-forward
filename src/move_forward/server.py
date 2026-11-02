@@ -271,7 +271,7 @@ class App:
                 pending, self._pending = self._pending, set()
             only = None if pending is None else pending | self.due()
 
-    def dashboard_page(self, notice: str = "", open_keys: set[str] | None = None) -> str:
+    def dashboard_page(self, notice: str = "") -> str:
         """The page from stored data; a page load also refreshes stale data in the background."""
         self.refresh_if_stale()
         warning, urgency = self.certificate_warning()
@@ -279,7 +279,6 @@ class App:
             build_dashboard(self.config, self.db),
             self.refreshing,
             notice,
-            open_keys,
             warning,
             urgency,
         )
@@ -337,17 +336,9 @@ class App:
         return render.banner(*self.certificate_warning())
 
 
-def _open_keys(query: str) -> set[str] | None:
-    """The `open` query parameter as a set of section keys; None when it's absent."""
-    values = parse_qs(query, keep_blank_values=True).get("open")
-    if values is None:
-        return None
-    return {key for key in values[0].split(",") if key}
-
-
 def _back_to_page(query: str, notice: str = "", extra: dict[str, str] | None = None) -> str:
     """Where a POST redirects: the request's `back` path (a focus page) if it's local, else the
-    dashboard, keeping the request's `open` parameter. The notice and `extra` parameters ride
+    dashboard. The notice and `extra` parameters ride
     along either way."""
     params: dict[str, str] = dict(extra or {})
     if notice:
@@ -356,9 +347,6 @@ def _back_to_page(query: str, notice: str = "", extra: dict[str, str] | None = N
     back = query_params.get("back", [""])[0]
     if render.local_path(back):
         return back + ("&" if "?" in back else "?") + urlencode(params) if params else back
-    values = query_params.get("open")
-    if values is not None:
-        params["open"] = values[0]
     return "/?" + urlencode(params) if params else "/"
 
 
@@ -471,7 +459,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 return
             if url.path == "/":
                 notice = parse_qs(url.query).get("notice", [""])[0]
-                self._html(HTTPStatus.OK, app.dashboard_page(notice, _open_keys(url.query)))
+                self._html(HTTPStatus.OK, app.dashboard_page(notice))
             elif url.path == settings.PATH and app.config_path is not None:
                 notice = parse_qs(url.query).get("notice", [""])[0]
                 self._html(HTTPStatus.OK, settings.page(app.config, notice))

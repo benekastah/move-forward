@@ -218,26 +218,13 @@ def test_actions_run_and_redirect_with_a_notice(
     response = post(client, "/actions/delete_branch", {"repo": "/r", "branch": "b"})
     assert response.status == 303
     assert response.getheader("Location") == "/?notice=did+it"
-    response = post(
-        client, "/actions/delete_branch?open=act%2Cfeedback", {"repo": "/r", "branch": "b"}
-    )
-    assert response.getheader("Location") == "/?notice=did+it&open=act%2Cfeedback"
-    assert seen == [("delete_branch", {"repo": "/r", "branch": "b"})] * 2
+    assert seen == [("delete_branch", {"repo": "/r", "branch": "b"})]
     assert app._wake.is_set()  # pyright: ignore[reportPrivateUsage]
 
     response = post(client, "/actions/boom", {})
     assert response.getheader("Location") == "/?notice=failed%3A+nope"
     body = get(client, "/?notice=failed%3A+nope").read().decode()
     assert "<span class='notice'>failed: nope</span>" in body
-
-
-def test_open_parameter_is_rendered_and_kept_through_refresh(client: HTTPConnection) -> None:
-    body = get(client, "/?open=github").read().decode()
-    assert "<details class='group' data-key='github' data-drag open>" in body
-    assert "<details class='group' data-key='act'>" in body
-    response = post(client, "/refresh?open=", {})
-    assert response.getheader("Location") == "/?open="
-    assert " open>" not in get(client, "/?open=").read().decode()
 
 
 def test_refresh_wakes_the_loop(client: HTTPConnection, app: server.App) -> None:

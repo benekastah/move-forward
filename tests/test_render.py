@@ -26,18 +26,6 @@ def test_dashboard_page_escapes_and_links() -> None:
     assert html.count("<a href='/' class='logo'") == 1
 
 
-def test_open_query_parameter_overrides_the_defaults() -> None:
-    html = render.dashboard_page(
-        _dashboard(), refreshing=frozenset(), open_keys={"github", "github.feedback"}
-    )
-    assert "<details class='group' data-key='github' data-drag open>" in html
-    assert "<details class='group' data-key='act'>" in html
-    assert "<details class='panel empty' data-key='github.feedback' data-drag open>" in html
-    assert "<details class='panel' data-key='slack.nudges' data-drag>" in html
-    everything_closed = render.dashboard_page(_dashboard(), refreshing=frozenset(), open_keys=set())
-    assert " open>" not in everything_closed
-
-
 def test_only_act_now_is_open_by_default() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert "<details class='group' data-key='act' open><summary><h2>Act now</h2>" in html
@@ -81,13 +69,20 @@ def test_refreshing_disables_the_buttons_and_reloads_sooner() -> None:
     )
 
 
+def test_the_page_reloads_in_the_background_instead_of_navigating() -> None:
+    html = render.dashboard_page(_dashboard(), refreshing=frozenset())
+    assert render.RELOAD_SCRIPT in html
+    assert "location.reload" not in html
+    assert "mfd:replaced" in render.OPEN_SECTIONS_SCRIPT + render.LAYOUT_SCRIPT
+
+
 def test_sections_carry_keys_for_the_open_state_script() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert "<details class='group' data-key='act' open>" in html
     assert "<details class='panel' data-key='slack.nudges' data-drag open>" in html
     assert "<details class='panel empty' data-key='github.needs_reviewer' data-drag>" in html
-    assert "details[data-key]" in html and "'?open=' + open" in html
-    assert "if (open === saved) return;" in html
+    assert "details[data-key]" in html and "localStorage.setItem('mfd.open'" in html
+    assert "localStorage.getItem('mfd.open')" in html and "location.search" not in html
     # No [git_stack], so the Stacks panel is absent and git's group still renders.
     assert "data-key='stacks'" not in html and "data-key='git'" in html
 

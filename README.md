@@ -8,7 +8,7 @@ everything is worked out from GitHub, git, Jira and the notes.
 
 It runs a small HTTP server on localhost, refreshes in the background, and
 renders plain HTML with two small bits of JavaScript: the ping page's copy
-button, and a snippet that keeps the open sections in the URL (`?open=…`) so
+button, and a snippet that keeps the open sections in the browser's local storage so
 the page's periodic reload and the buttons' redirects don't collapse them.
 All state lives in one SQLite database.
 
@@ -200,7 +200,7 @@ Pages (GET, HTML):
 
 | Path | Shows |
 | --- | --- |
-| `/` | The dashboard. `?open=act,github.feedback` sets the open sections; `?notice=…` shows a message. |
+| `/` | The dashboard. `?notice=…` shows a message. |
 | `/focus` | Focus mode's category list. |
 | `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
 
