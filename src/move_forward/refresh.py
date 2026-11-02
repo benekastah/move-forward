@@ -4,7 +4,7 @@ stored."""
 import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
@@ -211,8 +211,10 @@ _MEMBERS = TypeAdapter(
 """An Act now button's `also`: the items joined to its own, as kind, id, verb, fingerprint."""
 
 
-def _act_now_action(db: Database, action: str, fields: dict[str, str]) -> ActionResult:
-    """Act now's own buttons: snooze an item until tomorrow, dismiss it, or pin or unpin it,
+def _act_now_action(
+    config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
+) -> ActionResult:
+    """Act now's own buttons: snooze an item (for as long as `config` says), dismiss it, or pin or unpin it,
     by its main subject and verb, and the items joined to it (`also`) alike."""
     now = datetime.now(UTC)
     try:
@@ -228,10 +230,13 @@ def _act_now_action(db: Database, action: str, fields: dict[str, str]) -> Action
             feedback.forget((kind, id, verb))
         return ActionResult("unpinned")
     if action == "snooze":
-        local = localtime.local(now)
-        tomorrow = datetime.combine(local.date() + timedelta(days=1), time(), local.tzinfo)
-        said = [Feedback(action="snooze", fingerprint=f, until=tomorrow) for *_, f in members]
-        result = "snoozed until tomorrow"
+        said = [
+            Feedback(action="snooze", fingerprint=f, until=config.snooze_until(kind, now))
+            for kind, _, _, f in members
+        ]
+        until = localtime.day(said[0].until or now)
+        tomorrow = localtime.day(now) + timedelta(days=1)
+        result = "snoozed until " + ("tomorrow" if until == tomorrow else until.isoformat())
     elif action in ("dismiss", "pin"):
         said = [Feedback(action=action, fingerprint=f) for *_, f in members]
         result = "dismissed" if action == "dismiss" else "pinned"
@@ -247,7 +252,7 @@ def perform_action(config: Config, db: Database, name: str, fields: dict[str, st
     `ActionError` when it can't."""
     plugin_name, _, action_name = name.partition("/")
     if plugin_name == act_now.ACTIONS:
-        return _act_now_action(db, action_name, fields)
+        return _act_now_action(config.act_now, db, action_name, fields)
     plugins = enabled(config, db, datetime.now(UTC))
     e = next((e for e in plugins if e.name == plugin_name), None)
     handler = e.plugin.actions().get(action_name) if e else None

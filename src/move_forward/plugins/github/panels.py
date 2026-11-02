@@ -62,6 +62,7 @@ def pr_item(
     links: list[Link] | None = None,
     rank: float = 0,
     signals: Signals | None = None,
+    fingerprint: str | None = None,
 ) -> Item:
     return Item(
         title=pr.title,
@@ -74,6 +75,7 @@ def pr_item(
         draft=pr.is_draft,
         subjects=[pr_ref(pr)],
         signals=signals,
+        fingerprint=fingerprint,
     )
 
 
@@ -138,6 +140,7 @@ class Builder:
                         details=["review requested"],
                         rank=pr.updated_at.timestamp(),
                         signals=_review(pr, self.me),
+                        fingerprint=pr.head_oid,
                     )
                 )
             seen = {pr.url for pr in self.gh.direct_requests}
@@ -151,12 +154,14 @@ class Builder:
                             details=[reason],
                             rank=pr.updated_at.timestamp(),
                             signals=_review(pr, self.me),
+                            fingerprint=pr.head_oid,
                         )
                     )
         return Panel(
             key="reviews_for_me",
             priority=10,  # 1. reviews asked of me
             act_now=True,
+            snoozable=True,
             title="Reviews for me",
             description="PRs asking for my review directly, or that changed since I reviewed them.",
             items=items,

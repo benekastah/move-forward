@@ -121,6 +121,9 @@ class Panel(Model):
     the next thing to do."""
     signals: Signals | None = None
     """The signals of its items that carry none, for Act now: e.g. "Review", in minutes."""
+    snoozable: bool = False
+    """Its items, which must be `act_now` ones, get a Snooze button, and stay off the panel
+    until they change or the snooze ends: the same snooze as Act now's."""
 
 
 class SourceStatus(Model):

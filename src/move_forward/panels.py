@@ -189,6 +189,27 @@ def _without_hidden(panel: Panel, hidden: Hidden) -> Panel:
     return panel.model_copy(update={"items": [i for i in panel.items if not hidden(i)]})
 
 
+def _snoozable(
+    panel: Panel, feedback: dict[act_now.FeedbackKey, act_now.Feedback], now: datetime
+) -> Panel:
+    """A snoozable panel's items without those set aside there (snoozed, or dismissed, and
+    not changed since), and each of the rest with a Snooze button, as in Act now itself."""
+    items: list[Item] = []
+    for item in panel.items:
+        nomination = act_now.Nomination(
+            "", item if item.signals else item.model_copy(update={"signals": panel.signals})
+        )
+        key = nomination.key
+        if key is None:
+            items.append(item)
+        elif not act_now.set_aside(nomination, feedback.get(key), now):
+            kind, id, verb = key
+            fields = {"kind": kind, "id": id, "verb": verb, "fingerprint": nomination.fingerprint}
+            snooze = Action(name=f"{act_now.ACTIONS}/snooze", label="Snooze", fields=fields)
+            items.append(item.model_copy(update={"actions": [*item.actions, snooze]}))
+    return panel.model_copy(update={"items": items})
+
+
 def _with_item_actions(panel: Panel, item_actions: ItemActions) -> Panel:
     """Each item, and each of its focus-mode parts, with the plugins' buttons added."""
 
@@ -246,9 +267,10 @@ def build(
         panels=[
             *(_with_item_actions(panel, item_actions) for panel in ranked),
             *(
-                _sorted(_with_item_actions(_without_hidden(panel, hidden), item_actions))
+                _sorted(_with_item_actions(_without_hidden(shown, hidden), item_actions))
                 for plugin in plugins
                 for panel in plugin.panels
+                for shown in [_snoozable(panel, feedback or {}, now) if panel.snoozable else panel]
             ),
         ],
         groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),

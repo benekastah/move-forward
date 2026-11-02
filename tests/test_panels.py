@@ -299,9 +299,9 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
         "where": "https://jira/browse/APP-8",
     }
     assert add("notes.todos", "APP-1 Fix") == {"entry": "APP-1 Fix"}
-    # Other people's PRs don't get one.
+    # Other people's PRs only get the snooze.
     review = next(i for i in panel(dashboard, "github.reviews_for_me").items)
-    assert [a.name for a in review.actions] == []
+    assert [a.name for a in review.actions] == ["act_now/snooze"]
 
 
 def test_naming_settings_drive_pings_labels_and_jira() -> None:

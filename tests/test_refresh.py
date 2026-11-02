@@ -1,14 +1,14 @@
 """The refresh: plugins' snapshots collected and stored, including those that need the graph."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import ClassVar
 
 import pytest
-from conftest import NOW, issue, local_snapshot, pr, snapshot, stored
+from conftest import NOW, issue, local_snapshot, panel, pr, snapshot, stored
 
 from move_forward import refresh, registry
-from move_forward.act_now import Feedback
+from move_forward.act_now import ActNowConfig, Feedback
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
@@ -153,6 +153,40 @@ def test_act_now_buttons_snooze_dismiss_pin_and_unpin(monkeypatch: pytest.Monkey
         refresh.run_action(config, db, "act_now/forget", snooze.fields)
     with pytest.raises(ActionError, match="missing field"):
         refresh.run_action(config, db, "act_now/pin", {})
+
+
+def test_a_review_snoozed_in_its_panel_stays_away_for_the_days_set_for_prs() -> None:
+    config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
+    config = config.model_copy(update={"act_now": ActNowConfig(snooze_days={"pr": 7})})
+
+    def reviews() -> list[Item]:
+        return panel(refresh.build_dashboard(config, db, NOW), "github.reviews_for_me").items
+
+    snooze = next(a for a in reviews()[0].actions if a.label == "Snooze")
+    assert refresh.run_action(config, db, snooze.name, snooze.fields).startswith("snoozed until ")
+    assert reviews() == []
+    (said,) = FeedbackRepository(db).all().values()
+    now = datetime.now(UTC)  # the snooze counts from the real time, not NOW
+    assert said.until is not None and now + timedelta(days=6) < said.until <= now + timedelta(
+        days=7
+    )
+    assert refresh.build_dashboard(config, db, NOW).act_now() == []
+
+
+def test_a_snoozed_review_returns_when_the_prs_head_moves() -> None:
+    config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice", head_oid="a1")]))
+    snooze = next(
+        a
+        for a in panel(refresh.build_dashboard(config, db, NOW), "github.reviews_for_me")
+        .items[0]
+        .actions
+        if a.label == "Snooze"
+    )
+    refresh.run_action(config, db, snooze.name, snooze.fields)
+    config, db2 = stored(github=snapshot(direct_requests=[pr(1, author="alice", head_oid="b2")]))
+    for fb in FeedbackRepository(db).all().items():
+        FeedbackRepository(db2).say(fb[0], fb[1], NOW)
+    assert len(panel(refresh.build_dashboard(config, db2, NOW), "github.reviews_for_me").items) == 1
 
 
 def test_feedback_that_is_over_or_old_is_pruned() -> None:

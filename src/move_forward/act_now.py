@@ -12,11 +12,12 @@ import json
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Literal
 
 from pydantic import Field
 
+from . import localtime
 from .domain import Model
 from .graph import Ref
 from .page import Action, Item, Link, Panel, Signals, age
@@ -74,6 +75,18 @@ class ActNowConfig(Strict):
     per_plugin: int = Field(default=3, ge=1)
     """How many of them one plugin may fill, so one busy tool can't take the whole list."""
     weights: Weights = Field(default_factory=Weights)
+    default_snooze_days: int = Field(default=1, ge=1)
+    """How many days a snooze lasts, counted in local days: 1 is until tomorrow."""
+    snooze_days: dict[str, int] = Field(default_factory=dict)
+    """`default_snooze_days` for a kind of subject, e.g. `pr = 7` to snooze a PR for a week.
+    A snooze still ends early when its item changes."""
+
+    def snooze_until(self, kind: str, now: datetime) -> datetime:
+        """When a snooze of an item about a `kind` of subject, made at `now`, ends: local
+        midnight that many days on."""
+        days = max(self.snooze_days.get(kind, self.default_snooze_days), 1)
+        local = localtime.local(now)
+        return datetime.combine(local.date() + timedelta(days=days), time(), local.tzinfo)
 
 
 @dataclass(frozen=True)
@@ -103,7 +116,7 @@ class Nomination:
         return hashlib.sha256(seen.encode()).hexdigest()[:16]
 
 
-def _set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> bool:
+def set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> bool:
     """Snoozed until later, or dismissed, and not changed since."""
     if feedback is None or feedback.fingerprint != nomination.fingerprint:
         return False
@@ -258,7 +271,7 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not nom.signals.blocked and not (now and _set_aside(nom, said(nom), now))
+        if not nom.signals.blocked and not (now and set_aside(nom, said(nom), now))
     ]
     candidates.sort(
         key=lambda c: (
