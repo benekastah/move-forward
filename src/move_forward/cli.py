@@ -49,7 +49,7 @@ org = "example-org"
 
 [git]
 repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are found from them
-# refresh_seconds = 300
+# refresh_seconds = 1800
 # status_seconds = 30
 # my_branch_prefixes = ["me/"]            # besides branches with my commits or PRs
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]

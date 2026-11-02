@@ -5,13 +5,12 @@ Enabled by a `[git]` section.
 
 ## Config
 
-`refresh_seconds` (300) is how often it refreshes in the background: it only reads local checkouts.
-It also refreshes within seconds of a change: it watches each repo (with watchdog: inotify
+`refresh_seconds` (1800) is how often it reads every repo anyway, as a backstop. Otherwise
+it refreshes within seconds of a change: it watches each repo (with watchdog: inotify
 on Linux, FSEvents on macOS, `ReadDirectoryChangesW` on Windows), so a commit, checkout,
 new or deleted branch, rebase, push or fetch, a change to its config (an upstream set,
 git-stack tracking a branch), or an edit that changes what `git status` counts, refreshes
-the repo it happened in, reading only that one. Every `refresh_seconds`
-it reads every repo anyway.
+the repo it happened in, reading only that one.
 
 It watches each repo's refs, and each worktree's root and the top-level directories git
 tracks: ignored trees at the top (`node_modules`, `build`, `.venv`) aren't watched. On
