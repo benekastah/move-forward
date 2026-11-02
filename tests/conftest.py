@@ -13,6 +13,7 @@ from move_forward.domain import Model
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
+from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 from move_forward.plugins.github.models import (
     Check,
@@ -35,7 +36,7 @@ from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.refresh import build_dashboard, stored_graph
-from move_forward.registry import enabled, migrate
+from move_forward.registry import PLUGINS, enabled, migrate
 from move_forward.repositories import SnapshotRepository
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
@@ -47,6 +48,16 @@ REPO = "acme/widgets"
 def in_utc(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test runs in UTC, so what the app takes in local time is the same anywhere."""
     monkeypatch.setattr(localtime, "zone", UTC)
+
+
+@pytest.fixture(autouse=True)
+def git_polls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The registry's git plugin polls rather than watching the repos, so no test leaves
+    watcher threads behind; tests of watching make a plugin of their own."""
+    for plugin in PLUGINS:
+        if isinstance(plugin, GitPlugin):
+            monkeypatch.setattr(plugin, "_watching", False)
+            monkeypatch.setattr(plugin, "_watcher", None)
 
 
 def pr(number: int = 1, **overrides: object) -> PullRequest:
