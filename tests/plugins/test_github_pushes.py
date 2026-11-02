@@ -34,8 +34,12 @@ def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
     assert not changed_after()  # the first look notes where things stand
     assert not changed_after()
     assert changed_after(local_branch(mine.head, sha="a", ahead=0))  # pushed
-    assert KvRepository(db, "github").get(CHANGED) == '["acme/widgets#1"]'  # for collect
+    kv = KvRepository(db, "github")
+    assert kv.get(CHANGED) == '["acme/widgets#1"]'  # for collect
+    assert changed_after()  # still, until collect fetches it
+    kv.set(CHANGED, "[]")  # as collect does
     assert changed_after(local_branch(mine.head, sha="b", ahead=1))  # committed
+    kv.set(CHANGED, "[]")
     assert not changed_after(  # someone else's branch isn't my PR's
         local_branch(mine.head, sha="b", ahead=1), local_branch("theirs", sha="c")
     )
