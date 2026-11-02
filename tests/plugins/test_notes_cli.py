@@ -199,3 +199,25 @@ def test_check_ins_are_dates_on_the_entry(run: Run) -> None:
     assert entry["declined"] == []  # not the declines they used to be written as
     assert "checked in: 2026-10-29" in run("show", "APP-1")[1]
     assert run("checked", "APP-1", "--on", "someday")[0] == 1
+
+
+def test_offers_on_a_pr_are_kept_with_when_each_kind_was_last_made(run: Run) -> None:
+    other = "https://github.com/acme/widgets/pull/6"
+    assert run("offered", PR, "nudge")[0] == 0
+    assert run("offered", PR, "fresh-review")[0] == 0
+    assert run("offered", other, "nudge")[0] == 0
+    assert run("offered", PR, "nudge")[0] == 0  # again: replaces the time, still one
+    offers = _json(run, "offers", "--pr", PR)
+    assert sorted(o["kind"] for o in offers) == ["fresh-review", "nudge"]
+    assert len(_json(run, "offers")) == 3
+    with pytest.raises(SystemExit):  # not a kind: argparse says so and exits
+        run("offered", PR, "merge")
+
+
+def test_once_a_day_questions_are_kept_by_name(run: Run, tmp_path: Path) -> None:
+    assert _json(run, "last-asked", "ice") == {"question": "ice", "asked_on": None}
+    assert run("asked", "ice", "--on", "2026-10-30")[0] == 0
+    assert run("last-asked", "ice")[1] == "2026-10-30\n"
+    assert run("asked", "Bad Name")[0] == 1
+    assert run("export", str(tmp_path / "out"))[0] == 0  # the import's and export's key too
+    assert "Last asked: 2026-10-30" in (tmp_path / "out" / "on-ice.md").read_text()

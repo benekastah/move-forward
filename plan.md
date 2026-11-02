@@ -142,8 +142,7 @@ Sending, off by default:
 ### Notes and the skill
 
 - **Real fields for the skill's stand-ins.** The move-forward skill keeps some state
-  outside the database until the notes can hold it: the once-a-day ice question and the
-  per-PR "offered" dates live in its gitignored `daily.json`; merge conditions apply to a
+  outside the database until the notes can hold it: merge conditions apply to a
   whole entry, so a PR's URL goes in the condition text; `reviewer-map.md` is read only
   through `mfd slack import` and `mfd github import`, so the skill should set Slack ids
   with `mfd slack contact set` rather than editing the map. Give the notes real fields or

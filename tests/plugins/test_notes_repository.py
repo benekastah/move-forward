@@ -140,7 +140,7 @@ def test_an_import_replaces_stacks_on_ice_but_not_what_was_iced_on_its_own(
 
 def test_check_ins_written_as_declines_move_into_their_fields() -> None:
     db = Database(":memory:")
-    db.migrate("notes", MIGRATIONS[:-1])
+    db.migrate("notes", MIGRATIONS[:2])  # before check-ins were fields
     db.execute("INSERT INTO notes_entries (id, title) VALUES (1, 'APP-1 Fix it')")
     for position, (on, text) in enumerate(
         [

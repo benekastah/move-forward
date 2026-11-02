@@ -7,11 +7,13 @@ dashboard's buttons (`actions`), so both check the same things.
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
+from ... import localtime
 from ...graph import Graph
 from ...plugin import ActionError, ActionResult, CliHandler, Context
 from . import actions, markdown, panels
@@ -20,6 +22,8 @@ from .models import CheckIn, Entry, Ice, Size, Todo
 from .repository import NotesRepository
 
 LAST_ASKED_ICE = "last_asked_ice"
+"""The kv key of when the skill last asked about what's on ice; `mfd notes asked ice` sets
+it, and the import reads it from `on-ice.md`."""
 """The kv key for when the skill last asked about what's on ice."""
 
 
@@ -259,6 +263,40 @@ def _check_in(which: CheckIn, said: str) -> Command:
     return cmd
 
 
+def cmd_offered(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
+    NotesRepository(ctx.db).offered(args.pr, args.kind, ctx.now)
+    return Result(f"offered a {args.kind} on {args.pr}")
+
+
+def cmd_offers(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
+    found = NotesRepository(ctx.db).offers(args.pr)
+    text = "\n".join(
+        f"{localtime.local(o.offered_at):%Y-%m-%d %H:%M}  {o.kind}  {o.pr}" for o in found
+    )
+    return Result(text, [o.model_dump(mode="json") for o in found])
+
+
+QUESTION_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+"""A question's name, e.g. `ice`: what `mfd notes asked` records."""
+
+
+def _asked_key(question: str) -> str:
+    if not QUESTION_RE.match(question):
+        raise ValueError(f"{question!r}: name a question with lower-case letters, digits and -")
+    return f"last_asked_{question}"  # `ice`'s is LAST_ASKED_ICE, which the import sets
+
+
+def cmd_asked(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
+    on = date.fromisoformat(args.on) if args.on else ctx.today
+    ctx.kv.set(_asked_key(args.question), on.isoformat())
+    return Result(f"asked {args.question} on {on}")
+
+
+def cmd_last_asked(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
+    on = ctx.kv.get(_asked_key(args.question)) or None
+    return Result(on or "never", {"question": args.question, "asked_on": on})
+
+
 def cmd_ice(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namespace) -> Result:
     if args.item:
         kind, ref_id = args.item
@@ -293,6 +331,10 @@ def _commands() -> dict[str, Command]:
         "todo": cmd_todo,
         "condition": cmd_condition,
         "decline": cmd_decline,
+        "offered": cmd_offered,
+        "offers": cmd_offers,
+        "asked": cmd_asked,
+        "last-asked": cmd_last_asked,
         "checked": _check_in("checked", "checked in"),
         "asked-done": _check_in("asked_done", "asked if done"),
         "ice": cmd_ice,
@@ -352,6 +394,16 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     decline = add("decline", "record that something offered for an entry was turned down today")
     decline.add_argument("entry")
     decline.add_argument("text")
+    offered = add("offered", "record that the skill offered a nudge or a fresh review on a PR")
+    offered.add_argument("pr", help="the PR's URL")
+    offered.add_argument("kind", choices=["nudge", "fresh-review"])
+    add("offers", "when the skill last offered each kind on each PR").add_argument(
+        "--pr", help="just this PR's"
+    )
+    asked = add("asked", "record that the skill asked a once-a-day question, e.g. ice")
+    asked.add_argument("question")
+    asked.add_argument("--on", help="the day, YYYY-MM-DD (default: today)")
+    add("last-asked", "when the skill last asked a question").add_argument("question")
     for name, help in (
         ("checked", "record that the skill checked in on an entry"),
         ("asked-done", "record that the skill asked whether an entry is done"),

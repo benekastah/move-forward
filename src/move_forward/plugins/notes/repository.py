@@ -1,11 +1,23 @@
 """The notes plugin's tables, and the queries over them."""
 
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 
 from ...db import Database
 from ...graph import Ref
-from .models import CheckIn, Declined, Entry, Ice, IcedItem, Link, Section, Size, Todo
+from .models import (
+    CheckIn,
+    Declined,
+    Entry,
+    Ice,
+    IcedItem,
+    Link,
+    Offer,
+    OfferKind,
+    Section,
+    Size,
+    Todo,
+)
 
 MIGRATIONS = [
     """
@@ -105,6 +117,14 @@ MIGRATIONS = [
         asked_done_on = (SELECT MAX(on_date) FROM notes_declined
                          WHERE entry_id = notes_entries.id AND text = 'Asked-done');
     DELETE FROM notes_declined WHERE text IN ('Checked', 'Asked-done');
+    """,
+    """
+    CREATE TABLE notes_offers (        -- kept: what the skill offered about a PR, and when;
+        pr TEXT NOT NULL,              -- pruned after prune_days
+        kind TEXT NOT NULL CHECK (kind IN ('nudge', 'fresh-review')),
+        offered_at TEXT NOT NULL,      -- the last time, UTC
+        PRIMARY KEY (pr, kind)
+    );
     """,
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
@@ -255,6 +275,30 @@ class NotesRepository:
         self._db.execute(
             f"UPDATE notes_entries SET {column} = ? WHERE id = ?", (on.isoformat(), entry_id)
         )
+
+    def offered(self, pr: str, kind: OfferKind, at: datetime) -> None:
+        """Record that the skill offered `kind` about `pr` at `at`, replacing the time before."""
+        self._db.execute(
+            "INSERT OR REPLACE INTO notes_offers VALUES (?, ?, ?)", (pr, kind, at.isoformat())
+        )
+
+    def offers(self, pr: str | None = None) -> list[Offer]:
+        """What the skill last offered about each PR, or about `pr`; newest first."""
+        where, params = ("WHERE pr = ?", (pr,)) if pr else ("", ())
+        rows = self._db.query(
+            f"SELECT * FROM notes_offers {where} ORDER BY offered_at DESC, pr, kind", params
+        )
+        return [
+            Offer(pr=r["pr"], kind=r["kind"], offered_at=datetime.fromisoformat(r["offered_at"]))
+            for r in rows
+        ]
+
+    def forget_offers_before(self, cutoff: datetime) -> int:
+        """Delete offers last made before `cutoff`; how many went."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM notes_offers WHERE offered_at < ?", (cutoff.isoformat(),)
+            ).rowcount
 
     def set_status(self, entry_id: int, status: str | None) -> None:
         self._db.execute("UPDATE notes_entries SET status = ? WHERE id = ?", (status, entry_id))
