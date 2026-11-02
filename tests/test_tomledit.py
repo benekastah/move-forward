@@ -45,4 +45,6 @@ def test_a_key_or_section_not_there_is_added() -> None:
     parsed = tomllib.loads(text)
     assert parsed["prune_days"] == 30 and parsed["email"] == "me@x"
     assert text.index("prune_days") < text.index("[github]")
-    assert tomledit.value(Path("/a b")) == '"/a b"' and tomledit.value(True) == "true"
+    path = Path("/a b")  # `\\a b` on Windows, its backslash escaped in TOML as in JSON
+    assert tomllib.loads(f"p = {tomledit.value(path)}")["p"] == str(path)
+    assert tomledit.value(True) == "true"
