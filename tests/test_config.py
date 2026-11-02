@@ -1,3 +1,4 @@
+import typing
 from pathlib import Path
 from typing import ClassVar
 
@@ -150,3 +151,13 @@ def test_act_now_ranking_is_tuned_in_its_section(tmp_path: Path) -> None:
 def test_refresh_seconds_moved_into_each_plugins_section(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match=r"`refresh_seconds` is now per plugin"):
         _load(tmp_path, MINIMAL + "refresh_seconds = 60\n")
+
+
+def test_every_plugin_has_a_config_section_of_its_own_model() -> None:
+    """`Config` lists a field per plugin, typed by hand: each must match the registry's."""
+    for plugin in registry.PLUGINS:
+        field = config.Config.model_fields.get(plugin.name)
+        assert field is not None, f"Config has no [{plugin.name}] section"
+        annotation = field.annotation
+        models = typing.get_args(annotation) or (annotation,)
+        assert plugin.config_model in models, f"[{plugin.name}] isn't a {plugin.config_model}"

@@ -82,6 +82,19 @@ def test_snapshots_are_renamed_after_their_plugins(tmp_path: Path) -> None:
     assert sources == {"git", "github.derived"}
 
 
+def test_the_last_json_snapshots_are_cleared_and_when_they_were_fetched_kept(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(V1_SCHEMA)
+    conn.execute("INSERT INTO snapshots VALUES ('github', '2026-10-30', '{\"mine\": []}', NULL)")
+    conn.commit()
+    conn.close()
+    [row] = Database(path).query("SELECT * FROM snapshots")
+    assert row["payload"] is None and row["fetched_at"] == "2026-10-30"
+
+
 def _old_database(path: Path) -> None:
     """A database from before migrations, with a row in it."""
     conn = sqlite3.connect(path)

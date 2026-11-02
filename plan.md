@@ -162,14 +162,8 @@ Sending, off by default:
 
 ### Core housekeeping
 
-- **Config sections from the registry.** `Config` lists a field per built-in plugin; it
-  could build them from the registry, so adding a plugin needn't change core.
 - **Finding `me`.** `refresh` finds `me` among `person` entities by name; like linking
   kinds, this could become a declaration on a kind model.
-- **Stale JSON in `snapshots.payload`.** Core no longer writes it, but the last JSON each
-  plugin stored stays there, unused once that plugin's migration has copied it. A plugin
-  can't clear core's table, so this needs a core migration that runs only after every
-  built-in plugin's copy has shipped, or it stays as harmless dead data.
 
 ### Windows, on a real machine
 
