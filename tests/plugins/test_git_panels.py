@@ -11,6 +11,7 @@ from conftest import (
     panel,
     pr,
     snapshot,
+    stacks,
     stored,
     titles,
 )
@@ -20,6 +21,7 @@ from move_forward import refresh
 from move_forward.db import Database
 from move_forward.plugins.git.models import Worktree
 from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
+from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.registry import enabled
 
 build = dashboard
@@ -206,6 +208,39 @@ def test_a_branch_is_mine_by_my_commits_a_pr_of_mine_or_its_prefix() -> None:
 
     assert work(["me/"]) == ["fix-x", "me/old"]
     assert work([]) == ["ancient", "fix-x"]  # without prefixes, uncounted branches still count
+
+
+def test_a_branch_git_stack_tracks_shows_its_unpushed_work() -> None:
+    """Too old for its commits to count and without my prefix, it's still my stack's."""
+    local = local_snapshot(
+        branches=[
+            local_branch("main"),
+            local_branch("ancient", ahead_of_default=1),
+            local_branch("ancient-stacked", ahead_of_default=1),
+        ]
+    )
+    built = build(
+        local=local,
+        stacks=stacks(StackBranch(name="ancient-stacked", parent="main")),
+        my_branch_prefixes=["me/"],
+    )
+    assert titles(built, "git.local_work") == ["ancient-stacked: 1 commits, never pushed"]
+
+
+def test_cleanup_leaves_branches_git_stack_saw_merge_to_its_clean() -> None:
+    merged = [
+        pr(n, state="MERGED", merged_at=NOW - timedelta(days=1), head=f"me/{n}") for n in (1, 2)
+    ]
+    built = build(
+        github=snapshot(merged_recent=merged),
+        local=local_snapshot(branches=[local_branch("me/1"), local_branch("me/2")]),
+        stacks=stacks(
+            StackBranch(name="me/1", parent="main", status="merged"),
+            StackBranch(name="me/2", parent="main", status="needs-restack"),
+        ),
+    )
+    assert titles(built, "git.cleanup") == ["me/2: PR merged 1d ago"]
+    assert titles(built, "git_stack.stacks") == ["me/1: merged", "me/2: needs-restack"]
 
 
 def test_a_checkout_of_a_pr_that_moved_on_github_is_shown_without_fetching() -> None:

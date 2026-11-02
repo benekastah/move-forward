@@ -124,9 +124,6 @@ Sending, off by default:
 
 ### Code hosts
 
-- **More signals for which branches are mine.** A PR of mine, my commits off the default
-  branch and `my_branch_prefixes` decide it now; git-stack tracking it and being checked
-  out in one of my worktrees could count too, if those miss some.
 - **A second code host.** `repo` ids are GitHub `owner/name`, from a GitHub-only remote
   regex. A second host (Bitbucket, GitLab) needs ids like `github.com/acme/widgets` so
   they can't collide, and git parsing any host. Its plugin would publish its own kind of
