@@ -102,12 +102,11 @@ Sending, off by default:
   git's change check sees what it brings, and github follows. It's the first time the
   dashboard would write to the repos without a click (only remote-tracking refs), hence
   opt-in.
-- **Update what changed, not the whole plugin.** A change check refreshes the whole
-  plugin. jira's could ask for the changed tickets' fields and store just those, and git's
-  fingerprint could be kept per repo, so only the repo that moved is read again. github's
-  notifications name their PRs, but its panels come from searches, so storing one PR
-  means placing it in those lists by hand; that one can wait. The periodic full refresh
-  keeps any of these honest.
+- **github: update the PRs that changed.** A change check refreshes github whole. Its
+  notifications name their PRs, but its panels come from searches, so storing one PR means
+  placing it in those lists by hand; worth it only if github's refresh gets slow. (git
+  already reads only the repos that moved; jira's full search is one request for most
+  people, so a targeted one would save nothing.)
 
 ### The page
 

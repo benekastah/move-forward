@@ -1,5 +1,7 @@
 """The git plugin."""
 
+import json
+from datetime import datetime
 from typing import ClassVar
 
 from pydantic import BaseModel
@@ -18,8 +20,12 @@ from .setup import TEMPLATE, questions
 
 REPO = "repo"
 BRANCH = "branch"
-FINGERPRINT = "refs_fingerprint"
-"""The kv key of the last `changes.fingerprint` of the repos."""
+FINGERPRINTS = "refs_fingerprints"
+"""The kv key of the last `changes.fingerprints` of the repos."""
+MOVED = "repos_moved"
+"""The kv key of the repos (common git directories) `changed` saw move, for `collect`."""
+LAST_FULL = "last_full_collect"
+"""The kv key of when every repo was last read."""
 
 
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
@@ -36,11 +42,27 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     kinds: ClassVar[dict[str, type[BaseModel]]] = {REPO: RepoAttrs, BRANCH: BranchAttrs}
 
     def collect(self, ctx: Context[GitConfig]) -> LocalSnapshot:
+        """Every repo; or, after `changed` saw only some move, just those, keeping the rest
+        as stored, unless a full collect is due (`refresh_seconds` since the last), so
+        frequent changes can't put it off."""
+        moved = set(json.loads(ctx.kv.get(MOVED) or "[]"))
+        ctx.kv.set(MOVED, "[]")
+        last_full = ctx.kv.get(LAST_FULL)
+        full_due = (
+            last_full is None
+            or (ctx.now - datetime.fromisoformat(last_full)).total_seconds()
+            >= ctx.config.refresh_seconds
+        )
+        previous = None if full_due or not moved else self.load(ctx)
+        if previous is None:
+            ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         return client.collect(
             ctx.config.repos,
             ctx.now,
             ctx.config.commit_history_days,
             ctx.config.ignored_worktree_globs,
+            only=moved if previous is not None else None,
+            previous=previous,
         )
 
     def store(self, ctx: Context[GitConfig], snapshot: LocalSnapshot) -> None:
@@ -50,12 +72,19 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
     def changed(self, ctx: Context[GitConfig], graph: Graph) -> bool:
         """Whether a repo's refs moved (see `changes`): reading a few files' times, cheap
-        enough to do every few seconds."""
-        now = changes.fingerprint(ctx.config.repos)
-        before = ctx.kv.get(FINGERPRINT)
+        enough to do every few seconds. Which ones moved is kept for `collect`, to read just
+        those."""
+        now = changes.fingerprints(ctx.config.repos)
+        stored = ctx.kv.get(FINGERPRINTS)
+        before: dict[str, str] | None = json.loads(stored) if stored else None
         if now != before:
-            ctx.kv.set(FINGERPRINT, now)
-        return before is not None and now != before
+            ctx.kv.set(FINGERPRINTS, json.dumps(now))
+        if before is None:
+            return False
+        if moved := changes.moved(before, now):
+            pending = set(json.loads(ctx.kv.get(MOVED) or "[]")) | moved
+            ctx.kv.set(MOVED, json.dumps(sorted(pending)))
+        return bool(moved) or set(before) != set(now)
 
     def load(self, ctx: Context[GitConfig]) -> LocalSnapshot | None:
         return LocalRepository(ctx.db).load()

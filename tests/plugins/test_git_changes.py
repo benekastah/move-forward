@@ -1,15 +1,20 @@
 """git telling that a repository moved, from its ref files' times."""
 
+from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
+import pytest
 from conftest import NOW
 
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.plugin import Context
-from move_forward.plugins.git import changes
+from move_forward.plugins.git import changes, client
 from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git.models import LocalRepo
 from move_forward.plugins.git.plugin import GitPlugin
+from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.repositories import KvRepository
 from move_forward.shell import git
 
@@ -76,3 +81,51 @@ def test_the_plugin_says_changed_once_per_move_after_its_first_look(tmp_path: Pa
     git(repo, "commit", "-q", "--allow-empty", "-m", "second")
     assert plugin.changed(ctx, Graph([]))
     assert not plugin.changed(ctx, Graph([]))
+
+
+def test_after_a_change_only_the_repos_that_moved_are_read_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a, b = _repo(tmp_path / "a"), _repo(tmp_path / "b")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    plugin = GitPlugin()
+
+    def ctx(minutes: int) -> Context[GitConfig]:
+        return Context(
+            config=GitConfig(repos=[a, b], refresh_seconds=600),
+            email="me@example.com",
+            teams=[],
+            prune_days=90,
+            now=NOW + timedelta(minutes=minutes),
+            db=db,
+            kv=KvRepository(db, "git"),
+        )
+
+    read: list[str] = []
+    real = client.collect_repo
+
+    def counting(repo: Path, *args: Any) -> LocalRepo:
+        read.append(repo.name)
+        return real(repo, *args)
+
+    monkeypatch.setattr(client, "collect_repo", counting)
+
+    def refresh(minutes: int) -> None:
+        plugin.store(ctx(minutes), plugin.collect(ctx(minutes)))
+
+    assert not plugin.changed(ctx(0), Graph([]))  # the first look
+    refresh(0)
+    assert sorted(read) == ["a", "b"]
+    git(b, "commit", "-q", "--allow-empty", "-m", "second")
+    assert plugin.changed(ctx(1), Graph([]))
+    read.clear()
+    refresh(1)
+    assert read == ["b"]  # a is kept as stored
+    stored = plugin.load(ctx(1))
+    assert stored is not None and [r.dir for r in stored.repos] == [str(a), str(b)]
+    git(a, "commit", "-q", "--allow-empty", "-m", "second")
+    assert plugin.changed(ctx(11), Graph([]))
+    read.clear()
+    refresh(11)  # ten minutes since every repo was read: all of them, whatever moved
+    assert sorted(read) == ["a", "b"]

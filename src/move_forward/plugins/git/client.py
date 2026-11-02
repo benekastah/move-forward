@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from ...shell import CommandError, git
+from . import changes
 from .models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 _GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
@@ -295,11 +296,19 @@ def collect(
     now: datetime,
     commit_history_days: int,
     ignored_worktree_globs: list[str],
+    only: set[str] | None = None,
+    previous: LocalSnapshot | None = None,
 ) -> LocalSnapshot:
+    """Every repo among `repos`, or with `only` (common git directories, see
+    `changes.fingerprints`) just those, keeping the rest as `previous` has them; a repo
+    `previous` lacks is read anyway."""
     email = my_email(repos[0]) if repos else ""
     existing = folded([repo for repo in repos if repo.exists()])
+    kept = {r.dir: r for r in previous.repos} if previous and only is not None else {}
 
     def one(repo: Path) -> LocalRepo:
+        if str(repo) in kept and str(changes.common_dir(repo)) not in (only or set()):
+            return kept[str(repo)]
         return collect_repo(repo, email, now, commit_history_days, ignored_worktree_globs)
 
     with ThreadPoolExecutor(max_workers=max(1, len(existing))) as pool:
