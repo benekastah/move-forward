@@ -49,7 +49,7 @@ org = "example-org"
 
 [git]
 repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are found from them
-# refresh_seconds = 300
+# refresh_seconds = 1800
 # status_seconds = 30
 # my_branch_prefixes = ["me/"]            # besides branches with my commits or PRs
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
@@ -57,7 +57,7 @@ repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are foun
 # github_hosts = ["github.com"]           # remote hosts that are GitHub: an Enterprise server, ~/.ssh/config aliases
 
 [git_stack]                           # stacks from git-stack, in [git]'s repos
-# refresh_seconds = 300                  # how often it refreshes regardless of git's changes
+# refresh_seconds = 1800                 # how often it refreshes regardless of git's changes
 
 [slack]
 workspace_url = "https://example.slack.com"

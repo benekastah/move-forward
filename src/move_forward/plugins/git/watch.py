@@ -2,8 +2,9 @@
 `ReadDirectoryChangesW` on Windows), so `GitPlugin.changed` knows at once which repos
 moved and which worktrees were edited, instead of polling.
 
-A repo's refs are watched in its common git directory: `refs/` (recursively), its top
-level (`HEAD`, `packed-refs`) and `worktrees/` (each linked worktree's `HEAD`). A worktree's
+A repo's refs and config are watched in its common git directory: `refs/` (recursively),
+its top level (`HEAD`, `packed-refs`, `config`) and `worktrees/` (each linked worktree's
+`HEAD`). A worktree's
 edits are watched in its root (not recursively) and in each top-level directory git tracks
 (recursively), so the big ignored trees usually at the top (`node_modules`, `build`,
 `.venv`) cost no watches; a new untracked directory shows in the root's events. watchdog
@@ -39,16 +40,17 @@ def _within(path: Path, root: Path) -> Path | None:
         return None
 
 
-def is_ref_change(relative: Path) -> bool:
+def moves_repo(relative: Path) -> bool:
     """Whether a change at `relative`, a path in a common git directory, moves the repo:
-    `HEAD`, `packed-refs`, anything under `refs/`, or a linked worktree's `HEAD`."""
+    `HEAD`, `packed-refs`, anything under `refs/`, a linked worktree's `HEAD`, or `config`
+    (where branches' upstreams are set, and git-stack keeps its stacks)."""
     parts = relative.parts
     if not parts:
         return False
     if parts[0] == "refs":
         return True
     if len(parts) == 1:
-        return parts[0] in ("HEAD", "packed-refs")
+        return parts[0] in ("HEAD", "packed-refs", "config")
     return parts[0] == "worktrees" and len(parts) == 3 and parts[2] == "HEAD"
 
 
@@ -155,7 +157,7 @@ class Watcher(FileSystemEventHandler):
         with self._lock:
             for common in self._repos:
                 if (relative := _within(path, common)) is not None:
-                    if is_ref_change(relative):
+                    if moves_repo(relative):
                         self._moved.add(common)
                     return
             worktree = max(

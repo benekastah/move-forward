@@ -3,7 +3,7 @@
 from ...asking import Asker, InitSetup, branch_prefix, checkout, directories, path
 
 TEMPLATE = """\
-# refresh_seconds = 300                # how often it refreshes (only reads local checkouts)
+# refresh_seconds = 1800               # how often it reads every repo anyway (it watches them)
 # status_seconds = 30                  # how often edits are polled where watching fails (0: off)
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # commit_history_days = 180              # commit history for "directories I work in"
