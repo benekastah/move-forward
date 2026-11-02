@@ -25,7 +25,10 @@ your commits count towards the directories you work in.
 Remotes can have any names. "The default branch" is the default branch on every remote
 (`upstream/main` and `origin/main` in a fork), or the local one in a repo without remotes:
 a commit on any of them is on the default branch. The repo's GitHub name comes from the
-remote its local default branch tracks, else from the first remote on GitHub.
+remote its local default branch tracks, else from the first remote on GitHub. A remote is on
+GitHub when its host, as the remote URL names it, is one of `github_hosts`
+(`["github.com"]`): add a GitHub Enterprise Server's host, or an alias from
+`~/.ssh/config` (`github-work` in `git@github-work:acme/widgets.git`).
 
 ## Publishes
 

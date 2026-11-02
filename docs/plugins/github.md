@@ -5,6 +5,11 @@ requests, PRs I reviewed, and my teams' PRs. Enabled by a `[github]` section.
 
 ## Config
 
+`host` (`github.com`) is GitHub's host; for a GitHub Enterprise Server, its host (e.g.
+`github.acme.com`), which `gh` must be logged in to (`gh auth login --hostname <host>`).
+Every `gh api` call goes there. `mfd init` fills it in from an Enterprise org's URL. Set
+git's `github_hosts` too, so git knows the server's remotes.
+
 `refresh_seconds` (300) is how often it refreshes in the background: GitHub's API is rate-limited.
 It also refreshes soon after I get a notification about something in the org (a review
 requested, a review, a comment, CI): it polls my notifications as often as GitHub allows

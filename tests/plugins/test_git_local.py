@@ -56,6 +56,13 @@ def test_github_repo_from_remote_urls() -> None:
     assert local.github_repo("https://github.com/acme/widgets") == "acme/widgets"
     assert local.github_repo("git@github-work:acme/widgets.git") is None
     assert local.github_repo("https://gitlab.com/acme/widgets.git") is None
+    work = ["github.com", "github-work", "GitHub.Acme.com"]  # an alias, and an Enterprise host
+    assert local.github_repo("git@github-work:acme/widgets.git", work) == "acme/widgets"
+    assert local.github_repo("ssh://git@github.acme.com:22/acme/tools", work) == "acme/tools"
+    assert local.github_repo("https://github.acme.com/acme/tools/", work) == "acme/tools"
+    assert local.github_repo("github-work:acme/x", work) == "acme/x"  # scp-like, no user
+    assert local.github_repo("../elsewhere", work) is None
+    assert local.github_repo("/srv/git/widgets.git", work) is None
 
 
 def _init_repo(path: Path) -> None:

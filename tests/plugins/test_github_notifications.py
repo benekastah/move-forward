@@ -77,4 +77,4 @@ def test_a_failure_other_than_not_modified_is_raised(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(notifications, "run", run)
     with pytest.raises(CommandError, match="401"):
-        notifications.fetch(None)
+        notifications.fetch("github.com", None)

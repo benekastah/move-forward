@@ -62,7 +62,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     snapshot_model = GitHubSnapshot
 
     def collect(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot:
-        return client.collect(ctx.config.org, _team_slugs(ctx), ctx.config.history_days, ctx.now)
+        config = ctx.config
+        return client.collect(
+            config.host, config.org, _team_slugs(ctx), config.history_days, ctx.now
+        )
 
     def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
         PrRepository(ctx.db).replace(snapshot)
@@ -92,7 +95,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         if wait and ctx.now < datetime.fromisoformat(wait):
             return False
         seen = ctx.kv.get(NOTIFICATIONS_SEEN)
-        found = notifications.fetch(seen)
+        found = notifications.fetch(ctx.config.host, seen)
         if found is None:
             return False
         ctx.kv.set(NOTIFICATIONS_SEEN, found.last_modified)
@@ -125,7 +128,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 if login in known:
                     continue
                 try:
-                    email = client.commit_email(pr.repo, login, domains)
+                    email = client.commit_email(ctx.config.host, pr.repo, login, domains)
                 except Exception as e:  # noqa: BLE001
                     log.warning("email lookup for %s failed: %s", login, e)
                     continue

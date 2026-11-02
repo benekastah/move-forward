@@ -13,7 +13,7 @@ from move_forward.registry import enabled
 def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def not_modified(if_modified_since: str | None) -> None:
+    def not_modified(host: str, if_modified_since: str | None) -> None:
         return None
 
     monkeypatch.setattr(notifications, "fetch", not_modified)

@@ -19,6 +19,10 @@ class GitConfig(Strict):
     repos: list[Path]
     """Main checkouts of the repos I work in, one per repo. Their other worktrees are found
     from them with `git worktree list`, so those aren't listed."""
+    github_hosts: list[str] = Field(default_factory=lambda: ["github.com"])
+    """Hosts whose remotes are GitHub repos, as remote URLs name them: github.com, a GitHub
+    Enterprise Server's host, or an alias for either in ~/.ssh/config (`github-work` in
+    `git@github-work:acme/widgets.git`)."""
     my_branch_prefixes: list[str] = Field(default_factory=list)
     """Branch name prefixes that mark a branch as mine, e.g. `["jane/"]`. A branch with a PR
     of mine, or commits of mine off the default branch, is mine whatever its name."""

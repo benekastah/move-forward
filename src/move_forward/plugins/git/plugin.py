@@ -63,6 +63,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             ctx.config.ignored_worktree_globs,
             only=moved if previous is not None else None,
             previous=previous,
+            github_hosts=ctx.config.github_hosts,
         )
 
     def store(self, ctx: Context[GitConfig], snapshot: LocalSnapshot) -> None:

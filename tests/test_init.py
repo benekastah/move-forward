@@ -36,10 +36,10 @@ def no_machine_guesses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def guess_org(_cwd: Path) -> str:
         return "acme"
 
-    def guess_teams(org: str) -> list[str]:
+    def guess_teams(org: str, host: str = "github.com") -> list[str]:
         return ["core"] if org == "acme" else []
 
-    def org_team_examples(org: str) -> list[str]:
+    def org_team_examples(org: str, host: str = "github.com") -> list[str]:
         return ["platform", "web"] if org == "acme" else []
 
     def installed(_self: GitStackPlugin) -> bool:
@@ -255,12 +255,15 @@ def test_team_question_shows_the_orgs_teams_as_examples(no_machine_guesses: None
 def test_a_pasted_org_url_gives_the_org(tmp_path: Path, no_machine_guesses: None) -> None:
     assert github_setup.org("https://github.com/acme/") == "acme"
     assert github_setup.org("github.com/acme") == "acme" and github_setup.org("acme") == "acme"
-    with pytest.raises(ValueError, match="only github.com"):
-        github_setup.org("https://github.example.com/acme")
+    assert github_setup.org("https://GitHub.Acme.com/acme") == "github.acme.com/acme"
     path = tmp_path / "config.toml"
     init.init(path, scripted({"organization": "https://github.com/other"}), cwd=tmp_path)
     github = config.load(path).github
-    assert github is not None and github.org == "other"
+    assert github is not None and (github.host, github.org) == ("github.com", "other")
+    enterprise = tmp_path / "enterprise.toml"
+    init.init(enterprise, scripted({"organization": "https://github.acme.com/acme"}), cwd=tmp_path)
+    github = config.load(enterprise).github
+    assert github is not None and (github.host, github.org) == ("github.acme.com", "acme")
 
 
 def test_tab_completes_plugins_the_orgs_teams_and_directories(
@@ -268,7 +271,7 @@ def test_tab_completes_plugins_the_orgs_teams_and_directories(
 ) -> None:
     fetched: list[str] = []
 
-    def org_teams(org: str) -> list[str]:
+    def org_teams(org: str, host: str = "github.com") -> list[str]:
         fetched.append(org)
         return ["core", "core-infra", "web"]
 

@@ -184,13 +184,13 @@ def test_search_retries_a_failed_page_once(monkeypatch: pytest.MonkeyPatch) -> N
         return _response([RAW_PR], False, None)
 
     monkeypatch.setattr(github, "run", flaky_run)
-    assert [p.number for p in github.search_prs("q")] == [7]
+    assert [p.number for p in github.search_prs("github.com", "q")] == [7]
     assert len(attempts) == 2
 
     attempts.clear()
     monkeypatch.setattr(github, "stopping", lambda: True)
     with pytest.raises(github.CommandError):
-        github.search_prs("q")
+        github.search_prs("github.com", "q")
     assert len(attempts) == 1  # no retry while shutting down
 
 
@@ -206,7 +206,8 @@ def test_search_follows_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
         return pages.pop(0)
 
     monkeypatch.setattr(github, "run", fake_run)
-    prs = github.search_prs("is:pr author:@me", with_files=True)
+    prs = github.search_prs("ghe.acme.com", "is:pr author:@me", with_files=True)
     assert [p.number for p in prs] == [7, 8]
+    assert calls[0][:4] == ["gh", "api", "--hostname", "ghe.acme.com"]  # on its host
     assert "after=CURSOR" not in calls[0] and "after=CURSOR" in calls[1]
     assert "withFiles=true" in calls[0]
