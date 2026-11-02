@@ -112,9 +112,9 @@ def test_tracked_branches_are_stack_branches_pointing_at_gits() -> None:
 def test_parse_info_reads_git_stack_json() -> None:
     out = (
         '[{"name": "main", "parent": null, "status": null, "current": false,'
-        ' "reverted_parent": null, "group": null, "pr": null},'
+        ' "group": null, "pr": null},'
         ' {"name": "me/a", "parent": "main", "status": "up-to-date", "current": true,'
-        ' "reverted_parent": null, "group": "g", "pr": null}]'
+        ' "group": "g", "pr": null}]'
     )
     assert client.parse_info(out) == [
         StackBranch(name="main"),
