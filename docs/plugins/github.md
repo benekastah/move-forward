@@ -25,7 +25,8 @@ fetched. Its conventions that differ between organisations are off by default:
 `review_checks` (CI checks that really report review status), `required_owner_marker` (a
 CODEOWNERS comment such as `#required`), `ticket_link_prefix` (the PR body line that links
 the ticket, e.g. `Link`) and `placeholder_labels` (template labels to replace).
-`email_domains` picks reviewers' emails from their commits (default: your email's domain),
+`email_domains` picks reviewers' emails from their commits (default: your email's domain;
+an email found is kept, and a lookup that found none is tried again after `prune_days`),
 `stale_review_hours` says when a review request can be nudged, and `reviewer_history_days`
 how far back commits count for reviewer suggestions. `[github.teams]` gives a team's GitHub
 slug where it isn't the team's name.
