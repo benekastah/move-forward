@@ -46,8 +46,10 @@ def worktrees(repo: Path) -> list[Path]:
 
 
 def branch_exists(repo: Path, branch: str) -> bool:
+    """Whether `branch` is a local branch: its exact ref, not a revision (`main~1`) that
+    `rev-parse` would resolve."""
     try:
-        git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
+        git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}")
     except CommandError:
         return False
     return True

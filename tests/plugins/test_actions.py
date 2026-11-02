@@ -130,6 +130,8 @@ def test_delete_refuses_checked_out_missing_and_unknown_repo(config: Config, rep
         run("git/delete_branch", config, {"repo": str(repo), "branch": "main"})
     with pytest.raises(ActionError, match="doesn't exist"):
         run("git/delete_branch", config, {"repo": str(repo), "branch": "nope"})
+    with pytest.raises(ActionError, match="doesn't exist"):  # a revision, not a branch
+        run("git/delete_branch", config, {"repo": str(repo), "branch": "done~0"})
     with pytest.raises(ActionError, match="nor a worktree of one"):
         run("git/delete_branch", config, {"repo": "/elsewhere", "branch": "done"})
     with pytest.raises(ActionError, match="missing field"):
