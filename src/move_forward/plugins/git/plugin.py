@@ -40,6 +40,14 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     title = "Local"
     init_template = TEMPLATE
 
+    def __init__(self, watching: bool = True) -> None:
+        self._watching = watching
+        """Whether `changed` watches the repos (see `watch`), or only polls them."""
+        self._watcher: watch.Watcher | None = None
+        self._ids: dict[Path, str] = {}
+        """Each watched repo's id, the common git directory `changes` and `collect` name it
+        by, by its resolved path, as the watcher has it."""
+
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 
@@ -81,14 +89,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             self._watch(snapshot)
 
     change_check_seconds: ClassVar[int | None] = 2
-
-    def __init__(self, watching: bool = True) -> None:
-        self._watching = watching
-        """Whether `changed` watches the repos (see `watch`), or only polls them."""
-        self._watcher: watch.Watcher | None = None
-        self._ids: dict[Path, str] = {}
-        """Each watched repo's id, the common git directory `changes` and `collect` name it
-        by, by its resolved path, as the watcher has it."""
 
     def _watcher_for(self, ctx: Context[GitConfig]) -> watch.Watcher | None:
         """The watcher, started on the first call; None when not watching, or when it can't

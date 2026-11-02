@@ -131,6 +131,13 @@ Sending, off by default:
   PR could become a contract several plugins publish to, with a shared base for code-host
   plugins. All of it waits for that second host.
 
+### Code
+
+- **Class variables to the top**, as AGENTS.md now asks: `Plugin` and every plugin
+  (`GitPlugin`, `GitStackPlugin`, `GitHubPlugin`, `JiraPlugin`, `SlackPlugin`) set class
+  variables between their methods, next to the hook they're for, and `Dashboard` sets
+  `sources` after its methods.
+
 ### Notes and the skill
 
 - **Move the skill onto the notes' fields.** Check-ins, offers, once-a-day questions and
