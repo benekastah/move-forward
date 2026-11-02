@@ -18,7 +18,7 @@ from ...graph import Graph
 from ...plugin import ActionError, ActionResult, CliHandler, Context
 from . import actions, markdown, panels
 from .config import NotesConfig
-from .models import CheckIn, Entry, Ice, Size, Todo
+from .models import CheckIn, Condition, Entry, Ice, Size, Todo
 from .repository import NotesRepository
 
 LAST_ASKED_ICE = "last_asked_ice"
@@ -124,7 +124,7 @@ def _entry_text(entry: Entry) -> str:
     if entry.where:
         lines.append(f"  where: {entry.where}")
     lines += [f"  about: {link.ref}" for link in entry.links]
-    lines += [f"  merge condition: {text}" for text in entry.conditions]
+    lines += [f"  merge condition on {c.pr}: {c.text}" for c in entry.conditions]
     lines += [f"  declined {d.on}: {d.text}" for d in entry.declined]
     lines += [f"  checked in: {entry.checked_on}"] if entry.checked_on else []
     lines += [f"  asked if done: {entry.asked_done_on}"] if entry.asked_done_on else []
@@ -236,10 +236,15 @@ def cmd_condition(ctx: Context[NotesConfig], graph: Graph, args: argparse.Namesp
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
     text = args.text.strip()
+    pr = args.pr.strip() if args.pr else None
+    if pr is not None and not markdown.PR_URL_RE.fullmatch(pr):
+        raise ValueError(f"{pr!r} isn't a pull request's URL")
     if args.condition_command == "add":
-        if not notes.add_condition(entry.id, text):
-            raise ValueError(f"{entry.title} already has that merge condition")
-    elif not notes.remove_condition(entry.id, text):
+        if pr is None:
+            raise ValueError("a merge condition holds one PR: name it with --pr")
+        if not notes.add_condition(entry.id, Condition(pr=pr, text=text)):
+            raise ValueError(f"{entry.title} already has that merge condition on {pr}")
+    elif not notes.remove_condition(entry.id, text, pr):
         raise ValueError(f"{entry.title} has no merge condition {text!r}")
     notes.touch(entry.id, ctx.today)
     return Result(f"{entry.title}: {args.condition_command} merge condition")
@@ -391,6 +396,9 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     condition.add_argument("condition_command", choices=["add", "remove"])
     condition.add_argument("entry")
     condition.add_argument("text")
+    condition.add_argument(
+        "--pr", help="the PR it holds, by URL (needed to add; to remove, default every PR's)"
+    )
     decline = add("decline", "record that something offered for an entry was turned down today")
     decline.add_argument("entry")
     decline.add_argument("text")

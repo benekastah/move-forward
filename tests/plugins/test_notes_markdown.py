@@ -10,7 +10,7 @@ from skill_notes import ON_ICE, REVIEWER_MAP, WORK_NOTES
 from move_forward import cli
 from move_forward.db import Database
 from move_forward.plugins.notes import markdown
-from move_forward.plugins.notes.models import Link
+from move_forward.plugins.notes.models import Condition, Link
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
 TODAY = date(2026, 10, 31)
@@ -33,7 +33,8 @@ def test_an_entry_is_read_field_by_field() -> None:
         ("get it merged", "big", None),
         ("no size here", None, None),
     ]
-    assert entry.conditions == [f"don't merge until {PR_13} is merged"]
+    # The PR a condition names is the one it holds (the skill's convention).
+    assert entry.conditions == [Condition(pr=PR_13, text=f"don't merge until {PR_13} is merged")]
     assert [(d.on, d.text) for d in entry.declined] == [
         (date(2026, 10, 29), "don't nudge today"),
         (date(2026, 10, 28), "skip the review"),
@@ -156,3 +157,23 @@ def test_check_ins_the_skill_wrote_as_declines_are_read_into_their_fields() -> N
     assert [d.text for d in entry.declined] == ["nudging"]
     again, _ = markdown.read_work_notes(markdown.write_work_notes([entry], sections))
     assert again == [entry]  # written back as the skill wrote them, and read the same
+
+
+def test_conditions_are_given_their_pr_when_read() -> None:
+    pr_1, pr_2 = "https://github.com/acme/widgets/pull/1", "https://ghe.acme.com/acme/api/pull/2"
+    text = (
+        "# Work notes\n\n## APP-1 Two PRs\n- Where: " + f"{pr_1} {pr_2}\n"
+        "- Merge conditions:\n"
+        f"  - {pr_2}: after the migration\n"  # names its PR, as the export writes it
+        "  - after the release\n"  # for the whole entry: on each of its PRs
+        "\n## APP-2 No PR yet\n- Merge conditions: ask Sam first\n"
+    )
+    [two, none], sections = markdown.read_work_notes(text)
+    assert two.conditions == [
+        Condition(pr=pr_2, text="after the migration"),
+        Condition(pr=pr_1, text="after the release"),
+        Condition(pr=pr_2, text="after the release"),
+    ]
+    assert none.conditions == [] and none.lines == ["- Merge condition: ask Sam first"]
+    again, _ = markdown.read_work_notes(markdown.write_work_notes([two], sections))
+    assert again[0].conditions == two.conditions

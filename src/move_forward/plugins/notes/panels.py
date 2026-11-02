@@ -10,7 +10,7 @@ from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Link, Panel, PrState, Signals
 from .kinds import EntryAttrs, IcedAttrs
 from .markdown import PR_URL_RE
-from .models import Entry, Ice, Todo
+from .models import Condition, Entry, Ice, Todo
 
 NOT_BLOCKED_RE = re.compile(r"^\s*(nothing|none|no|-|n/a)\b", re.IGNORECASE)
 
@@ -26,6 +26,14 @@ PR_STATES: dict[str, PrState] = {"open": "open", "merged": "merged", "closed": "
 
 
 # Output models
+
+
+def _by_pr(conditions: list[Condition]) -> dict[str, list[str]]:
+    """Conditions' texts by the PR each holds."""
+    found: dict[str, list[str]] = {}
+    for condition in conditions:
+        found.setdefault(condition.pr, []).append(condition.text)
+    return found
 
 
 def todo_actions(todo: Todo, entry: str, suggested: bool = False) -> list[Action]:
@@ -176,7 +184,7 @@ def entities(entries: list[Entry], ices: list[Ice], covers: dict[int, list[Ref]]
                     "mentions": [entry.title],
                     "attrs": attrs(
                         EntryAttrs(
-                            merge_conditions=entry.conditions,
+                            merge_conditions=_by_pr(entry.conditions),
                             open_todos=[t.text for t in entry.open_todos],
                         )
                     ),

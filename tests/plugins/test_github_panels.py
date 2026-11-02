@@ -313,3 +313,19 @@ def test_act_now_says_how_long_a_review_or_a_reply_has_waited() -> None:
     why = {i.title: i.details[0] for i in act}
     assert why[f"Review: {asked.title}"] == "why: quick, alice waiting 3d"  # the latest request
     assert why[f"Reply: {questioned.title}"] == "why: quick, bob waiting 2d"
+
+
+def test_a_merge_condition_holds_only_its_own_pr() -> None:
+    api = pr(1, reviews=[approved_review()], review_decision="APPROVED")
+    web = pr(2, reviews=[approved_review()], review_decision="APPROVED")
+    work = entry(
+        "APP-1 both",
+        [],
+        **{
+            "Where": [f"{api.url} {web.url}"],
+            "Merge conditions": [f"{api.url}: after the migration"],
+        },
+    )
+    dashboard = build(github=snapshot(mine=[api, web]), work_items=[work])
+    assert titles(dashboard, "github.held") == [api.title]
+    assert titles(dashboard, "github.ready_to_merge") == [web.title]

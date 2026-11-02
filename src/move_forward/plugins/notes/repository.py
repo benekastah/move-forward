@@ -1,12 +1,15 @@
 """The notes plugin's tables, and the queries over them."""
 
+import sqlite3
 from collections import defaultdict
 from datetime import date, datetime
 
 from ...db import Database
 from ...graph import Ref
+from .markdown import attach_conditions
 from .models import (
     CheckIn,
+    Condition,
     Declined,
     Entry,
     Ice,
@@ -126,9 +129,22 @@ MIGRATIONS = [
         PRIMARY KEY (pr, kind)
     );
     """,
+    """
+    ALTER TABLE notes_conditions ADD COLUMN pr TEXT;  -- the PR it holds; NULL for one from
+                                                      -- before, until it's given its PR
+    """,
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
 only the notes know what's in them."""
+
+
+def _insert_condition(conn: sqlite3.Connection, entry_id: int, condition: Condition) -> None:
+    conn.execute(
+        "INSERT INTO notes_conditions (entry_id, position, text, pr) VALUES (?,"
+        " (SELECT COALESCE(MAX(position), -1) + 1 FROM notes_conditions WHERE entry_id = ?),"
+        " ?, ?)",
+        (entry_id, entry_id, condition.text, condition.pr),
+    )
 
 
 def _iso(value: date | None) -> str | None:
@@ -167,9 +183,10 @@ class NotesRepository:
                     links=todo_links[row["id"]],
                 )
             )
-        conditions: defaultdict[int, list[str]] = defaultdict(list)
+        self._attach_conditions()
+        conditions: defaultdict[int, list[Condition]] = defaultdict(list)
         for row in db.query("SELECT * FROM notes_conditions ORDER BY entry_id, position"):
-            conditions[row["entry_id"]].append(row["text"])
+            conditions[row["entry_id"]].append(Condition(pr=row["pr"], text=row["text"]))
         declined: defaultdict[int, list[Declined]] = defaultdict(list)
         for row in db.query("SELECT * FROM notes_declined ORDER BY entry_id, position"):
             declined[row["entry_id"]].append(
@@ -322,31 +339,61 @@ class NotesRepository:
                 > 0
             )
 
-    def add_condition(self, entry_id: int, text: str) -> bool:
+    def _attach_conditions(self) -> None:
+        """Give each condition kept before conditions named their PR its PR, once, by
+        `markdown.attach_conditions`: the PR its text names, else each of its entry's PRs;
+        one with neither becomes a line of its entry."""
+        with self._db.transaction() as conn:
+            old = conn.execute(
+                "SELECT entry_id, text FROM notes_conditions WHERE pr IS NULL"
+                " ORDER BY entry_id, position"
+            ).fetchall()
+            texts: defaultdict[int, list[str]] = defaultdict(list)
+            for row in old:
+                texts[row["entry_id"]].append(row["text"])
+            for entry_id, written in texts.items():
+                prs = [
+                    row["ref"]
+                    for row in conn.execute(
+                        "SELECT ref FROM notes_links WHERE entry_id = ? AND kind = 'pr'"
+                        " ORDER BY ref",
+                        (entry_id,),
+                    )
+                ]
+                conditions, lines = attach_conditions(written, prs)
+                conn.execute(
+                    "DELETE FROM notes_conditions WHERE entry_id = ? AND pr IS NULL", (entry_id,)
+                )
+                for condition in conditions:
+                    _insert_condition(conn, entry_id, condition)
+                for line in lines:
+                    conn.execute(
+                        "INSERT INTO notes_entry_lines VALUES (?,"
+                        " (SELECT COALESCE(MAX(position), -1) + 1 FROM notes_entry_lines"
+                        " WHERE entry_id = ?), ?)",
+                        (entry_id, entry_id, line),
+                    )
+
+    def add_condition(self, entry_id: int, condition: Condition) -> bool:
         """Add a merge condition at the end; False if the entry already has it."""
         with self._db.transaction() as conn:
             if conn.execute(
-                "SELECT 1 FROM notes_conditions WHERE entry_id = ? AND text = ?", (entry_id, text)
+                "SELECT 1 FROM notes_conditions WHERE entry_id = ? AND pr = ? AND text = ?",
+                (entry_id, condition.pr, condition.text),
             ).fetchone():
                 return False
-            conn.execute(
-                "INSERT INTO notes_conditions VALUES (?,"
-                " (SELECT COALESCE(MAX(position), -1) + 1 FROM notes_conditions"
-                " WHERE entry_id = ?), ?)",
-                (entry_id, entry_id, text),
-            )
+            _insert_condition(conn, entry_id, condition)
         return True
 
-    def remove_condition(self, entry_id: int, text: str) -> bool:
-        """Drop a merge condition; False if the entry didn't have it."""
+    def remove_condition(self, entry_id: int, text: str, pr: str | None = None) -> bool:
+        """Drop a merge condition, on `pr` or on every PR it's on; False if there was none."""
+        query = "DELETE FROM notes_conditions WHERE entry_id = ? AND text = ?"
+        params: tuple[object, ...] = (entry_id, text)
+        if pr is not None:
+            query += " AND pr = ?"
+            params += (pr,)
         with self._db.transaction() as conn:
-            return (
-                conn.execute(
-                    "DELETE FROM notes_conditions WHERE entry_id = ? AND text = ?",
-                    (entry_id, text),
-                ).rowcount
-                > 0
-            )
+            return conn.execute(query, params).rowcount > 0
 
     def add_declined(self, entry_id: int, on: date, text: str) -> None:
         """Record that `text` was offered for the entry and turned down on `on`."""
@@ -479,8 +526,8 @@ class NotesRepository:
                     [(entry_id, i, line) for i, line in enumerate(entry.lines)],
                 )
                 conn.executemany(
-                    "INSERT INTO notes_conditions VALUES (?, ?, ?)",
-                    [(entry_id, i, text) for i, text in enumerate(entry.conditions)],
+                    "INSERT INTO notes_conditions (entry_id, position, text, pr) VALUES (?, ?, ?, ?)",
+                    [(entry_id, i, c.text, c.pr) for i, c in enumerate(entry.conditions)],
                 )
                 conn.executemany(
                     "INSERT INTO notes_declined VALUES (?, ?, ?, ?)",

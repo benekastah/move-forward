@@ -8,7 +8,8 @@ from ...domain import Model
 class EntryAttrs(Model):
     """An `entry`: a piece of work in the notes, by title."""
 
-    merge_conditions: list[str] = Field(default_factory=list[str])
+    merge_conditions: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
+    """What must happen before each of its PRs merges, by the PR's URL."""
     open_todos: list[str] = Field(default_factory=list[str])
 
 
