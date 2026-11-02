@@ -129,9 +129,6 @@ Sending, off by default:
 
 ### Code hosts
 
-- **GitHub Enterprise.** github assumes github.com: a `host` key, passed to every `gh`
-  call (`--hostname`) and used for PR URLs, would let it work with an Enterprise server.
-  `mfd init`'s org question already takes a pasted org URL; it would fill in both.
 - **More signals for which branches are mine.** A PR of mine, my commits off the default
   branch and `my_branch_prefixes` decide it now; git-stack tracking it and being checked
   out in one of my worktrees could count too, if those miss some.
