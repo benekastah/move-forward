@@ -281,6 +281,8 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
     assert response.getheader("Location") == "/?notice=did+it"
     response = post(client, "/actions/x?back=https%3A%2F%2Fevil.example", {})
     assert response.getheader("Location") == "/?notice=did+it"
+    response = post(client, "/actions/x?back=%2F%5Cevil.example", {})  # browsers read "/\\" as "//"
+    assert response.getheader("Location") == "/?notice=did+it"
 
 
 def test_ticking_a_todo_off_redirects_back_with_it(

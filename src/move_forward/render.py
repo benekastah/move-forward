@@ -122,13 +122,19 @@ def _head(title: str, reload_seconds: int | None) -> str:
     )
 
 
+def local_path(url: str) -> bool:
+    """Whether `url` is a path on this dashboard, and nothing a browser would take for another
+    site: not `//host`, nor `/\\host` (browsers read a backslash as a slash), and nothing
+    unprintable (which could split a redirect's header)."""
+    return (
+        url.startswith("/") and not url.startswith("//") and "\\" not in url and url.isprintable()
+    )
+
+
 def _linkable(url: str | None) -> bool:
     """Whether `url` may be a link: http(s), or a path on this dashboard. Anything else (a
     `javascript:` URL, say, should one ever reach a plugin's data) is shown as text."""
-    return url is not None and (
-        url.startswith(("https://", "http://"))
-        or (url.startswith("/") and not url.startswith("//"))
-    )
+    return url is not None and (url.startswith(("https://", "http://")) or local_path(url))
 
 
 def banner(text: str, urgency: str | None) -> str:

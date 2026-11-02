@@ -45,11 +45,11 @@ STATIC_FILES = {
 """Served paths to the file in `STATIC_DIR` and its content type."""
 MAX_BODY_BYTES = 64 * 1024
 TLS_HANDSHAKE_SECONDS = 10
+"""A connection that hasn't finished its TLS handshake by then is dropped."""
 CHANGE_LOOP_SECONDS = 1.0
 """How often the change loop looks for plugins whose `change_check_seconds` have passed."""
 TLS_RECHECK_SECONDS = 3600
 """How often the HTTPS server looks for a newer certificate in the chain."""
-"""A connection that hasn't finished its TLS handshake by then is dropped."""
 LOGIN_PATH = "/login"
 NOT_SIGNED_IN = "<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
 LOCAL_HOSTS = ("127.0.0.1", "localhost")
@@ -344,7 +344,7 @@ def _back_to_page(query: str, notice: str = "", extra: dict[str, str] | None = N
         params["notice"] = notice
     query_params = parse_qs(query, keep_blank_values=True)
     back = query_params.get("back", [""])[0]
-    if back.startswith("/") and not back.startswith("//"):
+    if render.local_path(back):
         return back + ("&" if "?" in back else "?") + urlencode(params) if params else back
     values = query_params.get("open")
     if values is not None:
