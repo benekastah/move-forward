@@ -174,6 +174,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
         cheap: core asks every time it builds the graph."""
         return dict(self.linking)
 
+    def me(self, ctx: Context[C], snapshot: S | None) -> str | None:
+        """Who I am in the plugin's tool (a login), for the page; None when it doesn't say.
+        The first enabled plugin's answer is used."""
+        return None
+
     def entities(self, ctx: Context[C], snapshot: S | None) -> list[Entity]:
         """What the plugin publishes to the graph, from its snapshot and tables."""
         return []

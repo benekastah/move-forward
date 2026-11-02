@@ -160,11 +160,6 @@ Sending, off by default:
   against cleaning while something's on ice no longer matches the dashboard, which cleans
   regardless (`git stack clean` never restacks or pushes).
 
-### Core housekeeping
-
-- **Finding `me`.** `refresh` finds `me` among `person` entities by name; like linking
-  kinds, this could become a declaration on a kind model.
-
 ### Windows, on a real machine
 
 CI passes on Windows, but these need trying by hand: `py dev.py install` (the PATH

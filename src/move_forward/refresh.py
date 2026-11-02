@@ -13,7 +13,6 @@ from . import act_now, localtime, panels, shell
 from .act_now import Feedback
 from .config import Config
 from .db import Database
-from .domain import Model
 from .graph import Graph
 from .page import Action, Item, SourceStatus
 from .plugin import ActionError, ActionResult, collect_into
@@ -23,15 +22,6 @@ from .repositories import FeedbackRepository, LayoutRepository, SnapshotReposito
 from .shell import CommandError
 
 log = logging.getLogger(__name__)
-
-PERSON = "person"
-
-
-class _PersonView(Model):
-    """What core reads of a `person`: whether it's me."""
-
-    id: str
-    me: bool = False
 
 
 def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str, BaseModel | None]]:
@@ -150,7 +140,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         own = e.plugin.panels(e.ctx, snapshots[e.name], graph)
         nominated = e.plugin.act_now(e.ctx, snapshots[e.name], graph, own)
         plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
-    me = next((p for p in graph.view(PERSON, _PersonView) if p.me), None)
+    me = next((found for e in plugins if (found := e.plugin.me(e.ctx, snapshots[e.name]))), None)
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)
         for source, row in SnapshotRepository(db).all().items()
@@ -172,7 +162,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         now,
         plugin_panels,
         sources,
-        me.id if me else "",
+        me or "",
         item_actions,
         hidden,
         layout,
