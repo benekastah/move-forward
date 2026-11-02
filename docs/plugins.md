@@ -41,6 +41,7 @@ flowchart LR
     branch -. "my PRs' branches moving: refresh now" .-> github
     pr -. "a branch's PR; its head, to see a checkout behind" .-> git
     ice -. "its branches' commits, before deleting them" .-> git
+    stack_branch -. "tracked: my unpushed work" .-> git
     branch -. "which checkouts to scan" .-> git_stack
     repo -. "checkout → owner/name" .-> git_stack
     pr -. "a stack branch's PR" .-> git_stack

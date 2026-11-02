@@ -18,7 +18,9 @@ into it. A branch is yours if a PR of yours comes from it, if it has commits of 
 that aren't on the default branch (anywhere in its history, by the repo's `user.email`;
 counted for branches active within `commit_history_days`), or if its name starts with one
 of `my_branch_prefixes`. Without prefixes, a branch with only others' commits (a review
-checkout) isn't yours, and an older one that wasn't counted is. `ignored_worktree_globs`
+checkout) isn't yours, and an older one that wasn't counted is. Local work also shows
+the unpushed commits of any branch git-stack tracks (with the git_stack plugin), since
+stacks are built on your own branches. `ignored_worktree_globs`
 leaves worktrees out, and `commit_history_days` says how far back
 your commits count towards the directories you work in.
 
