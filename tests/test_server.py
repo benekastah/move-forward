@@ -479,7 +479,7 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
     clock = [1000.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
     app.config = app.config.model_copy(
-        update={"git": GitConfig(repos=[]), "refresh_on_load_seconds": 120}
+        update={"git": GitConfig(repos=[], refresh_seconds=60), "refresh_on_load_seconds": 120}
     )
     migrate(app.config, app.db)  # git's tables, as `mfd serve` makes them
     assert app.intervals() == {"github": 300, "git": 60}
