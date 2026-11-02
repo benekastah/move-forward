@@ -25,3 +25,16 @@ jobs:
         with:
           python-version: "3.12"
       - run: python dev.py check
+
+  # The one check the ruleset on main requires, so changing the matrix doesn't change what's
+  # required. It runs even if a check failed (a skipped required check would count as
+  # passing), and fails unless every check passed.
+  passed:
+    name: CI passed
+    if: always()
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every check passed
+        if: needs.check.result != 'success'
+        run: exit 1
