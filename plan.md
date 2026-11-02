@@ -102,13 +102,6 @@ Sending, off by default:
   git's change check sees what it brings, and github follows. It's the first time the
   dashboard would write to the repos without a click (only remote-tracking refs), hence
   opt-in.
-- **git_stack watches git instead of riding along with it.** Every git refresh (once a
-  minute for uncommitted edits, and after every local change) runs `git stack info` in
-  every repo, even when no branch moved. git_stack could declare `watches = ["git"]` and a
-  `changed(ctx, graph)` comparing git's `branch` entities (tips, upstreams) with what it
-  saw last, collecting only when they moved, with its own `refresh_seconds` as the
-  backstop. First check where git-stack keeps its stack metadata: what's outside git's
-  refs wouldn't show in git's branches, and would need a check of its own.
 - **Update what changed, not the whole plugin.** A change check refreshes the whole
   plugin. jira's could ask for the changed tickets' fields and store just those, and git's
   fingerprint could be kept per repo, so only the repo that moved is read again. github's
