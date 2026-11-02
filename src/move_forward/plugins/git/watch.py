@@ -2,13 +2,16 @@
 `ReadDirectoryChangesW` on Windows), so `GitPlugin.changed` knows at once which repos
 moved and which worktrees were edited, instead of polling.
 
-A repo's refs and config are watched in its common git directory: `refs/` (recursively),
-its top level (`HEAD`, `packed-refs`, `config`) and `worktrees/` (each linked worktree's
-`HEAD`). A worktree's
-edits are watched in its root (not recursively) and in each top-level directory git tracks
-(recursively), so the big ignored trees usually at the top (`node_modules`, `build`,
-`.venv`) cost no watches; a new untracked directory shows in the root's events. watchdog
-runs a thread per watched path, which is why it's these few and not every directory.
+A repo's refs and config are watched in its common git directory, recursively: one
+watch, and FSEvents reports a new `worktrees/<name>/HEAD` without its parent directories
+being created. Of what changes there, only refs, `HEAD`s, `packed-refs` and `config` count
+(see `moves_repo`); objects, logs and the index don't.
+
+A worktree's edits are watched in its root (not recursively) and in each top-level
+directory git tracks (recursively), so the big ignored trees usually at the top
+(`node_modules`, `build`, `.venv`) cost no watches; a new untracked directory shows in the
+root's events. watchdog runs a thread per watched path, which is why it's these few and not
+every directory.
 
 An edit only says a worktree may have changed: `changed` asks its `git status` whether the
 counts the page shows did. A repo or worktree with a path that can't be watched
@@ -42,16 +45,16 @@ def _within(path: Path, root: Path) -> Path | None:
 
 def moves_repo(relative: Path) -> bool:
     """Whether a change at `relative`, a path in a common git directory, moves the repo:
-    `HEAD`, `packed-refs`, anything under `refs/`, a linked worktree's `HEAD`, `config`
-    (where branches' upstreams are set, and git-stack keeps its stacks), or `worktrees`
-    itself coming or going (its first worktree added, `--detach`ed, moves no ref)."""
+    `HEAD`, `packed-refs`, anything under `refs/`, a linked worktree's `HEAD` (one added
+    `--detach`ed moves no ref), or `config` (where branches' upstreams are set, and git-stack
+    keeps its stacks)."""
     parts = relative.parts
     if not parts:
         return False
     if parts[0] == "refs":
         return True
     if len(parts) == 1:
-        return parts[0] in ("HEAD", "packed-refs", "config", "worktrees")
+        return parts[0] in ("HEAD", "packed-refs", "config")
     return parts[0] == "worktrees" and len(parts) == 3 and parts[2] == "HEAD"
 
 
@@ -108,11 +111,7 @@ class Watcher(FileSystemEventHandler):
         with self._sync_lock:
             wanted: dict[Path, list[tuple[Path, bool]]] = {}
             for common in set(worktrees.values()):
-                wanted[common] = [
-                    (common, False),
-                    (common / "refs", True),
-                    (common / "worktrees", True),
-                ]
+                wanted[common] = [(common, True)]
             for worktree in worktrees:
                 wanted[worktree] = [(worktree, False)] + [
                     (d, True) for d in tracked_top_dirs(worktree)
