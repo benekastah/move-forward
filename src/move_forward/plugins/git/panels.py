@@ -96,6 +96,12 @@ class Builder:
             repo.github_repo, branch
         )
 
+    def _stack_cleans(self, repo: LocalRepo, branch: Branch) -> bool:
+        """Whether git-stack sees the branch merged: git_stack's Clean deletes it and untracks
+        it too, where `git branch -D` would leave git-stack tracking a branch that's gone."""
+        stacked = self.stacked.get((repo.dir, branch.name))
+        return stacked is not None and stacked.stack_status == "merged"
+
     def local_work(self) -> Panel:
         items: list[Item] = []
         for repo in self.local.repos if self.local else []:
@@ -188,6 +194,8 @@ class Builder:
         targets: list[str] = []
         for repo in self.local.repos if self.local else []:
             for b in repo.branches:
+                if self._stack_cleans(repo, b):
+                    continue
                 merged = self._pr(repo.github_repo, b.name, "merged")
                 if merged:
                     when = datetime.fromisoformat(merged.merged_at) if merged.merged_at else None

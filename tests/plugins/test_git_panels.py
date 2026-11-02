@@ -227,6 +227,22 @@ def test_a_branch_git_stack_tracks_shows_its_unpushed_work() -> None:
     assert titles(built, "git.local_work") == ["ancient-stacked: 1 commits, never pushed"]
 
 
+def test_cleanup_leaves_branches_git_stack_saw_merge_to_its_clean() -> None:
+    merged = [
+        pr(n, state="MERGED", merged_at=NOW - timedelta(days=1), head=f"me/{n}") for n in (1, 2)
+    ]
+    built = build(
+        github=snapshot(merged_recent=merged),
+        local=local_snapshot(branches=[local_branch("me/1"), local_branch("me/2")]),
+        stacks=stacks(
+            StackBranch(name="me/1", parent="main", status="merged"),
+            StackBranch(name="me/2", parent="main", status="needs-restack"),
+        ),
+    )
+    assert titles(built, "git.cleanup") == ["me/2: PR merged 1d ago"]
+    assert titles(built, "git_stack.stacks") == ["me/1: merged", "me/2: needs-restack"]
+
+
 def test_a_checkout_of_a_pr_that_moved_on_github_is_shown_without_fetching() -> None:
     reviewing = pr(7, author="alice", head="alice/feature", head_oid="b" * 40)
     mine = pr(8, head="me/APP-8-fix", head_oid="c" * 40)

@@ -46,7 +46,8 @@ see [entities.md](../entities.md).
   another commit. That's read from github's PRs, so it shows without fetching.
 - **Cleanup**: local branches whose PR merged or whose remote is gone, with a Delete
   button each and Delete all (`git branch -D`; a branch checked out in a worktree is
-  refused).
+  refused). A branch git-stack sees merged is left to git_stack's Clean, which untracks it
+  as it deletes it.
 
 On notes' On ice panel, git adds Delete branches to a stack: the local ones, all or none,
 after a confirmation; refused for a branch with commits since it was iced; remote branches
