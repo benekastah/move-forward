@@ -128,6 +128,11 @@ is what's left to build.
   systems get a test of their own.
 - **Nothing destructive without a confirm.** Buttons that delete or rewrite
   set `confirm`, never force-push, reset or stash.
+- **A class's variables come first.** Its class variables (a plugin's `name`,
+  `kinds`, `change_check_seconds` and the like) go at the top, then `__init__`, which
+  sets every instance variable, then the methods. Don't define a class variable between
+  methods, next to the method it's for, or set a new instance variable outside
+  `__init__`.
 - **Every save must leave working code.** People run `mfd serve --reload`,
   which restarts on each change. Each file you write must be syntactically
   valid, and every import in the package must still resolve: when moving or
