@@ -4,6 +4,7 @@ from pydantic import Field
 
 from ...strict import Strict
 
+DEFAULT_REFRESH_SECONDS = 300
 DEFAULT_HOST = "github.com"
 DEFAULT_HISTORY_DAYS = 14
 DEFAULT_REVIEW_CHECKS: list[str] = []
@@ -15,7 +16,7 @@ DEFAULT_REVIEWER_HISTORY_DAYS = 180
 class GitHubConfig(Strict):
     """`[github]`: the organization and its pull-request conventions."""
 
-    refresh_seconds: int = Field(default=300, ge=10)
+    refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
     """How often the dashboard refreshes this plugin's data in the background (GitHub's API is rate-limited)."""
 
     host: str = DEFAULT_HOST

@@ -6,6 +6,7 @@ from pydantic import Field, field_validator
 
 from ...strict import Strict
 
+DEFAULT_REFRESH_SECONDS = 900
 DEFAULT_JIRA_TOKEN_ENV = "JIRA_API_TOKEN"
 DEFAULT_JIRA_KEYCHAIN_SERVICE = "move-forward-jira"
 DEFAULT_STATUS_IN_PROGRESS = "In Progress"
@@ -22,7 +23,7 @@ class JiraConfig(Strict):
     else the system's secret store.
     """
 
-    refresh_seconds: int = Field(default=900, ge=10)
+    refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
     """How often the dashboard refreshes this plugin's data in the background (tickets change slowly)."""
 
     site: str
