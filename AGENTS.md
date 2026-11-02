@@ -50,6 +50,10 @@ is what's left to build.
   does so once per page in `prepare_item_actions`. A plugin nominates items for
   core's Act now with `act_now`, each with `Signals` (effort, what it closes,
   who's waiting); by default, the items of its panels marked `act_now`.
+- Every request needs the dashboard's token, except the pages a tool's
+  sign-in (OAuth) returns to, which a plugin lists in `sign_in_pages`: they
+  must check their own single-use proof (OAuth's `state`) before doing
+  anything. A plugin builds such a redirect from `ctx.dashboard_url`.
 
 ## Rules for changes
 

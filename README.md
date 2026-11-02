@@ -94,7 +94,7 @@ Each plugin's page has its config, setup, panels, commands and buttons:
 | [git](docs/plugins/git.md) | `[git]` | each repo's worktrees and branches |
 | [git_stack](docs/plugins/git_stack.md) | `[git_stack]`, needs `[git]` | stacks from git-stack, in git's repos |
 | [jira](docs/plugins/jira.md) | `[jira]` | my open tickets |
-| [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages |
+| [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages; connects to the workspace's Slack app |
 | [notes](docs/plugins/notes.md) | `[notes]`, optional: always on | the skill's work notes (entries and todos) and what's on ice, in the database |
 
 ## Commands
