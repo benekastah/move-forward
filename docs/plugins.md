@@ -41,10 +41,11 @@ flowchart LR
     branch -. "my PRs' branches moving: refresh now" .-> github
     pr -. "a branch's PR; its head, to see a checkout behind" .-> git
     ice -. "its branches' commits, before deleting them" .-> git
+    stack_branch -. "tracked: my unpushed work; merged: left to its Clean" .-> git
     branch -. "which checkouts to scan" .-> git_stack
     repo -. "checkout → owner/name" .-> git_stack
     pr -. "a stack branch's PR" .-> git_stack
-    ice -. "what's on ice, by checkout: refuse stack clean" .-> git_stack
+    ice -. "its stack's branches: Untrack" .-> git_stack
     pr -. "transitions (related)" .-> jira
     pr -. "pings, nudges" .-> slack([slack])
     person -. "emails, to look up Slack ids" .-> slack

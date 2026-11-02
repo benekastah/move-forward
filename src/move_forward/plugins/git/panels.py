@@ -16,6 +16,8 @@ TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
 PR = "pr"
 BRANCH = "branch"
+STACK_BRANCH = "stack_branch"
+"""git_stack's kind for a branch git-stack tracks."""
 ICED = "iced"
 
 
@@ -41,6 +43,15 @@ class _PrView(Model):
         return Ref(kind=PR, id=self.id)
 
 
+class _StackBranchView(Model):
+    """What git reads of a `stack_branch` (git_stack's): which branch, and whether git-stack
+    sees it merged."""
+
+    repo_dir: str
+    name: str
+    stack_status: str | None = None
+
+
 class Builder:
     def __init__(
         self, config: GitConfig, now: datetime, snapshot: LocalSnapshot | None, graph: Graph
@@ -57,6 +68,10 @@ class Builder:
                 self.prs_by_branch.setdefault((pr.repo, pr.head), []).append(pr)
             if pr.state == "open":
                 self.open_prs.setdefault((pr.repo, pr.head), pr)
+        self.stacked: dict[tuple[str, str], _StackBranchView] = {
+            (b.repo_dir, b.name): b for b in graph.view(STACK_BRANCH, _StackBranchView)
+        }
+        """Branches git-stack tracks, by checkout and name."""
 
     def _pr(self, repo: str | None, branch: str, state: str) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
@@ -73,6 +88,19 @@ class Builder:
         if prefixes:
             return any(branch.name.startswith(p) for p in prefixes)
         return branch.my_commits is None
+
+    def _has_my_work(self, repo: LocalRepo, branch: Branch) -> bool:
+        """Whether Local work shows the branch's unpushed commits: it's mine, or git-stack
+        tracks it (stacks are built on my own branches)."""
+        return (repo.dir, branch.name) in self.stacked or self._is_my_branch(
+            repo.github_repo, branch
+        )
+
+    def _stack_cleans(self, repo: LocalRepo, branch: Branch) -> bool:
+        """Whether git-stack sees the branch merged: git_stack's Clean deletes it and untracks
+        it too, where `git branch -D` would leave git-stack tracking a branch that's gone."""
+        stacked = self.stacked.get((repo.dir, branch.name))
+        return stacked is not None and stacked.stack_status == "merged"
 
     def local_work(self) -> Panel:
         items: list[Item] = []
@@ -106,7 +134,7 @@ class Builder:
                 if item := self._behind_github(repo, branch):
                     items.append(item)
                     continue
-                if not self._is_my_branch(repo.github_repo, branch):
+                if not self._has_my_work(repo, branch):
                     continue
                 reason = None
                 if branch.ahead:
@@ -166,6 +194,8 @@ class Builder:
         targets: list[str] = []
         for repo in self.local.repos if self.local else []:
             for b in repo.branches:
+                if self._stack_cleans(repo, b):
+                    continue
                 merged = self._pr(repo.github_repo, b.name, "merged")
                 if merged:
                     when = datetime.fromisoformat(merged.merged_at) if merged.merged_at else None
