@@ -10,6 +10,7 @@ from conftest import ME, NOW, pr, snapshot
 from legacy import save_json_snapshot
 
 from move_forward.db import Database
+from move_forward.graph import Graph
 from move_forward.plugin import Context
 from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
@@ -225,3 +226,12 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
     failing = False
     refresh(9, "acme/widgets#2")  # refresh_seconds (300) since everything last ran
     assert len(searched) == 4 and len(fetched) == 2
+
+
+def test_the_daily_prune_looks_up_old_misses_again() -> None:
+    ctx = _context()
+    people = PeopleRepository(ctx.db)
+    people.save_looked_up("bob", None, NOW.replace(year=2025))
+    people.save_looked_up("alice", "a@x", NOW.replace(year=2025))
+    assert GitHubPlugin().prune(ctx, Graph()) == ["will look up 1 reviewer email(s) again"]
+    assert people.emails() == {"alice": "a@x"}

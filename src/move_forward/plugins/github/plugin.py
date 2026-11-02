@@ -187,7 +187,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 except Exception as e:  # noqa: BLE001
                     log.warning("email lookup for %s failed: %s", login, e)
                     continue
-                people.save_looked_up(login, email)
+                people.save_looked_up(login, email, ctx.now)
                 known[login] = email
 
     def after_collect(self, ctx: Context[GitHubConfig], graph: Graph) -> None:
@@ -316,6 +316,12 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
+
+    def prune(self, ctx: Context[GitHubConfig], graph: Graph) -> list[str]:
+        """Forget email lookups that found none `prune_days` ago, to try them again."""
+        cutoff = ctx.now - timedelta(days=ctx.prune_days)
+        retried = PeopleRepository(ctx.db).forget_misses_before(cutoff)
+        return [f"will look up {retried} reviewer email(s) again"] if retried else []
 
     def panels(
         self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None, graph: Graph
