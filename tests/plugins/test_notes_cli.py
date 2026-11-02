@@ -186,3 +186,16 @@ def test_ice_a_work_entry_by_kind_and_id(run: Run) -> None:
     code, _, err = run("ice", "--item", "entry", "nope")
     assert code == 1 and "no entry 'nope'" in err
     assert "APP-1 Fix" in run("ices")[1]
+
+
+def test_check_ins_are_dates_on_the_entry(run: Run) -> None:
+    run("add-entry", "APP-1 Fix the widget")
+    assert run("checked", "APP-1", "--on", "2026-10-29")[1] == (
+        "APP-1 Fix the widget: checked in 2026-10-29\n"
+    )
+    assert run("asked-done", "APP-1")[0] == 0  # today
+    [entry] = _json(run, "list")
+    assert entry["checked_on"] == "2026-10-29" and entry["asked_done_on"] is not None
+    assert entry["declined"] == []  # not the declines they used to be written as
+    assert "checked in: 2026-10-29" in run("show", "APP-1")[1]
+    assert run("checked", "APP-1", "--on", "someday")[0] == 1

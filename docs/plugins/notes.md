@@ -80,6 +80,8 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
 | `mfd notes condition add\|remove <entry> <text>` | Add or remove a merge condition. |
 | `mfd notes decline <entry> <text>` | Record that something offered for an entry (a nudge, say) was turned down today. |
+| `mfd notes checked <entry> [--on DATE]` | Record that the skill checked in on an entry (today by default); kept as its `checked_on`. |
+| `mfd notes asked-done <entry> [--on DATE]` | Record that the skill asked whether an entry is done; kept as its `asked_done_on`. |
 | `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack and group, on ice, or a `pr` (by URL), `ticket` (by key) or `entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |

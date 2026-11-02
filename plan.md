@@ -129,9 +129,6 @@ Sending, off by default:
 
 ### Code hosts
 
-- **GitHub Enterprise.** github assumes github.com: a `host` key, passed to every `gh`
-  call (`--hostname`) and used for PR URLs, would let it work with an Enterprise server.
-  `mfd init`'s org question already takes a pasted org URL; it would fill in both.
 - **More signals for which branches are mine.** A PR of mine, my commits off the default
   branch and `my_branch_prefixes` decide it now; git-stack tracking it and being checked
   out in one of my worktrees could count too, if those miss some.
@@ -145,8 +142,7 @@ Sending, off by default:
 ### Notes and the skill
 
 - **Real fields for the skill's stand-ins.** The move-forward skill keeps some state
-  outside the database until the notes can hold it: check-ins (`Checked`, `Asked-done`)
-  are `decline` items with those reserved texts; the once-a-day ice question and the
+  outside the database until the notes can hold it: the once-a-day ice question and the
   per-PR "offered" dates live in its gitignored `daily.json`; merge conditions apply to a
   whole entry, so a PR's URL goes in the condition text; `reviewer-map.md` is read only
   through `mfd slack import` and `mfd github import`, so the skill should set Slack ids

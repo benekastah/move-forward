@@ -8,6 +8,10 @@ from pydantic import Field
 from ...domain import Model
 
 Size = Literal["quick", "big"]
+CheckIn = Literal["checked", "asked_done"]
+"""The skill's check-ins on an entry: it checked in on it, or asked whether it's done."""
+CHECK_IN_TEXTS: dict[str, CheckIn] = {"Checked": "checked", "Asked-done": "asked_done"}
+"""The texts the skill wrote these as, `Declined <date>: Checked`, before they were fields."""
 
 
 class Link(Model):
@@ -45,6 +49,10 @@ class Entry(Model):
     """Where the work lives, as written, e.g. "engineering <PR URL>"."""
     blocked_on: str | None = None
     updated_on: date | None = None
+    checked_on: date | None = None
+    """When the skill last checked in on it."""
+    asked_done_on: date | None = None
+    """When the skill last asked whether it's done."""
     todos: list[Todo] = Field(default_factory=list)
     conditions: list[str] = Field(default_factory=list)
     """What must happen before its PRs merge."""

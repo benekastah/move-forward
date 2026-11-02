@@ -10,7 +10,18 @@ import re
 from datetime import date
 from pathlib import Path
 
-from .models import Declined, Entry, Ice, IcedItem, Link, Section, Size, Todo
+from .models import (
+    CHECK_IN_TEXTS,
+    CheckIn,
+    Declined,
+    Entry,
+    Ice,
+    IcedItem,
+    Link,
+    Section,
+    Size,
+    Todo,
+)
 
 WORK_NOTES_FILE = "work-notes.md"
 ON_ICE_FILE = "on-ice.md"
@@ -75,6 +86,8 @@ def _entry(title: str, lines: list[str]) -> Entry:
     todos: list[Todo] = []
     conditions: list[str] = []
     declined: list[Declined] = []
+    check_ins: dict[CheckIn, date] = {}
+    """The latest of each check-in, which the skill wrote as `Declined <date>: Checked`."""
     kept: list[str] = []
     block: str | None = None
     """The field whose `  - ` children the next lines may be: "todos", "conditions" or "kept"."""
@@ -98,6 +111,8 @@ def _entry(title: str, lines: list[str]) -> Entry:
         on = date.fromisoformat(dated.group(2)) if dated else None
         if dated and on and dated.group(1) == "Done":
             todos.append(_todo(value, done_on=on))
+        elif dated and on and (which := CHECK_IN_TEXTS.get(value)):
+            check_ins[which] = max(on, check_ins.get(which, on))
         elif dated and on:
             declined.append(Declined(on=on, text=value))
         elif key == "Left to do" and not value:
@@ -124,6 +139,8 @@ def _entry(title: str, lines: list[str]) -> Entry:
         where=known.get("Where"),
         blocked_on=known.get("Blocked on"),
         updated_on=_date(known.get("Updated", "")),
+        checked_on=check_ins.get("checked"),
+        asked_done_on=check_ins.get("asked_done"),
         todos=todos,
         conditions=conditions,
         declined=declined,
@@ -223,6 +240,9 @@ def entry_markdown(entry: Entry) -> str:
         lines.append("- Merge conditions:")
         lines += [f"  - {c}" for c in entry.conditions]
     lines += [f"- Declined {d.on.isoformat()}: {d.text}" for d in entry.declined]
+    for text, on in (("Checked", entry.checked_on), ("Asked-done", entry.asked_done_on)):
+        if on is not None:  # as the skill wrote them
+            lines.append(f"- Declined {on.isoformat()}: {text}")
     lines += entry.lines
     if entry.updated_on is not None:
         lines.append(f"- Updated: {entry.updated_on.isoformat()}")
