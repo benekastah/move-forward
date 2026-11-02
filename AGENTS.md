@@ -114,9 +114,9 @@ is what's left to build.
   assert on panel contents; plugin contract tests assert on the entities a
   plugin publishes. Tests touching git make real repos in `tmp_path`; tests
   never touch the network.
-- **No new runtime dependencies.** pydantic and cryptography (for the HTTPS
-  certificate) are the only ones; tools are reached through their CLIs (`gh`,
-  `git`) or the standard library.
+- **No new runtime dependencies.** pydantic, cryptography (for the HTTPS
+  certificate) and watchdog (git watching its repos) are the only ones; tools are
+  reached through their CLIs (`gh`, `git`) or the standard library.
 - **Linux, macOS and Windows, with every change.** Each change must keep working
   on all three; CI runs `dev.py check` on each, and it must pass on all of them.
   Use `pathlib` rather than joining paths with `/`, and write paths into TOML or

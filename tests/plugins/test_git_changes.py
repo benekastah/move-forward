@@ -79,7 +79,7 @@ def test_the_plugin_says_changed_once_per_move_after_its_first_look(tmp_path: Pa
         db=db,
         kv=KvRepository(db, "git"),
     )
-    plugin = GitPlugin()
+    plugin = GitPlugin(watching=False)
     assert not plugin.changed(ctx, Graph([]))  # nothing to compare against yet
     git(repo, "commit", "-q", "--allow-empty", "-m", "second")
     assert plugin.changed(ctx, Graph([]))
@@ -92,7 +92,7 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     a, b = _repo(tmp_path / "a"), _repo(tmp_path / "b")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
-    plugin = GitPlugin()
+    plugin = GitPlugin(watching=False)
 
     def ctx(minutes: int) -> Context[GitConfig]:
         return Context(
@@ -138,7 +138,7 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
     repo = _repo(tmp_path / "r")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
-    plugin = GitPlugin()
+    plugin = GitPlugin(watching=False)
 
     def ctx(seconds: int, status_seconds: int = 30) -> Context[GitConfig]:
         return Context(

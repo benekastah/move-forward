@@ -4,7 +4,7 @@ from ...asking import Asker, InitSetup, branch_prefix, checkout, directories, pa
 
 TEMPLATE = """\
 # refresh_seconds = 300                # how often it refreshes (only reads local checkouts)
-# status_seconds = 30                  # how often uncommitted edits are looked for (0: off)
+# status_seconds = 30                  # how often edits are polled where watching fails (0: off)
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # commit_history_days = 180              # commit history for "directories I work in"
 # github_hosts = ["github.com"]          # remote hosts that are GitHub: an Enterprise server, ~/.ssh/config aliases

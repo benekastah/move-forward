@@ -1,11 +1,11 @@
-"""Telling cheaply that a repository moved, for `GitPlugin.changed`: a commit, a checkout, a
-branch made or deleted, a rebase, a push or a fetch. They all rewrite files git keeps its
-refs in, so the times, sizes and identities of those files say so, without running git.
+"""Telling cheaply that a repository moved, for `GitPlugin.changed`, in the repos it can't
+watch (see `watch`): a commit, a checkout, a branch made or deleted, a rebase, a push or a
+fetch. They all rewrite files git keeps its refs in, so the times, sizes and identities of
+those files say so, without running git.
 
 Edits not yet committed aren't seen: the plugin's `git status` every `status_seconds` catches
-those. The index
-is left out, because editors rewrite it whenever they ask git for the status.
-"""
+those. The index is left out, because editors rewrite it whenever they ask git for the
+status."""
 
 import hashlib
 import json

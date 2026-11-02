@@ -1,6 +1,7 @@
 """The git plugin."""
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
@@ -12,13 +13,15 @@ from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
 from ...shell import CommandError
-from . import actions, changes, client
+from . import actions, changes, client, watch
 from .config import GitConfig
 from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
 from .panels import Builder, branch_ref, delete_iced_action, restore_iced_action
 from .repository import MIGRATIONS, LocalRepository
 from .setup import TEMPLATE, questions
+
+log = logging.getLogger(__name__)
 
 REPO = "repo"
 BRANCH = "branch"
@@ -71,47 +74,108 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         )
 
     def store(self, ctx: Context[GitConfig], snapshot: LocalSnapshot) -> None:
+        """Keep the snapshot, and watch the worktrees it found (once `changed` has started
+        watching: only the server asks it)."""
         LocalRepository(ctx.db).replace(snapshot)
+        if self._watcher is not None:
+            self._watch(snapshot)
 
-    change_check_seconds: ClassVar[int | None] = 5
+    change_check_seconds: ClassVar[int | None] = 2
+
+    def __init__(self, watching: bool = True) -> None:
+        self._watching = watching
+        """Whether `changed` watches the repos (see `watch`), or only polls them."""
+        self._watcher: watch.Watcher | None = None
+        self._ids: dict[Path, str] = {}
+        """Each watched repo's id, the common git directory `changes` and `collect` name it
+        by, by its resolved path, as the watcher has it."""
+
+    def _watcher_for(self, ctx: Context[GitConfig]) -> watch.Watcher | None:
+        """The watcher, started on the first call; None when not watching, or when it can't
+        start."""
+        if self._watching and self._watcher is None:
+            try:
+                self._watcher = watch.Watcher()
+            except Exception as e:  # noqa: BLE001 - polling still works without it
+                log.warning("can't watch the repos, so polling them: %s", e)
+                self._watching = False
+                return None
+            if snapshot := self.load(ctx):
+                self._watch(snapshot)
+        return self._watcher
+
+    def stop_watching(self) -> None:
+        """Stop the watcher, if it started; `changed` starts it again."""
+        if self._watcher is not None:
+            self._watcher.stop()
+            self._watcher = None
+
+    def _watch(self, snapshot: LocalSnapshot) -> None:
+        assert self._watcher is not None
+        worktrees: dict[Path, Path] = {}
+        for repo in snapshot.repos:
+            if (common := changes.common_dir(Path(repo.dir))) is None:
+                continue
+            self._ids[common.resolve()] = str(common)
+            for wt in repo.worktrees:
+                worktrees[Path(wt.path).resolve()] = common.resolve()
+        self._watcher.sync(worktrees)
 
     def changed(self, ctx: Context[GitConfig], graph: Graph) -> bool:
-        """Whether a repo's refs moved (see `changes`): reading a few files' times, cheap
-        enough to do every few seconds; or, every `status_seconds`, whether a worktree's
-        uncommitted edits changed, by its `git status`. Which repos moved is kept for
+        """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a
+        worktree's uncommitted edits changed. Watched repos say so as it happens (see
+        `watch`); the rest are polled, their refs by their files' times (see `changes`) and
+        their edits every `status_seconds` by `git status`. Which repos moved is kept for
         `collect`, to read just those."""
-        now = changes.fingerprints(ctx.config.repos)
+        watcher = self._watcher_for(ctx)
+        moved_now, edited_now = watcher.take() if watcher else (set[Path](), set[Path]())
+        watched: set[str] = (
+            {self._ids[c] for c in watcher.repos if c in self._ids} if watcher else set()
+        )
+        moved = {self._ids[c] for c in moved_now if c in self._ids}
+
         stored = ctx.kv.get(FINGERPRINTS)
         before: dict[str, str] | None = json.loads(stored) if stored else None
+        polled = [repo for repo in ctx.config.repos if str(changes.common_dir(repo)) not in watched]
+        now = changes.fingerprints(polled)
+        now.update({k: v for k, v in (before or {}).items() if k in watched})
         if now != before:
             ctx.kv.set(FINGERPRINTS, json.dumps(now))
-        moved: set[str] = changes.moved(before, now) if before is not None else set()
-        moved |= self._edited(ctx)
+        if before is not None:
+            moved |= changes.moved(before, now)
+        moved |= self._edited(ctx, edited_now, watcher.worktrees if watcher else set())
         if moved:
             pending = set(json.loads(ctx.kv.get(MOVED) or "[]")) | moved
             ctx.kv.set(MOVED, json.dumps(sorted(pending)))
         return bool(moved) or (before is not None and set(before) != set(now))
 
-    def _edited(self, ctx: Context[GitConfig]) -> set[str]:
+    def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:
         """The repos (common git directories) with a worktree whose uncommitted edits differ
-        from the last refresh's, when `status_seconds` have passed since the last look."""
+        from the last refresh's, asking `git status` of the worktrees the watcher saw edited,
+        and of those it doesn't watch once `status_seconds` have passed since the last look."""
         seconds = ctx.config.status_seconds
         last = ctx.kv.get(LAST_STATUS)
-        if not seconds or (
-            last and (ctx.now - datetime.fromisoformat(last)).total_seconds() < seconds
-        ):
+        poll = bool(seconds) and (
+            last is None or (ctx.now - datetime.fromisoformat(last)).total_seconds() >= seconds
+        )
+        if poll:
+            ctx.kv.set(LAST_STATUS, ctx.now.isoformat())
+        if not poll and not edited:
             return set()
-        ctx.kv.set(LAST_STATUS, ctx.now.isoformat())
-        edited: set[str] = set()
+        found: set[str] = set()
         for repo in snapshot.repos if (snapshot := self.load(ctx)) else []:
             for wt in repo.worktrees:
+                path = Path(wt.path)
+                resolved = path.resolve()
+                if resolved not in edited and (not poll or resolved in watched):
+                    continue
                 try:
-                    status = client.worktree_status(Path(wt.path))
+                    status = client.worktree_status(path)
                 except CommandError:  # gone since; the next read finds out
                     continue
                 if status != (wt.modified, wt.untracked):
-                    edited.add(str(changes.common_dir(Path(repo.dir))))
-        return edited
+                    found.add(str(changes.common_dir(Path(repo.dir))))
+        return found
 
     def load(self, ctx: Context[GitConfig]) -> LocalSnapshot | None:
         return LocalRepository(ctx.db).load()

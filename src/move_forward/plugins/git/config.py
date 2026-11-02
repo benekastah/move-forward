@@ -18,9 +18,9 @@ class GitConfig(Strict):
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
     """How often the dashboard refreshes this plugin's data in the background (it only reads local checkouts)."""
     status_seconds: int = Field(default=DEFAULT_STATUS_SECONDS, ge=0)
-    """How often each worktree's `git status` is checked for uncommitted edits, refreshing
-    the repos whose edits changed; 0 leaves them to `refresh_seconds`. Commits, checkouts
-    and pushes are seen within seconds either way."""
+    """For a worktree that can't be watched (see `watch`), how often its `git status` is
+    checked for uncommitted edits, refreshing its repo when they changed; 0 leaves them to
+    `refresh_seconds`."""
 
     repos: list[Path]
     """Main checkouts of the repos I work in, one per repo. Their other worktrees are found
