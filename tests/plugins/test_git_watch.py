@@ -60,6 +60,7 @@ def test_refs_head_packed_refs_and_config_move_a_repo() -> None:
     assert watch.moves_repo(Path("HEAD")) and watch.moves_repo(Path("packed-refs"))
     assert watch.moves_repo(Path("worktrees/wt/HEAD"))
     assert watch.moves_repo(Path("config"))  # e.g. git-stack tracking a branch
+    assert watch.moves_repo(Path("worktrees"))  # the first worktree, before it's watched
     assert not watch.moves_repo(Path("index"))
     assert not watch.moves_repo(Path("objects/ab/cdef"))
     assert not watch.moves_repo(Path("worktrees/wt/index"))
@@ -94,6 +95,9 @@ def test_edits_and_commits_are_seen_as_they_happen(tmp_path: Path, watcher: watc
     assert _until(took_move)
     moved.clear()
     git(repo, "config", "branch.main.stackParent", "base")  # as git-stack tracks a branch
+    assert _until(took_move)
+    moved.clear()  # a first worktree, detached: no ref moves, and worktrees/ wasn't there
+    git(repo, "worktree", "add", "-q", "--detach", str(tmp_path / "wt"))
     assert _until(took_move)
 
 

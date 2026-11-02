@@ -42,15 +42,16 @@ def _within(path: Path, root: Path) -> Path | None:
 
 def moves_repo(relative: Path) -> bool:
     """Whether a change at `relative`, a path in a common git directory, moves the repo:
-    `HEAD`, `packed-refs`, anything under `refs/`, a linked worktree's `HEAD`, or `config`
-    (where branches' upstreams are set, and git-stack keeps its stacks)."""
+    `HEAD`, `packed-refs`, anything under `refs/`, a linked worktree's `HEAD`, `config`
+    (where branches' upstreams are set, and git-stack keeps its stacks), or `worktrees`
+    itself coming or going (its first worktree added, `--detach`ed, moves no ref)."""
     parts = relative.parts
     if not parts:
         return False
     if parts[0] == "refs":
         return True
     if len(parts) == 1:
-        return parts[0] in ("HEAD", "packed-refs", "config")
+        return parts[0] in ("HEAD", "packed-refs", "config", "worktrees")
     return parts[0] == "worktrees" and len(parts) == 3 and parts[2] == "HEAD"
 
 
