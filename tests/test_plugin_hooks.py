@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import pytest
-from conftest import NOW, dashboard, issue, pr, snapshot, stored
+from conftest import ME, NOW, dashboard, issue, local_snapshot, pr, snapshot, stored
 from pydantic import BaseModel
 
 from move_forward import cli, localtime, refresh, registry, render
@@ -332,3 +332,9 @@ def test_plugin_names_are_each_their_own_and_none_is_cores() -> None:
             registry.check_names(clash)
     with pytest.raises(RuntimeError, match="lower-case"):
         registry.check_names([_named("My-Plugin")])
+
+
+def test_the_page_says_who_i_am_as_the_first_plugin_that_knows() -> None:
+    built = dashboard(github=snapshot())  # github knows my login
+    assert built.login == ME
+    assert dashboard(local=local_snapshot()).login == ""  # github with nothing fetched yet

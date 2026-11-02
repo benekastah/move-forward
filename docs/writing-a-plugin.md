@@ -114,6 +114,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   what it stored last.
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
   for every page. Nothing is kept as JSON.
+- `me(ctx, snapshot)` says who I am in the tool (a login), for the page's footer; the first
+  enabled plugin's answer is used.
 - A plugin that needs other plugins' entities to know what to fetch sets
   `collects_after_graph = True` and implements `collect_after(ctx, graph)` instead (see
   git_stack).
