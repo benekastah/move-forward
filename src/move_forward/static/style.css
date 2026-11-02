@@ -254,3 +254,10 @@ button.small { padding: 1px 8px; font-size: 12px; }
 .check.suggested { font-size: 15px; font-weight: 600; padding: 4px 12px; border: 2px solid var(--accent); }
 .check.suggested input { width: 20px; height: 20px; }
 .action input[type='text'] { font: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); width: 14em; margin-right: 4px; }
+
+/* The settings page: a table of settings per section, each with its help under it. */
+.settings table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.settings th { text-align: left; vertical-align: top; width: 14em; padding: 8px 12px 8px 0; font-weight: 600; }
+.settings td { padding: 6px 0; }
+.settings input[type='text'], .settings input[type='number'], .settings textarea { width: 100%; box-sizing: border-box; }
+.settings .help { margin: 4px 0 0; color: var(--muted); font-size: 12px; }

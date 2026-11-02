@@ -15,7 +15,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 from pydantic import ValidationError
 
-from . import auth, render, shell, tls
+from . import auth, render, settings, shell, tls
 from .config import Config
 from .db import Database
 from .graph import Graph
@@ -79,8 +79,18 @@ def _from_this_dashboard(
 class App:
     """Shared state for the request handlers: config, database and the refresh loop."""
 
-    def __init__(self, config: Config, db: Database, token: str, scheme: str = "http"):
+    def __init__(
+        self,
+        config: Config,
+        db: Database,
+        token: str,
+        scheme: str = "http",
+        config_path: Path | None = None,
+    ):
         self.config = config
+        self.config_path = config_path
+        """The file `config` was read from, which the settings page saves into; None when
+        there's none (tests), and no saving."""
         self.db = db
         self.token = token
         """What every request but `/login`, the static files and plugins' sign-in pages must
@@ -462,6 +472,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if url.path == "/":
                 notice = parse_qs(url.query).get("notice", [""])[0]
                 self._html(HTTPStatus.OK, app.dashboard_page(notice, _open_keys(url.query)))
+            elif url.path == settings.PATH and app.config_path is not None:
+                notice = parse_qs(url.query).get("notice", [""])[0]
+                self._html(HTTPStatus.OK, settings.page(app.config, notice))
             elif url.path == "/focus":
                 params = parse_qs(url.query, keep_blank_values=True)
                 category = params.get("cat", [""])[0]
@@ -518,6 +531,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 LayoutRepository(app.db).save(layout)
                 self.send_response(HTTPStatus.NO_CONTENT)
                 self.end_headers()
+            elif url.path == settings.PATH and app.config_path is not None:
+                notice = settings.save(app.config_path, app.config, _form_fields(body))
+                self._redirect(f"{settings.PATH}?{urlencode({'notice': notice})}")
             elif url.path == "/layout/reset":
                 LayoutRepository(app.db).reset()
                 self._redirect(_back_to_page(url.query, "layout reset"))
@@ -577,13 +593,19 @@ def scheme(config: Config) -> str:
     return tls.scheme(config.https, config.db_path)
 
 
-def serve(config: Config, db: Database, token: str, port: int | None = None) -> None:
+def serve(
+    config: Config,
+    db: Database,
+    token: str,
+    port: int | None = None,
+    config_path: Path | None = None,
+) -> None:
     """Serve forever on localhost, refreshing in the background: over HTTPS with the
-    certificate, else plain HTTP."""
+    certificate, else plain HTTP. The settings page saves into `config_path`."""
     if port and port != config.port:  # `--port`: plugins build URLs back to the dashboard
         config = config.model_copy(update={"port": port})
     served = scheme(config)
-    app = App(config, db, token, served)
+    app = App(config, db, token, served, config_path)
     threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
     threading.Thread(target=app.run_change_loop, name="changes", daemon=True).start()
     address = ("127.0.0.1", port or config.port)

@@ -154,6 +154,16 @@ failed" with the reason on hover. Its Refresh button refreshes just that plugin,
 and the plugins that collect after it (git_stack after git); the header's
 Refresh refreshes them all. The footer lists only plugins without a group.
 
+## Settings
+
+`/settings` (Settings, in the header) shows the config's settings as a form: the top
+level's, `[act_now]`'s and each enabled plugin's, each with what it does. Saving writes
+only the settings that changed into the config file, each on its own line, keeping the
+file's comments and hand edits, and only if the result loads; otherwise the page says why
+and nothing is written. `mfd serve` then restarts with it, as it does whenever the file
+changes. Tables such as `[github.teams]` are edited in the file, and `db_path`, `port` and
+`https` aren't changed here, since changing them moves the server.
+
 ## Focus mode
 
 The Focus button in the header opens a list of categories: All, each group
@@ -210,6 +220,7 @@ over 64 KiB):
 
 | Path | Fields | Does |
 | --- | --- | --- |
+| `/settings` | `<section>:<key>` per setting (`:prune_days`, `github:history_days`, `act_now:weights.closes`); a list one per line; a true-or-false one `on` or `off` | Saves the settings the form changed into the config file (see [Settings](#settings)), and redirects back to `/settings` saying what was saved, or why nothing was. Settings left out of the form are left as they are. |
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
 | `/actions/act_now/<snooze\|dismiss\|pin\|unpin>` | `kind`, `id` (the item's main subject), `verb`, `fingerprint`; `also` (optional: the items joined to it, as a JSON list of `[kind, id, verb, fingerprint]`) | Snoozes an Act now item (and the items joined to it) until tomorrow, dismisses it, or pins or unpins it. |

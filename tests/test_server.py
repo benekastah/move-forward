@@ -578,3 +578,21 @@ def test_a_sign_in_page_is_served_without_the_cookie_and_the_rest_still_need_it(
     response = get(client, "/github/private?state=s1", {})
     assert response.status == 401
     response.read()
+
+
+def test_the_settings_page_shows_and_saves_the_config(
+    client: HTTPConnection, app: server.App, tmp_path: Path
+) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text('email = "me@acme.com"\nteams = ["core"]\n\n[github]\norg = "acme"\n')
+    app.config_path = path
+    body = get(client, "/settings").read().decode()
+    assert "[github]" in body and "name='github:refresh_seconds'" in body
+    response = post(client, "/settings", {"github:history_days": "30", ":email": "me@acme.com"})
+    assert response.status == 303 and "saved+github.history_days" in (
+        response.getheader("Location") or ""
+    )
+    assert "history_days = 30" in path.read_text()
+    response = get(client, "/settings", {})  # without the token
+    assert response.status == 401
+    response.read()

@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         port = args.port or config.port
         if args.open:
             _open(auth.login_url(port, token, scheme(config)))
-        serve(config, db, token, port)
+        serve(config, db, token, port, config_path)
     return 0
 
 
