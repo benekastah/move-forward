@@ -53,6 +53,7 @@ repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are foun
 # my_branch_prefixes = ["me/"]            # besides branches with my commits or PRs
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # commit_history_days = 180
+# github_hosts = ["github.com"]           # remote hosts that are GitHub: an Enterprise server, ~/.ssh/config aliases
 
 [git_stack]                           # stacks from git-stack, in [git]'s repos
 # refresh_seconds = 300                  # how often it refreshes regardless of git's changes

@@ -2,6 +2,7 @@
 
 import fnmatch
 import re
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -11,7 +12,13 @@ from ...shell import CommandError, git
 from . import changes
 from .models import Branch, LocalRepo, LocalSnapshot, Worktree
 
-_GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
+_REMOTE_RE = re.compile(
+    r"^(?:[a-z][a-z0-9+.-]*://)?(?:[^@/\s]+@)?([^/:\s]+)(?::\d+)?[:/]"
+    r"([\w.-]+/[\w.-]+?)(?:\.git)?/?$"
+)
+"""A remote URL's host and `owner/name`: `https://host/o/n`, `ssh://git@host:22/o/n`,
+`git@host:o/n.git`, or `alias:o/n` (a host from ~/.ssh/config)."""
+GITHUB_HOSTS = ("github.com",)
 _TRACK_RE = re.compile(r"ahead (\d+)|behind (\d+)|(gone)")
 _FOR_EACH_REF_FORMAT = (
     "%(refname:short)%09%(upstream:short)%09%(upstream:track)%09%(committerdate:iso-strict)"
@@ -72,9 +79,13 @@ def parse_branches(for_each_ref: str) -> list[Branch]:
     return branches
 
 
-def github_repo(remote_url: str) -> str | None:
-    match = _GITHUB_REMOTE_RE.search(remote_url.strip())
-    return match.group(1) if match else None
+def github_repo(remote_url: str, hosts: Sequence[str] = GITHUB_HOSTS) -> str | None:
+    """The `owner/name` of a remote on one of `hosts` (as the remote names it: github.com,
+    an Enterprise server, or an SSH alias for either); None for any other remote."""
+    match = _REMOTE_RE.match(remote_url.strip())
+    if match is None or match.group(1).lower() not in {h.lower() for h in hosts}:
+        return None
+    return match.group(2)
 
 
 @dataclass(frozen=True)
@@ -121,7 +132,7 @@ def _ref_exists(repo: Path, ref: str) -> bool:
     return True
 
 
-def read_remotes(repo: Path) -> Remotes:
+def read_remotes(repo: Path, hosts: Sequence[str] = GITHUB_HOSTS) -> Remotes:
     """The repository's default branch and GitHub repo, from all its remotes. The main
     remote is the one the local default branch tracks (`upstream` in a fork, often), else
     the first whose `HEAD` git knows."""
@@ -140,7 +151,9 @@ def read_remotes(repo: Path) -> Remotes:
     if not default_refs and _ref_exists(repo, f"refs/heads/{default_branch}"):
         default_refs = [f"refs/heads/{default_branch}"]
     urls = {name: _config(repo, f"remote.{name}.url") or "" for name in names}
-    on_github = [r for name in [main, *names] if name and (r := github_repo(urls.get(name, "")))]
+    on_github = [
+        r for name in [main, *names] if name and (r := github_repo(urls.get(name, ""), hosts))
+    ]
     return Remotes(default_branch, default_refs, on_github[0] if on_github else None)
 
 
@@ -193,8 +206,9 @@ def collect_repo(
     now: datetime,
     commit_history_days: int,
     ignored_worktree_globs: list[str],
+    github_hosts: Sequence[str] = GITHUB_HOSTS,
 ) -> LocalRepo:
-    found = read_remotes(repo)
+    found = read_remotes(repo, github_hosts)
     default_branch = found.default_branch
     worktrees: list[Worktree] = []
     for path, branch in parse_worktrees(git(repo, "worktree", "list", "--porcelain")):
@@ -298,6 +312,7 @@ def collect(
     ignored_worktree_globs: list[str],
     only: set[str] | None = None,
     previous: LocalSnapshot | None = None,
+    github_hosts: Sequence[str] = GITHUB_HOSTS,
 ) -> LocalSnapshot:
     """Every repo among `repos`, or with `only` (common git directories, see
     `changes.fingerprints`) just those, keeping the rest as `previous` has them; a repo
@@ -309,7 +324,9 @@ def collect(
     def one(repo: Path) -> LocalRepo:
         if str(repo) in kept and str(changes.common_dir(repo)) not in (only or set()):
             return kept[str(repo)]
-        return collect_repo(repo, email, now, commit_history_days, ignored_worktree_globs)
+        return collect_repo(
+            repo, email, now, commit_history_days, ignored_worktree_globs, github_hosts
+        )
 
     with ThreadPoolExecutor(max_workers=max(1, len(existing))) as pool:
         return LocalSnapshot(repos=list(pool.map(one, existing)))
