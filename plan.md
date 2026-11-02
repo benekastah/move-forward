@@ -120,7 +120,14 @@ Sending, off by default:
   parent's events. Its API takes every path up front, with one `recursive` for them all, so
   the watch restarts when the paths change (a worktree, or a tracked directory, added or
   gone); the git directories, watched recursively, take a second one. It replaces watchdog
-  as a dependency.
+  as a dependency. Two gaps close with it: watching the directories in the index rather
+  than in `HEAD` watches a new directory once it's staged, not only once it's committed;
+  and an index write should count as an edit to its worktree (the main one's
+  `.git/index`, a linked one's `.git/worktrees/<name>/index`), since `git add` writes only
+  the index, so staging a new file ("untracked" becoming "modified") goes unseen until
+  `refresh_seconds`. Editors rewrite the index whenever they ask for the status, so that's
+  a `git status` per write, refreshing only when its counts changed; the dashboard's own
+  status doesn't write it.
 
 ### The page
 
