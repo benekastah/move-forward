@@ -61,18 +61,21 @@ def write(service: str, account: str, secret: str) -> None:
     for what, value in (("token", secret), ("service", service), ("account", account)):
         if any(c in value for c in '"\\\r\n'):
             raise ValueError(f"a {what} can't hold quotes, backslashes or line breaks")
-    if sys.platform == "darwin":
-        # `security -i` reads its commands from stdin, so the secret stays off the command
-        # line; -U replaces an item that's there.
-        line = f'add-generic-password -U -s "{service}" -a "{account}" -w "{secret}"\n'
-        run(["security", "-i"], input=line)
-    elif sys.platform == "win32":
-        _credential_manager_write(service, account, secret)
-    else:
-        run(
-            ["secret-tool", "store", f"--label={service}", "service", service, "account", account],
-            input=secret,
-        )
+    try:
+        if sys.platform == "darwin":
+            # `security -i` reads its commands from stdin, so the secret stays off the command
+            # line; -U replaces an item that's there.
+            line = f'add-generic-password -U -s "{service}" -a "{account}" -w "{secret}"\n'
+            run(["security", "-i"], input=line)
+        elif sys.platform == "win32":
+            _credential_manager_write(service, account, secret)
+        else:
+            command = ["secret-tool", "store", f"--label={service}", "service", service]
+            run([*command, "account", account], input=secret)
+    except CommandError as e:
+        # The store's error may quote what it read, secret included (`security -i` echoes
+        # the command it failed on): keep it out of the message, which reaches the page.
+        raise CommandError(str(e).replace(secret, "…")) from None
     # `security -i` can exit 0 when the command it read failed; check it took.
     if read(service, account) != secret:
         raise CommandError(f"the secret store didn't keep the token for {service}")

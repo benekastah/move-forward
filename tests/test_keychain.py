@@ -172,3 +172,14 @@ def test_mfd_token_check_says_where_each_token_is_without_showing_it(
         "jira: missing; run `mfd token set jira`",
     ]
     assert "s3cret" not in out and "from-env" not in out
+
+
+def test_a_store_that_refuses_the_secret_doesnt_say_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refusing(args: list[str], input: str | None = None) -> str:
+        raise CommandError(f"security -i: failed on: {input}")
+
+    monkeypatch.setattr(keychain, "run", refusing)
+    monkeypatch.setattr(keychain.sys, "platform", "darwin")
+    with pytest.raises(CommandError) as refused:
+        keychain.write("svc", "me@x", "s3cret-token")
+    assert "s3cret-token" not in str(refused.value) and "failed on" in str(refused.value)
