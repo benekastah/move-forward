@@ -112,6 +112,7 @@ before the command's name.
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
+| `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <PR URL>` ends it. |
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, verb, until, fingerprint), for the skill. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 | `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account. |

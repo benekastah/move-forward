@@ -10,7 +10,7 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, keychain, localtime, registry, supervisor, tls
+from . import auth, init, keychain, localtime, registry, snooze, supervisor, tls
 from . import config as config_module
 from .db import Database
 from .plugin import CliHandler
@@ -133,6 +133,15 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         "check", help="load the config and every plugin, and exit; fails with what's wrong"
     )
     commands.add_parser("dump", help="print the dashboard as JSON from what is stored")
+    snooze_parser = commands.add_parser(
+        "snooze", help="snooze a PR's review until it changes (or the time given is up)"
+    )
+    snooze_parser.add_argument("url", help="the PR's URL")
+    snooze_parser.add_argument(
+        "duration", nargs="?", help="e.g. 7d or 12h; default: [act_now] snooze_days for PRs"
+    )
+    unsnooze_parser = commands.add_parser("unsnooze", help="end a PR's review snooze")
+    unsnooze_parser.add_argument("url", help="the PR's URL")
     commands.add_parser(
         "snoozes",
         help="print the Act now items snoozed now as JSON: kind, id, verb, until, fingerprint",
@@ -297,6 +306,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "dump":
         print(build_dashboard(config, db).model_dump_json(indent=2))
+        return 0
+    if args.command == "snooze":
+        try:
+            duration = snooze.parse_duration(args.duration) if args.duration else None
+            plugins = enabled(config, db, datetime.now(UTC))
+            graph, _ = stored_graph(db, plugins)
+            until = snooze.snooze_review(
+                FeedbackRepository(db), graph, config.act_now, args.url, datetime.now(UTC), duration
+            )
+        except (ValueError, LookupError) as err:
+            print(err, file=sys.stderr)
+            return 1
+        print(f"snoozed until {localtime.local(until):%Y-%m-%d %H:%M}, or until the PR changes")
+        return 0
+    if args.command == "unsnooze":
+        snooze.wake_review(FeedbackRepository(db), args.url)
+        print("snooze ended")
         return 0
     if args.command == "snoozes":
         now = datetime.now(UTC)
