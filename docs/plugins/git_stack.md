@@ -36,3 +36,11 @@ branches.
 | --- | --- | --- |
 | `/actions/git_stack/untrack` | `targets` (lines of `<repo dir>\t<branch>`) | `git stack untrack --json` for each repo's, saying which branches still stacked on them now start their own stacks. |
 | `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local --json`, saying which branches it deleted, which it untracked but kept, and its warnings, or, when it fails, what it did first. |
+
+## Notifications
+
+Subscribe under Notifications on `/settings` (or `[notifications] subscribe` as
+`git_stack.<kind>`): `needs_restack` when a branch's status becomes `needs-restack` (say,
+its parent merged), and `merged` when it becomes `merged`, so `git stack clean` can remove
+it. A branch the last refresh didn't hold says nothing.
+

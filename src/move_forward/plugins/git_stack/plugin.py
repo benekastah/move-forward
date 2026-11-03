@@ -7,9 +7,10 @@ from typing import ClassVar
 from pydantic import BaseModel
 
 from ...graph import Entity, Graph
+from ...notifications import Event
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
-from . import actions, changes, client
+from . import actions, changes, client, events
 from .config import GitStackConfig
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
@@ -69,6 +70,13 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         self, ctx: Context[GitStackConfig], snapshot: GitStackSnapshot | None, graph: Graph
     ) -> list[Panel]:
         return [Builder(snapshot, graph).stacks()]
+
+    notification_kinds: ClassVar[dict[str, str]] = events.KINDS
+
+    def events(
+        self, ctx: Context[GitStackConfig], before: GitStackSnapshot, after: GitStackSnapshot
+    ) -> list[Event]:
+        return events.changes(before, after)
 
     def item_actions(self, ctx: Context[GitStackConfig], item: Item, graph: Graph) -> list[Action]:
         action = untrack_iced_action(item, graph)

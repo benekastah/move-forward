@@ -10,10 +10,11 @@ from pydantic import BaseModel
 
 from ...asking import Asker, InitSetup
 from ...graph import Entity, Graph, Ref, attrs
+from ...notifications import Event
 from ...page import Action, Item, Panel
 from ...plugin import ActionHandler, Context, Plugin
 from ...shell import CommandError
-from . import actions, changes, client, watch
+from . import actions, changes, client, events, watch
 from .config import GitConfig
 from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
@@ -229,6 +230,12 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         self, ctx: Context[GitConfig], snapshot: LocalSnapshot | None, graph: Graph
     ) -> list[Panel]:
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
+
+    notification_kinds: ClassVar[dict[str, str]] = events.KINDS
+
+    def graph_events(self, ctx: Context[GitConfig], graph: Graph) -> list[Event]:
+        built = Builder(ctx.config, ctx.now, self.load(ctx), graph)
+        return events.deletable(ctx.kv, built.cleanup())
 
     def item_actions(self, ctx: Context[GitConfig], item: Item, graph: Graph) -> list[Action]:
         found = (delete_iced_action(item, graph), restore_iced_action(item, graph))

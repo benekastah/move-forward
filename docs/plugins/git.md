@@ -82,3 +82,11 @@ git nominates the branches Cleanup lists, quick to delete.
 | `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
 | `/actions/git/delete_together` | `targets` | Deletes all of them or, if any can't go, none. |
 | `/actions/git/restore_together` | `targets` | Recreates each iced branch at the commit it was iced at: all of them or, if any can't be, none. |
+
+## Notifications
+
+Subscribe under Notifications on `/settings` (or `[notifications] subscribe` as
+`git.branch_deletable`). It says once that a local branch has joined the Cleanup panel
+(its PR merged, or its remote branch is gone): said again if it leaves and comes back. The
+first time it's asked, it only keeps what's there.
+

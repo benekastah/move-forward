@@ -25,7 +25,7 @@ def branch_ref(repo_dir: str, branch: str) -> Ref:
     return Ref(kind=BRANCH, id=f"{repo_dir}{BRANCH_ID_SEPARATOR}{branch}")
 
 
-def _stack_branch(repo_dir: str, branch: str) -> Ref:
+def stack_branch_ref(repo_dir: str, branch: str) -> Ref:
     return Ref(kind=STACK_BRANCH, id=branch_ref(repo_dir, branch).id)
 
 
@@ -76,7 +76,7 @@ def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
     have deleted."""
     return [
         Entity(
-            ref=_stack_branch(repo.dir, b.name),
+            ref=stack_branch_ref(repo.dir, b.name),
             title=b.name,
             refs=[branch_ref(repo.dir, b.name)],
             attrs=attrs(
@@ -140,7 +140,10 @@ class Builder:
                         url=pr.url if pr else None,
                         subtitle=f"{repo.dir} · on {b.parent}",
                         rank=1,
-                        subjects=[_stack_branch(repo.dir, b.name), *([pr.subject] if pr else [])],
+                        subjects=[
+                            stack_branch_ref(repo.dir, b.name),
+                            *([pr.subject] if pr else []),
+                        ],
                     )
                 )
             for b in repo.branches:
@@ -152,7 +155,7 @@ class Builder:
                             title=f"{b.name}: tracked, no PR",
                             subtitle=f"{repo.dir} · on {b.parent}",
                             rank=0.5,
-                            subjects=[_stack_branch(repo.dir, b.name)],
+                            subjects=[stack_branch_ref(repo.dir, b.name)],
                         )
                     )
         return Panel(
