@@ -271,7 +271,7 @@ class App:
                 pending, self._pending = self._pending, set()
             only = None if pending is None else pending | self.due()
 
-    def dashboard_page(self, notice: str = "") -> str:
+    def dashboard_page(self, notice: str = "", spot: render.Spot | None = None) -> str:
         """The page from stored data; a page load also refreshes stale data in the background."""
         self.refresh_if_stale()
         warning, urgency = self.certificate_warning()
@@ -281,6 +281,7 @@ class App:
             notice,
             warning,
             urgency,
+            spot,
         )
 
     def certificate_warning(self) -> tuple[str, str | None]:
@@ -339,17 +340,29 @@ class App:
 
 def _back_to_page(query: str, notice: str = "", extra: dict[str, str] | None = None) -> str:
     """Where a POST redirects: the request's `back` path (a focus page) if it's local, else the
-    dashboard. The notice and `extra` parameters ride
+    dashboard, at the panel the request's `at` names. The notice and `extra` parameters ride
     along either way."""
     params: dict[str, str] = dict(extra or {})
     if notice:
         params["notice"] = notice
     query_params = parse_qs(query, keep_blank_values=True)
     back = query_params.get("back", [""])[0]
+    at = query_params.get("at", [""])[0]
+    anchor = ""
+    if AT_RE.fullmatch(at):  # the panel the button was in, and where its item was
+        anchor = f"#{at}"
+        if (spot := _spot(query_params)) and not render.local_path(back):
+            params |= {"at": spot[0], "pos": str(spot[1])}
+            anchor = f"#{render.SPOT_ID}"
     if render.local_path(back):
-        return back + ("&" if "?" in back else "?") + urlencode(params) if params else back
-    return "/?" + urlencode(params) if params else "/"
+        return (
+            back + ("&" if "?" in back else "?") + urlencode(params) if params else back
+        ) + anchor
+    return ("/?" + urlencode(params) if params else "/") + anchor
 
+
+AT_RE = re.compile(r"[\w.-]+")
+"""A panel's key, which a redirect may name in its `#` link."""
 
 TOKEN_PARAM_RE = re.compile(r"([?&](?:token|code|state)=)[^&\s]*")
 """Query parameters that carry secrets: the sign-in token, and an OAuth sign-in's code and
@@ -359,6 +372,13 @@ state, as a tool's sign-in (Slack's) sends them back."""
 def _redact(text: str) -> str:
     """`text` without the values of secret query parameters, for the log."""
     return TOKEN_PARAM_RE.sub(r"\1…", text)
+
+
+def _spot(query_params: dict[str, list[str]]) -> render.Spot | None:
+    """Where the request says an action was pressed (`at`, `pos`), if it says so validly."""
+    at = query_params.get("at", [""])[0]
+    pos = query_params.get("pos", [""])[0]
+    return (at, int(pos)) if AT_RE.fullmatch(at) and pos.isdecimal() and len(pos) < 6 else None
 
 
 def _int(query_params: dict[str, list[str]], name: str) -> int:
@@ -459,8 +479,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if self._refuse_strangers():
                 return
             if url.path == "/":
-                notice = parse_qs(url.query).get("notice", [""])[0]
-                self._html(HTTPStatus.OK, app.dashboard_page(notice))
+                query = parse_qs(url.query)
+                notice = query.get("notice", [""])[0]
+                self._html(HTTPStatus.OK, app.dashboard_page(notice, _spot(query)))
             elif url.path == settings.PATH and app.config_path is not None:
                 notice = parse_qs(url.query).get("notice", [""])[0]
                 self._html(HTTPStatus.OK, settings.page(app.config, notice))

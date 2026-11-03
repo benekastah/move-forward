@@ -272,6 +272,21 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
     assert response.getheader("Location") == "/?notice=did+it"
 
 
+def test_actions_redirect_to_the_panel_they_were_in(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_run(*_: object) -> str:
+        return "did it"
+
+    monkeypatch.setattr(server, "perform_action", _results(fake_run))
+    response = post(client, "/actions/x?at=jira.jira_next", {})  # a panel's own button
+    assert response.getheader("Location") == "/?notice=did+it#jira.jira_next"
+    response = post(client, "/actions/x?at=jira.jira_next&pos=3", {})  # an item's
+    assert response.getheader("Location") == "/?notice=did+it&at=jira.jira_next&pos=3#spot"
+    response = post(client, "/actions/x?at=a%22%3E%3Cscript", {})  # only a panel's key
+    assert response.getheader("Location") == "/?notice=did+it"
+
+
 def test_ticking_a_todo_off_redirects_back_with_it(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

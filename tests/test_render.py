@@ -79,8 +79,13 @@ def test_the_page_reloads_in_the_background_instead_of_navigating() -> None:
 def test_sections_carry_keys_for_the_open_state_script() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert "<details class='group' data-key='act' open>" in html
-    assert "<details class='panel' data-key='slack.nudges' data-drag open>" in html
-    assert "<details class='panel empty' data-key='github.needs_reviewer' data-drag>" in html
+    assert (
+        "<details class='panel' id='slack.nudges' data-key='slack.nudges' data-drag open>" in html
+    )
+    assert (
+        "<details class='panel empty' id='github.needs_reviewer' data-key='github.needs_reviewer' data-drag>"
+        in html
+    )
     assert "details[data-key]" in html and "localStorage.setItem('mfd.open'" in html
     assert "localStorage.getItem('mfd.open')" in html and "location.search" not in html
     # No [git_stack], so the Stacks panel is absent and git's group still renders.
@@ -115,10 +120,15 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
         sources={},
     )
     html = render.dashboard_page(dashboard, refreshing=frozenset(), notice="deleted 1 <branch>")
-    assert "<form method='post' action='/actions/delete_branch' class='action'" in html
+    assert (
+        "<form method='post' action='/actions/delete_branch?at=cleanup&pos=0' class='action'"
+        in html
+    )
     assert "onsubmit='return confirm(&#x27;Sure?&#x27;)'" in html
     assert "<input type='hidden' name='branch' value='a&#x27;b'>" in html
-    assert "<form method='post' action='/actions/delete_branches' class='action'>" in html
+    assert (
+        "<form method='post' action='/actions/delete_branches?at=cleanup' class='action'>" in html
+    )
     assert "<span class='notice'>deleted 1 &lt;branch&gt;</span>" in html
 
 
@@ -174,7 +184,7 @@ def test_focus_page_actions_come_back_to_it() -> None:
     assert html is not None
     assert "action='/actions/delete_branch?back=%2Ffocus%3Fcat%3Dcleanup%26i%3D0'" in html
     assert "<span class='notice'>done</span>" in html
-    assert "/actions/delete_branch' class='action'" in render.dashboard_page(
+    assert "/actions/delete_branch?at=cleanup&pos=0' class='action'" in render.dashboard_page(
         dashboard, refreshing=frozenset()
     )
 
@@ -301,3 +311,40 @@ def test_an_act_now_item_carries_its_pending_fields_for_the_link_script() -> Non
     pending = html_of(page.Item(title="x", pending='{"plugin": "github"}'))
     assert "<li class='item' data-pending='{&quot;plugin&quot;: &quot;github&quot;}'>" in pending
     assert "<li class='item'>" in html_of(page.Item(title="x"))
+
+
+def test_a_panels_buttons_return_to_that_panel_instead_of_the_top() -> None:
+    item = page.Item(title="x", actions=[page.Action(name="a", label="Go", fields={})])
+    panel = page.Panel(key="jira.jira_next", title="P", description="", items=[item])
+    dashboard = panels.Dashboard(
+        generated_at=NOW,
+        login=ME,
+        panels=[panel],
+        groups=[page.Group(key="g", title="G", panel_keys=[panel.key], open=True)],
+        sources={},
+    )
+    html = render.dashboard_page(dashboard, refreshing=frozenset())
+    assert "id='jira.jira_next'" in html
+    assert "action='/actions/a?at=jira.jira_next&pos=0'" in html
+
+
+def test_the_page_after_an_action_has_an_anchor_where_its_item_was() -> None:
+    items = [page.Item(title=t) for t in ("a", "b")]
+    panel = page.Panel(key="p", title="P", description="", items=items)
+    dashboard = panels.Dashboard(
+        generated_at=NOW,
+        login=ME,
+        panels=[panel],
+        groups=[page.Group(key="g", title="G", panel_keys=["p"], open=True)],
+        sources={},
+    )
+    anchor = f"<li id='{render.SPOT_ID}' aria-hidden='true'></li>"
+
+    def at(spot: render.Spot | None) -> str:
+        return render.dashboard_page(dashboard, refreshing=frozenset(), spot=spot)
+
+    assert anchor not in at(None)
+    assert at(("p", 1)).index(anchor) < at(("p", 1)).index(">b<")  # between a and b
+    assert at(("p", 1)).index(anchor) > at(("p", 1)).index(">a<")
+    assert at(("p", 9)).index(anchor) > at(("p", 9)).index(">b<")  # its item was the last
+    assert anchor not in at(("other", 0))

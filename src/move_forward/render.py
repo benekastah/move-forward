@@ -79,7 +79,13 @@ RELOAD_SCRIPT = (
     # time, and each fetch has its own AbortController and timeout, cleared when it ends.
     # The swap waits while something is being dragged or typed in. The old elements go with
     # their listeners; the other scripts bind the new ones on `mfd:replaced`.
+    # The place an action was pressed (`at`, `pos`) only matters to the page that follows it,
+    # so it leaves the address: later reloads don't ask for it.
     "(() => {"
+    " const here = new URL(location.href);"
+    " if (here.searchParams.has('pos')) {"
+    "  here.searchParams.delete('at'); here.searchParams.delete('pos');"
+    "  history.replaceState(null, '', here.pathname + here.search + here.hash); }"
     " const FETCH_MS = 15000, RETRIES = 4;"
     " const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));"
     " const get = async () => {"
@@ -229,14 +235,19 @@ def _link_action(action: Action) -> str:
     )
 
 
-def _action(action: Action, back: str = "") -> str:
-    """A button's form. `back` is where the action redirects afterwards; default the page."""
+def _action(action: Action, back: str = "", at: str = "", pos: int | None = None) -> str:
+    """A button's form. `back` is where the action redirects afterwards; default the page.
+    `at` is the key of the panel it's in, and `pos` its item's place there: the redirect
+    returns to that place (see `Spot`), not the top of the page."""
     fields = "".join(
         f"<input type='hidden' name='{_e(name)}' value='{_e(value)}'>"
         for name, value in action.fields.items()
     )
     confirm = f" onsubmit='return confirm({_e(repr(action.confirm))})'" if action.confirm else ""
-    query = "?" + urlencode({"back": back}) if back else ""
+    params = {k: v for k, v in (("back", back), ("at", at)) if v}
+    if at and pos is not None:
+        params["pos"] = str(pos)
+    query = "?" + urlencode(params) if params else ""
     if action.checkbox:
         control = (
             f"<label class='check{' suggested' if action.suggested else ''}'>"
@@ -256,11 +267,11 @@ def _action(action: Action, back: str = "") -> str:
     )
 
 
-def buttons(actions: list[Action], back: str = "") -> str:
+def buttons(actions: list[Action], back: str = "", at: str = "", pos: int | None = None) -> str:
     """Buttons for `actions` (those that post, not links), each asking first if it has a
     `confirm`, for plugins' pages as for the dashboard. `back` is where each redirects
     afterwards; default the page they're on."""
-    forms = "".join(_action(a, back) for a in actions if a.href is None)
+    forms = "".join(_action(a, back, at, pos) for a in actions if a.href is None)
     return f"<div class='actions'>{forms}</div>" if actions else ""
 
 
@@ -273,7 +284,7 @@ def _link(link: Link) -> str:
     return f"<a href='{_e(link.url)}'{cls} target='_blank' rel='noopener'>{_e(link.text)}</a>"
 
 
-def _item(item: Item, back: str = "") -> str:
+def _item(item: Item, back: str = "", at: str = "", pos: int | None = None) -> str:
     title = (
         f"<a href='{_e(item.url)}' target='_blank' rel='noopener'>{_e(item.title)}</a>"
         if _linkable(item.url)
@@ -297,7 +308,7 @@ def _item(item: Item, back: str = "") -> str:
     if item.links:
         links = "".join(_link(link) for link in item.links)
         parts.append(f"<div class='links'>{links}</div>")
-    parts.append(buttons(item.actions, back))
+    parts.append(buttons(item.actions, back, at, pos))
     parts.append("</li>")
     return "".join(parts)
 
@@ -307,15 +318,27 @@ def _open(default: bool) -> str:
     return " open" if default else ""
 
 
-def _panel(panel: Panel) -> str:
+Spot = tuple[str, int]
+"""Where an action was pressed: a panel's key, and the place of its item there. The page that
+follows has an empty anchor, `SPOT_ID`, at that place (and only that page), so the browser
+scrolls to where the item was, even once it's gone from the end of its panel."""
+SPOT_ID = "spot"
+
+
+def _panel(panel: Panel, spot: Spot | None = None) -> str:
     open_attr = _open(bool(panel.items))
-    items = "".join(_item(item) for item in panel.items)
+    cells = [_item(item, at=panel.key, pos=n) for n, item in enumerate(panel.items)]
+    if spot and spot[0] == panel.key:
+        anchor = f"<li id='{SPOT_ID}' aria-hidden='true'></li>"
+        cells.insert(min(spot[1], len(cells)), anchor)
+    items = "".join(cells)
     return (
-        f"<details class='panel{'' if panel.items else ' empty'}' data-key='{_e(panel.key)}'"
+        f"<details class='panel{'' if panel.items else ' empty'}' id='{_e(panel.key)}'"
+        f" data-key='{_e(panel.key)}'"
         f" data-drag{open_attr}>"
         f"<summary><h2>{_e(panel.title)}</h2><span class='count'>{len(panel.items)}</span>"
         f"<span class='description'>{_e(panel.description)}</span></summary>"
-        f"{buttons(panel.actions)}<ul class='items'>{items}</ul></details>"
+        f"{buttons(panel.actions, at=panel.key)}<ul class='items'>{items}</ul></details>"
     )
 
 
@@ -346,7 +369,9 @@ def _refreshed(name: str, status: SourceStatus, now: datetime, refreshing: Abstr
     )
 
 
-def _group(group: Group, dashboard: Dashboard, refreshing: AbstractSet[str]) -> str:
+def _group(
+    group: Group, dashboard: Dashboard, refreshing: AbstractSet[str], spot: Spot | None = None
+) -> str:
     """A group section; panel keys the dashboard left out (e.g. Stacks without git-stack) are
     skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click."""
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
@@ -359,7 +384,9 @@ def _group(group: Group, dashboard: Dashboard, refreshing: AbstractSet[str]) -> 
         + f"{_open(group.open)}>"
         f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span>{refreshed}"
         "</summary>"
-        "<div class='panels'>" + "".join(_panel(panel) for panel in panels) + "</div></details>"
+        "<div class='panels'>"
+        + "".join(_panel(panel, spot) for panel in panels)
+        + "</div></details>"
     )
 
 
@@ -391,8 +418,9 @@ def dashboard_page(
     notice: str = "",
     warning: str = "",
     urgency: str | None = None,
+    spot: Spot | None = None,
 ) -> str:
-    """The page.
+    """The page. `spot` is where an action was just pressed (see `Spot`).
 
     `refreshing` are the plugins a refresh running now collects. `notice` is the outcome of
     an action just run, shown in the header. `warning` is something to fix, e.g. certificates ending soon,
@@ -413,7 +441,7 @@ def dashboard_page(
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
         + banner(warning, urgency)
         + "<main>"
-        + "".join(_group(group, dashboard, refreshing) for group in dashboard.groups)
+        + "".join(_group(group, dashboard, refreshing, spot) for group in dashboard.groups)
         + "</main>"
         f"<footer>{_sources(dashboard)}<form method='post' action='/layout/reset'>"
         "<button type='submit' class='secondary'>Reset layout</button></form></footer>"
