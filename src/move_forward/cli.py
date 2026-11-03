@@ -2,6 +2,7 @@
 
 import argparse
 import getpass
+import json
 import logging
 import os
 import sys
@@ -15,6 +16,7 @@ from .db import Database
 from .plugin import CliHandler
 from .refresh import build_dashboard, refresh, stored_graph
 from .registry import enabled, enabled_names, migrate
+from .repositories import FeedbackRepository
 from .server import scheme, serve
 from .shell import CommandError
 
@@ -131,6 +133,10 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         "check", help="load the config and every plugin, and exit; fails with what's wrong"
     )
     commands.add_parser("dump", help="print the dashboard as JSON from what is stored")
+    commands.add_parser(
+        "snoozes",
+        help="print the Act now items snoozed now as JSON: kind, id, verb, until, fingerprint",
+    )
     init_parser = commands.add_parser("init", help="ask for each setting and write the config")
     init_parser.add_argument(
         "--example", action="store_true", help="write a commented example instead of asking"
@@ -291,6 +297,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "dump":
         print(build_dashboard(config, db).model_dump_json(indent=2))
+        return 0
+    if args.command == "snoozes":
+        now = datetime.now(UTC)
+        snoozes = [
+            {
+                "kind": kind,
+                "id": id,
+                "verb": verb,
+                "until": f.until.isoformat(),
+                "fingerprint": f.fingerprint,
+            }
+            for (kind, id, verb), f in FeedbackRepository(db).all().items()
+            if f.action == "snooze" and f.until is not None and f.until > now
+        ]
+        print(json.dumps(snoozes, indent=2))
         return 0
     if args.command in plugin_commands:
         plugins = enabled(config, db, datetime.now(UTC))

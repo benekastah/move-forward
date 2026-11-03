@@ -1,12 +1,17 @@
 """The server's token file, and `mfd open` signing the browser in with it."""
 
+import json
 import threading
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from move_forward import auth, cli
+from move_forward.act_now import Feedback
+from move_forward.db import Database
 from move_forward.private import is_private
+from move_forward.repositories import FeedbackRepository
 
 
 def test_the_token_is_made_once_and_only_i_can_read_it(tmp_path: Path) -> None:
@@ -58,6 +63,32 @@ def test_mfd_open_opens_the_login_url(tmp_path: Path, monkeypatch: pytest.Monkey
     assert cli.main(["-c", str(config), "open"]) == 0
     token = (tmp_path / auth.TOKEN_FILE).read_text().strip()
     assert opened == [f"http://127.0.0.1:9999/login?token={token}"]
+
+
+def test_mfd_snoozes_lists_the_snoozes_still_running(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = tmp_path / "dashboard.db"
+    config = tmp_path / "config.toml"
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n')
+    assert cli.main(["-c", str(config), "snoozes"]) == 0  # creates and migrates the database
+    assert json.loads(capsys.readouterr().out) == []
+    now = datetime.now(UTC)
+    feedback = FeedbackRepository(Database(db_path))
+    for id, until in (("over", now - timedelta(hours=1)), ("running", now + timedelta(days=2))):
+        feedback.say(
+            ("pr", id, "Review"), Feedback(action="snooze", fingerprint="f1", until=until), now
+        )
+    feedback.say(("pr", "pinned", "Review"), Feedback(action="pin", fingerprint="f1"), now)
+    assert cli.main(["-c", str(config), "snoozes"]) == 0
+    [snooze] = json.loads(capsys.readouterr().out)
+    assert snooze | {"until": ""} == {
+        "kind": "pr",
+        "id": "running",
+        "verb": "Review",
+        "until": "",
+        "fingerprint": "f1",
+    }
 
 
 def test_two_processes_making_the_token_at_once_agree(tmp_path: Path) -> None:
