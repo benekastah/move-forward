@@ -135,7 +135,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
         else:
             rank = 0
             why = "blocked by " + ", ".join(issue.open_blockers)
-            importance, verb = 0, "Work on it"
+            importance, verb = 0, "Chase the blockers"
         rank += min(999, (now - issue.created).days)
         badges = [why] + ([f"due {issue.due:%b} {issue.due.day}"] if issue.due else [])
         items.append(
@@ -151,6 +151,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                     importance=importance,
                     due=end_of(issue.due, now) if issue.due else None,
                     blocked=bool(issue.open_blockers),
+                    touched=issue.updated,
                 ),
             )
         )
@@ -276,7 +277,8 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         panels: list[Panel],
     ) -> list[Item]:
         """Its transitions, and the tickets in What next that matter now: important ones
-        (incidents, escalated bugs) and those due within the week."""
+        (incidents, escalated bugs), those due within the week, and blocked ones, which Act
+        now ranks down until they've sat untouched for a while."""
         nominated = super().act_now(ctx, snapshot, graph, panels)
         for panel in panels:
             if panel.key != "jira_next":
@@ -284,6 +286,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for item in panel.items:
                 signals = item.signals or Signals()
                 due_soon = signals.due is not None and due_pressure(signals.due, ctx.now) > 0
-                if signals.importance or due_soon:
+                if signals.importance or due_soon or signals.blocked:
                     nominated.append(item)
         return nominated

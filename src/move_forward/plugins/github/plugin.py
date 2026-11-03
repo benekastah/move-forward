@@ -10,14 +10,14 @@ from pydantic import BaseModel
 
 from ...asking import Asker, InitSetup
 from ...graph import Entity, Graph, Ref, attrs
-from ...page import Panel
+from ...page import Item, Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
 from ...shell import CommandError
 from . import cli, client, derive, notifications, placing, pushes
 from .config import GitHubConfig
 from .kinds import PersonAttrs, PrAttrs
 from .models import GitHubSnapshot, PullRequest
-from .panels import PR, Builder
+from .panels import PR, REVIEW, Builder
 from .people import PeopleRepository
 from .prs import (
     changes_requested,
@@ -340,6 +340,21 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         retried = PeopleRepository(ctx.db).forget_misses_before(cutoff)
         return [f"will look up {retried} reviewer email(s) again"] if retried else []
+
+    def act_now(
+        self,
+        ctx: Context[GitHubConfig],
+        snapshot: GitHubSnapshot | None,
+        graph: Graph,
+        panels: list[Panel],
+    ) -> list[Item]:
+        """The panels' items, but not reviews of drafts: they aren't ready for one, so the
+        panel lists them last and Act now leaves them out."""
+        return [
+            item
+            for item in super().act_now(ctx, snapshot, graph, panels)
+            if not (item.draft and item.signals and item.signals.verb == REVIEW)
+        ]
 
     def panels(
         self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None, graph: Graph

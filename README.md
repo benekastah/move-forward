@@ -66,7 +66,12 @@ the items shown), `per_plugin` (3, the most one plugin may fill) and `weights`
 (what each signal adds to an item's score: `closes = 3`, `minutes = 2`,
 `hour = 1`, `waiting = 2` (plus 1 for each doubling of the days they've waited),
 `importance = 3` per level (high, critical), and `due = 1` times the due date's
-pressure, 0 a week or more ahead and rising to 4 once it's past).
+pressure, 0 a week or more ahead and rising to 4 once it's past, and
+`blocked = -4` for a blocked item). A blocked item (a ticket with open
+blockers, an entry blocked on something) is ranked down, until it has gone
+`blocked_stale_days` (3; 0 means never) without a touch: a ticket's last
+update or comment, an entry's last edit. Then it's worth chasing, and ranks as
+if it weren't blocked.
 A snooze lasts `default_snooze_days` (1: until tomorrow), or `snooze_days[<kind>]`
 for a kind of subject (`snooze_days = { pr = 7 }` snoozes a PR for a week),
 or until the item changes.

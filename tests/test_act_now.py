@@ -40,13 +40,12 @@ def _titles(panel: Panel) -> list[str]:
     return [i.title for i in panel.items]
 
 
-def test_finishing_beats_quick_beats_unknown_and_blocked_is_out() -> None:
+def test_finishing_beats_quick_beats_unknown() -> None:
     ranked = _ranked(
         [
             Nomination("github", _item("unknown")),
             Nomination("github", _item("quick", effort="minutes")),
             Nomination("jira", _item("closes", closes="APP-1", verb="Close")),
-            Nomination("github", _item("blocked", effort="minutes", closes="x", blocked=True)),
             Nomination("slack", _item("waited on", effort="hour", waiting=["alice"])),
         ]
     )
@@ -54,6 +53,37 @@ def test_finishing_beats_quick_beats_unknown_and_blocked_is_out() -> None:
     assert ranked.items[1].details == ["why: about an hour, alice waiting"]
     assert ranked.items[0].details == ["why: closes APP-1"]
     assert [i.rank for i in ranked.items] == [7, 6, 5, 4]  # the panel keeps its order
+
+
+def _blocked_and_open(
+    touched: datetime | None, config: act_now.ActNowConfig | None = None
+) -> Panel:
+    """A blocked and an unblocked item that are otherwise the same, the blocked one first in
+    line; the blocked one last, with `why` saying so, unless it has gone stale."""
+    blocked = _item("blocked", effort="minutes", blocked=True, touched=touched)
+    return _ranked(
+        [Nomination("jira", blocked), Nomination("github", _item("open", effort="minutes"))],
+        config,
+        now=NOW,
+    )
+
+
+def test_a_blocked_item_ranks_below_the_same_item_unblocked() -> None:
+    ranked = _blocked_and_open(NOW - timedelta(days=1))
+    assert _titles(ranked) == ["open", "blocked"]
+    assert ranked.items[1].details == ["why: blocked, quick"]
+
+
+def test_a_blocked_item_untouched_for_the_stale_days_ranks_as_if_unblocked() -> None:
+    ranked = _blocked_and_open(NOW - timedelta(days=4))
+    assert _titles(ranked) == ["blocked", "open"]  # tied, so in nomination order
+    assert ranked.items[0].details == ["why: blocked, untouched 4d, quick"]
+
+
+def test_a_blocked_item_never_goes_stale_without_a_touch_or_with_stale_days_at_zero() -> None:
+    assert _titles(_blocked_and_open(None)) == ["open", "blocked"]
+    never = act_now.ActNowConfig(blocked_stale_days=0)
+    assert _titles(_blocked_and_open(NOW - timedelta(days=30), never)) == ["open", "blocked"]
 
 
 def test_importance_time_waited_and_a_nearing_due_date_raise_an_item() -> None:

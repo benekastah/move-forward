@@ -38,6 +38,10 @@ class _EntryView(Model):
     open_todos: list[str] = Field(default_factory=list[str])
 
 
+REVIEW = "Review"
+"""The verb of a review asked of me."""
+
+
 def pr_ref(pr: PullRequest) -> Ref:
     return Ref(kind=PR, id=pr.url)
 
@@ -95,11 +99,9 @@ def requested_of(pr: PullRequest, me: str) -> datetime | None:
 
 
 def _review(pr: PullRequest, me: str) -> Signals:
-    """Review it: its author waits, since my review was asked for. A draft isn't ready for
-    one, so Act now leaves it out; the panel still lists it, last."""
+    """Review it: its author waits, since my review was asked for."""
     return Signals(
-        verb="Review",
-        blocked=pr.is_draft,
+        verb=REVIEW,
         effort=review_effort(pr),
         waiting=[pr.author] if pr.author else [],
         waiting_since=requested_of(pr, me),

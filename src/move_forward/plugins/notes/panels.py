@@ -3,7 +3,7 @@ other plugins' items: Add todo on items about my PRs and tickets, Put on ice on 
 branch. Pure functions; no I/O."""
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime, time
 
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
@@ -377,6 +377,9 @@ class Builder:
                         effort="minutes",
                         closes=entry.title,
                         blocked=blocked,
+                        touched=datetime.combine(entry.updated_on, time(), UTC)
+                        if entry.updated_on
+                        else None,
                     )
                     if close_out
                     else None,

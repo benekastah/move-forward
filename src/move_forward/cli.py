@@ -90,7 +90,8 @@ my-team = "#team-my-team"
 # [act_now]                             # how Act now ranks what the plugins nominate
 # size = 7                               # items shown
 # per_plugin = 3                         # so one busy tool can't fill the list
-# weights = { closes = 3, minutes = 2, hour = 1, waiting = 2, importance = 3, due = 1 }  # what each signal adds
+# weights = { closes = 3, minutes = 2, hour = 1, waiting = 2, importance = 3, due = 1, blocked = -4 }  # what each signal adds
+# blocked_stale_days = 3                 # a blocked item untouched this long stops being ranked down (0: never)
 # default_snooze_days = 1                # days a snooze lasts (1 = until tomorrow)
 # snooze_days = { pr = 7 }               # ...for a kind of subject, e.g. a PR's review for a week
 

@@ -1,7 +1,7 @@
 """Act now: core's short, ranked list of the best next actions, whatever the tools.
 
 Each plugin nominates items through its `act_now` hook, each with `Signals` saying how long
-it takes, what it finishes and who's waiting. Core drops what's blocked, scores the rest,
+it takes, what it finishes and who's waiting. Core scores them (a blocked one lower, unless it has sat untouched for a while),
 keeps one item per subject, joins an item about a unit of work (a ticket, a work entry) to
 the best item about something in it (its PR), keeps a few per plugin, and says on each
 item why it's there.
@@ -67,6 +67,8 @@ class Weights(Strict):
     """Per level of importance (1 high, 2 critical)."""
     due: float = 1
     """Times the due date's pressure: 0 a week or more ahead, rising to 4 once it's past."""
+    blocked: float = -4
+    """A blocked item, until it's been untouched for `blocked_stale_days`."""
 
 
 class ActNowConfig(Strict):
@@ -77,6 +79,9 @@ class ActNowConfig(Strict):
     per_plugin: int = Field(default=3, ge=1)
     """How many of them one plugin may fill, so one busy tool can't take the whole list."""
     weights: Weights = Field(default_factory=Weights)
+    blocked_stale_days: int = Field(default=3, ge=0)
+    """Days a blocked item can go untouched before Act now stops ranking it down, since
+    something blocked this long is worth chasing; 0 ranks blocked items down always."""
     default_snooze_days: int = Field(default=1, ge=1)
     """How many days a snooze lasts, counted in local days: 1 is until tomorrow."""
     snooze_days: dict[str, int] = Field(default_factory=dict)
@@ -157,17 +162,34 @@ def due_pressure(due: datetime, now: datetime) -> float:
     return DUE_MOST * (1 - max(left, timedelta()) / DUE_HORIZON)
 
 
-def score(signals: Signals, weights: Weights, now: datetime | None = None) -> float:
+def is_stale(signals: Signals, stale_after: timedelta | None, now: datetime | None) -> bool:
+    """Whether a blocked item has gone untouched for `stale_after` (None: never)."""
+    return (
+        stale_after is not None
+        and now is not None
+        and signals.touched is not None
+        and now - signals.touched >= stale_after
+    )
+
+
+def score(
+    signals: Signals,
+    weights: Weights,
+    now: datetime | None = None,
+    stale_after: timedelta | None = None,
+) -> float:
     """Finishing beats starting, quick beats slow, importance counts, someone waiting adds
     urgency (more the longer they've waited), and so does a due date drawing near. Unknown
     effort adds nothing, so an item of unknown size never takes a quick win's place. Without
-    `now`, how long someone has waited and how near a date is don't count."""
+    `now`, how long someone has waited and how near a date is don't count. A blocked item
+    scores less, unless it has been untouched for `stale_after`."""
     total = (
         weights.closes * (signals.closes is not None)
         + weights.minutes * (signals.effort == "minutes")
         + weights.hour * (signals.effort == "hour")
         + weights.waiting * bool(signals.waiting)
         + weights.importance * signals.importance
+        + weights.blocked * (signals.blocked and not is_stale(signals, stale_after, now))
     )
     if now is not None and signals.waiting and signals.waiting_since is not None:
         total += math.log2(1 + _days(now - signals.waiting_since))
@@ -183,10 +205,15 @@ PRIORITY_IMPORTANCE = {0: -1, 1: 1, 2: 2}
 """The `Signals.importance` each priority stands for."""
 
 
-def why(signals: Signals, now: datetime | None = None) -> str:
+def why(signals: Signals, now: datetime | None = None, stale_after: timedelta | None = None) -> str:
     """The signals that scored, in words: "critical, quick, closes APP-12, alice waiting 2d,
     due in 3d"."""
     parts: list[str] = []
+    if signals.blocked:
+        if now is not None and signals.touched and is_stale(signals, stale_after, now):
+            parts.append(f"blocked, untouched {age(now, signals.touched)}")
+        else:
+            parts.append("blocked")
     if signals.importance in IMPORTANCE_WORDS:
         parts.append(IMPORTANCE_WORDS[signals.importance])
     if signals.effort == "minutes":
@@ -276,7 +303,7 @@ def panels(
     units: Units = no_units,
     priority_of: PriorityOf = no_priority,
 ) -> list[Panel]:
-    """Act now's panels: nominations not blocked, snoozed or dismissed, pinned ones first and
+    """Act now's panels: nominations not snoozed or dismissed, pinned ones first and
     then the best (by score, then the plugin's own rank, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
     in all, each with buttons to snooze, dismiss, pin or prioritize it; a priority I set
@@ -287,6 +314,7 @@ def panels(
     config = config or ActNowConfig()
     feedback = feedback or {}
     size, per_plugin, weights = config.size, config.per_plugin, config.weights
+    stale_after = timedelta(days=config.blocked_stale_days) or None
     levels: dict[int, int] = {}
     """The priority I set on a nomination, by its `id`."""
     prioritized_nominations: list[Nomination] = []
@@ -306,12 +334,12 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not nom.signals.blocked and not (now and set_aside(nom, said(nom), now))
+        if not (now and set_aside(nom, said(nom), now))
     ]
     candidates.sort(
         key=lambda c: (
             not pinned(c[1]),
-            -score(c[1].signals, weights, now),
+            -score(c[1].signals, weights, now, stale_after),
             -c[1].item.rank,
             c[0],
         )
@@ -334,7 +362,7 @@ def panels(
             continue
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1
         is_pinned = any(pinned(n) for n in [nomination, *group.then])
-        shown = _shown(group, place, size, is_pinned, now, levels)
+        shown = _shown(group, place, size, is_pinned, now, levels, stale_after)
         by_plugin.setdefault(nomination.plugin, []).append(shown)
         place += 1
     if not by_plugin:
@@ -398,6 +426,7 @@ def _shown(
     pinned: bool,
     now: datetime | None,
     levels: dict[int, int],
+    stale_after: timedelta | None,
 ) -> Item:
     """The item as Act now shows it: its verb first, its place overall as a badge, why it's
     here, what else is due on the same subject, the items joined to it with their buttons,
@@ -405,7 +434,7 @@ def _shown(
     order."""
     nomination, then = group.nomination, group.then
     item, signals = nomination.item, nomination.signals
-    reason = ("pinned, " if pinned else "") + why(signals, now)
+    reason = ("pinned, " if pinned else "") + why(signals, now, stale_after)
     reason = reason.removesuffix(", ")
     details = [f"why: {reason}"] if reason else []
     details += item.details

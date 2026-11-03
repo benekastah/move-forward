@@ -95,7 +95,7 @@ def test_incidents_escalated_bugs_and_tickets_due_this_week_are_nominated() -> N
         escalation_levels=["manager", "director", "vp"],
     )
     why = {i.title.split(": ", 1)[1].split()[0]: i.details[0] for i in dashboard.act_now()}
-    assert why == {  # not APP-7 (a bug not escalated) nor APP-8 (blocked)
+    assert why == {  # not APP-7, a bug not escalated; APP-8, blocked, ranks last, past 3 a tool
         "APP-5": "why: critical",
         "APP-6": "why: important",
         "APP-2": "why: due in 3d",  # the end of its day, local time (UTC in tests): 3d 12h
@@ -118,3 +118,23 @@ def test_a_transition_joins_its_prs_act_now_item_and_is_set_aside_with_it() -> N
     snooze = next(a for a in item.actions if a.label == "Snooze")
     assert refresh.run_action(config, db, snooze.name, snooze.fields) == "snoozed until tomorrow"
     assert build_dashboard(config, db, NOW).act_now() == []  # the ticket's move too
+
+
+def test_a_blocked_ticket_is_nominated_and_comes_back_once_untouched_for_days() -> None:
+    dashboard = build(
+        jira=JiraSnapshot(
+            issues=[
+                issue(
+                    "APP-1", type="Task", open_blockers=["APP-9"], updated=NOW - timedelta(days=1)
+                ),
+                issue(
+                    "APP-2", type="Task", open_blockers=["APP-9"], updated=NOW - timedelta(days=5)
+                ),
+            ]
+        )
+    )
+    why = {i.title.split(": ", 1)[1].split()[0]: i.details[0] for i in dashboard.act_now()}
+    assert why == {"APP-1": "why: blocked", "APP-2": "why: blocked, untouched 5d"}
+    assert dashboard.act_now()[0].title.startswith(
+        "Chase the blockers: APP-2"
+    )  # the stale one first

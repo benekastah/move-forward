@@ -60,7 +60,12 @@ class Signals(Model):
     waiting: list[str] = Field(default_factory=list[str])
     """Who is waiting on me for it: logins, names, "customer"."""
     blocked: bool = False
-    """Not doable now: waiting on someone else, on CI, or for a decision."""
+    """Not doable now: waiting on someone else, on CI, or for a decision. Act now ranks it
+    lower, until `touched` is `blocked_stale_days` or more ago."""
+    touched: datetime | None = None
+    """When anything last happened on it (a ticket's last update or comment, an entry's last
+    edit): a blocked item untouched that long is worth another look. None: it never goes
+    stale."""
     importance: int = Field(default=0, ge=-1, le=2)
     """-1 not important, 0 normal, 1 high, 2 critical: how much it matters beyond its size.
     The plugin maps its tool's idea of it (an escalation, a priority) onto 0 to 2; -1 and a
