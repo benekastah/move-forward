@@ -46,6 +46,22 @@ def test_jira_transitions_from_pr_states() -> None:
     }
 
 
+def test_a_transition_with_a_target_status_has_a_button_to_make_it() -> None:
+    dashboard = build(
+        github=snapshot(mine=[pr(2)]),
+        jira=JiraSnapshot(issues=[issue("APP-2", status="In Progress")]),
+    )
+    buttons = {
+        i.title.split()[0]: [(a.name, a.label, a.fields) for a in i.actions]
+        for i in panel(dashboard, "jira.jira_transitions").items
+    }
+    assert buttons["APP-2"][0] == (
+        "jira/transition",
+        "Move to In Review",
+        {"key": "APP-2", "to": "In Review"},
+    )
+
+
 def test_jira_next_ranks_incidents_then_bugs_then_unblocked_work() -> None:
     dashboard = build(
         jira=JiraSnapshot(

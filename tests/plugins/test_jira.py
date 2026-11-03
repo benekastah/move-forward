@@ -247,3 +247,48 @@ def test_an_empty_search_is_empty_when_jira_accepts_the_token(
 ) -> None:
     _empty_search_with_myself(monkeypatch, 200)
     assert jira.search(JiraConfig(site="https://j"), "me@x", "key in (APP-1)", "t") == []
+
+
+CONFIG = JiraConfig(site="https://j")
+
+
+def _jira_replies(monkeypatch: pytest.MonkeyPatch, offered: str) -> list[tuple[str, object]]:
+    """Jira offering the transitions `offered`; the requests made are returned."""
+    sent: list[tuple[str, object]] = []
+
+    def request(
+        config: JiraConfig,
+        email: str,
+        api_token: str,
+        path: str,
+        body: dict[str, object] | None = None,
+    ) -> bytes:
+        sent.append((path, body))
+        return offered.encode()
+
+    def token(config: JiraConfig, email: str) -> str:
+        return "t"
+
+    monkeypatch.setattr(jira, "token", token)
+    monkeypatch.setattr(jira, "_request", request)
+    return sent
+
+
+def test_a_ticket_moves_by_the_transition_into_its_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent = _jira_replies(
+        monkeypatch,
+        '{"transitions": [{"id": "11", "to": {"name": "In Progress"}},'
+        ' {"id": "21", "to": {"name": "In Review"}}]}',
+    )
+    jira.transition(CONFIG, "me@x.com", "APP-1", "in review")
+    assert sent == [
+        ("/rest/api/3/issue/APP-1/transitions", None),
+        ("/rest/api/3/issue/APP-1/transitions", {"transition": {"id": "21"}}),
+    ]
+
+
+def test_a_ticket_that_cant_go_there_says_where_it_can(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent = _jira_replies(monkeypatch, '{"transitions": [{"id": "11", "to": {"name": "Done"}}]}')
+    with pytest.raises(LookupError, match="can't move to In Review; it can go to: Done"):
+        jira.transition(CONFIG, "me@x.com", "APP-1", "In Review")
+    assert len(sent) == 1  # nothing was changed

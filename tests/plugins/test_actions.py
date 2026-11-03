@@ -523,3 +523,25 @@ def test_deleted_iced_branches_are_restored_at_the_commits_they_were_iced_at(
         run("git/restore_together", config, restore.fields)
     with pytest.raises(ActionError, match="isn't on ice"):
         run("git/restore_together", config, {"targets": f"{repo}\t--force"})
+
+
+def test_the_jira_transition_button_moves_the_ticket_and_reports_what_jira_refuses(
+    config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
+    moved: list[tuple[str, str]] = []
+
+    def transition(config: JiraConfig, email: str, key: str, status: str) -> None:
+        if status == "Nowhere":
+            raise LookupError(f"{key} can't move to {status}; it can go to: Done")
+        moved.append((key, status))
+
+    monkeypatch.setattr(jira_client, "transition", transition)
+    assert run("jira/transition", config, {"key": "APP-1", "to": "In Review"}) == (
+        "moved APP-1 to In Review"
+    )
+    assert moved == [("APP-1", "In Review")]
+    with pytest.raises(ActionError, match="can go to: Done"):
+        run("jira/transition", config, {"key": "APP-1", "to": "Nowhere"})
+    with pytest.raises(ActionError, match="not a ticket key"):
+        run("jira/transition", config, {"key": "APP-1; drop", "to": "Done"})

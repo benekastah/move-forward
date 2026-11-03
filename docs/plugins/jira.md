@@ -42,9 +42,17 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
 
 ## Panels
 
-- **Jira transitions**: status changes the PR states suggest.
+- **Jira transitions**: status changes the PR states suggest, each with a "Move to …"
+  button that makes it in Jira (by the workflow's transition into that status, so it fails,
+  naming the statuses the ticket can go to, when there is none).
 - **What next**: my tickets (with their due dates), incidents (by escalation label, if configured), then bugs,
   then unblocked work.
+
+## Buttons
+
+| Path | Fields | Does |
+| --- | --- | --- |
+| `/actions/jira/transition` | `key`, `to` (a status name) | Moves the ticket to that status, with the API token (needs write access to the project). |
 
 ## Act now
 

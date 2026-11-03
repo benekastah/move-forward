@@ -147,7 +147,10 @@ ticket, a work entry's todo) joins the best item about something in it, to do
 after it, with its buttons: "Reply: PR 330", then "Move to In Review: APP-12". Each
 plugin nominates its own items; its page says which. Each item has Snooze
 (until tomorrow), Dismiss and Pin (first until unpinned); a snoozed or
-dismissed item comes back once it changes (its title, badges or details).
+dismissed item comes back once it changes (its title, badges or details). Opening an
+item's link, or pressing a plugin's button on it, hides it too, until its plugin has
+fetched again (at most 10 minutes), so it doesn't linger after you've dealt with it
+elsewhere; coming back to the tab asks that plugin to fetch.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
@@ -234,7 +237,7 @@ over 64 KiB):
 | `/settings` | `<section>:<key>` per setting (`:prune_days`, `github:history_days`, `act_now:weights.closes`); a list one per line; a true-or-false one `on` or `off` | Saves the settings the form changed into the config file (see [Settings](#settings)), and redirects back to `/settings` saying what was saved, or why nothing was. Settings left out of the form are left as they are. |
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
-| `/actions/act_now/<snooze\|dismiss\|pin\|unpin>` | `kind`, `id` (the item's main subject), `verb`, `fingerprint`; `also` (optional: the items joined to it, as a JSON list of `[kind, id, verb, fingerprint]`) | Snoozes an Act now item (and the items joined to it) until tomorrow, dismisses it, or pins or unpins it. |
+| `/actions/act_now/<snooze\|dismiss\|pin\|unpin\|pending>` | `kind`, `id` (the item's main subject), `verb`, `fingerprint`; `also` (optional: the items joined to it, as a JSON list of `[kind, id, verb, fingerprint]`) | Snoozes an Act now item (and the items joined to it) until tomorrow, dismisses it, or pins or unpins it; `pending` hides it until its plugin has fetched again. |
 
 For example, ticking off a todo ([notes](docs/plugins/notes.md#buttons)):
 

@@ -149,6 +149,29 @@ def _search_page(config: JiraConfig, email: str, api_token: str, body: dict[str,
         return response.read()
 
 
+def _request(
+    config: JiraConfig,
+    email: str,
+    api_token: str,
+    path: str,
+    body: dict[str, object] | None = None,
+) -> bytes:
+    """A GET of `path`, or a POST of `body` to it, answered with Jira's response."""
+    url = config.site.rstrip("/") + path
+    https.require_https(url, "the Jira token")
+    headers = {"Authorization": _basic_auth(email, api_token), "Accept": "application/json"}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers=headers,
+        method="POST" if body is not None else "GET",
+    )
+    with https.opener.open(request, timeout=60) as response:
+        return response.read()
+
+
 def _basic_auth(email: str, api_token: str) -> str:
     return "Basic " + base64.b64encode(f"{email}:{api_token}".encode()).decode()
 
@@ -230,6 +253,31 @@ def updated_within(config: JiraConfig, email: str, minutes: int) -> bool:
     }
     page = _Keys.model_validate_json(_search_page(config, email, token(config, email), body))
     return bool(page.issues)
+
+
+class _Transition(_Raw):
+    id: str
+    to: _Status
+
+
+class _Transitions(_Raw):
+    transitions: list[_Transition] = []
+
+
+def transition(config: JiraConfig, email: str, key: str, status: str) -> None:
+    """Move the ticket `key` to `status` (matched without regard to case) by the transition
+    its workflow offers into it; raises `LookupError` naming the statuses it can go to when
+    there is none."""
+    api_token = token(config, email)
+    path = f"/rest/api/3/issue/{key}/transitions"
+    offered = _Transitions.model_validate_json(_request(config, email, api_token, path))
+    wanted = next(
+        (t for t in offered.transitions if t.to.name.casefold() == status.casefold()), None
+    )
+    if wanted is None:
+        options = ", ".join(sorted(t.to.name for t in offered.transitions)) or "none"
+        raise LookupError(f"{key} can't move to {status}; it can go to: {options}")
+    _request(config, email, api_token, path, {"transition": {"id": wanted.id}})
 
 
 def collect(config: JiraConfig, email: str) -> JiraSnapshot:

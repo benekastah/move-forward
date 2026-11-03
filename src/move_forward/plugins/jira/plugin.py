@@ -12,9 +12,9 @@ from ...act_now import due_pressure
 from ...asking import Asker, InitSetup
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
-from ...page import Item, Link, Panel, Signals, age
-from ...plugin import Context, Plugin
-from . import client
+from ...page import Action, Item, Link, Panel, Signals, age
+from ...plugin import ActionHandler, Context, Plugin
+from . import actions, client
 from .config import JiraConfig
 from .kinds import TicketAttrs
 from .models import JiraIssue, JiraSnapshot
@@ -90,6 +90,15 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                     subtitle=proposal,
                     links=[Link(text=f"#{p.number}", url=p.url or p.id) for p in prs],
                     subjects=[ticket_ref(issue.key)],
+                    actions=[
+                        Action(
+                            name="jira/transition",
+                            label=f"Move to {to}",
+                            fields={"key": issue.key, "to": to},
+                        )
+                    ]
+                    if to
+                    else [],
                     signals=Signals(
                         verb=f"Move to {to}" if to else "Update the status",
                         effort="minutes",
@@ -191,6 +200,9 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
     linking: ClassVar[dict[str, str | None]] = {TICKET: None}
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
+
+    def actions(self) -> dict[str, ActionHandler]:
+        return actions.ACTIONS
 
     def collect(self, ctx: Context[JiraConfig]) -> JiraSnapshot:
         return client.collect(ctx.config, ctx.email)
