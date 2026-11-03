@@ -48,6 +48,7 @@ RAW_PR: dict[str, object] = {
                 "isOutdated": True,
                 "path": "a.py",
                 "comments": {
+                    "totalCount": 3,
                     "nodes": [
                         {
                             "author": {"login": "bob"},
@@ -55,7 +56,7 @@ RAW_PR: dict[str, object] = {
                             "url": "https://github.com/acme/widgets/pull/7#r1",
                             "createdAt": "2026-10-29T08:00:00Z",
                         }
-                    ]
+                    ],
                 },
             }
         ]
@@ -114,6 +115,11 @@ RAW_PR: dict[str, object] = {
                 "author": {"login": "bob"},
             },
             {"__typename": "HeadRefForcePushedEvent", "createdAt": "2026-10-29T03:00:00Z"},
+            {
+                "__typename": "AddedToMergeQueueEvent",
+                "createdAt": "2026-10-29T04:00:00Z",
+                "enqueuer": {"login": "carol"},
+            },
         ]
     },
     "files": {"nodes": [{"path": "a.py"}, {"path": "b/c.py"}]},
@@ -142,10 +148,13 @@ def test_to_pull_request_flattens_everything() -> None:
         "RemovedFromMergeQueueEvent",
         "IssueComment",
         "HeadRefForcePushedEvent",
+        "AddedToMergeQueueEvent",
     ]
     assert pr.events[0].reviewer == "alice" and pr.events[0].reviewer_kind == "user"
     assert pr.events[1].reason == "CI"
     assert pr.events[2].actor == "bob"
+    assert pr.events[4].actor == "carol"  # who queued it
+    assert pr.threads[0].comment_count == 3
     assert pr.files == ["a.py", "b/c.py"]
 
 

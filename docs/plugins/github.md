@@ -77,3 +77,26 @@ conflicts (about an hour), and PRs ready to merge (quick, closing the PR).
 | Command | Does |
 | --- | --- |
 | `mfd github import <dir>` | Read reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions; they win over emails looked up from commits. Run it again whenever the map changes. |
+
+## Notifications
+
+Subscribe to these kinds under Notifications on `/settings` (or `[notifications] subscribe`
+as `github.<kind>`); each is said once, when the state changes between two refreshes, and
+a PR the last refresh didn't hold says nothing of its state.
+
+| Kind | When |
+| --- | --- |
+| `pr_mergeable` | my PR is approved, green, conflict-free, not a draft and not queued |
+| `ci_failed`, `ci_recovered` | CI fails on my PR (naming the checks), or passes again |
+| `review_received` | someone but me or a bot approves, requests changes on or comments in a review of my PR |
+| `conversation_comment` | someone but me or a bot comments on my PR's conversation |
+| `merge_conflict` | my PR gets a conflict |
+| `pr_merged`, `pr_closed` | my PR is merged, or closed without merging, by anyone |
+| `merge_queue_added` | someone else queues my PR (unsaid when GitHub's recent timeline doesn't say who) |
+| `merge_queue_removed` | my PR leaves the queue without merging, with GitHub's reason |
+| `thread_reply` | a review thread on my PR, or one I reviewed, gains comments |
+| `review_requested` | a review is requested of me, or my team, including asked again |
+| `new_push` | new commits on a PR I reviewed |
+| `author_replied` | the author comments on a PR I reviewed |
+
+Events about one PR come as one notification, which opens the dashboard at the PR.

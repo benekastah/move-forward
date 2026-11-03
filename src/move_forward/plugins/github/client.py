@@ -57,11 +57,15 @@ class _RawComment(_Raw):
     created_at: datetime | None = Field(default=None, alias="createdAt")
 
 
+class _RawComments(_Nodes[_RawComment]):
+    total_count: int = Field(default=1, alias="totalCount")
+
+
 class _RawThread(_Raw):
     is_resolved: bool = Field(alias="isResolved")
     is_outdated: bool = Field(alias="isOutdated")
     path: str | None = None
-    comments: _Nodes[_RawComment] = _Nodes()
+    comments: _RawComments = _RawComments()
 
 
 class _RawContext(_Raw):
@@ -95,6 +99,7 @@ class _RawEvent(_Raw):
     requested_reviewer: _Named | None = Field(default=None, alias="requestedReviewer")
     reason: str | None = None
     author: _Named | None = None
+    enqueuer: _Named | None = None
 
 
 class _RawFile(_Raw):
@@ -291,10 +296,11 @@ def _event(raw: _RawEvent) -> TimelineEvent | None:
     if raw.created_at is None:
         return None
     reviewer = _reviewer(raw.requested_reviewer)
+    who = raw.author or raw.enqueuer
     return TimelineEvent(
         type=raw.typename,
         at=raw.created_at,
-        actor=raw.author.login if raw.author else None,
+        actor=who.login if who else None,
         reviewer_kind=reviewer[0] if reviewer else None,
         reviewer=reviewer[1] if reviewer else None,
         reason=raw.reason,
@@ -311,6 +317,7 @@ def _thread(raw: _RawThread) -> Thread:
         body=first.body if first else "",
         url=first.url if first else None,
         created_at=first.created_at if first else None,
+        comment_count=raw.comments.total_count,
     )
 
 

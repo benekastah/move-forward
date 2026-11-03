@@ -199,5 +199,8 @@ MIGRATIONS = [
     """
     ALTER TABLE github_people ADD COLUMN looked_up_at TEXT;  -- a lookup's time; NULL: before kept
     """,
+    """
+    ALTER TABLE github_pr_threads ADD COLUMN comment_count INTEGER NOT NULL DEFAULT 1;
+    """,
 ]
 """The github plugin's migrations."""

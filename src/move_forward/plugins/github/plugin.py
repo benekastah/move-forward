@@ -10,10 +10,11 @@ from pydantic import BaseModel
 
 from ...asking import Asker, InitSetup
 from ...graph import Entity, Graph, Ref, attrs
+from ...notifications import Event
 from ...page import Item, Panel
 from ...plugin import CliHandler, Context, Plugin, collect_into
 from ...shell import CommandError
-from . import cli, client, derive, notifications, placing, pushes
+from . import changes, cli, client, derive, notifications, placing, pushes
 from .config import GitHubConfig
 from .kinds import PersonAttrs, PrAttrs
 from .models import GitHubSnapshot, PullRequest
@@ -176,6 +177,13 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 return prs | {EVERYTHING}
             prs |= {f"{pr.repo}#{pr.number}" for pr in snapshot.mine if pr.repo.lower() in ci_repos}
         return prs
+
+    notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
+
+    def events(
+        self, ctx: Context[GitHubConfig], before: GitHubSnapshot, after: GitHubSnapshot
+    ) -> list[Event]:
+        return changes.changes(before, after)
 
     def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
         return PrRepository(ctx.db).load()

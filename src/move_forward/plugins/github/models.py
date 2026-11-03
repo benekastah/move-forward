@@ -25,6 +25,8 @@ class Thread(Model):
     body: str = ""
     url: str | None = None
     created_at: datetime | None = None
+    comment_count: int = 1
+    """Comments in the thread, the first included: a reply raises it."""
 
 
 class Review(Model):
@@ -38,7 +40,8 @@ class TimelineEvent(Model):
     """The GraphQL type, e.g. ReviewRequestedEvent or RemovedFromMergeQueueEvent."""
     at: datetime
     actor: str | None = None
-    """Who reviewed or commented, for PullRequestReview and IssueComment events."""
+    """Who reviewed or commented (PullRequestReview, IssueComment), or queued the PR
+    (AddedToMergeQueueEvent)."""
     reviewer_kind: Literal["user", "team"] | None = None
     reviewer: str | None = None
     """Login or team slug, for ReviewRequestedEvent."""

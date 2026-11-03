@@ -113,6 +113,7 @@ class PrRepository:
                         t.body,
                         t.url,
                         _iso(t.created_at),
+                        t.comment_count,
                     )
                     for i, t in enumerate(pr.threads)
                 ]
@@ -212,6 +213,7 @@ class PrRepository:
                             body=cast(str, r["body"]),
                             url=cast(str | None, r["comment_url"]),
                             created_at=_when(cast(str | None, r["created_at"])),
+                            comment_count=cast(int, r["comment_count"]),
                         )
                         for r in threads[key]
                     ],

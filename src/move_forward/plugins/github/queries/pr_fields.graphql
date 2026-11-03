@@ -32,7 +32,7 @@ fragment PrFields on PullRequest {
       isResolved
       isOutdated
       path
-      comments(first: 1) { nodes { author { login } body url createdAt } }
+      comments(first: 1) { totalCount nodes { author { login } body url createdAt } }
     }
   }
   commits(last: 1) {
@@ -52,12 +52,13 @@ fragment PrFields on PullRequest {
       }
     }
   }
-  timelineItems(last: 40, itemTypes: [REVIEW_REQUESTED_EVENT, HEAD_REF_FORCE_PUSHED_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT, PULL_REQUEST_REVIEW, ISSUE_COMMENT]) {
+  timelineItems(last: 40, itemTypes: [REVIEW_REQUESTED_EVENT, HEAD_REF_FORCE_PUSHED_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT, ADDED_TO_MERGE_QUEUE_EVENT, PULL_REQUEST_REVIEW, ISSUE_COMMENT]) {
     nodes {
       __typename
       ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Team { slug } } }
       ... on HeadRefForcePushedEvent { createdAt }
       ... on RemovedFromMergeQueueEvent { createdAt reason }
+      ... on AddedToMergeQueueEvent { createdAt enqueuer { login } }
       ... on PullRequestReview { createdAt author { login } }
       ... on IssueComment { createdAt author { login } }
     }

@@ -147,6 +147,15 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
     assert db.query("SELECT * FROM github_pr_files") == []  # gone with their PRs
 
 
+def test_a_threads_comment_count_is_kept() -> None:
+    thread = Thread(resolved=False, outdated=False, url="https://c/1", comment_count=4)
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    store = PrRepository(db)
+    store.replace(snapshot(mine=[pr(1, threads=[thread])]))
+    assert store.load() == snapshot(mine=[pr(1, threads=[thread])])
+
+
 def test_derived_data_moves_from_json_and_round_trips() -> None:
     derived = DerivedSnapshot(
         suggestions={
