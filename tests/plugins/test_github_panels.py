@@ -57,6 +57,14 @@ def test_reviews_for_me_includes_direct_requests_and_changed_prs() -> None:
     assert details["PR 2"][0].startswith("pushed")
 
 
+def test_act_now_does_not_suggest_reviewing_a_draft() -> None:
+    draft = pr(1, author="alice", is_draft=True)
+    ready = pr(2, author="bob")
+    dashboard = build(github=snapshot(direct_requests=[draft, ready]))
+    assert [i.title for i in dashboard.act_now()] == [f"Review: {ready.title}"]
+    assert len(panel(dashboard, "github.reviews_for_me").items) == 2
+
+
 def test_drafts_sort_last_in_every_panel() -> None:
     newest_draft = pr(1, author="alice", is_draft=True, updated_at=NOW)
     older = pr(2, author="alice", updated_at=NOW - timedelta(days=3))

@@ -95,9 +95,11 @@ def requested_of(pr: PullRequest, me: str) -> datetime | None:
 
 
 def _review(pr: PullRequest, me: str) -> Signals:
-    """Review it: its author waits, since my review was asked for."""
+    """Review it: its author waits, since my review was asked for. A draft isn't ready for
+    one, so Act now leaves it out; the panel still lists it, last."""
     return Signals(
         verb="Review",
+        blocked=pr.is_draft,
         effort=review_effort(pr),
         waiting=[pr.author] if pr.author else [],
         waiting_since=requested_of(pr, me),
