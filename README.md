@@ -67,6 +67,9 @@ the items shown), `per_plugin` (3, the most one plugin may fill) and `weights`
 `hour = 1`, `waiting = 2` (plus 1 for each doubling of the days they've waited),
 `importance = 3` per level (high, critical), and `due = 1` times the due date's
 pressure, 0 a week or more ahead and rising to 4 once it's past).
+A snooze lasts `default_snooze_days` (1: until tomorrow), or `snooze_days[<kind>]`
+for a kind of subject (`snooze_days = { pr = 7 }` snoozes a PR for a week),
+or until the item changes.
 
 Teams are named once, at the top level. A plugin that has its own idea of a
 team maps the names in a `teams` table of its section: `[github.teams]` gives

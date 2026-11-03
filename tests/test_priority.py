@@ -105,10 +105,11 @@ def test_finished_work_loses_its_priority() -> None:
     )
     repo = PriorityRepository(Database(":memory:"))
     gone_todo, gone_entry = TODO, Ref(kind="entry", id="gone")
-    for ref in (merged, open_pr, done_ticket, open_ticket, ENTRY, gone_todo, gone_entry):
+    branch = Ref(kind="branch", id="/r\tme/x")  # git's last refresh may have failed
+    for ref in (merged, open_pr, done_ticket, open_ticket, ENTRY, gone_todo, gone_entry, branch):
         repo.set(ref, 1, NOW)
     assert priority.forget_finished(repo, graph) == 4
-    assert set(repo.all()) == {open_pr, open_ticket, ENTRY}
+    assert set(repo.all()) == {open_pr, open_ticket, ENTRY, branch}
 
 
 def test_a_pr_the_graph_lacks_is_looked_up_and_kept_when_it_cannot_be_found() -> None:

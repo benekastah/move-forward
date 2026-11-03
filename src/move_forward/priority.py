@@ -57,7 +57,9 @@ def _finished(entity: Entity) -> bool:
 
 def forget_finished(repo: PriorityRepository, graph: Graph) -> int:
     """Clear the priorities of what's done, or gone: a merged or closed PR, a ticket in a done
-    status category, a todo ticked off, and an entry, todo or branch the graph no longer has.
+    status category, a todo ticked off, and an entry or todo the graph no longer has (notes
+    keeps them in the database, so they're only missing once they're gone; a branch can be
+    missing while git's last refresh failed, so its priority stays).
     A PR or ticket the graph lacks (long closed, or its tool is down) is looked up; one that
     can't be found keeps its priority. How many were cleared."""
     cleared = 0
@@ -71,7 +73,7 @@ def forget_finished(repo: PriorityRepository, graph: Graph) -> int:
             missing.setdefault(ref.kind, []).append(ref)
             continue
         else:
-            done = ref.kind in ("entry", TODO, "branch")
+            done = ref.kind in ("entry", TODO)
         if done:
             repo.clear(ref)
             cleared += 1

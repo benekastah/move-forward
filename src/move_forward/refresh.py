@@ -240,8 +240,9 @@ def _set_priority(db: Database, fields: dict[str, str], now: datetime) -> Action
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
-    """Act now's own buttons: snooze an item (for as long as `config` says), dismiss it, or pin or unpin it,
-    by its main subject and verb, and the items joined to it (`also`) alike."""
+    """Act now's own buttons: snooze an item (for as long as `config` says), dismiss it, or pin
+    or unpin it, by its main subject and verb, and the items joined to it (`also`) alike; and
+    set or clear the priority of its main subject."""
     now = datetime.now(UTC)
     if action == "priority":
         try:
