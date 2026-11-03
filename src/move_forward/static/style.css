@@ -261,3 +261,7 @@ button.small { padding: 1px 8px; font-size: 12px; }
 .settings td { padding: 6px 0; }
 .settings input[type='text'], .settings input[type='number'], .settings textarea { width: 100%; box-sizing: border-box; }
 .settings .help { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+
+/* The item a notification opened */
+li.item:target { animation: opened 2.5s ease-out; }
+@keyframes opened { from { background: color-mix(in srgb, #a78bfa 35%, transparent); } }

@@ -356,3 +356,8 @@ def test_the_page_after_an_action_has_an_anchor_where_its_item_was() -> None:
     assert at(("p", 1)).index(anchor) > at(("p", 1)).index(">a<")
     assert at(("p", 9)).index(anchor) > at(("p", 9)).index(">b<")  # its item was the last
     assert anchor not in at(("other", 0))
+
+
+def test_items_carry_their_anchor_for_notifications_to_open() -> None:
+    html = render.dashboard_page(_dashboard(), refreshing=frozenset())
+    assert re.search(r"<li class='item' id='item-pr-[^']+'", html)

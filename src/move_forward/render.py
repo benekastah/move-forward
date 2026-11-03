@@ -178,6 +178,29 @@ SPIN_SCRIPT = (
     "})();"
 )
 """Spins the tab's icon while a refresh runs; see inside."""
+NOTIFY_SCRIPT = (
+    # Shows the notifications the server has waiting (see `notifications`) once the browser
+    # has said yes, on load and every NOTIFY_SECONDS after. Asking is what takes them (they're
+    # kept until a page does), so with no permission it doesn't ask. Several tabs ask the same
+    # server, and a notification's `tag` makes a repeat replace the first. A click opens the
+    # dashboard at the item: this tab if it's one, which scrolls to it.
+    "(() => {"
+    " const NOTIFY_SECONDS = 15;"
+    " const poll = async () => {"
+    "  if (!('Notification' in window) || Notification.permission !== 'granted') return;"
+    "  try {"
+    "   const r = await fetch('/notifications', { method: 'POST', redirect: 'manual' });"
+    "   if (!r.ok) return;"
+    "   for (const n of await r.json()) {"
+    "    const note = new Notification(n.title, { body: n.body, tag: n.tag });"
+    "    note.onclick = () => { window.focus(); location.assign(n.url); note.close(); };"
+    "   }"
+    "  } catch (err) { /* the server may be restarting; the next poll tries again */ } };"
+    " document.addEventListener('DOMContentLoaded', poll);"
+    " setInterval(poll, NOTIFY_SECONDS * 1000);"
+    "})();"
+)
+"""Tells me of the events waiting on the server, as browser notifications; see inside."""
 FOCUS_KEYS_SCRIPT = (
     "document.addEventListener('keydown', (e) => {"
     " if (e.target.closest('input, textarea')) return;"
@@ -221,7 +244,7 @@ def _head(title: str, reload_seconds: int | None) -> str:
             f'<noscript><meta http-equiv="refresh" content="{reload_seconds}"></noscript>'
             f"<script>{OPEN_SECTIONS_SCRIPT}</script><script>{LAYOUT_SCRIPT}</script>"
             f"<script>{RELOAD_SCRIPT}</script><script>{PENDING_SCRIPT}</script>"
-            f"<script>{SPIN_SCRIPT}</script>"
+            f"<script>{SPIN_SCRIPT}</script><script>{NOTIFY_SCRIPT}</script>"
         )
         body = f"<body data-reload='{reload_seconds}'>"
     else:
@@ -330,8 +353,9 @@ def _item(item: Item, back: str = "", at: str = "", pos: int | None = None) -> s
         else _e(item.title)
     )
     pending = f" data-pending='{_e(item.pending)}'" if item.pending else ""
+    anchor = f" id='{_e(item.anchor)}'" if item.anchor else ""
     parts = [
-        f"<li class='item'{pending}><div class='item-head'>",
+        f"<li class='item'{anchor}{pending}><div class='item-head'>",
         f"<div class='item-title'>{title}</div>"
         + "".join(_link_action(a) for a in item.actions if a.href is not None)
         + "</div>",

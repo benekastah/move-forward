@@ -106,7 +106,19 @@ def _table(name: str, values: dict[str, object], optional: str = "") -> str:
     return text
 
 
-def render_config(answers: dict[str, object], sections: dict[str, dict[str, object]]) -> str:
+OPTIONAL_NOTIFICATION_SETTINGS = """\
+# [notifications]                       # browser notifications; none until you subscribe
+# subscribe = []                         # kinds, e.g. "dashboard.source_failing"; see the settings page
+# failing_minutes = 15                   # how long a plugin fails before `source_failing` says so
+# keep_hours = 24                        # events older than this are dropped untold
+"""
+
+
+def render_config(
+    answers: dict[str, object],
+    sections: dict[str, dict[str, object]],
+    subscribe: list[str] | None = None,
+) -> str:
     """The config file: the top-level `answers`, then a section per offered plugin, the
     chosen ones' with their `sections` values and the others commented out, each with its
     optional settings as comments."""
@@ -119,7 +131,10 @@ def render_config(answers: dict[str, object], sections: dict[str, dict[str, obje
         else:
             text += f"\n# [{plugin.name}]                      # uncomment to turn it on\n"
             text += plugin.init_example + plugin.init_template
-    return text + "\n" + OPTIONAL_ACT_NOW_SETTINGS
+    text += "\n" + OPTIONAL_ACT_NOW_SETTINGS + "\n"
+    if subscribe:
+        return text + _table("notifications", {"subscribe": subscribe})
+    return text + OPTIONAL_NOTIFICATION_SETTINGS
 
 
 def _plugins(answer: str) -> str:
@@ -132,6 +147,13 @@ def _plugins(answer: str) -> str:
         if missing := [r for r in by_name[name].requires if r not in chosen]:
             raise ValueError(f"{name} needs {', '.join(missing)} too")
     return ", ".join(chosen)
+
+
+def _kind(answer: str, kinds: dict[str, str]) -> str:
+    """A kind of event to subscribe to, or why it isn't one."""
+    if answer not in kinds:
+        raise ValueError(f"no notification {answer!r}; pick from {', '.join(kinds)}")
+    return answer
 
 
 def interview(prompt: Prompt, cwd: Path) -> str:
@@ -160,10 +182,17 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     port = ask(
         "Port for the local server (e.g. 8765)", str(config_module.DEFAULT_PORT), asking.port
     )
+    kinds = registry.notification_kinds_of([p.name for p in chosen])
+    subscribe = ask.list(
+        "Notifications to turn on, comma-separated (blank for none; the settings page lists them)",
+        [],
+        lambda kind: _kind(kind, kinds),
+        choices(list(kinds)),
+    )
     answers: dict[str, object] = {"email": setup.email, "teams": setup.teams}
     if port != str(config_module.DEFAULT_PORT):
         answers["port"] = int(port)
-    text = render_config(answers, sections)
+    text = render_config(answers, sections, subscribe)
     Config.model_validate(tomllib.loads(text))  # a bad answer fails here, before writing
     return text
 

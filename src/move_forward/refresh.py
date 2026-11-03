@@ -10,11 +10,12 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from . import act_now, localtime, panels, priority, shell
+from . import act_now, localtime, notifications, panels, priority, shell, tls
 from .act_now import Feedback
 from .config import Config
 from .db import Database
 from .graph import Graph, Ref
+from .notifications import NotificationRepository
 from .page import Action, Item, SourceStatus
 from .plugin import ActionError, ActionResult, collect_into
 from .prune import prune_if_due
@@ -36,11 +37,30 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
     return build_graph(plugins, snapshots), snapshots
 
 
+def _store(e: Enabled, snapshot: BaseModel, wanted: bool, now: datetime) -> None:
+    """Keep a plugin's new snapshot, and when I want its events, store what changed since the
+    last one (none for the first); a plugin that can't tell is logged, never stops the
+    refresh."""
+    before = e.plugin.load(e.ctx) if wanted else None
+    e.plugin.store(e.ctx, snapshot)
+    if before is None:
+        return
+    try:
+        events = e.plugin.events(e.ctx, before, snapshot)
+        NotificationRepository(e.ctx.db).add(e.name, events, now)
+    except Exception:
+        log.exception("%s: finding events failed", e.name)
+
+
 def _collect_all(
-    db: Database, plugins: list[Enabled], now: datetime, collect: Callable[[Enabled], BaseModel]
+    db: Database,
+    plugins: list[Enabled],
+    now: datetime,
+    collect: Callable[[Enabled], BaseModel],
+    subscribed: set[str],
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
-    plugin's `store`."""
+    plugin's `store`. `subscribed` are the kinds I want events of (see `notifications`)."""
     with ThreadPoolExecutor(max_workers=max(1, len(plugins))) as pool:
         for e in plugins:
             pool.submit(
@@ -49,8 +69,15 @@ def _collect_all(
                 e.name,
                 now,
                 lambda e=e: collect(e),
-                lambda snapshot, e=e: e.plugin.store(e.ctx, snapshot),
+                lambda snapshot, e=e: _store(e, snapshot, _wants(e, subscribed), now),
             )
+
+
+def _wants(e: Enabled, subscribed: set[str]) -> bool:
+    """Whether I've subscribed to any event the plugin makes."""
+    return any(
+        notifications.qualified(e.name, kind) in subscribed for kind in e.plugin.notification_kinds
+    )
 
 
 def refresh_seconds(e: Enabled) -> int | None:
@@ -101,15 +128,17 @@ def refresh(
     plugins = enabled(config, db, now)
     first, after = to_collect(plugins, only)
     collected = {e.name for e in first + after}
-    _collect_all(db, first, now, lambda e: e.plugin.collect(e.ctx))
+    subscribed = set(config.notifications.subscribe)
+    _collect_all(db, first, now, lambda e: e.plugin.collect(e.ctx), subscribed)
     if shell.stopping():
         return
     graph, _ = stored_graph(db, plugins)
     if after:
-        _collect_all(db, after, now, lambda e: e.plugin.collect_after(e.ctx, graph))
+        _collect_all(db, after, now, lambda e: e.plugin.collect_after(e.ctx, graph), subscribed)
         if shell.stopping():
             return
         graph, _ = stored_graph(db, plugins)
+    _dashboard_events(config, db, subscribed, now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
         if e.name not in collected and e.plugin.snapshot_model is not None:
@@ -118,6 +147,23 @@ def refresh(
             e.plugin.after_collect(e.ctx, graph)
         except Exception:
             log.exception("%s: after_collect failed", e.name)
+
+
+def _dashboard_events(config: Config, db: Database, subscribed: set[str], now: datetime) -> None:
+    """Store the events about the dashboard itself, those I've subscribed to."""
+    wanted = {k for k in notifications.DASHBOARD_KINDS if k in subscribed}
+    if not wanted:
+        return
+    try:
+        paths = tls.Paths.beside(config.db_path) if config.https else None
+        events = [
+            e
+            for e in notifications.dashboard_events(db, config.notifications, paths, now)
+            if notifications.qualified(notifications.DASHBOARD, e.kind) in wanted
+        ]
+        NotificationRepository(db).add(notifications.DASHBOARD, events, now)
+    except Exception:
+        log.exception("dashboard: finding events failed")
 
 
 def _prune_plugins(

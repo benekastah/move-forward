@@ -304,3 +304,29 @@ def test_teams_are_fetched_only_when_completion_asks() -> None:
     complete = asking.choices(teams)
     assert asked == []
     assert complete("") == ["a", "b"] and complete("b") == ["b"] and asked == [True]
+
+
+def test_notifications_are_off_unless_chosen(tmp_path: Path, no_machine_guesses: None) -> None:
+    off = tmp_path / "off.toml"
+    init.init(off, scripted({"Plugins": "git", "Teams": ""}), cwd=tmp_path)
+    assert config.load(off).notifications.subscribe == []
+    assert "# [notifications]" in off.read_text()
+    on = tmp_path / "on.toml"
+    answers: dict[str, str | list[str]] = {
+        "Plugins": "git",
+        "Teams": "",
+        "Notifications": "dashboard.source_failing",
+    }
+    init.init(on, scripted(answers), cwd=tmp_path)
+    assert config.load(on).notifications.subscribe == ["dashboard.source_failing"]
+
+
+def test_an_unknown_notification_is_asked_again(tmp_path: Path, no_machine_guesses: None) -> None:
+    path = tmp_path / "config.toml"
+    answers: dict[str, str | list[str]] = {
+        "Plugins": "git",
+        "Teams": "",
+        "Notifications": ["nope", "dashboard.certificate_ending"],
+    }
+    init.init(path, scripted(answers), cwd=tmp_path)
+    assert config.load(path).notifications.subscribe == ["dashboard.certificate_ending"]

@@ -92,3 +92,24 @@ def test_a_form_without_a_setting_leaves_it_alone(tmp_path: Path) -> None:
     path.write_text('email = "me@x"\nhttps = true\n\n[act_now]\nsize = 7\n')
     notice = settings.save(path, config_module.load(path), {"act_now:size": "5"})
     assert notice.startswith("saved act_now.size") and "https = true" in path.read_text()
+
+
+def test_ticked_notifications_are_saved_as_the_subscriptions(tmp_path: Path) -> None:
+    form = _form(**{"notify_form": "1", "notify:dashboard.source_failing": "on"})
+    notice, text = _saved(tmp_path, form)
+    assert "notifications.subscribe" in notice
+    assert tomllib.loads(text)["notifications"]["subscribe"] == ["dashboard.source_failing"]
+
+
+def test_a_form_without_the_checkboxes_leaves_the_subscriptions(tmp_path: Path) -> None:
+    notice, _ = _saved(tmp_path, _form())
+    assert notice == "nothing changed"
+
+
+def test_the_page_lists_the_kinds_with_the_subscribed_ticked() -> None:
+    config = config_module.Config.model_validate(
+        {"email": "me@x", "notifications": {"subscribe": ["dashboard.source_failing"]}}
+    )
+    html = settings.page(config)
+    assert "name='notify:dashboard.source_failing' checked" in html
+    assert "name='notify:dashboard.certificate_ending'>" in html

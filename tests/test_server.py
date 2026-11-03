@@ -1,5 +1,7 @@
+import json
 import threading
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPResponse
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -13,6 +15,7 @@ from move_forward import registry, server
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
+from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Action, Item
 from move_forward.panels import Layout
 from move_forward.plugin import KEPT, ActionError, ActionResult, Context, PageHandler
@@ -598,3 +601,12 @@ def test_the_settings_page_shows_and_saves_the_config(
     response = get(client, "/settings", {})  # without the token
     assert response.status == 401
     response.read()
+
+
+def test_notifications_are_told_once(app: server.App, client: HTTPConnection) -> None:
+    event = Event(kind="x", thing="pr:1", title="PR 1", text="can be merged", anchor="item-1")
+    NotificationRepository(app.db).add("github", [event], datetime.now(UTC))
+    response = post(client, "/notifications", {})
+    [told] = json.loads(response.read())
+    assert (told["title"], told["body"], told["url"]) == ("PR 1", "can be merged", "/#item-1")
+    assert json.loads(post(client, "/notifications", {}).read()) == []

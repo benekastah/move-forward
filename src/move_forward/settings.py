@@ -28,6 +28,13 @@ PATH = "/settings"
 Kind = Literal["int", "float", "bool", "text", "list"]
 LOCKED = {"db_path", "port", "https"}
 """Top-level settings shown but not changed here."""
+NOTIFICATIONS = "notifications"
+SUBSCRIBE = "subscribe"
+"""`[notifications]`'s list of kinds, shown as a checkbox each."""
+SUBSCRIBED_FORM = "notify_form"
+"""A hidden field that says the form has the checkboxes, so one left unticked means off."""
+NOTIFY_PREFIX = "notify:"
+"""A checkbox's name is this and the kind."""
 WEIGHTS = "weights"
 """`[act_now]`'s table of weights, shown a field per weight."""
 
@@ -81,7 +88,7 @@ def _fields(model: BaseModel, section: str | None, skip: set[str]) -> list[Setti
 def settings(config: Config) -> list[Setting]:
     """What the page shows: the top level's settings, `[act_now]`'s, then each enabled
     plugin's, in the order their models list them."""
-    sections = {p.name for p in registry.PLUGINS} | {"act_now"}
+    sections = {p.name for p in registry.PLUGINS} | {"act_now", NOTIFICATIONS}
     found = _fields(config, None, sections)
     act_now = config.act_now
     found += _fields(act_now, "act_now", {WEIGHTS})
@@ -89,6 +96,7 @@ def settings(config: Config) -> list[Setting]:
         Setting("act_now", f"{WEIGHTS}.{s.key}", s.kind, s.value, s.help)
         for s in _fields(act_now.weights, "act_now", set())
     ]
+    found += _fields(config.notifications, NOTIFICATIONS, {SUBSCRIBE})
     for plugin in registry.PLUGINS:
         section = cast(BaseModel | None, getattr(config, plugin.name, None))
         if section is not None:
@@ -139,6 +147,9 @@ def save(path: Path, config: Config, form: dict[str, str]) -> str:
             weights[setting.key.removeprefix(f"{WEIGHTS}.")] = new
         if _comparable(new) != _comparable(setting.value):
             changes[(setting.section, setting.key)] = new
+    subscribed = _subscribed(config, form)
+    if subscribed != config.notifications.subscribe:
+        changes[(NOTIFICATIONS, SUBSCRIBE)] = subscribed
     if not changes:
         return "nothing changed"
     text = path.read_text()
@@ -157,6 +168,18 @@ def save(path: Path, config: Config, form: dict[str, str]) -> str:
     _write(path, text)
     names = ", ".join(f"{s}.{k}" if s else k for s, k in changes)
     return f"saved {names}; the dashboard restarts with them"
+
+
+def _subscribed(config: Config, form: dict[str, str]) -> list[str]:
+    """The kinds ticked on the form, in the order the page lists them; a form without the
+    checkboxes leaves the subscriptions as they are."""
+    current = config.notifications.subscribe
+    if SUBSCRIBED_FORM not in form:
+        return current
+    kinds = registry.notification_kinds(config)
+    ticked = [kind for kind in kinds if form.get(f"{NOTIFY_PREFIX}{kind}") == "on"]
+    # A kind of a plugin that isn't enabled isn't on the form, and stays as it was.
+    return ticked + [kind for kind in current if kind not in kinds]
 
 
 def _write(path: Path, text: str) -> None:
@@ -189,6 +212,43 @@ def _input(setting: Setting) -> str:
     return f"<input type='{kind}' name='{e(setting.name)}' value='{e(setting.value)}'{disabled}>"
 
 
+ENABLE_SCRIPT = (
+    "<script>(() => {"
+    " const button = document.getElementById('allow-notifications');"
+    " const say = document.getElementById('notification-permission');"
+    " const show = () => { say.textContent = 'Notification' in window"
+    "  ? `The browser says: ${Notification.permission}.` : 'This browser has no notifications.'; };"
+    " button.addEventListener('click', async () => {"
+    "  if ('Notification' in window) await Notification.requestPermission(); show(); });"
+    " show(); })();</script>"
+)
+
+
+def _notifications(config: Config) -> str:
+    """The notifications section: the browser's permission, and a checkbox per kind of event,
+    grouped by where it comes from."""
+    e = render.e
+    subscribed = set(config.notifications.subscribe)
+    groups: dict[str, list[str]] = {}
+    for kind, says in registry.notification_kinds(config).items():
+        group, _, name = kind.partition(".")
+        checked = " checked" if kind in subscribed else ""
+        groups.setdefault(group, []).append(
+            f"<li><label><input type='checkbox' name='{e(NOTIFY_PREFIX + kind)}'{checked}>"
+            f" {e(name)}</label> <span class='help'>{e(says)}</span></li>"
+        )
+    lists = "".join(
+        f"<h3>{e(group)}</h3><ul>{''.join(rows)}</ul>" for group, rows in groups.items()
+    )
+    return (
+        "<h2>Notifications</h2><p>Shown by the browser while a dashboard tab is open, and"
+        " when you open one, for what happened while none was. None are on until ticked."
+        " <button type='button' id='allow-notifications'>Allow in this browser</button>"
+        " <span id='notification-permission' class='help'></span></p>"
+        f"<input type='hidden' name='{SUBSCRIBED_FORM}' value='1'>{lists}"
+    )
+
+
 def page(config: Config, notice: str = "") -> str:
     """The form, a table of settings per section."""
     e = render.e
@@ -209,7 +269,7 @@ def page(config: Config, notice: str = "") -> str:
         + "<article class='panel padded settings'>"
         "<p>Saving writes the config file, keeping its comments, and the dashboard restarts"
         " with it. Tables like <code>[github.teams]</code> are edited in the file.</p>"
-        f"<form method='post' action='{PATH}'>{tables}"
-        "<p><button type='submit'>Save</button></p></form></article>"
+        f"<form method='post' action='{PATH}'>{tables}{_notifications(config)}"
+        f"<p><button type='submit'>Save</button></p></form>{ENABLE_SCRIPT}</article>"
     )
     return render.page("Settings", "settings", body)

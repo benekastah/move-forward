@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
-from . import act_now, tls
+from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
 from .graph import Entity, Graph, Ref
 from .plugin import Context, Plugin, SourceError
@@ -85,6 +85,22 @@ def unmet_requirements(config: "Config") -> list[str]:
         for required in p.requires
         if required not in names
     ]
+
+
+def notification_kinds(config: "Config | None" = None) -> dict[str, str]:
+    """Every kind of event I can subscribe to, with what it says: the dashboard's, and those
+    of the plugins `config` enables (every plugin's without one)."""
+    names = None if config is None else set(enabled_names(config))
+    return notifications.available(
+        {p.name: p.notification_kinds for p in PLUGINS if names is None or p.name in names}
+    )
+
+
+def notification_kinds_of(plugin_names: list[str]) -> dict[str, str]:
+    """`notification_kinds` for the plugins named, e.g. those `mfd init` is setting up."""
+    return notifications.available(
+        {p.name: p.notification_kinds for p in PLUGINS if p.name in plugin_names}
+    )
 
 
 def migrate(config: "Config", db: Database) -> None:

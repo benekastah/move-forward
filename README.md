@@ -178,6 +178,26 @@ and nothing is written. `mfd serve` then restarts with it, as it does whenever t
 changes. Tables such as `[github.teams]` are edited in the file, and `db_path`, `port` and
 `https` aren't changed here, since changing them moves the server.
 
+## Notifications
+
+The dashboard can tell you in the browser when something changes: a PR becomes mergeable,
+a plugin can't fetch, the certificates are ending. Nothing is on until you subscribe, by
+ticking kinds of events under Notifications on `/settings`, answering `mfd init`'s
+question, or listing them in `[notifications] subscribe` (for example
+`["dashboard.source_failing"]`). Press "Allow in this browser" on the settings page once.
+
+- Each plugin compares what it fetched with what it fetched last time (`Plugin.events`),
+  so the first fetch never notifies, and only a change does. Events of kinds you haven't
+  subscribed to are never stored.
+- Events wait on the server until a dashboard tab asks for them, every 15 seconds and on
+  load, so ones from while no tab was open are told when you open one. Events older than
+  `keep_hours` (24) are dropped.
+- Events about the same thing, say one PR's CI failing and a new push, come as one
+  notification. Clicking one opens the dashboard at the item, which is highlighted.
+- `dashboard.source_failing`: a plugin has failed to fetch for `failing_minutes` (15), said
+  once until it works again. `dashboard.certificate_ending`: with `https` on, the
+  certificates have ended or are about to; said once for each problem.
+
 ## Focus mode
 
 The Focus button in the header opens a list of categories: All, each group

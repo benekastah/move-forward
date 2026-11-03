@@ -3,6 +3,7 @@
 Core and every plugin build these; `render` turns them into HTML.
 """
 
+import re
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -10,6 +11,15 @@ from pydantic import Field
 
 from .domain import Model
 from .graph import Ref
+
+ANCHOR_PREFIX = "item-"
+
+
+def anchor(kind: str, id: str) -> str:
+    """The id of the item about an entity (its main subject) on the page, e.g. `item-pr-acme-
+    widgets-12`: a link to `/#<id>` opens the dashboard at it."""
+    return ANCHOR_PREFIX + re.sub(r"[^A-Za-z0-9_-]+", "-", f"{kind}-{id}").strip("-")
+
 
 PrState = Literal["open", "merged", "closed"]
 
@@ -109,6 +119,11 @@ class Item(Model):
     """Pieces focus mode shows one at a time instead of this item, e.g. a work item's todos.
 
     The dashboard shows this item as is, so the parts should also appear in `details`."""
+
+    @property
+    def anchor(self) -> str | None:
+        """The id the page gives the item, from its main subject; None without one."""
+        return anchor(self.subjects[0].kind, self.subjects[0].id) if self.subjects else None
 
     def subject(self, kind: str) -> Ref | None:
         """The item's subject of `kind`, e.g. "pr", if it has one."""

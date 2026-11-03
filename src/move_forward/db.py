@@ -163,6 +163,20 @@ ALTER TABLE act_now_feedback_new RENAME TO act_now_feedback;
 """
 """Lets Act now's feedback say an item was acted on elsewhere."""
 
+_V9_NOTIFICATIONS = """
+CREATE TABLE notifications (           -- kept for `keep_hours`: events waiting for a page
+    id INTEGER PRIMARY KEY AUTOINCREMENT,   -- to tell me of them
+    kind TEXT NOT NULL,                -- `<plugin>.<kind>`
+    thing TEXT NOT NULL,               -- what it happened to; one notification per thing
+    title TEXT NOT NULL,
+    text TEXT NOT NULL,
+    anchor TEXT NOT NULL,              -- the item's id on the page, or ''
+    created_at TEXT NOT NULL,
+    told_at TEXT
+);
+"""
+"""Browser notifications' events, until a dashboard tab has shown them."""
+
 CORE_MIGRATIONS = [
     V1_SCHEMA,
     _V2_KV_AND_LAYOUT,
@@ -172,6 +186,7 @@ CORE_MIGRATIONS = [
     _V6_NO_SNAPSHOT_JSON,
     _V7_PRIORITIES,
     _V8_PENDING_FEEDBACK,
+    _V9_NOTIFICATIONS,
 ]
 
 _SCHEMA_VERSIONS = """

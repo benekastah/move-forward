@@ -119,6 +119,13 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - A plugin that needs other plugins' entities to know what to fetch sets
   `collects_after_graph = True` and implements `collect_after(ctx, graph)` instead (see
   git_stack).
+- `notification_kinds` and `events(ctx, before, after)` make browser notifications: when
+  the user has subscribed to one of the kinds (`<plugin>.<kind>`), `events` gets the last
+  good snapshot and the one just collected, and returns an `Event` for what changed: its
+  `thing` (events with the same one are told together), `title`, `text`, and `anchor` (an
+  item's `page.anchor(kind, id)`, to open the dashboard at it). Say it on a change of state,
+  not while it holds, and nothing about what `before` has no state for. A failure is
+  logged and the refresh goes on.
 - `after_collect(ctx, graph)` runs after every refresh, for work that needs the graph and
   writes the plugin's tables, e.g. notes finding what its ice covers.
 

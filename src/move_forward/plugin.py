@@ -21,6 +21,7 @@ from . import localtime, shell
 from .asking import Asker, InitSetup
 from .db import Database
 from .graph import Entity, Graph
+from .notifications import Event
 from .page import Action, Item, Panel
 from .repositories import KvRepository, SnapshotRepository
 
@@ -144,6 +145,20 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """What the last good collect kept, for `entities` and `panels`; None when there's
         nothing (no snapshot model, say)."""
         return None
+
+    notification_kinds: ClassVar[dict[str, str]] = {}
+    """The events the plugin's `events` makes, by kind, each with what it says, for the
+    settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
+    `github.pr_mergeable`."""
+
+    def events(self, ctx: Context[C], before: S, after: S) -> list[Event]:
+        """What happened between the last good snapshot (`before`) and the one just collected
+        (`after`), as events of its `notification_kinds`; only asked when I've subscribed to
+        one of them, and never for the first snapshot, which has nothing to compare with.
+        Say it only when the state changed (not mergeable to mergeable), and never about
+        something new in `after` that `before` hasn't any state for. A failure is logged and
+        the refresh goes on."""
+        return []
 
     def collect_after(self, ctx: Context[C], graph: Graph) -> S:
         """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the

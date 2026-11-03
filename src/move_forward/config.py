@@ -13,6 +13,7 @@ from pydantic import Field, field_validator, model_validator
 from . import registry
 from .act_now import ActNowConfig
 from .db import DEFAULT_KEEP_BACKUPS
+from .notifications import NotificationsConfig
 from .plugins.git.config import GitConfig
 from .plugins.git_stack.config import GitStackConfig
 from .plugins.github.config import GitHubConfig
@@ -68,6 +69,8 @@ class Config(Strict):
     the notes, and old pings from the database, by a daily job."""
     act_now: ActNowConfig = Field(default_factory=ActNowConfig)
     """`[act_now]`: how core ranks what the plugins nominate for Act now."""
+    notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
+    """`[notifications]`: which events to be told of in the browser; none until subscribed."""
     github: GitHubConfig | None = None
     git: GitConfig | None = None
     git_stack: GitStackConfig | None = None
@@ -108,6 +111,15 @@ class Config(Strict):
                 raise ValueError(
                     f"[{name}.teams] has {', '.join(unknown)}, which the top-level teams don't"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _known_notifications(self) -> "Config":
+        """`[notifications] subscribe` names only kinds that exist."""
+        known = registry.notification_kinds()
+        bad = [kind for kind in self.notifications.subscribe if kind not in known]
+        if bad:
+            raise ValueError(f"[notifications] subscribe has {', '.join(bad)}: no such kind")
         return self
 
     @model_validator(mode="after")

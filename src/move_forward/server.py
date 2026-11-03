@@ -1,12 +1,13 @@
 """The local HTTP server: server-rendered pages, a few form endpoints, and a background refresh."""
 
+import json
 import logging
 import re
 import ssl
 import threading
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
@@ -19,6 +20,7 @@ from . import act_now, auth, render, settings, shell, tls
 from .config import Config
 from .db import Database
 from .graph import Graph
+from .notifications import NotificationRepository
 from .panels import Layout
 from .plugin import KEPT, ActionError
 from .refresh import (
@@ -51,6 +53,7 @@ CHANGE_LOOP_SECONDS = 1.0
 TLS_RECHECK_SECONDS = 3600
 """How often the HTTPS server looks for a newer certificate in the chain."""
 LOGIN_PATH = "/login"
+NOTIFICATIONS_PATH = "/notifications"
 NOT_SIGNED_IN = "<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
 LOCAL_HOSTS = ("127.0.0.1", "localhost")
 """Names the page is served under. A request naming any other host is refused, which stops a
@@ -305,6 +308,13 @@ class App:
             self.request_refresh()
         return result.notice, result.params
 
+    def take_notifications(self) -> str:
+        """The events waiting to be told, as the JSON list of notifications the page shows
+        (see `notifications`); they're marked told."""
+        keep = timedelta(hours=self.config.notifications.keep_hours)
+        found = NotificationRepository(self.db).take(datetime.now(UTC), keep)
+        return json.dumps([n.model_dump() for n in found])
+
     def sign_in_pages(self) -> set[str]:
         """The enabled plugins' pages a tool's sign-in returns to (`Plugin.sign_in_pages`)."""
         plugins = enabled(self.config, self.db, datetime.now(UTC))
@@ -532,6 +542,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     self._html(HTTPStatus.BAD_REQUEST, "<p>No such plugin to refresh.</p>")
                     return
                 self._redirect(_back_to_page(url.query))
+            elif url.path == NOTIFICATIONS_PATH:
+                self._send(HTTPStatus.OK, app.take_notifications(), "application/json")
             elif url.path == "/layout":
                 try:
                     layout = Layout.model_validate_json(body)
