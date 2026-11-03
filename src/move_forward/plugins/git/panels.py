@@ -221,7 +221,7 @@ class Builder:
                                 confirm=f"Delete local branch {b.name}?",
                             )
                         ],
-                        subjects=[merged.subject] if merged else [],
+                        subjects=[merged.subject if merged else branch_ref(repo.dir, b.name)],
                     )
                 )
         actions = (

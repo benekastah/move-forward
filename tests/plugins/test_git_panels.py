@@ -100,7 +100,9 @@ def test_cleanup_lists_merged_and_gone_branches() -> None:
         "me/done: PR merged 1d ago",
         "me/gone: upstream gone",
     ]
-    assert [a.fields for item in cleanup.items for a in item.actions] == [
+    assert [
+        a.fields for item in cleanup.items for a in item.actions if a.name == "git/delete_branch"
+    ] == [
         {"repo": "/src/widgets", "branch": "me/done"},
         {"repo": "/src/widgets", "branch": "me/gone"},
     ]
@@ -267,3 +269,11 @@ def test_a_checkout_of_a_pr_that_moved_on_github_is_shown_without_fetching() -> 
         ),
     )
     assert titles(unpushed, "git.local_work") == ["me/APP-8-fix: 1 unpushed commits"]
+
+
+def test_a_gone_branch_has_a_subject_so_deleting_it_can_hide_its_act_now_item() -> None:
+    local = local_snapshot(branches=[local_branch("me/gone", upstream="origin/me/gone", gone=True)])
+    dashboard = build(github=snapshot(), local=local)
+    act = panel(dashboard, "act.git")
+    delete = next(a for a in act.items[0].actions if a.name == "git/delete_branch")
+    assert "pending" in delete.fields
