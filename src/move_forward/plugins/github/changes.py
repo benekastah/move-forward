@@ -21,7 +21,8 @@ KINDS = {
     "merge_queue_added": "someone else adds my PR to the merge queue",
     "merge_queue_removed": "my PR leaves the merge queue without merging",
     "thread_reply": "a review thread on my PR or one I reviewed gets a reply",
-    "review_requested": "a review is requested of me or my team",
+    "review_requested_me": "a review is requested of me",
+    "review_requested_team": "a review is requested of my team",
     "new_push": "new code is pushed to a PR I reviewed",
     "author_replied": "the author comments on a PR I reviewed",
 }
@@ -175,8 +176,8 @@ def changes(before: GitHubSnapshot, after: GitHubSnapshot) -> list[Event]:
     asked = {pr.url for pr in (*before.direct_requests, *before.team_requests)}
     for pr in after.direct_requests:
         if pr.url not in asked and not pr.is_draft:
-            found.append(_event(pr, "review_requested", "review requested of you"))
+            found.append(_event(pr, "review_requested_me", "review requested of you"))
     for pr in after.team_requests:
         if pr.url not in asked and not pr.is_draft:
-            found.append(_event(pr, "review_requested", "review requested of your team"))
+            found.append(_event(pr, "review_requested_team", "review requested of your team"))
     return found

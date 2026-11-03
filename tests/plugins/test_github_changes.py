@@ -124,16 +124,16 @@ def test_a_reply_in_a_known_thread_is_said_but_a_new_thread_is_not_a_reply() -> 
 def test_a_review_request_is_said_when_new_or_asked_again() -> None:
     theirs = pr(7, author="alice", requested_users=[ME])
     assert _kinds(snapshot(), snapshot(direct_requests=[theirs])) == [
-        ("review_requested", "review requested of you")
+        ("review_requested_me", "review requested of you")
     ]
     assert _kinds(snapshot(direct_requests=[theirs]), snapshot(direct_requests=[theirs])) == []
     team = pr(8, author="alice")
     assert _kinds(snapshot(), snapshot(team_requests=[team])) == [
-        ("review_requested", "review requested of your team")
+        ("review_requested_team", "review requested of your team")
     ]
     # reviewed before, then asked again
     assert _kinds(snapshot(reviewed_by_me=[theirs]), snapshot(direct_requests=[theirs])) == [
-        ("review_requested", "review requested of you")
+        ("review_requested_me", "review requested of you")
     ]
 
 
