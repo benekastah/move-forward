@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import date, datetime
 
 from ...db import Database
-from .models import JiraIssue, JiraSnapshot
+from .models import JiraComment, JiraIssue, JiraSnapshot
 
 MIGRATIONS = [
     """
@@ -67,6 +67,18 @@ MIGRATIONS = [
     """
     ALTER TABLE jira_issues ADD COLUMN due TEXT;  -- its due date, YYYY-MM-DD; NULL: none
     """,
+    """
+    CREATE TABLE jira_issue_comments ( -- fetched: the latest comments, oldest first
+        key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        id TEXT NOT NULL,
+        author TEXT NOT NULL,
+        created TEXT NOT NULL,
+        mine INTEGER NOT NULL,
+        mentions_me INTEGER NOT NULL,
+        PRIMARY KEY (key, position)
+    );
+    """,
 ]
 """The jira plugin's migrations."""
 
@@ -125,6 +137,14 @@ class IssueRepository:
                 "INSERT INTO jira_issue_blockers VALUES (?, ?, ?)",
                 [(i.key, n, key) for i in issues for n, key in enumerate(i.open_blockers)],
             )
+            conn.executemany(
+                "INSERT INTO jira_issue_comments VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (i.key, n, c.id, c.author, c.created.isoformat(), c.mine, c.mentions_me)
+                    for i in issues
+                    for n, c in enumerate(i.comments)
+                ],
+            )
             _remember(conn, [i.key for i in issues])
 
     def remember_projects(self, keys: list[str]) -> None:
@@ -143,6 +163,17 @@ class IssueRepository:
         blockers: defaultdict[str, list[str]] = defaultdict(list)
         for row in self._db.query("SELECT * FROM jira_issue_blockers ORDER BY key, position"):
             blockers[row["key"]].append(row["blocker"])
+        comments: defaultdict[str, list[JiraComment]] = defaultdict(list)
+        for row in self._db.query("SELECT * FROM jira_issue_comments ORDER BY key, position"):
+            comments[row["key"]].append(
+                JiraComment(
+                    id=row["id"],
+                    author=row["author"],
+                    created=datetime.fromisoformat(row["created"]),
+                    mine=bool(row["mine"]),
+                    mentions_me=bool(row["mentions_me"]),
+                )
+            )
         return JiraSnapshot(
             issues=[
                 JiraIssue(
@@ -160,6 +191,7 @@ class IssueRepository:
                     resolved=datetime.fromisoformat(row["resolved"]) if row["resolved"] else None,
                     url=row["url"],
                     due=date.fromisoformat(row["due"]) if row["due"] else None,
+                    comments=comments[row["key"]],
                 )
                 for row in self._db.query("SELECT * FROM jira_issues ORDER BY position")
             ]

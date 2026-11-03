@@ -2,6 +2,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, date, datetime
 from email.message import Message
+from typing import cast
 
 import pytest
 from legacy import save_json_snapshot
@@ -292,3 +293,49 @@ def test_a_ticket_that_cant_go_there_says_where_it_can(monkeypatch: pytest.Monke
     with pytest.raises(LookupError, match="can't move to In Review; it can go to: Done"):
         jira.transition(CONFIG, "me@x.com", "APP-1", "In Review")
     assert len(sent) == 1  # nothing was changed
+
+
+def _comment_json(id: str, account: str, body: object) -> dict[str, object]:
+    return {
+        "id": id,
+        "author": {"accountId": account, "displayName": f"User {account}"},
+        "created": "2026-10-20T10:00:00.000+0000",
+        "body": body,
+    }
+
+
+def test_comments_tell_mine_from_others_and_find_mentions_of_me() -> None:
+    mention = {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{"type": "mention", "attrs": {"id": "me-id", "text": "@me"}}],
+            }
+        ],
+    }
+    other_mention = {"type": "mention", "attrs": {"id": "someone-else"}}
+    fields = dict(cast(dict[str, object], RAW["fields"]))
+    fields["comment"] = {
+        "comments": [
+            _comment_json("1", "me-id", "mine"),
+            _comment_json("2", "bob", mention),
+            _comment_json("3", "bob", other_mention),
+        ]
+    }
+    raw = jira.RawIssue.model_validate({**RAW, "fields": fields})
+    issue = jira.to_issue(raw, "https://jira", "me-id")
+    assert [(c.id, c.mine, c.mentions_me) for c in issue.comments] == [
+        ("1", True, False),
+        ("2", False, True),
+        ("3", False, False),
+    ]
+    assert jira.to_issue(raw, "https://jira").comments[0].mine is False  # account unknown
+
+
+def test_only_the_latest_comments_are_kept() -> None:
+    fields = dict(cast(dict[str, object], RAW["fields"]))
+    fields["comment"] = {"comments": [_comment_json(str(n), "bob", "x") for n in range(30)]}
+    raw = jira.RawIssue.model_validate({**RAW, "fields": fields})
+    kept = jira.to_issue(raw, "https://jira").comments
+    assert [c.id for c in kept] == [str(n) for n in range(20, 30)]

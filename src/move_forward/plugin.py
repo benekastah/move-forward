@@ -160,6 +160,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
         the refresh goes on."""
         return []
 
+    def graph_events(self, ctx: Context[C], graph: Graph) -> list[Event]:
+        """Events from what other plugins' entities say, e.g. a ticket's PRs all merged,
+        asked after every refresh of anything, when I've subscribed to one of its kinds.
+        Nothing compares snapshots for it: keep what was said in `ctx.kv` and say a thing
+        once, and keep it without saying anything the first time asked."""
+        return []
+
     def collect_after(self, ctx: Context[C], graph: Graph) -> S:
         """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
         repos git found. Runs once their snapshots are stored, in parallel with other

@@ -1,5 +1,6 @@
 """The Jira plugin: my open tickets, the status changes their PRs suggest, and what's next."""
 
+import json
 import math
 import re
 from datetime import date, datetime, time, timedelta
@@ -12,9 +13,10 @@ from ...act_now import due_pressure
 from ...asking import Asker, InitSetup
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
+from ...notifications import Event
 from ...page import Action, Item, Link, Panel, Signals, age
 from ...plugin import ActionHandler, Context, Plugin
-from . import actions, client
+from . import actions, changes, client
 from .config import JiraConfig
 from .kinds import TicketAttrs
 from .models import JiraIssue, JiraSnapshot
@@ -23,6 +25,8 @@ from .setup import EXAMPLE, TEMPLATE, questions
 
 TICKET = "ticket"
 PR = "pr"
+CLOSEABLE = "closeable"
+"""The kv key of the tickets already said to be closeable."""
 CHECKED = "changes_checked_at"
 """The kv key of when `changed` last looked."""
 
@@ -200,6 +204,32 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
     linking: ClassVar[dict[str, str | None]] = {TICKET: None}
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
+
+    notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
+
+    def events(
+        self, ctx: Context[JiraConfig], before: JiraSnapshot, after: JiraSnapshot
+    ) -> list[Event]:
+        return changes.changes(ctx.config, before, after)
+
+    def graph_events(self, ctx: Context[JiraConfig], graph: Graph) -> list[Event]:
+        """`closeable`: a ticket the transitions panel now proposes closing (its PRs are
+        merged), once. The first time only keeps what's there."""
+        snapshot = self.load(ctx) or JiraSnapshot(issues=[])
+        issues = {i.key: i for i in snapshot.issues}
+        closing = {
+            item.actions[0].fields["key"]
+            for item in transitions(
+                ctx.config, JiraSnapshot(issues=list(issues.values())), graph
+            ).items
+            if item.actions and item.actions[0].fields.get("to") == ctx.config.status_closed
+        }
+        said = ctx.kv.get(CLOSEABLE)
+        ctx.kv.set(CLOSEABLE, json.dumps(sorted(closing)))
+        if said is None:
+            return []
+        known = set(json.loads(said))
+        return [changes.closeable(issues[key]) for key in sorted(closing - known) if key in issues]
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS

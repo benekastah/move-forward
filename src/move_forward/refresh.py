@@ -13,15 +13,16 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from . import act_now, localtime, notifications, panels, priority, shell, tls
 from .act_now import Feedback
 from .config import Config
-from .db import Database
+from .db import CORE, Database
 from .graph import Graph, Ref
-from .notifications import NotificationRepository
+from .notifications import Event, NotificationRepository
 from .page import Action, Item, SourceStatus
 from .plugin import ActionError, ActionResult, collect_into
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, enabled
 from .repositories import (
     FeedbackRepository,
+    KvRepository,
     LayoutRepository,
     PriorityRepository,
     SnapshotRepository,
@@ -37,19 +38,30 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
     return build_graph(plugins, snapshots), snapshots
 
 
-def _store(e: Enabled, snapshot: BaseModel, wanted: bool, now: datetime) -> None:
-    """Keep a plugin's new snapshot, and when I want its events, store what changed since the
-    last one (none for the first); a plugin that can't tell is logged, never stops the
-    refresh."""
-    before = e.plugin.load(e.ctx) if wanted else None
+def _store(e: Enabled, snapshot: BaseModel, subscribed: set[str], now: datetime) -> None:
+    """Keep a plugin's new snapshot and, when I've subscribed to any of its events, store
+    those I subscribed to that changed since the last one. The first snapshot has nothing to
+    compare with, so it makes none (core's kv remembers that it has been stored). A plugin
+    that can't tell is logged, and never stops the refresh."""
+    wanted = _wants(e, subscribed)
+    kv = KvRepository(e.ctx.db, CORE)
+    key = f"stored:{e.name}"
+    before = e.plugin.load(e.ctx) if wanted and kv.get(key) else None
     e.plugin.store(e.ctx, snapshot)
+    kv.set(key, "1")
     if before is None:
         return
     try:
         events = e.plugin.events(e.ctx, before, snapshot)
-        NotificationRepository(e.ctx.db).add(e.name, events, now)
+        _keep(e, events, subscribed, now)
     except Exception:
         log.exception("%s: finding events failed", e.name)
+
+
+def _keep(e: Enabled, events: list[Event], subscribed: set[str], now: datetime) -> None:
+    """Store a plugin's events of the kinds I've subscribed to."""
+    wanted = [ev for ev in events if notifications.qualified(e.name, ev.kind) in subscribed]
+    NotificationRepository(e.ctx.db).add(e.name, wanted, now)
 
 
 def _collect_all(
@@ -69,7 +81,7 @@ def _collect_all(
                 e.name,
                 now,
                 lambda e=e: collect(e),
-                lambda snapshot, e=e: _store(e, snapshot, _wants(e, subscribed), now),
+                lambda snapshot, e=e: _store(e, snapshot, subscribed, now),
             )
 
 
@@ -138,6 +150,7 @@ def refresh(
         if shell.stopping():
             return
         graph, _ = stored_graph(db, plugins)
+    _graph_events(plugins, graph, subscribed, now)
     _dashboard_events(config, db, subscribed, now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
@@ -147,6 +160,20 @@ def refresh(
             e.plugin.after_collect(e.ctx, graph)
         except Exception:
             log.exception("%s: after_collect failed", e.name)
+
+
+def _graph_events(
+    plugins: list[Enabled], graph: Graph, subscribed: set[str], now: datetime
+) -> None:
+    """Store the events plugins make from the graph (`Plugin.graph_events`), for those I've
+    subscribed to some of."""
+    for e in plugins:
+        if not _wants(e, subscribed):
+            continue
+        try:
+            _keep(e, e.plugin.graph_events(e.ctx, graph), subscribed, now)
+        except Exception:
+            log.exception("%s: finding events from the graph failed", e.name)
 
 
 def _dashboard_events(config: Config, db: Database, subscribed: set[str], now: datetime) -> None:

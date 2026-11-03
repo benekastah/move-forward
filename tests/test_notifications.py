@@ -175,3 +175,21 @@ def test_the_dashboards_own_events_are_stored_when_subscribed(tmp_path: Path) ->
     refresh.refresh(config, db, NOW + timedelta(minutes=2))
     [n] = NotificationRepository(db).take(NOW + timedelta(minutes=2), KEEP)
     assert n.tag == "source:github"
+
+
+@pytest.mark.usefixtures("git")
+def test_only_the_subscribed_kinds_of_a_plugin_are_stored(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        _Git,
+        "notification_kinds",
+        {"changed": "the snapshot changed", "other": "something else"},
+    )
+
+    def both(*_args: object) -> list[Event]:
+        return [
+            Event(kind="changed", thing="a", title="A", text="changed"),
+            Event(kind="other", thing="b", title="B", text="other"),
+        ]
+
+    monkeypatch.setattr(_Git, "events", both)
+    assert [n.tag for n in _run(["git.changed"]).take(NOW, KEEP)] == ["a"]

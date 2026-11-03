@@ -7,13 +7,14 @@ import urllib.error
 import urllib.request
 from datetime import date, datetime
 from http import HTTPStatus
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ... import https, keychain
 from ...plugin import SourceError
 from .config import JiraConfig
-from .models import JiraIssue, JiraSnapshot
+from .models import MAX_COMMENTS, JiraComment, JiraIssue, JiraSnapshot
 
 SEARCH_PATH = "/rest/api/3/search/jql"
 MYSELF_PATH = "/rest/api/3/myself"
@@ -32,6 +33,7 @@ FIELDS = [
     "issuelinks",
     "resolutiondate",
     "duedate",
+    "comment",
 ]
 
 
@@ -71,6 +73,22 @@ class _IssueLink(_Raw):
     inward_issue: _LinkedIssue | None = Field(default=None, alias="inwardIssue")
 
 
+class _Author(_Raw):
+    account_id: str | None = Field(default=None, alias="accountId")
+    display_name: str = Field(default="someone", alias="displayName")
+
+
+class _RawComment(_Raw):
+    id: str
+    author: _Author = _Author()
+    created: datetime
+    body: object = None
+
+
+class _RawComments(_Raw):
+    comments: list[_RawComment] = []
+
+
 class _Fields(_Raw):
     summary: str = ""
     status: _Status = _Status()
@@ -83,6 +101,7 @@ class _Fields(_Raw):
     issuelinks: list[_IssueLink] = []
     resolutiondate: datetime | None = None
     duedate: date | None = None
+    comment: _RawComments = _RawComments()
 
 
 class RawIssue(_Raw):
@@ -104,7 +123,24 @@ def token(config: JiraConfig, email: str) -> str:
     raise RuntimeError(f"no Jira token: run `mfd token set jira`, or set ${config.token_env}")
 
 
-def to_issue(raw: RawIssue, site: str) -> JiraIssue:
+def mentions(body: object, account_id: str) -> bool:
+    """Whether a comment's body (Atlassian document format: nested nodes) mentions the account."""
+    if isinstance(body, dict):
+        node = cast(dict[str, object], body)
+        attrs = node.get("attrs")
+        if (
+            node.get("type") == "mention"
+            and isinstance(attrs, dict)
+            and cast(dict[str, object], attrs).get("id") == account_id
+        ):
+            return True
+        return any(mentions(child, account_id) for child in node.values())
+    if isinstance(body, list):
+        return any(mentions(child, account_id) for child in cast(list[object], body))
+    return False
+
+
+def to_issue(raw: RawIssue, site: str, account_id: str | None = None) -> JiraIssue:
     f = raw.fields
     open_blockers = [
         link.inward_issue.key
@@ -112,6 +148,16 @@ def to_issue(raw: RawIssue, site: str) -> JiraIssue:
         if link.type.inward == BLOCKED_BY_LINK
         and link.inward_issue
         and link.inward_issue.fields.status.status_category.key != "done"
+    ]
+    comments = [
+        JiraComment(
+            id=c.id,
+            author=c.author.display_name,
+            created=c.created,
+            mine=account_id is not None and c.author.account_id == account_id,
+            mentions_me=account_id is not None and mentions(c.body, account_id),
+        )
+        for c in f.comment.comments[-MAX_COMMENTS:]
     ]
     return JiraIssue(
         key=raw.key,
@@ -128,6 +174,7 @@ def to_issue(raw: RawIssue, site: str) -> JiraIssue:
         resolved=f.resolutiondate,
         due=f.duedate,
         url=f"{site.rstrip('/')}/browse/{raw.key}",
+        comments=comments,
     )
 
 
@@ -196,7 +243,19 @@ def verify_token(config: JiraConfig, email: str, api_token: str) -> None:
         raise
 
 
-def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[JiraIssue]:
+class _Myself(_Raw):
+    account_id: str | None = Field(default=None, alias="accountId")
+
+
+def account_id(config: JiraConfig, email: str, api_token: str) -> str | None:
+    """My account id in Jira, which tells my comments from others' and finds mentions of me."""
+    found = _Myself.model_validate_json(_request(config, email, api_token, MYSELF_PATH))
+    return found.account_id
+
+
+def search(
+    config: JiraConfig, email: str, jql: str, api_token: str, me: str | None = None
+) -> list[JiraIssue]:
     issues: list[JiraIssue] = []
     next_token: str | None = None
     while True:
@@ -206,7 +265,7 @@ def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[Jir
         page = RawSearchResponse.model_validate_json(_search_page(config, email, api_token, body))
         if not issues and not page.issues:
             verify_token(config, email, api_token)
-        issues.extend(to_issue(raw, config.site) for raw in page.issues)
+        issues.extend(to_issue(raw, config.site, me) for raw in page.issues)
         if not page.next_page_token:
             return issues
         next_token = page.next_page_token
@@ -281,4 +340,6 @@ def transition(config: JiraConfig, email: str, key: str, status: str) -> None:
 
 
 def collect(config: JiraConfig, email: str) -> JiraSnapshot:
-    return JiraSnapshot(issues=search(config, email, MY_OPEN_ISSUES_JQL, token(config, email)))
+    api_token = token(config, email)
+    me = account_id(config, email, api_token)
+    return JiraSnapshot(issues=search(config, email, MY_OPEN_ISSUES_JQL, api_token, me))

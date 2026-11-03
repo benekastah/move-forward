@@ -60,3 +60,23 @@ jira nominates the status changes its PRs suggest, quick, closing the ticket whe
 to Closed. From What next it nominates incidents (important, critical once escalated),
 escalated bugs (important) and tickets due within the week (the due date counting more as
 the end of its day nears); a ticket with open blockers is left out.
+
+## Notifications
+
+Subscribe under Notifications on `/settings` (or `[notifications] subscribe` as
+`jira.<kind>`). Each is said once, when the state changes; the first refresh says nothing.
+
+| Kind | When |
+| --- | --- |
+| `assigned` | a ticket appears among my open tickets |
+| `comment_added` | someone but me comments on one |
+| `mentioned` | someone mentions me in a comment (said instead of `comment_added`) |
+| `priority_raised` | its priority goes up in the order of `priorities` |
+| `unblocked` | the last unfinished ticket blocking it is done |
+| `closeable` | its PRs are merged, so the transitions panel proposes closing it |
+
+`priorities` (`["Lowest", "Low", "Medium", "High", "Highest"]`) lists Jira's priority names
+lowest first; one not listed is never counted as raised. Comments come with the search (the
+latest ten per ticket are kept), and my account id from `/myself` tells mine from others'.
+A flagged (impediment) ticket isn't told: Jira's flag is a custom field whose id differs by
+site.

@@ -12,6 +12,7 @@ DEFAULT_JIRA_KEYCHAIN_SERVICE = "move-forward-jira"
 DEFAULT_STATUS_IN_PROGRESS = "In Progress"
 DEFAULT_STATUS_IN_REVIEW = "In Review"
 DEFAULT_STATUS_CLOSED = "Closed"
+DEFAULT_PRIORITIES = ["Lowest", "Low", "Medium", "High", "Highest"]
 DEFAULT_INCIDENT_TYPES = ["incident"]
 DEFAULT_BUG_TYPES = ["bug"]
 
@@ -38,6 +39,9 @@ class JiraConfig(Strict):
     """Workflow status names, for the transitions the Jira panel proposes."""
     status_in_review: str = DEFAULT_STATUS_IN_REVIEW
     status_closed: str = DEFAULT_STATUS_CLOSED
+    priorities: list[str] = Field(default_factory=lambda: list(DEFAULT_PRIORITIES))
+    """Jira's priority names, lowest first, for `priority_raised` notifications: a priority
+    not listed here is never counted as raised."""
     escalation_label_prefix: str = ""
     """Prefix of labels that say how far an issue is escalated, e.g. `escalated-to-`;
     empty means no such labels."""
