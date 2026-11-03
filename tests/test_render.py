@@ -69,6 +69,14 @@ def test_refreshing_disables_the_buttons_and_reloads_sooner() -> None:
     )
 
 
+def test_the_icon_spins_only_while_refreshing() -> None:
+    busy = render.dashboard_page(_dashboard(), refreshing=frozenset({"github"}))
+    idle = render.dashboard_page(_dashboard(), refreshing=frozenset())
+    assert "<span data-refreshing>refreshing…</span>" in busy
+    assert "<span data-refreshing" not in idle
+    assert render.SPIN_SCRIPT in busy and render.SPIN_SCRIPT in idle
+
+
 def test_the_page_reloads_in_the_background_instead_of_navigating() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert render.RELOAD_SCRIPT in html

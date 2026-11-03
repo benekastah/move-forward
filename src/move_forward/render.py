@@ -140,6 +140,44 @@ PENDING_SCRIPT = (
     "});"
 )
 """Hides an Act now item whose link I open, until its plugin has fetched again; see inside."""
+SPIN_SCRIPT = (
+    # While a refresh runs (the header's status carries `data-refreshing`), the tab's icon
+    # turns. Browsers don't animate SVG icons, so a canvas draws the icon (a circle with
+    # the arrow, as in favicon.svg, from primitives: no image to load) rotated, about 12
+    # times a second, and each frame becomes a new icon link (Firefox ignores a changed
+    # `href`). When the refresh ends, the last frame is the icon upright, which also changes
+    # the icon whatever it showed before. Checked on load and on
+    # `mfd:replaced`, since RELOAD_SCRIPT swaps the status in.
+    "(() => {"
+    " const ARROW = [[4.5,2],[4.5,3],[5.5,3],[1.5,4],[2.5,4],[3.5,4],[4.5,4],[5.5,4],[6.5,4],"
+    "  [4.5,5],[5.5,5],[4.5,6]];"
+    " const SIZE = 64, UNIT = SIZE / 9;"
+    " const canvas = document.createElement('canvas'); canvas.width = canvas.height = SIZE;"
+    " let timer = null, angle = 0;"
+    " const show = (href, type) => {"
+    "  document.querySelectorAll('link[rel=icon]').forEach((l) => l.remove());"
+    "  const link = document.createElement('link');"
+    "  link.rel = 'icon'; link.type = type; link.href = href; document.head.appendChild(link); };"
+    " const draw = (turn) => {"
+    "  const c = canvas.getContext('2d');"
+    "  angle = turn;"
+    "  c.clearRect(0, 0, SIZE, SIZE); c.save(); c.translate(SIZE / 2, SIZE / 2); c.rotate(angle);"
+    "  c.translate(-SIZE / 2, -SIZE / 2);"
+    "  c.fillStyle = '#000'; c.beginPath(); c.arc(SIZE / 2, SIZE / 2, SIZE / 2, 0, 2 * Math.PI);"
+    "  c.fill(); c.fillStyle = '#a78bfa';"
+    "  ARROW.forEach(([x, y]) => c.fillRect(x * UNIT, y * UNIT, UNIT + 0.5, UNIT + 0.5));"
+    "  c.restore();"
+    "  show(canvas.toDataURL('image/png'), 'image/png'); };"
+    " const check = () => {"
+    "  const on = !!document.querySelector('[data-refreshing]');"
+    "  if (on && !timer) timer = setInterval(() => draw(angle + Math.PI / 8), 80);"
+    "  else if (!on && timer) {"
+    "   clearInterval(timer); timer = null; draw(0); } };"
+    " document.addEventListener('DOMContentLoaded', check);"
+    " document.addEventListener('mfd:replaced', check);"
+    "})();"
+)
+"""Spins the tab's icon while a refresh runs; see inside."""
 FOCUS_KEYS_SCRIPT = (
     "document.addEventListener('keydown', (e) => {"
     " if (e.target.closest('input, textarea')) return;"
@@ -183,6 +221,7 @@ def _head(title: str, reload_seconds: int | None) -> str:
             f'<noscript><meta http-equiv="refresh" content="{reload_seconds}"></noscript>'
             f"<script>{OPEN_SECTIONS_SCRIPT}</script><script>{LAYOUT_SCRIPT}</script>"
             f"<script>{RELOAD_SCRIPT}</script><script>{PENDING_SCRIPT}</script>"
+            f"<script>{SPIN_SCRIPT}</script>"
         )
         body = f"<body data-reload='{reload_seconds}'>"
     else:
@@ -434,7 +473,7 @@ def dashboard_page(
     notice_html += f"<span class='notice warn'>{_e(warning)}</span>" if warning else ""
     return (
         _head("Move forward", reload_seconds) + f"<header><h1>{LOGO}</h1><div class='header-right'>"
-        f"{notice_html}<span>{_e(status)}</span>"
+        f"{notice_html}<span{' data-refreshing' if refreshing else ''}>{_e(status)}</span>"
         "<a class='button' href='/focus'>Focus</a>"
         "<a class='button secondary' href='/settings'>Settings</a>"
         "<form method='post' action='/refresh'><button type='submit'"
