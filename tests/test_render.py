@@ -284,3 +284,20 @@ def test_only_web_and_dashboard_urls_become_links() -> None:
     html = render._item(item)  # pyright: ignore[reportPrivateUsage]
     assert "javascript:" not in html
     assert "<a href='https://x/1'" in html and "sneaky" in html and "also" in html
+
+
+def test_an_act_now_item_carries_its_pending_fields_for_the_link_script() -> None:
+    def html_of(item: page.Item) -> str:
+        panel = page.Panel(key="p", title="P", description="", items=[item])
+        dashboard = panels.Dashboard(
+            generated_at=NOW,
+            login=ME,
+            panels=[panel],
+            groups=[page.Group(key="g", title="G", panel_keys=["p"], open=True)],
+            sources={},
+        )
+        return render.dashboard_page(dashboard, refreshing=frozenset())
+
+    pending = html_of(page.Item(title="x", pending='{"plugin": "github"}'))
+    assert "<li class='item' data-pending='{&quot;plugin&quot;: &quot;github&quot;}'>" in pending
+    assert "<li class='item'>" in html_of(page.Item(title="x"))

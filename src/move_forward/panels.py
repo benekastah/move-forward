@@ -190,19 +190,23 @@ def _without_hidden(panel: Panel, hidden: Hidden) -> Panel:
 
 
 def _snoozable(
-    panel: Panel, feedback: dict[act_now.FeedbackKey, act_now.Feedback], now: datetime
+    panel: Panel,
+    plugin: str,
+    feedback: dict[act_now.FeedbackKey, act_now.Feedback],
+    now: datetime,
+    fetched: dict[str, datetime],
 ) -> Panel:
     """A snoozable panel's items without those set aside there (snoozed, or dismissed, and
     not changed since), and each of the rest with a Snooze button, as in Act now itself."""
     items: list[Item] = []
     for item in panel.items:
         nomination = act_now.Nomination(
-            "", item if item.signals else item.model_copy(update={"signals": panel.signals})
+            plugin, item if item.signals else item.model_copy(update={"signals": panel.signals})
         )
         key = nomination.key
         if key is None:
             items.append(item)
-        elif not act_now.set_aside(nomination, feedback.get(key), now):
+        elif not act_now.set_aside(nomination, feedback.get(key), now, fetched):
             kind, id, verb = key
             fields = {"kind": kind, "id": id, "verb": verb, "fingerprint": nomination.fingerprint}
             snooze = Action(name=f"{act_now.ACTIONS}/snooze", label="Snooze", fields=fields)
@@ -222,6 +226,24 @@ def _with_item_actions(panel: Panel, item_actions: ItemActions) -> Panel:
         )
 
     return panel.model_copy(update={"items": [add(item) for item in panel.items]})
+
+
+def _pending_on_buttons(panel: Panel) -> Panel:
+    """Act now's items with their plugins' buttons (not Act now's own) carrying the item's
+    `pending` fields, so that running one hides the item until its plugin has fetched again."""
+
+    def tag(item: Item) -> Item:
+        if item.pending is None:
+            return item
+        actions = [
+            a
+            if a.href is not None or a.name.startswith(f"{act_now.ACTIONS}/")
+            else a.model_copy(update={"fields": {**a.fields, act_now.PENDING_FIELD: item.pending}})
+            for a in item.actions
+        ]
+        return item.model_copy(update={"actions": actions})
+
+    return panel.model_copy(update={"items": [tag(item) for item in panel.items]})
 
 
 def build(
@@ -259,20 +281,27 @@ def build(
         if not hidden(item)
     ]
     titles = {plugin.key: plugin.title for plugin in plugins}
+    fetched = {source: status.fetched_at for source, status in sources.items() if status.fetched_at}
     ranked = [
         p.model_copy(update={"key": panel_key(ACT_NOW, p.key)})
-        for p in act_now.panels(nominations, ranking, feedback, now, titles, units, priority_of)
+        for p in act_now.panels(
+            nominations, ranking, feedback, now, titles, units, priority_of, fetched
+        )
     ]
     return Dashboard(
         generated_at=now,
         login=login,
         panels=[
-            *(_with_item_actions(panel, item_actions) for panel in ranked),
+            *(_pending_on_buttons(_with_item_actions(panel, item_actions)) for panel in ranked),
             *(
                 _sorted(_with_item_actions(_without_hidden(shown, hidden), item_actions))
                 for plugin in plugins
                 for panel in plugin.panels
-                for shown in [_snoozable(panel, feedback or {}, now) if panel.snoozable else panel]
+                for shown in [
+                    _snoozable(panel, plugin.key, feedback or {}, now, fetched)
+                    if panel.snoozable
+                    else panel
+                ]
             ),
         ],
         groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),

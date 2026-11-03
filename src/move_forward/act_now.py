@@ -26,6 +26,9 @@ from .strict import Strict
 KEY = "now"
 """The Act now panel's key within core's Act now group."""
 ACTIONS = "act_now"
+PENDING_FIELD = "pending"
+"""The field a plugin's button carries, in Act now, to hide its item once the button has run:
+the item's `pending`."""
 """The prefix of Act now's own buttons, `act_now/<snooze|dismiss|pin|unpin>`."""
 DUE_HORIZON = timedelta(days=7)
 """How far ahead a due date starts to count."""
@@ -45,11 +48,19 @@ FeedbackKey = tuple[str, str, str]
 class Feedback(Model):
     """What I said of an Act now item."""
 
-    action: Literal["snooze", "dismiss", "pin"]
+    action: Literal["snooze", "dismiss", "pin", "pending"]
+    """`pending` is no choice of mine: I acted on the item elsewhere (a link, a button), so it's
+    hidden until its plugin has fetched again, to show how that went."""
     fingerprint: str
     """The item's when I said it; a snooze or dismissal of an item that changed lapses."""
     until: datetime | None = None
-    """When a snooze ends."""
+    """When a snooze, or a pending hide, ends."""
+    said_at: datetime | None = None
+    """When I said it; set when feedback is read back."""
+
+
+PENDING = timedelta(minutes=10)
+"""The longest an item I acted on stays hidden, should its plugin not fetch again by then."""
 
 
 class Weights(Strict):
@@ -141,12 +152,26 @@ def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomina
     ), level
 
 
-def set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> bool:
-    """Snoozed until later, or dismissed, and not changed since."""
+def set_aside(
+    nomination: Nomination,
+    feedback: Feedback | None,
+    now: datetime,
+    fetched: dict[str, datetime] | None = None,
+) -> bool:
+    """Snoozed until later, or dismissed, and not changed since; or acted on, and its plugin
+    not fetched since (`fetched`, by plugin), within `PENDING`."""
     if feedback is None or feedback.fingerprint != nomination.fingerprint:
         return False
     if feedback.action == "dismiss":
         return True
+    if feedback.action == "pending":
+        fetched_at = (fetched or {}).get(nomination.plugin)
+        acted = feedback.said_at or now
+        return (
+            feedback.until is not None
+            and feedback.until > now
+            and (fetched_at is None or fetched_at <= acted)
+        )
     return feedback.action == "snooze" and feedback.until is not None and feedback.until > now
 
 
@@ -302,8 +327,10 @@ def panels(
     titles: dict[str, str] | None = None,
     units: Units = no_units,
     priority_of: PriorityOf = no_priority,
+    fetched: dict[str, datetime] | None = None,
 ) -> list[Panel]:
-    """Act now's panels: nominations not snoozed or dismissed, pinned ones first and
+    """Act now's panels: nominations not snoozed or dismissed (or acted on, until their
+    plugin has fetched again: `fetched` says when it last did), pinned ones first and
     then the best (by score, then the plugin's own rank, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
     in all, each with buttons to snooze, dismiss, pin or prioritize it; a priority I set
@@ -334,7 +361,7 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not (now and set_aside(nom, said(nom), now))
+        if not (now and set_aside(nom, said(nom), now, fetched))
     ]
     candidates.sort(
         key=lambda c: (
@@ -379,6 +406,19 @@ def panels(
     ]
 
 
+def _member_fields(
+    nomination: Nomination, key: FeedbackKey, then: list[Nomination]
+) -> dict[str, str]:
+    """The fields that name an item (by its `key`), and the items joined to it (`also`), to
+    the buttons that set it aside."""
+    kind, id, verb = key
+    fields = {"kind": kind, "id": id, "verb": verb, "fingerprint": nomination.fingerprint}
+    members = [[*n.key, n.fingerprint] for n in then if n.key is not None]
+    if members:
+        fields["also"] = json.dumps(members)
+    return fields
+
+
 def _buttons(
     nomination: Nomination, then: list[Nomination], pinned: bool, level: int | None
 ) -> list[Action]:
@@ -387,11 +427,7 @@ def _buttons(
     too, posted as `also`."""
     if nomination.key is None:
         return []
-    kind, id, verb = nomination.key
-    fields = {"kind": kind, "id": id, "verb": verb, "fingerprint": nomination.fingerprint}
-    members = [[*n.key, n.fingerprint] for n in then if n.key is not None]
-    if members:
-        fields["also"] = json.dumps(members)
+    fields = _member_fields(nomination, nomination.key, then)
 
     def button(action: str, label: str) -> Action:
         return Action(name=f"{ACTIONS}/{action}", label=label, fields=fields)
@@ -444,8 +480,16 @@ def _shown(
     links += [
         Link(text=joined.item.title, url=joined.item.url) for joined in then if joined.item.url
     ]
+    pending = (
+        json.dumps(
+            {**_member_fields(nomination, nomination.key, then), "plugin": nomination.plugin}
+        )
+        if nomination.key
+        else None
+    )
     return item.model_copy(
         update={
+            "pending": pending,
             "title": _titled(nomination),
             "details": details,
             "badges": [f"#{place + 1}", *item.badges],

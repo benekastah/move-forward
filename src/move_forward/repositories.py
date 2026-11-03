@@ -136,6 +136,7 @@ class FeedbackRepository:
                 action=row["action"],
                 fingerprint=row["fingerprint"],
                 until=datetime.fromisoformat(row["until"]) if row["until"] else None,
+                said_at=datetime.fromisoformat(row["created_at"]),
             )
             for row in self._db.query("SELECT * FROM act_now_feedback")
         }

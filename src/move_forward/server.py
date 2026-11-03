@@ -15,7 +15,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 from pydantic import ValidationError
 
-from . import auth, render, settings, shell, tls
+from . import act_now, auth, render, settings, shell, tls
 from .config import Config
 from .db import Database
 from .graph import Graph
@@ -300,7 +300,8 @@ class App:
             result = perform_action(self.config, self.db, name, fields)
         except ActionError as e:
             return f"failed: {e}", {}
-        self.request_refresh()
+        if not name.startswith(f"{act_now.ACTIONS}/"):  # these only change what's shown
+            self.request_refresh()
         return result.notice, result.params
 
     def sign_in_pages(self) -> set[str]:

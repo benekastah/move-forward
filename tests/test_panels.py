@@ -1,8 +1,10 @@
 """Core's panels and the Dashboard: todos, on ice, nudges, groups and focus mode."""
 
+import json
 from datetime import UTC, datetime
 
 from conftest import (
+    NOW,
     dashboard,
     entry,
     issue,
@@ -18,7 +20,8 @@ from conftest import (
 )
 
 from move_forward import panels
-from move_forward.page import Group
+from move_forward.graph import Ref
+from move_forward.page import Action, Group, Item, Signals
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
@@ -421,3 +424,31 @@ def test_empty_notes_say_how_to_fill_them() -> None:
     assert "mfd notes import <dir>" in empty.description
     some = dashboard(work_items=[entry("APP-1", [todo("x")])]).panel("notes.todos")
     assert "mfd notes import" not in some.description
+
+
+def test_a_plugins_buttons_in_act_now_carry_the_items_pending_fields_but_acts_own_do_not() -> None:
+    action = Action(name="github/anything", label="Do it", fields={"pr": "1"})
+    page = panels.build(
+        NOW,
+        [
+            panels.PluginPanels(
+                "github",
+                "GitHub",
+                [],
+                [
+                    Item(
+                        title="x",
+                        subjects=[Ref(kind="pr", id="p")],
+                        signals=Signals(verb="Go"),
+                        actions=[action],
+                    )
+                ],
+            )
+        ],
+        {},
+    )
+    (item,) = page.act_now()
+    ours = {a.label: a for a in item.actions}
+    assert ours["Do it"].fields["pending"] == item.pending
+    assert "pending" not in ours["Snooze"].fields
+    assert item.pending is not None and json.loads(item.pending)["plugin"] == "github"

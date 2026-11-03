@@ -113,6 +113,27 @@ RELOAD_SCRIPT = (
     "})();"
 )
 """Reloads the page in the background and swaps it in, retrying; see inside."""
+PENDING_SCRIPT = (
+    # Opening a link of an Act now item (its PR, its ticket) means I'm about to act on it
+    # elsewhere: hide the item at once, tell the server to keep it hidden until its plugin has
+    # fetched again, and when I come back to this tab, ask that plugin to fetch now. One
+    # delegated listener on the document, so it needs no rebinding when RELOAD_SCRIPT swaps
+    # the body in. A failed request only means the item shows again at the next reload.
+    "document.addEventListener('click', (e) => {"
+    " const link = e.target.closest && e.target.closest('li.item[data-pending] a[href]');"
+    " if (!link) return;"
+    " const item = link.closest('li.item');"
+    " let fields; try { fields = JSON.parse(item.dataset.pending); } catch { return; }"
+    " const { plugin, ...rest } = fields;"
+    " fetch('/actions/act_now/pending', { method: 'POST', redirect: 'manual', keepalive: true,"
+    "  body: new URLSearchParams(rest) }).catch(() => {});"
+    " item.hidden = true;"
+    " window.addEventListener('focus', () => {"
+    "  fetch('/refresh', { method: 'POST', redirect: 'manual',"
+    "   body: new URLSearchParams({ plugin }) }).catch(() => {}); }, { once: true });"
+    "});"
+)
+"""Hides an Act now item whose link I open, until its plugin has fetched again; see inside."""
 FOCUS_KEYS_SCRIPT = (
     "document.addEventListener('keydown', (e) => {"
     " if (e.target.closest('input, textarea')) return;"
@@ -155,7 +176,7 @@ def _head(title: str, reload_seconds: int | None) -> str:
         reload = (
             f'<noscript><meta http-equiv="refresh" content="{reload_seconds}"></noscript>'
             f"<script>{OPEN_SECTIONS_SCRIPT}</script><script>{LAYOUT_SCRIPT}</script>"
-            f"<script>{RELOAD_SCRIPT}</script>"
+            f"<script>{RELOAD_SCRIPT}</script><script>{PENDING_SCRIPT}</script>"
         )
         body = f"<body data-reload='{reload_seconds}'>"
     else:
@@ -258,8 +279,9 @@ def _item(item: Item, back: str = "") -> str:
         if _linkable(item.url)
         else _e(item.title)
     )
+    pending = f" data-pending='{_e(item.pending)}'" if item.pending else ""
     parts = [
-        "<li class='item'><div class='item-head'>",
+        f"<li class='item'{pending}><div class='item-head'>",
         f"<div class='item-title'>{title}</div>"
         + "".join(_link_action(a) for a in item.actions if a.href is not None)
         + "</div>",

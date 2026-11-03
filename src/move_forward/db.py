@@ -146,6 +146,23 @@ CREATE TABLE priorities (              -- kept: how much I said an entity matter
 """
 """Priorities: 0 not important, 1 important, 2 critical, by entity."""
 
+_V8_PENDING_FEEDBACK = """
+CREATE TABLE act_now_feedback_new (    -- as before, and `pending`: acted on elsewhere, hidden
+    subject_kind TEXT NOT NULL,        -- until its plugin has fetched again (until: at most)
+    subject_id TEXT NOT NULL,
+    verb TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('snooze', 'dismiss', 'pin', 'pending')),
+    until TEXT,
+    fingerprint TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (subject_kind, subject_id, verb)
+);
+INSERT INTO act_now_feedback_new SELECT * FROM act_now_feedback;
+DROP TABLE act_now_feedback;
+ALTER TABLE act_now_feedback_new RENAME TO act_now_feedback;
+"""
+"""Lets Act now's feedback say an item was acted on elsewhere."""
+
 CORE_MIGRATIONS = [
     V1_SCHEMA,
     _V2_KV_AND_LAYOUT,
@@ -154,6 +171,7 @@ CORE_MIGRATIONS = [
     _V5_ACT_NOW_FEEDBACK,
     _V6_NO_SNAPSHOT_JSON,
     _V7_PRIORITIES,
+    _V8_PENDING_FEEDBACK,
 ]
 
 _SCHEMA_VERSIONS = """
