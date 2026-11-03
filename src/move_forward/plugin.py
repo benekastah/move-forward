@@ -27,6 +27,12 @@ from .repositories import KvRepository, SnapshotRepository
 log = logging.getLogger(__name__)
 
 
+class SourceError(Exception):
+    """A tool turning us away in a way I have to fix, e.g. a rejected API token. Unlike other
+    failures of a plugin's `fetch`, `Graph.fetch` passes it on, so a command can say why
+    instead of reporting what it asked about as unknown."""
+
+
 @dataclass(frozen=True)
 class Context[C: BaseModel]:
     """What a plugin gets to work with: its own config section and storage, and the

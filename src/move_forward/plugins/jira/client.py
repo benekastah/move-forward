@@ -11,10 +11,12 @@ from http import HTTPStatus
 from pydantic import BaseModel, ConfigDict, Field
 
 from ... import https, keychain
+from ...plugin import SourceError
 from .config import JiraConfig
 from .models import JiraIssue, JiraSnapshot
 
 SEARCH_PATH = "/rest/api/3/search/jql"
+MYSELF_PATH = "/rest/api/3/myself"
 PAGE_SIZE = 100
 MY_OPEN_ISSUES_JQL = "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"
 BLOCKED_BY_LINK = "is blocked by"
@@ -133,12 +135,11 @@ def _search_page(config: JiraConfig, email: str, api_token: str, body: dict[str,
     """One page of a JQL search: the response to `body`."""
     url = config.site.rstrip("/") + SEARCH_PATH
     https.require_https(url, "the Jira token")
-    auth = base64.b64encode(f"{email}:{api_token}".encode()).decode()
     request = urllib.request.Request(
         url,
         data=json.dumps(body).encode(),
         headers={
-            "Authorization": f"Basic {auth}",
+            "Authorization": _basic_auth(email, api_token),
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
@@ -146,6 +147,30 @@ def _search_page(config: JiraConfig, email: str, api_token: str, body: dict[str,
     )
     with https.opener.open(request, timeout=60) as response:
         return response.read()
+
+
+def _basic_auth(email: str, api_token: str) -> str:
+    return "Basic " + base64.b64encode(f"{email}:{api_token}".encode()).decode()
+
+
+def verify_token(config: JiraConfig, email: str, api_token: str) -> None:
+    """Raise `SourceError` if Jira doesn't accept the token. A search with a rejected token
+    isn't refused: Jira answers it as an anonymous user, with no issues, so an empty search
+    can't tell a bad token from no tickets."""
+    url = config.site.rstrip("/") + MYSELF_PATH
+    https.require_https(url, "the Jira token")
+    request = urllib.request.Request(
+        url, headers={"Authorization": _basic_auth(email, api_token), "Accept": "application/json"}
+    )
+    try:
+        https.opener.open(request, timeout=60).close()
+    except urllib.error.HTTPError as e:
+        if e.code == HTTPStatus.UNAUTHORIZED:
+            raise SourceError(
+                f"Jira rejected the API token for {email} (HTTP 401); it may have expired or "
+                "been revoked: make a new one and run `mfd token set jira`"
+            ) from e
+        raise
 
 
 def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[JiraIssue]:
@@ -156,6 +181,8 @@ def search(config: JiraConfig, email: str, jql: str, api_token: str) -> list[Jir
         if next_token:
             body["nextPageToken"] = next_token
         page = RawSearchResponse.model_validate_json(_search_page(config, email, api_token, body))
+        if not issues and not page.issues:
+            verify_token(config, email, api_token)
         issues.extend(to_issue(raw, config.site) for raw in page.issues)
         if not page.next_page_token:
             return issues

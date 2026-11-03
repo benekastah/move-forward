@@ -10,7 +10,7 @@ from pydantic import BaseModel, ValidationError
 from . import act_now, tls
 from .db import CORE, OWNER_RE, Database
 from .graph import Entity, Graph, Ref
-from .plugin import Context, Plugin
+from .plugin import Context, Plugin, SourceError
 from .plugins.git.plugin import GitPlugin
 from .plugins.git_stack.plugin import GitStackPlugin
 from .plugins.github.plugin import GitHubPlugin
@@ -158,6 +158,8 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         for e in plugins:
             try:
                 found += e.plugin.fetch(e.ctx, kind, ids)
+            except SourceError:
+                raise
             except Exception:
                 log.exception("%s: fetching %s failed", e.name, kind)
         return found

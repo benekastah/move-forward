@@ -1,4 +1,5 @@
 import urllib.error
+import urllib.request
 from datetime import UTC, date, datetime
 from email.message import Message
 
@@ -7,7 +8,7 @@ from legacy import save_json_snapshot
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Context
+from move_forward.plugin import Context, SourceError
 from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
@@ -208,3 +209,41 @@ def test_other_jira_errors_still_fail_the_fetch(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(jira, "search", fake_search)
     with pytest.raises(urllib.error.HTTPError):
         jira.tickets(JiraConfig(site="https://j"), "me@x", ["APP-1", "APP-2"], "t")
+
+
+class _Closable:
+    def close(self) -> None:
+        pass
+
+
+def _empty_search_with_myself(monkeypatch: pytest.MonkeyPatch, status: int) -> list[str]:
+    """An empty search, and `/myself` answering with `status`; the paths asked."""
+    asked: list[str] = []
+
+    def fake_open(request: urllib.request.Request, timeout: float) -> _Closable:
+        asked.append(request.full_url)
+        if status != 200:
+            raise urllib.error.HTTPError(request.full_url, status, "", Message(), None)
+        return _Closable()
+
+    def fake_page(config: object, email: str, api_token: str, body: dict[str, object]) -> bytes:
+        return b'{"issues": []}'
+
+    monkeypatch.setattr(jira, "_search_page", fake_page)
+    monkeypatch.setattr(jira.https.opener, "open", fake_open)
+    return asked
+
+
+def test_an_empty_search_fails_when_jira_rejects_the_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Jira answers a search with a rejected token as an anonymous user: 200 with no issues.
+    asked = _empty_search_with_myself(monkeypatch, 401)
+    with pytest.raises(SourceError, match="rejected the API token for me@x.*mfd token set jira"):
+        jira.search(JiraConfig(site="https://j"), "me@x", "key in (APP-1)", "t")
+    assert asked == ["https://j/rest/api/3/myself"]
+
+
+def test_an_empty_search_is_empty_when_jira_accepts_the_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _empty_search_with_myself(monkeypatch, 200)
+    assert jira.search(JiraConfig(site="https://j"), "me@x", "key in (APP-1)", "t") == []

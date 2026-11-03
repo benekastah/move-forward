@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ...domain import Model
 from ...graph import Graph
-from ...plugin import KEPT, ActionError, ActionHandler, ActionResult, Context
+from ...plugin import KEPT, ActionError, ActionHandler, ActionResult, Context, SourceError
 from .config import NotesConfig
 from .covers import covers
 from .markdown import links_in
@@ -223,7 +223,11 @@ def link_for(graph: Graph, value: str) -> Link:
     found = links_in(value)
     if len(found) == 1 and found[0].ref == value:
         return found[0]
-    if value in graph.fetch(TICKET, [value]):
+    try:
+        fetched = graph.fetch(TICKET, [value])
+    except SourceError as e:
+        raise ActionError(str(e)) from e
+    if value in fetched:
         return Link(kind=TICKET, ref=value)
     raise ActionError(f"{value!r} is neither a PR URL nor a ticket key Jira knows")
 

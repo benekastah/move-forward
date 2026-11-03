@@ -8,7 +8,7 @@ from move_forward import refresh
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
-from move_forward.plugin import KEPT, ActionError
+from move_forward.plugin import KEPT, ActionError, SourceError
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.repository import LocalRepository
@@ -474,6 +474,24 @@ def test_linking_a_ticket_in_a_project_new_to_jira_fetches_it_and_jira_learns_th
         run("notes/todo_link", config, {**fields, "input": "NEW-404"})
     assert asked == [["OPS-5"], ["NEW-404"]]
     assert graph(config).named("see OPS-6") == [Ref(kind="ticket", id="OPS-6")]
+
+
+def test_linking_a_ticket_says_why_when_jira_turns_the_fetch_away(
+    config: Config, work_notes: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
+
+    def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
+        raise SourceError("Jira rejected the API token")
+
+    def token(config: JiraConfig, email: str) -> str:
+        return "t"
+
+    monkeypatch.setattr(jira_client, "token", token)
+    monkeypatch.setattr(jira_client, "tickets", tickets)
+    fields = {**_todo(config, "get it merged"), "input": "OPS-5"}
+    with pytest.raises(ActionError, match="Jira rejected the API token"):
+        run("notes/todo_link", config, fields)
 
 
 def test_a_worktree_of_a_configured_repo_will_do_for_its_branches(
