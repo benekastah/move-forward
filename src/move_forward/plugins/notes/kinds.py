@@ -13,6 +13,15 @@ class EntryAttrs(Model):
     open_todos: list[str] = Field(default_factory=list[str])
 
 
+class TodoAttrs(Model):
+    """A `todo`: one open todo of a work entry, by its id. Ticking it off takes it away."""
+
+    entry: str
+    """Its entry's title."""
+    size: str | None = None
+    """`quick` or `big`; None while unsized."""
+
+
 class IcedAttrs(Model):
     """An `iced`: one act of icing, by its id. It hides what it points at: its items, and
     what else it covers, like its branches' PRs."""

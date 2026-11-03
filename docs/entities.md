@@ -35,7 +35,8 @@ in, e.g. `APP-12`, so `UTF-8` isn't one) is found in other entities'
 | `branch` | git | `<repo dir>\t<branch>` | | its `repo` |
 | `stack_branch` | git_stack | its `branch`'s id | | its `branch`, which git may have deleted |
 | `ticket` (linking) | jira | the issue key, e.g. `APP-1` | the issue's status | |
-| `entry` (linking) | notes | the entry's title | | the `pr` URLs and `ticket` keys linked to it and its open todos, and the `ticket` keys its title mentions |
+| `entry` (linking) | notes | the entry's title | | the `pr` URLs and `ticket` keys linked to it and its open todos (each open todo is a `todo` that points back at its entry), and the `ticket` keys its title mentions |
+| `todo` | notes | the todo's id (a number) | `open` (a ticked-off todo is gone) | its `entry` |
 | `iced` (hiding) | notes | the act of icing's id | | what it puts on ice (a stack's `branch`es, or a `pr`, `ticket` or `entry`), and what else that covers: the branches' `pr`s and `stack_branch`es, an entry's refs |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
@@ -132,6 +133,13 @@ A branch git-stack tracks, including one git no longer has.
 | --- | --- | --- |
 | `merge_conditions` | object of lists of strings | what must happen before each of its PRs merges, by the PR's URL; a PR without conditions isn't in it |
 | `open_todos` | list of strings | its open todos' text |
+
+### `todo`
+
+| Attribute | Type | Meaning |
+| --- | --- | --- |
+| `entry` | string | its entry's title |
+| `size` | string or null | `quick` or `big`; null while unsized |
 
 ### `iced`
 

@@ -8,7 +8,7 @@ from datetime import datetime
 from ...domain import Model
 from ...graph import Entity, Graph, Ref, attrs
 from ...page import Action, Item, Link, Panel, PrState, Signals
-from .kinds import EntryAttrs, IcedAttrs
+from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
 from .markdown import PR_URL_RE
 from .models import Condition, Entry, Ice, Todo
 
@@ -18,6 +18,7 @@ PR = "pr"
 TICKET = "ticket"
 ENTRY = "entry"
 ICED = "iced"
+TODO = "todo"
 TODOS = "todos"
 """The todos panel's key."""
 BRANCH = "branch"
@@ -191,6 +192,16 @@ def entities(entries: list[Entry], ices: list[Ice], covers: dict[int, list[Ref]]
                 }
             )
         )
+        result += [
+            Entity(
+                ref=Ref(kind=TODO, id=str(todo.id)),
+                title=todo.text,
+                state="open",
+                refs=[Ref(kind=ENTRY, id=entry.title)],
+                attrs=attrs(TodoAttrs(entry=entry.title, size=todo.size)),
+            )
+            for todo in entry.open_todos
+        ]
     for ice in ices:
         own = [Ref(kind=item.kind, id=item.ref_id) for item in ice.items]
         result.append(

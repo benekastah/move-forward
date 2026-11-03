@@ -235,11 +235,13 @@ def build(
     ranking: act_now.ActNowConfig | None = None,
     feedback: dict[act_now.FeedbackKey, act_now.Feedback] | None = None,
     units: act_now.Units = act_now.no_units,
+    priority_of: act_now.PriorityOf = act_now.no_priority,
 ) -> Dashboard:
     """The dashboard: Act now, ranked from the plugins' nominations, then the plugins' panels in
     their groups, without hidden items, each item with the plugins' buttons, sorted, in the
     `layout`'s order. `ranking` is `[act_now]`, `feedback` what I said of its items, and
-    `units` the graph's, for Act now to join items about the same unit of work. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
+    `units` the graph's, for Act now to join items about the same unit of work, and
+    `priority_of` what I set as the priority of what an item is about. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
     so two plugins' panels never clash."""
     plugins = [
         PluginPanels(
@@ -259,7 +261,7 @@ def build(
     titles = {plugin.key: plugin.title for plugin in plugins}
     ranked = [
         p.model_copy(update={"key": panel_key(ACT_NOW, p.key)})
-        for p in act_now.panels(nominations, ranking, feedback, now, titles, units)
+        for p in act_now.panels(nominations, ranking, feedback, now, titles, units, priority_of)
     ]
     return Dashboard(
         generated_at=now,

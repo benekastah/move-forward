@@ -9,16 +9,21 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from . import act_now, localtime, panels, shell
+from . import act_now, localtime, panels, priority, shell
 from .act_now import Feedback
 from .config import Config
 from .db import Database
-from .graph import Graph
+from .graph import Graph, Ref
 from .page import Action, Item, SourceStatus
 from .plugin import ActionError, ActionResult, collect_into
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, enabled
-from .repositories import FeedbackRepository, LayoutRepository, SnapshotRepository
+from .repositories import (
+    FeedbackRepository,
+    LayoutRepository,
+    PriorityRepository,
+    SnapshotRepository,
+)
 from .shell import CommandError
 
 log = logging.getLogger(__name__)
@@ -122,6 +127,8 @@ def _prune_plugins(
     notices: list[str] = []
     if dropped := FeedbackRepository(db).prune(now, now - timedelta(days=days)):
         notices.append(f"act_now: forgot {dropped} snooze(s), dismissal(s) or pin(s)")
+    if cleared := priority.forget_finished(PriorityRepository(db), graph):
+        notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")
     for e in plugins:
         try:
             notices += [f"{e.name}: {notice}" for notice in e.plugin.prune(e.ctx, graph)]
@@ -169,6 +176,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         config.act_now,
         FeedbackRepository(db).all(),
         graph.units,
+        priority.level_of(PriorityRepository(db).all(), graph),
     )
 
 
@@ -211,12 +219,35 @@ _MEMBERS = TypeAdapter(
 """An Act now button's `also`: the items joined to its own, as kind, id, verb, fingerprint."""
 
 
+def _set_priority(db: Database, fields: dict[str, str], now: datetime) -> ActionResult:
+    """Act now's priority buttons: set the priority (`level`, 0 to 2) of the entity, or clear
+    it when there's no level."""
+    ref = Ref(kind=fields["kind"], id=fields["id"])
+    priorities = PriorityRepository(db)
+    if "level" not in fields:
+        priorities.clear(ref)
+        return ActionResult("priority cleared")
+    try:
+        level = int(fields["level"])
+    except ValueError as err:
+        raise ActionError("malformed `level`") from err
+    if level not in act_now.PRIORITIES:
+        raise ActionError(f"no priority {level}")
+    priorities.set(ref, level, now)
+    return ActionResult(f"priority: {act_now.PRIORITIES[level].lower()}")
+
+
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
     """Act now's own buttons: snooze an item (for as long as `config` says), dismiss it, or pin or unpin it,
     by its main subject and verb, and the items joined to it (`also`) alike."""
     now = datetime.now(UTC)
+    if action == "priority":
+        try:
+            return _set_priority(db, fields, now)
+        except KeyError as err:
+            raise ActionError(f"missing field {err}") from err
     try:
         members = [(fields["kind"], fields["id"], fields["verb"], fields["fingerprint"])]
         members += _MEMBERS.validate_json(fields.get("also") or "[]")

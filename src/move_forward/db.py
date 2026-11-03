@@ -135,6 +135,17 @@ JSON copy; what's left is the last one before that. It held only fetched data, w
 next refresh brings back, so a plugin enabled later loses nothing it needs. The column
 stays: plugins' first migrations, which copied from it, still name it."""
 
+_V7_PRIORITIES = """
+CREATE TABLE priorities (              -- kept: how much I said an entity matters
+    kind TEXT NOT NULL,                -- until it's done (see `refresh.forget_finished_priorities`)
+    id TEXT NOT NULL,
+    level INTEGER NOT NULL CHECK (level BETWEEN 0 AND 2),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (kind, id)
+);
+"""
+"""Priorities: 0 not important, 1 important, 2 critical, by entity."""
+
 CORE_MIGRATIONS = [
     V1_SCHEMA,
     _V2_KV_AND_LAYOUT,
@@ -142,6 +153,7 @@ CORE_MIGRATIONS = [
     _V4_NOTES_IN_THE_NOTES_PLUGIN,
     _V5_ACT_NOW_FEEDBACK,
     _V6_NO_SNAPSHOT_JSON,
+    _V7_PRIORITIES,
 ]
 
 _SCHEMA_VERSIONS = """

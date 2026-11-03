@@ -16,8 +16,8 @@ from ...plugin import ActionHandler, CliHandler, Context, Plugin
 from . import actions, cli, prune
 from .config import NotesConfig
 from .covers import covers
-from .kinds import EntryAttrs, IcedAttrs
-from .panels import ENTRY, ICED, TODOS, Builder, entities
+from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
+from .panels import ENTRY, ICED, TODO, TODOS, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 EMPTY_NOTES = (
@@ -41,6 +41,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     kinds: ClassVar[dict[str, type[BaseModel]]] = {
         ENTRY: EntryAttrs,
         ICED: IcedAttrs,
+        TODO: TodoAttrs,
     }
     linking: ClassVar[dict[str, str | None]] = {ENTRY: None}
     hides: ClassVar[list[str]] = [ICED]

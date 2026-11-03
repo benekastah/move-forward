@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from .act_now import Feedback, FeedbackKey
 from .db import Database
+from .graph import Ref
 from .panels import Layout
 
 
@@ -98,6 +99,29 @@ class LayoutRepository:
 
     def reset(self) -> None:
         self._db.execute("DELETE FROM layout")
+
+
+class PriorityRepository:
+    """How much I said entities matter (`priorities`): 0 not important, 1 important, 2
+    critical, kept until the entity is done."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def all(self) -> dict[Ref, int]:
+        return {
+            Ref(kind=row["kind"], id=row["id"]): row["level"]
+            for row in self._db.query("SELECT * FROM priorities")
+        }
+
+    def set(self, ref: Ref, level: int, now: datetime) -> None:
+        self._db.execute(
+            "INSERT OR REPLACE INTO priorities VALUES (?, ?, ?, ?)",
+            (ref.kind, ref.id, level, now.isoformat()),
+        )
+
+    def clear(self, ref: Ref) -> None:
+        self._db.execute("DELETE FROM priorities WHERE kind = ? AND id = ?", (ref.kind, ref.id))
 
 
 class FeedbackRepository:

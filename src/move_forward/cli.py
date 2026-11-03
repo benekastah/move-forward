@@ -10,13 +10,14 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, keychain, localtime, registry, snooze, supervisor, tls
+from . import auth, init, keychain, localtime, priority, registry, snooze, supervisor, tls
 from . import config as config_module
+from .act_now import PRIORITIES
 from .db import Database
 from .plugin import CliHandler
 from .refresh import build_dashboard, refresh, stored_graph
 from .registry import enabled, enabled_names, migrate
-from .repositories import FeedbackRepository
+from .repositories import FeedbackRepository, PriorityRepository
 from .server import scheme, serve
 from .shell import CommandError
 
@@ -140,6 +141,15 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     snooze_parser.add_argument(
         "duration", nargs="?", help="e.g. 7d or 12h; default: [act_now] snooze_days for PRs"
     )
+    priority_parser = commands.add_parser(
+        "priority",
+        help="set how much an entity matters: 0 not important, 1 important, 2 critical, or clear",
+    )
+    priority_parser.add_argument(
+        "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
+    )
+    priority_parser.add_argument("level", choices=["0", "1", "2", "clear"])
+    priority_parser.add_argument("--kind", help="the entity's kind, e.g. todo")
     unsnooze_parser = commands.add_parser("unsnooze", help="end a PR's review snooze")
     unsnooze_parser.add_argument("url", help="the PR's URL")
     commands.add_parser(
@@ -319,6 +329,21 @@ def main(argv: list[str] | None = None) -> int:
             print(err, file=sys.stderr)
             return 1
         print(f"snoozed until {localtime.local(until):%Y-%m-%d %H:%M}, or until the PR changes")
+        return 0
+    if args.command == "priority":
+        graph, _ = stored_graph(db, enabled(config, db, datetime.now(UTC)))
+        try:
+            ref = priority.resolve(graph, args.entity, args.kind)
+        except LookupError as err:
+            print(err, file=sys.stderr)
+            return 1
+        priorities = PriorityRepository(db)
+        if args.level == "clear":
+            priorities.clear(ref)
+            print(f"priority of {ref.kind} {ref.id} cleared")
+        else:
+            priorities.set(ref, int(args.level), datetime.now(UTC))
+            print(f"{ref.kind} {ref.id}: {PRIORITIES[int(args.level)].lower()}")
         return 0
     if args.command == "unsnooze":
         snooze.wake_review(FeedbackRepository(db), args.url)

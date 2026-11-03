@@ -36,6 +36,8 @@ MAX_MEMBERS = 20
 """More items than one Act now item ever joins: a bound on the `also` a button posts."""
 Units = Callable[[Ref], list[Ref]]
 """The units of work a subject is part of (see `Graph.units`)."""
+PriorityOf = Callable[[Ref], int | None]
+"""The priority I set on what a subject is, is part of or contains, 0 to 2; None if none."""
 FeedbackKey = tuple[str, str, str]
 """An item's main subject's kind and id, and its verb: what feedback is kept by."""
 
@@ -116,6 +118,24 @@ class Nomination:
         return hashlib.sha256(seen.encode()).hexdigest()[:16]
 
 
+def no_priority(ref: Ref) -> int | None:
+    """No priorities set (without a database)."""
+    return None
+
+
+def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomination, int | None]:
+    """The nomination with the highest priority I set on its subjects replacing its plugin's
+    importance, and that priority; as it is, and None, when I set none."""
+    levels = [p for s in nomination.item.subjects if (p := priority_of(s)) is not None]
+    if not levels:
+        return nomination, None
+    level = max(levels)
+    signals = nomination.signals.model_copy(update={"importance": PRIORITY_IMPORTANCE[level]})
+    return Nomination(
+        nomination.plugin, nomination.item.model_copy(update={"signals": signals})
+    ), level
+
+
 def set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> bool:
     """Snoozed until later, or dismissed, and not changed since."""
     if feedback is None or feedback.fingerprint != nomination.fingerprint:
@@ -156,7 +176,11 @@ def score(signals: Signals, weights: Weights, now: datetime | None = None) -> fl
     return total
 
 
-IMPORTANCE_WORDS = {1: "important", 2: "critical"}
+IMPORTANCE_WORDS = {-1: "not important", 1: "important", 2: "critical"}
+PRIORITIES = {0: "Not important", 1: "Important", 2: "Critical"}
+"""The priorities I can set, by level, as the buttons say them."""
+PRIORITY_IMPORTANCE = {0: -1, 1: 1, 2: 2}
+"""The `Signals.importance` each priority stands for."""
 
 
 def why(signals: Signals, now: datetime | None = None) -> str:
@@ -250,17 +274,28 @@ def panels(
     now: datetime | None = None,
     titles: dict[str, str] | None = None,
     units: Units = no_units,
+    priority_of: PriorityOf = no_priority,
 ) -> list[Panel]:
     """Act now's panels: nominations not blocked, snoozed or dismissed, pinned ones first and
     then the best (by score, then the plugin's own rank, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
-    in all, each with buttons to snooze, dismiss or pin it. They're split into a panel per
+    in all, each with buttons to snooze, dismiss, pin or prioritize it; a priority I set
+    replaces the item's importance. They're split into a panel per
     plugin (keyed and, by `titles`, titled after it), so they flow across the page; the
     panels come in their best items' order, and each item is badged with its place overall.
     With nothing to act on, one empty panel says so."""
     config = config or ActNowConfig()
     feedback = feedback or {}
     size, per_plugin, weights = config.size, config.per_plugin, config.weights
+    levels: dict[int, int] = {}
+    """The priority I set on a nomination, by its `id`."""
+    prioritized_nominations: list[Nomination] = []
+    for nomination in nominations:
+        changed, level = prioritized(nomination, priority_of)
+        if level is not None:
+            levels[id(changed)] = level
+        prioritized_nominations.append(changed)
+    nominations = prioritized_nominations
 
     def said(nomination: Nomination) -> Feedback | None:
         return feedback.get(nomination.key) if nomination.key else None
@@ -299,7 +334,7 @@ def panels(
             continue
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1
         is_pinned = any(pinned(n) for n in [nomination, *group.then])
-        shown = _shown(group, place, size, is_pinned, now)
+        shown = _shown(group, place, size, is_pinned, now, levels)
         by_plugin.setdefault(nomination.plugin, []).append(shown)
         place += 1
     if not by_plugin:
@@ -316,9 +351,12 @@ def panels(
     ]
 
 
-def _buttons(nomination: Nomination, then: list[Nomination], pinned: bool) -> list[Action]:
-    """Snooze until tomorrow, dismiss, and pin or unpin; none for an item about nothing. They
-    act on the items joined to it (`then`) too, posted as `also`."""
+def _buttons(
+    nomination: Nomination, then: list[Nomination], pinned: bool, level: int | None
+) -> list[Action]:
+    """Snooze, dismiss, pin or unpin, and set the priority of its subject (or clear it); none
+    for an item about nothing. Snooze, dismiss and pin act on the items joined to it (`then`)
+    too, posted as `also`."""
     if nomination.key is None:
         return []
     kind, id, verb = nomination.key
@@ -330,14 +368,37 @@ def _buttons(nomination: Nomination, then: list[Nomination], pinned: bool) -> li
     def button(action: str, label: str) -> Action:
         return Action(name=f"{ACTIONS}/{action}", label=label, fields=fields)
 
+    subject = nomination.item.subjects[0]
+    priority = {"kind": subject.kind, "id": subject.id}
+
+    def set_priority(new: int) -> Action:
+        return Action(
+            name=f"{ACTIONS}/priority",
+            label=PRIORITIES[new],
+            fields={**priority, "level": str(new)},
+        )
+
     return [
         button("snooze", "Snooze"),
         button("dismiss", "Dismiss"),
         button("unpin", "Unpin") if pinned else button("pin", "Pin"),
+        *(set_priority(new) for new in PRIORITIES if new != level),
+        *(
+            [Action(name=f"{ACTIONS}/priority", label="Clear priority", fields=priority)]
+            if level is not None
+            else []
+        ),
     ]
 
 
-def _shown(group: _Group, place: int, size: int, pinned: bool, now: datetime | None) -> Item:
+def _shown(
+    group: _Group,
+    place: int,
+    size: int,
+    pinned: bool,
+    now: datetime | None,
+    levels: dict[int, int],
+) -> Item:
     """The item as Act now shows it: its verb first, its place overall as a badge, why it's
     here, what else is due on the same subject, the items joined to it with their buttons,
     and the buttons to set it aside. Ranked by its place, since the panels keep their own
@@ -366,7 +427,7 @@ def _shown(group: _Group, place: int, size: int, pinned: bool, now: datetime | N
             "actions": [
                 *item.actions,
                 *(action for joined in then for action in joined.item.actions),
-                *_buttons(nomination, then, pinned),
+                *_buttons(nomination, then, pinned, levels.get(id(nomination))),
             ],
         }
     )

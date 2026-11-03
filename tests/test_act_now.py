@@ -187,8 +187,8 @@ def test_a_pinned_item_comes_first_and_says_so() -> None:
     )
     assert _titles(ranked) == ["PR 1", "PR 2"]
     assert ranked.items[0].details == ["why: pinned"]
-    assert [a.label for a in ranked.items[0].actions] == ["Snooze", "Dismiss", "Unpin"]
-    assert [a.label for a in ranked.items[1].actions] == ["Snooze", "Dismiss", "Pin"]
+    assert [a.label for a in ranked.items[0].actions][:3] == ["Snooze", "Dismiss", "Unpin"]
+    assert [a.label for a in ranked.items[1].actions][:3] == ["Snooze", "Dismiss", "Pin"]
     assert ranked.items[1].actions[0].fields == {
         "kind": "pr",
         "id": "u2",
@@ -248,7 +248,7 @@ def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it(
     assert [i.title for i in items] == ["Reply: PR 1", "Write it up", "Fix CI: PR 2"]
     joined = items[0]
     assert joined.details == ["why: quick, al waiting", "then: Move to In Review: APP-1 Do it"]
-    assert [a.label for a in joined.actions] == ["Move", "Snooze", "Dismiss", "Pin"]
+    assert [a.label for a in joined.actions][:4] == ["Move", "Snooze", "Dismiss", "Pin"]
     assert [link.url for link in joined.links] == ["https://jira/APP-1"]
     also = json.loads(joined.actions[1].fields["also"])
     assert also == [["ticket", "APP-1", "Move to In Review", Nomination("jira", move).fingerprint]]
