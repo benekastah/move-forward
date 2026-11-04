@@ -6,7 +6,7 @@ import urllib.request
 from typing import Any
 from urllib.parse import urlencode
 
-from ... import https
+from ...api import http
 
 API = "https://slack.com/api/"
 AUTHORIZE = "https://slack.com/oauth/v2/authorize"
@@ -27,14 +27,14 @@ def call(method: str, api_token: str | None, params: dict[str, str]) -> dict[str
     """POST `params` (form-encoded) to Slack's `method`, with `api_token` if given, and return
     its answer; raises SlackError when it isn't `ok`."""
     url = API + method
-    https.require_https(url, "the Slack token")
+    http.require_https(url, "the Slack token")
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     if api_token:
         headers["Authorization"] = f"Bearer {api_token}"
     request = urllib.request.Request(
         url, data=urlencode(params).encode(), headers=headers, method="POST"
     )
-    with https.opener.open(request, timeout=TIMEOUT_SECONDS) as response:
+    with http.opener.open(request, timeout=TIMEOUT_SECONDS) as response:
         answer: dict[str, Any] = json.loads(response.read())
     if not answer.get("ok"):
         raise SlackError(method, str(answer.get("error", "an error")))

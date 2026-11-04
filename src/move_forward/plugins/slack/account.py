@@ -4,10 +4,7 @@ and the pages the sign-in goes through."""
 import json
 from importlib import resources
 
-from ... import render
-from ...graph import Graph
-from ...page import Action
-from ...plugin import ActionError, Context
+from ...api import Action, ActionError, Context, Graph, html
 from . import oauth, scopes
 from .config import SlackConfig
 
@@ -29,7 +26,7 @@ def manifest() -> str:
 
 def _setup(ctx: Context[SlackConfig]) -> str:
     """How to make the app, once per workspace, and how to point the dashboard at it."""
-    e = render.e
+    e = html.e
     redirect = ctx.dashboard_url + oauth.CALLBACK_PATH
     return (
         "<h2>Set up the Slack app</h2>"
@@ -49,7 +46,7 @@ def _setup(ctx: Context[SlackConfig]) -> str:
 
 def page(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -> str:
     """Slack's page: what it's connected as, or how to connect, or how to set the app up."""
-    e = render.e
+    e = html.e
     found = oauth.connection(ctx)
     lost = ctx.kv.get(oauth.LOST)
     notice = query.get("notice", [""])[0]
@@ -65,7 +62,7 @@ def page(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -
             f"<p>As <code>{e(found.user_id)}</code> in {e(found.team_name or found.team_id)},"
             f" with {e(', '.join(found.scopes) or 'no scopes')}.</p>"
             + (f"<ul>{lacking}</ul>" if lacking else "")
-            + render.buttons([DISCONNECT], SLACK_PATH)
+            + html.buttons([DISCONNECT], SLACK_PATH)
         )
     else:
         if lost:
@@ -73,11 +70,11 @@ def page(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -
         if ctx.config.client_id:
             parts.append(
                 "<h2>Connect</h2><p>Sign in to the workspace's Slack app, for your own"
-                " token.</p>" + render.buttons([CONNECT], oauth.CONNECT_PATH)
+                " token.</p>" + html.buttons([CONNECT], oauth.CONNECT_PATH)
             )
         parts.append(_setup(ctx))
     body = "<article class='panel padded'>" + "".join(parts) + "</article>"
-    return render.page("Slack", "slack", body)
+    return html.page("Slack", "slack", body)
 
 
 def connect(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -> str | None:
@@ -92,16 +89,16 @@ def connect(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]
             "<article class='panel padded'><p>No sign-in under way: use the Connect button on"
             f" <a href='{SLACK_PATH}'>Slack's page</a>.</p></article>"
         )
-        return render.page("Connect Slack", "slack", body)
+        return html.page("Connect Slack", "slack", body)
     # The URL is ours, built with urlencode; JSON-quoted, with "</" broken so it can't end
     # the script.
     quoted = json.dumps(url).replace("</", "<\\/")
     script = f"location.replace({quoted});"
     body = (
         "<article class='panel padded'><p>Taking you to Slack to sign in…</p>"
-        f"<p><a class='button' href='{render.e(url)}'>Continue to Slack</a></p></article>"
+        f"<p><a class='button' href='{html.e(url)}'>Continue to Slack</a></p></article>"
     )
-    return render.page("Connect Slack", "slack", body, script)
+    return html.page("Connect Slack", "slack", body, script)
 
 
 def connect_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
@@ -117,7 +114,7 @@ def callback(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]
     """Where Slack sends the browser back: finish signing in, or say why not. Served
     without the dashboard's cookie (see `Plugin.sign_in_pages`): `oauth.finish` checks the
     sign-in's own `state` before anything else."""
-    e = render.e
+    e = html.e
     try:
         found = oauth.finish(ctx, query)
     except oauth.SignInError as err:
@@ -125,7 +122,7 @@ def callback(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]
     else:
         body = f"<p>Connected to {e(found.team_name or found.team_id)}.</p>"
     body += f"<p><a class='button' href='{SLACK_PATH}'>Back to Slack's page</a></p>"
-    return render.page("Slack", "slack", f"<article class='panel padded'>{body}</article>")
+    return html.page("Slack", "slack", f"<article class='panel padded'>{body}</article>")
 
 
 def disconnect_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:

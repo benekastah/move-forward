@@ -5,7 +5,7 @@ import sqlite3
 from collections import defaultdict
 from datetime import date, datetime
 
-from ...db import Database
+from ...api import Database
 from .models import JiraComment, JiraIssue, JiraSnapshot
 
 MIGRATIONS = [

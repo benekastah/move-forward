@@ -6,8 +6,8 @@ from pathlib import Path
 
 from pydantic import Field
 
-from ...domain import Model
-from ...shell import CommandError, git
+from ...api import Model
+from ...api.shell import CommandError, git
 from . import codeowners
 from .models import DerivedSnapshot, GitHubSnapshot, ReviewerSuggestion, TeamPrScore
 

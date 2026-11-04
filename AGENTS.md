@@ -18,9 +18,10 @@ is what's left to build.
   `panels.py` (pure functions from its snapshot and the graph to panels),
   `plugin.py` (the `Plugin` subclass), and `actions.py` if it has buttons.
   Core's `domain.py` has only the base `Model`.
-- Plugins never import each other or read each other's config, snapshots or
-  tables. What one needs from another goes through the graph. A plugin that's
-  built on another declares it in `requires`.
+- Plugins import core only from `move_forward.api` (ruff enforces it), and never
+  import each other or read each other's config, snapshots or tables. What one needs
+  from another goes through the graph. A plugin that's built on another declares it in
+  `requires`.
 - A plugin declares the kinds it publishes in `kinds`, each with a model of its
   attributes, and the graph checks its entities against them. A consumer reads
   another plugin's entities with `graph.view(kind, View)`, through its own

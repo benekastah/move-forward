@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from ...db import Database
+from ...api import Database
 from .models import Contact, Ping, TeamChannel
 
 Source = Literal["import", "dashboard", "lookup"]

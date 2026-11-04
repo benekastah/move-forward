@@ -8,10 +8,8 @@ from pathlib import Path
 
 from pydantic import Field
 
-from ...domain import Model
-from ...graph import Graph
-from ...plugin import ActionError, Context, form_field
-from ...shell import CommandError, git
+from ...api import ActionError, Context, Graph, Model, form_field
+from ...api.shell import CommandError, git
 from . import client
 from .config import GitConfig
 from .panels import ICED, TARGET_SEPARATOR, branch_ref

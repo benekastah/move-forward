@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ...strict import Strict
+from ...api import Strict
 
 DEFAULT_REFRESH_SECONDS = 300
 DEFAULT_HOST = "github.com"

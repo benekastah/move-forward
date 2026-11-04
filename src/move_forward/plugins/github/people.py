@@ -4,8 +4,7 @@ commit authors to reviewers to suggest."""
 from datetime import datetime
 from typing import Literal
 
-from ...db import Database
-from ...markdown import cell, tables
+from ...api import Database, cell, tables
 
 Source = Literal["import", "lookup"]
 IMPORTED: Source = "import"

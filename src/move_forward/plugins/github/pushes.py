@@ -5,8 +5,7 @@ would see mine only at its next `refresh_seconds`."""
 
 import json
 
-from ...domain import Model
-from ...graph import Graph, Ref
+from ...api import Graph, Model, Ref
 
 BRANCH = "branch"
 """git's kind for a local branch."""

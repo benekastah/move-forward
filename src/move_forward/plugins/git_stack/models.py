@@ -1,6 +1,6 @@
 """The git_stack plugin's data: the branches git-stack tracks."""
 
-from ...domain import Model
+from ...api import Model
 
 
 class StackBranch(Model):

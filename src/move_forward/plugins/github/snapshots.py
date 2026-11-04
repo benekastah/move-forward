@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Literal, cast
 
-from ...db import Database, Params
+from ...api import Database, Params
 from .models import (
     Check,
     DerivedSnapshot,

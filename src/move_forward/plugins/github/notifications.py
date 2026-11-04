@@ -9,7 +9,7 @@ from email.utils import parsedate_to_datetime
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
-from ...shell import CommandError, run
+from ...api.shell import CommandError, run
 
 DEFAULT_POLL_SECONDS = 60
 _HEAD_END = re.compile(r"\r?\n\r?\n")

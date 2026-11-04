@@ -6,9 +6,7 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 
 from datetime import datetime
 
-from ...domain import Model
-from ...graph import Graph, Ref
-from ...page import Action, Item, Panel, Signals, age
+from ...api import Action, Graph, Item, Model, Panel, Ref, Signals, age
 from .config import GitConfig
 from .models import Branch, LocalRepo, LocalSnapshot
 

@@ -5,8 +5,7 @@ Each says something once, when a state changes; a ticket the earlier snapshot di
 only ever says it was assigned.
 """
 
-from ...notifications import Event
-from ...page import anchor
+from ...api import Event, anchor
 from .config import JiraConfig
 from .models import JiraIssue, JiraSnapshot
 

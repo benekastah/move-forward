@@ -4,7 +4,7 @@ from typing import cast
 
 from pydantic import model_validator
 
-from ...strict import Strict
+from ...api import Strict
 
 IMPORT_ONCE = "the notes live in the database now: import them once with `mfd notes import <dir>`"
 """What to say to a config that still names the markdown notes' directory."""

@@ -1,6 +1,6 @@
 """The entity kinds jira publishes, with their attributes; see `docs/entities.md`."""
 
-from ...domain import Model
+from ...api import Model
 
 
 class TicketAttrs(Model):

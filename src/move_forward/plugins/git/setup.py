@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[git]`."""
 
-from ...asking import Asker, InitSetup, branch_prefix, checkout, directories, path
+from ...api import Asker, InitSetup, branch_prefix, checkout, directories, path
 
 TEMPLATE = """\
 # refresh_seconds = 1800               # how often it reads every repo anyway (it watches them)

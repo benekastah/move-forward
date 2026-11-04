@@ -29,7 +29,7 @@ from pathlib import Path, PurePosixPath
 
 from watchfiles._rust_notify import RustNotify
 
-from ...shell import CommandError, git
+from ...api.shell import CommandError, git
 
 log = logging.getLogger(__name__)
 

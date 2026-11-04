@@ -4,7 +4,7 @@ branches, and the directories I commit to, as the last refresh found them."""
 from collections import defaultdict
 from datetime import datetime
 
-from ...db import Database
+from ...api import Database
 from .models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 _FROM_SNAPSHOT = "FROM snapshots, json_each(snapshots.payload, '$.repos') AS repo"

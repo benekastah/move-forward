@@ -1,6 +1,6 @@
 """The entity kind git_stack publishes, with its attributes; see `docs/entities.md`."""
 
-from ...domain import Model
+from ...api import Model
 
 
 class StackBranchAttrs(Model):

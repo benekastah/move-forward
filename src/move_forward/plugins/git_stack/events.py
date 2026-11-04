@@ -1,7 +1,6 @@
 """Notification events of the git_stack plugin: branches that need a restack or were merged."""
 
-from ...notifications import Event
-from ...page import anchor
+from ...api import Event, anchor
 from .models import GitStackSnapshot, StackBranch
 from .panels import stack_branch_ref
 

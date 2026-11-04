@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from ...asking import Asker, InitSetup, checkout, choices, quiet, word
+from ...api import Asker, InitSetup, checkout, choices, quiet, word
 from .client import api
 from .config import DEFAULT_HOST
 
