@@ -105,7 +105,7 @@ def last_review_activity(pr: PullRequest) -> datetime | None:
     return max(times) if times else None
 
 
-def review_blockers(pr: PullRequest, me: str, review_checks: list[str]) -> list[str]:
+def review_blockers(pr: PullRequest, me: str, policy_checks: list[str]) -> list[str]:
     """Why the skill wouldn't nudge reviewers of my PR yet; empty when it's in order."""
     blockers: list[str] = []
     if approved(pr):
@@ -114,7 +114,7 @@ def review_blockers(pr: PullRequest, me: str, review_checks: list[str]) -> list[
         blockers.append("no reviewers requested")
     if has_conflicts(pr):
         blockers.append("conflicts")
-    if any(c.name not in review_checks for c in failing_checks(pr)):
+    if any(c.name not in policy_checks for c in failing_checks(pr)):
         blockers.append("failing checks")
     if unresolved_threads(pr):
         blockers.append("unresolved threads")

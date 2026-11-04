@@ -109,7 +109,7 @@ def test_nudge_blockers_and_staleness() -> None:
         "github": snapshot(
             mine=[fresh, stale, policy_only, broken, threads, approved, nobody, draft]
         ),
-        "review_checks": ["review-policy/owners"],
+        "policy_checks": ["review-policy/owners"],
     }
     found = pings(**stored)
     assert found[fresh.url].blockers == [] and not found[fresh.url].stale
@@ -123,7 +123,8 @@ def test_nudge_blockers_and_staleness() -> None:
     built = dashboard(slack=True, **stored)
     assert sorted(titles(built, "slack.nudges")) == ["PR 2", "PR 3"]
     nudged = [i.title for i in built.act_now() if "the reviewers" in i.title]
-    assert sorted(nudged) == ["Ping the reviewers: PR 2", "Ping the reviewers: PR 3"]
+    # PR 3's failing policy check is for me to meet first, so Act now names that instead
+    assert sorted(nudged) == ["Ping the reviewers: PR 2"]
 
 
 def test_ping_links_appear_on_my_prs_wherever_they_are_and_only_with_slack() -> None:

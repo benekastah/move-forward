@@ -165,7 +165,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     channels = cast(dict[str, TeamChannel], o.pop("teams", {}))
     pings = cast(list[Ping], o.pop("pings", []))
     github: dict[str, object] = {"org": "acme"}
-    for key in ("review_checks", "placeholder_labels", "ticket_link_prefix", "stale_review_hours"):
+    for key in ("policy_checks", "placeholder_labels", "ticket_link_prefix", "stale_review_hours"):
         if key in o:
             github[key] = o.pop(key)
     git: dict[str, object] = {"repos": [], "my_branch_prefixes": o.pop("my_branch_prefixes", [])}

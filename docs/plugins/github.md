@@ -32,7 +32,7 @@ just opened, say) waits for that.
 
 `[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
 fetched. Its conventions that differ between organisations are off by default:
-`review_checks` (CI checks that really report review status), `required_owner_marker` (a
+`policy_checks` (checks that enforce PR policy, such as labels or assignees, rather than test the code), `required_owner_marker` (a
 CODEOWNERS comment such as `#required`), `ticket_link_prefix` (the PR body line that links
 the ticket, e.g. `Link`) and `placeholder_labels` (template labels to replace).
 `email_domains` picks reviewers' emails from their commits (default: your email's domain;
@@ -54,7 +54,9 @@ tickets they name), and `person` for me and everyone it knows an email for; see
 - **Feedback to address**: unresolved threads, changes requested, comments since my last
   push I haven't answered.
 - **CI failures**: failing checks and merge-queue evictions in the last 2 days. Checks
-  named in `review_checks` never count as failures.
+  named in `policy_checks` never count as failures.
+- **PR policy**: failing checks named in `policy_checks`, linked to their details, which
+  say what's missing (a label, an assignee).
 - **Merge conflicts**.
 - **Needs a reviewer**: no person requested and no approval. PRs requesting one of my
   `teams` get recent committers to the PR's directories as suggestions for whom to assign

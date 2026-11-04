@@ -7,7 +7,7 @@ from ...strict import Strict
 DEFAULT_REFRESH_SECONDS = 300
 DEFAULT_HOST = "github.com"
 DEFAULT_HISTORY_DAYS = 14
-DEFAULT_REVIEW_CHECKS: list[str] = []
+DEFAULT_POLICY_CHECKS: list[str] = []
 DEFAULT_PLACEHOLDER_LABELS: list[str] = []
 DEFAULT_STALE_REVIEW_HOURS = 24
 DEFAULT_REVIEWER_HISTORY_DAYS = 180
@@ -26,9 +26,10 @@ class GitHubConfig(Strict):
     """The GitHub organization, as in https://<host>/<org>."""
     history_days: int = DEFAULT_HISTORY_DAYS
     """How far back to fetch my merged and closed PRs (Jira transitions, cleanup, PR states)."""
-    review_checks: list[str] = Field(default_factory=lambda: list(DEFAULT_REVIEW_CHECKS))
-    """Names of checks that report review status rather than CI (e.g. a "review-policy" check
-    that fails until reviews are in). They never count as CI failures."""
+    policy_checks: list[str] = Field(default_factory=lambda: list(DEFAULT_POLICY_CHECKS))
+    """Names of checks that enforce PR policy rather than test the code (e.g. a check that
+    fails until the PR has a risk label, or enough assignees). A failing one is a PR policy
+    item, not a CI failure."""
     required_owner_marker: str = ""
     """A comment marker on a CODEOWNERS line whose owners' approval is required, e.g.
     `#required`. Such files count first in team PR scores. Empty: no such convention."""

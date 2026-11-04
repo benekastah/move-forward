@@ -155,13 +155,28 @@ def test_ci_failures_show_failing_checks_and_recent_queue_removals() -> None:
     review_only = pr(5, checks=[Check(name="review-policy/approvals", state="FAILURE")])
     dashboard = build(
         github=snapshot(mine=[failing, evicted, old_eviction, draft, review_only]),
-        review_checks=["review-policy/approvals"],
+        policy_checks=["review-policy/approvals"],
     )
     items = {i.title: i for i in panel(dashboard, "github.ci_failures").items}
     assert set(items) == {"PR 1", "PR 2"}
     assert items["PR 1"].details == ["tests: FAILURE"]
     assert items["PR 1"].links[0].url == "https://ci/1"
     assert items["PR 2"].details == ["removed from merge queue 3h ago: CI failed"]
+
+
+def test_failing_policy_checks_are_pr_policy_items_not_ci_failures() -> None:
+    label = Check(name="pr-policy/risk-label", state="FAILURE", url="https://ci/policy")
+    approved_pr = pr(1, reviews=[approved_review()], review_decision="APPROVED", checks=[label])
+    draft = pr(2, is_draft=True, checks=[label])
+    dashboard = build(
+        github=snapshot(mine=[approved_pr, draft]), policy_checks=["pr-policy/risk-label"]
+    )
+    (item,) = panel(dashboard, "github.policy").items
+    assert item.title == "PR 1"
+    assert item.details == ["pr-policy/risk-label: FAILURE"]
+    assert item.links[0].url == "https://ci/policy"
+    assert titles(dashboard, "github.ci_failures") == []
+    assert titles(dashboard, "github.ready_to_merge") == []  # held until the policy passes
 
 
 def test_conflicts() -> None:

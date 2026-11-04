@@ -14,7 +14,7 @@ email = "me@x"  # who I am
 [github]
 org = "acme"
 # refresh_seconds = 300                 # how often it refreshes
-review_checks = ["policy"]  # a "#" in a comment
+policy_checks = ["policy"]  # a "#" in a comment
 
 # [jira]
 # site = "https://example.atlassian.net"
@@ -23,9 +23,9 @@ review_checks = ["policy"]  # a "#" in a comment
 
 
 def test_a_set_key_keeps_its_comment() -> None:
-    text = tomledit.set_key(CONFIG, "github", "review_checks", ["policy", "ci # 2"])
-    assert 'review_checks = ["policy", "ci # 2"]  # a "#" in a comment' in text
-    assert tomllib.loads(text)["github"]["review_checks"] == ["policy", "ci # 2"]
+    text = tomledit.set_key(CONFIG, "github", "policy_checks", ["policy", "ci # 2"])
+    assert 'policy_checks = ["policy", "ci # 2"]  # a "#" in a comment' in text
+    assert tomllib.loads(text)["github"]["policy_checks"] == ["policy", "ci # 2"]
 
 
 def test_a_commented_default_is_set_in_its_own_section_not_a_left_out_one() -> None:

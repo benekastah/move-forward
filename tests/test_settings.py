@@ -19,7 +19,7 @@ size = 7
 [github]
 org = "acme"
 # refresh_seconds = 300                 # how often it refreshes
-review_checks = []  # checks that report review status
+policy_checks = []  # checks that report review status
 """
 
 
@@ -51,7 +51,7 @@ def test_saving_changes_only_the_lines_of_what_changed(tmp_path: Path) -> None:
         _form(
             **{
                 "github:refresh_seconds": "600",
-                "github:review_checks": "policy\nci",
+                "github:policy_checks": "policy\nci",
                 "act_now:weights.closes": "4",
                 ":prune_days": "30",
             }
@@ -59,7 +59,7 @@ def test_saving_changes_only_the_lines_of_what_changed(tmp_path: Path) -> None:
     )
     assert notice.startswith("saved ") and "github.refresh_seconds" in notice
     assert "refresh_seconds = 600                 # how often it refreshes" in text
-    assert 'review_checks = ["policy", "ci"]  # checks that report review status' in text
+    assert 'policy_checks = ["policy", "ci"]  # checks that report review status' in text
     assert 'email = "me@x"   # who I am' in text and text.startswith("# my config\n")
     loaded = config_module.Config.model_validate(tomllib.loads(text))
     assert loaded.act_now.weights.closes == 4 and loaded.prune_days == 30

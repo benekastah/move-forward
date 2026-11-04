@@ -241,7 +241,7 @@ class Builder:
         for pr in self.mine:
             if pr.is_draft:
                 continue
-            failing = [c for c in failing_checks(pr) if c.name not in self.config.review_checks]
+            failing = [c for c in failing_checks(pr) if c.name not in self.config.policy_checks]
             details = [f"{c.name}: {c.state}" for c in failing]
             links = [Link(text=c.name, url=c.url) for c in failing if c.url]
             for event in pr.events:
@@ -259,6 +259,27 @@ class Builder:
             signals=Signals(verb="Fix CI", effort="hour"),
             title="CI failures",
             description="Failing checks and recent merge-queue evictions on my non-draft PRs.",
+            items=items,
+        )
+
+    def policy(self) -> Panel:
+        items: list[Item] = []
+        for pr in self.mine:
+            if pr.is_draft:
+                continue
+            failing = [c for c in failing_checks(pr) if c.name in self.config.policy_checks]
+            if failing:
+                details = [f"{c.name}: {c.state}" for c in failing]
+                links = [Link(text=c.name, url=c.url) for c in failing if c.url]
+                items.append(pr_item(self.now, pr, details=details, links=links, rank=len(failing)))
+        return Panel(
+            key="policy",
+            priority=45,  # 4. CI failures, but quick
+            act_now=True,
+            signals=Signals(verb="Meet PR policy", effort="minutes"),
+            title="PR policy",
+            description="Failing policy checks on my non-draft PRs: a label, an assignee or the"
+            " like is missing.",
             items=items,
         )
 
@@ -397,6 +418,7 @@ class Builder:
             self.reviews_for_me(),
             self.feedback(),
             self.ci_failures(),
+            self.policy(),
             self.conflicts(),
             self.needs_reviewer(),
             ready,

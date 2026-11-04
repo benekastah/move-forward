@@ -32,7 +32,7 @@ def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
         '[jira]\nsite = "https://j"\n',
     )
     assert loaded.git is not None and loaded.git.repos == [Path("~/src/a").expanduser()]
-    assert loaded.github is not None and loaded.github.review_checks == []
+    assert loaded.github is not None and loaded.github.policy_checks == []
     assert [loaded.github.slug(t) for t in loaded.teams] == ["core", "web-reviewers"]
     assert loaded.slack is not None and loaded.slack.teams == {"core": "#team-core"}
     assert loaded.slack.ping_first == DEFAULT_PING_FIRST
