@@ -56,6 +56,11 @@ def priority_level(issue: JiraIssue, priorities: list[str]) -> int:
     return priorities.index(issue.priority) + 1 if issue.priority in priorities else 0
 
 
+def _first(names: list[str]) -> str:
+    """The name a proposal shows for a status with several."""
+    return names[0] if names else "?"
+
+
 class _PrView(Model):
     """What jira reads of a `pr` (github's), to suggest status changes."""
 
@@ -68,30 +73,39 @@ class _PrView(Model):
     changes_requested: bool
 
 
+def in_status(issue: JiraIssue, names: list[str]) -> bool:
+    """Whether the issue's status is any of `names`, without regard to case."""
+    return issue.status.casefold() in {name.casefold() for name in names}
+
+
 def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
     items: list[Item] = []
     for issue in snapshot.issues:
         prs = [p for p in graph.view_related(ticket_ref(issue.key), PR, _PrView) if p.mine]
         open_prs = [p for p in prs if p.state == "open"]
         merged = [p for p in prs if p.state == "merged"]
-        proposal, to = None, None
+        proposal = None
+        targets: list[str] = []
+        closing = False
         if (
-            issue.status == config.status_in_progress
+            in_status(issue, config.status_in_progress)
             and open_prs
             and all(not p.draft for p in open_prs)
         ):
-            to = config.status_in_review
-            proposal = f"{config.status_in_progress} → {to}: all PRs open and non-draft"
-        elif issue.status == config.status_in_review and merged and not open_prs:
-            to = config.status_closed
-            proposal = f"{config.status_in_review} → {to}: all PRs merged"
-        elif issue.status == config.status_in_review and any(
+            targets = config.status_in_review
+            proposal = f"{issue.status} → {_first(targets)}: all PRs open and non-draft"
+        elif in_status(issue, config.status_in_review) and merged and not open_prs:
+            targets = config.status_closed
+            closing = True
+            proposal = f"{issue.status} → {_first(targets)}: all PRs merged"
+        elif in_status(issue, config.status_in_review) and any(
             p.draft or p.changes_requested for p in open_prs
         ):
-            to = config.status_in_progress
-            proposal = f"{config.status_in_review} → {to}: a PR is draft or has changes requested"
+            targets = config.status_in_progress
+            proposal = f"{issue.status} → {_first(targets)}: a PR is draft or has changes requested"
         elif issue.status_category == "new" and prs:
             proposal = f"still {issue.status} but has PRs"
+        to = targets[0] if targets else None
         if proposal:
             items.append(
                 Item(
@@ -104,7 +118,8 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                         Action(
                             name="jira/transition",
                             label=f"Move to {to}",
-                            fields={"key": issue.key, "to": to},
+                            fields={"key": issue.key, "to": to}
+                            | ({"also": "\n".join(targets[1:])} if targets[1:] else {}),
                         )
                     ]
                     if to
@@ -112,7 +127,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                     signals=Signals(
                         verb=f"Move to {to}" if to else "Update the status",
                         effort="minutes",
-                        closes=issue.key if to == config.status_closed else None,
+                        closes=issue.key if closing else None,
                     ),
                 )
             )
@@ -142,9 +157,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
         level = escalation(issue, config.escalation_label_prefix, config.escalation_levels)
         priority = priority_level(issue, config.priorities)
         top = bool(config.priorities) and priority == len(config.priorities)
-        blocked = bool(issue.open_blockers) or issue.status.casefold() == (
-            config.status_blocked.casefold()
-        )
+        blocked = bool(issue.open_blockers) or in_status(issue, config.status_blocked)
         if any(t in kind for t in config.incident_types):
             rank = 3000 + level * 100 + priority * 20
             why = "incident" + (f", escalated ({level})" if level else "")
@@ -238,7 +251,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for item in transitions(
                 ctx.config, JiraSnapshot(issues=list(issues.values())), graph
             ).items
-            if item.actions and item.actions[0].fields.get("to") == ctx.config.status_closed
+            if item.actions and item.signals and item.signals.closes
         }
         said = ctx.kv.get(CLOSEABLE)
         ctx.kv.set(CLOSEABLE, json.dumps(sorted(closing)))

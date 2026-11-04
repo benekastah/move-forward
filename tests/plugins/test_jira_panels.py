@@ -154,3 +154,17 @@ def test_a_blocked_ticket_is_nominated_and_comes_back_once_untouched_for_days() 
     assert dashboard.act_now()[0].title.startswith(
         "Chase the blockers: APP-2"
     )  # the stale one first
+
+
+def test_any_name_of_a_status_matches_and_a_move_offers_them_in_order() -> None:
+    dashboard = build(
+        github=snapshot(mine=[pr(2)]),
+        jira=JiraSnapshot(issues=[issue("APP-2", status="doing")]),
+        jira_statuses={
+            "in_progress": ["In Progress", "Doing"],
+            "in_review": ["Code Review", "In Review"],
+        },
+    )
+    [item] = panel(dashboard, "jira.jira_transitions").items
+    assert item.subtitle == "doing → Code Review: all PRs open and non-draft"
+    assert item.actions[0].fields == {"key": "APP-2", "to": "Code Review", "also": "In Review"}

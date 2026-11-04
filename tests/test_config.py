@@ -72,7 +72,7 @@ def test_naming_settings_have_defaults_and_load(tmp_path: Path) -> None:
         tmp_path,
         'email = "me@acme.com"\nprune_days = 30\n\n[github]\norg = "acme"\n\n'
         '[slack]\nping_first = "Look: {url}"\n\n'
-        '[jira]\nsite = "https://j"\nstatus_closed = "Done"\nincident_types = ["sev"]\n',
+        '[jira]\nsite = "https://j"\nstatus_closed = ["Done"]\nincident_types = ["sev"]\n',
     )
     assert loaded.slack is not None and loaded.prune_days == 30
     assert loaded.slack.ping_first == "Look: {url}"
@@ -80,7 +80,7 @@ def test_naming_settings_have_defaults_and_load(tmp_path: Path) -> None:
     assert loaded.github is not None
     assert loaded.github.placeholder_labels == DEFAULT_PLACEHOLDER_LABELS
     assert loaded.jira is not None
-    assert loaded.jira.status_closed == "Done" and loaded.jira.status_in_review == "In Review"
+    assert loaded.jira.status_closed == ["Done"] and loaded.jira.status_in_review == ["In Review"]
     assert loaded.jira.incident_types == ["sev"] and loaded.jira.bug_types == ["bug"]
 
 

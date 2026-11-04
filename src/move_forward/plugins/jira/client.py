@@ -334,19 +334,25 @@ class _Transitions(_Raw):
     transitions: list[_Transition] = []
 
 
-def transition(config: JiraConfig, email: str, key: str, status: str) -> None:
-    """Move the ticket `key` to `status` (matched without regard to case) by the transition
-    its workflow offers into it; raises `LookupError` naming the statuses it can go to when
-    there is none."""
+def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> None:
+    """Move the ticket `key` to the first of `statuses` (matched without regard to case) that
+    its workflow offers a transition into; raises `LookupError` naming the statuses it can
+    go to when there is none."""
     api_token = token(config, email)
     path = f"/rest/api/3/issue/{key}/transitions"
     offered = _Transitions.model_validate_json(_request(config, email, api_token, path))
     wanted = next(
-        (t for t in offered.transitions if t.to.name.casefold() == status.casefold()), None
+        (
+            t
+            for status in statuses
+            for t in offered.transitions
+            if t.to.name.casefold() == status.casefold()
+        ),
+        None,
     )
     if wanted is None:
         options = ", ".join(sorted(t.to.name for t in offered.transitions)) or "none"
-        raise LookupError(f"{key} can't move to {status}; it can go to: {options}")
+        raise LookupError(f"{key} can't move to {' or '.join(statuses)}; it can go to: {options}")
     _request(config, email, api_token, path, {"transition": {"id": wanted.id}})
 
 

@@ -27,7 +27,9 @@ returns at most one key.
 
 `[jira]` needs `site`, an `https://` URL (the requests carry your token). `token_env` and
 `keychain_service` say where its token is. `status_in_progress`, `status_in_review` and
-`status_closed` are the workflow's status names, for Jira transitions; a ticket in
+`status_closed` are lists of the workflow's status names, for Jira transitions: a ticket
+matches a role if its status is any of them (without regard to case), and a move goes to the
+first one the ticket can move to. A ticket in
 `status_blocked` counts as blocked (in What next and Act now) even without blocker links.
 `blocked_by_links` (e.g. `["depends on"]`) names more links, as the blocked ticket sees
 them, that mean "blocked by", besides "is blocked by".

@@ -36,13 +36,18 @@ class JiraConfig(Strict):
     """The service the token is stored under in the system's secret store (the macOS
     keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;
     its account is the top-level `email`."""
-    status_in_progress: str = DEFAULT_STATUS_IN_PROGRESS
-    """Workflow status names, for the transitions the Jira panel proposes."""
-    status_in_review: str = DEFAULT_STATUS_IN_REVIEW
-    status_closed: str = DEFAULT_STATUS_CLOSED
-    status_blocked: str = DEFAULT_STATUS_BLOCKED
-    """A ticket in this status counts as blocked in "What next" and Act now, even with no
-    blocker links."""
+    status_in_progress: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_IN_PROGRESS])
+    """Workflow status names for "in progress", e.g. `["In Progress", "Doing"]`, for the
+    transitions the Jira panel proposes. A ticket is in one if its status is any of the names
+    (without regard to case); a move goes to the first name the ticket can move to. The
+    same goes for the other `status_*`."""
+    status_in_review: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_IN_REVIEW])
+    """Names for "in review", e.g. `["In Review", "Code Review"]`."""
+    status_closed: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_CLOSED])
+    """Names for closed, e.g. `["Closed", "Done"]`."""
+    status_blocked: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_BLOCKED])
+    """A ticket in one of these statuses counts as blocked in "What next" and Act now, even
+    with no blocker links, e.g. `["Blocked", "On Hold"]`."""
     priorities: list[str] = Field(default_factory=lambda: list(DEFAULT_PRIORITIES))
     """Jira's priority names, lowest first, for `priority_raised` notifications: a priority
     not listed here is never counted as raised."""

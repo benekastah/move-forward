@@ -303,17 +303,25 @@ def test_a_ticket_moves_by_the_transition_into_its_status(monkeypatch: pytest.Mo
         '{"transitions": [{"id": "11", "to": {"name": "In Progress"}},'
         ' {"id": "21", "to": {"name": "In Review"}}]}',
     )
-    jira.transition(CONFIG, "me@x.com", "APP-1", "in review")
+    jira.transition(CONFIG, "me@x.com", "APP-1", ["in review"])
     assert sent == [
         ("/rest/api/3/issue/APP-1/transitions", None),
         ("/rest/api/3/issue/APP-1/transitions", {"transition": {"id": "21"}}),
     ]
 
 
+def test_a_ticket_moves_to_the_first_of_several_statuses_it_can(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent = _jira_replies(monkeypatch, '{"transitions": [{"id": "31", "to": {"name": "Done"}}]}')
+    jira.transition(CONFIG, "me@x.com", "APP-1", ["Closed", "done"])
+    assert sent[-1] == ("/rest/api/3/issue/APP-1/transitions", {"transition": {"id": "31"}})
+
+
 def test_a_ticket_that_cant_go_there_says_where_it_can(monkeypatch: pytest.MonkeyPatch) -> None:
     sent = _jira_replies(monkeypatch, '{"transitions": [{"id": "11", "to": {"name": "Done"}}]}')
     with pytest.raises(LookupError, match="can't move to In Review; it can go to: Done"):
-        jira.transition(CONFIG, "me@x.com", "APP-1", "In Review")
+        jira.transition(CONFIG, "me@x.com", "APP-1", ["In Review"])
     assert len(sent) == 1  # nothing was changed
 
 

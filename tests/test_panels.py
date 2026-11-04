@@ -324,7 +324,11 @@ def test_naming_settings_drive_pings_labels_and_jira() -> None:
         "ping_first": "Please look at {url}",
         "ping_follow_up": "Bump!",
         "placeholder_labels": ["needs-team"],
-        "jira_statuses": {"in_progress": "Doing", "in_review": "Checking", "closed": "Shipped"},
+        "jira_statuses": {
+            "in_progress": ["Doing"],
+            "in_review": ["Checking"],
+            "closed": ["Shipped"],
+        },
         "escalation_label_prefix": "esc:",
         "escalation_levels": ["lead", "vp"],
         "incident_types": ["outage"],
