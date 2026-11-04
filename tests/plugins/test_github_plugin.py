@@ -251,8 +251,10 @@ def test_the_daily_prune_looks_up_old_misses_again() -> None:
     assert people.emails() == {"alice": "a@x"}
 
 
-def test_a_reviews_state_is_kept() -> None:
-    review = TimelineEvent(type="PullRequestReview", at=NOW, actor="bob", state="APPROVED")
+def test_a_reviews_state_and_whether_it_has_text_are_kept() -> None:
+    review = TimelineEvent(
+        type="PullRequestReview", at=NOW, actor="bob", state="APPROVED", has_body=True
+    )
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)
     store = PrRepository(db)

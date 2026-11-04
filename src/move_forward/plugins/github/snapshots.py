@@ -131,6 +131,7 @@ class PrRepository:
                         e.reviewer,
                         e.reason,
                         e.state,
+                        e.has_body,
                     )
                     for i, e in enumerate(pr.events)
                 ]
@@ -238,6 +239,7 @@ class PrRepository:
                                 "reviewer": r["reviewer"],
                                 "reason": r["reason"],
                                 "state": r["state"],
+                                "has_body": r["has_body"],
                             }
                         )
                         for r in events[key]

@@ -101,6 +101,7 @@ class _RawEvent(_Raw):
     author: _Named | None = None
     enqueuer: _Named | None = None
     state: str | None = None
+    body: str | None = None
 
 
 class _RawFile(_Raw):
@@ -306,6 +307,7 @@ def _event(raw: _RawEvent) -> TimelineEvent | None:
         reviewer=reviewer[1] if reviewer else None,
         reason=raw.reason,
         state=raw.state,
+        has_body=bool(raw.body and raw.body.strip()),
     )
 
 

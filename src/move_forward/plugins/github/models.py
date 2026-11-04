@@ -50,6 +50,8 @@ class TimelineEvent(Model):
     state: str | None = None
     """APPROVED, CHANGES_REQUESTED, COMMENTED and so on, for PullRequestReview; None for
     other events and for reviews stored before it was kept."""
+    has_body: bool = False
+    """A review has text of its own, beyond its inline comments, for PullRequestReview."""
 
 
 class PullRequest(Model):

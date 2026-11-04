@@ -63,17 +63,20 @@ def ticket_keys(pr: PullRequest) -> list[str]:
     return seen
 
 
-FEEDBACK_VERBS = {
-    "APPROVED": "approved by",
-    "CHANGES_REQUESTED": "changes requested by",
-}
-
-
 def _feedback_verb(event: TimelineEvent) -> str:
     """How feedback reads in the list: by the review's state, or a comment."""
     if event.type == "IssueComment":
         return "comments by"
-    return FEEDBACK_VERBS.get(event.state or "", "reviewed by")
+    if event.state == "APPROVED" and event.has_body:
+        return "approved with comments by"
+    if event.state == "CHANGES_REQUESTED":
+        return "changes requested by"
+    return "reviewed by"
+
+
+def _bare_approval(event: TimelineEvent) -> bool:
+    """An approval with nothing written: there's nothing to answer."""
+    return event.type == "PullRequestReview" and event.state == "APPROVED" and not event.has_body
 
 
 def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ()) -> list[str]:
@@ -87,7 +90,7 @@ def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ())
             continue
         if event.actor == me:
             pending.clear()
-        elif not is_bot(event.actor, ignored):
+        elif not is_bot(event.actor, ignored) and not _bare_approval(event):
             pending.append(f"{_feedback_verb(event)} {event.actor}")
     return pending
 

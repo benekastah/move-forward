@@ -130,7 +130,7 @@ def test_feedback_collects_threads_changes_requested_and_unanswered_comments() -
     assert items["PR 2"].details == ["changes requested", "comments by alice"]
 
 
-def test_feedback_words_a_review_by_its_state() -> None:
+def test_feedback_words_a_review_by_its_state_and_skips_a_bare_approval() -> None:
     pushed = NOW - timedelta(days=1)
 
     def at(hours: int) -> datetime:
@@ -140,7 +140,8 @@ def test_feedback_words_a_review_by_its_state() -> None:
         1,
         last_commit_at=pushed,
         events=[
-            event("PullRequestReview", at(1), actor="alice", state="APPROVED"),
+            event("PullRequestReview", at(1), actor="alice", state="APPROVED", has_body=True),
+            event("PullRequestReview", at(1), actor="erin", state="APPROVED"),  # nothing to answer
             event("PullRequestReview", at(2), actor="bob", state="CHANGES_REQUESTED"),
             event("PullRequestReview", at(3), actor="carol", state="COMMENTED"),
             event("PullRequestReview", at(4), actor="dave"),  # stored before states were kept
@@ -149,7 +150,7 @@ def test_feedback_words_a_review_by_its_state() -> None:
     dashboard = build(github=snapshot(mine=[reviewed]))
     [item] = panel(dashboard, "github.feedback").items
     assert item.details == [
-        "approved by alice",
+        "approved with comments by alice",
         "changes requested by bob",
         "reviewed by carol",
         "reviewed by dave",
