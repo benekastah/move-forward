@@ -203,3 +203,13 @@ def test_pings_are_worked_out_once_per_page_not_per_item(monkeypatch: pytest.Mon
     built = dashboard(slack=True, github=snapshot(mine=mine))
     assert len(built.panel("github.conflicts").items) == 3
     assert len(built_pingers) == 2  # the Nudge panel's, and the Ping links'
+
+
+def test_the_nudge_panels_description_says_how_long_a_review_must_be_quiet() -> None:
+    def description(hours: int) -> str:
+        built = dashboard(slack=True, github=snapshot(mine=[pr(1)]), stale_review_hours=hours)
+        return next(p for p in built.panels if p.key == "slack.nudges").description
+
+    assert description(24).endswith("quiet for a day.")
+    assert description(72).endswith("quiet for 3 days.")
+    assert description(6).endswith("quiet for 6 hours.")

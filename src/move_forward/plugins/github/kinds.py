@@ -30,6 +30,8 @@ class PrAttrs(Model):
     """On my open PRs only: why reviewers shouldn't be nudged yet; empty when it's in order."""
     last_review_activity: str | None = None
     """On my open PRs only: the latest review request, review or human comment."""
+    stale_review_hours: int | None = None
+    """On my open PRs only: `[github] stale_review_hours`, for what says "quiet for N"."""
     progress: str | None = None
     """On my open PRs only: `draft`, `ready to merge`, `CI failing` or `in review`."""
     review_stale: bool | None = None

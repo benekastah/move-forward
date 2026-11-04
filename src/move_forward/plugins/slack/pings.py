@@ -61,11 +61,22 @@ class PrView(Model):
     requested_teams: list[str] = Field(default_factory=list[str])
     review_blockers: list[str] | None = None
     review_stale: bool | None = None
+    stale_review_hours: int | None = None
     last_review_activity: str | None = None
 
 
 def my_open_prs(graph: Graph) -> list[PrView]:
     return [pr for pr in graph.view(PR, PrView) if pr.mine and pr.state == "open"]
+
+
+def _quiet(prs: list[PrView]) -> str:
+    """How long a review request must be quiet to be nudged, as github's
+    `stale_review_hours` says: "a day", "3 days", "6 hours"."""
+    hours = next((pr.stale_review_hours for pr in prs if pr.stale_review_hours), 24)
+    if hours % 24 == 0:
+        days = hours // 24
+        return "a day" if days == 1 else f"{days} days"
+    return "an hour" if hours == 1 else f"{hours} hours"
 
 
 def _datetime(value: str | None) -> datetime | None:
@@ -209,6 +220,7 @@ class Pinger:
             priority=85,  # 8. stale reviews and nudges
             act_now=True,
             title="Nudge reviewers",
-            description="In order (green, no conflicts, no open threads) and quiet for a day.",
+            description="In order (green, no conflicts, no open threads) and quiet for"
+            f" {_quiet(self.my_open_prs)}.",
             items=items,
         )
