@@ -319,7 +319,7 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
     return [
         Panel(
             key="assigned",
-            priority=125,
+            priority=Band.TRANSITIONS + 5,
             title="Linear issues",
             description="Issues assigned to me, oldest first.",
             items=[...],
@@ -330,8 +330,10 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database reads beyond what
   the plugin passes in. Anything slow belongs in `collect`.
 - The page keys a panel `<plugin>.<key>` (`linear.assigned`) and groups a plugin's panels
-  together. `priority` sets the default order, lowest first, in the skill's step order;
-  the person can drag panels and groups about, and that wins.
+  together. `priority` sets the default order, lowest first, in the skill's step order:
+  pick the `Band` it belongs in (`Band.REVIEWS`, `Band.CI`, `Band.NEXT`, ...), adding to
+  one to fall between two. The person can drag panels and groups about, and that wins.
+- An item's `rank` orders it within its panel only; Act now orders by score.
 - Each `Item` names its `subjects`, the entities it's about, main one first. Other plugins
   add their buttons by them, and core hides items whose subject is on ice.
 - A badge is a string, or `Badge(text, tone="warn")` for one that needs attention (`good`

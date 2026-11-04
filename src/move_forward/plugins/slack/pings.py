@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ...api import Graph, Item, Model, Panel, Ref, Signals, age
+from ...api import Band, Graph, Item, Model, Panel, Ref, Signals, age
 from ...api.kinds import PULL_REQUEST as PR
 from .config import SlackConfig
 from .models import Contact, Ping, TeamChannel
@@ -218,7 +218,7 @@ class Pinger:
             )
         return Panel(
             key="nudges",
-            priority=85,  # 8. stale reviews and nudges
+            priority=Band.NUDGES,
             act_now=True,
             title="Nudge reviewers",
             description="In order (green, no conflicts, no open threads) and quiet for"

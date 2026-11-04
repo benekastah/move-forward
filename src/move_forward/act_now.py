@@ -365,7 +365,7 @@ def panels(
 ) -> list[Panel]:
     """Act now's panels: nominations not snoozed or dismissed (those I opened dimmed, in
     their place), pinned ones first and
-    then the best (by score, then the plugin's own rank, then the order they came in), one
+    then the best (by score, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
     in all, each with buttons to snooze, dismiss, pin or prioritize it; a priority I set
     replaces the item's importance. They're split into a panel per
@@ -402,7 +402,6 @@ def panels(
         key=lambda c: (
             not pinned(c[1]),
             -score(c[1].signals, weights, now, stale_after, horizon),
-            -c[1].item.rank,
             c[0],
         )
     )

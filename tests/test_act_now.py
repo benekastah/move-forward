@@ -302,3 +302,12 @@ def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it(
     also = json.loads(joined.actions[1].fields["also"])
     assert also == [["ticket", "APP-1", "move_to_in_review", Nomination("jira", move).fingerprint]]
     assert [p.key for p in panels] == ["github", "notes"]  # the ticket's item went with its PR
+
+
+def test_equal_scores_keep_the_order_they_were_nominated_in_whatever_their_rank() -> None:
+    low = _item("first", "u1").model_copy(update={"rank": 1})
+    high = _item("second", "u2").model_copy(update={"rank": 3000})  # a panel's own order
+    assert _titles(_ranked([Nomination("jira", low), Nomination("github", high)])) == [
+        "first",
+        "second",
+    ]

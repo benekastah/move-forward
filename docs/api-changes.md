@@ -60,3 +60,6 @@ catch up.
 - **Opened items**: `Item.pending` is gone; core sets `Item.act_now_fields` and
   `Item.opened_at` on Act now's items (a plugin's are ignored). Act now's feedback action
   `pending` is `opened`.
+- **Panel order**: `Band` names where a panel goes in the day's check-in
+  (`priority=Band.CI`); Act now no longer reads `Item.rank`, which orders an item within
+  its panel only.

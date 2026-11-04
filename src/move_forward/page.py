@@ -5,6 +5,7 @@ Core and every plugin build these; `render` turns them into HTML.
 
 import re
 from datetime import UTC, datetime
+from enum import IntEnum
 from typing import Literal
 
 from pydantic import Field
@@ -20,6 +21,43 @@ def anchor(kind: str, id: str) -> str:
     `item-pull_request-https-github-com-acme-widgets-pull-12`: a link to `/#<id>` opens the
     dashboard at it."""
     return ANCHOR_PREFIX + re.sub(r"[^A-Za-z0-9_-]+", "-", f"{kind}-{id}").strip("-")
+
+
+class Band(IntEnum):
+    """Where a panel goes in the day's check-in (`Panel.priority`), lowest first: the order
+    the work-notes skill walks through. A panel between two bands adds to one, e.g.
+    `Band.MERGE + 1`."""
+
+    TODOS = 0
+    """Reconcile the work notes."""
+    REVIEWS = 10
+    """Reviews asked of me."""
+    STACKS = 20
+    """Sync stacks."""
+    FEEDBACK = 30
+    """Feedback on my PRs."""
+    CI = 40
+    """CI failures."""
+    PUSH = 50
+    """Restack and push."""
+    STACKS_NO_PR = 60
+    """Stacks without PRs."""
+    METADATA = 70
+    """PR metadata."""
+    REVIEWERS = 80
+    """A person for each review."""
+    NUDGES = 85
+    """Stale reviews and nudges."""
+    MERGE = 90
+    """The merge queue."""
+    CLEANUP = 100
+    """Cleanup."""
+    TRANSITIONS = 120
+    """Ticket updates."""
+    NEXT = 130
+    """What next."""
+    PARKED = 1000
+    """Parked: what the skill leaves alone."""
 
 
 class Link(Model):
@@ -111,7 +149,7 @@ class Item(Model):
     """Longer lines shown under the title."""
     links: list[Link] = Field(default_factory=list)
     rank: float = 0
-    """Higher sorts first within a panel."""
+    """Higher sorts first within its panel; Act now orders by score, not by it."""
     deferred: bool = False
     """Not for now, e.g. a draft PR: it sorts after everything else in its panel, whatever
     its rank, and Act now leaves it out unless its plugin nominates it in `act_now`."""

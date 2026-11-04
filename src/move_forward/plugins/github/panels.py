@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from pydantic import Field
 
-from ...api import Badge, Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
+from ...api import Badge, Band, Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import REVIEW as REVIEW_TASK
 from ...api.kinds import TICKET
@@ -258,7 +258,7 @@ class Builder:
                     )
         return Panel(
             key="reviews_for_me",
-            priority=10,  # 1. reviews asked of me
+            priority=Band.REVIEWS,
             act_now=True,
             snoozable=True,
             title="Reviews for me",
@@ -287,7 +287,7 @@ class Builder:
             items.append(pr_item(self.now, pr, details=details, rank=-pr.created_at.timestamp()))
         return Panel(
             key="needs_reviewer",
-            priority=80,  # 8a. a person for each review
+            priority=Band.REVIEWERS,
             title="Needs a reviewer",
             description="My open PRs with no person requested and no approval yet.",
             items=items,
@@ -330,7 +330,7 @@ class Builder:
                 )
         return Panel(
             key="feedback",
-            priority=30,  # 3. feedback on my PRs
+            priority=Band.FEEDBACK,
             act_now=True,
             title="Feedback to address",
             description="Unresolved review threads, changes requested, and comments since my last push.",
@@ -365,7 +365,7 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=details, links=links, rank=len(failing)))
         return Panel(
             key="ci_failures",
-            priority=40,  # 4. CI failures
+            priority=Band.CI,
             act_now=True,
             signals=Signals(verb="Fix CI", task="fix_ci", effort="hour"),
             title="CI failures",
@@ -385,7 +385,7 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=details, links=links, rank=len(failing)))
         return Panel(
             key="policy",
-            priority=45,  # 4. CI failures, but quick
+            priority=Band.CI + 5,  # CI failures, but quick
             act_now=True,
             signals=Signals(verb="Meet PR policy", task="meet_pr_policy", effort="minutes"),
             title="PR policy",
@@ -410,7 +410,7 @@ class Builder:
             items.append(pr_item(self.now, pr, details=details, signals=signals))
         return Panel(
             key="conflicts",
-            priority=20,  # 2. sync stacks
+            priority=Band.STACKS,
             act_now=True,
             signals=Signals(verb="Resolve conflicts", task="resolve_conflicts", effort="hour"),
             title="Merge conflicts",
@@ -444,7 +444,7 @@ class Builder:
         return (
             Panel(
                 key="ready_to_merge",
-                priority=90,  # 9. the merge queue
+                priority=Band.MERGE,
                 act_now=True,
                 title="Ready to merge",
                 description="Approved, green, no open threads, based on the default branch.",
@@ -452,7 +452,7 @@ class Builder:
             ),
             Panel(
                 key="held",
-                priority=91,  # 9, with merge conditions
+                priority=Band.MERGE + 1,  # with merge conditions
                 title="Held by merge conditions",
                 description="Would be ready, but the work notes hold them, or GitHub says the branch is"
                 " behind or blocked.",
@@ -463,7 +463,7 @@ class Builder:
     def merge_queue(self) -> Panel:
         return Panel(
             key="merge_queue",
-            priority=92,  # 9, after ready to merge and held
+            priority=Band.MERGE + 2,  # after ready to merge and held
             title="In the merge queue",
             description="My PRs waiting in the merge queue.",
             items=[
@@ -507,7 +507,7 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=problems))
         return Panel(
             key="metadata",
-            priority=70,  # 7. PR metadata
+            priority=Band.METADATA,
             title="PR housekeeping",
             description="Unknown labels, missing ticket links, drafts that look ready, big PRs.",
             items=items,
@@ -536,7 +536,7 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=details, rank=rank))
         return Panel(
             key="team_prs",
-            priority=81,  # 8a, for my teams' PRs
+            priority=Band.REVIEWERS + 1,  # for my teams' PRs
             title="Requested from my teams",
             description=f"PRs waiting on {', '.join(self.teams) or 'my teams'}, ranked by"
             " CODEOWNERS and the paths I work in.",

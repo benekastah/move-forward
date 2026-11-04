@@ -25,6 +25,7 @@ from ..notifications import Event
 from ..page import (
     Action,
     Badge,
+    Band,
     Effort,
     Identity,
     Item,
@@ -95,6 +96,7 @@ __all__ = [
     "AfterCollectRequest",
     "Asker",
     "Badge",
+    "Band",
     "Changed",
     "ChangedRequest",
     "CliHandler",

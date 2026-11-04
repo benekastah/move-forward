@@ -12,6 +12,7 @@ from ...api import (
     ActNowRequest,
     Asker,
     Badge,
+    Band,
     ChangedRequest,
     CollectRequest,
     EntitiesRequest,
@@ -171,7 +172,7 @@ def rollouts(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
             items.append(_finish_rollout(config, issue, prs))
     return Panel(
         key="rollouts",
-        priority=121,  # after the transitions
+        priority=Band.TRANSITIONS + 1,  # after the transitions
         act_now=True,
         title="Rollouts",
         description="Tickets in a rollout status and where their PRs are",
@@ -251,7 +252,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
             )
     return Panel(
         key="jira_transitions",
-        priority=120,  # 12. Jira updates
+        priority=Band.TRANSITIONS,
         act_now=True,
         title="Jira transitions",
         description="Status changes the PR states suggest.",
@@ -331,7 +332,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
         )
     return Panel(
         key="jira_next",
-        priority=130,  # 13. what next
+        priority=Band.NEXT,
         title="What next",
         description="My open tickets: incidents by escalation, then bugs, then unblocked work.",
         items=items,
