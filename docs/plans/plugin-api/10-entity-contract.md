@@ -52,6 +52,9 @@ publisher must do). **After** for relations and the git-stack membership attribu
 - git_stack publishes `stack: list[str]` (the stack's branch ids, group included) on each
   `git_stack.stack_branch`; notes' `_stack_branches` becomes a lookup.
 - `docs/graph.md` (a "Relations" section), `plugins.md`.
+- notes keeps matching an iced branch git no longer has by its name (no branch, so no
+  relation). The harness needs no `with_relations`: a seeded entity's `refs` are its
+  relations already.
 
 **Tests.** Table-driven: renamed branch, same-sha branch, two repos; the four consumers
 agree; notes ices the whole group from the attribute. **Size.** L.

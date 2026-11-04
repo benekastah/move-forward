@@ -26,6 +26,7 @@ from .plugin import (
     LinkingRequest,
     LoadRequest,
     Plugin,
+    RelateRequest,
     SourceError,
     UrlRequest,
 )
@@ -400,4 +401,31 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         for kind, spec in e.plugin.kinds.items():
             specs.setdefault(kind, spec)  # a family's first publisher's
     hiding = [kind for kind, spec in specs.items() if spec.hides]
+    graph = Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
+    related = _relations(plugins, graph)
+    if not related:
+        return graph
+    entities = [
+        e.model_copy(update={"refs": list(dict.fromkeys([*e.refs, *related[e.ref]]))})
+        if e.ref in related
+        else e
+        for e in entities
+    ]
     return Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
+
+
+def _relations(plugins: list[Enabled], graph: Graph) -> dict[Ref, list[Ref]]:
+    """What each plugin relates (`Plugin.relate`), by the entity of its own each starts at.
+    A relation from an entity that isn't the plugin's, or isn't in the graph, is a plugin
+    bug: it's logged and left out."""
+    found: dict[Ref, list[Ref]] = {}
+    for e in plugins:
+        pairs: list[tuple[Ref, Ref]] = call(
+            e.name, "relate", lambda e=e: e.plugin.relate(RelateRequest(e.ctx, graph)), []
+        )
+        for mine, theirs in pairs:
+            if mine.kind not in e.plugin.kinds or graph.get(mine.kind, mine.id) is None:
+                log.error("%s related %s %s, which it doesn't publish", e.name, mine.kind, mine.id)
+                continue
+            found.setdefault(mine, []).append(theirs)
+    return found

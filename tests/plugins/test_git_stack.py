@@ -28,7 +28,7 @@ from move_forward.plugin import ActionError, ChangedRequest, CollectAfterRequest
 from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack import actions, client
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
-from move_forward.plugins.git_stack.panels import repo_dirs
+from move_forward.plugins.git_stack.panels import repo_dirs, stack_of
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 from move_forward.registry import enabled
@@ -38,9 +38,10 @@ ICED = iced("me/x", "/src/widgets")
 
 
 def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
+    names = ["main", "me/APP-1-branch", "me/APP-2-branch", "me/APP-3-branch", "me/no-pr"]
     built = dashboard(
         github=snapshot(mine=[pr(1), pr(2)]),
-        local=local_snapshot(),
+        local=local_snapshot(branches=[local_branch(n) for n in names]),  # PRs relate to them
         stacks=stacks(
             StackBranch(name="main"),
             StackBranch(name="me/APP-1-branch", parent="main", status="up-to-date"),
@@ -100,6 +101,7 @@ def test_tracked_branches_are_stack_branches_pointing_at_gits() -> None:
         "stack_parent": "main",
         "stack_status": "needs-restack",
         "stack_group": "g",
+        "stack": ["/src/widgets\tme/top"],  # its group has no other stack
     }
     # git's own branch is left as git published it, and a branch git deleted isn't git's.
     branch = graph.get("git.branch", "/src/widgets\tme/top")
@@ -344,3 +346,18 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
     assert changed()
     assert not changed()
     assert GitStackPlugin.watches == ["git"]
+
+
+def test_a_branchs_stack_is_its_own_then_its_groups_others_bottom_first() -> None:
+    tracked = [
+        StackBranch(name="main"),
+        StackBranch(name="a1", parent="main", group="g"),
+        StackBranch(name="a2", parent="a1"),
+        StackBranch(name="b1", parent="main", group="g"),
+        StackBranch(name="b2", parent="b1"),
+        StackBranch(name="c1", parent="main"),  # in no group
+    ]
+    assert stack_of(tracked, "b2") == ["b1", "b2", "a1", "a2"]
+    assert stack_of(tracked, "a1") == ["a1", "a2", "b1", "b2"]
+    assert stack_of(tracked, "c1") == ["c1"]
+    assert stack_of(tracked, "main") == ["main"]  # a root isn't tracked

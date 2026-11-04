@@ -184,6 +184,20 @@ the pattern (Jira not set up), mentions link nothing. `graph.named(text)` finds 
 refs in any text, for a plugin reading text of its own (notes finds the tickets a todo
 names with it).
 
+### Relations
+
+Some links only a third plugin knows: which local branch a pull request comes from is in
+neither github's PR (its head's name, in a repo on GitHub) nor git's branch (a name, in a
+checkout) alone. A plugin says what it knows with `relate(req)`: pairs of one of its own
+entities and another's, which core adds as refs from the first to the second after every
+plugin has published, so `graph.related(branch, "pull_request")` finds the branch's PRs
+whoever relates them. github relates each PR to the branch of its head's name in the
+checkout of its repo; else, for a branch renamed since it was pushed, the one whose
+upstream has that name; else, for one of mine, a branch at its head's commit. git, git_stack,
+notes and github's push tracking all read that one relation, so a second code host's
+plugin relates its own PRs and they work everywhere. A relation from an entity that isn't
+the plugin's is logged and left out.
+
 ### Hidden entities
 
 A plugin can declare kinds whose entities **hide** what they point at, with

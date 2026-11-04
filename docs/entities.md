@@ -151,6 +151,7 @@ The person family, modeled in core (`api.kinds.Person`); github adds `me`.
 | --- | --- | --- |
 | `ahead`, `behind` | int | commits ahead of and behind its upstream |
 | `gone` | bool | its upstream was deleted |
+| `upstream` | string or null | what it tracks, e.g. `origin/me/fix`; null when never pushed |
 | `repo_dir` | string | the checkout it's in (git) |
 | `name` | string | the branch's name (git) |
 | `sha` | string or null | the commit it points at, as of the last refresh (git) |
@@ -166,6 +167,7 @@ A branch git-stack tracks, including one git no longer has.
 | `stack_parent` | string | the branch it's built on |
 | `stack_status` | string or null | git-stack's status, e.g. `up-to-date`, `needs-restack`, `merged` |
 | `stack_group` | string or null | on a stack's bottom branch, the group its stack is in when the group has other stacks; git-stack's `restack`, `sync` and `push` act on the whole group |
+| `stack` | list of strings | what git-stack acts on with it, by `git.branch` id: its stack, then the other stacks in its group, each bottom first, its own first of all |
 
 ### `ticket`
 

@@ -1,7 +1,8 @@
 """The git plugin's panels: local work and branches to clean up.
 
-Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from the graph's
-`pull_request` entities, matched by their `repo` and `head`.
+Pure functions of the snapshot and the graph; no I/O. A branch's PRs are the
+`pull_request`s the graph relates to its `git.branch` (github relates them, by the branch's
+name, its upstream's, or its commit).
 """
 
 from datetime import datetime
@@ -41,11 +42,6 @@ class _PrView(Model):
         return Ref(kind=PR, id=self.id)
 
 
-def _named(repo: LocalRepo, name: str | None) -> Branch | None:
-    """The repo's branch called `name`, if it has one."""
-    return next((b for b in repo.branches if b.name == name), None) if name else None
-
-
 class _StackBranchView(Model):
     """What git reads of a `git_stack.stack_branch`: which branch, and whether git-stack sees
     it merged."""
@@ -62,53 +58,30 @@ class Builder:
         self.config = config
         self.now = now
         self.local = snapshot
-        self.prs_by_branch: dict[tuple[str, str], list[_PrView]] = {}
-        """My PRs, by repo and head branch."""
-        self.open_prs: dict[tuple[str, str], _PrView] = {}
-        """Every open PR github knows (mine, or one I review), by repo and head branch."""
-        for pr in graph.view(PR, _PrView):
-            if pr.mine:
-                self.prs_by_branch.setdefault((pr.repo, pr.head), []).append(pr)
-            if pr.state == "open":
-                self.open_prs.setdefault((pr.repo, pr.head), pr)
+        self.graph = graph
         self.stacked: dict[tuple[str, str], _StackBranchView] = {
             (b.repo_dir, b.name): b for b in graph.view(STACK_BRANCH, _StackBranchView)
         }
         """Branches git-stack tracks, by checkout and name."""
 
-    def _prs_for(self, repo: str | None, name: str, branch: Branch | None) -> list[_PrView]:
-        """My PRs from the branch: by its name, else, for a branch that was renamed, from
-        the name of its upstream, else any of mine whose head is the commit it is at."""
-        key = repo or ""
-        if found := self.prs_by_branch.get((key, name)):
-            return found
-        if branch is None:
-            return []
-        if branch.upstream and "/" in branch.upstream:
-            remote_name = branch.upstream.split("/", 1)[1]
-            if found := self.prs_by_branch.get((key, remote_name)):
-                return found
-        if branch.sha:
-            return [
-                pr
-                for (pr_repo, _), prs in self.prs_by_branch.items()
-                if pr_repo == key
-                for pr in prs
-                if pr.head_oid == branch.sha
-            ]
-        return []
+    def _prs_from(self, repo_dir: str, name: str) -> list[_PrView]:
+        """The PRs from the branch, mine or not: those the graph relates to it (github does,
+        by its name, its upstream's or its commit)."""
+        return self.graph.view_related(branch_ref(repo_dir, name), PR, _PrView)
 
-    def _pr(
-        self, repo: str | None, name: str, state: str, branch: Branch | None = None
-    ) -> _PrView | None:
+    def _prs_for(self, repo_dir: str, name: str) -> list[_PrView]:
+        """My PRs from the branch."""
+        return [pr for pr in self._prs_from(repo_dir, name) if pr.mine]
+
+    def _pr(self, repo_dir: str, name: str, state: str) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
-        return next((pr for pr in self._prs_for(repo, name, branch) if pr.state == state), None)
+        return next((pr for pr in self._prs_for(repo_dir, name) if pr.state == state), None)
 
-    def _is_my_branch(self, repo: str | None, branch: Branch) -> bool:
+    def _is_my_branch(self, repo_dir: str, branch: Branch) -> bool:
         """Mine if a PR of mine comes from it, if I have commits on it that aren't on the
         default branch, or by its name's prefix. Without prefixes, a branch whose commits
         were counted and none are mine (a review checkout) isn't; one too old to count is."""
-        if self._prs_for(repo, branch.name, branch) or branch.my_commits:
+        if self._prs_for(repo_dir, branch.name) or branch.my_commits:
             return True
         prefixes = self.config.my_branch_prefixes
         if prefixes:
@@ -118,9 +91,7 @@ class Builder:
     def _has_my_work(self, repo: LocalRepo, branch: Branch) -> bool:
         """Whether Local work shows the branch's unpushed commits: it's mine, or git-stack
         tracks it (stacks are built on my own branches)."""
-        return (repo.dir, branch.name) in self.stacked or self._is_my_branch(
-            repo.github_repo, branch
-        )
+        return (repo.dir, branch.name) in self.stacked or self._is_my_branch(repo.dir, branch)
 
     def _stack_cleans(self, repo: LocalRepo, branch: Branch) -> bool:
         """Whether git-stack sees the branch merged: git_stack's Clean deletes it and untracks
@@ -136,9 +107,7 @@ class Builder:
         for repo in self.local.repos if self.local else []:
             for wt in repo.worktrees:
                 if wt.modified or wt.untracked:
-                    pr = self._pr(
-                        repo.github_repo, wt.branch or "", "open", _named(repo, wt.branch)
-                    )
+                    pr = self._pr(repo.dir, wt.branch, "open") if wt.branch else None
                     actions: list[Action] = []
                     if wt.modified:
                         actions.append(
@@ -176,7 +145,7 @@ class Builder:
                     reason = f"{branch.ahead_of_default} commits, never pushed"
                 if not reason:
                     continue
-                pr = self._pr(repo.github_repo, branch.name, "open", branch)
+                pr = self._pr(repo.dir, branch.name, "open")
                 actions = []
                 if not branch.behind:
                     actions.append(
@@ -222,7 +191,7 @@ class Builder:
         """An item for a branch with nothing to push whose open PR (mine, or one I review)
         is at another commit on GitHub: someone pushed to it since it was last pulled.
         Read from github's PRs, so it needs no fetch."""
-        pr = self.open_prs.get((repo.github_repo or "", branch.name))
+        pr = next((p for p in self._prs_from(repo.dir, branch.name) if p.state == "open"), None)
         if (
             pr is None
             or branch.ahead
@@ -246,12 +215,12 @@ class Builder:
             for b in repo.branches:
                 if self._stack_cleans(repo, b):
                     continue
-                merged = self._pr(repo.github_repo, b.name, "merged", b)
+                merged = self._pr(repo.dir, b.name, "merged")
                 if merged:
                     when = datetime.fromisoformat(merged.merged_at) if merged.merged_at else None
                     title = f"{b.name}: PR merged {age(self.now, when)} ago"
                     subtitle = repo.dir
-                elif b.gone and not b.ahead and self._is_my_branch(repo.github_repo, b):
+                elif b.gone and not b.ahead and self._is_my_branch(repo.dir, b):
                     title = f"{b.name}: upstream gone"
                     subtitle = f"{repo.dir} · last commit {age(self.now, b.committed_at)} ago"
                 else:

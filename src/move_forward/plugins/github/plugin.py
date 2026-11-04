@@ -32,6 +32,7 @@ from ...api import (
     Plugin,
     PruneRequest,
     Ref,
+    RelateRequest,
     StoreRequest,
     UrlRequest,
     attrs,
@@ -39,7 +40,7 @@ from ...api import (
 )
 from ...api.kinds import PERSON
 from ...api.shell import CommandError
-from . import changes, cli, client, derive, notifications, placing, pushes
+from . import changes, cli, client, derive, notifications, placing, pushes, relations
 from .config import GitHubConfig
 from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
@@ -174,7 +175,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return Changed(bool(pending), f"{len(pending)} PR(s) to fetch")
 
     def _branches_moved(self, ctx: Context[GitHubConfig], graph: Graph) -> set[str]:
-        now = pushes.tips(graph, PR, REPO)
+        now = pushes.tips(graph, f"{self.name}.{PR}")
         before = ctx.kv.get_json(BRANCHES_SEEN, object)
         if now != before:
             ctx.kv.set_json(BRANCHES_SEEN, now)
@@ -365,6 +366,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             for login in dict.fromkeys([snapshot.login, *emails])
         ]
         return [*entities.values(), *people]
+
+    def relate(self, req: RelateRequest[GitHubConfig]) -> list[tuple[Ref, Ref]]:
+        """Each of its PRs to the local branch it comes from (see `relations`)."""
+        return relations.relations(req.graph, f"{self.name}.{PR}")
 
     def fetch(self, req: FetchRequest[GitHubConfig]) -> list[Entity]:
         """PRs by URL, with their state and `closed_at`: when they were merged or closed."""

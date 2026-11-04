@@ -239,6 +239,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                                 ahead=branch.ahead,
                                 behind=branch.behind,
                                 gone=branch.gone,
+                                upstream=branch.upstream,
                                 checked_out_in=checked_out.get(branch.name),
                             )
                         ),

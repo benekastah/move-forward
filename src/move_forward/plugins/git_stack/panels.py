@@ -1,8 +1,7 @@
 """The git-stack plugin's panel and entities.
 
-Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from the graph's
-`pull_request` entities, matched by their `repo` and `head`, and a checkout's GitHub repo from git's
-`git.repo` entities.
+Pure functions of the snapshot and the graph; no I/O. A branch's PR is the `pull_request`
+the graph relates to its `git.branch` (github relates them).
 """
 
 from pathlib import Path
@@ -11,11 +10,10 @@ from ...api import Action, Entity, Graph, Item, Model, Panel, Ref, attrs
 from ...api.ids import branch_id
 from ...api.kinds import PULL_REQUEST as PR
 from .kinds import StackBranchAttrs
-from .models import GitStackSnapshot
+from .models import GitStackSnapshot, StackBranch
 
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
-REPO = "git.repo"
 """Joins a repo dir and a branch name in a `git.branch` entity's id."""
 
 
@@ -42,13 +40,6 @@ class _BranchView(Model):
     repo_dir: str
 
 
-class _RepoView(Model):
-    """What git_stack reads of a `git.repo`: GitHub's name for a checkout."""
-
-    id: str
-    dir: str
-
-
 class _PrView(Model):
     """What git_stack reads of a `pull_request`."""
 
@@ -69,9 +60,41 @@ def repo_dirs(graph: Graph) -> list[str]:
     return sorted({b.repo_dir for b in graph.view(BRANCH, _BranchView)})
 
 
+def stack_of(branches: list[StackBranch], branch: str) -> list[str]:
+    """The names of what git-stack acts on with `branch`: its stack, and the other stacks in
+    its group, since git-stack's `restack`, `sync` and `push` act on all of them. Each stack
+    bottom first, the branch's own first of all; just the branch when it isn't tracked."""
+    parents = {b.name: b.parent for b in branches if b.parent is not None}
+    if branch not in parents:
+        return [branch]
+    bottom, seen = branch, {branch}
+    while parents[bottom] in parents and parents[bottom] not in seen:  # down to the root
+        bottom = parents[bottom]
+        seen.add(bottom)
+    groups = {b.name: b.group for b in branches if b.parent is not None and b.group}
+    group = groups.get(bottom)
+    bottoms = [bottom] + sorted(
+        name
+        for name, other in groups.items()
+        if group is not None and other == group and name != bottom and parents[name] not in parents
+    )
+    children: dict[str, list[str]] = {}
+    for name, parent in parents.items():
+        children.setdefault(parent, []).append(name)
+    stack: list[str] = []
+    for start in bottoms:
+        pending = [start]
+        while pending:
+            name = pending.pop()
+            if name not in stack:
+                stack.append(name)
+                pending += reversed(children.get(name, []))
+    return stack
+
+
 def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
     """A `git_stack.stack_branch` per tracked branch, pointing at its `git.branch`, which git
-    may have deleted."""
+    may have deleted, with the stack and group git-stack acts on with it."""
     return [
         Entity(
             ref=stack_branch_ref(repo.dir, b.name),
@@ -84,6 +107,7 @@ def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
                     stack_parent=b.parent,
                     stack_status=b.status,
                     stack_group=b.group,
+                    stack=[branch_id(repo.dir, n) for n in stack_of(repo.branches, b.name)],
                 )
             ),
         )
@@ -96,16 +120,13 @@ def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
 class Builder:
     def __init__(self, snapshot: GitStackSnapshot | None, graph: Graph):
         self.snapshot = snapshot
-        self.github_repos = {r.dir: r.id for r in graph.view(REPO, _RepoView)}
-        self.my_prs: dict[tuple[str, str], list[_PrView]] = {}
-        for pr in graph.view(PR, _PrView):
-            if pr.mine:
-                self.my_prs.setdefault((pr.repo, pr.head), []).append(pr)
+        self.graph = graph
 
     def _pr(self, repo_dir: str, branch: str, state: str) -> _PrView | None:
-        """My PR from the branch in `state`, e.g. "open" or "merged"."""
-        prs = self.my_prs.get((self.github_repos.get(repo_dir, ""), branch), [])
-        return next((pr for pr in prs if pr.state == state), None)
+        """My PR from the branch in `state`, e.g. "open" or "merged": one the graph relates
+        to it (github does)."""
+        prs = self.graph.view_related(branch_ref(repo_dir, branch), PR, _PrView)
+        return next((pr for pr in prs if pr.mine and pr.state == state), None)
 
     def stacks(self) -> Panel:
         items: list[Item] = []

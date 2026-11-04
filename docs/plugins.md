@@ -38,13 +38,13 @@ flowchart LR
 
     repo -. "checkouts: team PR scores, reviewer suggestions" .-> github
     entry -. "merge conditions (Held)" .-> github
-    branch -. "my PRs' branches moving: refresh now" .-> github
-    pr -. "a branch's PR; its head, to see a checkout behind" .-> git
+    branch -. "my PRs' branches moving: refresh now; relates each PR to its branch" .-> github
+    repo -. "checkout → owner/name, to relate PRs to branches" .-> github
+    pr -. "a branch's PR (related by github); its head, to see a checkout behind" .-> git
     ice -. "its branches' commits, before deleting them" .-> git
     stack_branch -. "tracked: my unpushed work; merged: left to its Clean" .-> git
     branch -. "which checkouts to scan" .-> git_stack
-    repo -. "checkout → owner/name" .-> git_stack
-    pr -. "a stack branch's PR" .-> git_stack
+    pr -. "a stack branch's PR (related by github)" .-> git_stack
     ice -. "its stack's branches: Untrack" .-> git_stack
     pr -. "transitions (related)" .-> jira
     pr -. "pings, nudges" .-> slack([slack])
@@ -53,7 +53,7 @@ flowchart LR
     repo -. "an iced branch's checkout" .-> notes
     stack_branch -. "what tracks an iced branch" .-> notes
     ticket -. "Add todo titles" .-> notes
-    stack_branch -. "the stack to ice, with its group" .-> notes
+    stack_branch -. "the stack to ice, with its group (its stack)" .-> notes
     person -. "who I am" .-> core([core])
 ```
 

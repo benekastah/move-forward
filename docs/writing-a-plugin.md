@@ -285,6 +285,9 @@ class LinearPlugin(...):
   Each must say its `lifecycle`, and its attributes fit `KindSpec.fetched_attrs` (a
   family's are core's: `PullRequestFetched`, `TicketFetched`), else any of the kind's own.
 - A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
+- **Relations.** What only your plugin knows links one of its entities to another's (a PR
+  to its local branch) goes in `relate(req)`, as `(mine, theirs)` pairs; see
+  [graph.md](graph.md#relations).
 
 ## Reading other plugins' entities
 
