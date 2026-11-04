@@ -5,6 +5,7 @@ import json
 import re
 import urllib.error
 import urllib.request
+from collections.abc import Collection
 from datetime import date, datetime
 from http import HTTPStatus
 from typing import cast
@@ -140,12 +141,20 @@ def mentions(body: object, account_id: str) -> bool:
     return False
 
 
-def to_issue(raw: RawIssue, site: str, account_id: str | None = None) -> JiraIssue:
+def to_issue(
+    raw: RawIssue,
+    site: str,
+    account_id: str | None = None,
+    blocked_by_links: Collection[str] = (),
+) -> JiraIssue:
+    """The issue, with its unfinished blockers: linked issues through "is blocked by" or one
+    of `blocked_by_links` (the links' inward names)."""
     f = raw.fields
+    blocking = {BLOCKED_BY_LINK, *blocked_by_links}
     open_blockers = [
         link.inward_issue.key
         for link in f.issuelinks
-        if link.type.inward == BLOCKED_BY_LINK
+        if link.type.inward in blocking
         and link.inward_issue
         and link.inward_issue.fields.status.status_category.key != "done"
     ]
@@ -265,7 +274,9 @@ def search(
         page = RawSearchResponse.model_validate_json(_search_page(config, email, api_token, body))
         if not issues and not page.issues:
             verify_token(config, email, api_token)
-        issues.extend(to_issue(raw, config.site, me) for raw in page.issues)
+        issues.extend(
+            to_issue(raw, config.site, me, config.blocked_by_links) for raw in page.issues
+        )
         if not page.next_page_token:
             return issues
         next_token = page.next_page_token

@@ -46,6 +46,9 @@ class JiraConfig(Strict):
     priorities: list[str] = Field(default_factory=lambda: list(DEFAULT_PRIORITIES))
     """Jira's priority names, lowest first, for `priority_raised` notifications: a priority
     not listed here is never counted as raised."""
+    blocked_by_links: list[str] = Field(default_factory=list)
+    """Names of links, as the blocked ticket sees them, that also mean "blocked by", e.g.
+    `["depends on"]`. "is blocked by" always does."""
     escalation_label_prefix: str = ""
     """Prefix of labels that say how far an issue is escalated, e.g. `escalated-to-`;
     empty means no such labels."""

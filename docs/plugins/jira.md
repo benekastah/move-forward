@@ -29,6 +29,8 @@ returns at most one key.
 `keychain_service` say where its token is. `status_in_progress`, `status_in_review` and
 `status_closed` are the workflow's status names, for Jira transitions; a ticket in
 `status_blocked` counts as blocked (in What next and Act now) even without blocker links.
+`blocked_by_links` (e.g. `["depends on"]`) names more links, as the blocked ticket sees
+them, that mean "blocked by", besides "is blocked by".
 `escalation_label_prefix` (e.g. `escalated-to-`) and `escalation_levels` (what follows it,
 lowest first) rank escalated incidents and bugs in What next, and `incident_types` and
 `bug_types` are the issue types (lower-case substrings) that count as each.

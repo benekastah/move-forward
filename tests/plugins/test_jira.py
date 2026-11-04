@@ -68,6 +68,28 @@ def test_to_issue() -> None:
     assert issue.url == "https://example.atlassian.net/browse/APP-1"
 
 
+def test_other_configured_links_also_mean_blocked_by() -> None:
+    raw = {
+        "key": "X-1",
+        "fields": {
+            "created": "2026-10-01T00:00:00Z",
+            "updated": "2026-10-01T00:00:00Z",
+            "issuelinks": [
+                {
+                    "type": {"inward": "depends on", "outward": "is depended on by"},
+                    "inwardIssue": {
+                        "key": "X-2",
+                        "fields": {"status": {"statusCategory": {"key": "new"}}},
+                    },
+                }
+            ],
+        },
+    }
+    parsed = jira.RawIssue.model_validate(raw)
+    assert jira.to_issue(parsed, "https://j").open_blockers == []
+    assert jira.to_issue(parsed, "https://j", None, ["depends on"]).open_blockers == ["X-2"]
+
+
 def test_minimal_issue() -> None:
     raw = {
         "key": "X-1",
