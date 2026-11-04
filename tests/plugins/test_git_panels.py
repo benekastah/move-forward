@@ -61,15 +61,12 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
         iced_stacks=[iced("me/iced", "/src/widgets")],
     )
     items = {i.title: i for i in panel(dashboard, "git.local_work").items}
-    assert set(items) == {
-        "me/APP-1-branch: 2 modified, 1 untracked",
-        "me/APP-1-branch: 3 unpushed commits",
-        "me/new: 2 commits, never pushed",
-    }  # me/iced is on ice: hidden
-    assert items["me/APP-1-branch: 3 unpushed commits"].url == pr(1).url
-    assert items["me/APP-1-branch: 3 unpushed commits"].badges == ["has PR"]
-    actions = items["me/APP-1-branch: 3 unpushed commits"].actions
-    assert [(a.name, a.fields) for a in actions if a.name != "notes/todo_add"] == [
+    both = "me/APP-1-branch: 2 modified, 1 untracked, 3 unpushed commits"
+    assert set(items) == {both, "me/new: 2 commits, never pushed"}  # me/iced is on ice: hidden
+    assert items[both].url == pr(1).url
+    assert items[both].badges == ["uncommitted", "has PR"]
+    assert [(a.name, a.fields) for a in items[both].actions if a.name != "notes/todo_add"] == [
+        ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
         ("git/push_branch", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
         ("notes/ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
     ]
@@ -77,11 +74,18 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
         "git/push_branch",
         "notes/ice",
     ]
-    dirty = items["me/APP-1-branch: 2 modified, 1 untracked"].actions
-    assert [(a.name, a.fields) for a in dirty if a.name != "notes/todo_add"] == [
-        ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
-        ("notes/ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
-    ]
+
+
+def test_a_branch_behind_its_upstream_says_why_it_has_no_push_button() -> None:
+    local = local_snapshot(
+        branches=[
+            local_branch("main"),
+            local_branch("me/rebased", upstream="origin/me/rebased", ahead=2, behind=3),
+        ]
+    )
+    [item] = panel(build(local=local), "git.local_work").items
+    assert item.details == ["3 behind origin/me/rebased: a plain push would be rejected"]
+    assert "git/push_branch" not in [a.name for a in item.actions]
 
 
 def test_cleanup_lists_merged_and_gone_branches() -> None:

@@ -53,7 +53,9 @@ see [entities.md](../entities.md).
 
 - **Local work**: dirty worktrees, unpushed and never-pushed branches, with buttons: WIP
   commit (tracked files only), Push (never forced; sets the upstream for a new branch),
-  and notes' Put on ice. Also checkouts of open PRs (mine, or ones I review) that moved on
+  and notes' Put on ice. A branch is one item, with both buttons when it has uncommitted
+  changes and unpushed commits. A branch behind its upstream (say after a rebase) has no
+  Push, since a plain push would be rejected, and says so instead. Also checkouts of open PRs (mine, or ones I review) that moved on
   GitHub: a branch with nothing to push whose PR's head, as github last saw it, is
   another commit. That's read from github's PRs, so it shows without fetching.
 - **Cleanup**: local branches whose PR merged or whose remote is gone, with a Delete

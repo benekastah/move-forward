@@ -104,6 +104,9 @@ class Builder:
 
     def local_work(self) -> Panel:
         items: list[Item] = []
+        dirty: dict[tuple[str, str], int] = {}
+        """Where in `items` each branch's uncommitted-changes item is, so its unpushed
+        commits join it: a branch is one item."""
         for repo in self.local.repos if self.local else []:
             for wt in repo.worktrees:
                 if wt.modified or wt.untracked:
@@ -115,6 +118,8 @@ class Builder:
                                 "wip_commit", "WIP commit", {"repo": repo.dir, "worktree": wt.path}
                             )
                         )
+                    if wt.branch:
+                        dirty[(repo.dir, wt.branch)] = len(items)
                     items.append(
                         Item(
                             title=f"{wt.branch or 'detached HEAD'}: {wt.modified} modified,"
@@ -149,16 +154,33 @@ class Builder:
                     actions.append(
                         action("push_branch", "Push", {"repo": repo.dir, "branch": branch.name})
                     )
-                items.append(
-                    Item(
-                        title=f"{branch.name}: {reason}",
-                        url=pr.url if pr else None,
-                        subtitle=f"{repo.dir} · last commit {age(self.now, branch.committed_at)} ago",
-                        badges=["has PR"] if pr else ["no PR"],
-                        actions=actions,
-                        subjects=[branch_ref(repo.dir, branch.name)] + ([pr.subject] if pr else []),
+                details: list[str] = []
+                if branch.behind and branch.upstream:
+                    details.append(
+                        f"{branch.behind} behind {branch.upstream}: a plain push would be rejected"
                     )
+                item = Item(
+                    title=f"{branch.name}: {reason}",
+                    url=pr.url if pr else None,
+                    subtitle=f"{repo.dir} · last commit {age(self.now, branch.committed_at)} ago",
+                    badges=["has PR"] if pr else ["no PR"],
+                    details=details,
+                    actions=actions,
+                    subjects=[branch_ref(repo.dir, branch.name)] + ([pr.subject] if pr else []),
                 )
+                if (index := dirty.get((repo.dir, branch.name))) is not None:
+                    uncommitted = items[index]
+                    item = uncommitted.model_copy(
+                        update={
+                            "title": f"{uncommitted.title}, {reason}",
+                            "badges": [*uncommitted.badges, *item.badges],
+                            "details": details,
+                            "actions": [*uncommitted.actions, *actions],
+                        }
+                    )
+                    items[index] = item
+                else:
+                    items.append(item)
         return Panel(
             key="local_work",
             priority=50,  # 5. restack and push
