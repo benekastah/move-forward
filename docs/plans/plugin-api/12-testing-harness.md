@@ -20,7 +20,7 @@ can't follow it.
   - `Harness(plugin, section: dict, *, now=NOW, email="me@x", teams=[])`: an in-memory
     `Database` migrated for core and the plugin, a `Context`, and the plugin enabled alone.
   - `harness.with_entities([...Entity])`: seeds other kinds through a stub publisher
-    plugin, so a consumer test can place a `pr` without github.
+    plugin, so a consumer test can place a `pull_request` without github.
   - `harness.entities()`, `panels()`, `act_now()`, `dashboard()` (as `build_dashboard`
     does, with Act now), `run_action(name, fields)`, `page(path, query)`,
     `graph_events()`, `prune()`; `render_item(item)` for HTML assertions.

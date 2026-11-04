@@ -37,8 +37,8 @@ class Plugin:
         return None  # unsupported: core refreshes the whole plugin instead
 ```
 
-Core groups refs by the plugins that publish each kind (`KindSpec` + `publishes`, 05; a
-shared kind may have several), queues a subject job, and the refresh loop runs subject
+Core groups refs by the plugin that published each (05: a family's ref goes to the
+plugin whose entity has the id, a plugin's own kind to that plugin), queues a subject job, and the refresh loop runs subject
 jobs ahead of due full refreshes under `_refresh_lock`, so a tab focus doesn't wait on a
 full collect; the hook runs with its timeout; `events(before, after)` runs as `_store`
 does so a merged PR still notifies; `snapshots.fetched_at` is not touched (the full
@@ -101,5 +101,5 @@ interplay; test the ordering of subject jobs against a due full refresh). **Size
 
 ## Dependencies
 
-04 (hook style), 05 (publishers per kind), 06 (no table rebuild), 13 (`Item.pending`
+04 (hook style), 05 (which plugin published a ref), 06 (no table rebuild), 13 (`Item.pending`
 handover). After the cut.
