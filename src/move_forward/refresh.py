@@ -22,6 +22,7 @@ from .notifications import Event, NotificationRepository
 from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
 from .plugin import (
     ActionError,
+    ActionRequest,
     ActionResult,
     ActNowRequest,
     AfterCollectRequest,
@@ -34,6 +35,7 @@ from .plugin import (
     ItemActionsRequest,
     KeptItemRequest,
     LoadRequest,
+    PageRequest,
     PanelsRequest,
     PrepareItemActionsRequest,
     PruneRequest,
@@ -430,7 +432,7 @@ def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[s
         if handler := e.plugin.pages().get(path):
             graph, _ = stored_graph(db, plugins)
             try:
-                return handler(e.ctx, graph, query)
+                return handler(PageRequest(e.ctx, graph, query, path))
             except Exception as err:
                 log.exception("%s: page %s failed", e.name, path)
                 raise PageFailed(path) from err
@@ -537,9 +539,13 @@ def _act_now_action(
     return ActionResult(result)
 
 
-def perform_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> ActionResult:
+def perform_action(
+    config: Config, db: Database, name: str, fields: dict[str, str], back: str | None = None
+) -> ActionResult:
     """Run a plugin's action, `<plugin>/<action>`, or Act now's, `act_now/<action>`; raises
-    `ActionError` when it can't."""
+    `ActionError` when it can't. `back` is the page the button was on, when it wasn't the
+    dashboard."""
+    surface: Surface = "focus" if back and back.startswith("/focus") else "dashboard"
     plugin_name, _, action_name = name.partition("/")
     if plugin_name == act_now.ACTIONS:
         return _act_now_action(config.act_now, db, action_name, fields)
@@ -552,7 +558,7 @@ def perform_action(config: Config, db: Database, name: str, fields: dict[str, st
         raise ActionError(f"unknown action {name}")
     graph, _ = stored_graph(db, plugins)
     try:
-        result = handler(e.ctx, graph, fields)
+        result = handler(ActionRequest(e.ctx, graph, fields, surface, back))
     except ActionError:
         raise
     except CommandError as err:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from ...api import ActionError, Context, Graph, form_field
+from ...api import ActionError, ActionRequest
 from ...api.shell import DEFAULT_TIMEOUT_SECONDS, CommandError, git
 from .config import GitStackConfig
 from .panels import STACK_BRANCH, StackBranchView, repo_dirs
@@ -92,14 +92,15 @@ def cleaned(events: list[_Event]) -> str:
     return "; ".join(parts)
 
 
-def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:
+def stack_clean(req: ActionRequest[GitStackConfig]) -> str:
     """`git stack clean -d local --json`: untrack merged branches in every stack, iced ones
     too, and delete them, saying what it did, or how far it got before it failed. It never
     restacks or pushes, so an iced stack's unmerged branches are left as they are, and a
     merged one it deletes can be restored at its iced commit by reopening the stack."""
-    if form_field(fields, "repo") not in repo_dirs(graph):
+    graph, fields = req.graph, req.fields
+    if req.field("repo") not in repo_dirs(graph):
         raise ActionError(f"{fields['repo']} is not a configured repo")
-    repo = Path(form_field(fields, "repo"))
+    repo = Path(req.field("repo"))
     found = run_json(
         repo,
         ["clean", "-d", "local"],
@@ -109,10 +110,11 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
     return f"cleaned {repo}: {cleaned(found.events) or 'nothing merged to clean'}"
 
 
-def untrack(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, str]) -> str:
+def untrack(req: ActionRequest[GitStackConfig]) -> str:
     """`git stack untrack --json` the `<repo>\t<branch>` lines of `targets`, repo by repo.
     Each must be a branch git-stack tracks: `git stack untrack` takes globs too, and they'd
     match more."""
+    graph, fields = req.graph, req.fields
     by_repo: dict[str, list[str]] = {}
     for target in fields.get("targets", "").splitlines():
         if not target:

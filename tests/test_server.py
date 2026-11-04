@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPResponse
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 from urllib.parse import quote, urlencode
 
 import pytest
@@ -16,7 +16,7 @@ from conftest import ME, pr, snapshot
 from move_forward import auth, registry, server
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.graph import Graph
+from move_forward.graph import Ref
 from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Action, Item
 from move_forward.panels import Layout
@@ -26,8 +26,8 @@ from move_forward.plugin import (
     ActionResult,
     Changed,
     ChangedRequest,
-    Context,
     PageHandler,
+    PageRequest,
 )
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import GitHubConfig
@@ -123,10 +123,14 @@ def post(
 FakeRun = Callable[[object, object, str, dict[str, str]], str]
 
 
-def _results(run: FakeRun) -> Callable[[object, object, str, dict[str, str]], ActionResult]:
+def _results(
+    run: FakeRun,
+) -> Callable[[object, object, str, dict[str, str], str | None], ActionResult]:
     """An action runner standing in for `perform_action`, from one that returns notices."""
 
-    def perform(config: object, db: object, name: str, fields: dict[str, str]) -> ActionResult:
+    def perform(
+        config: object, db: object, name: str, fields: dict[str, str], back: str | None = None
+    ) -> ActionResult:
         return ActionResult(run(config, db, name, fields))
 
     return perform
@@ -324,7 +328,7 @@ def test_ticking_a_todo_off_redirects_back_with_it(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def fake_perform(
-        _config: object, _db: object, name: str, fields: dict[str, str]
+        _config: object, _db: object, name: str, fields: dict[str, str], back: str | None = None
     ) -> ActionResult:
         params = {KEPT: "notes:7"} if name == "notes/todo_done" else {}
         return ActionResult(f"{name} {fields['todo']}", params)
@@ -672,7 +676,8 @@ class _GitHubWithASignIn(GitHubPlugin):
     sign_in_pages: ClassVar[frozenset[str]] = frozenset({"/github/back"})
 
     def pages(self) -> dict[str, PageHandler]:
-        def page(ctx: Context[GitHubConfig], graph: Graph, query: dict[str, list[str]]) -> str:
+        def page(req: PageRequest[GitHubConfig]) -> str:
+            query = req.query
             return f"back with {query.get('state', ['?'])[0]}"
 
         return {"/github/back": page, "/github/private": page}
@@ -759,7 +764,7 @@ def test_every_answer_forbids_framing(client: HTTPConnection) -> None:
 def test_a_failing_plugin_page_answers_500_and_the_rest_stays_up(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def boom(ctx: object, graph: object, query: object) -> str:
+    def boom(req: object) -> str:
         raise RuntimeError("boom")
 
     def pages(self: SlackPlugin) -> dict[str, object]:
@@ -769,3 +774,33 @@ def test_a_failing_plugin_page_answers_500_and_the_rest_stays_up(
     failed = get(client, "/ping")
     assert failed.status == 500 and "failed" in failed.read().decode()
     assert get(client, "/").status == 200
+
+
+def test_an_action_refreshes_its_plugin_and_whoever_publishes_what_it_touched(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def perform(
+        config: object, db: object, name: str, fields: dict[str, str], back: str | None = None
+    ) -> ActionResult:
+        touched = [Ref(kind="pr", id=pr(1).url)] if name == "slack/react" else []
+        return ActionResult("done", touched=touched)
+
+    monkeypatch.setattr(server, "perform_action", perform)
+    app.run_action("slack/mark_sent", {})
+    assert app._pending == {"slack"}  # pyright: ignore[reportPrivateUsage]
+    app._pending = set()  # pyright: ignore[reportPrivateUsage]
+    app.run_action("slack/react", {})
+    assert app._pending == {"slack", "github"}  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_plugin_page_knows_its_path(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def where(req: PageRequest[Any]) -> str:
+        return f"<p>at {req.path}</p>"
+
+    def pages(self: SlackPlugin) -> dict[str, object]:
+        return {"/where": where}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages)
+    assert "at /where" in get(client, "/where").read().decode()

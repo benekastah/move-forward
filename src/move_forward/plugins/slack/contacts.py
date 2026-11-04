@@ -3,7 +3,7 @@ what `mfd slack` shares with them."""
 
 import re
 
-from ...api import ActionError, Context, Graph, Model, form_field, html
+from ...api import ActionError, ActionRequest, Context, Graph, Model, html
 from . import client, oauth, scopes
 from .config import SlackConfig
 from .pings import my_open_prs
@@ -53,16 +53,16 @@ def set_team_channel(slack: SlackRepository, team: str, name: str, channel_id: s
     return f"{team}'s pings go to {channel_name or channel}"
 
 
-def set_contact_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
-    return set_contact(
-        SlackRepository(ctx.db), form_field(fields, "login"), fields.get("slack_id", "")
-    )
+def set_contact_action(req: ActionRequest[SlackConfig]) -> str:
+    ctx, fields = req.ctx, req.fields
+    return set_contact(SlackRepository(ctx.db), req.field("login"), fields.get("slack_id", ""))
 
 
-def set_team_channel_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
+def set_team_channel_action(req: ActionRequest[SlackConfig]) -> str:
+    ctx, fields = req.ctx, req.fields
     return set_team_channel(
         SlackRepository(ctx.db),
-        form_field(fields, "team"),
+        req.field("team"),
         fields.get("channel_name", ""),
         fields.get("channel_id", ""),
     )

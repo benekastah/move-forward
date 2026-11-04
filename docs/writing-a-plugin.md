@@ -294,12 +294,13 @@ Set `Item.fingerprint` to what would make a snoozed or dismissed item worth anot
 
 ## Buttons, pages and commands
 
-- **Actions.** `actions()` maps names to handlers `(ctx, graph, fields) -> str |
-  ActionResult`; a button posts to `/actions/<plugin>/<name>`. Check every field: they
+- **Actions.** `actions()` maps names to handlers `(req: ActionRequest) -> str |
+  ActionResult`; a button posts to `/actions/<plugin>/<name>`. `req.fields` are its form
+  fields, `req.surface` where the button was (`dashboard` or `focus`). Check every field: they
   come from a form, so treat them as untrusted (a repo must be configured, a worktree must
   be the repo's, an id must exist). Anything that deletes or rewrites sets `confirm`, and
   nothing force-pushes, resets or stashes. Read a required field with
-  `form_field(fields, name)`, which says "missing field" when the form lacks it. Raise
+  `req.field(name)`, which says "missing field" when the form lacks it. Raise
   `ActionError` with a message the page can show; anything else a handler raises is shown
   as "<plugin>/<name> failed" and logged.
 - **Adding to other plugins' items.** `item_actions(req)` returns `ItemAdditions`
@@ -307,14 +308,19 @@ Set `Item.fingerprint` to what would make a snoozed or dismissed item worth anot
   plugin whose item it is and `req.surface` where it's shown (`dashboard`, `focus`,
   `act_now`). A plugin that reads its tables for them does so once per page in
   `prepare_item_actions(req)`, returning the per-item function.
+- **After an action** the server refreshes the acting plugin. An action that changed
+  something another plugin publishes (reacting to a PR, say) lists it in
+  `ActionResult(notice, touched=[ref])`, and that plugin is refreshed too.
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, {KEPT: "<plugin>:<key>"})` and implement `kept_item`.
-- **Pages.** `pages()` maps paths to handlers returning HTML (use `api.html.page` and
+- **Pages.** `pages()` maps paths to handlers `(req: PageRequest) -> str | None` (with
+  `req.query` and `req.path`) returning HTML (use `api.html.page` and
   `api.html.e` to escape everything). A page a tool's sign-in (OAuth) redirects back to goes
   in `sign_in_pages` too: browsers don't send the dashboard's cookie on a redirect from
   another site, so it's served without one, and must check OAuth's single-use `state`
   before doing anything.
-- **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`.
+- **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
+  a handler `(req: CliRequest) -> int` that gets the parsed `req.args`.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the
 plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their

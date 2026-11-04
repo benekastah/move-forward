@@ -4,7 +4,7 @@ and the pages the sign-in goes through."""
 import json
 from importlib import resources
 
-from ...api import Action, ActionError, Context, Graph, html
+from ...api import Action, ActionError, ActionRequest, Context, PageRequest, html
 from . import oauth, scopes
 from .config import SlackConfig
 
@@ -44,8 +44,9 @@ def _setup(ctx: Context[SlackConfig]) -> str:
     )
 
 
-def page(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -> str:
+def page(req: PageRequest[SlackConfig]) -> str:
     """Slack's page: what it's connected as, or how to connect, or how to set the app up."""
+    ctx, query = req.ctx, req.query
     e = html.e
     found = oauth.connection(ctx)
     lost = ctx.kv.get(oauth.LOST)
@@ -77,10 +78,11 @@ def page(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -
     return html.page("Slack", "slack", body)
 
 
-def connect(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -> str | None:
+def connect(req: PageRequest[SlackConfig]) -> str | None:
     """Send the browser to Slack for the sign-in the Connect button started (see
     `connect_action`); a read that starts nothing, so a link or an image can't overwrite a
     sign-in under way. None (not found) without a `client_id`."""
+    ctx = req.ctx
     if not ctx.config.client_id:
         return None
     url = oauth.pending_url(ctx)
@@ -101,19 +103,21 @@ def connect(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]
     return html.page("Connect Slack", "slack", body, script)
 
 
-def connect_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
+def connect_action(req: ActionRequest[SlackConfig]) -> str:
     """Start signing in: a fresh `state` and verifier replace any sign-in started before.
     A button, so it is a POST, which the server only takes from the dashboard's own pages."""
+    ctx = req.ctx
     if not ctx.config.client_id:
         raise ActionError("set client_id in [slack] first")
     oauth.start(ctx)
     return "taking you to Slack"
 
 
-def callback(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -> str:
+def callback(req: PageRequest[SlackConfig]) -> str:
     """Where Slack sends the browser back: finish signing in, or say why not. Served
     without the dashboard's cookie (see `Plugin.sign_in_pages`): `oauth.finish` checks the
     sign-in's own `state` before anything else."""
+    ctx, query = req.ctx, req.query
     e = html.e
     try:
         found = oauth.finish(ctx, query)
@@ -125,8 +129,9 @@ def callback(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]
     return html.page("Slack", "slack", f"<article class='panel padded'>{body}</article>")
 
 
-def disconnect_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
+def disconnect_action(req: ActionRequest[SlackConfig]) -> str:
     """Revoke and forget the app's token."""
+    ctx = req.ctx
     if oauth.connection(ctx) is None:
         raise ActionError("Slack isn't connected")
     oauth.disconnect(ctx)

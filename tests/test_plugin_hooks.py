@@ -18,12 +18,14 @@ from move_forward.graph import Entity, Graph, Ref
 from move_forward.page import Action, Identity, ItemAdditions
 from move_forward.plugin import (
     CliHandler,
+    CliRequest,
     Context,
     EntitiesRequest,
     FetchRequest,
     ItemActionsRequest,
     LinkingRequest,
     PageHandler,
+    PageRequest,
     Plugin,
     PrepareItemActionsRequest,
 )
@@ -48,9 +50,8 @@ class Hooked(JiraPlugin):
         )
 
     def pages(self) -> dict[str, PageHandler]:
-        def hello(
-            ctx: Context[JiraConfig], graph: Graph, query: dict[str, list[str]]
-        ) -> str | None:
+        def hello(req: PageRequest[JiraConfig]) -> str | None:
+            graph, query = req.graph, req.query
             pr_url = query.get("pr", [""])[0]
             entity = graph.get("pr", pr_url)
             return render.page("Hello", "hello", render.e(entity.title)) if entity else None
@@ -112,7 +113,8 @@ class _Counted(JiraPlugin):
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         parser.add_argument("what")
 
-        def run(ctx: Context[JiraConfig], graph: Graph, args: argparse.Namespace) -> int:
+        def run(req: CliRequest[JiraConfig]) -> int:
+            ctx, graph, args = req.ctx, req.graph, req.args
             print(f"{args.what}: {len(graph.of_kind('ticket'))} for {ctx.email}")
             return 3
 

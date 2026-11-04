@@ -104,6 +104,7 @@ class Dashboard(Model):
     """Who I am in each tool that says, in plugin order."""
     panels: list[Panel]
     groups: list[Group]
+    sources: dict[str, SourceStatus]
 
     def panel(self, key: str) -> Panel:
         return next(p for p in self.panels if p.key == key)
@@ -161,8 +162,6 @@ class Dashboard(Model):
             for item in panel.items
             for part in item.parts or [item]
         ]
-
-    sources: dict[str, SourceStatus]
 
 
 def _sorted(panel: Panel) -> Panel:

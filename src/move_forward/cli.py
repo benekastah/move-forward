@@ -14,7 +14,7 @@ from . import auth, init, keychain, localtime, priority, registry, signin, snooz
 from . import config as config_module
 from .act_now import PRIORITIES
 from .db import Database
-from .plugin import CliHandler
+from .plugin import CliHandler, CliRequest
 from .refresh import build_dashboard, refresh, stored_graph
 from .registry import enabled, enabled_names, migrate
 from .repositories import FeedbackRepository, PriorityRepository, SessionRepository
@@ -419,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{args.command}] isn't in {config_path}", file=sys.stderr)
             return 1
         graph, _ = stored_graph(db, plugins)
-        return plugin_commands[args.command](e.ctx, graph, args)
+        return plugin_commands[args.command](CliRequest(e.ctx, graph, args))
     if args.command == "serve":
         supervisor.serve_supervised()
         port = args.port or config.port

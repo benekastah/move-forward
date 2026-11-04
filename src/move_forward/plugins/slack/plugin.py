@@ -16,6 +16,7 @@ from ...api import (
     Action,
     ActionError,
     ActionHandler,
+    ActionRequest,
     AfterCollectRequest,
     Asker,
     CliHandler,
@@ -25,6 +26,7 @@ from ...api import (
     ItemActionsRequest,
     ItemAdditions,
     PageHandler,
+    PageRequest,
     Panel,
     PanelsRequest,
     Plugin,
@@ -134,6 +136,10 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     title = "Slack"
     init_template = TEMPLATE
     init_example = EXAMPLE
+    config_model = SlackConfig
+    migrations: ClassVar[list[str]] = MIGRATIONS
+    cli_help = "see and set where review pings go, or import them from the skill's markdown"
+    sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK_PATH})
 
     def init_suggested(self) -> bool:
         """Only when asked for: it needs a site (jira) or workspace (slack) to be useful."""
@@ -141,10 +147,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
-
-    config_model = SlackConfig
-    migrations: ClassVar[list[str]] = MIGRATIONS
-    cli_help = "see and set where review pings go, or import them from the skill's markdown"
 
     def panels(self, req: PanelsRequest[SlackConfig, BaseModel]) -> list[Panel]:
         ctx, graph = req.ctx, req.graph
@@ -182,16 +184,14 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         return ping_action
 
     def pages(self) -> dict[str, PageHandler]:
-        def ping(
-            ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]
-        ) -> str | None:
+        def ping(req: PageRequest[SlackConfig]) -> str | None:
+            ctx, graph, query = req.ctx, req.graph, req.query
             pr_url = query.get("pr", [""])[0]
             found = pinger(ctx, graph).pings().get(pr_url)
             return ping_page(found, ctx.now) if found else None
 
-        def where_pings_go(
-            ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]
-        ) -> str | None:
+        def where_pings_go(req: PageRequest[SlackConfig]) -> str | None:
+            ctx, graph = req.ctx, req.graph
             return contacts.contacts_page(ctx, graph)
 
         return {
@@ -201,8 +201,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             oauth.CONNECT_PATH: account.connect,
             oauth.CALLBACK_PATH: account.callback,
         }
-
-    sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK_PATH})
 
     def after_collect(self, req: AfterCollectRequest[SlackConfig]) -> None:
         """Look up the Slack ids of requested reviewers nothing names one for."""
@@ -215,8 +213,9 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         return cli.add_commands(parser)
 
     def actions(self) -> dict[str, ActionHandler]:
-        def mark_sent(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
+        def mark_sent(req: ActionRequest[SlackConfig]) -> str:
             """Record a ping as sent, so the next one to that target is a follow-up."""
+            ctx, fields = req.ctx, req.fields
             try:
                 form = PingForm.model_validate(fields)
             except ValueError as e:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import Field
 
-from ...api import ActionError, Context, Graph, Model, form_field
+from ...api import ActionError, ActionRequest, Graph, Model
 from ...api.shell import CommandError, git
 from . import client
 from .config import GitConfig
@@ -72,17 +72,19 @@ def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
         raise ActionError(f"{branch} has commits since it was iced; thaw it, or ice it again")
 
 
-def delete_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
-    repo = repo_path(ctx.config, form_field(fields, "repo"))
-    branch = form_field(fields, "branch")
+def delete_branch(req: ActionRequest[GitConfig]) -> str:
+    ctx, graph = req.ctx, req.graph
+    repo = repo_path(ctx.config, req.field("repo"))
+    branch = req.field("branch")
     _check_deletable(graph, repo, branch)
     git(repo, "branch", "-D", branch)
     return f"deleted {branch} in {repo}"
 
 
-def delete_together(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
+def delete_together(req: ActionRequest[GitConfig]) -> str:
     """Delete every `<repo>\t<branch>` line of `targets`, or none: each is checked first, so
     one that can't go stops it before anything is deleted. For a stack on ice."""
+    ctx, graph, fields = req.ctx, req.graph, req.fields
     targets: list[tuple[Path, str]] = []
     for line in fields.get("targets", "").splitlines():
         repo_dir, _, branch = line.partition(TARGET_SEPARATOR)
@@ -105,10 +107,11 @@ def _iced_sha(graph: Graph, repo: Path, branch: str) -> str | None:
     )
 
 
-def restore_together(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
+def restore_together(req: ActionRequest[GitConfig]) -> str:
     """Recreate every `<repo>\t<branch>` line of `targets` at the commit it was iced at, or
     none: each must be on ice, gone, and its commit still in the repo. For a stack on ice
     whose branches were deleted."""
+    ctx, graph, fields = req.ctx, req.graph, req.fields
     targets: list[tuple[Path, str, str]] = []
     for line in fields.get("targets", "").splitlines():
         repo_dir, _, branch = line.partition(TARGET_SEPARATOR)
@@ -132,8 +135,9 @@ def restore_together(ctx: Context[GitConfig], graph: Graph, fields: dict[str, st
     return f"restored {', '.join(branch for _, branch, _ in targets)}"
 
 
-def delete_branches(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
+def delete_branches(req: ActionRequest[GitConfig]) -> str:
     """Delete every `<repo>\\t<branch>` line of `targets`; one failure doesn't stop the rest."""
+    ctx, graph, fields = req.ctx, req.graph, req.fields
     done: list[str] = []
     failed: list[str] = []
     for line in fields.get("targets", "").splitlines():
@@ -141,7 +145,7 @@ def delete_branches(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str
         if not branch:
             continue
         try:
-            delete_branch(ctx, graph, {"repo": repo_dir, "branch": branch})
+            delete_branch(ActionRequest(ctx, graph, {"repo": repo_dir, "branch": branch}))
             done.append(branch)
         except (ActionError, CommandError) as e:
             failed.append(f"{branch}: {e}")
@@ -151,12 +155,13 @@ def delete_branches(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str
     return notice
 
 
-def push_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
+def push_branch(req: ActionRequest[GitConfig]) -> str:
     """Push a branch where git would (see `client.push_target`), or one without an upstream
     to the remote git would pick (`client.push_remote`), setting its upstream. Never
     forces."""
-    repo = repo_path(ctx.config, form_field(fields, "repo"))
-    branch = form_field(fields, "branch")
+    ctx = req.ctx
+    repo = repo_path(ctx.config, req.field("repo"))
+    branch = req.field("branch")
     if not branch_exists(repo, branch):
         raise ActionError(f"{branch} doesn't exist in {repo}")
     try:
@@ -177,11 +182,12 @@ def push_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -
     return f"pushed {branch}"
 
 
-def wip_commit(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
+def wip_commit(req: ActionRequest[GitConfig]) -> str:
     """Commit the modified tracked files of a worktree of the repo as "WIP". Untracked files
     are left."""
-    repo = repo_path(ctx.config, form_field(fields, "repo"))
-    worktree = Path(form_field(fields, "worktree"))
+    ctx = req.ctx
+    repo = repo_path(ctx.config, req.field("repo"))
+    worktree = Path(req.field("worktree"))
     if worktree.resolve() not in {w.resolve() for w in worktrees(repo)}:
         raise ActionError(f"{worktree} is not a worktree of {repo}")
     modified, _ = client.worktree_status(worktree)

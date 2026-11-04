@@ -324,17 +324,25 @@ class App:
         paths = tls.Paths.beside(self.config.db_path)
         return tls.problem(paths) or "", tls.urgency(paths)
 
-    def run_action(self, name: str, fields: dict[str, str]) -> tuple[str, dict[str, str]]:
-        """Run a button's action and refresh afterwards, so the page reflects it soon.
+    def run_action(
+        self, name: str, fields: dict[str, str], back: str | None = None
+    ) -> tuple[str, dict[str, str]]:
+        """Run a button's action and refresh afterwards, so the page reflects it soon: the
+        acting plugin, and those publishing what it says it touched (`ActionResult.touched`).
+        `back` is the page the button was on, when it wasn't the dashboard.
 
         Returns the notice for the page and, when it succeeded, its redirect parameters.
         """
         try:
-            result = perform_action(self.config, self.db, name, fields)
+            result = perform_action(self.config, self.db, name, fields, back)
         except ActionError as e:
             return f"failed: {e}", {}
-        if not name.startswith(f"{act_now.ACTIONS}/"):  # these only change what's shown
-            self.request_refresh()
+        plugin = name.partition("/")[0]
+        if plugin != act_now.ACTIONS:  # Act now's own only change what's shown
+            kinds = {ref.kind for ref in result.touched}
+            plugins = enabled(self.config, self.db, datetime.now(UTC))
+            publishers = {e.name for e in plugins if kinds.intersection(e.plugin.kinds)}
+            self.request_refresh({plugin} | publishers)
         return result.notice, result.params
 
     def take_notifications(self) -> str:
@@ -450,6 +458,7 @@ def _form_fields(body: bytes) -> dict[str, str]:
 def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         timeout = REQUEST_TIMEOUT_SECONDS
+        _notice_taken = False
 
         def end_headers(self) -> None:
             """Every answer, redirects and errors included, forbids being framed by another
@@ -487,8 +496,6 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self.send_header("Set-Cookie", cookie)
             self.send_header("Content-Length", "0")
             self.end_headers()
-
-        _notice_taken = False
 
         def _take_notice(self) -> str:
             """The notice the last redirect left for this page, which it shows once: the
@@ -688,7 +695,10 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             elif url.path.startswith("/actions/"):
                 name = url.path[len("/actions/") :]
                 fields = _form_fields(body)
-                notice, extra = app.run_action(name, fields)
+                back = parse_qs(url.query).get("back", [""])[0]
+                notice, extra = app.run_action(
+                    name, fields, back if render.local_path(back) else None
+                )
                 self._redirect(_back_to_page(url.query, extra), notice)
             else:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")

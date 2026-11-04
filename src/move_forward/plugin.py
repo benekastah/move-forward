@@ -10,7 +10,7 @@ what it uses.
 import argparse
 import logging
 import traceback
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from . import localtime, private, shell
 from .asking import Asker, InitSetup
 from .db import Database
-from .graph import Entity, Graph
+from .graph import Entity, Graph, Ref
 from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, SnapshotRepository
@@ -245,9 +245,25 @@ class PruneRequest[C: BaseModel]:
     graph: Graph
 
 
-PageHandler = Callable[[Context[Any], Graph, dict[str, list[str]]], str | None]
-"""Renders a page from the query parameters; None means not found."""
-CliHandler = Callable[[Context[Any], Graph, argparse.Namespace], int]
+@dataclass(frozen=True)
+class PageRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+    query: dict[str, list[str]]
+    path: str
+    """The page's path, e.g. `/ping`."""
+
+
+@dataclass(frozen=True)
+class CliRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+    args: argparse.Namespace
+
+
+PageHandler = Callable[[PageRequest[Any]], str | None]
+"""Renders a page; None means not found."""
+CliHandler = Callable[[CliRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
 KEPT = "kept"
 """The redirect parameter naming an item to keep on the focus page: `<plugin>:<key>`."""
@@ -262,15 +278,37 @@ class ActionResult:
     params: dict[str, str] = field(default_factory=dict[str, str])
     """e.g. `{KEPT: "notes:12"}`, to keep a todo just ticked off on the focus page; see
     `Plugin.kept_item`."""
-
-
-ActionHandler = Callable[[Context[Any], Graph, dict[str, str]], str | ActionResult]
-"""Runs a button's action with its form fields; returns the notice for the page (or a result
-with redirect parameters too) and raises `ActionError` with the reason when it can't."""
+    touched: list[Ref] = field(default_factory=list[Ref])
+    """What the action changed outside its own plugin's tool, e.g. a PR it reacted to: the
+    server refreshes the plugin that publishes each, as well as the acting plugin."""
 
 
 class ActionError(Exception):
     """Something the user needs to know; shown on the page, not a crash."""
+
+
+@dataclass(frozen=True)
+class ActionRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+    fields: dict[str, str]
+    """The button's form fields: untrusted, as anything a form sends."""
+    surface: Surface = "dashboard"
+    """Where the button was: the dashboard or focus mode."""
+    back: str | None = None
+    """The page the button was on, when it wasn't the dashboard (a focus page)."""
+
+    def field(self, name: str) -> str:
+        """A required field; `ActionError` saying "missing field" when the form lacks it."""
+        try:
+            return self.fields[name]
+        except KeyError:
+            raise ActionError(f"missing field {name!r}") from None
+
+
+ActionHandler = Callable[[ActionRequest[Any]], str | ActionResult]
+"""Runs a button's action; returns the notice for the page (or a result with redirect
+parameters too) and raises `ActionError` with the reason when it can't."""
 
 
 class Plugin[C: BaseModel, S: BaseModel]:
@@ -300,7 +338,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     requires: ClassVar[list[str]] = []
     """Plugins whose entities this one is built on, e.g. `["git"]`; the config must enable
     them too."""
-
     migrations: ClassVar[list[str]] = []
     """SQL scripts creating and changing the plugin's tables, applied in order. Append to it;
     never edit one that has shipped. Tables are prefixed with `name`."""
@@ -312,6 +349,33 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """How long `collect` (or `collect_after`) may take. Past it, the refresh records the
     plugin as failed and goes on; the plugin is left out of refreshes until its collect
     returns (a thread can't be stopped)."""
+    notification_kinds: ClassVar[dict[str, str]] = {}
+    """The events the plugin's `events` makes, by kind, each with what it says, for the
+    settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
+    `github.pr_mergeable`."""
+    change_check_seconds: ClassVar[int | None] = None
+    """How often `mfd serve` asks `changed`; None for a plugin without such a check."""
+    watches: ClassVar[list[str]] = []
+    """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
+    each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
+    rather than waiting for `change_check_seconds`."""
+    sign_in_pages: ClassVar[frozenset[str]] = frozenset()
+    """Of its pages, those a tool's sign-in (OAuth) sends the browser back to, e.g.
+    "/slack/callback". They're served without the dashboard's sign-in cookie, which browsers
+    don't send on a redirect from another site, so the page must check its own proof that
+    the request is the one it started (OAuth's single-use `state`) before doing anything."""
+    cli_help: ClassVar[str | None] = None
+    """The help line of `mfd <name>`; None means the plugin has no command."""
+    always_on: ClassVar[bool] = False
+    """On without a section (notes), so `mfd init` doesn't offer it."""
+    init_template: ClassVar[str] = ""
+    """The section's optional settings with their defaults, commented out, as `mfd init`
+    writes them under the section."""
+    init_example: ClassVar[str] = ""
+    """The section's required settings, commented out, for a section `mfd init` writes
+    commented out because the plugin wasn't chosen."""
+    init_finds_teams: ClassVar[bool] = False
+    """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
 
     # Refresh
 
@@ -331,11 +395,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """What the last good collect kept, for `entities` and `panels`; None when there's
         nothing (no snapshot model, say)."""
         return None
-
-    notification_kinds: ClassVar[dict[str, str]] = {}
-    """The events the plugin's `events` makes, by kind, each with what it says, for the
-    settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
-    `github.pr_mergeable`."""
 
     def events(self, req: EventsRequest[C, S]) -> list[Event]:
         """What happened between the last good snapshot (`before`) and the one just collected
@@ -362,13 +421,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def after_collect(self, req: AfterCollectRequest[C]) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.
         caching lookups in the plugin's tables."""
-
-    change_check_seconds: ClassVar[int | None] = None
-    """How often `mfd serve` asks `changed`; None for a plugin without such a check."""
-    watches: ClassVar[list[str]] = []
-    """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
-    each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
-    rather than waiting for `change_check_seconds`."""
 
     def changed(self, req: ChangedRequest[C]) -> bool | Changed:
         """Whether what the plugin collects has changed since this was last asked, by a check
@@ -448,20 +500,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Extra pages by path, e.g. "/ping"."""
         return {}
 
-    sign_in_pages: ClassVar[frozenset[str]] = frozenset()
-    """Of its pages, those a tool's sign-in (OAuth) sends the browser back to, e.g.
-    "/slack/callback". They're served without the dashboard's sign-in cookie, which browsers
-    don't send on a redirect from another site, so the page must check its own proof that
-    the request is the one it started (OAuth's single-use `state`) before doing anything."""
-
     # Writing
 
     def actions(self) -> dict[str, ActionHandler]:
         """Button handlers by name, posted to `/actions/<plugin>/<name>`."""
         return {}
-
-    cli_help: ClassVar[str | None] = None
-    """The help line of `mfd <name>`; None means the plugin has no command."""
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         """Add the arguments of `mfd <name>` to `parser` and return what runs it. Only called
@@ -469,18 +512,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         raise NotImplementedError(f"{self.name} has cli_help but no cli")
 
     # Set-up and upkeep
-
-    always_on: ClassVar[bool] = False
-    """On without a section (notes), so `mfd init` doesn't offer it."""
-    init_template: ClassVar[str] = ""
-    """The section's optional settings with their defaults, commented out, as `mfd init`
-    writes them under the section."""
-    init_example: ClassVar[str] = ""
-    """The section's required settings, commented out, for a section `mfd init` writes
-    commented out because the plugin wasn't chosen."""
-
-    init_finds_teams: ClassVar[bool] = False
-    """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
 
     def init_suggested(self) -> bool:
         """Whether `mfd init` offers to set the plugin up by default."""
@@ -496,14 +527,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns
         what was done, one line each."""
         return []
-
-
-def form_field(fields: Mapping[str, str], name: str) -> str:
-    """An action's request field; `ActionError` when the request lacks it."""
-    try:
-        return fields[name]
-    except KeyError:
-        raise ActionError(f"missing field {name!r}") from None
 
 
 def collect_into[T: BaseModel](
