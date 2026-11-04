@@ -73,15 +73,33 @@ has `handle`, the short text the tool shows people (`#7`, `!12`), for display on
 plugin keeps its own identifiers as extras (`GitHubPullRequest.number`). Consumers that
 show "PR #7" today (`git/panels.py`) show `handle`.
 
-**Refs to a family's entities name the family.** A family's ids are unique across its
-publishers (a PR's URL, a ticket's key), so `Ref("pull_request", url)` finds the PR
-whoever publishes it. That's what notes needs when it finds a PR URL in a note, and slack
+**Each family says what identifies its entities, unique whoever publishes them.** Today's
+ids aren't all unique across tools: a ticket's key (`jira/plugin.py:35`) can be `OPS-12` in
+Jira and in Linear, or on two Jira sites, and a person's login (`github/plugin.py:324`) can
+be `alice` on GitHub and someone else on GitLab. So:
+
+| Family | Id | `handle` (shown, and matched in text) |
+| --- | --- | --- |
+| `pull_request` | its URL | `#7`, `!12` |
+| `ticket` | its URL | its key, `APP-12` |
+| `person` | `<host>/<login>`, `github.com/alice` | the login |
+
+`Family.id_rule` checks each id as entities are published (an absolute URL, or
+`<host>/<login>`), and an entity whose id doesn't fit is dropped and logged.
+
+**Text names a family's entities by handle.** `linking` patterns (`jira`'s ticket keys)
+match handles, and the graph maps a handle found in text to the entities with that handle
+(`graph.by_handle(family, handle)`): all of them when two trackers share a key, since a
+mention can't say which.
+
+**Refs to a family's entities name the family.** With ids unique across publishers,
+`Ref("pull_request", url)` finds the PR whoever publishes it. That's what notes needs when it finds a PR URL in a note, and slack
 and jira when they read mentions: none of them know, or should know, the publisher. It
 also keeps stored refs valid if another plugin starts publishing the same thing. A plugin's
 own kinds are referred to by their full name (`Ref("git.branch", id)`). On an entity,
 `ref` is its identity (the family for a family's kinds), `kind` its full name
-(`github.pull_request`), `family` its family or None. Two publishers with one family id:
-the first stands, logged, as two publishers of one ref are today.
+(`github.pull_request`), `family` its family or None. Two publishers with one family id
+publish the same thing (two plugins reading one GitHub): the first stands, logged.
 
 **Reading.** `graph.view(PULL_REQUEST)` gives every publisher's PRs as `PullRequest`
 (the plugin's extra fields left out); a consumer that needs github's extras asks for
@@ -112,7 +130,8 @@ then; adding a family is additive for publishers.
 
 ## PR 5b — families in core (no migration)
 
-- `api/kinds.py`: `Family(name, label, model)`; `PULL_REQUEST`, `TICKET`, `PERSON`. The
+- `api/kinds.py`: `Family(name, label, model, id_rule)`; `PULL_REQUEST`, `TICKET`,
+  `PERSON`; `handle` on every family model. The
   family models take the fields some other plugin reads (git's, git_stack's, jira's,
   notes', slack's views decide which), except a tool's own identifiers: `number` becomes
   `handle` in the family and stays in `GitHubPullRequest`, and consumers show `handle`.
@@ -120,9 +139,10 @@ then; adding a family is additive for publishers.
   `github/kinds.py`, `jira/kinds.py`).
 - `check_plugins` (09; `check_names` until then) refuses a kind named for a family whose
   model doesn't subclass the family's.
-- `Entity.family`; the graph indexes entities by ref, by full kind and by family;
-  `graph.view`, `of_kind`, `related` and `get` take a family or a full kind. `url_for` on
-  a family ref asks the plugin that published the id.
+- `Entity.family`; the graph indexes entities by ref, by full kind, by family and by
+  handle; `graph.view`, `of_kind`, `related` and `get` take a family or a full kind;
+  `graph.by_handle(family, handle)`. `url_for` on a family ref asks the plugin that
+  published the id. `linking` matches handles (`graph.py:41-67` matches ids today).
 - Consumers import `api.kinds.PULL_REQUEST` and friends and drop their local `PR = "pr"`.
   The kind strings themselves are still today's in this PR (`pr` is the family's name until
   5c renames it), so nothing stored changes yet.
@@ -132,7 +152,8 @@ then; adding a family is additive for publishers.
 **Tests.** Two test plugins each publishing a `pull_request` kind both appear under the
 family, each with its extras under its own kind; a plugin whose `pull_request` model
 doesn't subclass `PullRequest` is refused with the reason; a family ref resolves to
-whichever plugin published the id. **Size.** M/L.
+whichever plugin published the id; an id breaking its family's rule is dropped; text naming
+a key two trackers share links both tickets. **Size.** M/L.
 
 ## PR 5c — plugin-prefixed kinds, `pull_request` (core migration V11, notes migration)
 
@@ -141,22 +162,37 @@ whichever plugin published the id. **Size.** M/L.
   the string); other plugins write the full string (`"git.branch"`,
   `"git_stack.stack_branch"`, `"notes.entry"`), as they write a family's constant.
 - The `pr` family is renamed `pull_request`; `ticket` and `person` keep their names.
+- Ids by the family rules: jira publishes tickets by URL (`<site>/browse/<key>`, the key as
+  `handle`), github people as `<host>/<login>` (the login as `handle`). github's own
+  `github_people` table stays keyed by login: it's github's.
 - Core migration, in `priorities.kind` and `act_now_feedback.subject_kind`: `pr` →
   `pull_request`, `branch` → `git.branch`, `repo` → `git.repo`, `stack_branch` →
   `git_stack.stack_branch`, `entry` → `notes.entry`, `todo` → `notes.todo`, `iced` →
   `notes.iced`. notes migration, in its link, todo link and ice item tables: `pr` →
-  `pull_request`, `branch` → `git.branch`, `entry` → `notes.entry`.
+  `pull_request`, `branch` → `git.branch`, `entry` → `notes.entry`; and notes'
+  `markdown.py` constants, which turn `on-ice.md` text into kinds.
+- Stored ticket keys and person logins can't be rewritten by SQL: a migration doesn't know
+  Jira's site or GitHub's host. They're re-keyed once, at the first refresh after the
+  upgrade, from the graph: core in `priorities` and `act_now_feedback`, notes in its link
+  and ice tables, slack in its contacts and pings (keyed by GitHub login today), each
+  mapping a stored key to the entity whose `handle` it is. A row nothing matches (its
+  ticket long done) is dropped and logged. A kv flag per owner marks it done.
 - **User config**: `[act_now] snooze_days` keys are kinds (`pr = 7` → `pull_request = 7`,
   `entry = 2` → `"notes.entry" = 2`); a `Config` validator names the new key, like
-  `MOVED_SETTINGS` (`config.py:33-42`). `mfd priority --kind` takes the new names (README
-  row). Where a kind is shown (`mfd priority`'s messages, snooze notices), its label is.
+  `MOVED_SETTINGS` (`config.py:33-42`). Where a kind is shown (`mfd priority`'s
+  messages, snooze notices), its label is.
+- **The skill** changes in the same PR: it passes kinds to `mfd notes ice --item <kind>
+  <id>` (`notes/cli.py:306`) and `mfd priority --kind`, and reads ticket ids in `mfd notes`
+  JSON, which become URLs. The CLI takes only the new names: there's one user, so no
+  compatibility shim.
 - Anchors change (`page.anchor` is built from the kind); bookmarks to `#item-pr-…` and
   `#item-entry-…` break. `notifications.anchor` is transient.
 
 **Tests.** Kinds are published prefixed and `ctx.ref` agrees; family refs aren't
 prefixed; the migration over a V10 database with a row of each kind; notes' migration over
-its tables; `snooze_days = { pr = 7 }` fails to load naming `pull_request`. **Risk.** Medium
-(stored data). **Size.** M.
+its tables; the re-keying turns a stored `APP-1` into its URL and drops a key nothing
+publishes, once; `snooze_days = { pr = 7 }` fails to load naming `pull_request`.
+**Risk.** Medium (stored data). **Size.** M/L.
 
 ## Decisions
 
@@ -175,6 +211,9 @@ its tables; `snooze_days = { pr = 7 }` fails to load naming `pull_request`. **Ri
   Linear issue.
 - Which families: **`pull_request`, `ticket`, `person` now; `email` with its first
   publisher**; `branch` and `repo` stay git's until a second publisher exists.
+- Identity: **each family's own rule** (URLs for PRs and tickets, `<host>/<login>` for
+  people) vs `person` as a plugin's kind with only email shared (tickets would still need
+  URLs).
 - Refs to a family's entities **by family** (links found in text and stored rows don't
   depend on the publisher) vs by full kind (the referrer would have to know the publisher).
 - `Entity.lifecycle` as a two-value field (**recommended**) vs a richer status enum; `gone`
