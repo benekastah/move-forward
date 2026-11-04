@@ -16,11 +16,12 @@ import os
 import re
 import tempfile
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, cast, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
+from pydantic_core import PydanticUndefined
 
 from . import registry, render, tomledit
 from .config import Config
@@ -52,6 +53,8 @@ class Setting:
     value: object
     help: str
     locked: bool = False
+    default: object = None
+    """The field's default in code; None when it has none."""
 
     @property
     def name(self) -> str:
@@ -106,7 +109,8 @@ def _fields(model: BaseModel, section: str | None, skip: set[str]) -> list[Setti
             continue
         help = " ".join((field.description or "").split())
         locked = section is None and key in LOCKED
-        found.append(Setting(section, key, kind, getattr(model, key), help, locked))
+        default = field.get_default(call_default_factory=True)
+        found.append(Setting(section, key, kind, getattr(model, key), help, locked, default))
     return found
 
 
@@ -118,8 +122,7 @@ def settings(config: Config) -> list[Setting]:
     act_now = config.act_now
     found += _fields(act_now, "act_now", {WEIGHTS})
     found += [
-        Setting("act_now", f"{WEIGHTS}.{s.key}", s.kind, s.value, s.help)
-        for s in _fields(act_now.weights, "act_now", set())
+        replace(s, key=f"{WEIGHTS}.{s.key}") for s in _fields(act_now.weights, "act_now", set())
     ]
     found += _fields(config.notifications, NOTIFICATIONS, {SUBSCRIBE})
     for plugin in registry.PLUGINS:
@@ -241,9 +244,22 @@ def _input(setting: Setting) -> str:
     )
 
 
+def _default_text(setting: Setting) -> str | None:
+    """The setting's default as it is entered (a list one item per line); None when empty."""
+    default = setting.default
+    if default is None or default == "" or default == [] or default is PydanticUndefined:
+        return None
+    if isinstance(default, list):
+        return "\n".join(str(v) for v in cast(list[object], default))
+    return str(default)
+
+
 def _placeholder(setting: Setting) -> str:
     """The attribute showing the setting's example in its empty field."""
-    if setting.kind in ("bool", "int", "float") or (text := example(setting)) is None:
+    if setting.kind == "bool" or setting.locked:
+        return ""
+    text = _default_text(setting) or example(setting)
+    if not text:
         return ""
     return f" placeholder='{render.e(text).replace(chr(10), '&#10;')}'"
 

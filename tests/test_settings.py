@@ -115,15 +115,20 @@ def test_the_page_lists_the_kinds_with_the_subscribed_ticked() -> None:
     assert "name='notify:dashboard.certificate_ending'>" in html
 
 
-def test_empty_fields_show_the_example_from_their_help_one_list_item_per_line() -> None:
+def test_fields_show_their_default_as_a_placeholder_else_the_example_from_their_help() -> None:
     config = config_module.Config.model_validate({"email": "me@x", "github": {"org": "acme"}})
     html = settings.page(config)
-    assert "name='github:policy_checks' rows='3' placeholder='pr-policy'" in html
+    assert "name='github:refresh_seconds' value='300' placeholder='300'" in html  # the default
+    assert "name='github:policy_checks' rows='3' placeholder='pr-policy'" in html  # the example
     jira = config_module.Config.model_validate(
         {"email": "me@x", "jira": {"site": "https://x.atlassian.net"}}
     )
+    page = settings.page(jira)
     assert (
-        "name='jira:escalation_levels' rows='3' placeholder='manager&#10;director&#10;vp'"
-        in settings.page(jira)
+        "name='jira:escalation_levels' rows='3' placeholder='manager&#10;director&#10;vp'" in page
     )
-    assert "name='github:refresh_seconds'" in html and "placeholder='300'" not in html
+    assert (
+        "name='jira:priorities' rows='3' placeholder='Lowest&#10;Low&#10;Medium&#10;High&#10;Highest'"
+        in page
+    )
+    assert "name='jira:status_in_progress' rows='3' placeholder='In Progress'" in page
