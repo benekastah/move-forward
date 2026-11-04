@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from conftest import issue, know_jira_projects
+from conftest import issue, know_jira_projects, section
 
 from move_forward import refresh
 from move_forward.config import Config
@@ -64,12 +64,14 @@ def repo(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def config(repo: Path, tmp_path: Path) -> Config:
-    return Config(
-        email="me@acme.com",
-        github=GitHubConfig(org="acme"),
-        teams=["core"],
-        git=GitConfig(repos=[repo]),
-        db_path=tmp_path / "dashboard.db",
+    return Config.model_validate(
+        {
+            "email": "me@acme.com",
+            "github": GitHubConfig(org="acme"),
+            "teams": ["core"],
+            "git": GitConfig(repos=[repo]),
+            "db_path": tmp_path / "dashboard.db",
+        }
     )
 
 
@@ -78,9 +80,9 @@ def _stored(config: Config) -> Database:
     the notes hold from earlier actions."""
     db = Database(config.db_path)
     migrate(config, db)
-    if config.jira:
+    if config.section("jira"):
         know_jira_projects(db, "APP")
-    if config.git:
+    if config.section("git"):
         # Just the branches: notes checks a repo is configured by the graph having its branches.
         repos = [
             LocalRepo(
@@ -100,7 +102,7 @@ def _stored(config: Config) -> Database:
                     )
                 ],
             )
-            for repo in config.git.repos
+            for repo in section(config, "git", GitConfig).repos
         ]
         LocalRepository(db).replace(LocalSnapshot(repos=repos))
     return db
@@ -276,7 +278,7 @@ def test_an_iced_branch_with_commits_since_it_was_iced_isnt_deleted(
 def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -> None:
     git(repo, "branch", "top", "wip")
     git(repo, "branch", "beside", "done")
-    config = config.model_copy(update={"git_stack": GitStackConfig()})
+    config = config.with_section("git_stack", GitStackConfig())
     db = _stored(config)
     tracked = [
         StackBranch(name="main"),
@@ -300,7 +302,7 @@ def test_ice_takes_the_other_stacks_in_the_group_as_git_stack_would(
 ) -> None:
     for name in ("other", "other-top", "apart"):
         git(repo, "branch", name, "main")
-    config = config.model_copy(update={"git_stack": GitStackConfig()})
+    config = config.with_section("git_stack", GitStackConfig())
     db = _stored(config)
     tracked = [
         StackBranch(name="main"),
@@ -407,7 +409,7 @@ def test_todo_link_links_a_jira_ticket_or_a_pr(config: Config, work_notes: None)
     fields = {**_todo(config, "get it merged"), "input": " APP-9 "}
     with pytest.raises(ActionError, match="nor a ticket key"):  # no jira: not a key
         run("notes/todo_link", config, fields)
-    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
+    config = config.with_section("jira", JiraConfig(site="https://j.example/"))
     assert run("notes/todo_link", config, fields) == "linked APP-9"
     with pytest.raises(ActionError, match="already linked"):
         run("notes/todo_link", config, fields)
@@ -462,7 +464,7 @@ def test_todo_add_can_create_the_entry(config: Config, work_notes: None) -> None
 def test_linking_a_ticket_in_a_project_new_to_jira_fetches_it_and_jira_learns_the_project(
     config: Config, work_notes: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
+    config = config.with_section("jira", JiraConfig(site="https://j.example/"))
     asked: list[list[str]] = []
 
     def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
@@ -487,7 +489,7 @@ def test_linking_a_ticket_in_a_project_new_to_jira_fetches_it_and_jira_learns_th
 def test_linking_a_ticket_says_why_when_jira_turns_the_fetch_away(
     config: Config, work_notes: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
+    config = config.with_section("jira", JiraConfig(site="https://j.example/"))
 
     def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
         raise SourceError("Jira rejected the API token")
@@ -536,7 +538,7 @@ def test_deleted_iced_branches_are_restored_at_the_commits_they_were_iced_at(
 def test_the_jira_transition_button_moves_the_ticket_and_reports_what_jira_refuses(
     config: Config, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
+    config = config.with_section("jira", JiraConfig(site="https://j.example/"))
     moved: list[tuple[str, list[str]]] = []
 
     def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> None:

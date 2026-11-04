@@ -61,11 +61,13 @@ def test_check_says_when_the_certificate_is_missing_or_ending(tmp_path: Path) ->
 
 @pytest.fixture
 def https(tmp_path: Path) -> Iterator[tuple[HTTPSConnection, tls.Paths]]:
-    config = Config(
-        email="me@x",
-        https=True,
-        db_path=tmp_path / "dashboard.db",
-        github=GitHubConfig(org="acme"),
+    config = Config.model_validate(
+        {
+            "email": "me@x",
+            "https": True,
+            "db_path": tmp_path / "dashboard.db",
+            "github": GitHubConfig(org="acme"),
+        }
     )
     db = Database(config.db_path)
     migrate(config, db)
@@ -136,8 +138,14 @@ def test_without_a_certificate_the_dashboard_stays_on_plain_http(tmp_path: Path)
 
 
 def test_plugins_know_where_the_dashboard_is_served(tmp_path: Path) -> None:
-    config = Config(
-        email="me@x", https=True, port=9001, db_path=tmp_path / "d.db", github=GitHubConfig(org="a")
+    config = Config.model_validate(
+        {
+            "email": "me@x",
+            "https": True,
+            "port": 9001,
+            "db_path": tmp_path / "d.db",
+            "github": GitHubConfig(org="a"),
+        }
     )
 
     def url(config: Config) -> str:

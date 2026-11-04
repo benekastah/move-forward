@@ -139,7 +139,7 @@ def settings(config: Config) -> list[Setting]:
     ]
     found += _fields(config.notifications, NOTIFICATIONS, {SUBSCRIBE})
     for plugin in registry.PLUGINS:
-        section = cast(BaseModel | None, getattr(config, plugin.name, None))
+        section = config.section(plugin.name)
         if section is not None:
             found += _fields(section, plugin.name, set())
     return found

@@ -44,11 +44,9 @@ change without notice. Its submodules group the rest: `api.html` (`page`, `e` to
 
 ## Registering it
 
-1. Add an instance to `PLUGINS` in `registry.py`.
-2. Add a field for its section to `Config` in `config.py`, typed `LinearConfig | None`
-   (None, the section missing, means disabled).
-
-Both are core changes: land them in their own commit, ahead of the plugin's own.
+Add an instance to `PLUGINS` in `registry.py`: that's a core change, so land it in its own
+commit, ahead of the plugin's own. Its `[linear]` section is then read as its
+`config_model` (`config.section("linear")`); with no section, it's disabled.
 
 ## Config
 

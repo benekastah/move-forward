@@ -2,11 +2,16 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from conftest import section
 
 from move_forward import asking, config, init
 from move_forward.plugins.git import setup as git_setup
+from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.github import setup as github_setup
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.slack.config import SlackConfig
 from move_forward.shell import git
 
 
@@ -58,13 +63,16 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
     message = init.init(path, scripted({}), cwd=tmp_path)
     assert message.startswith(f"wrote {path}")
     loaded = config.load(path)
-    assert loaded.github is not None and loaded.git is not None
-    assert loaded.github.org == "acme" and loaded.teams == ["core"]
-    assert loaded.slack is None
+    assert loaded.section("github") is not None and loaded.section("git") is not None
+    assert section(loaded, "github", GitHubConfig).org == "acme" and loaded.teams == ["core"]
+    assert loaded.section("slack") is None
     assert loaded.email == "jane@acme.com"
-    assert loaded.git.repos == [tmp_path / "app"]
-    assert loaded.git.my_branch_prefixes == [] and loaded.port == config.DEFAULT_PORT
-    assert loaded.jira is None and loaded.git_stack is None
+    assert section(loaded, "git", GitConfig).repos == [tmp_path / "app"]
+    assert (
+        section(loaded, "git", GitConfig).my_branch_prefixes == []
+        and loaded.port == config.DEFAULT_PORT
+    )
+    assert loaded.section("jira") is None and loaded.section("git_stack") is None
     text = path.read_text()
     assert "# prune_days = 90" in text and "# [jira]" in text and "# [slack]" in text
     assert "[notes]" not in text and "# [git_stack]" in text and "Jira" not in message
@@ -79,7 +87,7 @@ def test_init_turns_on_git_stack_when_it_is_installed(
     monkeypatch.setattr(GitStackPlugin, "init_suggested", installed)
     path = tmp_path / "config.toml"
     init.init(path, scripted({}), cwd=tmp_path)
-    assert config.load(path).git_stack is not None
+    assert config.load(path).section("git_stack") is not None
 
 
 def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses: None) -> None:
@@ -105,14 +113,19 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
         cwd=tmp_path,
     )
     loaded = config.load(path)
-    assert loaded.github is not None and loaded.git is not None
-    assert loaded.github.org == "other" and loaded.teams == ["a", "b"]
-    assert loaded.slack is not None and loaded.slack.teams == {"a": "#team-a"}
+    assert loaded.section("github") is not None and loaded.section("git") is not None
+    assert section(loaded, "github", GitHubConfig).org == "other" and loaded.teams == ["a", "b"]
+    assert loaded.section("slack") is not None and section(loaded, "slack", SlackConfig).teams == {
+        "a": "#team-a"
+    }
     assert loaded.email == "jane@other.com"
-    assert loaded.git.repos == [tmp_path / "x", tmp_path / "y"]
-    assert loaded.slack.workspace_url == "https://o.slack.com"
-    assert loaded.git.my_branch_prefixes == ["jane/"] and loaded.port == 9000
-    assert loaded.jira is not None and loaded.jira.site == "https://o.atlassian.net"
+    assert section(loaded, "git", GitConfig).repos == [tmp_path / "x", tmp_path / "y"]
+    assert section(loaded, "slack", SlackConfig).workspace_url == "https://o.slack.com"
+    assert section(loaded, "git", GitConfig).my_branch_prefixes == ["jane/"] and loaded.port == 9000
+    assert (
+        loaded.section("jira") is not None
+        and section(loaded, "jira", JiraConfig).site == "https://o.atlassian.net"
+    )
     assert "`mfd token set jira`" in message
     assert "# status_closed" in path.read_text()
 
@@ -141,9 +154,19 @@ def test_bad_answers_are_asked_again_with_the_reason(
     assert "'acme.slack.com' isn't a URL starting with https://" in out
     assert "'http://acme.atlassian.net' must start with https://" in out
     loaded = config.load(path)
-    assert loaded.github is not None and loaded.github.org == "acme" and loaded.port == 9000
-    assert loaded.slack is not None and loaded.slack.workspace_url == "https://acme.slack.com"
-    assert loaded.jira is not None and loaded.jira.site == "https://acme.atlassian.net"
+    assert (
+        loaded.section("github") is not None
+        and section(loaded, "github", GitHubConfig).org == "acme"
+        and loaded.port == 9000
+    )
+    assert (
+        loaded.section("slack") is not None
+        and section(loaded, "slack", SlackConfig).workspace_url == "https://acme.slack.com"
+    )
+    assert (
+        loaded.section("jira") is not None
+        and section(loaded, "jira", JiraConfig).site == "https://acme.atlassian.net"
+    )
 
 
 def test_giving_up_after_repeated_bad_answers(tmp_path: Path, no_machine_guesses: None) -> None:
@@ -160,7 +183,7 @@ def test_repo_paths_must_exist(tmp_path: Path, no_machine_guesses: None) -> None
         scripted({"checkout": [f"{tmp_path}/nope", f"{tmp_path}/app"]}),
         cwd=tmp_path,
     )
-    git = config.load(path).git
+    git = config.load(path).section("git", GitConfig)
     assert git is not None and git.repos == [tmp_path / "app"]
 
 
@@ -236,8 +259,10 @@ def test_without_github_the_teams_are_asked_by_name(
     }
     init.init(path, scripted(answers), cwd=tmp_path)
     loaded = config.load(path)
-    assert loaded.github is None and loaded.teams == ["web", "api"]
-    assert loaded.slack is not None and loaded.slack.teams == {"web": "#web"}
+    assert loaded.section("github") is None and loaded.teams == ["web", "api"]
+    assert loaded.section("slack") is not None and section(loaded, "slack", SlackConfig).teams == {
+        "web": "#web"
+    }
     assert "# [github]" in path.read_text()
 
 
@@ -258,11 +283,11 @@ def test_a_pasted_org_url_gives_the_org(tmp_path: Path, no_machine_guesses: None
     assert github_setup.org("https://GitHub.Acme.com/acme") == "github.acme.com/acme"
     path = tmp_path / "config.toml"
     init.init(path, scripted({"organization": "https://github.com/other"}), cwd=tmp_path)
-    github = config.load(path).github
+    github = config.load(path).section("github", GitHubConfig)
     assert github is not None and (github.host, github.org) == ("github.com", "other")
     enterprise = tmp_path / "enterprise.toml"
     init.init(enterprise, scripted({"organization": "https://github.acme.com/acme"}), cwd=tmp_path)
-    github = config.load(enterprise).github
+    github = config.load(enterprise).section("github", GitHubConfig)
     assert github is not None and (github.host, github.org) == ("github.acme.com", "acme")
 
 

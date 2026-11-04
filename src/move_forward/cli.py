@@ -10,8 +10,6 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel
-
 from . import auth, init, keychain, localtime, priority, registry, signin, snooze, supervisor, tls
 from . import config as config_module
 from .act_now import PRIORITIES
@@ -208,7 +206,7 @@ def _token_settings(config: config_module.Config) -> dict[str, keychain.TokenSet
     """Where each enabled plugin with a token keeps it (`Plugin.token_settings`)."""
     found: dict[str, keychain.TokenSettings] = {}
     for plugin in registry.PLUGINS:
-        section: BaseModel | None = getattr(config, plugin.name)
+        section = config.section(plugin.name)
         if section is not None and (settings := plugin.token_settings(section)) is not None:
             found[plugin.name] = settings
     return found

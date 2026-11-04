@@ -54,7 +54,7 @@ PLUGINS: list[Plugin[Any, Any]] = [
     SlackPlugin(),
     NotesPlugin(),
 ]
-"""Every built-in plugin. Each one's name is a field of `Config`."""
+"""Every built-in plugin. Each one's name is its section in the config (`Config.section`)."""
 
 
 def check_names(plugins: list[Plugin[Any, Any]]) -> None:
@@ -126,7 +126,7 @@ def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:
 
 def enabled_names(config: "Config") -> list[str]:
     """The plugins the config enables, in page order, without touching the database."""
-    return [p.name for p in PLUGINS if getattr(config, p.name) is not None]
+    return [p.name for p in PLUGINS if config.section(p.name) is not None]
 
 
 def unmet_requirements(config: "Config") -> list[str]:
@@ -161,7 +161,7 @@ def notification_kinds_of(plugin_names: list[str]) -> dict[str, str]:
 def migrate(config: "Config", db: Database) -> None:
     """Apply the enabled plugins' migrations. Once, when `mfd` opens the database."""
     for plugin in PLUGINS:
-        if getattr(config, plugin.name) is not None:
+        if config.section(plugin.name) is not None:
             db.migrate(plugin.name, plugin.migrations)
 
 
@@ -170,7 +170,7 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
     `migrate` has run."""
     result: list[Enabled] = []
     for plugin in PLUGINS:
-        section: BaseModel | None = getattr(config, plugin.name)
+        section = config.section(plugin.name)
         if section is None:
             continue
         ctx = Context(
