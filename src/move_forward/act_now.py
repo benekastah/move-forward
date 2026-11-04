@@ -31,7 +31,7 @@ PENDING_FIELD = "pending"
 the item's `pending`."""
 """The prefix of Act now's own buttons, `act_now/<snooze|dismiss|pin|unpin>`."""
 DUE_HORIZON = timedelta(days=7)
-"""How far ahead a due date starts to count."""
+"""How far ahead a due date starts to count, unless `[act_now] due_warning_days` says."""
 DUE_MOST = 4.0
 """What a due date adds (times its weight) once it's past; it rises to that over
 `DUE_HORIZON`."""
@@ -93,6 +93,9 @@ class ActNowConfig(Strict):
     blocked_stale_days: int = Field(default=3, ge=0)
     """Days a blocked item can go untouched before Act now stops ranking it down, since
     something blocked this long is worth chasing; 0 ranks blocked items down always."""
+    due_warning_days: int = Field(default=7, ge=1)
+    """How many days ahead a due date starts to raise an item: the pressure rises from 0 at
+    this distance to its most when the date arrives."""
     default_snooze_days: int = Field(default=1, ge=1)
     """How many days a snooze lasts, counted in local days: 1 is until tomorrow."""
     snooze_days: dict[str, int] = Field(default_factory=dict)
@@ -185,12 +188,12 @@ def _days(since: timedelta) -> float:
     return max(since.total_seconds(), 0) / 86400
 
 
-def due_pressure(due: datetime, now: datetime) -> float:
-    """0 while `due` is `DUE_HORIZON` or more away, rising to `DUE_MOST` as it arrives."""
+def due_pressure(due: datetime, now: datetime, horizon: timedelta = DUE_HORIZON) -> float:
+    """0 while `due` is `horizon` or more away, rising to `DUE_MOST` as it arrives."""
     left = due - now
-    if left >= DUE_HORIZON:
+    if left >= horizon:
         return 0.0
-    return DUE_MOST * (1 - max(left, timedelta()) / DUE_HORIZON)
+    return DUE_MOST * (1 - max(left, timedelta()) / horizon)
 
 
 def is_stale(signals: Signals, stale_after: timedelta | None, now: datetime | None) -> bool:
@@ -208,6 +211,7 @@ def score(
     weights: Weights,
     now: datetime | None = None,
     stale_after: timedelta | None = None,
+    horizon: timedelta = DUE_HORIZON,
 ) -> float:
     """Finishing beats starting, quick beats slow, importance counts, someone waiting adds
     urgency (more the longer they've waited), and so does a due date drawing near. Unknown
@@ -225,7 +229,7 @@ def score(
     if now is not None and signals.waiting and signals.waiting_since is not None:
         total += math.log2(1 + _days(now - signals.waiting_since))
     if now is not None and signals.due is not None:
-        total += weights.due * due_pressure(signals.due, now)
+        total += weights.due * due_pressure(signals.due, now, horizon)
     return total
 
 
@@ -236,7 +240,12 @@ PRIORITY_IMPORTANCE = {0: -1, 1: 1, 2: 2}
 """The `Signals.importance` each priority stands for."""
 
 
-def why(signals: Signals, now: datetime | None = None, stale_after: timedelta | None = None) -> str:
+def why(
+    signals: Signals,
+    now: datetime | None = None,
+    stale_after: timedelta | None = None,
+    horizon: timedelta = DUE_HORIZON,
+) -> str:
     """The signals that scored, in words: "critical, quick, closes APP-12, alice waiting 2d,
     due in 3d"."""
     parts: list[str] = []
@@ -258,7 +267,7 @@ def why(signals: Signals, now: datetime | None = None, stale_after: timedelta | 
         if now is not None and signals.waiting_since is not None:
             waited = f" {age(now, signals.waiting_since)}"
         parts.append(f"{', '.join(signals.waiting)} waiting{waited}")
-    if now is not None and signals.due is not None and due_pressure(signals.due, now) > 0:
+    if now is not None and signals.due is not None and due_pressure(signals.due, now, horizon) > 0:
         if signals.due <= now:
             parts.append(f"overdue by {age(now, signals.due)}")
         else:
@@ -348,6 +357,7 @@ def panels(
     feedback = feedback or {}
     size, per_plugin, weights = config.size, config.per_plugin, config.weights
     stale_after = timedelta(days=config.blocked_stale_days) or None
+    horizon = timedelta(days=config.due_warning_days)
     levels: dict[int, int] = {}
     """The priority I set on a nomination, by its `id`."""
     prioritized_nominations: list[Nomination] = []
@@ -372,7 +382,7 @@ def panels(
     candidates.sort(
         key=lambda c: (
             not pinned(c[1]),
-            -score(c[1].signals, weights, now, stale_after),
+            -score(c[1].signals, weights, now, stale_after, horizon),
             -c[1].item.rank,
             c[0],
         )
@@ -395,7 +405,7 @@ def panels(
             continue
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1
         is_pinned = any(pinned(n) for n in [nomination, *group.then])
-        shown = _shown(group, place, size, is_pinned, now, levels, stale_after)
+        shown = _shown(group, place, size, is_pinned, now, levels, stale_after, horizon)
         by_plugin.setdefault(nomination.plugin, []).append(shown)
         place += 1
     if not by_plugin:
@@ -469,6 +479,7 @@ def _shown(
     now: datetime | None,
     levels: dict[int, int],
     stale_after: timedelta | None,
+    horizon: timedelta,
 ) -> Item:
     """The item as Act now shows it: its verb first, its place overall as a badge, why it's
     here, what else is due on the same subject, the items joined to it with their buttons,
@@ -476,7 +487,7 @@ def _shown(
     order."""
     nomination, then = group.nomination, group.then
     item, signals = nomination.item, nomination.signals
-    reason = ("pinned, " if pinned else "") + why(signals, now, stale_after)
+    reason = ("pinned, " if pinned else "") + why(signals, now, stale_after, horizon)
     reason = reason.removesuffix(", ")
     details = [f"why: {reason}"] if reason else []
     details += item.details

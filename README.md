@@ -72,6 +72,7 @@ blockers, an entry blocked on something) is ranked down, until it has gone
 `blocked_stale_days` (3; 0 means never) without a touch: a ticket's last
 update or comment, an entry's last edit. Then it's worth chasing, and ranks as
 if it weren't blocked.
+A due date starts raising an item `due_warning_days` (7) ahead.
 A snooze lasts `default_snooze_days` (1: until tomorrow), or `snooze_days[<kind>]`
 for a kind of subject (`snooze_days = { pr = 7 }` snoozes a PR for a week),
 or until the item changes. It ends at local midnight, or at `snooze_until_hour` (9: nine

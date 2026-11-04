@@ -36,6 +36,7 @@ OPTIONAL_ACT_NOW_SETTINGS = """\
 # per_plugin = 3                         # so one busy tool can't fill the list
 # weights = { closes = 3, minutes = 2, hour = 1, waiting = 2, importance = 3, due = 1, blocked = -4 }  # what each signal adds
 # blocked_stale_days = 3                 # a blocked item untouched this long stops being ranked down (0: never)
+# due_warning_days = 7                  # a due date starts raising an item this many days ahead
 # default_snooze_days = 1                # days a snooze lasts (1 = until tomorrow)
 # snooze_until_hour = 0                # the local hour a snooze ends at on its last day (9: 9am)
 # snooze_days = { pr = 7 }               # ...for a kind of subject, e.g. a PR's review for a week

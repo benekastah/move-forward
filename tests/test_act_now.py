@@ -124,6 +124,16 @@ def test_importance_time_waited_and_a_nearing_due_date_raise_an_item() -> None:
     assert why["due in a month"] == []  # too far off to count, or to mention
 
 
+def test_the_due_warning_days_say_how_far_ahead_a_due_date_counts() -> None:
+    soon = Nomination("jira", _item("due in 3 days", due=NOW + timedelta(days=3)))
+    default = _ranked([soon], act_now.ActNowConfig(), now=NOW)
+    assert default.items[0].details == ["why: due in 3d"]
+    narrow = _ranked([soon], act_now.ActNowConfig(due_warning_days=2), now=NOW)
+    assert narrow.items[0].details == []  # three days out is beyond a two-day warning
+    wide = act_now.ActNowConfig(due_warning_days=30)
+    assert _ranked([soon], wide, now=NOW).items[0].details == ["why: due in 3d"]
+
+
 def test_without_now_time_does_not_count() -> None:
     since = NOW - timedelta(days=30)
     assert act_now.score(Signals(waiting=["a"], waiting_since=since), act_now.Weights()) == 2
