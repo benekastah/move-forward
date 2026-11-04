@@ -15,7 +15,7 @@ from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.notifications import Event, NotificationRepository, NotificationsConfig
 from move_forward.page import Item, anchor
-from move_forward.plugin import Context
+from move_forward.plugin import CollectRequest, EventsRequest, LoadRequest, StoreRequest
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
@@ -95,18 +95,17 @@ class _Git(GitPlugin):
     repos: ClassVar[list[str]] = ["one"]
     broken: ClassVar[bool] = False
 
-    def collect(self, ctx: Context[GitConfig]) -> LocalSnapshot:
+    def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         return local_snapshot()
 
-    def store(self, ctx: Context[GitConfig], snapshot: LocalSnapshot) -> None:
-        ctx.kv.set("snapshot", json.dumps(self.repos))
+    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
+        req.ctx.kv.set("snapshot", json.dumps(self.repos))
 
-    def load(self, ctx: Context[GitConfig]) -> LocalSnapshot | None:
+    def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:
+        ctx = req.ctx
         return local_snapshot() if ctx.kv.get("snapshot") else None
 
-    def events(
-        self, ctx: Context[GitConfig], before: LocalSnapshot, after: LocalSnapshot
-    ) -> list[Event]:
+    def events(self, req: EventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
         if self.broken:
             raise RuntimeError("no idea")
         return [Event(kind="changed", thing="git", title="git", text="changed")]

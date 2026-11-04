@@ -24,11 +24,20 @@ from .plugin import (
     ActionError,
     ActionResult,
     ActNowRequest,
+    AfterCollectRequest,
+    CollectAfterRequest,
+    Collected,
+    CollectRequest,
+    EventsRequest,
+    GraphEventsRequest,
     IdentityRequest,
     ItemActionsRequest,
     KeptItemRequest,
+    LoadRequest,
     PanelsRequest,
     PrepareItemActionsRequest,
+    PruneRequest,
+    StoreRequest,
     collect_into,
 )
 from .prune import prune_if_due
@@ -43,6 +52,9 @@ from .repositories import (
 from .shell import CommandError
 
 log = logging.getLogger(__name__)
+
+MAX_PIECES = 50
+"""How many times one refresh collects a plugin that keeps saying it has more."""
 
 _collecting: set[str] = set()
 """The plugins whose `collect` is still running, maybe past its timeout: a thread can't be
@@ -61,21 +73,24 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
     return build_graph(plugins, snapshots), snapshots
 
 
-def _store(e: Enabled, snapshot: BaseModel, subscribed: set[str], now: datetime) -> None:
+def _store(
+    e: Enabled, snapshot: BaseModel, subscribed: set[str], now: datetime, previous: Graph
+) -> None:
     """Keep a plugin's new snapshot and, when I've subscribed to any of its events, store
     those I subscribed to that changed since the last one. The first snapshot has nothing to
     compare with, so it makes none (core's kv remembers that it has been stored). A plugin
-    that can't tell is logged, and never stops the refresh."""
+    that can't tell is logged, and never stops the refresh. `previous` is the graph from
+    before this refresh."""
     wanted = _wants(e, subscribed)
     kv = KvRepository(e.ctx.db, CORE)
     key = f"stored:{e.name}"
-    before = e.plugin.load(e.ctx) if wanted and kv.get(key) else None
-    e.plugin.store(e.ctx, snapshot)
+    before = e.plugin.load(LoadRequest(e.ctx)) if wanted and kv.get(key) else None
+    e.plugin.store(StoreRequest(e.ctx, snapshot))
     kv.set(key, "1")
     if before is None:
         return
     try:
-        events = e.plugin.events(e.ctx, before, snapshot)
+        events = e.plugin.events(EventsRequest(e.ctx, before, snapshot, previous))
         _keep(e, events, subscribed, now)
     except Exception:
         log.exception("%s: finding events failed", e.name)
@@ -91,15 +106,26 @@ def _collect_all(
     db: Database,
     plugins: list[Enabled],
     now: datetime,
-    collect: Callable[[Enabled], BaseModel],
+    collect: Callable[[Enabled], BaseModel | Collected[BaseModel]],
     subscribed: set[str],
-) -> None:
+    previous: Graph,
+) -> set[str]:
     """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
     plugin's `store`. `subscribed` are the kinds I want events of (see `notifications`).
     Each plugin has its `collect_timeout_seconds`: one that takes longer is recorded as
     failed, and the refresh goes on without it; one still running from an earlier refresh
-    is left out."""
+    is left out. Returns the plugins that have more to collect (`Collected.more`)."""
     started = time.monotonic()
+    more: set[str] = set()
+
+    def piece(e: Enabled) -> BaseModel:
+        result = collect(e)
+        if isinstance(result, Collected):
+            if result.more:
+                more.add(e.name)
+            return result.snapshot
+        return result
+
     pool = ThreadPoolExecutor(max_workers=max(1, len(plugins)))
     running: list[tuple[Enabled, Future[None]]] = []
     for e in plugins:
@@ -115,8 +141,8 @@ def _collect_all(
                     db,
                     e.name,
                     now,
-                    lambda: collect(e),
-                    lambda snapshot: _store(e, snapshot, subscribed, now),
+                    lambda: piece(e),
+                    lambda snapshot: _store(e, snapshot, subscribed, now, previous),
                 )
             finally:
                 with _collecting_lock:
@@ -130,7 +156,9 @@ def _collect_all(
         except FutureTimeout:
             log.warning("%s: collect timed out after %ss", e.name, limit)
             SnapshotRepository(db).save_error(e.name, now, f"timed out after {limit}s")
+            more.discard(e.name)
     pool.shutdown(wait=False)
+    return more
 
 
 def _wants(e: Enabled, subscribed: set[str]) -> bool:
@@ -181,45 +209,72 @@ def refresh(
     config: Config, db: Database, now: datetime | None = None, only: set[str] | None = None
 ) -> None:
     """Refresh every plugin, or `only` those (and the plugins that collect after them, e.g.
-    git_stack after git). Each plugin fails on its own. After collecting, the graph is built
-    again, the daily prune runs if due, and `after_collect` runs for the plugins collected
+    git_stack after git). Each plugin fails on its own. A plugin with more to collect
+    (`Collected.more`) is collected again, piece by piece, up to `MAX_PIECES` times. After
+    collecting, the graph is built again, the plugins' events found against what held
+    before, the daily prune runs if due, and `after_collect` runs for the plugins collected
     and those that collect nothing (they work from the others' data)."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
+    previous, previous_snapshots = stored_graph(db, plugins)
     first, after = to_collect(plugins, only)
     collected = {e.name for e in first + after}
     subscribed = set(config.notifications.subscribe)
-    _collect_all(db, first, now, lambda e: e.plugin.collect(e.ctx), subscribed)
+
+    def in_pieces(
+        due: list[Enabled], collect: Callable[[Enabled], BaseModel | Collected[BaseModel]]
+    ) -> None:
+        more = _collect_all(db, due, now, collect, subscribed, previous)
+        for _ in range(MAX_PIECES - 1):
+            if not more or shell.stopping():
+                return
+            more = _collect_all(
+                db, [e for e in due if e.name in more], now, collect, subscribed, previous
+            )
+        if more:
+            log.warning("%s: still more to collect after %s pieces", ", ".join(more), MAX_PIECES)
+
+    in_pieces(first, lambda e: e.plugin.collect(CollectRequest(e.ctx)))
     if shell.stopping():
         return
     graph, _ = stored_graph(db, plugins)
     if after:
-        _collect_all(db, after, now, lambda e: e.plugin.collect_after(e.ctx, graph), subscribed)
+        in_pieces(after, lambda e: e.plugin.collect_after(CollectAfterRequest(e.ctx, graph)))
         if shell.stopping():
             return
         graph, _ = stored_graph(db, plugins)
-    _graph_events(plugins, graph, subscribed, now)
+    snapshots = {e.name: e.snapshot() for e in plugins}
+    _graph_events(plugins, graph, snapshots, previous, previous_snapshots, subscribed, now)
     _dashboard_events(config, db, subscribed, now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
         if e.name not in collected and e.plugin.snapshot_model is not None:
             continue
         try:
-            e.plugin.after_collect(e.ctx, graph)
+            e.plugin.after_collect(AfterCollectRequest(e.ctx, graph))
         except Exception:
             log.exception("%s: after_collect failed", e.name)
 
 
 def _graph_events(
-    plugins: list[Enabled], graph: Graph, subscribed: set[str], now: datetime
+    plugins: list[Enabled],
+    graph: Graph,
+    snapshots: dict[str, BaseModel | None],
+    previous: Graph,
+    previous_snapshots: dict[str, BaseModel | None],
+    subscribed: set[str],
+    now: datetime,
 ) -> None:
-    """Store the events plugins make from the graph (`Plugin.graph_events`), for those I've
-    subscribed to some of."""
+    """Store the events plugins make from the graph (`Plugin.graph_events`), against what
+    held before this refresh, for those I've subscribed to some of."""
     for e in plugins:
         if not _wants(e, subscribed):
             continue
+        req = GraphEventsRequest(
+            e.ctx, graph, snapshots.get(e.name), previous, previous_snapshots.get(e.name)
+        )
         try:
-            _keep(e, e.plugin.graph_events(e.ctx, graph), subscribed, now)
+            _keep(e, e.plugin.graph_events(req), subscribed, now)
         except Exception:
             log.exception("%s: finding events from the graph failed", e.name)
 
@@ -253,7 +308,7 @@ def _prune_plugins(
         notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")
     for e in plugins:
         try:
-            notices += [f"{e.name}: {notice}" for notice in e.plugin.prune(e.ctx, graph)]
+            notices += [f"{e.name}: {n}" for n in e.plugin.prune(PruneRequest(e.ctx, graph))]
         except Exception:
             log.exception("%s: prune failed", e.name)
     return notices

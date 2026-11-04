@@ -1,3 +1,5 @@
+from typing import cast
+
 """What Jira notifications say, from two snapshots and the graph."""
 
 from conftest import NOW, issue, pr, snapshot, stored
@@ -5,6 +7,8 @@ from conftest import NOW, issue, pr, snapshot, stored
 from move_forward import refresh, registry
 from move_forward.config import Config
 from move_forward.db import Database
+from move_forward.graph import Graph
+from move_forward.plugin import GraphEventsRequest
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.changes import KINDS, changes
 from move_forward.plugins.jira.config import JiraConfig
@@ -68,27 +72,40 @@ def test_comments_are_kept_with_the_snapshot() -> None:
     assert store.load() == with_comments
 
 
-def _closeable_events(pair: tuple[Config, Database]) -> list[str]:
-    config, db = pair
-    enabled = registry.enabled(config, db, NOW)
-    graph, _ = refresh.stored_graph(db, enabled)
-    plugin = next(e for e in enabled if e.name == "jira")
-    return [e.thing for e in JiraPlugin().graph_events(plugin.ctx, graph)]
+class _Refreshes:
+    """jira's `graph_events` over what's stored, as successive refreshes ask it: each against
+    what the one before saw (the first against nothing)."""
+
+    def __init__(self, pair: tuple[Config, Database]):
+        self.pair = pair
+        self.previous: tuple[Graph, JiraSnapshot | None] | None = None
+
+    def closeable(self) -> list[str]:
+        config, db = self.pair
+        enabled = registry.enabled(config, db, NOW)
+        graph, snapshots = refresh.stored_graph(db, enabled)
+        jira = next(e for e in enabled if e.name == "jira")
+        now = cast(JiraSnapshot | None, snapshots["jira"])
+        before_graph, before = self.previous or (graph, None)
+        req = GraphEventsRequest(jira.ctx, graph, now, before_graph, before)
+        self.previous = (graph, now)
+        return [e.thing for e in JiraPlugin().graph_events(req)]
 
 
 def test_a_ticket_whose_prs_merge_is_closeable_once_and_not_the_first_time() -> None:
     tickets = JiraSnapshot(issues=[issue("APP-1", status="In Review")])
     open_pr = pr(1)
     config, db = stored(github=snapshot(mine=[open_pr]), jira=tickets)
-    assert _closeable_events((config, db)) == []  # first: keeps what's there
-    assert _closeable_events((config, db)) == []
+    refreshes = _Refreshes((config, db))
+    assert refreshes.closeable() == []  # first: nothing to compare with
+    assert refreshes.closeable() == []
     PrRepository(db).replace(snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)]))
-    assert _closeable_events((config, db)) == ["APP-1"]
-    assert _closeable_events((config, db)) == []  # said once
+    assert refreshes.closeable() == ["APP-1"]
+    assert refreshes.closeable() == []  # said once
 
 
 def test_a_ticket_already_closeable_the_first_time_is_not_said() -> None:
     tickets = JiraSnapshot(issues=[issue("APP-1", status="In Review")])
     merged = snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)])
     pair = stored(github=merged, jira=tickets)
-    assert _closeable_events(pair) == []
+    assert _Refreshes(pair).closeable() == []

@@ -8,16 +8,19 @@ from pydantic import BaseModel
 
 from ...api import (
     ActionHandler,
-    Context,
+    ChangedRequest,
+    CollectAfterRequest,
     EntitiesRequest,
     Entity,
     Event,
-    Graph,
+    EventsRequest,
     ItemActionsRequest,
     ItemAdditions,
+    LoadRequest,
     Panel,
     PanelsRequest,
     Plugin,
+    StoreRequest,
 )
 from . import actions, changes, client, events
 from .config import GitStackConfig
@@ -50,24 +53,28 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {STACK_BRANCH: StackBranchAttrs}
 
-    def collect_after(self, ctx: Context[GitStackConfig], graph: Graph) -> GitStackSnapshot:
+    def collect_after(self, req: CollectAfterRequest[GitStackConfig]) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""
+        graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
 
-    def store(self, ctx: Context[GitStackConfig], snapshot: GitStackSnapshot) -> None:
+    def store(self, req: StoreRequest[GitStackConfig, GitStackSnapshot]) -> None:
+        ctx, snapshot = req.ctx, req.snapshot
         StackRepository(ctx.db).replace(snapshot)
 
-    def changed(self, ctx: Context[GitStackConfig], graph: Graph) -> bool:
+    def changed(self, req: ChangedRequest[GitStackConfig]) -> bool:
         """Whether a stack may have moved since the last look (see `changes`): asked right
         after each refresh of git, rather than collecting with every one."""
+        ctx, graph = req.ctx, req.graph
         now = changes.fingerprint(graph, repo_dirs(graph))
         before = ctx.kv.get(FINGERPRINT)
         if now != before:
             ctx.kv.set(FINGERPRINT, now)
         return before is not None and now != before
 
-    def load(self, ctx: Context[GitStackConfig]) -> GitStackSnapshot | None:
+    def load(self, req: LoadRequest[GitStackConfig]) -> GitStackSnapshot | None:
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""
+        ctx = req.ctx
         return StackRepository(ctx.db).load()
 
     def entities(self, req: EntitiesRequest[GitStackConfig, GitStackSnapshot]) -> list[Entity]:
@@ -80,9 +87,8 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
 
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 
-    def events(
-        self, ctx: Context[GitStackConfig], before: GitStackSnapshot, after: GitStackSnapshot
-    ) -> list[Event]:
+    def events(self, req: EventsRequest[GitStackConfig, GitStackSnapshot]) -> list[Event]:
+        before, after = req.before, req.after
         return events.changes(before, after)
 
     def item_actions(self, req: ItemActionsRequest[GitStackConfig]) -> ItemAdditions:

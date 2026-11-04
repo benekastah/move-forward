@@ -43,7 +43,7 @@ is what's left to build.
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database
   reads beyond what the plugin passes in. Everything slow happens in
   `collect` or `after_collect`, or in `collect_after` for a plugin that
-  needs other plugins' entities to know what to fetch; `changed(ctx, graph)`, polled
+  needs other plugins' entities to know what to fetch; `changed`, polled
   every `change_check_seconds` and right after each refresh of a plugin it
   `watches`, is a cheap check that its tool has something new, so the plugin
   refreshes sooner. Rare work (the daily

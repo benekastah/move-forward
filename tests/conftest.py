@@ -12,6 +12,7 @@ from move_forward.db import Database
 from move_forward.domain import Model
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
+from move_forward.plugin import AfterCollectRequest, StoreRequest
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
@@ -219,11 +220,13 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         know_jira_projects(db, "APP")
     for e in enabled(config, db, NOW):  # kept as a refresh keeps them
         if e.name in snapshots:
-            e.plugin.store(e.ctx, snapshots[e.name])
+            e.plugin.store(StoreRequest(e.ctx, snapshots[e.name]))
             SnapshotRepository(db).save_fetched(e.name, NOW)
     plugins = enabled(config, db, NOW)
     notes = next(e for e in plugins if e.name == "notes")
-    notes.plugin.after_collect(notes.ctx, stored_graph(db, plugins)[0])  # what ice covers
+    notes.plugin.after_collect(
+        AfterCollectRequest(notes.ctx, stored_graph(db, plugins)[0])
+    )  # what ice covers
     if derived is not None:
         DerivedRepository(db).replace(derived)
         SnapshotRepository(db).save_fetched("github.derived", NOW)

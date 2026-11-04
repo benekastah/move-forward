@@ -1,6 +1,5 @@
 """The Jira plugin: my open tickets, the status changes their PRs suggest, and what's next."""
 
-import json
 import math
 import re
 from datetime import date, datetime, time, timedelta
@@ -13,22 +12,27 @@ from ...api import (
     ActionHandler,
     ActNowRequest,
     Asker,
-    Context,
+    ChangedRequest,
+    CollectRequest,
     EntitiesRequest,
     Entity,
     Event,
+    EventsRequest,
     FetchRequest,
     Graph,
+    GraphEventsRequest,
     InitSetup,
     Item,
     Link,
     LinkingRequest,
+    LoadRequest,
     Model,
     Panel,
     PanelsRequest,
     Plugin,
     Ref,
     Signals,
+    StoreRequest,
     UrlRequest,
     age,
     attrs,
@@ -44,7 +48,6 @@ from .setup import EXAMPLE, TEMPLATE, questions
 
 TICKET = "ticket"
 PR = "pr"
-CLOSEABLE = "closeable"
 """The kv key of the tickets already said to be closeable."""
 CHECKED = "changes_checked_at"
 """The kv key of when `changed` last looked."""
@@ -329,6 +332,15 @@ def key_pattern(projects: list[str]) -> str | None:
     return rf"\b(?:{alternatives})-\d+\b"
 
 
+def _closing(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> set[str]:
+    """The tickets the transitions panel proposes closing."""
+    return {
+        item.actions[0].fields["key"]
+        for item in transitions(config, snapshot, graph).items
+        if item.actions and item.signals and item.signals.closes
+    }
+
+
 class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     name = "jira"
     title = "Jira"
@@ -351,44 +363,39 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
 
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
 
-    def events(
-        self, ctx: Context[JiraConfig], before: JiraSnapshot, after: JiraSnapshot
-    ) -> list[Event]:
+    def events(self, req: EventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
+        ctx, before, after = req.ctx, req.before, req.after
         return changes.changes(ctx.config, before, after)
 
-    def graph_events(self, ctx: Context[JiraConfig], graph: Graph) -> list[Event]:
-        """`closeable`: a ticket the transitions panel now proposes closing (its PRs are
-        merged), once. The first time only keeps what's there."""
-        snapshot = self.load(ctx) or JiraSnapshot(issues=[])
-        issues = {i.key: i for i in snapshot.issues}
-        closing = {
-            item.actions[0].fields["key"]
-            for item in transitions(
-                ctx.config, JiraSnapshot(issues=list(issues.values())), graph
-            ).items
-            if item.actions and item.signals and item.signals.closes
-        }
-        said = ctx.kv.get(CLOSEABLE)
-        ctx.kv.set(CLOSEABLE, json.dumps(sorted(closing)))
-        if said is None:
+    def graph_events(self, req: GraphEventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
+        """`closeable`: a ticket the transitions panel proposes closing (its PRs are merged)
+        now and didn't before this refresh."""
+        if req.previous_snapshot is None:
             return []
-        known = set(json.loads(said))
-        return [changes.closeable(issues[key]) for key in sorted(closing - known) if key in issues]
+        config = req.ctx.config
+        before = _closing(config, req.previous_snapshot, req.previous_graph)
+        snapshot = req.snapshot or JiraSnapshot(issues=[])
+        issues = {i.key: i for i in snapshot.issues}
+        now = _closing(config, snapshot, req.graph)
+        return [changes.closeable(issues[key]) for key in sorted(now - before) if key in issues]
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS
 
-    def collect(self, ctx: Context[JiraConfig]) -> JiraSnapshot:
+    def collect(self, req: CollectRequest[JiraConfig]) -> JiraSnapshot:
+        ctx = req.ctx
         return client.collect(ctx.config, ctx.email)
 
-    def store(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot) -> None:
+    def store(self, req: StoreRequest[JiraConfig, JiraSnapshot]) -> None:
+        ctx, snapshot = req.ctx, req.snapshot
         IssueRepository(ctx.db).replace(snapshot)
 
     change_check_seconds: ClassVar[int | None] = 60
 
-    def changed(self, ctx: Context[JiraConfig], graph: Graph) -> bool:
+    def changed(self, req: ChangedRequest[JiraConfig]) -> bool:
         """Whether a ticket of mine was updated since the last look (and a minute before
         it, as Jira counts in whole minutes): a one-result search."""
+        ctx = req.ctx
         checked = ctx.kv.get(CHECKED)
         found = False
         if checked is not None:
@@ -398,7 +405,8 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         ctx.kv.set(CHECKED, ctx.now.isoformat())
         return found
 
-    def load(self, ctx: Context[JiraConfig]) -> JiraSnapshot | None:
+    def load(self, req: LoadRequest[JiraConfig]) -> JiraSnapshot | None:
+        ctx = req.ctx
         return IssueRepository(ctx.db).load()
 
     def linking_patterns(self, req: LinkingRequest[JiraConfig]) -> dict[str, str | None]:

@@ -24,10 +24,10 @@ from legacy import save_json_snapshot
 from move_forward import refresh
 from move_forward.db import Database
 from move_forward.graph import Ref
-from move_forward.plugin import ActionError
+from move_forward.plugin import ActionError, ChangedRequest, CollectAfterRequest
 from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack import actions, client
-from move_forward.plugins.git_stack.models import StackBranch, StackRepo
+from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 from move_forward.plugins.git_stack.panels import repo_dirs
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
@@ -140,7 +140,8 @@ def test_collects_in_the_repos_git_has_branches_in(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(client, "collect_repo", collect_repo)
     git_stack = next(e for e in plugins if e.name == "git_stack")
-    collected = git_stack.plugin.collect_after(git_stack.ctx, graph)
+    collected = git_stack.plugin.collect_after(CollectAfterRequest(git_stack.ctx, graph))
+    assert isinstance(collected, GitStackSnapshot)
     assert asked == [Path("/src/widgets")]
     assert [r.dir for r in collected.repos] == [str(Path("/src/widgets"))]
 
@@ -331,7 +332,7 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
     def changed() -> bool:
         plugins = enabled(config, db, NOW)
         e = next(e for e in plugins if e.name == "git_stack")
-        return GitStackPlugin().changed(e.ctx, refresh.stored_graph(db, plugins)[0])
+        return GitStackPlugin().changed(ChangedRequest(e.ctx, refresh.stored_graph(db, plugins)[0]))
 
     assert not changed()  # the first look notes where things stand
     assert not changed()
