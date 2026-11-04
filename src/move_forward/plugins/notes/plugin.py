@@ -23,6 +23,7 @@ from ...api import (
     ItemActionsRequest,
     ItemAdditions,
     KeptItemRequest,
+    KindSpec,
     Panel,
     PanelsRequest,
     Plugin,
@@ -54,13 +55,12 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     always_on = True
     config_model = NotesConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {
-        ENTRY: EntryAttrs,
-        ICED: IcedAttrs,
-        TODO: TodoAttrs,
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        # Done entries and todos aren't published: one that's gone is done.
+        ENTRY: KindSpec(EntryAttrs, linking=None, gone_means_done=True, resolvable=True),
+        ICED: KindSpec(IcedAttrs, hides=True),
+        TODO: KindSpec(TodoAttrs, gone_means_done=True),
     }
-    linking: ClassVar[dict[str, str | None]] = {ENTRY: None}
-    hides: ClassVar[list[str]] = [ICED]
     cli_help = "import the skill's markdown notes, or export them back"
 
     def entities(self, req: EntitiesRequest[NotesConfig, BaseModel]) -> list[Entity]:

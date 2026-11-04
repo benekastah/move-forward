@@ -13,7 +13,7 @@ from pydantic import BaseModel, ValidationError
 
 from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
-from .graph import Entity, Graph, Ref
+from .graph import Entity, Graph, KindSpec, Ref
 from .plugin import (
     Context,
     EntitiesRequest,
@@ -204,7 +204,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
                 log.error("%s published %s %s twice", e.name, ref.kind, ref.id)
                 continue
             try:
-                e.plugin.kinds[ref.kind].model_validate(entity.attrs)
+                e.plugin.kinds[ref.kind].attrs.model_validate(entity.attrs)
             except ValidationError as error:
                 log.error("%s published a bad %s %s: %s", e.name, ref.kind, ref.id, error)
                 continue
@@ -242,5 +242,11 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
             {},
         )
         linking.update(patterns)
-    hiding = [kind for e in plugins for kind in e.plugin.hides]
-    return Graph(entities, url_for, fetch, linking, hiding)
+    specs: dict[str, KindSpec] = {
+        kind: spec
+        for e in plugins
+        for kind, spec in e.plugin.kinds.items()
+        if owners.get(kind) == e.name
+    }
+    hiding = [kind for kind, spec in specs.items() if spec.hides]
+    return Graph(entities, url_for, fetch, linking, hiding, specs)

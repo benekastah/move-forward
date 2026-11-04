@@ -27,6 +27,10 @@ in, e.g. `APP-12`, so `UTF-8` isn't one) is found in other entities'
 
 ## Kinds
 
+Every entity also says whether its work is over, in `lifecycle`: `done` for a merged or
+closed `pr` and a `ticket` in a done status category (also when fetched), `open` otherwise.
+`entry` and `todo` are published only while open, and are done once gone.
+
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pr` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket` keys its branch, title and body mention |

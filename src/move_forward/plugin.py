@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from . import localtime, private, shell
 from .asking import Asker, InitSetup
 from .db import Database
-from .graph import Entity, Graph, Ref
+from .graph import Entity, Graph, KindSpec, Ref
 from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, SnapshotRepository
@@ -323,18 +323,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """e.g. "GitHub": the heading of the plugin's group on the page."""
     config_model: ClassVar[type[BaseModel]]
     """The model of the `[name]` section: C."""
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {}
-    """The entity kinds the plugin publishes, each with the model of its attributes. The graph
-    checks the plugin's entities of those kinds against them as it's built."""
-    linking: ClassVar[dict[str, str | None]] = {}
-    """Of its kinds, the ones that link what they're about (see `Graph.related`): each with the
-    pattern of its ids, so the graph finds them in other entities' `mentions` (a ticket's
-    key), or None when its entities point at what they link themselves (a work entry).
-    `linking_patterns` can narrow the patterns from what the plugin has seen."""
-    hides: ClassVar[list[str]] = []
-    """Of its kinds, the ones whose entities hide what they point at (see `Graph.hidden`):
-    core leaves items about hidden things out of every panel but the hiding plugin's own
-    items about the hiding entity, e.g. notes' On ice."""
+    kinds: ClassVar[dict[str, KindSpec]] = {}
+    """The entity kinds the plugin publishes, each with its spec: the model of its
+    attributes, which the graph checks its entities against, and whether it links what it's
+    about (see `Graph.related`; `linking_patterns` can narrow its id pattern), hides what it
+    points at (core leaves items about hidden things off the page, but for the hiding
+    plugin's own, e.g. notes' On ice), can be fetched, is done once gone, or is where `mfd
+    priority` looks."""
     requires: ClassVar[list[str]] = []
     """Plugins whose entities this one is built on, e.g. `["git"]`; the config must enable
     them too."""
@@ -438,7 +433,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Its `linking` kinds with the patterns of their ids as of now, e.g. only the project
         keys jira has seen; None where no id can be found in text. Read from its tables, so
         cheap: core asks every time it builds the graph."""
-        return dict(self.linking)
+        return {
+            kind: spec.linking for kind, spec in self.kinds.items() if spec.linking is not False
+        }
 
     def identity(self, req: IdentityRequest[C, S]) -> Identity | None:
         """Who I am in the plugin's tool (a login), for the page's footer, which lists each

@@ -14,7 +14,7 @@ from move_forward import cli, localtime, refresh, registry, render
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import Model
-from move_forward.graph import Entity, Graph, Ref
+from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.page import Action, Identity, ItemAdditions
 from move_forward.plugin import (
     CliHandler,
@@ -188,7 +188,7 @@ class _TicketAttrs(Model):
 class _Declaring(JiraPlugin):
     """Jira, declaring its tickets need a summary, and publishing one without."""
 
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {"ticket": _TicketAttrs}
+    kinds: ClassVar[dict[str, KindSpec]] = {"ticket": KindSpec(_TicketAttrs)}
 
     def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
         return [
@@ -217,8 +217,10 @@ class _VeilAttrs(Model):
 class _Veiling(Hooked):
     """Jira, plus a hiding `veil` over PR 1 and ticket APP-3."""
 
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {**JiraPlugin.kinds, "veil": _VeilAttrs}
-    hides: ClassVar[list[str]] = ["veil"]
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        **JiraPlugin.kinds,
+        "veil": KindSpec(_VeilAttrs, hides=True),
+    }
 
     def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
         veil = Entity(
@@ -259,7 +261,7 @@ class _Unruly(JiraPlugin):
 class _Claiming(JiraPlugin):
     """Jira, declaring github's `pr` too."""
 
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {**JiraPlugin.kinds, "pr": _VeilAttrs}
+    kinds: ClassVar[dict[str, KindSpec]] = {**JiraPlugin.kinds, "pr": KindSpec(_VeilAttrs)}
 
 
 def _graph_with(plugin: JiraPlugin, monkeypatch: pytest.MonkeyPatch) -> Graph:

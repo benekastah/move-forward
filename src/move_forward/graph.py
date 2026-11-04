@@ -7,6 +7,8 @@ Kinds and their attributes are a published contract, listed in `docs/entities.md
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel, Field, JsonValue
 
@@ -41,6 +43,32 @@ class Entity(Model):
     """Text that may name linking entities by id, e.g. a PR's branch, title and body; the graph
     adds a ref to each linking entity whose id it finds in it."""
     attrs: dict[str, JsonValue] = Field(default_factory=dict)
+    lifecycle: Literal["open", "done"] = "open"
+    """Whether the work it stands for is over (a PR merged or closed, a ticket resolved), as
+    its publisher says; `state` is the tool's own word for it."""
+
+
+@dataclass(frozen=True)
+class KindSpec:
+    """What a plugin says of a kind it publishes (`Plugin.kinds`)."""
+
+    attrs: type[BaseModel]
+    """The model its entities' `attrs` must fit."""
+    linking: str | None | Literal[False] = False
+    """Whether it links what it's about (see `Graph.related`): False if not; else the pattern
+    of its ids, for finding them in other entities' `mentions` (`Plugin.linking_patterns`
+    can narrow it as the plugin learns), or None when its entities point at what they link
+    themselves."""
+    hides: bool = False
+    """Whether its entities hide what they point at (notes' ice); see `Graph.hidden`."""
+    fetchable: bool = False
+    """Whether `Plugin.fetch` can look its entities up when the graph no longer has them, as
+    the daily prune does to learn whether long-gone work ended."""
+    gone_means_done: bool = False
+    """Whether an entity missing from the graph is done: its plugin publishes only open ones
+    (notes' todos), and keeps them where only finishing removes them."""
+    resolvable: bool = False
+    """Whether `mfd priority <id>`, given no kind, looks among its entities by id."""
 
 
 def _no_url(kind: str, id: str) -> str | None:
@@ -81,11 +109,14 @@ class Graph:
         fetch: Fetch = _no_fetch,
         linking: Mapping[str, str | None] | None = None,
         hiding: Iterable[str] = (),
+        kinds: Mapping[str, KindSpec] | None = None,
     ):
         """`linking` names the kinds that link what they're about (see `related`), each with
         the pattern of its ids, for finding them in entities' `mentions`; None for a kind
         whose entities point at what they link themselves. `hiding` names the kinds whose
-        entities hide what they point at (see `hidden`)."""
+        entities hide what they point at (see `hidden`). `kinds` are the publishers' specs
+        of their kinds (see `spec`)."""
+        self._kinds = dict(kinds or {})
         self._linking = dict(linking or {})
         self._hiding = set(hiding)
         self._patterns = {k: re.compile(p) for k, p in self._linking.items() if p is not None}
@@ -146,6 +177,14 @@ class Graph:
         if ref.kind in self._linking:
             linkers.append(ref)
         return list(dict.fromkeys(linkers))
+
+    def spec(self, kind: str) -> KindSpec | None:
+        """What the publisher of `kind` says of it; None for a kind no plugin publishes."""
+        return self._kinds.get(kind)
+
+    def kinds(self) -> list[str]:
+        """The kinds the plugins publish, in plugin order."""
+        return list(self._kinds)
 
     def hides(self, kind: str) -> bool:
         """Whether entities of `kind` hide what they point at, e.g. notes' ice."""

@@ -4,8 +4,6 @@ import argparse
 from datetime import datetime, timedelta
 from typing import ClassVar, cast
 
-from pydantic import BaseModel
-
 from ...api import (
     ActNowRequest,
     AfterCollectRequest,
@@ -25,6 +23,7 @@ from ...api import (
     IdentityRequest,
     InitSetup,
     Item,
+    KindSpec,
     LoadRequest,
     Panel,
     PanelsRequest,
@@ -89,7 +88,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     init_finds_teams = True
     config_model = GitHubConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {PR: PrAttrs, PERSON: PersonAttrs}
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        PR: KindSpec(PrAttrs, fetchable=True, resolvable=True),
+        PERSON: KindSpec(PersonAttrs),
+    }
     cli_help = "import reviewers' emails from the skill's reviewer map"
     snapshot_model = GitHubSnapshot
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
@@ -319,6 +321,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             title=pr.title,
             url=pr.url,
             state=state,
+            lifecycle="open" if state == "open" else "done",
             mentions=[pr.head, pr.title, pr.body],
             attrs=attrs(pr_attrs),
         )
@@ -375,6 +378,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                     title=url,
                     url=url,
                     state=state,
+                    lifecycle="open" if state == "open" else "done",
                     attrs={"closed_at": closed_at.isoformat() if closed_at else None},
                 )
             )

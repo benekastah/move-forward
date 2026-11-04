@@ -4,8 +4,6 @@ import shutil
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import BaseModel
-
 from ...api import (
     ActionHandler,
     ChangedRequest,
@@ -16,6 +14,7 @@ from ...api import (
     EventsRequest,
     ItemActionsRequest,
     ItemAdditions,
+    KindSpec,
     LoadRequest,
     Panel,
     PanelsRequest,
@@ -46,7 +45,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     snapshot_model = GitStackSnapshot
     collects_after_graph = True
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {STACK_BRANCH: StackBranchAttrs}
+    kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 
     def init_suggested(self) -> bool:

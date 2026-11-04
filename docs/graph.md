@@ -128,8 +128,8 @@ A view lists only what its consumer reads, so publishers can add attributes free
 
 ### Related entities
 
-Some kinds stand for a unit of work and link what's about it. A plugin declares them in
-`linking`, each with the pattern of its ids, or None (its `linking_patterns` hook can narrow
+Some kinds stand for a unit of work and link what's about it. A plugin declares them with
+`KindSpec(..., linking=...)`, giving the pattern of its ids, or None (its `linking_patterns` hook can narrow
 a pattern from what it has seen, as jira does to the project keys it knows):
 
 ```python
@@ -175,7 +175,8 @@ names with it).
 
 ### Hidden entities
 
-A plugin can declare kinds whose entities **hide** what they point at, in `hides`. notes'
+A plugin can declare kinds whose entities **hide** what they point at, with
+`KindSpec(..., hides=True)`. notes'
 `iced` is one: what's on ice stays off the page until it's thawed. It points at what's on
 ice (a stack's branches, a PR, a ticket or a work entry) and at what notes finds for it
 after each refresh: the branches' PRs and git_stack's `stack_branch`es, and what an iced

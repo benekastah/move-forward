@@ -5,8 +5,6 @@ import re
 from datetime import date, datetime, time, timedelta
 from typing import ClassVar
 
-from pydantic import BaseModel
-
 from ...api import (
     Action,
     ActionHandler,
@@ -23,6 +21,7 @@ from ...api import (
     GraphEventsRequest,
     InitSetup,
     Item,
+    KindSpec,
     Link,
     LinkingRequest,
     LoadRequest,
@@ -349,8 +348,9 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     config_model = JiraConfig
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
-    linking: ClassVar[dict[str, str | None]] = {TICKET: None}
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        TICKET: KindSpec(TicketAttrs, linking=None, fetchable=True, resolvable=True)
+    }
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
     change_check_seconds: ClassVar[int | None] = 60
@@ -420,6 +420,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 title=f"{issue.key} {issue.summary}",
                 url=issue.url,
                 state=issue.status,
+                lifecycle="done" if issue.status_category == "done" else "open",
                 attrs=attrs(
                     TicketAttrs(
                         summary=issue.summary,
@@ -448,6 +449,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 title=f"{i.key} {i.summary}",
                 url=i.url,
                 state=i.status,
+                lifecycle="done" if i.resolved else "open",
                 attrs={"resolved_at": i.resolved.isoformat() if i.resolved else None},
             )
             for i in found

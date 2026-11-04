@@ -19,7 +19,7 @@ from ..asking import (
 )
 from ..db import Database, Params
 from ..domain import Model
-from ..graph import Entity, Graph, Ref, attrs
+from ..graph import Entity, Graph, KindSpec, Ref, attrs
 from ..markdown import cell, tables
 from ..notifications import Event
 from ..page import (
@@ -109,6 +109,7 @@ __all__ = [
     "ItemActionsRequest",
     "ItemAdditions",
     "KeptItemRequest",
+    "KindSpec",
     "KvRepository",
     "Link",
     "LinkingRequest",
