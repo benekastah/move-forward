@@ -115,6 +115,15 @@ def test_cleanup_lists_merged_and_gone_branches() -> None:
     assert cleanup.actions[0].confirm is not None
 
 
+def test_cleanup_of_a_merged_branch_can_be_put_on_ice_but_is_still_about_its_pr() -> None:
+    merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
+    local = local_snapshot(branches=[local_branch("me/done", upstream="origin/me/done", gone=True)])
+    dashboard = build(github=snapshot(merged_recent=[merged]), local=local)
+    [item] = panel(dashboard, "git.cleanup").items
+    assert [s.kind for s in item.subjects] == ["pr", "branch"]  # the PR keys and anchors it
+    assert "notes/ice" in [a.name for a in item.actions]
+
+
 def test_branch_prefixes_limit_cleanup_and_local_work_to_my_branches() -> None:
     merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="theirs/merged-by-me")
     local = local_snapshot(
