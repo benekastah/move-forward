@@ -83,6 +83,7 @@ my-team = "#team-my-team"
 # status_in_progress = "In Progress"      # workflow names the transitions panel uses
 # status_in_review = "In Review"
 # status_closed = "Closed"
+# status_blocked = "Blocked"             # tickets in it count as blocked, with or without blocker links
 # escalation_label_prefix = ""            # labels that rank incidents, e.g. "escalated-to-"
 # escalation_levels = []                  # what follows it, lowest first, e.g. ["manager", "director", "vp"]
 # incident_types = ["incident"]           # issue types (substrings, lower-case)

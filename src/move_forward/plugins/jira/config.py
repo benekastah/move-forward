@@ -12,6 +12,7 @@ DEFAULT_JIRA_KEYCHAIN_SERVICE = "move-forward-jira"
 DEFAULT_STATUS_IN_PROGRESS = "In Progress"
 DEFAULT_STATUS_IN_REVIEW = "In Review"
 DEFAULT_STATUS_CLOSED = "Closed"
+DEFAULT_STATUS_BLOCKED = "Blocked"
 DEFAULT_PRIORITIES = ["Lowest", "Low", "Medium", "High", "Highest"]
 DEFAULT_INCIDENT_TYPES = ["incident"]
 DEFAULT_BUG_TYPES = ["bug"]
@@ -39,6 +40,9 @@ class JiraConfig(Strict):
     """Workflow status names, for the transitions the Jira panel proposes."""
     status_in_review: str = DEFAULT_STATUS_IN_REVIEW
     status_closed: str = DEFAULT_STATUS_CLOSED
+    status_blocked: str = DEFAULT_STATUS_BLOCKED
+    """A ticket in this status counts as blocked in "What next" and Act now, even with no
+    blocker links."""
     priorities: list[str] = Field(default_factory=lambda: list(DEFAULT_PRIORITIES))
     """Jira's priority names, lowest first, for `priority_raised` notifications: a priority
     not listed here is never counted as raised."""

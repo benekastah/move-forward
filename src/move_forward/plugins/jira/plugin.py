@@ -128,26 +128,33 @@ def end_of(day: date, now: datetime) -> datetime:
 def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Panel:
     """My open tickets in the order to take them, each with signals for Act now: an incident
     is important, critical once escalated, and an escalated bug important; a due date
-    counts, and a ticket with open blockers is blocked."""
+    counts, and a ticket with open blockers, or in the blocked status, is blocked."""
     items: list[Item] = []
     for issue in snapshot.issues:
         kind = issue.type.lower()
         level = escalation(issue, config.escalation_label_prefix, config.escalation_levels)
+        blocked = bool(issue.open_blockers) or issue.status.casefold() == (
+            config.status_blocked.casefold()
+        )
         if any(t in kind for t in config.incident_types):
             rank = 3000 + level * 100
             why = "incident" + (f", escalated ({level})" if level else "")
+            why += ", blocked" if blocked else ""
             importance, verb = (2 if level else 1), "Look at the incident"
         elif any(t in kind for t in config.bug_types):
             rank = 2000 + level * 100
             why = "bug" + (f", escalated ({level})" if level else "")
+            why += ", blocked" if blocked else ""
             importance, verb = (1 if level else 0), "Fix the bug"
-        elif not issue.open_blockers:
+        elif not blocked:
             rank = 1000
             why = "unblocked" + (f", under {issue.parent}" if issue.parent else "")
             importance, verb = 0, "Work on it"
         else:
             rank = 0
-            why = "blocked by " + ", ".join(issue.open_blockers)
+            why = (
+                "blocked by " + ", ".join(issue.open_blockers) if issue.open_blockers else "blocked"
+            )
             importance, verb = 0, "Chase the blockers"
         rank += min(999, (now - issue.created).days)
         badges = [why] + ([f"due {issue.due:%b} {issue.due.day}"] if issue.due else [])
@@ -163,7 +170,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                     verb=verb,
                     importance=importance,
                     due=end_of(issue.due, now) if issue.due else None,
-                    blocked=bool(issue.open_blockers),
+                    blocked=blocked,
                     touched=issue.updated,
                 ),
             )
