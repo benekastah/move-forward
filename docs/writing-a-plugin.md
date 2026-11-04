@@ -395,14 +395,32 @@ plugin and hook). The rest of the page, and the other plugins' refreshes, go on.
 
 ## Tests
 
-Tests go in `tests/plugins/`, named after the plugin (`test_linear_*.py`).
+`move_forward.testing.Harness` runs a plugin as core runs it: enabled alone, over an
+in-memory database, with core's graph, page, actions and pages. It doesn't import pytest;
+wrap it in a fixture of your own.
 
-- **Panel tests** build the page as core does, with `conftest.dashboard(...)` (add your
-  snapshot to `conftest.stored`), and assert on panel contents.
+```python
+def test_triage_lists_my_open_issues() -> None:
+    linear = Harness(LinearPlugin(), {"team": "ENG"})  # the [linear] section
+    linear.store(LinearSnapshot(issues=[issue("ENG-1")]))  # as a refresh keeps it
+    linear.with_entities([pull_request])  # another plugin's, as it would publish them
+    assert [i.title for i in linear.act_now()] == ["Triage: ENG-1 Fix it"]
+    assert linear.run_action("close", {"key": "ENG-1"}) == "closed ENG-1"
+```
+
+It has `entities()` (what the graph holds of the plugin's), `panels()`, `dashboard()`,
+`act_now()`, `render_item(item)`, `run_action(name, fields)`, `page(key, query)`,
+`graph_events()` (since the last `store`), `prune()`, and `tick(seconds)` to move its clock.
+`tests/plugins/test_jira_panels.py` uses it.
+
+- **Panel tests** build the page as core does and assert on panel contents.
 - **Contract tests** assert on the entities the plugin publishes.
 - Tests never touch the network: monkeypatch the client. Tests touching git make real
   repos in `tmp_path`.
 - Make sure each test would fail without the change it covers.
+
+A built-in's tests go in `tests/plugins/`, named after it (`test_jira_*.py`); those of
+built-ins working together use `conftest.dashboard(...)` and `conftest.stored(...)`.
 
 ## Docs to update in the same commit
 

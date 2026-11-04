@@ -346,6 +346,11 @@ def _link(link: Link) -> str:
     return f"<a href='{_e(link.url)}'{cls} target='_blank' rel='noopener'>{_e(link.text)}</a>"
 
 
+def item_html(item: Item) -> str:
+    """An item's HTML, as a panel on the page shows it."""
+    return _item(item)
+
+
 def _item(item: Item, back: str = "", at: str = "", pos: int | None = None) -> str:
     title = (
         f"<a href='{_e(item.url)}' target='_blank' rel='noopener'>{_e(item.title)}</a>"

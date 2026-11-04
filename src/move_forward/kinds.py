@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 from pydantic import Field
 
-from .domain import KindModel, Model
+from .domain import KindModel
 
 PULL_REQUEST = "pull_request"
 """The family of pull requests (and merge requests): shown as "PR"."""
@@ -116,7 +116,7 @@ class Family:
     name: str
     label: str
     """What the page and the CLI call it, e.g. "PR"."""
-    model: type[Model]
+    model: type[KindModel]
     id_rule: Callable[[str], bool]
     """Whether an id fits the family: ids are unique whoever publishes them, so two tools'
     `OPS-12` (or two people's `alice`) are never taken for one."""

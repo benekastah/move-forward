@@ -1,4 +1,5 @@
-"""The Jira plugin's panels, built as core builds the page."""
+"""The Jira plugin's panels, built as core builds the page: alone through
+`move_forward.testing`'s `Harness`, and with github's PRs through `conftest`."""
 
 from datetime import timedelta
 
@@ -16,8 +17,10 @@ from conftest import (
 )
 
 from move_forward import refresh
-from move_forward.plugins.jira.models import JiraSnapshot
+from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
+from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.refresh import build_dashboard
+from move_forward.testing import Harness
 
 build = dashboard
 
@@ -64,24 +67,36 @@ def test_a_transition_with_a_target_status_has_a_button_to_make_it() -> None:
     )
 
 
+ESCALATED: dict[str, object] = {
+    "site": "https://jira",
+    "escalation_label_prefix": "esc-",
+    "escalation_levels": ["manager", "director", "vp"],
+}
+"""A `[jira]` section with escalation labels."""
+
+
+def _jira(issues: list[JiraIssue], section: dict[str, object] | None = None) -> Harness:
+    """jira alone, run as core runs it (see `move_forward.testing`), with my tickets."""
+    jira = Harness(JiraPlugin(), section or {"site": "https://jira"}, now=NOW)
+    jira.store(JiraSnapshot(issues=issues))
+    return jira
+
+
 def test_jira_next_ranks_incidents_then_bugs_then_unblocked_work() -> None:
-    dashboard = build(
-        jira=JiraSnapshot(
-            issues=[
-                issue("APP-1", type="Task"),
-                issue("APP-2", type="Task", open_blockers=["APP-9"]),
-                issue("APP-3", type="Bug"),
-                issue("APP-4", type="Incident"),
-                issue("APP-5", type="Incident", labels=["esc-vp"]),
-                issue("APP-6", type="Bug", labels=["esc-manager"]),
-            ]
-        ),
-        escalation_label_prefix="esc-",
-        escalation_levels=["manager", "director", "vp"],
+    jira = _jira(
+        [
+            issue("APP-1", type="Task"),
+            issue("APP-2", type="Task", open_blockers=["APP-9"]),
+            issue("APP-3", type="Bug"),
+            issue("APP-4", type="Incident"),
+            issue("APP-5", type="Incident", labels=["esc-vp"]),
+            issue("APP-6", type="Bug", labels=["esc-manager"]),
+        ],
+        ESCALATED,
     )
-    keys = [i.title.split()[0] for i in panel(dashboard, "jira.jira_next").items]
+    keys = [i.title.split()[0] for i in panel(jira.dashboard(), "jira.jira_next").items]
     assert keys == ["APP-5", "APP-4", "APP-6", "APP-3", "APP-1", "APP-2"]
-    badges = {i.title.split()[0]: i.badges for i in panel(dashboard, "jira.jira_next").items}
+    badges = {i.title.split()[0]: i.badges for i in panel(jira.dashboard(), "jira.jira_next").items}
     assert badges["APP-5"] == ["incident, escalated (3)"]
     assert badges["APP-2"] == ["blocked by APP-9"]
 
@@ -97,21 +112,18 @@ def test_a_ticket_whose_prs_merged_is_nominated_to_close() -> None:
 
 
 def test_incidents_escalated_bugs_and_tickets_due_this_week_are_nominated() -> None:
-    dashboard = build(
-        jira=JiraSnapshot(
-            issues=[
-                issue("APP-1", type="Task"),
-                issue("APP-2", type="Task", due=(NOW + timedelta(days=3)).date()),
-                issue("APP-3", type="Task", due=(NOW + timedelta(days=30)).date()),
-                issue("APP-5", type="Incident", labels=["esc-vp"]),
-                issue("APP-6", type="Bug", labels=["esc-manager"]),
-                issue("APP-7", type="Bug"),
-                issue("APP-8", type="Incident", open_blockers=["APP-9"]),
-            ]
-        ),
-        escalation_label_prefix="esc-",
-        escalation_levels=["manager", "director", "vp"],
-    )
+    dashboard = _jira(
+        [
+            issue("APP-1", type="Task"),
+            issue("APP-2", type="Task", due=(NOW + timedelta(days=3)).date()),
+            issue("APP-3", type="Task", due=(NOW + timedelta(days=30)).date()),
+            issue("APP-5", type="Incident", labels=["esc-vp"]),
+            issue("APP-6", type="Bug", labels=["esc-manager"]),
+            issue("APP-7", type="Bug"),
+            issue("APP-8", type="Incident", open_blockers=["APP-9"]),
+        ],
+        ESCALATED,
+    ).dashboard()
     why = {i.title.split(": ", 1)[1].split()[0]: i.details[0] for i in dashboard.act_now()}
     assert why == {  # not APP-7, a bug not escalated; APP-8, blocked, ranks last, past 3 a tool
         "APP-5": "why: critical",
@@ -139,18 +151,12 @@ def test_a_transition_joins_its_prs_act_now_item_and_is_set_aside_with_it() -> N
 
 
 def test_a_blocked_ticket_is_nominated_and_comes_back_once_untouched_for_days() -> None:
-    dashboard = build(
-        jira=JiraSnapshot(
-            issues=[
-                issue(
-                    "APP-1", type="Task", open_blockers=["APP-9"], updated=NOW - timedelta(days=1)
-                ),
-                issue(
-                    "APP-2", type="Task", open_blockers=["APP-9"], updated=NOW - timedelta(days=5)
-                ),
-            ]
-        )
-    )
+    dashboard = _jira(
+        [
+            issue("APP-1", type="Task", open_blockers=["APP-9"], updated=NOW - timedelta(days=1)),
+            issue("APP-2", type="Task", open_blockers=["APP-9"], updated=NOW - timedelta(days=5)),
+        ]
+    ).dashboard()
     why = {i.title.split(": ", 1)[1].split()[0]: i.details[0] for i in dashboard.act_now()}
     assert why == {"APP-1": "why: blocked", "APP-2": "why: blocked, untouched 5d"}
     assert dashboard.act_now()[0].title.startswith(
