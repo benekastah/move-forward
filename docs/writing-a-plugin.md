@@ -220,7 +220,8 @@ class LinearPlugin(...):
 - **Families.** A kind that more than one tool could publish (a pull request, a ticket, a
   person) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
   extend its model (`class LinearIssue(Ticket)`), setting `handle` to how your tool shows
-  it. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
+  it, and give each entity an id by the family's rule (`api.kinds.FAMILIES[...].id_rule`:
+  a URL for a ticket or a PR, `<host>/<login>` for a person), so it's unique across tools. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
   through the family's model, whoever publishes it.
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
   declared `linking`, so the graph relates what's about it. Give it the pattern of its ids
@@ -243,7 +244,7 @@ class LinearPlugin(...):
   snapshot is `fetchable`; one `mfd priority <id>` should look in without `--kind` is
   `resolvable`.
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
-  graph, and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
+  graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune.
 
 ## Reading other plugins' entities

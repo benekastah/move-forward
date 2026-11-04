@@ -81,11 +81,11 @@ def test_add_entries_and_todos_then_list_and_show(run: Run, config: Path) -> Non
     assert [t["text"] for t in shown["todos"]] == ["reply to the thread", f"review {PR}", "big one"]
     assert [(link["kind"], link["ref"]) for link in shown["todos"][1]["links"]] == [
         ("pull_request", PR),
-        ("ticket", "APP-2"),
+        ("ticket", "https://j.example/browse/APP-2"),
     ]
     text = run("show", "1")[1]
     assert "#1 [quick] reply to the thread" in text
-    assert f"#2 [open] review {PR}  {PR}  APP-2" in text
+    assert f"#2 [open] review {PR}  {PR}  https://j.example/browse/APP-2" in text
 
 
 def test_entries_are_found_by_id_title_pr_or_ticket(run: Run) -> None:

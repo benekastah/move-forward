@@ -181,7 +181,7 @@ def to_issue(
         open_blockers=open_blockers,
         resolved=f.resolutiondate,
         due=f.duedate,
-        url=f"{site.rstrip('/')}/browse/{raw.key}",
+        url=ticket_url(site, raw.key),
         comments=comments,
     )
 
@@ -287,6 +287,18 @@ KEY_RE = re.compile(r"[A-Z][A-Z0-9_]*-[0-9]+")
 
 def is_key(value: str) -> bool:
     return KEY_RE.fullmatch(value) is not None
+
+
+def ticket_url(site: str, key: str) -> str:
+    """A ticket's URL, which is its id in the graph: `<site>/browse/<key>`."""
+    return f"{site.rstrip('/')}/browse/{key}"
+
+
+def key_of(site: str, url: str) -> str | None:
+    """The key of the ticket on `site` that `url` is, from `ticket_url`; None for another."""
+    prefix = ticket_url(site, "")
+    key = url.removeprefix(prefix)
+    return key if url.startswith(prefix) and is_key(key) else None
 
 
 def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:

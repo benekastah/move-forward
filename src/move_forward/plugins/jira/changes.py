@@ -27,7 +27,7 @@ def _event(issue: JiraIssue, kind: str, text: str) -> Event:
         thing=issue.key,
         title=f"{issue.key} {issue.summary}",
         text=text,
-        anchor=anchor(TICKET, issue.key),
+        anchor=anchor(TICKET, issue.url),
     )
 
 

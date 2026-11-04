@@ -5,7 +5,9 @@ family's model says and other plugins read them through it. A plugin's other kin
 own, named for it (`git.branch`). See `docs/entities.md`."""
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from pydantic import Field
 
@@ -77,23 +79,46 @@ class Person(Model):
     email: str | None = None
 
 
+def is_url(id: str) -> bool:
+    """Whether `id` is an absolute http(s) URL: a PR's or a ticket's id."""
+    parts = urlsplit(id)
+    return parts.scheme in ("http", "https") and bool(parts.netloc)
+
+
+_HOST_LOGIN = re.compile(r"[A-Za-z0-9.-]+(?::[0-9]+)?/[^/\s]+")
+
+
+def is_host_login(id: str) -> bool:
+    """Whether `id` is `<host>/<login>`, e.g. `github.com/alice`: a person's id."""
+    return _HOST_LOGIN.fullmatch(id) is not None
+
+
 @dataclass(frozen=True)
 class Family:
     name: str
     label: str
     """What the page and the CLI call it, e.g. "PR"."""
     model: type[Model]
+    id_rule: Callable[[str], bool]
+    """Whether an id fits the family: ids are unique whoever publishes them, so two tools'
+    `OPS-12` (or two people's `alice`) are never taken for one."""
 
 
 FAMILIES = {
     family.name: family
     for family in (
-        Family(PULL_REQUEST, "PR", PullRequest),
-        Family(TICKET, "ticket", Ticket),
-        Family(PERSON, "person", Person),
+        Family(PULL_REQUEST, "PR", PullRequest, is_url),
+        Family(TICKET, "ticket", Ticket, is_url),
+        Family(PERSON, "person", Person, is_host_login),
     )
 }
 """Every family, by name."""
+
+
+def fits(kind: str, id: str) -> bool:
+    """Whether `id` fits its family's rule; any id does for a plugin's own kind."""
+    family = FAMILIES.get(kind)
+    return family is None or family.id_rule(id)
 
 
 def label(kind: str) -> str:

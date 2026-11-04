@@ -17,7 +17,8 @@ CHANNEL_NAME_RE = re.compile(r"^#[\w-]+$")
 
 
 class _PersonView(Model):
-    """What slack reads of a `person` (github's): their commit email."""
+    """What slack reads of a `person`, found by their GitHub login (`handle`): their commit
+    email."""
 
     email: str | None = None
 
@@ -163,8 +164,8 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
     users, _ = _requested(graph)
     found: list[str] = []
     for login in sorted(users - set(known)):
-        person = graph.view_one(PERSON, login, _PersonView)
-        email = person.email if person else None
+        people = graph.view_by_handle(PERSON, login, _PersonView)
+        email = next((p.email for p in people if p.email), None)
         if email is None:
             continue
         slack_id = client.lookup_by_email(api_token, email)

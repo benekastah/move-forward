@@ -327,8 +327,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         )
 
     def entities(self, req: EntitiesRequest[GitHubConfig, GitHubSnapshot]) -> list[Entity]:
-        """`pr` for every PR in the snapshot, and a `person` for me and for everyone whose
-        email github knows."""
+        """A `pull_request` for every PR in the snapshot, and a `person` (`<host>/<login>`)
+        for me and for everyone whose email github knows."""
         ctx, snapshot = req.ctx, req.snapshot
         if snapshot is None:
             return []
@@ -352,7 +352,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         emails = PeopleRepository(ctx.db).emails()
         people = [
             Entity(
-                ref=Ref(kind=PERSON, id=login),
+                ref=Ref(kind=PERSON, id=f"{ctx.config.host}/{login}"),
                 title=login,
                 attrs=attrs(
                     GitHubPerson(handle=login, me=login == snapshot.login, email=emails.get(login))

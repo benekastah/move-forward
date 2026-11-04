@@ -143,12 +143,13 @@ def ice_item(req: ActionRequest[NotesConfig]) -> str:
     entry its PRs and tickets, a ticket the PRs that mention it. An optional `note` says
     why."""
     ctx, graph, fields = req.ctx, req.graph, req.fields
-    kind, ref_id = req.field("kind"), req.field("id")
+    kind, given = req.field("kind"), req.field("id")
+    ref_id = graph.identify(kind, given)  # a ticket by its key, too
     if kind not in ICEABLE:
         raise ActionError(f"notes puts PRs, tickets and work entries on ice, not a {kind!r}")
     entity = graph.get(kind, ref_id)
     if entity is None:
-        raise ActionError(f"no {kind} {ref_id!r} to put on ice")
+        raise ActionError(f"no {kind} {given!r} to put on ice")
     notes = NotesRepository(ctx.db)
     iced = {(item.kind, item.ref_id) for i in notes.ices() for item in i.items}
     if (kind, ref_id) in iced or graph.hidden(entity.ref):
@@ -229,21 +230,22 @@ def todo_delete(req: ActionRequest[NotesConfig]) -> str:
 
 
 def link_for(graph: Graph, value: str) -> Link:
-    """A ticket key (or another linking entity's id a plugin declares) or a PR URL as a link.
-    A key the graph doesn't know yet is fetched, so a ticket in a project new to jira is
-    found (and jira knows that project's keys from then on)."""
+    """A ticket key (or another linking entity's handle a plugin declares) or a PR URL as a
+    link, by the entity's id. A key the graph doesn't know yet is fetched, so a ticket in a
+    project new to jira is found (and jira knows that project's keys from then on)."""
     named = graph.named(value)
-    if [r.id for r in named] == [value]:
-        return Link(kind=named[0].kind, ref=value)
+    if len(named) == 1 and graph.handle(named[0].kind, named[0].id) == value:
+        return Link(kind=named[0].kind, ref=named[0].id)
     found = links_in(value)
     if len(found) == 1 and found[0].ref == value:
         return found[0]
+    ticket = graph.identify(TICKET, value)
     try:
-        fetched = graph.fetch(TICKET, [value])
+        fetched = graph.fetch(TICKET, [ticket])
     except SourceError as e:
         raise ActionError(str(e)) from e
-    if value in fetched:
-        return Link(kind=TICKET, ref=value)
+    if ticket in fetched:
+        return Link(kind=TICKET, ref=ticket)
     raise ActionError(f"{value!r} is neither a PR URL nor a ticket key Jira knows")
 
 
@@ -252,12 +254,13 @@ def todo_link(req: ActionRequest[NotesConfig]) -> str:
     ctx, graph = req.ctx, req.graph
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, req, done=False)
-    link = link_for(graph, req.field("input").strip())
+    value = req.field("input").strip()
+    link = link_for(graph, value)
     if link in todo.links:
-        raise ActionError(f"{link.ref} is already linked to that todo")
+        raise ActionError(f"{value} is already linked to that todo")
     notes.link_todo(todo.id, link)
     notes.touch(entry.id, ctx.today)
-    return f"linked {link.ref}"
+    return f"linked {value}"
 
 
 def todo_add(req: ActionRequest[NotesConfig]) -> str:

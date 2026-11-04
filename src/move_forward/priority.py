@@ -26,11 +26,14 @@ def level_of(marks: dict[Ref, int], graph: Graph) -> PriorityOf:
 
 
 def resolve(graph: Graph, text: str, kind: str | None = None) -> Ref:
-    """The entity `text` names, by id, among the kinds marked `resolvable` (a PR's URL, a
-    ticket's key, an entry's title, a branch's id), or with `kind`, among that kind's (e.g. a
+    """The entity `text` names, by id or by what `Graph.identify` makes of it, among the
+    kinds marked `resolvable` (a PR's URL, a ticket's URL or key, an entry's title, a
+    branch's id), or with `kind`, among that kind's (e.g. a
     todo by its id). Raises LookupError when the graph has none, or more than one."""
     kinds = [kind] if kind else [k for k in graph.kinds() if (s := graph.spec(k)) and s.resolvable]
-    found = [entity.ref for k in kinds if (entity := graph.get(k, text)) is not None]
+    found = [
+        entity.ref for k in kinds if (entity := graph.get(k, graph.identify(k, text))) is not None
+    ]
     if len(found) != 1:
         raise LookupError(
             f"{text!r} names {'several entities' if found else 'no entity the dashboard knows'}"

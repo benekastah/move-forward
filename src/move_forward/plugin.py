@@ -115,6 +115,13 @@ class UrlRequest[C: BaseModel]:
 
 
 @dataclass(frozen=True)
+class HandleRequest[C: BaseModel]:
+    ctx: Context[C]
+    kind: str
+    id: str
+
+
+@dataclass(frozen=True)
 class LinkingRequest[C: BaseModel]:
     ctx: Context[C]
 
@@ -454,6 +461,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def url_for(self, req: UrlRequest[C]) -> str | None:
         """A URL for an entity of a kind the plugin knows, even one not in the graph, e.g. a
         ticket's from its key."""
+        return None
+
+    def handle_for(self, req: HandleRequest[C]) -> str | None:
+        """The `handle` of an entity of a kind the plugin knows, by id, even one not in the
+        graph, e.g. a ticket's key from its URL."""
         return None
 
     # Page

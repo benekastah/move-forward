@@ -81,16 +81,18 @@ def add_todo_action(entry: str | None, new_title: str = "", where: str = "") -> 
     )
 
 
-def entry_for(entries: list[Entry], url: str | None, keys: list[str], graph: Graph) -> str | None:
+def entry_for(
+    entries: list[Entry], url: str | None, tickets: list[str], graph: Graph
+) -> str | None:
     """The entry that covers a PR or ticket: one that names the URL, else one about one of
-    the tickets."""
+    the `tickets` (by id)."""
     if url:
         for entry in entries:
             if url in _entry_urls(entry):
                 return entry.title
-    for key in keys:
+    for ticket in tickets:
         for entry in entries:
-            if key in entry_keys(entry, graph):
+            if ticket in entry_tickets(entry, graph):
                 return entry.title
     return None
 
@@ -114,7 +116,7 @@ def _todo_links(
     """
     text = todo.text
     own_prs = [*PR_URL_RE.findall(text), *(link.ref for link in todo.links if link.kind == PR)]
-    own_keys = [
+    own_tickets = [
         *(r.id for r in graph.named(text) if r.kind == TICKET),
         *(link.ref for link in todo.links if link.kind == TICKET),
     ]
@@ -128,9 +130,9 @@ def _todo_links(
         if u not in urls:
             number = u.rsplit("/", 1)[1]
             links.append(Link(text=f"PR {number}", url=u, strong=True, pr_state=states.get(u)))
-    for key in dict.fromkeys(own_keys):
-        if url := graph.url_for(TICKET, key):
-            links.append(Link(text=key, url=url, strong=True))
+    for ticket in dict.fromkeys(own_tickets):
+        if url := graph.url_for(TICKET, ticket):
+            links.append(Link(text=graph.handle(TICKET, ticket), url=url, strong=True))
     return links
 
 
@@ -165,8 +167,8 @@ def _entry_urls(entry: Entry) -> list[str]:
     return sorted(link.ref for link in entry.links if link.kind == PR)
 
 
-def entry_keys(entry: Entry, graph: Graph) -> list[str]:
-    """The tickets an entry is about: linked to it, or named in its title."""
+def entry_tickets(entry: Entry, graph: Graph) -> list[str]:
+    """The tickets an entry is about, by id: linked to it, or named in its title."""
     named = [r.id for r in graph.named(entry.title) if r.kind == TICKET]
     return sorted({*named, *(link.ref for link in entry.links if link.kind == TICKET)})
 
@@ -243,9 +245,10 @@ class _BranchView(Model):
 
 
 class _TicketView(Model):
-    """What notes reads of a `ticket` (jira's)."""
+    """What notes reads of a `ticket`."""
 
     id: str
+    handle: str
     url: str | None = None
     summary: str | None = None
 
@@ -277,17 +280,19 @@ class Builder:
             entity = self.graph.get(PR, ref.id)
             if pr is None or entity is None or not (pr.mine and pr.state == "open"):
                 return None
-            keys = [r.id for r in entity.refs if r.kind == TICKET]
-            entry = entry_for(self.entries, pr.id, keys, self.graph)
-            ticket = self.graph.view_one(TICKET, keys[0], _TicketView) if keys else None
+            tickets = [r.id for r in entity.refs if r.kind == TICKET]
+            entry = entry_for(self.entries, pr.id, tickets, self.graph)
+            if not tickets:
+                return add_todo_action(entry, f"{pr.id} {pr.title}", pr.id)
+            ticket = self.graph.view_one(TICKET, tickets[0], _TicketView)
             summary = ticket.summary if ticket else None
-            title = f"{keys[0]} {summary or pr.title}" if keys else f"{pr.id} {pr.title}"
-            return add_todo_action(entry, title, pr.id)
+            key = self.graph.handle(TICKET, tickets[0])
+            return add_todo_action(entry, f"{key} {summary or pr.title}", pr.id)
         ticket = self.graph.view_one(TICKET, ref.id, _TicketView)
         if ticket is None:
             return None
         entry = entry_for(self.entries, ticket.url, [ticket.id], self.graph)
-        title = f"{ticket.id} {ticket.summary}" if ticket.summary else ticket.id
+        title = f"{ticket.handle} {ticket.summary}" if ticket.summary else ticket.handle
         return add_todo_action(entry, title, ticket.url or "")
 
     def put_on_ice(self, item: Item) -> Action | None:
@@ -349,7 +354,7 @@ class Builder:
             if not open_todos:
                 continue
             urls = _entry_urls(entry)
-            keys = entry_keys(entry, self.graph)
+            keys = [self.graph.handle(TICKET, t) for t in entry_tickets(entry, self.graph)]
             blocked = _is_blocked(entry)
             quick = [t for t in open_todos if t.size == "quick"]
             close_out = len(quick) == len(open_todos)
