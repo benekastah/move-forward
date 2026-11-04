@@ -5,6 +5,7 @@ from urllib.parse import quote
 from conftest import ME, NOW, dashboard, entry, pr, snapshot, stored, todo
 
 from move_forward import page, panels, render
+from move_forward.graph import Ref
 from move_forward.page import Identity
 from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.refresh import kept_item
@@ -319,7 +320,7 @@ def test_only_web_and_dashboard_urls_become_links() -> None:
     assert "<a href='https://x/1'" in html and "sneaky" in html and "also" in html
 
 
-def test_an_act_now_item_carries_its_pending_fields_for_the_link_script() -> None:
+def test_an_item_carries_its_subjects_and_act_now_fields_for_the_link_script() -> None:
     def html_of(item: page.Item) -> str:
         panel = page.Panel(key="p", title="P", description="", items=[item])
         dashboard = panels.Dashboard(
@@ -331,9 +332,19 @@ def test_an_act_now_item_carries_its_pending_fields_for_the_link_script() -> Non
         )
         return render.dashboard_page(dashboard, refreshing=frozenset())
 
-    pending = html_of(page.Item(title="x", pending='{"plugin": "github"}'))
-    assert "<li class='item' data-pending='{&quot;plugin&quot;: &quot;github&quot;}'>" in pending
-    assert "<li class='item'>" in html_of(page.Item(title="x"))
+    subject = Ref(kind="pull_request", id="https://g/1")
+    opened = html_of(
+        page.Item(title="x", subjects=[subject], act_now_fields='{"kind": "k"}', opened_at=NOW)
+    )
+    said = "{&quot;kind&quot;: &quot;pull_request&quot;, &quot;id&quot;: &quot;https://g/1&quot;}"
+    assert "<li class='item opened' id='item-pull_request-https-g-1'" in opened
+    assert f" data-opened='{{&quot;kind&quot;: &quot;k&quot;}}' data-subjects='[{said}]'>" in opened
+    assert (
+        f"<button type='button' class='button link-action refetch' data-subjects='[{said}]'"
+        in opened
+    )
+    plain = html_of(page.Item(title="x"))
+    assert "<li class='item'>" in plain and "refetch" not in plain.split("<script>")[0]
 
 
 def test_a_panels_buttons_return_to_that_panel_instead_of_the_top() -> None:

@@ -1,5 +1,6 @@
 """Server-side HTML for the dashboard and focus mode, and the frame of plugins' pages."""
 
+import json
 from collections.abc import Set as AbstractSet
 from datetime import datetime
 from html import escape
@@ -119,27 +120,47 @@ RELOAD_SCRIPT = (
     "})();"
 )
 """Reloads the page in the background and swaps it in, retrying; see inside."""
-PENDING_SCRIPT = (
-    # Opening a link of an Act now item (its PR, its ticket) means I'm about to act on it
-    # elsewhere: hide the item at once, tell the server to keep it hidden until its plugin has
-    # fetched again, and when I come back to this tab, ask that plugin to fetch now. One
-    # delegated listener on the document, so it needs no rebinding when RELOAD_SCRIPT swaps
-    # the body in. A failed request only means the item shows again at the next reload.
-    "document.addEventListener('click', (e) => {"
-    " const link = e.target.closest && e.target.closest('li.item[data-pending] a[href]');"
-    " if (!link) return;"
-    " const item = link.closest('li.item');"
-    " let fields; try { fields = JSON.parse(item.dataset.pending); } catch { return; }"
-    " const { plugin, ...rest } = fields;"
-    " fetch('/actions/act_now/pending', { method: 'POST', redirect: 'manual', keepalive: true,"
-    "  body: new URLSearchParams(rest) }).catch(() => {});"
-    " item.hidden = true;"
+OPENED_SCRIPT = (
+    # Opening a link of an item (its PR, its ticket) means I'm about to act on it elsewhere.
+    # Its subjects are remembered for this tab (sessionStorage, half an hour), and when I
+    # come back to the tab, they're fetched again (`/refresh/subjects`), not whole plugins.
+    # An Act now item is also marked opened (`act_now/opened`), dimmed in its place until it
+    # changes. An item's ↻ button fetches its subjects again at once. One delegated listener
+    # on the document, so it needs no rebinding when RELOAD_SCRIPT swaps the body in; a
+    # failed request only means the page shows the change at its next reload.
+    "(() => {"
+    " const KEY = 'mfd-opened', KEEP = 30 * 60 * 1000;"
+    " const kept = () => { try { return JSON.parse(sessionStorage.getItem(KEY) || '[]'); }"
+    "  catch { return []; } };"
+    " const subjectsOf = (el) => { try { return JSON.parse(el.dataset.subjects || '[]'); }"
+    "  catch { return []; } };"
+    " const refetch = (subjects) => { if (!subjects.length) return;"
+    "  fetch('/refresh/subjects', { method: 'POST', keepalive: true,"
+    "   headers: { 'Content-Type': 'application/json' },"
+    "   body: JSON.stringify(subjects.slice(0, 50)) }).catch(() => {}); };"
+    " document.addEventListener('click', (e) => {"
+    "  const again = e.target.closest && e.target.closest('button.refetch');"
+    "  if (again) { refetch(subjectsOf(again)); return; }"
+    "  const link = e.target.closest && e.target.closest('li.item a[href]');"
+    "  if (!link || link.closest('form')) return;"
+    "  const item = link.closest('li.item'), now = Date.now();"
+    "  const remembered = kept().filter((s) => now - s.at < KEEP);"
+    "  for (const s of subjectsOf(item)) remembered.push({ kind: s.kind, id: s.id, at: now });"
+    "  sessionStorage.setItem(KEY, JSON.stringify(remembered));"
+    "  if (item.dataset.opened) {"
+    "   fetch('/actions/act_now/opened', { method: 'POST', redirect: 'manual', keepalive: true,"
+    "    body: new URLSearchParams(JSON.parse(item.dataset.opened)) }).catch(() => {});"
+    "   item.classList.add('opened'); } });"
     " window.addEventListener('focus', () => {"
-    "  fetch('/refresh', { method: 'POST', redirect: 'manual',"
-    "   body: new URLSearchParams({ plugin }) }).catch(() => {}); }, { once: true });"
-    "});"
+    "  const now = Date.now(), seen = new Set(), subjects = [];"
+    "  for (const s of kept()) { const key = s.kind + ' ' + s.id;"
+    "   if (now - s.at < KEEP && !seen.has(key)) { seen.add(key);"
+    "    subjects.push({ kind: s.kind, id: s.id }); } }"
+    "  refetch(subjects); });"
+    "})();"
 )
-"""Hides an Act now item whose link I open, until its plugin has fetched again; see inside."""
+"""Fetches again what I opened when I come back to the tab, and dims an opened Act now item;
+see inside."""
 SPIN_SCRIPT = (
     # While a refresh runs (the header's status carries `data-refreshing`), the tab's icon
     # turns. Browsers don't animate SVG icons, so a canvas draws the icon (a circle with
@@ -242,7 +263,7 @@ def _head(title: str, reload_seconds: int | None) -> str:
         reload = (
             f'<noscript><meta http-equiv="refresh" content="{reload_seconds}"></noscript>'
             f"<script>{OPEN_SECTIONS_SCRIPT}</script><script>{LAYOUT_SCRIPT}</script>"
-            f"<script>{RELOAD_SCRIPT}</script><script>{PENDING_SCRIPT}</script>"
+            f"<script>{RELOAD_SCRIPT}</script><script>{OPENED_SCRIPT}</script>"
             f"<script>{SPIN_SCRIPT}</script><script>{NOTIFY_SCRIPT}</script>"
         )
         body = f"<body data-reload='{reload_seconds}'>"
@@ -359,12 +380,22 @@ def _item(item: Item, back: str = "", at: str = "", pos: int | None = None) -> s
         if linkable(item.url)
         else _e(item.title)
     )
-    pending = f" data-pending='{_e(item.pending)}'" if item.pending else ""
     anchor = f" id='{_e(item.anchor)}'" if item.anchor else ""
+    data = f" data-opened='{_e(item.act_now_fields)}'" if item.act_now_fields else ""
+    subjects = json.dumps([{"kind": s.kind, "id": s.id} for s in item.subjects])
+    data += f" data-subjects='{_e(subjects)}'" if item.subjects else ""
+    refetch = (
+        f"<button type='button' class='button link-action refetch' data-subjects='{_e(subjects)}'"
+        " title='Fetch it again now'>↻</button>"
+        if item.subjects
+        else ""
+    )
+    cls = "item opened" if item.opened_at else "item"
     parts = [
-        f"<li class='item'{anchor}{pending}><div class='item-head'>",
+        f"<li class='{cls}'{anchor}{data}><div class='item-head'>",
         f"<div class='item-title'>{title}</div>"
         + "".join(_link_action(a) for a in item.actions if a.href is not None)
+        + refetch
         + "</div>",
     ]
     if item.subtitle:

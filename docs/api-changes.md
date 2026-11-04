@@ -57,3 +57,6 @@ catch up.
   (`SubjectsRequest(ctx, refs, snapshot)`) returns `Subjects(snapshot, updated)`, or None
   to be refreshed whole; `subjects_timeout_seconds`. An action's `touched` refs are
   fetched this way, not by refreshing their publishers whole.
+- **Opened items**: `Item.pending` is gone; core sets `Item.act_now_fields` and
+  `Item.opened_at` on Act now's items (a plugin's are ignored). Act now's feedback action
+  `pending` is `opened`.

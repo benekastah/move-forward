@@ -312,4 +312,4 @@ def test_a_gone_branch_has_a_subject_so_deleting_it_can_hide_its_act_now_item() 
     dashboard = build(github=snapshot(), local=local)
     act = panel(dashboard, "act.git")
     delete = next(a for a in act.items[0].actions if a.name == "git/delete_branch")
-    assert "pending" in delete.fields
+    assert "opened" in delete.fields

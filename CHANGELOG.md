@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Opened items are dimmed, not hidden
+
+Opening an Act now item's link dims it in its place until it changes, instead of hiding it
+until its plugin fetches again. `/actions/act_now/pending` is now `/actions/act_now/opened`
+(same fields). What was hidden that way is dimmed after the upgrade.
+
 ### Fetching one PR again
 
 `mfd refresh --subject pull_request <URL>` fetches just that PR (any number of

@@ -592,16 +592,17 @@ def _act_now_action(
     except ValidationError as err:
         raise ActionError("malformed `also`") from err
     feedback = FeedbackRepository(db)
-    if action == "pending":
+    if action == "opened":
         # What I did elsewhere isn't a choice to keep: it never replaces a pin or a snooze.
         said = feedback.all()
         for kind, id, task, f in members:
-            if (kind, id, task) not in said:
-                until = now + act_now.PENDING
+            before = said.get((kind, id, task))
+            if before is None or before.action == "opened":
+                until = now + act_now.OPENED_FOR
                 feedback.say(
-                    (kind, id, task), Feedback(action="pending", fingerprint=f, until=until), now
+                    (kind, id, task), Feedback(action="opened", fingerprint=f, until=until), now
                 )
-        return ActionResult("hidden until it's fetched again")
+        return ActionResult("opened")
     if action == "unpin":
         for kind, id, task, _ in members:
             feedback.forget((kind, id, task))
@@ -644,8 +645,8 @@ def perform_action(
     plugin_name, _, action_name = name.partition("/")
     if plugin_name == act_now.ACTIONS:
         return _act_now_action(config.act_now, db, action_name, fields)
-    pending = fields.get(act_now.PENDING_FIELD)
-    fields = {k: v for k, v in fields.items() if k != act_now.PENDING_FIELD}
+    opened = fields.get(act_now.OPENED_FIELD)
+    fields = {k: v for k, v in fields.items() if k != act_now.OPENED_FIELD}
     plugins = enabled(config, db, datetime.now(UTC))
     e = next((e for e in plugins if e.name == plugin_name), None)
     handler = e.plugin.actions().get(action_name) if e else None
@@ -662,16 +663,16 @@ def perform_action(
         log.exception("%s failed", name)
         raise ActionError(f"{name} failed: {type(err).__name__}: {err}") from err
     result = result if isinstance(result, ActionResult) else ActionResult(result)
-    if pending:
-        _hide_until_fetched(db, pending)
+    if opened:
+        _mark_opened(db, opened)
     return result
 
 
-def _hide_until_fetched(db: Database, pending: str) -> None:
-    """Hide the Act now item a button was on (its `pending` fields) until its plugin has
-    fetched again, to show what the button did; a malformed `pending` hides nothing."""
+def _mark_opened(db: Database, opened: str) -> None:
+    """Mark the Act now item a button was on (its `act_now_fields`) opened, dimmed until it
+    changes; malformed fields mark nothing."""
     try:
-        fields: dict[str, str] = json.loads(pending)
-        _act_now_action(act_now.ActNowConfig(), db, "pending", fields)
+        fields: dict[str, str] = json.loads(opened)
+        _act_now_action(act_now.ActNowConfig(), db, "opened", fields)
     except (ValueError, ActionError, TypeError):
-        log.debug("ignoring malformed pending fields: %r", pending)
+        log.debug("ignoring malformed opened fields: %r", opened)

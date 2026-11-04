@@ -9,11 +9,11 @@ import pytest
 from conftest import NOW, issue, local_branch, local_snapshot, panel, pr, snapshot, stored
 
 from move_forward import refresh, registry
-from move_forward.act_now import PENDING, ActNowConfig, Feedback
+from move_forward.act_now import OPENED_FOR, ActNowConfig, Feedback
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.notifications import NotificationRepository
-from move_forward.page import Item
+from move_forward.page import Badge, Item
 from move_forward.plugin import (
     ActionError,
     AfterCollectRequest,
@@ -30,6 +30,7 @@ from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
+from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
@@ -309,33 +310,39 @@ def test_a_plugin_watching_what_it_requires_isnt_refreshed_with_it_but_on_its_ow
     assert seconds["jira"] == 900  # collecting after the graph, on its own setting
 
 
-def test_an_item_acted_on_elsewhere_hides_until_its_plugin_has_fetched_again() -> None:
+def test_an_item_opened_elsewhere_is_dimmed_in_its_place_until_it_changes() -> None:
     config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
     (item,) = refresh.build_dashboard(config, db, NOW).act_now()
-    assert item.pending is not None
-    fields = json.loads(item.pending)
-    assert fields["plugin"] == "github"
-    assert refresh.run_action(config, db, "act_now/pending", fields).startswith("hidden")
-    assert refresh.build_dashboard(config, db, NOW).act_now() == []
+    assert item.act_now_fields is not None and item.opened_at is None
+    assert (
+        refresh.run_action(config, db, "act_now/opened", json.loads(item.act_now_fields))
+        == "opened"
+    )
+    (dimmed,) = refresh.build_dashboard(config, db, NOW).act_now()
+    assert dimmed.title == item.title and dimmed.opened_at is not None
+    assert any(isinstance(b, Badge) and b.text.startswith("opened") for b in dimmed.badges)
 
-    SnapshotRepository(db).save_fetched("github", datetime.now(UTC) + timedelta(seconds=1))
-    assert [i.title for i in refresh.build_dashboard(config, db, NOW).act_now()] == [item.title]
+    moved = pr(1, author="alice", head_oid="b" * 40)  # pushed to since
+    PrRepository(db).replace(snapshot(direct_requests=[moved]))
+    (changed,) = refresh.build_dashboard(config, db, NOW).act_now()
+    assert changed.opened_at is None  # its fingerprint moved: worth another look
 
 
-def test_an_item_acted_on_elsewhere_comes_back_by_itself_if_its_plugin_never_fetches() -> None:
+def test_an_item_opened_elsewhere_is_dimmed_for_a_day_at_most() -> None:
     config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
     (item,) = refresh.build_dashboard(config, db, NOW).act_now()
-    refresh.run_action(config, db, "act_now/pending", json.loads(item.pending or "{}"))
-    later = datetime.now(UTC) + PENDING + timedelta(seconds=1)
-    assert [i.title for i in refresh.build_dashboard(config, db, later).act_now()] == [item.title]
+    refresh.run_action(config, db, "act_now/opened", json.loads(item.act_now_fields or "{}"))
+    later = datetime.now(UTC) + OPENED_FOR + timedelta(seconds=1)
+    (shown,) = refresh.build_dashboard(config, db, later).act_now()
+    assert shown.opened_at is None
 
 
-def test_acting_elsewhere_keeps_a_pin_and_a_dismissal() -> None:
+def test_opening_elsewhere_keeps_a_pin() -> None:
     config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
     (item,) = refresh.build_dashboard(config, db, NOW).act_now()
     pin = next(a for a in item.actions if a.label == "Pin")
     refresh.run_action(config, db, pin.name, pin.fields)
-    refresh.run_action(config, db, "act_now/pending", json.loads(item.pending or "{}"))
+    refresh.run_action(config, db, "act_now/opened", json.loads(item.act_now_fields or "{}"))
     (said,) = FeedbackRepository(db).all().values()
     assert said.action == "pin"
 

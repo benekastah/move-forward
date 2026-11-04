@@ -321,3 +321,21 @@ def test_every_built_in_plugins_migrations_make_only_its_tables() -> None:
     db = Database(":memory:")
     for plugin in registry.BUILTINS:
         db.migrate(plugin.name, plugin.migrations)  # raises on a stray table
+
+
+def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    db = Database(path)
+    db.execute("DELETE FROM migrations WHERE owner = 'core' AND name = '0013_opened'")
+    db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
+    db.execute(
+        "INSERT INTO act_now_feedback VALUES ('k', 'x', 't', 'pending', NULL, 'f', '2026-10-30')"
+    )
+    db.execute(
+        "INSERT INTO act_now_feedback VALUES ('k', 'y', 't', 'pin', NULL, 'f', '2026-10-30')"
+    )
+    del db
+    actions = {
+        r["subject_id"]: r["action"] for r in Database(path).query("SELECT * FROM act_now_feedback")
+    }
+    assert actions == {"x": "opened", "y": "pin"}
