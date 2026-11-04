@@ -102,7 +102,9 @@ def test_nudge_blockers_and_staleness() -> None:
     )
     broken = pr(4, requested_users=["alice"], checks=[Check(name="tests", state="FAILURE")])
     threads = pr(5, requested_users=["alice"], threads=[thread()])
-    approved = pr(6, requested_users=["alice"], reviews=[approved_review()])
+    approved = pr(
+        6, requested_users=["alice"], reviews=[approved_review()], review_decision="APPROVED"
+    )
     nobody = pr(7)
     draft = pr(8, is_draft=True, requested_users=["alice"])
     stored: dict[str, object] = {

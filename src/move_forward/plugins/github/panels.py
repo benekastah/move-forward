@@ -22,6 +22,7 @@ from .prs import (
     is_bot,
     merge_blockers,
     needs_re_review,
+    review_required,
     ticket_keys,
     unanswered_feedback,
     unresolved_threads,
@@ -200,7 +201,7 @@ class Builder:
     def needs_reviewer(self) -> Panel:
         items: list[Item] = []
         for pr in self.mine:
-            if pr.is_draft or approved(pr) or pr.requested_users:
+            if pr.is_draft or approved(pr) or not review_required(pr) or pr.requested_users:
                 continue
             details: list[str] = []
             if pr.requested_teams:

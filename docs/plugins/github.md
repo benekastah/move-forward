@@ -69,7 +69,9 @@ tickets they name), and `person` for me and everyone it knows an email for; see
 - **Reviews for me** and **Requested from my teams** size a review by the files that
   CODEOWNERS gives me or my teams, when there are some: "my part: 12 lines in 2 of 119
   files". The PR's badges still show the whole PR. Without owned files, the whole PR sizes it.
-- **Needs a reviewer**: no person requested and no approval. PRs requesting one of my
+- **Needs a reviewer**: no person requested and no approval. Approval is GitHub's `reviewDecision`
+  when it gives one; it is null where the base branch requires no review, and then neither
+  this panel nor Ready to merge asks for an approval. PRs requesting one of my
   `teams` get recent committers to the PR's directories as suggestions for whom to assign
   instead.
 - **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs). A PR that GitHub's merge state calls BEHIND ("behind base: update the branch") or BLOCKED with nothing else we can see ("blocked by branch protection") isn't ready either: it's held, with that reason.

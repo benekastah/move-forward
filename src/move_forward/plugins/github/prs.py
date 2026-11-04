@@ -20,8 +20,19 @@ def is_bot(login: str | None, ignored: Collection[str] = ()) -> bool:
     return login is None or login in ignored or bool(BOT_LOGIN_RE.search(login))
 
 
+def review_required(pr: PullRequest) -> bool:
+    """Whether the base branch requires a review: GitHub's `reviewDecision` is null when none
+    is required (it is APPROVED, CHANGES_REQUESTED or REVIEW_REQUIRED otherwise)."""
+    return pr.review_decision is not None
+
+
 def approved(pr: PullRequest) -> bool:
-    return pr.review_decision == "APPROVED" or any(r.state == "APPROVED" for r in pr.reviews)
+    """GitHub's verdict when it gives one (its rules count who may approve, and dismissed
+    or stale reviews); else, where no review is required, whether anyone's latest review
+    approves."""
+    if pr.review_decision is not None:
+        return pr.review_decision == "APPROVED"
+    return any(r.state == "APPROVED" for r in pr.reviews)
 
 
 def changes_requested(pr: PullRequest) -> bool:
@@ -140,7 +151,7 @@ def merge_blockers(pr: PullRequest, ignored: Collection[str] = ()) -> list[str]:
     """Why a PR can't be merged yet; empty when it's ready (Ready to merge's rule, besides
     the work notes' merge conditions)."""
     reasons: list[str] = []
-    if not approved(pr):
+    if review_required(pr) and not approved(pr):
         reasons.append("not approved")
     if unresolved_threads(pr, ignored):
         reasons.append("unresolved threads")

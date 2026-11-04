@@ -112,7 +112,9 @@ def test_needs_reviewer_lists_team_only_and_unrequested_prs_with_suggestions() -
     team_only = pr(1, requested_teams=["core"])
     nobody = pr(2)
     has_person = pr(3, requested_users=["alice"])
-    approved = pr(4, requested_teams=["core"], reviews=[approved_review()])
+    approved = pr(
+        4, requested_teams=["core"], reviews=[approved_review()], review_decision="APPROVED"
+    )
     draft = pr(5, is_draft=True)
     dashboard = build(
         github=snapshot(mine=[team_only, nobody, has_person, approved, draft]),
@@ -528,3 +530,13 @@ def test_a_pr_behind_its_base_or_blocked_is_held_with_the_reason_not_ready() -> 
         "PR 1": ["held: behind base: update the branch"],
         "PR 2": ["held: blocked by branch protection"],
     }
+
+
+def test_approval_follows_githubs_decision_and_none_is_demanded_where_no_review_is_required() -> (
+    None
+):
+    stale_approval = pr(1, reviews=[approved_review()], review_decision="REVIEW_REQUIRED")
+    not_required = pr(2, review_decision=None, requested_users=[], requested_teams=[])
+    built = build(github=snapshot(mine=[stale_approval, not_required]))
+    assert titles(built, "github.ready_to_merge") == ["PR 2"]  # approval isn't required there
+    assert titles(built, "github.needs_reviewer") == ["PR 1"]  # GitHub says it isn't approved
