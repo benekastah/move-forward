@@ -41,7 +41,7 @@ def _core_import(file: Path, node: ast.ImportFrom) -> str | None:
 def test_plugins_import_core_only_through_the_api() -> None:
     reached: list[str] = []
     for file in sorted((PACKAGE / "plugins").rglob("*.py")):
-        for node in ast.walk(ast.parse(file.read_text())):
+        for node in ast.walk(ast.parse(file.read_text(encoding="utf-8"))):
             if isinstance(node, ast.ImportFrom) and (core := _core_import(file, node)):
                 reached.append(f"{file.relative_to(PACKAGE)}: {core}")
             if isinstance(node, ast.Import):
