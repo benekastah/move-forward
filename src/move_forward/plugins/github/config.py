@@ -44,7 +44,7 @@ class GitHubConfig(Strict):
     comments count as feedback."""
     required_owner_marker: str = ""
     """A comment marker on a CODEOWNERS line whose owners' approval is required, e.g.
-    `#required`. Such files count first in team PR scores. Empty: no such convention."""
+    `#!required`. Such files count first in team PR scores. Empty: no such convention."""
     ticket_link_prefixes: list[str] = Field(default_factory=list)
     """The words a PR description line can start with to link its ticket, e.g.
     `["Link", "Closes"]`; the ticket follows as a key or a Jira URL. PR housekeeping flags

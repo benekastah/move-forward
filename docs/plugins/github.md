@@ -34,7 +34,7 @@ just opened, say) waits for that.
 fetched. Its conventions that differ between organisations are off by default:
 `policy_checks` (checks that enforce PR policy, such as labels or assignees, rather than test the code), `ignored_reviewers` (logins whose comments and
 reviews, like a policy bot's, aren't feedback; other bots' are), `required_owner_marker` (a
-CODEOWNERS comment such as `#required`), `ticket_link_prefixes` (the words a PR body line linking
+CODEOWNERS comment such as `#!required`), `ticket_link_prefixes` (the words a PR body line linking
 the ticket can start with, e.g. `["Link", "Closes"]`, followed by a key or a Jira URL) and `placeholder_labels` (template labels to replace).
 `email_domains` picks reviewers' emails from their commits (default: your email's domain;
 an email found is kept, and a lookup that found none is tried again after `prune_days`),

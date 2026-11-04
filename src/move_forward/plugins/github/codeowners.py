@@ -56,7 +56,7 @@ class CodeOwners:
     """A parsed CODEOWNERS file."""
 
     def __init__(self, text: str, required_marker: str = ""):
-        """`required_marker`, when set, is a comment token (e.g. `#required`) that marks a
+        """`required_marker`, when set, is a comment token (e.g. `#!required`) that marks a
         line's owners as required approvers."""
         self._literal: dict[str, _Rule] = {}
         """Anchored patterns without wildcards, keyed by path. Later lines overwrite."""
