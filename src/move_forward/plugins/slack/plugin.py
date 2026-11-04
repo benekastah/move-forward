@@ -5,7 +5,6 @@ import` reads the first two from the skill's `reviewer-map.md`.
 """
 
 import argparse
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar, Literal
@@ -35,8 +34,6 @@ from .models import Ping, TeamChannel
 from .pings import Pinger, PingTarget, PrPing
 from .repository import MIGRATIONS, SlackRepository
 from .setup import EXAMPLE, TEMPLATE, questions
-
-log = logging.getLogger(__name__)
 
 PING_PATH = "/ping"
 COPY_SCRIPT = (
@@ -206,7 +203,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         """Look up the Slack ids of requested reviewers nothing names one for."""
         found = contacts.look_up_requested(ctx, graph)
         if found:
-            log.info("found Slack ids for %s", ", ".join(found))
+            ctx.log.info("found Slack ids for %s", ", ".join(found))
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
