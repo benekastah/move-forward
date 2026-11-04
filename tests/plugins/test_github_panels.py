@@ -391,3 +391,12 @@ def test_a_merge_condition_holds_only_its_own_pr() -> None:
     dashboard = build(github=snapshot(mine=[api, web]), work_items=[work])
     assert titles(dashboard, "github.held") == [api.title]
     assert titles(dashboard, "github.ready_to_merge") == [web.title]
+
+
+def test_the_merge_queue_panel_lists_my_queued_prs_and_is_not_for_act_now() -> None:
+    queued = pr(1, in_merge_queue=True)
+    dashboard = build(github=snapshot(mine=[queued, pr(2)]))
+    queue = panel(dashboard, "github.merge_queue")
+    assert [i.title for i in queue.items] == [queued.title]
+    assert not queue.act_now
+    assert all(i.title != queued.title or i.signals is None for i in queue.items)

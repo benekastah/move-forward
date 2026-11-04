@@ -353,6 +353,19 @@ class Builder:
             ),
         )
 
+    def merge_queue(self) -> Panel:
+        return Panel(
+            key="merge_queue",
+            priority=92,  # 9, after ready to merge and held
+            title="In the merge queue",
+            description="My PRs waiting in the merge queue.",
+            items=[
+                pr_item(self.now, pr, details=["in the merge queue"])
+                for pr in self.mine
+                if pr.in_merge_queue
+            ],
+        )
+
     def metadata(self) -> Panel:
         items: list[Item] = []
         for pr in self.mine:
@@ -423,6 +436,7 @@ class Builder:
             self.needs_reviewer(),
             ready,
             held,
+            self.merge_queue(),
             self.team_prs(),
             self.metadata(),
         ]

@@ -63,6 +63,7 @@ tickets they name), and `person` for me and everyone it knows an email for; see
   `teams` get recent committers to the PR's directories as suggestions for whom to assign
   instead.
 - **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs).
+- **In the merge queue**: my PRs waiting in it. Nothing to act on, so Act now ignores it.
 - **Requested from my teams**: PRs waiting on any of my `teams`, ranked by how many files
   CODEOWNERS gives those teams (required first) and how many are in directories I commit
   to.

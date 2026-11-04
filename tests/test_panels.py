@@ -82,6 +82,7 @@ def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
                     "team_prs",
                     "ready_to_merge",
                     "held",
+                    "merge_queue",
                 )
             ],
         ),
@@ -424,6 +425,7 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
         "slack.nudges",
         "github.ready_to_merge",
         "github.held",
+        "github.merge_queue",
         "git.cleanup",
         "jira.jira_transitions",
         "jira.jira_next",
