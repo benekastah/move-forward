@@ -104,7 +104,7 @@ def test_drafts_sort_last_in_every_panel() -> None:
     older = pr(2, author="alice", updated_at=NOW - timedelta(days=3))
     dashboard = build(github=snapshot(direct_requests=[newest_draft, older]))
     assert titles(dashboard, "github.reviews_for_me") == ["PR 2", "PR 1"]
-    assert [i.draft for i in panel(dashboard, "github.reviews_for_me").items] == [False, True]
+    assert [i.deferred for i in panel(dashboard, "github.reviews_for_me").items] == [False, True]
 
 
 # Needs a reviewer

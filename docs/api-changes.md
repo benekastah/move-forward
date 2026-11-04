@@ -9,17 +9,11 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
-## Since version 1, additive
-
-- `Plugin.relate(req)` (`RelateRequest(ctx, graph)`): a plugin's relations between its own
-  entities and another's. github relates PRs to their local branches; read them with
-  `graph.related(branch, "pull_request")`.
-- `git.branch` has `upstream`; `git_stack.stack_branch` has `stack`.
-
 ## Version 1
 
-The first frozen version. Everything below came before it, while only the built-ins used
-the API; it's listed so a plugin written against an earlier checkout can catch up.
+The first version. While the built-ins are its only plugins, changes go into it without
+raising the version; it's listed so a plugin written against an earlier checkout can
+catch up.
 
 - **Imports.** Core is `move_forward.api` (with `api.html`, `api.shell`, `api.http`,
   `api.localtime`, `api.keychain`, `api.kinds` and `api.ids`) and nothing else.
@@ -50,3 +44,12 @@ the API; it's listed so a plugin written against an earlier checkout can catch u
 - **Migrations** are named `Migration(name, run)`s, SQL or Python, kept by name; a plugin's
   tables are prefixed with its name.
 - **Tests**: `move_forward.testing.Harness`.
+- **Relations**: `Plugin.relate(req)` (`RelateRequest(ctx, graph)`) relates a plugin's
+  entities to another's; github relates PRs to their local branches, read with
+  `graph.related(branch, "pull_request")`. `git.branch` has `upstream`;
+  `git_stack.stack_branch` has `stack`.
+- **Page model**: a badge is a string or a `Badge(text, tone)` (`plain`, `warn`, `good`),
+  and only a `warn` one is drawn as a warning (no more guessing from its words);
+  `Link.done` strikes out a link to what's over (was `Link.pr_state`; `PrState` is gone);
+  `Item.deferred` (was `Item.draft`) sorts an item last, and Act now leaves it out unless
+  the plugin's `act_now` nominates it. A graph view also gets an entity's `lifecycle`.

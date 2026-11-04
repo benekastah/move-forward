@@ -22,13 +22,16 @@ from conftest import (
 
 from move_forward import panels
 from move_forward.graph import Ref
-from move_forward.page import Action, Group, Item, Panel, Signals
+from move_forward.page import Action, Badge, Group, Item, Panel, Signals
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
 from move_forward.refresh import kept_item
 
 build = dashboard
+
+BLOCKED_ON_REVIEWS = Badge(text="blocked: reviews", tone="warn")
+"""An entry's badge, when it's blocked on reviews."""
 
 
 def test_todos_put_close_outs_first_and_blocked_last() -> None:
@@ -42,7 +45,7 @@ def test_todos_put_close_outs_first_and_blocked_last() -> None:
     assert [i.title for i in items] == ["APP-1 almost", "APP-4 fine", "APP-2 mixed", "APP-3 stuck"]
     assert items[0].badges == ["close-out: 1 quick todo(s)"]
     assert items[2].details == ["[quick] small", "[big] big one"]
-    assert items[3].badges == ["close-out: 1 quick todo(s)", "blocked: reviews"]
+    assert items[3].badges == ["close-out: 1 quick todo(s)", BLOCKED_ON_REVIEWS]
 
 
 def test_every_panel_is_in_exactly_one_group() -> None:
@@ -143,7 +146,7 @@ def test_focus_shows_todos_one_at_a_time() -> None:
     assert [(i.title, i.subtitle, i.badges) for _, i in focused] == [
         ("small", "APP-2 mixed", ["quick"]),
         ("big one", "APP-2 mixed", ["big"]),
-        ("x", "APP-3 stuck", ["unsized", "blocked: reviews"]),
+        ("x", "APP-3 stuck", ["unsized", BLOCKED_ON_REVIEWS]),
     ]
     assert focused[0][1].url is None  # the todo doesn't say which PR it's about
     assert [link.text for link in focused[0][1].links] == ["PR 7"]
@@ -206,7 +209,7 @@ def test_todo_parts_put_the_prs_they_mention_first_in_bold() -> None:
     focused = build(work_items=[noted], github=github).focus_items("notes.todos")
     assert focused is not None
     parts = [part for _, part in focused]
-    assert [link.pr_state for link in parts[0].links] == ["merged", "open", "closed"]
+    assert [link.done for link in parts[0].links] == [True, False, True]  # merged, open, closed
     # Only the todo whose every mentioned PR is merged or closed is suggested as done.
     assert [p.actions[0].suggested for p in parts] == [False, False, True, True]
     assert parts[2].badges == ["unsized", "its PRs are done"]
@@ -242,10 +245,10 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
     assert focused is not None
     [(_, part)] = focused
     # The PR named in the todo is one of the entry's PRs too; the todo's own come first.
-    assert [(l.text, l.url, l.strong, l.pr_state) for l in part.links] == [
-        ("PR 4", "https://github.com/acme/other/pull/4", True, None),
-        ("PR 7", "https://github.com/acme/widgets/pull/7", False, "merged"),
-        ("APP-9", "https://j.example/browse/APP-9", True, None),
+    assert [(l.text, l.url, l.strong, l.done) for l in part.links] == [
+        ("PR 4", "https://github.com/acme/other/pull/4", True, False),
+        ("PR 7", "https://github.com/acme/widgets/pull/7", False, True),
+        ("APP-9", "https://j.example/browse/APP-9", True, False),
     ]
     assert part.url == "https://github.com/acme/other/pull/4"
     # An unknown-state PR is not evidence the todo is done.
@@ -342,7 +345,10 @@ def test_naming_settings_drive_pings_labels_and_jira() -> None:
     assert "needs-team" in panel(dashboard, "github.metadata").items[0].details[0]
     [transition] = panel(dashboard, "jira.jira_transitions").items
     assert transition.subtitle == "Doing → Checking: all PRs open and non-draft"
-    by_key = {i.title.split()[0]: i.badges[0] for i in panel(dashboard, "jira.jira_next").items}
+    by_key = {
+        i.title.split()[0]: str(b if isinstance(b := i.badges[0], str) else b.text)
+        for i in panel(dashboard, "jira.jira_next").items
+    }
     assert by_key["XY-2"].startswith("incident, escalated (2)")  # vp is the 2nd level
     assert by_key["XY-3"].startswith("bug")
 
@@ -354,7 +360,11 @@ def test_a_long_blocked_on_badge_is_cut_at_a_word_with_an_ellipsis() -> None:
             entry("APP-1 Stuck", [todo("ship", "quick")], **{"Blocked on": [reason + " today"]})
         ]
     )
-    [badge] = [b for b in panel(built, "notes.todos").items[0].badges if b.startswith("blocked")]
+    [badge] = [
+        b.text
+        for b in panel(built, "notes.todos").items[0].badges
+        if isinstance(b, Badge) and b.text.startswith("blocked")
+    ]
     assert badge == f"blocked: {reason}…"  # " today" would cut a word at 80 characters
     assert len(badge) <= len("blocked: ") + 80
 
@@ -372,8 +382,10 @@ def test_a_ticket_in_the_blocked_status_is_blocked_without_blocker_links() -> No
     items = {i.title.split()[0]: i for i in panel(dashboard, "jira.jira_next").items}
     signals = {key: item.signals for key, item in items.items()}
     assert all(s is not None for s in signals.values())
-    assert items["XY-1"].badges[0] == "blocked" and signals["XY-1"] and signals["XY-1"].blocked
-    assert items["XY-2"].badges[0] == "incident, blocked" and signals["XY-2"]
+    assert items["XY-1"].badges[0] == Badge(text="blocked", tone="warn")
+    assert signals["XY-1"] and signals["XY-1"].blocked
+    assert items["XY-2"].badges[0] == Badge(text="incident, blocked", tone="warn")
+    assert signals["XY-2"]
     assert signals["XY-2"].blocked
     assert items["XY-3"].badges[0] == "unblocked" and signals["XY-3"]
     assert not signals["XY-3"].blocked

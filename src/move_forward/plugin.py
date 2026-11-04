@@ -558,14 +558,15 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def act_now(self, req: ActNowRequest[C, S]) -> list[Item]:
         """The plugin's candidates for core's Act now, each with `signals`, from its
-        `panels`. By default the items of the panels marked `act_now`, each taking its
-        panel's signals if it has none of its own; a plugin that knows better nominates
-        precisely."""
+        `panels`. By default the items of the panels marked `act_now` that aren't `deferred`,
+        each taking its panel's signals if it has none of its own; a plugin that knows
+        better nominates precisely (a deferred item too)."""
         return [
             item if item.signals else item.model_copy(update={"signals": panel.signals})
             for panel in req.panels
             if panel.act_now
             for item in panel.items
+            if not item.deferred
         ]
 
     def item_actions(self, req: ItemActionsRequest[C]) -> ItemAdditions:

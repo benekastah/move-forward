@@ -7,7 +7,7 @@ name, its upstream's, or its commit).
 
 from datetime import datetime
 
-from ...api import Action, Graph, Item, Model, Panel, Ref, Signals, age
+from ...api import Action, Badge, Graph, Item, Model, Panel, Ref, Signals, age
 from ...api.ids import branch_id, branch_parts
 from ...api.kinds import PULL_REQUEST as PR
 from .config import GitConfig
@@ -123,7 +123,7 @@ class Builder:
                             f" {wt.untracked} untracked",
                             url=pr.url if pr else None,
                             subtitle=wt.path,
-                            badges=["uncommitted"],
+                            badges=[Badge(text="uncommitted", tone="warn")],
                             rank=2,
                             actions=actions,
                             subjects=([branch_ref(repo.dir, wt.branch)] if wt.branch else [])

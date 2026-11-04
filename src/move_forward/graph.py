@@ -325,7 +325,13 @@ class Graph:
 
 
 def _as[V: BaseModel](entity: Entity, model: type[V]) -> V:
-    fields = {"id": entity.ref.id, "title": entity.title, "url": entity.url, "state": entity.state}
+    fields = {
+        "id": entity.ref.id,
+        "title": entity.title,
+        "url": entity.url,
+        "state": entity.state,
+        "lifecycle": entity.lifecycle,
+    }
     return model.model_validate({**entity.attrs, **fields})
 
 

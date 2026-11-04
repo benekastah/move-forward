@@ -11,6 +11,7 @@ from ...api import (
     ActionHandler,
     ActNowRequest,
     Asker,
+    Badge,
     ChangedRequest,
     CollectRequest,
     EntitiesRequest,
@@ -305,7 +306,8 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
             importance = 0
             verb, task = "Chase the blockers", "chase_the_blockers"
         rank += min(999, (now - issue.created).days)
-        badges = [why] + ([f"due {issue.due:%b} {issue.due.day}"] if issue.due else [])
+        badges: list[str | Badge] = [Badge(text=why, tone="warn") if blocked else why]
+        badges += [f"due {issue.due:%b} {issue.due.day}"] if issue.due else []
         items.append(
             Item(
                 title=f"{issue.key} {issue.summary}",

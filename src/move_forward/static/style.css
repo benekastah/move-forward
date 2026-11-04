@@ -10,7 +10,8 @@
   --badge: #eef1f5;
   --warn: #b45309;
   --warn-bg: #fff4e5;
-  --merged: #7c3aed;
+  --good: #15803d;
+  --good-bg: #ecfdf3;
   color-scheme: light dark;
 }
 
@@ -26,7 +27,8 @@
     --badge: #262c35;
     --warn: #fbbf24;
     --warn-bg: #2a2410;
-    --merged: #c4b5fd;
+    --good: #4ade80;
+    --good-bg: #12261a;
   }
 }
 
@@ -179,13 +181,13 @@ main.single { max-width: 720px; margin: 0 auto; padding-top: 16px; }
   white-space: nowrap;
 }
 .badge.warn { background: var(--warn-bg); color: var(--warn); }
+.badge.good { background: var(--good-bg); color: var(--good); }
 .details { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
 .details li { overflow-wrap: anywhere; }
 .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 12px; }
 .links a.strong { font-weight: 700; }
-/* PR states: purple for merged, gray for closed, both struck through; no red/green pair. */
-.links a.merged { color: var(--merged); text-decoration: line-through; }
-.links a.closed { color: var(--muted); text-decoration: line-through; }
+/* What a link points at is over (a PR merged or closed, a ticket resolved): struck through. */
+.links a.done { color: var(--muted); text-decoration: line-through; }
 
 button, .button {
   display: inline-block;

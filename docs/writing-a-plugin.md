@@ -334,6 +334,10 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
   the person can drag panels and groups about, and that wins.
 - Each `Item` names its `subjects`, the entities it's about, main one first. Other plugins
   add their buttons by them, and core hides items whose subject is on ice.
+- A badge is a string, or `Badge(text, tone="warn")` for one that needs attention (`good`
+  for one going well). A link to what's over sets `done`, and is struck through. An item
+  that's not for now (a draft) is `deferred`: it sorts last, and Act now leaves it out
+  unless the plugin's `act_now` nominates it.
 
 ### Act now
 
