@@ -188,7 +188,7 @@ def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> No
         "prune_days",
         "status_closed",
         "required_owner_marker",
-        "ticket_link_prefix",
+        "ticket_link_prefixes",
         "commit_history_days",
         "stale_review_hours",
         "size",

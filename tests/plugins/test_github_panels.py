@@ -25,6 +25,7 @@ from move_forward.plugins.github.models import (
     ReviewerSuggestion,
     TeamPrScore,
 )
+from move_forward.plugins.github.prs import has_ticket_link_line
 from move_forward.plugins.notes.models import Ice
 
 build = dashboard
@@ -304,7 +305,7 @@ def test_metadata_flags_labels_links_and_ready_looking_drafts() -> None:
         github=snapshot(mine=[unknown, no_link, empty, ready_draft, draft_with_todo, fine]),
         work_items=[entry("APP-5 x", [todo("finish", "big")])],
         placeholder_labels=["needs-team", "needs-risk"],
-        ticket_link_prefix="Link",
+        ticket_link_prefixes=["Link"],
         jira_site="https://jira",  # so PR 5 and the entry are linked through APP-5
     )
     items = {i.title: i.details for i in panel(dashboard, "github.metadata").items}
@@ -467,3 +468,12 @@ def test_a_review_is_sized_by_the_part_i_or_my_teams_own() -> None:
     assert items[big.title].badges == ["+900 lines", "119 files"]
     assert items[whole.title].signals and items[whole.title].signals.effort == "day"
     assert items[whole.title].details == ["review requested"]
+
+
+def test_a_ticket_link_line_starts_with_any_prefix_and_names_a_key_or_a_url() -> None:
+    prefixes = ["Link", "Closes"]
+    assert has_ticket_link_line("Closes RD-123", prefixes)
+    assert has_ticket_link_line("text\nLink https://acme.atlassian.net/browse/RD-123", prefixes)
+    assert not has_ticket_link_line("Fixes RD-123", prefixes)
+    assert not has_ticket_link_line("Closes nothing", prefixes)
+    assert not has_ticket_link_line("Linkage RD-123", prefixes)  # a word boundary

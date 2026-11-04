@@ -47,9 +47,11 @@ def has_conflicts(pr: PullRequest) -> bool:
     return pr.mergeable == "CONFLICTING" or pr.merge_state == "DIRTY"
 
 
-def has_ticket_link_line(body: str, prefix: str) -> bool:
-    """Whether a line of the PR body starts with `prefix` and names a ticket key."""
-    pattern = rf"^\s*{re.escape(prefix)}\b.*?[A-Z][A-Z0-9]+-\d+"
+def has_ticket_link_line(body: str, prefixes: list[str]) -> bool:
+    """Whether a line of the PR body starts with one of `prefixes` and names a ticket key,
+    bare or in a URL."""
+    words = "|".join(re.escape(p) for p in prefixes)
+    pattern = rf"^\s*(?:{words})\b.*?[A-Z][A-Z0-9]+-\d+"
     return re.search(pattern, body, re.IGNORECASE | re.MULTILINE) is not None
 
 

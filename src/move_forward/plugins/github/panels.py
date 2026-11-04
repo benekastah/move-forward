@@ -397,9 +397,9 @@ class Builder:
         for pr in self.mine:
             problems = [label for label in pr.labels if label in self.config.placeholder_labels]
             keys = ticket_keys(pr)
-            prefix = self.config.ticket_link_prefix
-            if keys and prefix and not has_ticket_link_line(pr.body, prefix):
-                problems.append(f"no {prefix} line for {keys[0]}")
+            prefixes = self.config.ticket_link_prefixes
+            if keys and prefixes and not has_ticket_link_line(pr.body, prefixes):
+                problems.append(f"no {' or '.join(prefixes)} line for {keys[0]}")
             if not pr.body.strip():
                 problems.append("empty description")
             if size_label := next((x for x in pr.labels if x in self.config.split_pr_labels), None):

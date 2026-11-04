@@ -44,9 +44,10 @@ class GitHubConfig(Strict):
     required_owner_marker: str = ""
     """A comment marker on a CODEOWNERS line whose owners' approval is required, e.g.
     `#required`. Such files count first in team PR scores. Empty: no such convention."""
-    ticket_link_prefix: str = ""
-    """The word a PR description line starts with to link its ticket, e.g. `Link`. PR
-    housekeeping flags PRs with a ticket key but no such line. Empty: no such convention."""
+    ticket_link_prefixes: list[str] = Field(default_factory=list)
+    """The words a PR description line can start with to link its ticket, e.g.
+    `["Link", "Closes"]`; the ticket follows as a key or a Jira URL. PR housekeeping flags
+    PRs with a ticket key but no such line. Empty: no such convention."""
     placeholder_labels: list[str] = Field(default_factory=lambda: list(DEFAULT_PLACEHOLDER_LABELS))
     """PR labels the template leaves to be replaced, e.g. `needs-team`; PR housekeeping
     flags them."""
