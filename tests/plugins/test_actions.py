@@ -529,18 +529,20 @@ def test_the_jira_transition_button_moves_the_ticket_and_reports_what_jira_refus
     config: Config, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = config.model_copy(update={"jira": JiraConfig(site="https://j.example/")})
-    moved: list[tuple[str, str]] = []
+    moved: list[tuple[str, list[str]]] = []
 
-    def transition(config: JiraConfig, email: str, key: str, status: str) -> None:
-        if status == "Nowhere":
-            raise LookupError(f"{key} can't move to {status}; it can go to: Done")
-        moved.append((key, status))
+    def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> None:
+        if statuses[0] == "Nowhere":
+            raise LookupError(f"{key} can't move to {statuses[0]}; it can go to: Done")
+        moved.append((key, statuses))
 
     monkeypatch.setattr(jira_client, "transition", transition)
     assert run("jira/transition", config, {"key": "APP-1", "to": "In Review"}) == (
         "moved APP-1 to In Review"
     )
-    assert moved == [("APP-1", "In Review")]
+    assert moved == [("APP-1", ["In Review"])]
+    run("jira/transition", config, {"key": "APP-1", "to": "Done", "also": "Closed\nShipped"})
+    assert moved[-1] == ("APP-1", ["Done", "Closed", "Shipped"])
     with pytest.raises(ActionError, match="can go to: Done"):
         run("jira/transition", config, {"key": "APP-1", "to": "Nowhere"})
     with pytest.raises(ActionError, match="not a ticket key"):
