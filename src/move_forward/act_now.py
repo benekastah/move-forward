@@ -244,7 +244,7 @@ def why(signals: Signals, now: datetime | None = None, stale_after: timedelta | 
     if signals.effort == "minutes":
         parts.append("quick")
     elif signals.effort == "hour":
-        parts.append("about an hour")
+        parts.append("takes about an hour")
     if signals.closes:
         parts.append(f"closes {signals.closes}")
     if signals.waiting:

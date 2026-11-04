@@ -50,7 +50,7 @@ def test_finishing_beats_quick_beats_unknown() -> None:
         ]
     )
     assert _titles(ranked) == ["Close: closes", "waited on", "quick", "unknown"]
-    assert ranked.items[1].details == ["why: about an hour, alice waiting"]
+    assert ranked.items[1].details == ["why: takes about an hour, alice waiting"]
     assert ranked.items[0].details == ["why: closes APP-1"]
     assert [i.rank for i in ranked.items] == [7, 6, 5, 4]  # the panel keeps its order
 
