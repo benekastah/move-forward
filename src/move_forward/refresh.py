@@ -3,8 +3,11 @@ stored."""
 
 import json
 import logging
+import threading
+import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -16,10 +19,10 @@ from .config import Config
 from .db import CORE, Database
 from .graph import Graph, Ref
 from .notifications import Event, NotificationRepository
-from .page import Action, Item, SourceStatus
+from .page import Action, Item, Panel, SourceStatus
 from .plugin import ActionError, ActionResult, collect_into
 from .prune import prune_if_due
-from .registry import Enabled, build_graph, enabled
+from .registry import Enabled, build_graph, call, enabled
 from .repositories import (
     FeedbackRepository,
     KvRepository,
@@ -30,6 +33,16 @@ from .repositories import (
 from .shell import CommandError
 
 log = logging.getLogger(__name__)
+
+_collecting: set[str] = set()
+"""The plugins whose `collect` is still running, maybe past its timeout: a thread can't be
+stopped, so the next refresh leaves the plugin out until it returns."""
+_collecting_lock = threading.Lock()
+
+
+class PageFailed(Exception):
+    """A plugin's page handler raised: that page answers 500, the rest of the dashboard
+    stays up."""
 
 
 def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str, BaseModel | None]]:
@@ -72,17 +85,42 @@ def _collect_all(
     subscribed: set[str],
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
-    plugin's `store`. `subscribed` are the kinds I want events of (see `notifications`)."""
-    with ThreadPoolExecutor(max_workers=max(1, len(plugins))) as pool:
-        for e in plugins:
-            pool.submit(
-                collect_into,
-                db,
-                e.name,
-                now,
-                lambda e=e: collect(e),
-                lambda snapshot, e=e: _store(e, snapshot, subscribed, now),
-            )
+    plugin's `store`. `subscribed` are the kinds I want events of (see `notifications`).
+    Each plugin has its `collect_timeout_seconds`: one that takes longer is recorded as
+    failed, and the refresh goes on without it; one still running from an earlier refresh
+    is left out."""
+    started = time.monotonic()
+    pool = ThreadPoolExecutor(max_workers=max(1, len(plugins)))
+    running: list[tuple[Enabled, Future[None]]] = []
+    for e in plugins:
+        with _collecting_lock:
+            if e.name in _collecting:
+                log.warning("%s: still collecting from an earlier refresh; left out", e.name)
+                continue
+            _collecting.add(e.name)
+
+        def run(e: Enabled = e) -> None:
+            try:
+                collect_into(
+                    db,
+                    e.name,
+                    now,
+                    lambda: collect(e),
+                    lambda snapshot: _store(e, snapshot, subscribed, now),
+                )
+            finally:
+                with _collecting_lock:
+                    _collecting.discard(e.name)
+
+        running.append((e, pool.submit(run)))
+    for e, future in running:
+        limit = e.plugin.collect_timeout_seconds
+        try:
+            future.result(timeout=max(0.0, started + limit - time.monotonic()))
+        except FutureTimeout:
+            log.warning("%s: collect timed out after %ss", e.name, limit)
+            SnapshotRepository(db).save_error(e.name, now, f"timed out after {limit}s")
+    pool.shutdown(wait=False)
 
 
 def _wants(e: Enabled, subscribed: set[str]) -> bool:
@@ -218,19 +256,54 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
     graph, snapshots = stored_graph(db, plugins)
     plugin_panels: list[panels.PluginPanels] = []
     for e in plugins:
-        own = e.plugin.panels(e.ctx, snapshots[e.name], graph)
-        nominated = e.plugin.act_now(e.ctx, snapshots[e.name], graph, own)
+        snapshot = snapshots[e.name]
+        own = call(e.name, "panels", lambda e=e, s=snapshot: e.plugin.panels(e.ctx, s, graph), None)
+        if own is None:
+            plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, [_failed(e)], []))
+            continue
+        nominated = call(
+            e.name,
+            "act_now",
+            lambda e=e, s=snapshot, own=own: e.plugin.act_now(e.ctx, s, graph, own),
+            [],
+        )
         plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
-    me = next((found for e in plugins if (found := e.plugin.me(e.ctx, snapshots[e.name]))), None)
+    me = next(
+        (
+            found
+            for e in plugins
+            if (
+                found := call(e.name, "me", lambda e=e: e.plugin.me(e.ctx, snapshots[e.name]), None)
+            )
+        ),
+        None,
+    )
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)
         for source, row in SnapshotRepository(db).all().items()
     }
 
-    prepared = [e.plugin.prepare_item_actions(e.ctx, graph) for e in plugins]
+    def no_actions(item: Item) -> list[Action]:
+        return []
+
+    prepared = [
+        (
+            e.name,
+            call(
+                e.name,
+                "prepare_item_actions",
+                lambda e=e: e.plugin.prepare_item_actions(e.ctx, graph),
+                no_actions,
+            ),
+        )
+        for e in plugins
+    ]
 
     def item_actions(item: Item) -> list[Action]:
-        return [a for actions in prepared for a in actions(item)]
+        found: list[Action] = []
+        for name, actions in prepared:
+            found += call(name, "item_actions", lambda actions=actions: actions(item), [])
+        return found
 
     def hidden(item: Item) -> bool:
         """About something hidden, unless it's about what hides it (an On ice item)."""
@@ -254,14 +327,28 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
     )
 
 
+def _failed(e: Enabled) -> Panel:
+    """What stands in for a plugin's panels when building them failed."""
+    return Panel(
+        key="failed",
+        title=f"{e.plugin.title} (failed)",
+        description="Building this plugin's panels failed; the log says why.",
+        items=[],
+    )
+
+
 def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[str]]) -> str | None:
     """An enabled plugin's page at `path`, or None when there's no such page (or the plugin
-    has nothing at that query)."""
+    has nothing at that query). Raises `PageFailed` when its handler raises."""
     plugins = enabled(config, db, datetime.now(UTC))
     for e in plugins:
         if handler := e.plugin.pages().get(path):
             graph, _ = stored_graph(db, plugins)
-            return handler(e.ctx, graph, query)
+            try:
+                return handler(e.ctx, graph, query)
+            except Exception as err:
+                log.exception("%s: page %s failed", e.name, path)
+                raise PageFailed(path) from err
     return None
 
 
@@ -280,7 +367,7 @@ def kept_item(config: Config, db: Database, kept: str) -> tuple[str, Item] | Non
     if e is None:
         return None
     graph, _ = stored_graph(db, plugins)
-    kept_item = e.plugin.kept_item(e.ctx, graph, key)
+    kept_item = call(e.name, "kept_item", lambda: e.plugin.kept_item(e.ctx, graph, key), None)
     if kept_item is None:
         return None
     panel, item = kept_item
@@ -379,10 +466,13 @@ def perform_action(config: Config, db: Database, name: str, fields: dict[str, st
     graph, _ = stored_graph(db, plugins)
     try:
         result = handler(e.ctx, graph, fields)
-    except KeyError as err:
-        raise ActionError(f"missing field {err}") from err
+    except ActionError:
+        raise
     except CommandError as err:
         raise ActionError(str(err)) from err
+    except Exception as err:
+        log.exception("%s failed", name)
+        raise ActionError(f"{name} failed: {type(err).__name__}: {err}") from err
     result = result if isinstance(result, ActionResult) else ActionResult(result)
     if pending:
         _hide_until_fetched(db, pending)

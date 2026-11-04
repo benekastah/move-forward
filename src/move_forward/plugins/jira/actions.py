@@ -3,7 +3,7 @@
 import urllib.error
 
 from ...graph import Graph
-from ...plugin import ActionError, ActionHandler, Context
+from ...plugin import ActionError, ActionHandler, Context, form_field
 from . import client
 from .config import JiraConfig
 
@@ -11,7 +11,7 @@ from .config import JiraConfig
 def transition(ctx: Context[JiraConfig], graph: Graph, fields: dict[str, str]) -> str:
     """Move the ticket `key` to the status `to`, or else one of the `also` names (one per
     line): the first its workflow offers."""
-    key, to = fields["key"], fields["to"]
+    key, to = form_field(fields, "key"), form_field(fields, "to")
     names = [to, *fields.get("also", "").splitlines()]
     if not client.is_key(key):
         raise ActionError(f"not a ticket key: {key}")

@@ -10,7 +10,7 @@ from pydantic import Field
 
 from ...domain import Model
 from ...graph import Graph
-from ...plugin import ActionError, Context
+from ...plugin import ActionError, Context, form_field
 from ...shell import CommandError, git
 from . import client
 from .config import GitConfig
@@ -75,8 +75,8 @@ def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
 
 
 def delete_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
-    repo = repo_path(ctx.config, fields["repo"])
-    branch = fields["branch"]
+    repo = repo_path(ctx.config, form_field(fields, "repo"))
+    branch = form_field(fields, "branch")
     _check_deletable(graph, repo, branch)
     git(repo, "branch", "-D", branch)
     return f"deleted {branch} in {repo}"
@@ -157,8 +157,8 @@ def push_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -
     """Push a branch where git would (see `client.push_target`), or one without an upstream
     to the remote git would pick (`client.push_remote`), setting its upstream. Never
     forces."""
-    repo = repo_path(ctx.config, fields["repo"])
-    branch = fields["branch"]
+    repo = repo_path(ctx.config, form_field(fields, "repo"))
+    branch = form_field(fields, "branch")
     if not branch_exists(repo, branch):
         raise ActionError(f"{branch} doesn't exist in {repo}")
     try:
@@ -182,8 +182,8 @@ def push_branch(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -
 def wip_commit(ctx: Context[GitConfig], graph: Graph, fields: dict[str, str]) -> str:
     """Commit the modified tracked files of a worktree of the repo as "WIP". Untracked files
     are left."""
-    repo = repo_path(ctx.config, fields["repo"])
-    worktree = Path(fields["worktree"])
+    repo = repo_path(ctx.config, form_field(fields, "repo"))
+    worktree = Path(form_field(fields, "worktree"))
     if worktree.resolve() not in {w.resolve() for w in worktrees(repo)}:
         raise ActionError(f"{worktree} is not a worktree of {repo}")
     modified, _ = client.worktree_status(worktree)

@@ -10,7 +10,7 @@ what it uses.
 import argparse
 import logging
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, ClassVar
@@ -128,6 +128,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """S, or None when the plugin fetches nothing and `collect` is never called."""
     collects_after_graph: ClassVar[bool] = False
     """Whether the snapshot comes from `collect_after` instead of `collect`."""
+    collect_timeout_seconds: ClassVar[int] = 300
+    """How long `collect` (or `collect_after`) may take. Past it, the refresh records the
+    plugin as failed and goes on; the plugin is left out of refreshes until its collect
+    returns (a thread can't be stopped)."""
 
     # Refresh
 
@@ -308,6 +312,14 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns
         what was done, one line each."""
         return []
+
+
+def form_field(fields: Mapping[str, str], name: str) -> str:
+    """An action's request field; `ActionError` when the request lacks it."""
+    try:
+        return fields[name]
+    except KeyError:
+        raise ActionError(f"missing field {name!r}") from None
 
 
 def collect_into[T: BaseModel](
