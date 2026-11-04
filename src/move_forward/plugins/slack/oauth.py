@@ -161,7 +161,7 @@ def finish(ctx: Context[SlackConfig], query: dict[str, list[str]]) -> Connection
         pending = None
     if pending is None or not state or not hmac.compare_digest(state, pending.state):
         raise SignInError("this isn't the sign-in this dashboard started; connect again")
-    ctx.kv.set(PENDING, "")  # single use, whatever happens next
+    ctx.kv.delete(PENDING)  # single use, whatever happens next
     if ctx.now - pending.started > timedelta(minutes=SIGN_IN_MINUTES):
         raise SignInError("the sign-in took too long; connect again")
     if error := query.get("error", [""])[0]:
@@ -198,7 +198,7 @@ def finish(ctx: Context[SlackConfig], query: dict[str, list[str]]) -> Connection
         _store(ctx, connection, user)
     except (ValueError, CommandError, OSError) as e:  # e.g. Linux without `secret-tool`
         raise SignInError(f"couldn't keep the token in the system's secret store: {e}") from e
-    ctx.kv.set(LOST, "")
+    ctx.kv.delete(LOST)
     return connection
 
 
@@ -270,7 +270,7 @@ def token(ctx: Context[SlackConfig]) -> str | None:
 def _lose(ctx: Context[SlackConfig], why: str) -> None:
     """Forget the connection, keeping why for slack's page. Its tokens are deleted if the
     secret store lets them be: they're of no use now either way."""
-    ctx.kv.set(CONNECTION, "")
+    ctx.kv.delete(CONNECTION)
     ctx.kv.set(LOST, why)
     with contextlib.suppress(CommandError, OSError):
         forget(ctx)
@@ -278,7 +278,7 @@ def _lose(ctx: Context[SlackConfig], why: str) -> None:
 
 def forget(ctx: Context[SlackConfig]) -> None:
     """Drop the connection and its tokens from the secret store."""
-    ctx.kv.set(CONNECTION, "")
+    ctx.kv.delete(CONNECTION)
     keychain.delete(ctx.config.keychain_service, ctx.email)
     keychain.delete(refresh_service(ctx.config), ctx.email)
 

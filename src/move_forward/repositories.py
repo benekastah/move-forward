@@ -4,7 +4,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from .act_now import Feedback, FeedbackKey
 from .db import Database
@@ -68,6 +68,27 @@ class KvRepository:
 
     def set(self, key: str, value: str) -> None:
         self._db.execute("INSERT OR REPLACE INTO kv VALUES (?, ?, ?)", (self._owner, key, value))
+
+    def delete(self, key: str) -> None:
+        self._db.execute("DELETE FROM kv WHERE plugin = ? AND key = ?", (self._owner, key))
+
+    def keys(self, prefix: str = "") -> list[str]:
+        """The keys set, those starting with `prefix`, in order."""
+        rows = self._db.query(
+            "SELECT key FROM kv WHERE plugin = ? AND substr(key, 1, ?) = ? ORDER BY key",
+            (self._owner, len(prefix), prefix),
+        )
+        return [row["key"] for row in rows]
+
+    def get_json[T](self, key: str, type_: type[T]) -> T | None:
+        """The value at `key` read as JSON into `type_` (a model, or e.g. `list[str]`); None
+        when it isn't set."""
+        value = self.get(key)
+        return None if value is None else TypeAdapter(type_).validate_json(value)
+
+    def set_json(self, key: str, value: object) -> None:
+        """Set `key` to `value` as JSON: a model, or lists, dicts and plain values."""
+        self.set(key, TypeAdapter(type(value)).dump_json(value).decode())
 
 
 class SessionRepository:

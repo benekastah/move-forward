@@ -224,7 +224,7 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
         at.kv.set(CHANGED, json.dumps(list(changed)))
         gh = plugin.collect(at)
         plugin.store(at, gh)
-        assert at.kv.get(CHANGED) == "[]"
+        assert at.kv.get(CHANGED) is None
         return gh
 
     refresh(0, "acme/widgets#2")  # nothing stored to place them in yet: everything

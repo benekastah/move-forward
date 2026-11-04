@@ -1,8 +1,6 @@
 """The GitHub plugin."""
 
 import argparse
-import json
-import logging
 from datetime import datetime, timedelta
 from typing import ClassVar, cast
 
@@ -40,8 +38,6 @@ from .prs import (
 from .setup import TEMPLATE, questions
 from .snapshots import DerivedRepository, PrRepository
 from .tables import MIGRATIONS
-
-log = logging.getLogger(__name__)
 
 DERIVED = "derived"
 """`after_collect`'s part of the refresh, `github.derived`: team scores and reviewer
@@ -101,7 +97,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             try:
                 fetched = client.fetch_prs(config.host, ids)
             except CommandError as e:
-                log.warning("fetching the PRs that changed failed, so fetching all: %s", e)
+                ctx.log.warning("fetching the PRs that changed failed, so fetching all: %s", e)
             else:
                 return placing.place(previous, fetched, _team_slugs(ctx))
         ctx.kv.set(LAST_FULL, ctx.now.isoformat())
@@ -123,16 +119,16 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         )
 
     def _take_changed(self, ctx: Context[GitHubConfig]) -> set[str]:
-        changed = set(json.loads(ctx.kv.get(CHANGED) or "[]"))
-        ctx.kv.set(CHANGED, "[]")
+        changed = set(ctx.kv.get_json(CHANGED, list[str]) or [])
+        ctx.kv.delete(CHANGED)
         return changed
 
     def _note_changed(self, ctx: Context[GitHubConfig], prs: set[str]) -> set[str]:
         """Add `prs` to those pending for `collect`; all that are pending."""
-        pending = set(json.loads(ctx.kv.get(CHANGED) or "[]"))
+        pending = set(ctx.kv.get_json(CHANGED, list[str]) or [])
         if prs - pending:
             pending |= prs
-            ctx.kv.set(CHANGED, json.dumps(sorted(pending)))
+            ctx.kv.set_json(CHANGED, sorted(pending))
         return pending
 
     def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
@@ -153,10 +149,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def _branches_moved(self, ctx: Context[GitHubConfig], graph: Graph) -> set[str]:
         now = pushes.tips(graph, PR, REPO)
-        stored = ctx.kv.get(BRANCHES_SEEN)
-        before: object = json.loads(stored) if stored else None
+        before = ctx.kv.get_json(BRANCHES_SEEN, object)
         if now != before:
-            ctx.kv.set(BRANCHES_SEEN, json.dumps(now))
+            ctx.kv.set_json(BRANCHES_SEEN, now)
         if not isinstance(before, dict):  # the first look, or kept in an older form
             return set()
         return pushes.moved(cast(dict[str, str], before), now)
@@ -228,7 +223,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 try:
                     email = client.commit_email(ctx.config.host, pr.repo, login, domains)
                 except Exception as e:  # noqa: BLE001
-                    log.warning("email lookup for %s failed: %s", login, e)
+                    ctx.log.warning("email lookup for %s failed: %s", login, e)
                     continue
                 people.save_looked_up(login, email, ctx.now)
                 known[login] = email
@@ -348,7 +343,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             try:
                 state, closed_at = client.pr_state(url)
             except CommandError as e:
-                log.warning("couldn't fetch %s: %s", url, e)
+                ctx.log.warning("couldn't fetch %s: %s", url, e)
                 continue
             found.append(
                 Entity(

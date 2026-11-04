@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
@@ -155,6 +156,8 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
             db=db,
             kv=KvRepository(db, plugin.name),
             dashboard_url=f"{tls.scheme(config.https, config.db_path)}://localhost:{config.port}",
+            name=plugin.name,
+            data_root=Path(config.db_path).parent,
         )
         result.append(Enabled(plugin, ctx))
     return result

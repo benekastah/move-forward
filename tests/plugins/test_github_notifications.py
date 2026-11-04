@@ -87,7 +87,7 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
     def taken() -> list[str]:
         """What `collect` would fetch, taken as it takes it."""
         found = json.loads(kv.get(CHANGED) or "[]")
-        kv.set(CHANGED, "[]")
+        kv.delete(CHANGED)
         return found
 
     def changed(minutes: int) -> bool:

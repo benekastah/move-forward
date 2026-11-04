@@ -104,6 +104,11 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - `name` is the config section, the kv namespace and migrations' owner, the tables'
   prefix and the first part of the actions' paths: lower-case letters, digits and `_`,
   unique, and not `core` or `act_now`. The registry checks this when it's imported.
+- Every hook gets `ctx`, the plugin's context: its section (`ctx.config`), `ctx.name`,
+  `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, its database (`ctx.db`) and key/value
+  state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
+  a logger named for it (`ctx.log`), and `ctx.data_dir`, a private directory of its own for
+  files, made on first use beside the database.
 
 - A plugin that collects has a `refresh_seconds` setting in its section (with a default
   that suits its tool): the server refreshes it that often, on its own schedule.

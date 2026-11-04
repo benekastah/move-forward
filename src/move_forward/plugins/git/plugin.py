@@ -1,7 +1,5 @@
 """The git plugin."""
 
-import json
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
@@ -31,8 +29,6 @@ from .models import LocalSnapshot
 from .panels import Builder, branch_ref, delete_iced_action, restore_iced_action
 from .repository import MIGRATIONS, LocalRepository
 from .setup import TEMPLATE, questions
-
-log = logging.getLogger(__name__)
 
 REPO = "repo"
 BRANCH = "branch"
@@ -71,8 +67,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         """Every repo; or, after `changed` saw only some move, just those, keeping the rest
         as stored, unless a full collect is due (`refresh_seconds` since the last), so
         frequent changes can't put it off."""
-        moved = set(json.loads(ctx.kv.get(MOVED) or "[]"))
-        ctx.kv.set(MOVED, "[]")
+        moved = set(ctx.kv.get_json(MOVED, list[str]) or [])
+        ctx.kv.delete(MOVED)
         last_full = ctx.kv.get(LAST_FULL)
         full_due = (
             last_full is None
@@ -108,7 +104,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             try:
                 self._watcher = watch.Watcher()
             except Exception as e:  # noqa: BLE001 - polling still works without it
-                log.warning("can't watch the repos, so polling them: %s", e)
+                ctx.log.warning("can't watch the repos, so polling them: %s", e)
                 self._watching = False
                 return None
             if snapshot := self.load(ctx):
@@ -145,20 +141,19 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         )
         moved = {self._ids[c] for c in moved_now if c in self._ids}
 
-        stored = ctx.kv.get(FINGERPRINTS)
-        before: dict[str, str] | None = json.loads(stored) if stored else None
+        before = ctx.kv.get_json(FINGERPRINTS, dict[str, str])
         polled = [repo for repo in ctx.config.repos if str(changes.common_dir(repo)) not in watched]
         now = changes.fingerprints(polled)
         now.update({k: v for k, v in (before or {}).items() if k in watched})
         if now != before:
-            ctx.kv.set(FINGERPRINTS, json.dumps(now))
+            ctx.kv.set_json(FINGERPRINTS, now)
         if before is not None:
             moved |= changes.moved(before, now)
         moved |= self._edited(ctx, edited_now, watcher.worktrees if watcher else set())
-        pending = set(json.loads(ctx.kv.get(MOVED) or "[]"))
+        pending = set(ctx.kv.get_json(MOVED, list[str]) or [])
         if moved - pending:
             pending |= moved
-            ctx.kv.set(MOVED, json.dumps(sorted(pending)))
+            ctx.kv.set_json(MOVED, sorted(pending))
         # Pending until `collect` reads them: what's seen in the check core makes right after
         # a refresh (whose answer it ignores) still asks for a refresh at the next one.
         return bool(pending) or (before is not None and set(before) != set(now))

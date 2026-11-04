@@ -37,9 +37,9 @@ def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
     kv = KvRepository(db, "github")
     assert kv.get(CHANGED) == '["acme/widgets#1"]'  # for collect
     assert changed_after()  # still, until collect fetches it
-    kv.set(CHANGED, "[]")  # as collect does
+    kv.delete(CHANGED)  # as collect does
     assert changed_after(local_branch(mine.head, sha="b", ahead=1))  # committed
-    kv.set(CHANGED, "[]")
+    kv.delete(CHANGED)
     assert not changed_after(  # someone else's branch isn't my PR's
         local_branch(mine.head, sha="b", ahead=1), local_branch("theirs", sha="c")
     )
