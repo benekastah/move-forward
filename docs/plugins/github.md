@@ -59,7 +59,9 @@ tickets they name), and `person` for me and everyone it knows an email for; see
   pushed or re-requested since.
 - **Feedback to address**: unresolved threads, changes requested, comments since my last
   push I haven't answered.
-- **CI failures**: failing checks and merge-queue evictions in the last 2 days. Checks
+- **CI failures**: failing checks and merge-queue evictions in the last
+  `merge_queue_eviction_days` (2), unless the PR is back in the queue, was queued again, or
+  is green now. Checks
   named in `policy_checks` never count as failures.
 - **PR policy**: failing checks named in `policy_checks`, linked to their details, which
   say what's missing (a label, an assignee).

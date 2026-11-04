@@ -171,6 +171,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         "placeholder_labels",
         "ticket_link_prefixes",
         "stale_review_hours",
+        "merge_queue_eviction_days",
         "quick_review_max_lines",
         "quick_review_max_files",
         "hour_review_max_lines",

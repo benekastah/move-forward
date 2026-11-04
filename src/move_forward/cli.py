@@ -46,6 +46,7 @@ org = "example-org"
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
 # email_domains = []                     # reviewers' email domains, if not just your email's
 # stale_review_hours = 24
+# merge_queue_eviction_days = 2        # how long a merge-queue removal stays in CI failures
 # quick_review_max_lines = 100           # a review within these limits takes minutes
 # quick_review_max_files = 5
 # hour_review_max_lines = 300            # within these, an hour; beyond, a day

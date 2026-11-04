@@ -26,7 +26,6 @@ from .prs import (
     unresolved_threads,
 )
 
-MERGE_QUEUE_LOOKBACK = timedelta(days=2)
 PR = "pr"
 ENTRY = "entry"
 
@@ -263,15 +262,24 @@ class Builder:
 
     def ci_failures(self) -> Panel:
         items: list[Item] = []
-        cutoff = self.now - MERGE_QUEUE_LOOKBACK
+        cutoff = self.now - timedelta(days=self.config.merge_queue_eviction_days)
         for pr in self.mine:
             if pr.is_draft:
                 continue
             failing = [c for c in failing_checks(pr) if c.name not in self.config.policy_checks]
             details = [f"{c.name}: {c.state}" for c in failing]
             links = [Link(text=c.name, url=c.url) for c in failing if c.url]
+            requeued = max(
+                (e.at for e in pr.events if e.type == "AddedToMergeQueueEvent"), default=None
+            )
             for event in pr.events:
-                if event.type == "RemovedFromMergeQueueEvent" and event.at >= cutoff:
+                if (
+                    event.type == "RemovedFromMergeQueueEvent"
+                    and event.at >= cutoff
+                    and not pr.in_merge_queue
+                    and not (requeued and requeued > event.at)
+                    and pr.rollup_state != "SUCCESS"
+                ):
                     details.append(
                         f"removed from merge queue {age(self.now, event.at)} ago"
                         + (f": {event.reason}" if event.reason else "")

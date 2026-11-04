@@ -224,6 +224,7 @@ def test_ci_failures_show_failing_checks_and_recent_queue_removals() -> None:
     )
     evicted = pr(
         2,
+        rollup_state="PENDING",
         events=[event("RemovedFromMergeQueueEvent", NOW - timedelta(hours=3), reason="CI failed")],
     )
     old_eviction = pr(3, events=[event("RemovedFromMergeQueueEvent", NOW - timedelta(days=5))])
@@ -492,3 +493,23 @@ def test_threads_of_ignored_reviewers_dont_hold_a_merge_or_a_ready_draft() -> No
     assert titles(ignoring, "github.ready_to_merge") == ["PR 1"]
     details = [d for i in panel(ignoring, "github.metadata").items for d in i.details]
     assert "draft with green CI and no open todos: ready?" in details
+
+
+def test_an_eviction_stops_showing_once_the_pr_is_queued_again_or_green_and_the_window_is_a_setting() -> (
+    None
+):
+    removed = event("RemovedFromMergeQueueEvent", NOW - timedelta(days=3), reason="CI failed")
+    stale = pr(1, rollup_state="PENDING", events=[removed])
+    back = pr(2, rollup_state="PENDING", in_merge_queue=True, events=[removed])
+    queued_since = pr(
+        3,
+        rollup_state="PENDING",
+        events=[removed, event("AddedToMergeQueueEvent", NOW - timedelta(days=2), actor="me")],
+    )
+    green = pr(4, rollup_state="SUCCESS", events=[removed])
+    built = build(github=snapshot(mine=[stale, back, queued_since, green]))
+    assert titles(built, "github.ci_failures") == []  # three days is past the window
+    wider = build(
+        github=snapshot(mine=[stale, back, queued_since, green]), merge_queue_eviction_days=4
+    )
+    assert titles(wider, "github.ci_failures") == ["PR 1"]
