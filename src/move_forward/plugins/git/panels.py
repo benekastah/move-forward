@@ -7,7 +7,7 @@ name, its upstream's, or its commit).
 
 from datetime import datetime
 
-from ...api import Action, Badge, Graph, Item, Model, Panel, Ref, Signals, age
+from ...api import Action, Badge, Band, Graph, Item, Model, Panel, Ref, Signals, age
 from ...api.ids import branch_id, branch_parts
 from ...api.kinds import PULL_REQUEST as PR
 from .config import GitConfig
@@ -180,7 +180,7 @@ class Builder:
                     items.append(item)
         return Panel(
             key="local_work",
-            priority=50,  # 5. restack and push
+            priority=Band.PUSH,
             title="Local work",
             description="Uncommitted changes in worktrees, branches with unpushed commits, and"
             " checkouts of PRs that moved on GitHub.",
@@ -261,7 +261,7 @@ class Builder:
         )
         return Panel(
             key="cleanup",
-            priority=100,  # 10. cleanup
+            priority=Band.CLEANUP,
             act_now=True,
             signals=Signals(verb="Delete the branch", task="delete_the_branch", effort="minutes"),
             title="Cleanup",

@@ -6,7 +6,7 @@ import re
 import textwrap
 from datetime import UTC, datetime, time
 
-from ...api import Action, Badge, Entity, Graph, Item, Link, Model, Panel, Ref, Signals, attrs
+from ...api import Action, Badge, Band, Entity, Graph, Item, Link, Model, Panel, Ref, Signals, attrs
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
@@ -405,7 +405,7 @@ class Builder:
             )
         return Panel(
             key=TODOS,
-            priority=0,  # 0b. reconcile the work notes
+            priority=Band.TODOS,
             title="Todos from the work notes",
             description="Easy close-outs first; blocked work last.",
             items=items,
@@ -448,7 +448,7 @@ class Builder:
             )
         return Panel(
             key="iced",
-            priority=1000,  # parked: the skill leaves these alone
+            priority=Band.PARKED,
             title="On ice",
             description="Stacks, PRs, tickets and work entries parked until they're reopened.",
             items=items,

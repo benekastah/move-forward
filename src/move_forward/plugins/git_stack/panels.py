@@ -6,7 +6,7 @@ the graph relates to its `git.branch` (github relates them).
 
 from pathlib import Path
 
-from ...api import Action, Entity, Graph, Item, Model, Panel, Ref, attrs
+from ...api import Action, Band, Entity, Graph, Item, Model, Panel, Ref, attrs
 from ...api.ids import branch_id
 from ...api.kinds import PULL_REQUEST as PR
 from .kinds import StackBranchAttrs
@@ -179,7 +179,7 @@ class Builder:
                     )
         return Panel(
             key="stacks",
-            priority=60,  # 6. stacks without PRs
+            priority=Band.STACKS_NO_PR,
             title="Stacks",
             description="git-stack branches that need a restack, were merged, or have no PR.",
             items=items,
