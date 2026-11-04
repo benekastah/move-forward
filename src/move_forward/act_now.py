@@ -99,12 +99,18 @@ class ActNowConfig(Strict):
     """`default_snooze_days` for a kind of subject, e.g. `pr = 7` to snooze a PR for a week.
     A snooze still ends early when its item changes."""
 
+    snooze_until_hour: int = Field(default=0, ge=0, le=23)
+    """The local hour a snooze ends at on its last day: 0 is midnight, 9 shows a snooze made at
+    5pm again at 9am the next morning."""
+
     def snooze_until(self, kind: str, now: datetime) -> datetime:
-        """When a snooze of an item about a `kind` of subject, made at `now`, ends: local
-        midnight that many days on."""
+        """When a snooze of an item about a `kind` of subject, made at `now`, ends: that many
+        local days on, at `snooze_until_hour`."""
         days = max(self.snooze_days.get(kind, self.default_snooze_days), 1)
         local = localtime.local(now)
-        return datetime.combine(local.date() + timedelta(days=days), time(), local.tzinfo)
+        return datetime.combine(
+            local.date() + timedelta(days=days), time(self.snooze_until_hour), local.tzinfo
+        )
 
 
 @dataclass(frozen=True)

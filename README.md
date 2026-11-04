@@ -74,7 +74,8 @@ update or comment, an entry's last edit. Then it's worth chasing, and ranks as
 if it weren't blocked.
 A snooze lasts `default_snooze_days` (1: until tomorrow), or `snooze_days[<kind>]`
 for a kind of subject (`snooze_days = { pr = 7 }` snoozes a PR for a week),
-or until the item changes.
+or until the item changes. It ends at local midnight, or at `snooze_until_hour` (9: nine
+in the morning) on its last day.
 
 Teams are named once, at the top level. A plugin that has its own idea of a
 team maps the names in a `teams` table of its section: `[github.teams]` gives

@@ -3,7 +3,7 @@ from datetime import timedelta
 import pytest
 from conftest import NOW, pr, snapshot, stored
 
-from move_forward import refresh, snooze
+from move_forward import localtime, refresh, snooze
 from move_forward.act_now import ActNowConfig
 from move_forward.repositories import FeedbackRepository
 
@@ -51,3 +51,12 @@ def test_an_unknown_pr_cannot_be_snoozed() -> None:
     graph, _ = refresh.stored_graph(db, refresh.enabled(config, db, NOW))
     with pytest.raises(LookupError, match="mfd refresh"):
         snooze.snooze_review(FeedbackRepository(db), graph, ActNowConfig(), "https://x/pull/9", NOW)
+
+
+def test_a_snooze_ends_at_the_configured_local_hour_of_its_last_day() -> None:
+    config = ActNowConfig(snooze_until_hour=9)
+    local = localtime.local(config.snooze_until("pr", NOW))
+    tomorrow = localtime.local(NOW).date() + timedelta(days=1)
+    assert (local.date(), local.hour, local.minute) == (tomorrow, 9, 0)
+    midnight = localtime.local(ActNowConfig().snooze_until("pr", NOW))
+    assert (midnight.date(), midnight.hour) == (tomorrow, 0)
