@@ -128,6 +128,11 @@ A view lists only what its consumer reads, so publishers can add attributes free
 
 ### Related entities
 
+Text names a family's entities by their `handle` (a ticket's key): a pattern's match is
+looked up among the entities with that handle (`graph.by_handle(kind, handle)`), all of
+them when two trackers share a key; a match no entity has yet becomes a ref with that text
+as its id.
+
 Some kinds stand for a unit of work and link what's about it. A plugin declares them with
 `KindSpec(..., linking=...)`, giving the pattern of its ids, or None (its `linking_patterns` hook can narrow
 a pattern from what it has seen, as jira does to the project keys it knows):

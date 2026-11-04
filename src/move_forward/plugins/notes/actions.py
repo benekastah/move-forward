@@ -18,6 +18,8 @@ from ...api import (
     Model,
     SourceError,
 )
+from ...api.kinds import PULL_REQUEST as PR
+from ...api.kinds import TICKET
 from .config import NotesConfig
 from .covers import covers
 from .markdown import links_in
@@ -29,8 +31,6 @@ TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""
 BRANCH = "branch"
 STACK_BRANCH = "stack_branch"
-PR = "pr"
-TICKET = "ticket"
 ENTRY = "entry"
 ICEABLE = (PR, TICKET, ENTRY)
 """What `ice_item` puts on ice on its own; branches go with their stacks, through `ice`."""

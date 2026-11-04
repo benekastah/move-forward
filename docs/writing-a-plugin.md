@@ -212,6 +212,10 @@ class LinearPlugin(...):
 - Document the kind and its attributes in [entities.md](entities.md);
   `tests/test_entities_doc.py` fails until you do. [plugins.md](plugins.md) draws who
   publishes and reads what.
+- **Families.** A kind that more than one tool could publish (a pull request, a ticket, a
+  person) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
+  extend its model (`class LinearIssue(Ticket)`), setting `handle` to how your tool shows
+  it. Other plugins read it through the family's model, whoever publishes it.
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
   declared `linking`, so the graph relates what's about it. Give it the pattern of its ids
   (`KindSpec(..., linking=r"...")`, or None and narrow it from what the plugin has seen)

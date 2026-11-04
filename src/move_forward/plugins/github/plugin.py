@@ -38,7 +38,7 @@ from ...api import (
 from ...api.shell import CommandError
 from . import changes, cli, client, derive, notifications, placing, pushes
 from .config import GitHubConfig
-from .kinds import PersonAttrs, PrAttrs
+from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
 from .panels import PR, REVIEW, Builder
 from .people import PeopleRepository
@@ -89,8 +89,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     config_model = GitHubConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
-        PR: KindSpec(PrAttrs, fetchable=True, resolvable=True),
-        PERSON: KindSpec(PersonAttrs),
+        PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),
+        PERSON: KindSpec(GitHubPerson),
     }
     cli_help = "import reviewers' emails from the skill's reviewer map"
     snapshot_model = GitHubSnapshot
@@ -315,7 +315,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             ]
             fields["progress"] = progress(pr, ignored)
             fields["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
-        pr_attrs = PrAttrs.model_validate(fields)
+        pr_attrs = GitHubPullRequest.model_validate({**fields, "handle": f"#{pr.number}"})
         return Entity(
             ref=Ref(kind=PR, id=pr.url),
             title=pr.title,
@@ -354,7 +354,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             Entity(
                 ref=Ref(kind=PERSON, id=login),
                 title=login,
-                attrs=attrs(PersonAttrs(me=login == snapshot.login, email=emails.get(login))),
+                attrs=attrs(
+                    GitHubPerson(handle=login, me=login == snapshot.login, email=emails.get(login))
+                ),
             )
             for login in dict.fromkeys([snapshot.login, *emails])
         ]

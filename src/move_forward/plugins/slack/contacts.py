@@ -4,14 +4,13 @@ what `mfd slack` shares with them."""
 import re
 
 from ...api import ActionError, ActionRequest, Context, Graph, Model, html
+from ...api.kinds import PERSON
 from . import client, oauth, scopes
 from .config import SlackConfig
 from .pings import my_open_prs
 from .repository import DASHBOARD, IMPORTED, LOOKED_UP, SlackRepository
 
 CONTACTS_PATH = "/slack/contacts"
-PR = "pr"
-PERSON = "person"
 SLACK_ID_RE = re.compile(r"^[UW][A-Z0-9]{6,}$")
 CHANNEL_ID_RE = re.compile(r"^[CG][A-Z0-9]{6,}$")
 CHANNEL_NAME_RE = re.compile(r"^#[\w-]+$")

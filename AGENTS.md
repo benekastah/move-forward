@@ -26,7 +26,8 @@ is what's left to build.
   model of its attributes, which the graph checks its entities against, and its flags
   (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`). An entity says
   whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
-  states. A consumer reads
+  states. What more than one tool may represent (a pull request, a ticket, a person) is a
+  family core models (`api.kinds`); a plugin's kind of a family extends its model. A consumer reads
   another plugin's entities with `graph.view(kind, View)`, through its own
   small model of the fields it uses, not `attrs.get`. A kind that stands for a
   unit of work (a ticket, a work entry) is declared `linking` (with

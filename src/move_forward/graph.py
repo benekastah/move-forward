@@ -43,6 +43,9 @@ class Entity(Model):
     """Text that may name linking entities by id, e.g. a PR's branch, title and body; the graph
     adds a ref to each linking entity whose id it finds in it."""
     attrs: dict[str, JsonValue] = Field(default_factory=dict)
+    family: str | None = None
+    """The family of kinds it's in (a pull request, a ticket), set by core; None for a kind
+    that's a plugin's own."""
     lifecycle: Literal["open", "done"] = "open"
     """Whether the work it stands for is over (a PR merged or closed, a ticket resolved), as
     its publisher says; `state` is the tool's own word for it."""
@@ -79,23 +82,38 @@ def _no_fetch(kind: str, ids: list[str]) -> list["Entity"]:
     return []
 
 
-def _named(texts: Iterable[str], patterns: dict[str, re.Pattern[str]]) -> list[Ref]:
-    """The linking entities `texts` name by id, in order, once each."""
+Handles = Mapping[tuple[str, str], list[Ref]]
+"""The entities of each kind by `handle` (the text that names them: a ticket's key)."""
+
+
+def _handle(entity: Entity) -> str | None:
+    handle = entity.attrs.get("handle")
+    return handle if isinstance(handle, str) else None
+
+
+def _named(
+    texts: Iterable[str], patterns: dict[str, re.Pattern[str]], handles: Handles
+) -> list[Ref]:
+    """The linking entities `texts` name, in order, once each: those whose `handle` it is,
+    or, for text no entity in the graph has as its handle, the ref with that text as id."""
     return list(
         dict.fromkeys(
-            Ref(kind=kind, id=match[0])
+            ref
             for text in texts
             for kind, pattern in patterns.items()
             for match in pattern.finditer(text)
+            for ref in handles.get((kind, match[0])) or [Ref(kind=kind, id=match[0])]
         )
     )
 
 
-def _with_mentions(entity: Entity, patterns: dict[str, re.Pattern[str]]) -> Entity:
-    """The entity pointing, too, at each linking entity whose id its mentions name."""
+def _with_mentions(
+    entity: Entity, patterns: dict[str, re.Pattern[str]], handles: Handles
+) -> Entity:
+    """The entity pointing, too, at each linking entity its mentions name."""
     if not entity.mentions or not patterns:
         return entity
-    refs = list(dict.fromkeys([*entity.refs, *_named(entity.mentions, patterns)]))
+    refs = list(dict.fromkeys([*entity.refs, *_named(entity.mentions, patterns, handles)]))
     return entity.model_copy(update={"refs": refs}) if len(refs) != len(entity.refs) else entity
 
 
@@ -120,7 +138,12 @@ class Graph:
         self._linking = dict(linking or {})
         self._hiding = set(hiding)
         self._patterns = {k: re.compile(p) for k, p in self._linking.items() if p is not None}
-        entities = [_with_mentions(e, self._patterns) for e in entities]
+        entities = list(entities)
+        self._handles: dict[tuple[str, str], list[Ref]] = defaultdict(list)
+        for entity in entities:
+            if (handle := _handle(entity)) is not None:
+                self._handles[(entity.ref.kind, handle)].append(entity.ref)
+        entities = [_with_mentions(e, self._patterns, self._handles) for e in entities]
         self._by_ref: dict[Ref, Entity] = {}
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
@@ -203,10 +226,15 @@ class Graph:
         )
 
     def named(self, text: str) -> list[Ref]:
-        """The linking entities `text` names by id, as an entity's `mentions` would find them,
+        """The linking entities `text` names (by handle), as an entity's `mentions` would find them,
         whether or not they're in the graph: e.g. the tickets a todo names by key. For a
         plugin to find another's ids in text without knowing their pattern."""
-        return _named([text], self._patterns)
+        return _named([text], self._patterns, self._handles)
+
+    def by_handle(self, kind: str, handle: str) -> list[Entity]:
+        """The entities of `kind` whose `handle` is `handle`: e.g. the tickets keyed `APP-12`,
+        one per tracker that has such a key."""
+        return [e for ref in self._handles.get((kind, handle), []) if (e := self._by_ref.get(ref))]
 
     def url_for(self, kind: str, id: str) -> str | None:
         """The entity's URL if it's in the graph, else whatever a plugin can make of it, e.g.

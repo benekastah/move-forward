@@ -7,7 +7,15 @@ from pathlib import Path
 import move_forward
 
 PACKAGE = Path(move_forward.__file__).parent
-API_MODULES = ["api", "api.html", "api.shell", "api.http", "api.localtime", "api.keychain"]
+API_MODULES = [
+    "api",
+    "api.html",
+    "api.shell",
+    "api.http",
+    "api.localtime",
+    "api.keychain",
+    "api.kinds",
+]
 
 
 def test_every_name_the_api_offers_resolves() -> None:

@@ -8,12 +8,12 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 from pathlib import Path
 
 from ...api import Action, Entity, Graph, Item, Model, Panel, Ref, attrs
+from ...api.kinds import PULL_REQUEST as PR
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
 
 BRANCH = "branch"
 STACK_BRANCH = "stack_branch"
-PR = "pr"
 REPO = "repo"
 BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""

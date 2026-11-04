@@ -1,12 +1,11 @@
 """The entity kinds jira publishes, with their attributes; see `docs/entities.md`."""
 
-from ...api import Model
+from ...api.kinds import Ticket
 
 
-class TicketAttrs(Model):
-    """A `ticket`: one of my open Jira issues, by key."""
+class JiraTicket(Ticket):
+    """A `ticket` (the ticket family): one of my open Jira issues; `handle` is its key."""
 
-    summary: str
     status: str
     status_category: str
     """Jira's `new`, `indeterminate` or `done`."""

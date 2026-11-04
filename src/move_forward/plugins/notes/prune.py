@@ -11,12 +11,12 @@ known as such, so an entry naming only tickets goes once it hasn't been updated 
 from datetime import UTC, date, datetime
 
 from ...api import Entity, Graph, Model
+from ...api.kinds import PULL_REQUEST as PR
+from ...api.kinds import TICKET
 from .models import Entry, Ice
 from .panels import entry_keys
 from .repository import NotesRepository
 
-PR = "pr"
-TICKET = "ticket"
 ENTRY = "entry"
 BRANCH = "branch"
 

@@ -4,9 +4,9 @@ ties a PR to its branch, and an entry's links change, so notes finds them after 
 refresh and when something is iced."""
 
 from ...api import Graph, Model, Ref
+from ...api.kinds import PULL_REQUEST as PR
 from .models import Ice
 
-PR = "pr"
 REPO = "repo"
 BRANCH = "branch"
 STACK_BRANCH = "stack_branch"

@@ -7,12 +7,12 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 from datetime import datetime
 
 from ...api import Action, Graph, Item, Model, Panel, Ref, Signals, age
+from ...api.kinds import PULL_REQUEST as PR
 from .config import GitConfig
 from .models import Branch, LocalRepo, LocalSnapshot
 
 TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
-PR = "pr"
 BRANCH = "branch"
 STACK_BRANCH = "stack_branch"
 """git_stack's kind for a branch git-stack tracks."""
@@ -30,7 +30,7 @@ class _PrView(Model):
     url: str | None = None
     state: str | None = None
     repo: str
-    number: int
+    handle: str
     head: str
     head_oid: str | None = None
     mine: bool
@@ -232,7 +232,7 @@ class Builder:
         ):
             return None
         return Item(
-            title=f"{branch.name}: PR #{pr.number} moved on GitHub; pull it",
+            title=f"{branch.name}: PR {pr.handle} moved on GitHub; pull it",
             url=pr.url,
             subtitle=f"{repo.dir} · last commit here {age(self.now, branch.committed_at)} ago",
             badges=["behind GitHub"],

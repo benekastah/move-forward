@@ -1,0 +1,87 @@
+"""The families of entity kinds core models: what more than one tool may represent (a pull
+request, a ticket, a person). A plugin's kind named for a family must extend its model,
+adding the plugin's own fields, so every publisher's entities of the family carry what the
+family's model says and other plugins read them through it. See `docs/entities.md`."""
+
+from dataclasses import dataclass
+
+from pydantic import Field
+
+from .domain import Model
+
+PULL_REQUEST = "pr"
+"""The family of pull requests (and merge requests): shown as "PR"."""
+TICKET = "ticket"
+"""The family of tickets (issues), which link what's about them."""
+PERSON = "person"
+"""The family of people."""
+
+
+class PullRequest(Model):
+    """What every pull request has, whoever publishes it."""
+
+    handle: str
+    """How its tool shows it, e.g. `#7`: for display, not identity (that's its URL)."""
+    repo: str
+    """`owner/name`."""
+    head: str
+    """The branch it merges."""
+    head_oid: str | None = None
+    """The commit its head branch is at in its tool, as of the last refresh."""
+    draft: bool
+    mine: bool
+    """I opened it."""
+    changes_requested: bool
+    created_at: str
+    """ISO datetime."""
+    merged_at: str | None
+    requested_users: list[str] = Field(default_factory=list[str])
+    requested_teams: list[str] = Field(default_factory=list[str])
+    """A team's top-level name where the plugin maps it, else the tool's own name for it."""
+    review_blockers: list[str] | None = None
+    """On my open PRs only: why reviewers shouldn't be nudged yet; empty when it's in order."""
+    last_review_activity: str | None = None
+    """On my open PRs only: the latest review request, review or human comment."""
+    failing_policy_checks: list[str] | None = None
+    """On my open PRs only: the failing checks that report review policy."""
+    stale_review_hours: int | None = None
+    """On my open PRs only: how long review may be quiet before it's nudgeable."""
+    progress: str | None = None
+    """On my open PRs only: `draft`, `ready to merge`, `CI failing` or `in review`."""
+    review_stale: bool | None = None
+    """On my open PRs only: quiet for `stale_review_hours`."""
+
+
+class Ticket(Model):
+    """What every ticket has, whoever publishes it."""
+
+    handle: str
+    """How its tool shows it, e.g. `APP-12`: also what text names it by."""
+    summary: str
+
+
+class Person(Model):
+    """What every person has, whoever publishes them."""
+
+    handle: str
+    """Their name in the tool, e.g. a login."""
+    email: str | None = None
+
+
+@dataclass(frozen=True)
+class Family:
+    name: str
+    label: str
+    """What the page and the CLI call it, e.g. "PR"."""
+    model: type[Model]
+
+
+FAMILIES = {
+    family.name: family
+    for family in (
+        Family(PULL_REQUEST, "PR", PullRequest),
+        Family(TICKET, "ticket", Ticket),
+        Family(PERSON, "person", Person),
+    )
+}
+"""Every family, by name."""

@@ -43,6 +43,7 @@ extend-select = ["I", "UP", "B", "C4", "SIM", "TID251"]
 "move_forward.https".msg = "plugins import from move_forward.api"
 "move_forward.init".msg = "plugins import from move_forward.api"
 "move_forward.keychain".msg = "plugins import from move_forward.api"
+"move_forward.kinds".msg = "plugins import from move_forward.api"
 "move_forward.localtime".msg = "plugins import from move_forward.api"
 "move_forward.markdown".msg = "plugins import from move_forward.api"
 "move_forward.notifications".msg = "plugins import from move_forward.api"

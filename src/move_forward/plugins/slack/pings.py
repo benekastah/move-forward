@@ -11,10 +11,9 @@ from typing import Literal
 from pydantic import Field
 
 from ...api import Graph, Item, Model, Panel, Ref, Signals, age
+from ...api.kinds import PULL_REQUEST as PR
 from .config import SlackConfig
 from .models import Contact, Ping, TeamChannel
-
-PR = "pr"
 
 
 class PingTarget(Model):
@@ -50,7 +49,7 @@ class PrView(Model):
     url: str | None = None
     state: str | None = None
     repo: str
-    number: int
+    handle: str
     head: str
     draft: bool
     mine: bool
@@ -206,7 +205,7 @@ class Pinger:
                 Item(
                     title=pr.title,
                     url=pr.url,
-                    subtitle=f"{pr.repo}#{pr.number}",
+                    subtitle=f"{pr.repo}{pr.handle}",
                     details=details,
                     rank=-since.timestamp(),
                     subjects=[Ref(kind=PR, id=pr.id)],
