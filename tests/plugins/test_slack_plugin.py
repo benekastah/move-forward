@@ -213,3 +213,31 @@ def test_the_nudge_panels_description_says_how_long_a_review_must_be_quiet() -> 
     assert description(24).endswith("quiet for a day.")
     assert description(72).endswith("quiet for 3 days.")
     assert description(6).endswith("quiet for 6 hours.")
+
+
+def test_the_workspace_url_must_be_https() -> None:
+    assert SlackConfig(workspace_url="https://acme.slack.com").workspace_url
+    assert SlackConfig(workspace_url="").workspace_url == ""
+    for bad in ("http://acme.slack.com", "javascript:alert(1)", "acme.slack.com"):
+        with pytest.raises(ValueError, match="https://"):
+            SlackConfig(workspace_url=bad)
+
+
+def test_open_slack_is_only_a_link_for_an_http_url() -> None:
+    def form(link: str | None) -> str:
+        target = slack_plugin.PingTarget(
+            kind="user",
+            name="alice",
+            slack_link=link,
+            destination="alice (DM)",
+            ping_kind="first",
+            message="hi",
+        )
+        ping = slack_plugin.PrPing(
+            pr_url="https://x/pull/1", title="t", targets=[target], blockers=[], stale=True
+        )
+        return slack_plugin._target_form(ping, target, NOW)
+
+    assert "href='https://acme.slack.com/archive/C1'" in form("https://acme.slack.com/archive/C1")
+    assert "javascript" not in form("javascript:alert(1)")
+    assert "no Slack link known" in form("javascript:alert(1)")

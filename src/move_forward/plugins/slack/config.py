@@ -38,6 +38,13 @@ class SlackConfig(Strict):
     """The channel of a team nothing else names one for, from its name: e.g. `#team-{team}`.
     Empty means no guess."""
 
+    @field_validator("workspace_url")
+    @classmethod
+    def _https(cls, value: str) -> str:
+        if value and not value.startswith("https://"):
+            raise ValueError(f"{value!r} must be an https:// URL, e.g. https://example.slack.com")
+        return value
+
     @field_validator("team_channel")
     @classmethod
     def _pattern(cls, value: str) -> str:

@@ -76,7 +76,7 @@ def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> str:
     open_link = (
         f"<a class='button' href='{e(target.slack_link)}' target='_blank' rel='noopener'>"
         "Open Slack</a>"
-        if target.slack_link
+        if render.linkable(target.slack_link)
         else "<span class='target-note'>no Slack link known for this target</span>"
     )
     return (

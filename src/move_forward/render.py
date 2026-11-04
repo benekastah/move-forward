@@ -268,7 +268,7 @@ def local_path(url: str) -> bool:
     )
 
 
-def _linkable(url: str | None) -> bool:
+def linkable(url: str | None) -> bool:
     """Whether `url` may be a link: http(s), or a path on this dashboard. Anything else (a
     `javascript:` URL, say, should one ever reach a plugin's data) is shown as text."""
     return url is not None and (url.startswith(("https://", "http://")) or local_path(url))
@@ -288,7 +288,7 @@ def _badge(text: str) -> str:
 
 
 def _link_action(action: Action) -> str:
-    if not _linkable(action.href):
+    if not linkable(action.href):
         return ""
     title = f" title='{_e(action.title)}'" if action.title else ""
     return (
@@ -341,7 +341,7 @@ def _link(link: Link) -> str:
     """A link; a PR's gets its state as a class (merged and closed are struck through)."""
     classes = [c for c, on in (("strong", link.strong), (link.pr_state, True)) if on and c]
     cls = f" class='{' '.join(classes)}'" if classes else ""
-    if not _linkable(link.url):
+    if not linkable(link.url):
         return f"<span{cls}>{_e(link.text)}</span>"
     return f"<a href='{_e(link.url)}'{cls} target='_blank' rel='noopener'>{_e(link.text)}</a>"
 
@@ -349,7 +349,7 @@ def _link(link: Link) -> str:
 def _item(item: Item, back: str = "", at: str = "", pos: int | None = None) -> str:
     title = (
         f"<a href='{_e(item.url)}' target='_blank' rel='noopener'>{_e(item.title)}</a>"
-        if _linkable(item.url)
+        if linkable(item.url)
         else _e(item.title)
     )
     pending = f" data-pending='{_e(item.pending)}'" if item.pending else ""
