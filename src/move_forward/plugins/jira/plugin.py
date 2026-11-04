@@ -84,15 +84,13 @@ def _advance_rollout(issue: JiraIssue, prs: list[_PrView]) -> Item:
     """The item for a ticket in rollout with PRs still open, listing where each is. Low
     urgency, unless one is ready to merge: merging the next one is the step. Act now joins it
     to the best item about one of its PRs ("Merge, then: Advance the rollout")."""
-    lines = [f"{p.progress or p.state}: #{p.number}" for p in prs]
     ready = any(p.progress == "ready to merge" for p in prs)
-    lines.sort(key=lambda line: not line.startswith("ready to merge"))
+    ordered = sorted(prs, key=lambda p: p.progress != "ready to merge")  # the step first
     return Item(
         title=f"{issue.key} {issue.summary}",
         url=issue.url,
         subtitle=f"{issue.status}: PRs still open",
-        details=lines,
-        links=[Link(text=f"#{p.number}", url=p.url or p.id) for p in prs],
+        links=[_state_link(p) for p in ordered],
         subjects=[ticket_ref(issue.key)],
         signals=Signals(
             verb="Advance the rollout",
@@ -100,6 +98,11 @@ def _advance_rollout(issue: JiraIssue, prs: list[_PrView]) -> Item:
             effort="minutes" if ready else "hour",
         ),
     )
+
+
+def _state_link(pr: _PrView) -> Link:
+    """A PR's link, saying where it is: "ready to merge #123", "draft #124", "merged #120"."""
+    return Link(text=f"{pr.progress or pr.state} #{pr.number}", url=pr.url or pr.id)
 
 
 def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) -> Item:
@@ -111,7 +114,7 @@ def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) ->
         url=issue.url,
         subtitle=f"{issue.status}: all PRs merged",
         details=["all PRs merged; close once monitoring is done"],
-        links=[Link(text=f"#{p.number}", url=p.url or p.id) for p in prs],
+        links=[_state_link(p) for p in prs],
         subjects=[ticket_ref(issue.key)],
         actions=[
             Action(
@@ -127,6 +130,27 @@ def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) ->
     )
 
 
+def rollouts(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
+    """Tickets in a rollout status, with where each of their PRs is."""
+    items: list[Item] = []
+    for issue in snapshot.issues:
+        if not in_status(issue, config.status_rollout):
+            continue
+        prs = [p for p in graph.view_related(ticket_ref(issue.key), PR, _PrView) if p.mine]
+        if any(p.state == "open" for p in prs):
+            items.append(_advance_rollout(issue, prs))
+        elif any(p.state == "merged" for p in prs):
+            items.append(_finish_rollout(config, issue, prs))
+    return Panel(
+        key="rollouts",
+        priority=121,  # after the transitions
+        act_now=True,
+        title="Rollouts",
+        description="Tickets in a rollout status and where their PRs are",
+        items=items,
+    )
+
+
 def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
     items: list[Item] = []
     for issue in snapshot.issues:
@@ -138,11 +162,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
         targets: list[str] = []
         closing = False
         if in_status(issue, config.status_rollout):
-            if open_prs:
-                items.append(_advance_rollout(issue, prs))
-            elif merged:
-                items.append(_finish_rollout(config, issue, prs))
-            continue
+            continue  # `rollouts` has it
         if (
             in_status(issue, config.status_in_progress)
             and open_prs
@@ -414,7 +434,11 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     ) -> list[Panel]:
         if snapshot is None:
             return []
-        return [transitions(ctx.config, snapshot, graph), what_next(ctx.config, snapshot, ctx.now)]
+        return [
+            transitions(ctx.config, snapshot, graph),
+            rollouts(ctx.config, snapshot, graph),
+            what_next(ctx.config, snapshot, ctx.now),
+        ]
 
     def act_now(
         self,

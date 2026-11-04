@@ -32,8 +32,8 @@ matches a role if its status is any of them (without regard to case), and a move
 first one the ticket can move to. A ticket in
 `status_blocked` counts as blocked (in What next and Act now) even without blocker links.
 A ticket in `status_rollout` (default `["Rollout"]`, empty: off) is waiting on monitoring: it is
-never proposed for closing, nothing is suggested while it has open PRs, and once they have
-all merged one low-urgency Act now item, "Finish the rollout", offers to close it. Nothing
+never proposed for closing, and has its own panel, Rollouts: "Advance the rollout" while it has
+open PRs, and once they have all merged "Finish the rollout", which offers to close it. Nothing
 moves a ticket into rollout, and What next ranks it below unblocked work.
 `blocked_by_links` (e.g. `["depends on"]`) names more links, as the blocked ticket sees
 them, that mean "blocked by", besides "is blocked by".
@@ -58,6 +58,10 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
   naming the statuses the ticket can go to, when there is none). A ticket in progress or
   in review whose only PRs were closed without merging is flagged too ("reopen it or move
   the ticket back"; in review, with a button back to in progress).
+- **Rollouts**: tickets in a `status_rollout` status, each with its PRs as links saying where
+  each is ("ready to merge #123", "draft #124", "merged #120"): "Advance the rollout" while some are
+  open (low urgency, raised when one is ready to merge), "Finish the rollout" with a Close button
+  once all have merged.
 - **What next**: my tickets (with their due dates), incidents (by escalation label, if configured), then bugs,
   then unblocked work.
 

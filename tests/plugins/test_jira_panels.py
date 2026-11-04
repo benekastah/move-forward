@@ -12,6 +12,7 @@ from conftest import (
     snapshot,
     stored,
     thread,
+    titles,
 )
 
 from move_forward import refresh
@@ -179,7 +180,7 @@ def test_a_ticket_in_rollout_is_closed_by_hand_once_its_prs_merged() -> None:
             issues=[issue("APP-1", status="Rollout"), issue("APP-3", status="Rollout")]
         ),  # APP-3 has no PRs: nothing to say
     )
-    [item] = panel(dashboard, "jira.jira_transitions").items
+    [item] = panel(dashboard, "jira.rollouts").items
     assert item.title.startswith("APP-1")
     assert item.details == ["all PRs merged; close once monitoring is done"]
     assert [(a.label, a.fields["to"]) for a in item.actions if a.name == "jira/transition"] == [
@@ -201,11 +202,13 @@ def test_a_rollout_with_open_prs_lists_them_and_rises_when_one_is_ready_to_merge
             issues=[issue("APP-2", status="Rollout"), issue("APP-3", status="Rollout")]
         ),
     )
-    items = {i.title.split()[0]: i for i in panel(dashboard, "jira.jira_transitions").items}
-    assert items["APP-2"].details == ["ready to merge: #2"]
+    assert titles(dashboard, "jira.jira_transitions") == []  # rollouts are their own panel
+    items = {i.title.split()[0]: i for i in panel(dashboard, "jira.rollouts").items}
+    assert [(l.text, l.url) for l in items["APP-2"].links] == [("ready to merge #2", ready.url)]
+    assert items["APP-2"].details == []  # the links say where each PR is
     assert items["APP-2"].signals and items["APP-2"].signals.verb == "Advance the rollout"
     assert (items["APP-2"].signals.importance, items["APP-2"].signals.effort) == (0, "minutes")
-    assert items["APP-3"].details == ["in review: #3"]
+    assert [l.text for l in items["APP-3"].links] == ["in review #3"]
     assert items["APP-3"].signals and items["APP-3"].signals.importance == -1
     # Act now joins it to the PR's own Merge item, not a second line
     titles_now = [i.title for i in dashboard.act_now()]
