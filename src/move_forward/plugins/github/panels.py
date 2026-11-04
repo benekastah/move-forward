@@ -440,6 +440,13 @@ class Builder:
                 problems.append(f"no {' or '.join(prefixes)} line for {keys[0]}")
             if not pr.body.strip():
                 problems.append("empty description")
+            idle = self.now - pr.updated_at
+            if (
+                pr.is_draft
+                and self.config.stale_draft_days
+                and idle >= timedelta(days=self.config.stale_draft_days)
+            ):
+                problems.append(f"stale draft: untouched {age(self.now, pr.updated_at)}")
             if size_label := next((x for x in pr.labels if x in self.config.split_pr_labels), None):
                 problems.append(f"worth splitting: labeled {size_label}")
             elif pr.size >= self.config.split_pr_lines:

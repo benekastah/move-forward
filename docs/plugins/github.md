@@ -41,7 +41,8 @@ an email found is kept, and a lookup that found none is tried again after `prune
 `stale_review_hours` says when a review request can be nudged,
 `quick_review_max_lines`/`_files` and `hour_review_max_lines`/`_files` size a review (minutes
 within the quick limits, an hour within the hour ones, else a day; they grow slowly because
-complexity grows faster than size), `split_pr_suggest_lines` and `split_pr_lines` (my PRs at least that many lines "may need
+complexity grows faster than size), `stale_draft_days` (my drafts untouched that long get a "stale draft" line; 0: off),
+`split_pr_suggest_lines` and `split_pr_lines` (my PRs at least that many lines "may need
 splitting" or are "worth splitting", in PR housekeeping) and `split_pr_labels` (labels that
 mean worth splitting whatever the lines), and `reviewer_history_days`
 how far back commits count for reviewer suggestions. `[github.teams]` gives a team's GitHub

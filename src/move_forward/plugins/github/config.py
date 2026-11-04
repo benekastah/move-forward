@@ -10,6 +10,7 @@ DEFAULT_HISTORY_DAYS = 14
 DEFAULT_POLICY_CHECKS: list[str] = []
 DEFAULT_PLACEHOLDER_LABELS: list[str] = []
 DEFAULT_STALE_REVIEW_HOURS = 24
+DEFAULT_STALE_DRAFT_DAYS = 14
 DEFAULT_MERGE_QUEUE_EVICTION_DAYS = 2
 DEFAULT_QUICK_REVIEW_MAX_LINES = 100
 DEFAULT_QUICK_REVIEW_MAX_FILES = 5
@@ -81,6 +82,9 @@ class GitHubConfig(Strict):
     merge_queue_eviction_days: int = Field(default=DEFAULT_MERGE_QUEUE_EVICTION_DAYS, ge=0)
     """How long a removal from the merge queue stays in CI failures, e.g. `2` days, unless
     the PR is back in the queue, was queued again, or its checks pass now."""
+    stale_draft_days: int = Field(default=DEFAULT_STALE_DRAFT_DAYS, ge=0)
+    """My draft PRs untouched for this many days, e.g. `14`, get a "stale draft" line in PR
+    housekeeping. 0: never."""
     reviewer_history_days: int = DEFAULT_REVIEWER_HISTORY_DAYS
     """How far back commits count when suggesting reviewers."""
 

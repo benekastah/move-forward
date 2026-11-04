@@ -47,6 +47,7 @@ org = "example-org"
 # email_domains = []                     # reviewers' email domains, if not just your email's
 # stale_review_hours = 24
 # merge_queue_eviction_days = 2        # how long a merge-queue removal stays in CI failures
+# stale_draft_days = 14                # my drafts untouched this long get a housekeeping line (0: off)
 # quick_review_max_lines = 100           # a review within these limits takes minutes
 # quick_review_max_files = 5
 # hour_review_max_lines = 300            # within these, an hour; beyond, a day

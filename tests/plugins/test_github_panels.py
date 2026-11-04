@@ -633,3 +633,18 @@ def test_conflicts_skip_drafts_and_a_stacked_pr_is_told_to_restack() -> None:
         "Resolve conflicts: PR 4",
         "Restack the stack: PR 2",
     ]
+
+
+def test_housekeeping_flags_my_drafts_untouched_for_stale_draft_days() -> None:
+    stale = pr(
+        1, is_draft=True, body="x", updated_at=NOW - timedelta(days=15), rollup_state="FAILURE"
+    )
+    fresh = pr(
+        2, is_draft=True, body="x", updated_at=NOW - timedelta(days=13), rollup_state="FAILURE"
+    )
+    old_open = pr(3, body="x", updated_at=NOW - timedelta(days=40))  # not a draft
+    snap = snapshot(mine=[stale, fresh, old_open])
+    details = {i.title: i.details for i in panel(build(github=snap), "github.metadata").items}
+    assert details == {"PR 1": ["stale draft: untouched 15d"]}
+    off = build(github=snap, stale_draft_days=0)
+    assert titles(off, "github.metadata") == []
