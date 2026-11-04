@@ -136,8 +136,9 @@ def needs_re_review(pr: PullRequest, me: str) -> str | None:
         return None
     if me in pr.requested_users:
         return "review re-requested"
-    if pr.last_commit_at and pr.last_commit_at > last:
-        return f"pushed {localtime.day(pr.last_commit_at)} after my review"
+    pushed = last_push_at(pr)
+    if pushed and pushed > last:
+        return f"pushed {localtime.day(pushed)} after my review"
     return None
 
 

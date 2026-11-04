@@ -3,6 +3,7 @@
 Pure functions of the snapshot, the derived snapshot and the graph; no I/O.
 """
 
+from collections.abc import Collection
 from datetime import datetime, timedelta
 
 from pydantic import Field
@@ -20,6 +21,7 @@ from .prs import (
     has_conflicts,
     has_ticket_link_line,
     is_bot,
+    last_push_at,
     merge_blockers,
     needs_re_review,
     review_required,
@@ -95,27 +97,38 @@ def review_effort(lines: int, files: int, config: GitHubConfig) -> Effort:
     return "day"
 
 
-def requested_of(pr: PullRequest, me: str) -> datetime | None:
-    """When my review was last asked for on the PR, by name; None if it never was."""
+def requested_of(pr: PullRequest, me: str, team_slugs: Collection[str] = ()) -> datetime | None:
+    """When my review was last asked for on the PR, of me by name or of one of my teams
+    (`team_slugs`); None if it never was."""
     times = [
         e.at
         for e in pr.events
-        if e.type == "ReviewRequestedEvent" and e.reviewer_kind == "user" and e.reviewer == me
+        if e.type == "ReviewRequestedEvent"
+        and (
+            (e.reviewer_kind == "user" and e.reviewer == me)
+            or (e.reviewer_kind == "team" and e.reviewer in team_slugs)
+        )
     ]
     return max(times, default=None)
 
 
 def _review(
-    pr: PullRequest, me: str, config: GitHubConfig, part: TeamPrScore | None = None
+    pr: PullRequest,
+    me: str,
+    config: GitHubConfig,
+    part: TeamPrScore | None = None,
+    waiting_since: datetime | None = None,
+    team_slugs: Collection[str] = (),
 ) -> Signals:
-    """Review it: its author waits, since my review was asked for. The effort is that of
-    the part I or my teams own (`part`), when there is one."""
+    """Review it: its author waits, since my review was asked for (or, for a re-review after
+    a push, since the push: `waiting_since`). The effort is that of the part I or my teams
+    own (`part`), when there is one."""
     lines, files = (part.part_lines, part.part_files) if part else (pr.size, pr.changed_files)
     return Signals(
         verb=REVIEW,
         effort=review_effort(lines, files, config),
         waiting=[pr.author] if pr.author else [],
-        waiting_since=requested_of(pr, me),
+        waiting_since=waiting_since or requested_of(pr, me, team_slugs),
     )
 
 
@@ -141,6 +154,10 @@ class Builder:
     def _entries(self, pr: PullRequest) -> list[_EntryView]:
         """The work entries about the PR or its tickets."""
         return self.graph.view_related(pr_ref(pr), ENTRY, _EntryView)
+
+    def _slugs(self) -> list[str]:
+        """My teams' GitHub slugs."""
+        return [self.config.slug(t) for t in self.teams]
 
     def _part(self, pr: PullRequest) -> TeamPrScore | None:
         """The part of a PR I or my teams own in CODEOWNERS; None when there is none."""
@@ -168,7 +185,9 @@ class Builder:
                         pr,
                         details=["review requested", *self._my_part(pr)],
                         rank=pr.updated_at.timestamp(),
-                        signals=_review(pr, self.me, self.config, self._part(pr)),
+                        signals=_review(
+                            pr, self.me, self.config, self._part(pr), team_slugs=self._slugs()
+                        ),
                         fingerprint=pr.head_oid,
                     )
                 )
@@ -182,7 +201,16 @@ class Builder:
                             pr,
                             details=[reason, *self._my_part(pr)],
                             rank=pr.updated_at.timestamp(),
-                            signals=_review(pr, self.me, self.config, self._part(pr)),
+                            signals=_review(
+                                pr,
+                                self.me,
+                                self.config,
+                                self._part(pr),
+                                waiting_since=last_push_at(pr)
+                                if reason.startswith("pushed")
+                                else None,
+                                team_slugs=self._slugs(),
+                            ),
                             fingerprint=pr.head_oid,
                         )
                     )

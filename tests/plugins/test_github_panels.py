@@ -574,3 +574,28 @@ def test_feedback_is_judged_from_the_latest_push_and_a_thread_reply_clears_nothi
     )
     items = {i.title: i.details for i in panel(built, "github.feedback").items}
     assert items == {"PR 1": ["comments by bob"], "PR 2": ["comments by alice"]}
+
+
+def test_a_review_waits_since_the_push_or_the_request_of_me_or_my_team() -> None:
+    reviewed_at = NOW - timedelta(days=3)
+    pushed_at = NOW - timedelta(hours=2)
+    requested_at = NOW - timedelta(hours=7)
+    repushed = pr(
+        1,
+        author="alice",
+        reviews=[approved_review(ME, reviewed_at)],
+        last_commit_at=NOW - timedelta(days=4),  # an old commit, force-pushed two hours ago
+        events=[event("HeadRefForcePushedEvent", pushed_at)],
+    )
+    by_team = pr(
+        2,
+        author="bob",
+        events=[event("ReviewRequestedEvent", requested_at, reviewer_kind="team", reviewer="core")],
+    )
+    built = build(github=snapshot(direct_requests=[by_team], reviewed_by_me=[repushed]))
+    waiting = {
+        i.title: i.signals.waiting_since
+        for i in panel(built, "github.reviews_for_me").items
+        if i.signals
+    }
+    assert waiting == {"PR 1": pushed_at, "PR 2": requested_at}
