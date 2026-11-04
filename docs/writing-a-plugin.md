@@ -79,8 +79,12 @@ class LinearConfig(Strict):
   required ones, commented, written when the plugin isn't chosen).
 - Secrets never go in the config. Give the section `token_env` and `keychain_service`, as
   jira and slack do, and read the token with `keychain.token(config, email)`: then
-  `mfd token set <plugin>` stores it and `mfd token check` finds it. Anything sent with a
+  `mfd token set <plugin>` stores it and `mfd token check` finds it (a section that keeps
+  them under other names overrides `token_settings(config)`). Anything sent with a
   token must go over HTTPS (`api.http`).
+- A section mapping the top-level teams to the tool's names for them (github's
+  `[github.teams]`) names that field in `teams_field`, so the config refuses a team it
+  doesn't have.
 - A tool whose sign-in sends the browser back to the dashboard (OAuth) is given
   `ctx.dashboard_url` (`http://localhost:8765`, or `https://` when it serves HTTPS) to
   build its redirect URL from, and a page of the plugin's to land on.
@@ -114,8 +118,10 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   a logger named for it (`ctx.log`), and `ctx.data_dir`, a private directory of its own for
   files, made on first use beside the database.
 
-- A plugin that collects has a `refresh_seconds` setting in its section (with a default
-  that suits its tool): the server refreshes it that often, on its own schedule.
+- A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
+  setting in its section (with a default that suits its tool): the server refreshes it
+  that often, on its own schedule. One scheduled some other way overrides
+  `refresh_seconds(ctx)`.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
   request answered "not modified", another plugin's entities in the graph) sets
   `change_check_seconds` and implements `changed(req)`: the server asks that often, and

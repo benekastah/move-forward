@@ -2,11 +2,14 @@
 
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
-from move_forward import cli, keychain
+from move_forward import cli, keychain, registry
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.shell import CommandError
 
 
@@ -183,3 +186,28 @@ def test_a_store_that_refuses_the_secret_doesnt_say_it(monkeypatch: pytest.Monke
     with pytest.raises(CommandError) as refused:
         keychain.write("svc", "me@x", "s3cret-token")
     assert "s3cret-token" not in str(refused.value) and "failed on" in str(refused.value)
+
+
+@dataclass
+class _ElsewhereToken:
+    token_env: str = "GITHUB_PAT"
+    keychain_service: str = "move-forward-github"
+
+
+class _GitHubWithAToken(GitHubPlugin):
+    """github, keeping a token its section doesn't name as `token_env`."""
+
+    def token_settings(self, config: GitHubConfig) -> keychain.TokenSettings | None:
+        return _ElsewhereToken()
+
+
+def test_mfd_token_finds_a_plugins_token_by_its_token_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    swap = {"github": _GitHubWithAToken()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    monkeypatch.setenv("GITHUB_PAT", "x")
+    config = _config(tmp_path)
+    config.write_text(config.read_text() + '[github]\norg = "acme"\n')
+    assert cli.main(["-c", str(config), "token", "check"]) == 0
+    assert "github: from $GITHUB_PAT" in capsys.readouterr().out

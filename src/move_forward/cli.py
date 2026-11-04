@@ -10,6 +10,8 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
+from pydantic import BaseModel
+
 from . import auth, init, keychain, localtime, priority, registry, signin, snooze, supervisor, tls
 from . import config as config_module
 from .act_now import PRIORITIES
@@ -189,7 +191,7 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     token_commands = token_parser.add_subparsers(dest="token_command", required=True)
     set_parser = token_commands.add_parser("set", help="ask for a token and store it")
-    set_parser.add_argument("plugin", choices=_token_plugins())
+    set_parser.add_argument("plugin", help="the plugin whose token to store, e.g. jira")
     token_commands.add_parser("check", help="say where each plugin's token is found")
     token_commands.add_parser(
         "rotate", help="make a new dashboard token and sign every browser out"
@@ -202,21 +204,21 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     return parser, plugin_commands
 
 
-def _token_plugins() -> list[str]:
-    """The plugins whose section says where their token is (see `keychain.TokenSettings`)."""
-    fields = set(keychain.TokenSettings.__annotations__)
-    return [p.name for p in registry.PLUGINS if fields <= p.config_model.model_fields.keys()]
+def _token_settings(config: config_module.Config) -> dict[str, keychain.TokenSettings]:
+    """Where each enabled plugin with a token keeps it (`Plugin.token_settings`)."""
+    found: dict[str, keychain.TokenSettings] = {}
+    for plugin in registry.PLUGINS:
+        section: BaseModel | None = getattr(config, plugin.name)
+        if section is not None and (settings := plugin.token_settings(section)) is not None:
+            found[plugin.name] = settings
+    return found
 
 
 def _token(config: config_module.Config, config_path: Path, args: argparse.Namespace) -> int:
     """`mfd token set <plugin>`: ask for the plugin's token without echoing it and store it
     in the system's secret store, for the top-level `email`. `mfd token check`: say where
     each enabled plugin's token is found, without showing it."""
-    sections = {
-        name: section
-        for name in enabled_names(config)
-        if isinstance(section := getattr(config, name), keychain.TokenSettings)
-    }
+    sections = _token_settings(config)
     if args.token_command == "rotate":
         path = auth.token_path(config.db_path)
         auth.load_or_create(path)
@@ -235,7 +237,7 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
         return 0
     section = sections.get(args.plugin)
     if section is None:
-        print(f"[{args.plugin}] isn't in {config_path}", file=sys.stderr)
+        print(f"[{args.plugin}] isn't in {config_path}, or keeps no token", file=sys.stderr)
         return 1
     try:
         secret = getpass.getpass(f"{args.plugin} API token: ").strip()

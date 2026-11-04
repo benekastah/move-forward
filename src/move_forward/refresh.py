@@ -173,13 +173,11 @@ def _wants(e: Enabled, subscribed: set[str]) -> bool:
 
 
 def refresh_seconds(e: Enabled) -> int | None:
-    """How often a plugin refreshes on its own: its section's `refresh_seconds`. None for a
-    plugin that doesn't collect, or has no such setting (one that collects after the plugins
-    it requires may rely on being refreshed with them)."""
-    if e.plugin.snapshot_model is None:
+    """How often a plugin refreshes on its own (`Plugin.refresh_seconds`); None for one that
+    doesn't collect, or doesn't refresh on its own."""
+    if not e.plugin.collects:
         return None
-    seconds: object = getattr(e.ctx.config, "refresh_seconds", None)
-    return seconds if isinstance(seconds, int) else None
+    return call(e.name, "refresh_seconds", lambda: e.plugin.refresh_seconds(e.ctx), None)
 
 
 def to_collect(
@@ -189,7 +187,7 @@ def to_collect(
     on their own, then those that collect after the graph, including any whose `requires`
     are among the first, unless it `watches` them too: then its `changed` decides, right
     after they refresh."""
-    collecting = [e for e in plugins if e.plugin.snapshot_model is not None]
+    collecting = [e for e in plugins if e.plugin.collects]
     first = [
         e
         for e in collecting
@@ -253,7 +251,7 @@ def refresh(
     _dashboard_events(config, db, subscribed, now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
-        if e.name not in collected and e.plugin.snapshot_model is not None:
+        if e.name not in collected and e.plugin.collects:
             continue
         try:
             e.plugin.after_collect(AfterCollectRequest(e.ctx, graph))

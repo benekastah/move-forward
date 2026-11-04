@@ -22,6 +22,7 @@ from . import localtime, private, shell
 from .asking import Asker, InitSetup
 from .db import Database
 from .graph import Entity, Graph, KindSpec, Ref
+from .keychain import TokenSettings
 from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, SnapshotRepository
@@ -380,7 +381,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """SQL scripts creating and changing the plugin's tables, applied in order. Append to it;
     never edit one that has shipped. Tables are prefixed with `name`."""
     snapshot_model: ClassVar[type[BaseModel] | None] = None
-    """S, or None when the plugin fetches nothing and `collect` is never called."""
+    """S, or None when the plugin fetches nothing and `collect` is never called (see
+    `collects`)."""
+    teams_field: ClassVar[str | None] = None
+    """The field of the plugin's section mapping each top-level team to what the tool calls
+    it (`teams`, e.g. `[github.teams]`), so the config can check it names only teams it has;
+    None for a plugin without one."""
     collects_after_graph: ClassVar[bool] = False
     """Whether the snapshot comes from `collect_after` instead of `collect`."""
     collect_timeout_seconds: ClassVar[int] = 300
@@ -415,6 +421,24 @@ class Plugin[C: BaseModel, S: BaseModel]:
     commented out because the plugin wasn't chosen."""
     init_finds_teams: ClassVar[bool] = False
     """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
+
+    @property
+    def collects(self) -> bool:
+        """Whether the plugin fetches anything: it has a `snapshot_model`, so a refresh
+        calls its `collect` (or `collect_after`) and it has a schedule."""
+        return self.snapshot_model is not None
+
+    def refresh_seconds(self, ctx: Context[C]) -> int | None:
+        """How often the plugin refreshes on its own, in seconds; None for never (one that
+        collects after the plugins it requires may rely on being refreshed with them). By
+        default its section's `refresh_seconds`, when it has one."""
+        seconds: object = getattr(ctx.config, "refresh_seconds", None)
+        return seconds if isinstance(seconds, int) else None
+
+    def token_settings(self, config: C) -> TokenSettings | None:
+        """Where the plugin's API token is, for `mfd token`: by default its section, when that
+        has `token_env` and `keychain_service`; None for a plugin with no token."""
+        return config if isinstance(config, TokenSettings) else None
 
     # Refresh
 
