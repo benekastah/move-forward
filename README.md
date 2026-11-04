@@ -234,7 +234,7 @@ Pages (GET, HTML):
 
 | Path | Shows |
 | --- | --- |
-| `/` | The dashboard. `?notice=…` shows a message. |
+| `/` | The dashboard. |
 | `/focus` | Focus mode's category list. |
 | `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
 
@@ -247,9 +247,10 @@ Plugins add pages and buttons of their own, listed on their pages (see
 
 Forms (POST, `application/x-www-form-urlencoded`). A plugin's buttons post to
 `/actions/<plugin>/<action>`; the rest are core's. Each answers `303 See Other`
-to `/`, or to the `back` query parameter when it's a local path, with
-`notice=<outcome>` added; an action that fails is `notice=failed: <reason>`,
-not an error status. A malformed request gets one: `400`, or `413` for a body
+to `/`, or to the `back` query parameter when it's a local path, with its outcome
+in a short-lived cookie the next page shows once (signed, so no other site or app
+on localhost can show a notice of its own); an action that fails says
+`failed: <reason>`, not an error status. A malformed request gets one: `400`, or `413` for a body
 over 64 KiB):
 
 | Path | Fields | Does |

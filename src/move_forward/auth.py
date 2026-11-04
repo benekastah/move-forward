@@ -11,6 +11,7 @@ import os
 import secrets
 import tempfile
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 from .private import is_private, make_private
 
@@ -23,6 +24,9 @@ COOKIE = "move_forward_token"
 COOKIE_MAX_AGE_SECONDS = 400 * 24 * 3600
 """As long as browsers keep a cookie (400 days), so a browser restart doesn't sign me out."""
 BEARER = "Bearer "
+NOTICE_COOKIE = "move_forward_notice"
+NOTICE_MAX_AGE_SECONDS = 60
+"""Long enough for the redirect after an action; a notice not shown by then is stale."""
 
 
 def token_path(db_path: Path) -> Path:
@@ -73,11 +77,16 @@ def from_request(authorization: str | None, cookie: str | None) -> str | None:
     """The token a request carries: its `Authorization: Bearer` header, else its cookie."""
     if authorization and authorization.startswith(BEARER):
         return authorization[len(BEARER) :].strip()
+    return _cookie(cookie, COOKIE)
+
+
+def _cookie(cookie: str | None, wanted: str) -> str | None:
+    """The value of the cookie named `wanted` in a `Cookie` header, if it has one."""
     for part in (cookie or "").split(";"):
         # Parsed by hand: other apps on localhost share our cookies, and `SimpleCookie`
         # drops the whole header (or raises) over one malformed cookie of theirs.
         name, _, value = part.strip().partition("=")
-        if name == COOKIE:
+        if name == wanted:
             return value.strip()
     return None
 
@@ -93,3 +102,34 @@ def set_cookie(token: str, secure: bool = False) -> str:
 
 def login_url(port: int, token: str, scheme: str = "http") -> str:
     return f"{scheme}://127.0.0.1:{port}/login?token={token}"
+
+
+def _sign(token: str, text: str) -> str:
+    return hmac.new(token.encode(), text.encode(), "sha256").hexdigest()
+
+
+def notice_cookie(token: str, notice: str, secure: bool = False) -> str:
+    """The `Set-Cookie` value that shows `notice` on the next page, once. It's signed, since
+    other apps on localhost (any port) can set our cookies too, and a notice of theirs mustn't
+    look like the dashboard's own."""
+    value = f"{_sign(token, notice)}.{quote(notice, safe='')}"
+    cookie = (
+        f"{NOTICE_COOKIE}={value}; Path=/; HttpOnly; SameSite=Strict;"
+        f" Max-Age={NOTICE_MAX_AGE_SECONDS}"
+    )
+    return cookie + ("; Secure" if secure else "")
+
+
+CLEAR_NOTICE = f"{NOTICE_COOKIE}=; Path=/; Max-Age=0"
+"""The `Set-Cookie` value that drops the notice once a page has shown it."""
+
+
+def notice_from(token: str, cookie: str | None) -> str | None:
+    """The notice a request's `Cookie` header carries: "" when it's not signed by `token`,
+    None when there's no notice cookie at all."""
+    value = _cookie(cookie, NOTICE_COOKIE)
+    if not value:
+        return None
+    signature, _, quoted = value.partition(".")
+    notice = unquote(quoted)
+    return notice if hmac.compare_digest(_sign(token, notice), signature) else ""

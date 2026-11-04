@@ -320,9 +320,14 @@ class App:
         plugins = enabled(self.config, self.db, datetime.now(UTC))
         return {path for e in plugins for path in e.plugin.sign_in_pages}
 
-    def plugin_page(self, path: str, query: str) -> str | None:
-        """An enabled plugin's page; None when there's none at `path`."""
-        return plugin_page(self.config, self.db, path, parse_qs(query, keep_blank_values=True))
+    def plugin_page(self, path: str, query: str, notice: str = "") -> str | None:
+        """An enabled plugin's page, with `notice` as its query's; None when there's none at
+        `path`."""
+        params = parse_qs(query, keep_blank_values=True)
+        params = {k: v for k, v in params.items() if k != NOTICE} | (
+            {NOTICE: [notice]} if notice else {}
+        )
+        return plugin_page(self.config, self.db, path, params)
 
     def focus_page(
         self,
@@ -348,13 +353,15 @@ class App:
         return render.banner(*self.certificate_warning())
 
 
-def _back_to_page(query: str, notice: str = "", extra: dict[str, str] | None = None) -> str:
+NOTICE = "notice"
+"""The query parameter a plugin's page reads its notice from (see `App.plugin_page`)."""
+
+
+def _back_to_page(query: str, extra: dict[str, str] | None = None) -> str:
     """Where a POST redirects: the request's `back` path (a focus page) if it's local, else the
-    dashboard, at the panel the request's `at` names. The notice and `extra` parameters ride
-    along either way."""
+    dashboard, at the panel the request's `at` names. The `extra` parameters ride along
+    either way."""
     params: dict[str, str] = dict(extra or {})
-    if notice:
-        params["notice"] = notice
     query_params = parse_qs(query, keep_blank_values=True)
     back = query_params.get("back", [""])[0]
     at = query_params.get("at", [""])[0]
@@ -412,6 +419,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
         def _send(self, status: HTTPStatus, body: str, content_type: str) -> None:
             data = body.encode()
             self.send_response(status)
+            if self._notice_taken:  # one handler answers every request on its connection
+                self.send_header("Set-Cookie", auth.CLEAR_NOTICE)
+                self._notice_taken = False
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
@@ -423,11 +433,25 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
         def _html(self, status: HTTPStatus, body: str) -> None:
             self._send(status, body, "text/html; charset=utf-8")
 
-        def _redirect(self, location: str) -> None:
+        def _redirect(self, location: str, notice: str = "") -> None:
+            """Send the browser to `location`, which shows `notice` (see `_take_notice`)."""
             self.send_response(HTTPStatus.SEE_OTHER)
             self.send_header("Location", location)
+            if notice:
+                cookie = auth.notice_cookie(app.token, notice, app.scheme == "https")
+                self.send_header("Set-Cookie", cookie)
             self.send_header("Content-Length", "0")
             self.end_headers()
+
+        _notice_taken = False
+
+        def _take_notice(self) -> str:
+            """The notice the last redirect left for this page, which it shows once: the
+            answer drops it. A cookie, not a query parameter, so nobody else's link can put
+            words in the dashboard's mouth, and a reload doesn't show it again."""
+            notice = auth.notice_from(app.token, self.headers.get("Cookie"))
+            self._notice_taken = notice is not None
+            return notice or ""
 
         def _refuse_other_sites(self, check_origin: bool) -> bool:
             """Answer 403 to a request from another site; returns whether it did."""
@@ -490,22 +514,21 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 return
             if url.path == "/":
                 query = parse_qs(url.query)
-                notice = query.get("notice", [""])[0]
+                notice = self._take_notice()
                 self._html(HTTPStatus.OK, app.dashboard_page(notice, _spot(query)))
             elif url.path == settings.PATH and app.config_path is not None:
-                notice = parse_qs(url.query).get("notice", [""])[0]
-                self._html(HTTPStatus.OK, settings.page(app.config, notice))
+                self._html(HTTPStatus.OK, settings.page(app.config, self._take_notice()))
             elif url.path == "/focus":
                 params = parse_qs(url.query, keep_blank_values=True)
                 category = params.get("cat", [""])[0]
-                notice = params.get("notice", [""])[0]
+                notice = self._take_notice()
                 kept = params.get(KEPT, [""])[0]
                 page = app.focus_page(category, _int(params, "i"), notice, kept)
                 if page is None:
                     self._html(HTTPStatus.NOT_FOUND, "<p>No such focus category.</p>")
                 else:
                     self._html(HTTPStatus.OK, page)
-            elif (page := app.plugin_page(url.path, url.query)) is not None:
+            elif (page := app.plugin_page(url.path, url.query, self._take_notice())) is not None:
                 self._html(HTTPStatus.OK, page)
             else:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
@@ -555,15 +578,15 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self.end_headers()
             elif url.path == settings.PATH and app.config_path is not None:
                 notice = settings.save(app.config_path, app.config, _form_fields(body))
-                self._redirect(f"{settings.PATH}?{urlencode({'notice': notice})}")
+                self._redirect(settings.PATH, notice)
             elif url.path == "/layout/reset":
                 LayoutRepository(app.db).reset()
-                self._redirect(_back_to_page(url.query, "layout reset"))
+                self._redirect(_back_to_page(url.query), "layout reset")
             elif url.path.startswith("/actions/"):
                 name = url.path[len("/actions/") :]
                 fields = _form_fields(body)
                 notice, extra = app.run_action(name, fields)
-                self._redirect(_back_to_page(url.query, notice, extra))
+                self._redirect(_back_to_page(url.query, extra), notice)
             else:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
 

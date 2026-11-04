@@ -11,7 +11,7 @@ from urllib.parse import quote, urlencode
 import pytest
 from conftest import ME, pr, snapshot
 
-from move_forward import registry, server
+from move_forward import auth, registry, server
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
@@ -67,6 +67,17 @@ def client(app: server.App) -> Iterator[HTTPConnection]:
 
 TOKEN = "s3cret"
 SIGNED_IN = {"Authorization": f"Bearer {TOKEN}"}
+
+
+def notice_cookie(response: HTTPResponse) -> str:
+    """The notice cookie a redirect set, as a `Cookie` header's value."""
+    return (response.getheader("Set-Cookie") or "").partition(";")[0]
+
+
+def notice_of(response: HTTPResponse) -> str | None:
+    """The notice a redirect left for the next page."""
+    response.read()
+    return auth.notice_from(TOKEN, notice_cookie(response))
 
 
 def get(client: HTTPConnection, path: str, headers: dict[str, str] | None = None) -> HTTPResponse:
@@ -139,9 +150,8 @@ def test_mark_as_sent_records_a_ping_and_redirects(client: HTTPConnection, app: 
         {"pr_url": pr(1).url, "target": "user:alice", "kind": "first", "message": "hi <there>"},
     )
     assert response.status == 303
-    assert response.getheader("Location") == "/?" + urlencode(
-        {"notice": "marked the first ping to alice as sent"}
-    )
+    assert response.getheader("Location") == "/"
+    assert notice_of(response) == "marked the first ping to alice as sent"
     pings = SlackRepository(app.db).pings()
     assert [(p.target, p.kind, p.message) for p in pings] == [("user:alice", "first", "hi <there>")]
     # The next page shows the follow-up.
@@ -184,11 +194,10 @@ def test_invalid_ping_form_is_rejected(client: HTTPConnection, app: server.App) 
     response = post(
         client, "/actions/slack/mark_sent", {"pr_url": "x", "target": "t", "kind": "later"}
     )
-    assert response.status == 303 and "failed%3A+bad+ping" in (response.getheader("Location") or "")
+    assert response.status == 303 and "failed: bad ping" in (notice_of(response) or "")
     for target in ("alice", "robot:alice", "user:"):
         response = post(client, "/actions/slack/mark_sent", {**SENT, "target": target})
-        assert "failed%3A+bad+ping" in (response.getheader("Location") or ""), target
-        response.read()
+        assert "failed: bad ping" in (notice_of(response) or ""), target
     assert SlackRepository(app.db).pings() == []
 
 
@@ -220,14 +229,16 @@ def test_actions_run_and_redirect_with_a_notice(
     monkeypatch.setattr(server, "perform_action", _results(fake_run))
     response = post(client, "/actions/delete_branch", {"repo": "/r", "branch": "b"})
     assert response.status == 303
-    assert response.getheader("Location") == "/?notice=did+it"
+    assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
     assert seen == [("delete_branch", {"repo": "/r", "branch": "b"})]
     assert app._wake.is_set()  # pyright: ignore[reportPrivateUsage]
 
     response = post(client, "/actions/boom", {})
-    assert response.getheader("Location") == "/?notice=failed%3A+nope"
-    body = get(client, "/?notice=failed%3A+nope").read().decode()
-    assert "<span class='notice'>failed: nope</span>" in body
+    assert (response.getheader("Location"), notice_of(response)) == ("/", "failed: nope")
+    cookie = {**SIGNED_IN, "Cookie": notice_cookie(response)}
+    shown = get(client, "/", cookie)
+    assert "<span class='notice'>failed: nope</span>" in shown.read().decode()
+    assert shown.getheader("Set-Cookie") == auth.CLEAR_NOTICE  # shown once
 
 
 def test_refresh_wakes_the_loop(client: HTTPConnection, app: server.App) -> None:
@@ -265,14 +276,14 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
 
     monkeypatch.setattr(server, "perform_action", _results(fake_run))
     response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dall%26i%3D0", {})
-    assert response.getheader("Location") == "/focus?cat=all&i=0&notice=did+it"
+    assert (response.getheader("Location"), notice_of(response)) == ("/focus?cat=all&i=0", "did it")
     # Only local paths; anything else goes to the dashboard.
     response = post(client, "/actions/x?back=//evil.example", {})
-    assert response.getheader("Location") == "/?notice=did+it"
+    assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
     response = post(client, "/actions/x?back=https%3A%2F%2Fevil.example", {})
-    assert response.getheader("Location") == "/?notice=did+it"
+    assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
     response = post(client, "/actions/x?back=%2F%5Cevil.example", {})  # browsers read "/\\" as "//"
-    assert response.getheader("Location") == "/?notice=did+it"
+    assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
 
 
 def test_actions_redirect_to_the_panel_they_were_in(
@@ -283,11 +294,14 @@ def test_actions_redirect_to_the_panel_they_were_in(
 
     monkeypatch.setattr(server, "perform_action", _results(fake_run))
     response = post(client, "/actions/x?at=jira.jira_next", {})  # a panel's own button
-    assert response.getheader("Location") == "/?notice=did+it#jira.jira_next"
+    assert (response.getheader("Location"), notice_of(response)) == ("/#jira.jira_next", "did it")
     response = post(client, "/actions/x?at=jira.jira_next&pos=3", {})  # an item's
-    assert response.getheader("Location") == "/?notice=did+it&at=jira.jira_next&pos=3#spot"
+    assert (response.getheader("Location"), notice_of(response)) == (
+        "/?at=jira.jira_next&pos=3#spot",
+        "did it",
+    )
     response = post(client, "/actions/x?at=a%22%3E%3Cscript", {})  # only a panel's key
-    assert response.getheader("Location") == "/?notice=did+it"
+    assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
 
 
 def test_ticking_a_todo_off_redirects_back_with_it(
@@ -322,9 +336,8 @@ def test_ticking_a_todo_off_redirects_back_with_it(
         "/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0",
         {"todo": "7"},
     )
-    assert response.getheader("Location") == (
-        "/focus?cat=notes.todos&i=0&kept=notes%3A7&notice=notes%2Ftodo_done+7"
-    )
+    assert response.getheader("Location") == "/focus?cat=notes.todos&i=0&kept=notes%3A7"
+    assert notice_of(response) == "notes/todo_done 7"
     body = get(client, "/focus?cat=notes.todos&i=0&kept=notes%3A7").read().decode()
     assert "<input type='checkbox' checked" in body and "x y" in body
     response = post(
@@ -332,9 +345,8 @@ def test_ticking_a_todo_off_redirects_back_with_it(
         "/actions/notes/todo_undone?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0",
         {"todo": "7"},
     )
-    assert (
-        response.getheader("Location") == "/focus?cat=notes.todos&i=0&notice=notes%2Ftodo_undone+7"
-    )
+    assert response.getheader("Location") == "/focus?cat=notes.todos&i=0"
+    assert notice_of(response) == "notes/todo_undone 7"
 
 
 def test_being_stopped_shuts_down_quietly(
@@ -433,7 +445,10 @@ def test_the_page_keeps_the_order_dragged_into_it_until_reset(
     assert page.index("data-key='slack'") < page.index("data-key='github'")
     assert page.index("data-key='github.held'") < page.index("data-key='github.metadata'")
     response = post(client, "/layout/reset", {})
-    assert response.status == 303 and response.getheader("Location") == "/?notice=layout+reset"
+    assert response.status == 303 and (response.getheader("Location"), notice_of(response)) == (
+        "/",
+        "layout reset",
+    )
     response.read()
     assert LayoutRepository(app.db).load() == Layout()
 
@@ -594,9 +609,8 @@ def test_the_settings_page_shows_and_saves_the_config(
     body = get(client, "/settings").read().decode()
     assert "[github]" in body and "name='github:refresh_seconds'" in body
     response = post(client, "/settings", {"github:history_days": "30", ":email": "me@acme.com"})
-    assert response.status == 303 and "saved+github.history_days" in (
-        response.getheader("Location") or ""
-    )
+    assert response.status == 303 and response.getheader("Location") == "/settings"
+    assert "saved github.history_days" in (notice_of(response) or "")
     assert "history_days = 30" in path.read_text()
     response = get(client, "/settings", {})  # without the token
     assert response.status == 401
@@ -610,3 +624,9 @@ def test_notifications_are_told_once(app: server.App, client: HTTPConnection) ->
     [told] = json.loads(response.read())
     assert (told["title"], told["body"], told["url"]) == ("PR 1", "can be merged", "/#item-1")
     assert json.loads(post(client, "/notifications", {}).read()) == []
+
+
+def test_a_notice_the_server_did_not_sign_is_not_shown(client: HTTPConnection) -> None:
+    for cookie in ("move_forward_notice=0.run%20curl", "move_forward_notice=run%20curl"):
+        body = get(client, "/?notice=run+curl", {**SIGNED_IN, "Cookie": cookie}).read().decode()
+        assert "run curl" not in body
