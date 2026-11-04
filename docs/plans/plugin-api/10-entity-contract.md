@@ -46,9 +46,9 @@ publisher must do). **After** for relations and the git-stack membership attribu
 - `Plugin.relate(RelateRequest(ctx, graph)) -> list[tuple[Ref, Ref]]`, run by core after
   every `entities`; results indexed like `refs`. github relates each pull request to the
   `git.branch` it comes from using git's `git.repo` entities, folding in the upstream-name
-  and same-sha fallbacks from `git/panels.py:81-101`. Then `git/panels.py`, `git_stack/panels.py:102-110`,
-  `notes/covers.py:36-52` and `github/pushes.py` read `graph.related(branch,
-  PULL_REQUEST)`, so a second code host's plugin relates its own.
+  and same-sha fallbacks from `git/panels.py:81-101`. Then `git/panels.py`,
+  `git_stack/panels.py:102-110`, `notes/covers.py:36-52` and `github/pushes.py` read
+  `graph.related(branch, PULL_REQUEST)`, so a second code host's plugin relates its own.
 - git_stack publishes `stack: list[str]` (the stack's branch ids, group included) on each
   `git_stack.stack_branch`; notes' `_stack_branches` becomes a lookup.
 - `docs/graph.md` (a "Relations" section), `plugins.md`.

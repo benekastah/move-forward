@@ -46,7 +46,7 @@ for something else.
 # api.kinds (core)
 class PullRequest(KindModel):
     repo: str
-    handle: str           # how the tool shows it: "#7" (GitHub), "!12" (GitLab); display only
+    handle: str  # what the tool shows: "#7" (GitHub), "!12" (GitLab); display only
     head: str
     head_oid: str | None = None
     base: str
@@ -132,7 +132,7 @@ family, each with its extras under its own kind; a plugin whose `pull_request` m
 doesn't subclass `PullRequest` is refused with the reason; a family ref resolves to
 whichever plugin published the id. **Size.** M/L.
 
-## PR 5c — names: plugin-prefixed kinds, `pull_request` (core migration V11 + notes migration)
+## PR 5c — plugin-prefixed kinds, `pull_request` (core migration V11, notes migration)
 
 - Core publishes every kind as `<plugin>.<name>` and every family's refs by the family; a
   plugin makes refs to its own kinds with `ctx.ref(name, id)` (and `ctx.kind(name)` for
