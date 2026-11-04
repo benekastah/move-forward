@@ -43,7 +43,9 @@ from .pings import Pinger, PingTarget, PrPing
 from .repository import MIGRATIONS, SlackRepository
 from .setup import EXAMPLE, TEMPLATE, questions
 
-PING_PATH = "/ping"
+PING = "ping"
+"""The ping page for one of my PRs, `/slack/ping?pr=<PR URL>`."""
+PING_PATH = f"/slack/{PING}"
 COPY_SCRIPT = (
     "function copyMessage(button) {"
     " const text = button.closest('form').querySelector('textarea').value;"
@@ -140,7 +142,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     config_model = SlackConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
     cli_help = "see and set where review pings go, or import them from the skill's markdown"
-    sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK_PATH})
+    sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK})
 
     def init_suggested(self) -> bool:
         """Only when asked for: it needs a site (jira) or workspace (slack) to be useful."""
@@ -196,11 +198,11 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             return contacts.contacts_page(ctx, graph)
 
         return {
-            PING_PATH: ping,
-            contacts.CONTACTS_PATH: where_pings_go,
-            account.SLACK_PATH: account.page,
-            oauth.CONNECT_PATH: account.connect,
-            oauth.CALLBACK_PATH: account.callback,
+            PING: ping,
+            contacts.CONTACTS: where_pings_go,
+            "": account.page,
+            oauth.CONNECT: account.connect,
+            oauth.CALLBACK: account.callback,
         }
 
     def after_collect(self, req: AfterCollectRequest[SlackConfig]) -> None:

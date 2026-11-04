@@ -29,8 +29,11 @@ from ...api.shell import CommandError
 from . import client, scopes
 from .config import SlackConfig
 
-CALLBACK_PATH = "/slack/callback"
-CONNECT_PATH = "/slack/connect"
+CALLBACK = "callback"
+"""The page Slack's sign-in sends the browser back to, `/slack/callback`."""
+CONNECT = "connect"
+"""The page that sends the browser to Slack's sign-in, `/slack/connect`."""
+CONNECT_PATH = f"/slack/{CONNECT}"
 PENDING = "oauth_pending"
 """The kv key of the sign-in started and not yet back."""
 CONNECTION = "connection"
@@ -113,7 +116,7 @@ def start(ctx: Context[SlackConfig]) -> str:
     pending = Pending(
         state=secrets.token_urlsafe(32),
         verifier=secrets.token_urlsafe(64),
-        redirect_uri=ctx.dashboard_url + CALLBACK_PATH,
+        redirect_uri=ctx.page_url(CALLBACK),
         started=ctx.now,
     )
     query = {

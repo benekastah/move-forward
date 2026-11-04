@@ -38,14 +38,14 @@ from move_forward.repositories import KvRepository
 
 
 class Hooked(JiraPlugin):
-    """Jira, plus a link on every PR item and a page at /hello."""
+    """Jira, plus a link on every PR item and a page at /jira/hello."""
 
     def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
         pr = req.item.subject("pull_request")
         if pr is None:
             return ItemAdditions()
         return ItemAdditions(
-            actions=[Action(name="", label="Look", fields={}, href=f"/hello?pr={pr.id}")],
+            actions=[Action(name="", label="Look", fields={}, href=f"/jira/hello?pr={pr.id}")],
             badges=[f"seen by {self.name} on {req.surface}, {req.owner}'s"],
         )
 
@@ -56,7 +56,7 @@ class Hooked(JiraPlugin):
             entity = graph.get("pull_request", pr_url)
             return render.page("Hello", "hello", render.e(entity.title)) if entity else None
 
-        return {"/hello": hello}
+        return {"hello": hello}
 
 
 @pytest.fixture(autouse=True)
@@ -68,9 +68,9 @@ def hooked(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_a_plugin_adds_buttons_to_another_plugins_items() -> None:
     built = dashboard(github=snapshot(mine=[pr(1, merge_state="DIRTY")]), jira_site="https://j")
     [item] = built.panel("github.conflicts").items
-    assert [a.href for a in item.actions if a.href] == [f"/hello?pr={pr(1).url}"]
+    assert [a.href for a in item.actions if a.href] == [f"/jira/hello?pr={pr(1).url}"]
     html = render.dashboard_page(built, refreshing=frozenset())
-    assert f"<a class='button link-action' href='/hello?pr={pr(1).url}'>Look</a>" in html
+    assert f"<a class='button link-action' href='/jira/hello?pr={pr(1).url}'>Look</a>" in html
     assert all(not a.href for a in built.panel("notes.todos").actions)
 
 
@@ -99,9 +99,9 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
     db = Database(":memory:")
     registry.migrate(config, db)
     PrRepository(db).replace(snapshot(mine=[pr(1, title="Fix <it>")]))
-    page = refresh.plugin_page(config, db, "/hello", {"pr": [pr(1).url]})
-    assert page is not None and "Fix &lt;it&gt;" in page and "/ hello</h1>" in page
-    assert refresh.plugin_page(config, db, "/hello", {"pr": ["nope"]}) is None
+    page = refresh.plugin_page(config, db, "/jira/hello", {"pr": [pr(1).url]})
+    assert isinstance(page, str) and "Fix &lt;it&gt;" in page and "/ hello</h1>" in page
+    assert refresh.plugin_page(config, db, "/jira/hello", {"pr": ["nope"]}) is None
     assert refresh.plugin_page(config, db, "/nowhere", {}) is None
 
 

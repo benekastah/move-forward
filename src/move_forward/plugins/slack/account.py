@@ -1,10 +1,9 @@
 """Slack's page, `/slack`: setting up the app, connecting to it, and what it's connected as;
 and the pages the sign-in goes through."""
 
-import json
 from importlib import resources
 
-from ...api import Action, ActionError, ActionRequest, Context, PageRequest, html
+from ...api import Action, ActionError, ActionRequest, Context, PageRequest, Response, html
 from . import oauth, scopes
 from .config import SlackConfig
 
@@ -27,7 +26,7 @@ def manifest() -> str:
 def _setup(ctx: Context[SlackConfig]) -> str:
     """How to make the app, once per workspace, and how to point the dashboard at it."""
     e = html.e
-    redirect = ctx.dashboard_url + oauth.CALLBACK_PATH
+    redirect = ctx.page_url(oauth.CALLBACK)
     return (
         "<h2>Set up the Slack app</h2>"
         "<p>One app serves the whole workspace; someone makes it once:</p><ol>"
@@ -78,7 +77,7 @@ def page(req: PageRequest[SlackConfig]) -> str:
     return html.page("Slack", "slack", body)
 
 
-def connect(req: PageRequest[SlackConfig]) -> str | None:
+def connect(req: PageRequest[SlackConfig]) -> str | Response | None:
     """Send the browser to Slack for the sign-in the Connect button started (see
     `connect_action`); a read that starts nothing, so a link or an image can't overwrite a
     sign-in under way. None (not found) without a `client_id`."""
@@ -92,15 +91,7 @@ def connect(req: PageRequest[SlackConfig]) -> str | None:
             f" <a href='{SLACK_PATH}'>Slack's page</a>.</p></article>"
         )
         return html.page("Connect Slack", "slack", body)
-    # The URL is ours, built with urlencode; JSON-quoted, with "</" broken so it can't end
-    # the script.
-    quoted = json.dumps(url).replace("</", "<\\/")
-    script = f"location.replace({quoted});"
-    body = (
-        "<article class='panel padded'><p>Taking you to Slack to sign in…</p>"
-        f"<p><a class='button' href='{html.e(url)}'>Continue to Slack</a></p></article>"
-    )
-    return html.page("Connect Slack", "slack", body, script)
+    return Response.redirect(url)
 
 
 def connect_action(req: ActionRequest[SlackConfig]) -> str:

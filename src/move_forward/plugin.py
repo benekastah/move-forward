@@ -91,6 +91,11 @@ class Context[C: BaseModel]:
         (`ActionResult.params`); `Plugin.kept_item` gets `key` back."""
         return {KEPT: f"{self.name}:{key}"}
 
+    def page_url(self, key: str) -> str:
+        """The full URL of one of the plugin's pages, e.g. for a sign-in to send the browser
+        back to: `https://localhost:8765/slack/callback`."""
+        return self.dashboard_url + page_path(self.name, key)
+
     def part(self, name: str) -> str:
         """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
         as `github.derived` (see `collect_into`)."""
@@ -268,7 +273,28 @@ class PageRequest[C: BaseModel]:
     graph: Graph
     query: dict[str, list[str]]
     path: str
-    """The page's path, e.g. `/ping`."""
+    """The page's path, e.g. `/slack/ping`."""
+
+
+@dataclass(frozen=True)
+class Response:
+    """What a page answers when it's more than HTML to show: a redirect, another status."""
+
+    body: str = ""
+    status: int = 200
+    content_type: str = "text/html; charset=utf-8"
+    headers: dict[str, str] = field(default_factory=dict[str, str])
+
+    @classmethod
+    def redirect(cls, url: str) -> "Response":
+        """Send the browser to `url` (303 See Other)."""
+        return cls(status=303, headers={"Location": url})
+
+
+def page_path(plugin: str, key: str) -> str:
+    """Where a plugin's page is served: `/<plugin>/<key>`, or `/<plugin>` for its index
+    (`""`)."""
+    return f"/{plugin}/{key}" if key else f"/{plugin}"
 
 
 @dataclass(frozen=True)
@@ -278,8 +304,8 @@ class CliRequest[C: BaseModel]:
     args: argparse.Namespace
 
 
-PageHandler = Callable[[PageRequest[Any]], str | None]
-"""Renders a page; None means not found."""
+PageHandler = Callable[[PageRequest[Any]], str | Response | None]
+"""Renders a page, as HTML or a `Response`; None means not found."""
 CliHandler = Callable[[CliRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
 KEPT = "kept"
@@ -372,8 +398,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
     rather than waiting for `change_check_seconds`."""
     sign_in_pages: ClassVar[frozenset[str]] = frozenset()
-    """Of its pages, those a tool's sign-in (OAuth) sends the browser back to, e.g.
-    "/slack/callback". They're served without the dashboard's sign-in cookie, which browsers
+    """Of its pages, by key, those a tool's sign-in (OAuth) sends the browser back to, e.g.
+    slack's "callback" (`/slack/callback`). Only a key of `pages()` counts. They're served
+    without the dashboard's sign-in cookie, which browsers
     don't send on a redirect from another site, so the page must check its own proof that
     the request is the one it started (OAuth's single-use `state`) before doing anything."""
     cli_help: ClassVar[str | None] = None
@@ -516,7 +543,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return None
 
     def pages(self) -> dict[str, PageHandler]:
-        """Extra pages by path, e.g. "/ping"."""
+        """Extra pages by key, served at `/<plugin>/<key>` (`page_path`): "ping" is
+        `/slack/ping`, and "" the plugin's own `/slack`."""
         return {}
 
     # Writing

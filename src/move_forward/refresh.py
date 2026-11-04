@@ -40,6 +40,7 @@ from .plugin import (
     PanelsRequest,
     PrepareItemActionsRequest,
     PruneRequest,
+    Response,
     StoreRequest,
     collect_into,
 )
@@ -439,19 +440,31 @@ def _failed(e: Enabled) -> Panel:
     )
 
 
-def plugin_page(config: Config, db: Database, path: str, query: dict[str, list[str]]) -> str | None:
-    """An enabled plugin's page at `path`, or None when there's no such page (or the plugin
-    has nothing at that query). Raises `PageFailed` when its handler raises."""
+def page_of(path: str) -> tuple[str, str]:
+    """The plugin and the page key a path names: `/slack/ping` is slack's `ping`, `/slack`
+    its index, `""`."""
+    plugin, _, key = path.strip("/").partition("/")
+    return plugin, key
+
+
+def plugin_page(
+    config: Config, db: Database, path: str, query: dict[str, list[str]]
+) -> str | Response | None:
+    """The enabled plugin's page at `path`, `/<plugin>/<key>`, or None when there's no such
+    page (or the plugin has nothing at that query). Raises `PageFailed` when its handler
+    raises."""
+    name, key = page_of(path)
     plugins = enabled(config, db, datetime.now(UTC))
-    for e in plugins:
-        if handler := e.plugin.pages().get(path):
-            graph, _ = stored_graph(db, plugins)
-            try:
-                return handler(PageRequest(e.ctx, graph, query, path))
-            except Exception as err:
-                log.exception("%s: page %s failed", e.name, path)
-                raise PageFailed(path) from err
-    return None
+    e = next((e for e in plugins if e.name == name), None)
+    handler = e.plugin.pages().get(key) if e else None
+    if e is None or handler is None:
+        return None
+    graph, _ = stored_graph(db, plugins)
+    try:
+        return handler(PageRequest(e.ctx, graph, query, path))
+    except Exception as err:
+        log.exception("%s: page %s failed", e.name, path)
+        raise PageFailed(path) from err
 
 
 def run_action(config: Config, db: Database, name: str, fields: dict[str, str]) -> str:
