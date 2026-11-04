@@ -33,7 +33,7 @@ publisher must do). **After** for relations and the git-stack membership attribu
   validates and logs/drops misfits. `entities.md`'s "Fetched on demand" table is checked by
   `test_entities_doc.py` like the others.
 - `api.ids.branch_id(repo_dir, name)` / `branch_parts(id)`; git, git_stack and notes use
-  them; the three separator constants go. Format unchanged (decision below). `git.branch`
+  them; the four separator constants go (with `notes/markdown.py:32`'s). Format unchanged (decision below). `git.branch`
   stays git's kind (05); core holds only the id format, which three plugins build and
   parse.
 
