@@ -3,6 +3,7 @@ other plugins' items: Add todo on items about my PRs and tickets, Put on ice on 
 branch. Pure functions; no I/O."""
 
 import re
+import textwrap
 from datetime import UTC, datetime, time
 
 from ...domain import Model
@@ -94,6 +95,10 @@ def entry_for(entries: list[Entry], url: str | None, keys: list[str], graph: Gra
             if key in entry_keys(entry, graph):
                 return entry.title
     return None
+
+
+BLOCKED_BADGE_WIDTH = 80
+"""Characters of what an entry is blocked on that its badge shows, cut at a word."""
 
 
 def _is_blocked(entry: Entry) -> bool:
@@ -354,7 +359,10 @@ class Builder:
             if close_out:
                 badges.append(f"close-out: {len(open_todos)} quick todo(s)")
             if blocked:
-                badges.append("blocked: " + (entry.blocked_on or "")[:80])
+                badges.append(
+                    "blocked: "
+                    + textwrap.shorten(entry.blocked_on or "", BLOCKED_BADGE_WIDTH, placeholder="…")
+                )
             url = urls[0] if urls else None
             links = [Link(text=f"PR {u.rsplit('/', 1)[1]}", url=u) for u in urls]
             ordered = sorted(open_todos, key=lambda t: t.size != "quick")

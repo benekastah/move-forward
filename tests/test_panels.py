@@ -341,6 +341,18 @@ def test_naming_settings_drive_pings_labels_and_jira() -> None:
     assert by_key["XY-3"].startswith("bug")
 
 
+def test_a_long_blocked_on_badge_is_cut_at_a_word_with_an_ellipsis() -> None:
+    reason = "waiting for the platform team to finish the migration of the billing service"
+    built = dashboard(
+        work_items=[
+            entry("APP-1 Stuck", [todo("ship", "quick")], **{"Blocked on": [reason + " today"]})
+        ]
+    )
+    [badge] = [b for b in panel(built, "notes.todos").items[0].badges if b.startswith("blocked")]
+    assert badge == f"blocked: {reason}…"  # " today" would cut a word at 80 characters
+    assert len(badge) <= len("blocked: ") + 80
+
+
 def test_a_ticket_in_the_blocked_status_is_blocked_without_blocker_links() -> None:
     dashboard = build(
         jira=JiraSnapshot(
