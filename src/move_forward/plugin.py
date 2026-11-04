@@ -86,6 +86,16 @@ class Context[C: BaseModel]:
         """Today where I am: the local date, for what's recorded as done or changed today."""
         return localtime.day(self.now)
 
+    def kept(self, key: str) -> dict[str, str]:
+        """An action result's parameters keeping the plugin's item `key` on the focus page
+        (`ActionResult.params`); `Plugin.kept_item` gets `key` back."""
+        return {KEPT: f"{self.name}:{key}"}
+
+    def part(self, name: str) -> str:
+        """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
+        as `github.derived` (see `collect_into`)."""
+        return f"{self.name}.{name}"
+
 
 @dataclass(frozen=True)
 class EntitiesRequest[C: BaseModel, S: BaseModel]:

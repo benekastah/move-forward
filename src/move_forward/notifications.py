@@ -52,7 +52,8 @@ class Event(Model):
     kind: str
     """What happened, as the plugin names it: `pr_mergeable`. Stored as `<plugin>.<kind>`."""
     thing: str
-    """What it happened to, e.g. a PR's URL: events with the same thing are told as one."""
+    """What it happened to, e.g. a PR's URL: the plugin's events with the same thing are told
+    as one."""
     title: str
     """What it's about, e.g. the PR's title."""
     text: str
@@ -84,11 +85,13 @@ class NotificationRepository:
         self._db = db
 
     def add(self, plugin: str, events: list[Event], now: datetime) -> int:
-        """Store the events a plugin made, as of `now`; returns how many."""
+        """Store the events a plugin made, as of `now`; returns how many. Their things are
+        the plugin's (`<plugin>:<thing>`), so two plugins' events about one URL are told
+        apart."""
         rows = [
             (
                 qualified(plugin, e.kind),
-                e.thing,
+                f"{plugin}:{e.thing}",
                 e.title,
                 e.text,
                 e.anchor,

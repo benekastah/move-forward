@@ -9,7 +9,6 @@ checkouts. `mfd notes` calls the same functions.
 from pathlib import Path
 
 from ...api import (
-    KEPT,
     ActionError,
     ActionHandler,
     ActionRequest,
@@ -207,7 +206,7 @@ def todo_done(req: ActionRequest[NotesConfig]) -> ActionResult:
     entry, todo = _todo(notes, req, done=False)
     notes.set_done(todo.id, ctx.today)
     notes.touch(entry.id, ctx.today)
-    return ActionResult(f"done: {todo.text}", {KEPT: f"notes:{todo.id}"})
+    return ActionResult(f"done: {todo.text}", ctx.kept(str(todo.id)))
 
 
 def todo_undone(req: ActionRequest[NotesConfig]) -> str:

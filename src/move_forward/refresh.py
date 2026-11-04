@@ -425,6 +425,7 @@ def build_dashboard(
         graph.units,
         priority.level_of(PriorityRepository(db).all(), graph),
         surface,
+        _known_action(plugins),
     )
 
 
@@ -551,6 +552,16 @@ def _act_now_action(
     for (kind, id, task, _), one in zip(members, said, strict=True):
         feedback.say((kind, id, task), one, now)
     return ActionResult(result)
+
+
+def _known_action(plugins: list[Enabled]) -> panels.KnownAction:
+    """Whether a button's name is `<plugin>/<action>` of an enabled plugin's `actions`."""
+    names = {
+        f"{e.name}/{action}"
+        for e in plugins
+        for action in call(e.name, "actions", e.plugin.actions, {})
+    }
+    return names.__contains__
 
 
 def perform_action(

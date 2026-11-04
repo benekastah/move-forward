@@ -32,9 +32,23 @@ def test_events_about_the_same_thing_are_told_as_one() -> None:
     repo = NotificationRepository(Database(":memory:"))
     repo.add("github", [_event(), _event("ci_failed", text="CI failed"), _event(thing="pr:2")], NOW)
     first, second = repo.take(NOW, KEEP)
-    assert (first.title, first.body, first.tag) == ("PR 1", "can be merged, CI failed", "pr:1")
+    assert (first.title, first.body, first.tag) == (
+        "PR 1",
+        "can be merged, CI failed",
+        "github:pr:1",
+    )
     assert first.url == "/#item-pr-1"
-    assert second.tag == "pr:2"
+    assert second.tag == "github:pr:2"
+
+
+def test_two_plugins_events_about_one_thing_are_told_apart() -> None:
+    repo = NotificationRepository(Database(":memory:"))
+    repo.add("github", [_event(thing="https://pr/1")], NOW)
+    repo.add("slack", [_event(thing="https://pr/1", text="pinged")], NOW)
+    assert [(n.tag, n.body) for n in repo.take(NOW, KEEP)] == [
+        ("github:https://pr/1", "can be merged"),
+        ("slack:https://pr/1", "pinged"),
+    ]
 
 
 def test_events_are_told_once() -> None:
@@ -48,7 +62,7 @@ def test_events_older_than_the_keep_time_are_dropped_untold() -> None:
     repo = NotificationRepository(Database(":memory:"))
     repo.add("github", [_event()], NOW - KEEP - timedelta(minutes=1))
     repo.add("github", [_event(thing="pr:2")], NOW - timedelta(hours=1))
-    assert [n.tag for n in repo.take(NOW, KEEP)] == ["pr:2"]
+    assert [n.tag for n in repo.take(NOW, KEEP)] == ["github:pr:2"]
 
 
 def test_an_event_without_an_anchor_opens_the_dashboard() -> None:
@@ -173,7 +187,7 @@ def test_the_dashboards_own_events_are_stored_when_subscribed(tmp_path: Path) ->
     refresh.refresh(config, db, NOW)
     refresh.refresh(config, db, NOW + timedelta(minutes=2))
     [n] = NotificationRepository(db).take(NOW + timedelta(minutes=2), KEEP)
-    assert n.tag == "source:github"
+    assert n.tag == "dashboard:source:github"
 
 
 @pytest.mark.usefixtures("git")
@@ -191,4 +205,4 @@ def test_only_the_subscribed_kinds_of_a_plugin_are_stored(monkeypatch: pytest.Mo
         ]
 
     monkeypatch.setattr(_Git, "events", both)
-    assert [n.tag for n in _run(["git.changed"]).take(NOW, KEEP)] == ["a"]
+    assert [n.tag for n in _run(["git.changed"]).take(NOW, KEEP)] == ["git:a"]

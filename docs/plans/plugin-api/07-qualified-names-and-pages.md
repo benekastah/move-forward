@@ -24,17 +24,22 @@ auth hole must close before any code you didn't write declares a sign-in page.
 
 ## PR 7a — actions, keys, sources, events
 
-- `ctx.action(name, label, fields, **kw) -> Action` builds `"<plugin>/<name>"`. At
-  `panels.build`, an `Action.name` that isn't `<enabled plugin>/<name>` or `act_now/…` is
-  dropped and logged. Remove the hand-written prefixes (sites above).
-- `ActionResult.keep(key)` on `ctx` → `{KEPT: f"{ctx.name}:{key}"}`.
-- `ctx.record_part("derived", collector, store)` wraps `collect_into` with
-  `<plugin>.<part>` (`github/plugin.py:236-250`); `render._plugin_of` keeps parsing.
-- `Event.thing`: core prefixes `<plugin>:` when storing (`notifications.py:88-98`);
-  `Event.anchor` built via `ctx.anchor(ref)`.
+- Core checks every button: one whose `Action.name` isn't Act now's (`act_now/…`), a link,
+  or `<enabled plugin>/<name>` of that plugin's `actions()` is dropped and logged (once a
+  name). That catches a typo in the action as well as the prefix. Plugins keep building
+  names with a helper of their own (git's `action()`): a `ctx.action` factory would have
+  meant passing a context into every pure panel builder, for no safety the check doesn't
+  give.
+- `ctx.kept(key)` → `{KEPT: f"{ctx.name}:{key}"}` for an `ActionResult`'s params.
+- `ctx.part("derived")` → `github.derived`, the source `collect_into` records a part of a
+  refresh as; `render._plugin_of` keeps parsing it.
+- `Event.thing`: core prefixes `<plugin>:` when storing (`notifications.py`), so two
+  plugins' events about one URL are two notifications. `Event.anchor` stays
+  `page.anchor(kind, id)`: a `ctx.anchor` would add nothing.
 
-**Tests.** An action with a bare name is dropped and logged; `KEPT` round-trips; events of
-two plugins about one URL are two notifications. **Size.** M.
+**Tests.** A button posting to no declared action is dropped and logged; the known actions
+are the enabled plugins'; events of two plugins about one URL are two notifications.
+**Size.** M.
 
 ## PR 7b — pages under the plugin's prefix, `Response`, sign-in scoped
 
