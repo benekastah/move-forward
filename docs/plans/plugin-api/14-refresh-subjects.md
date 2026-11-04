@@ -43,7 +43,8 @@ jobs ahead of due full refreshes under `_refresh_lock`, so a tab focus doesn't w
 full collect; the hook runs with its timeout; `events(before, after)` runs as `_store`
 does so a merged PR still notifies; `snapshots.fetched_at` is not touched (the full
 refresh's meaning stays). A plugin returning `None`, raising or timing out falls back to
-`request_refresh({name})`. Triggers: tab focus, the per-item button, and `mfd refresh
+`request_refresh({name})`. Triggers: tab focus, the per-item button, an action's
+`touched` refs (04), and `mfd refresh
 --subject <kind> <id>` for the skill.
 
 Opened state reuses the fingerprint lapse snoozes already have: an `opened` row with the

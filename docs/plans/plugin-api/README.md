@@ -28,8 +28,7 @@ resolve). Line numbers are as of `main` at `4cd7d63`.
 
 Deferred, not in any subplan: built-ins' first migrations reading core's V1 tables and
 `snapshots.payload` (problem 13's second half: keep, and freeze `V1_SCHEMA` for them);
-persisting the previous graph across restarts (04 keeps it in memory); a `plugins = []`
-allow-list in the config; ticket↔PR relations beyond `mentions`.
+a `plugins = []` allow-list in the config; ticket↔PR relations beyond `mentions`.
 
 ## Order and dependencies
 
@@ -86,12 +85,13 @@ Do them in file order, with 02's second PR (the `api_version` freeze) after 12:
    `Review` survives) over dropping all feedback.
 5. **Plugin order and identity** ([09](09-discovery-and-config.md)): **alphabetical by name;
    footer lists every plugin's identity** rather than first-wins.
-6. **Discovery** ([09](09-discovery-and-config.md)): **entry points only**; a config
-   section enables, an entry point installs.
+6. **Discovery** ([09](09-discovery-and-config.md)): **built-ins listed in core, entry
+   points for other packages**; a config section enables, an entry point installs.
 7. **Opened cap** ([14](14-refresh-subjects.md)): **24 h**, cleared earlier when the data
    changes.
-8. **`ActionResult.refresh` default** ([04](04-hook-request-objects.md)): **own plugin
-   only**; an action names others when it changes their tool.
+8. **Refresh after an action** ([04](04-hook-request-objects.md)): **the acting plugin, and
+   the publishers of what it touched** (`ActionResult.touched: list[Ref]`), rather than
+   naming plugins or refreshing all.
 9. **Family names** ([05](05-kinds-and-lifecycle.md)): **`pull_request`** (shown as "PR")
    and `ticket`; no tool's numbering in a family (a PR has a `handle` to show, its URL to
    identify it). Not `code_review`/`work_item`: the names fit a GitLab MR or a Linear
@@ -101,7 +101,11 @@ Do them in file order, with 02's second PR (the `api_version` freeze) after 12:
 11. **Branch id format** ([10](10-entity-contract.md)): **keep `"<dir>\t<name>"` behind
     helpers**; changing it migrates notes' ice tables for nothing.
 12. **Collect timeout default** ([01](01-isolate-hook-errors.md)): **300 s**, per-plugin
-    override.
+    override, per piece: a plugin with more work returns `Collected(more=True)` (04).
+13. **Family identity** ([05](05-kinds-and-lifecycle.md)): **each family's own rule**: URLs
+    for PRs and tickets, `<host>/<login>` for people; text names them by `handle`.
+14. **Previous graph** ([04](04-hook-request-objects.md)): **the last one built, or after a
+    start the one built from stored snapshots**; nothing new stored.
 
 ## Minimum before inviting others
 
