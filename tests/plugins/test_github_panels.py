@@ -616,3 +616,20 @@ def test_ticket_keys_come_from_jiras_projects_else_a_guess_that_skips_utf_8_and_
     assert flagged() == ["Fix APP-7", "Fix ZZ-5"]  # a guess: ZZ-5 and APP-7 look like tickets
     known = JiraSnapshot(issues=[issue("APP-1")])  # Jira has seen project APP
     assert flagged(jira=known) == ["Fix APP-7"]  # ZZ isn't one of its projects
+
+
+def test_conflicts_skip_drafts_and_a_stacked_pr_is_told_to_restack() -> None:
+    base = pr(1, head="me/base")
+    stacked = pr(2, head="me/top", base="me/base", mergeable="CONFLICTING")
+    draft = pr(3, mergeable="CONFLICTING", is_draft=True)
+    plain = pr(4, mergeable="CONFLICTING")
+    built = build(github=snapshot(mine=[base, stacked, draft, plain]))
+    items = {i.title: i for i in panel(built, "github.conflicts").items}
+    assert set(items) == {"PR 2", "PR 4"}
+    assert items["PR 2"].details[0] == "stacked on me/base: restack (git stack sync)"
+    assert items["PR 2"].signals and items["PR 2"].signals.verb == "Restack the stack"
+    assert items["PR 4"].signals is None  # Resolve conflicts, from the panel
+    assert sorted(i.title for i in built.act_now()) == [
+        "Resolve conflicts: PR 4",
+        "Restack the stack: PR 2",
+    ]

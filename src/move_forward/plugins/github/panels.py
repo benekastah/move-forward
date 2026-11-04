@@ -357,22 +357,23 @@ class Builder:
 
     def conflicts(self) -> Panel:
         items: list[Item] = []
+        my_heads = {pr.head for pr in self.mine}
         for pr in self.mine:
-            if has_conflicts(pr):
-                items.append(
-                    pr_item(
-                        self.now,
-                        pr,
-                        details=[f"mergeable: {pr.mergeable}, state: {pr.merge_state}"],
-                    )
-                )
+            if pr.is_draft or not has_conflicts(pr):
+                continue
+            details = [f"mergeable: {pr.mergeable}, state: {pr.merge_state}"]
+            signals = None
+            if pr.base in my_heads:  # stacked on another of my branches: restacking fixes it
+                details.insert(0, f"stacked on {pr.base}: restack (git stack sync)")
+                signals = Signals(verb="Restack the stack", effort="minutes")
+            items.append(pr_item(self.now, pr, details=details, signals=signals))
         return Panel(
             key="conflicts",
             priority=20,  # 2. sync stacks
             act_now=True,
             signals=Signals(verb="Resolve conflicts", effort="hour"),
             title="Merge conflicts",
-            description="My open PRs that conflict with their base.",
+            description="My open, non-draft PRs that conflict with their base.",
             items=items,
         )
 
