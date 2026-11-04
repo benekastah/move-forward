@@ -27,8 +27,7 @@ would otherwise be a break.
   why (`server.py:205,243`).
 - `me()` is first-plugin-wins (`refresh.py:224`).
 
-**Before** for everything above (cheap once the request objects exist). Persisting the
-previous graph across restarts is deferred (memory only here).
+**Before** for everything above (cheap once the request objects exist).
 
 ## PR 4a — read hooks
 
@@ -56,28 +55,48 @@ focus page; two identities in the footer. **Size.** L.
 - `EventsRequest(ctx, before, after, graph)`: `_store` (`refresh.py:41-58`) gets the graph
   built before the collect phase (already in hand at `refresh.py:147` for `collect_after`;
   for phase one, build it once before `_collect_all`).
-- `GraphEventsRequest(ctx, graph, previous: Graph | None)`: `App` keeps the last graph it
-  built and passes it through `refresh(..., previous=)`; `None` on the first run and for
-  `mfd refresh`. jira's `CLOSEABLE` kv and git's `deletable` kv can go once they diff graphs.
+- `GraphEventsRequest(ctx, graph, previous: Graph)`: what was true before this refresh, so
+  a notification fires when something becomes true, not every refresh while it stays so.
+  `App` keeps the last graph it built and passes it through `refresh(..., previous=)`. On
+  the first refresh after a start, and for `mfd refresh`, `previous` is the graph built
+  from the stored snapshots before collecting: what the dashboard knew when it stopped,
+  since every plugin keeps its last fetch in its tables. Nothing new is stored, and what
+  changed while the dashboard was down notifies once. jira's `CLOSEABLE` kv and git's
+  `deletable` kv go: they diff graphs instead.
 - `ChangedRequest(ctx, graph)` → `bool | Changed(changed, reason: str, subjects: list[Ref])`;
   the reason joins the "changed: …; refreshing" log lines.
+- Collecting in pieces: `collect` may return `Collected(snapshot, more=True)` for work too
+  big for one `collect_timeout_seconds` (01). Core stores the piece as any collect, then
+  runs the plugin's `collect` again right after the other due plugins, until `more` is
+  False; each piece has the timeout to itself. The plugin keeps its place in kv and merges
+  each piece into what it loads, as git's partial read and github's targeted fetch do now
+  (`git/plugin.py`'s `collect`, `github/plugin.py`'s `collect`). A plain snapshot means
+  `more=False`.
 
-**Tests.** `events` sees the graph; `graph_events` gets `previous` on the second refresh and
-`None` on the first; reason appears in the log. **Size.** L.
+**Tests.** `events` sees the graph; `graph_events` gets the last graph on the second
+refresh and the stored one on the first, so a branch that became deletable while the
+dashboard was stopped notifies once; reason appears in the log; a collect returning
+`more=True` twice runs three times in one refresh, each piece timed on its own.
+**Size.** L.
 
 ## PR 4c — handlers
 
 - `ActionRequest(ctx, graph, fields, surface, back: str | None)` with `req.field(name)`
   raising `ActionError("missing field …")` (finishes 01's `KeyError` fix).
-- `ActionResult.refresh: frozenset[str] | None = None`: which plugins to refresh after;
-  `None` = the acting plugin only (today: all). git's branch actions → own; notes' →
-  own; jira's transition → own; slack's `mark_sent` → own. `App.run_action` honours it.
+- `ActionResult.touched: list[Ref] = []`: what the action changed outside its own plugin.
+  `App.run_action` refreshes the acting plugin, and the plugin that published each touched
+  ref (a family's ref goes to the plugin whose entity has the id, 05); once 14 lands, just
+  those items. Today it refreshes every plugin. An action names what it acted on, not
+  plugins: slack reacting on a PR knows it touched a PR, not who publishes PRs. Built-ins:
+  git's branch actions, notes', jira's transition and slack's `mark_sent` touch nothing
+  outside themselves.
 - `PageRequest(ctx, graph, query, path)`; handlers return `str` here (`Response` comes in
   07). `CliRequest(ctx, graph, args)`.
 - `plan.md`'s "class variables to the top" done while every plugin file is open.
 
 **Tests.** Existing action tests adapted; `test_server.py:224` asserts only the acting
-plugin is refreshed; a page handler sees its path. **Size.** L.
+plugin is refreshed; an action touching a PR refreshes its publisher too; a page handler
+sees its path. **Size.** L.
 
 **Migration/compat (all three).** None stored. **Risk.** Medium: touches every plugin file,
 but mechanically; three PRs so each keeps `--reload` green.
@@ -87,8 +106,10 @@ but mechanically; three PRs so each keeps `--reload` green.
 - Request objects (**recommended**) vs keyword-only parameters (allow additions, not
   removals or defaults derived from other inputs) vs a fatter `Context` (mixes per-plugin
   environment with per-call inputs).
-- `ActionResult.refresh` default **own plugin only**; the alternative (all, as today)
-  makes every click cost a full github collect.
+- After an action, **refresh the acting plugin and the publishers of what it touched**
+  (`touched: list[Ref]`) vs naming plugins (`refresh: frozenset[str]`: the action would
+  have to know who publishes a PR) vs all, as today (every click costs a full github
+  collect).
 - Footer lists every identity (**recommended**) vs a `login_plugin` setting.
 
 ## Dependencies
