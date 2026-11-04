@@ -63,5 +63,5 @@ fragment PrFields on PullRequest {
       ... on IssueComment { createdAt author { login } }
     }
   }
-  files(first: 100) @include(if: $withFiles) { nodes { path } }
+  files(first: 100) @include(if: $withFiles) { nodes { path additions deletions } }
 }

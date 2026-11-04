@@ -89,7 +89,10 @@ class PullRequest(Model):
     last_commit_at: datetime | None = None
     events: list[TimelineEvent] = Field(default_factory=list)
     files: list[str] = Field(default_factory=list)
-    """Changed paths; only fetched for searches that need them."""
+    """Changed paths (the first 100); only fetched for the searches that need them: my PRs and
+    the ones I review."""
+    file_lines: list[int] = Field(default_factory=list)
+    """Lines added plus deleted in each of `files`, in the same order."""
 
 
 class GitHubSnapshot(Model):
@@ -122,6 +125,10 @@ class TeamPrScore(Model):
     """Of those, files where my team's approval is required."""
     my_files: int
     """Files in directories I committed to recently."""
+    part_files: int = 0
+    """Files owned by me or my teams in CODEOWNERS; 0 when none are (or there is no file)."""
+    part_lines: int = 0
+    """Lines changed in those files."""
 
 
 class DerivedSnapshot(Model):

@@ -64,6 +64,9 @@ tickets they name), and `person` for me and everyone it knows an email for; see
 - **PR policy**: failing checks named in `policy_checks`, linked to their details, which
   say what's missing (a label, an assignee).
 - **Merge conflicts**.
+- **Reviews for me** and **Requested from my teams** size a review by the files that
+  CODEOWNERS gives me or my teams, when there are some: "my part: 12 lines in 2 of 119
+  files". The PR's badges still show the whole PR. Without owned files, the whole PR sizes it.
 - **Needs a reviewer**: no person requested and no approval. PRs requesting one of my
   `teams` get recent committers to the PR's directories as suggestions for whom to assign
   instead.

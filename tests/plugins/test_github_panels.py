@@ -451,3 +451,19 @@ def test_housekeeping_says_when_a_pr_may_need_or_is_worth_splitting() -> None:
         worth.title: ["worth splitting: 800 lines"],
         labeled.title: ["worth splitting: labeled size/XL"],
     }
+
+
+def test_a_review_is_sized_by_the_part_i_or_my_teams_own() -> None:
+    big = pr(1, author="alice", size=900, changed_files=119)
+    whole = pr(2, author="alice", size=900, changed_files=119)
+    score = TeamPrScore(owned_files=2, required_files=0, my_files=0, part_files=2, part_lines=12)
+    built = build(
+        github=snapshot(direct_requests=[big, whole]),
+        derived=DerivedSnapshot(team_scores={big.url: score}),
+    )
+    items = {i.title: i for i in panel(built, "github.reviews_for_me").items}
+    assert items[big.title].signals and items[big.title].signals.effort == "minutes"
+    assert "my part: 12 lines in 2 of 119 files" in items[big.title].details
+    assert items[big.title].badges == ["+900 lines", "119 files"]
+    assert items[whole.title].signals and items[whole.title].signals.effort == "day"
+    assert items[whole.title].details == ["review requested"]

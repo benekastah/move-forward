@@ -11,7 +11,7 @@ from ...domain import Model
 from ...graph import Graph, Ref
 from ...page import Effort, Item, Link, Panel, Signals, age
 from .config import GitHubConfig
-from .models import DerivedSnapshot, GitHubSnapshot, PullRequest
+from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
 from .prs import (
     approved,
     changes_requested,
@@ -104,11 +104,15 @@ def requested_of(pr: PullRequest, me: str) -> datetime | None:
     return max(times, default=None)
 
 
-def _review(pr: PullRequest, me: str, config: GitHubConfig) -> Signals:
-    """Review it: its author waits, since my review was asked for."""
+def _review(
+    pr: PullRequest, me: str, config: GitHubConfig, part: TeamPrScore | None = None
+) -> Signals:
+    """Review it: its author waits, since my review was asked for. The effort is that of
+    the part I or my teams own (`part`), when there is one."""
+    lines, files = (part.part_lines, part.part_files) if part else (pr.size, pr.changed_files)
     return Signals(
         verb=REVIEW,
-        effort=review_effort(pr.size, pr.changed_files, config),
+        effort=review_effort(lines, files, config),
         waiting=[pr.author] if pr.author else [],
         waiting_since=requested_of(pr, me),
     )
@@ -137,6 +141,20 @@ class Builder:
         """The work entries about the PR or its tickets."""
         return self.graph.view_related(pr_ref(pr), ENTRY, _EntryView)
 
+    def _part(self, pr: PullRequest) -> TeamPrScore | None:
+        """The part of a PR I or my teams own in CODEOWNERS; None when there is none."""
+        score = self.derived.team_scores.get(pr.url) if self.derived else None
+        return score if score and score.part_files else None
+
+    def _my_part(self, pr: PullRequest) -> list[str]:
+        """A detail saying how much of the PR is mine to review, or nothing."""
+        part = self._part(pr)
+        if part is None:
+            return []
+        return [
+            f"my part: {part.part_lines} lines in {part.part_files} of {pr.changed_files} files"
+        ]
+
     # Reviews for me
 
     def reviews_for_me(self) -> Panel:
@@ -147,9 +165,9 @@ class Builder:
                     pr_item(
                         self.now,
                         pr,
-                        details=["review requested"],
+                        details=["review requested", *self._my_part(pr)],
                         rank=pr.updated_at.timestamp(),
-                        signals=_review(pr, self.me, self.config),
+                        signals=_review(pr, self.me, self.config, self._part(pr)),
                         fingerprint=pr.head_oid,
                     )
                 )
@@ -161,9 +179,9 @@ class Builder:
                         pr_item(
                             self.now,
                             pr,
-                            details=[reason],
+                            details=[reason, *self._my_part(pr)],
                             rank=pr.updated_at.timestamp(),
-                            signals=_review(pr, self.me, self.config),
+                            signals=_review(pr, self.me, self.config, self._part(pr)),
                             fingerprint=pr.head_oid,
                         )
                     )
@@ -418,7 +436,7 @@ class Builder:
                 if pr.url in direct or pr.is_draft:
                     continue
                 score = scores.get(pr.url)
-                details: list[str] = []
+                details: list[str] = [*self._my_part(pr)]
                 rank = 0.0
                 if score:
                     details.append(

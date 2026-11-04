@@ -135,7 +135,10 @@ class PrRepository:
                     )
                     for i, e in enumerate(pr.events)
                 ]
-                rows["github_pr_files"] += [(*key, i, f) for i, f in enumerate(pr.files)]
+                rows["github_pr_files"] += [
+                    (*key, i, f, pr.file_lines[i] if i < len(pr.file_lines) else 0)
+                    for i, f in enumerate(pr.files)
+                ]
         with self._db.transaction() as conn:
             for table in ("github_prs", "github_account", "github_team_members"):
                 conn.execute(f"DELETE FROM {table}")
@@ -245,6 +248,7 @@ class PrRepository:
                         for r in events[key]
                     ],
                     files=[cast(str, r["path"]) for r in files[key]],
+                    file_lines=[cast(int, r["lines"]) for r in files[key]],
                 )
             )
         members = [r["login"] for r in self._db.query("SELECT login FROM github_team_members")]
@@ -270,9 +274,9 @@ class DerivedRepository:
                 ],
             )
             conn.executemany(
-                "INSERT INTO github_team_scores VALUES (?, ?, ?, ?)",
+                "INSERT INTO github_team_scores VALUES (?, ?, ?, ?, ?, ?)",
                 [
-                    (url, s.owned_files, s.required_files, s.my_files)
+                    (url, s.owned_files, s.required_files, s.my_files, s.part_files, s.part_lines)
                     for url, s in derived.team_scores.items()
                 ],
             )
@@ -291,6 +295,8 @@ class DerivedRepository:
                     owned_files=row["owned_files"],
                     required_files=row["required_files"],
                     my_files=row["my_files"],
+                    part_files=row["part_files"],
+                    part_lines=row["part_lines"],
                 )
                 for row in self._db.query("SELECT * FROM github_team_scores")
             },

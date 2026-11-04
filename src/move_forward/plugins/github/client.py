@@ -106,6 +106,8 @@ class _RawEvent(_Raw):
 
 class _RawFile(_Raw):
     path: str
+    additions: int = 0
+    deletions: int = 0
 
 
 class _RawRef(_Raw):
@@ -330,6 +332,7 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
     requested = [_reviewer(r.requested_reviewer) for r in raw.review_requests.nodes if r]
     commit = next((c.commit for c in raw.commits.nodes if c), None)
     rollup = commit.status_check_rollup if commit else None
+    files = [f for f in raw.files.nodes if f] if raw.files else []
     return PullRequest(
         url=raw.url,
         number=raw.number,
@@ -375,7 +378,8 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
             for e in (_event(raw_event) for raw_event in raw.timeline_items.nodes if raw_event)
             if e
         ],
-        files=[f.path for f in raw.files.nodes if f] if raw.files else [],
+        files=[f.path for f in files],
+        file_lines=[f.additions + f.deletions for f in files],
     )
 
 
@@ -430,8 +434,8 @@ def collect(
 
         login_future = pool.submit(login, host)
         mine = search("is:pr is:open author:@me archived:false", True)
-        direct = search("is:pr is:open user-review-requested:@me archived:false")
-        reviewed = search("is:pr is:open reviewed-by:@me -author:@me archived:false")
+        direct = search("is:pr is:open user-review-requested:@me archived:false", True)
+        reviewed = search("is:pr is:open reviewed-by:@me -author:@me archived:false", True)
         team_futures = [
             search(
                 f"is:pr is:open team-review-requested:{org}/{team} -author:@me archived:false",

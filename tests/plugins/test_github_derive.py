@@ -17,6 +17,15 @@ def test_team_score_counts_owned_required_and_my_files() -> None:
     assert derive.team_score(["x"], None, {"@acme/core"}, []).owned_files == 0
 
 
+def test_team_score_counts_the_part_owned_by_me_or_my_teams_with_its_lines() -> None:
+    owners = codeowners.CodeOwners("/api/ @acme/core\n/web/ @me\n/docs/ @someone\n")
+    files = ["api/a.py", "web/c.ts", "docs/d.md"]
+    score = derive.team_score(files, owners, {"@acme/core"}, [], [10, 5, 100], "@me")
+    assert (score.part_files, score.part_lines) == (2, 15)  # my team's and mine, not docs
+    unowned = derive.team_score(["x"], owners, {"@acme/core"}, [], [7], "@me")
+    assert (unowned.part_files, unowned.part_lines) == (0, 0)
+
+
 def _commit(repo: Path, email: str, path: str) -> None:
     (repo / path).parent.mkdir(parents=True, exist_ok=True)
     (repo / path).write_text(email + path)

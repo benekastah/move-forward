@@ -208,5 +208,10 @@ MIGRATIONS = [
     """
     ALTER TABLE github_pr_events ADD COLUMN has_body INTEGER NOT NULL DEFAULT 0;  -- a review has text
     """,
+    """
+    ALTER TABLE github_pr_files ADD COLUMN lines INTEGER NOT NULL DEFAULT 0;  -- added plus deleted
+    ALTER TABLE github_team_scores ADD COLUMN part_files INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE github_team_scores ADD COLUMN part_lines INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 """The github plugin's migrations."""

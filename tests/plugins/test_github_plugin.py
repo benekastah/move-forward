@@ -130,12 +130,13 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
             ),
         ],
         files=["a.py", "b.py"],
+        file_lines=[0, 0],  # the JSON import predates the lines column
         merged_at=NOW,
         in_merge_queue=True,
     )
     gh = snapshot(
         mine=[full, pr(2)],
-        team_requests=[full.model_copy(update={"files": ["only/here.py"]})],
+        team_requests=[full.model_copy(update={"files": ["only/here.py"], "file_lines": [0]})],
         merged_recent=[pr(3, state="MERGED")],
     )
     db = Database(":memory:")
@@ -260,3 +261,12 @@ def test_a_reviews_state_and_whether_it_has_text_are_kept() -> None:
     store = PrRepository(db)
     store.replace(snapshot(mine=[pr(1, events=[review])]))
     assert store.load() == snapshot(mine=[pr(1, events=[review])])
+
+
+def test_each_files_changed_lines_are_kept() -> None:
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    store = PrRepository(db)
+    changed = pr(1, files=["a.py", "b.py"], file_lines=[3, 40])
+    store.replace(snapshot(mine=[changed]))
+    assert store.load() == snapshot(mine=[changed])

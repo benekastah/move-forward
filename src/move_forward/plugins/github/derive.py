@@ -37,19 +37,31 @@ def team_score(
     owners: codeowners.CodeOwners | None,
     team_handles: set[str],
     my_dirs: list[str],
+    lines: list[int] | None = None,
+    my_handle: str | None = None,
 ) -> TeamPrScore:
-    """How much of a PR falls to my teams: `team_handles` are `@org/team` as CODEOWNERS has them."""
-    owned = required = 0
+    """How much of a PR falls to my teams: `team_handles` are `@org/team` as CODEOWNERS has them.
+
+    `lines` are each file's changed lines. With them, and `my_handle` (`@login`), the part
+    owned by me or my teams is counted too (`part_files`, `part_lines`).
+    """
+    owned = required = part_files = part_lines = 0
+    mine: set[str] = {*team_handles, *([my_handle] if my_handle else [])}
     if owners:
-        for path in files:
+        for index, path in enumerate(files):
             path_owners, is_required = owners.owners(path)
             if team_handles.intersection(path_owners):
                 owned += 1
                 required += is_required
+            if mine.intersection(path_owners):
+                part_files += 1
+                part_lines += lines[index] if lines and index < len(lines) else 0
     return TeamPrScore(
         owned_files=owned,
         required_files=required,
         my_files=sum(_in_my_dirs(path, my_dirs) for path in files),
+        part_files=part_files,
+        part_lines=part_lines,
     )
 
 
@@ -109,14 +121,20 @@ def collect(
     }
     team_handles = {f"@{org}/{team}" for team in teams}
 
+    asked = {
+        pr.url: pr
+        for pr in (*github.team_requests, *github.direct_requests, *github.reviewed_by_me)
+    }
     scores = {
         pr.url: team_score(
             pr.files,
             owners.get(pr.repo),
             team_handles,
             repos[pr.repo].my_dirs if pr.repo in repos else [],
+            pr.file_lines,
+            f"@{github.login}",
         )
-        for pr in github.team_requests
+        for pr in asked.values()
     }
     suggestions = {
         pr.url: suggest_reviewers(
