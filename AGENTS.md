@@ -104,10 +104,13 @@ is what's left to build.
   core's in `init.py`, a plugin's in its `setup.py`) and `mfd init --example` (`cli.py`). Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
   `MOVED_SETTINGS` in `config.py`).
-- **Migrations are append-only.** Core and each plugin own a list of SQL
-  scripts applied in order and counted in `schema_versions`. Never edit one
-  that has been committed to `main`; add a new one. A plugin's tables are
-  prefixed with its name.
+- **Migrations are append-only.** Core and each plugin own a list of named
+  `Migration`s (SQL, or a Python function for a data fix), applied in order and
+  kept by name in the `migrations` ledger. Never edit, rename or reorder one
+  that has been committed to `main`; add a new one, named with the next
+  number (`0004_issue_comments`). A plugin's tables, indexes, views and
+  triggers are prefixed with its name: core refuses a migration that makes
+  another.
 - **A plugin table is fetched or kept**, and its comment says which.
   Fetched tables hold what `collect` brings back; `store` replaces them
   wholesale, so they're never pruned. A table computed from the graph in

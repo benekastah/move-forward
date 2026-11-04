@@ -20,9 +20,11 @@ frozen for it).
 **Changes.**
 - `Migration(name: str, run: str | Callable[[sqlite3.Connection], None])`;
   `Plugin.migrations: list[Migration]`; `api` exports it.
-- `db.migrate` keeps a ledger `migrations(owner, name, applied_at)`; the new core
-  migration creates it and backfills from `schema_versions` counts using each built-in's
-  names, so the index→name switch is exact on existing databases. It refuses a list whose
+- `db.migrate` keeps a ledger `migrations(owner, name, applied_at)`, made beside
+  `schema_versions` when the database opens (not a numbered migration: core's own
+  migrations are kept in it too). The first time an owner migrates, its ledger is
+  backfilled from its `schema_versions` count with the code's names, so the index→name
+  switch is exact on existing databases. It refuses a list whose
   applied prefix doesn't match the ledger (renamed or reordered) and still fails when the
   ledger has names the code lacks ("upgrade the dashboard"). `schema_versions` stays as a
   count for one release, then goes.

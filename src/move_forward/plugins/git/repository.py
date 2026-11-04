@@ -4,14 +4,16 @@ branches, and the directories I commit to, as the last refresh found them."""
 from collections import defaultdict
 from datetime import datetime
 
-from ...api import Database
+from ...api import Database, Migration
 from .models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 _FROM_SNAPSHOT = "FROM snapshots, json_each(snapshots.payload, '$.repos') AS repo"
 _GIT_SNAPSHOT = "snapshots.source = 'git' AND snapshots.payload IS NOT NULL"
 
 MIGRATIONS = [
-    f"""
+    Migration(
+        "0001_checkouts",
+        f"""
     CREATE TABLE git_repos (           -- fetched: the checkouts in [git] repos
         dir TEXT PRIMARY KEY,
         position INTEGER NOT NULL,     -- [git] repos' order
@@ -67,10 +69,16 @@ MIGRATIONS = [
         SELECT json_extract(repo.value, '$.dir'), d.value
         {_FROM_SNAPSHOT}, json_each(repo.value, '$.my_dirs') AS d WHERE {_GIT_SNAPSHOT};
     """,
-    """
+    ),
+    Migration(
+        "0002_branch_my_commits",
+        """
     ALTER TABLE git_branches ADD COLUMN my_commits INTEGER;  -- NULL: not counted
     """,
-    """
+    ),
+    Migration(
+        "0003_default_refs",
+        """
     CREATE TABLE git_default_refs (    -- fetched: the default branch on each remote
         repo_dir TEXT NOT NULL REFERENCES git_repos ON DELETE CASCADE,
         position INTEGER NOT NULL,
@@ -78,6 +86,7 @@ MIGRATIONS = [
         PRIMARY KEY (repo_dir, position)
     );
     """,
+    ),
 ]
 """The git plugin's migrations."""
 

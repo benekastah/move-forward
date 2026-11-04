@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from . import localtime, private, shell
 from .asking import Asker, InitSetup
-from .db import Database
+from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
 from .notifications import Event
@@ -377,7 +377,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     requires: ClassVar[list[str]] = []
     """Plugins whose entities this one is built on, e.g. `["git"]`; the config must enable
     them too."""
-    migrations: ClassVar[list[str]] = []
+    migrations: ClassVar[list[Migration]] = []
     """SQL scripts creating and changing the plugin's tables, applied in order. Append to it;
     never edit one that has shipped. Tables are prefixed with `name`."""
     snapshot_model: ClassVar[type[BaseModel] | None] = None

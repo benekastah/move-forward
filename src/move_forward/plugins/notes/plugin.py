@@ -24,6 +24,7 @@ from ...api import (
     ItemAdditions,
     KeptItemRequest,
     KindSpec,
+    Migration,
     Panel,
     PanelsRequest,
     Plugin,
@@ -55,7 +56,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     title = "Notes"
     always_on = True
     config_model = NotesConfig
-    migrations: ClassVar[list[str]] = MIGRATIONS
+    migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         # Done entries and todos aren't published: one that's gone is done.
         ENTRY: KindSpec(EntryAttrs, linking=None, gone_means_done=True, resolvable=True),

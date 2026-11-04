@@ -5,7 +5,7 @@ from collections import defaultdict
 from collections.abc import Callable, Collection
 from datetime import date, datetime
 
-from ...api import Database, Ref
+from ...api import Database, Migration, Ref
 from ...api.kinds import PULL_REQUEST as PR
 from .markdown import BRANCH, attach_conditions
 from .models import (
@@ -24,7 +24,9 @@ from .models import (
 )
 
 MIGRATIONS = [
-    """
+    Migration(
+        "0001_notes",
+        """
     CREATE TABLE notes_entries (
         id INTEGER PRIMARY KEY,
         title TEXT NOT NULL UNIQUE,
@@ -92,7 +94,10 @@ MIGRATIONS = [
         PRIMARY KEY (kind, ref_id)
     );
     """,
-    """
+    ),
+    Migration(
+        "0002_ice_covers",
+        """
     CREATE TABLE notes_ice_covers (    -- derived: what else an act of icing hides, e.g. its
         ice_id INTEGER NOT NULL        -- branches' PRs; replaced after every refresh
             REFERENCES notes_ice ON DELETE CASCADE,
@@ -101,9 +106,12 @@ MIGRATIONS = [
         PRIMARY KEY (ice_id, kind, ref_id)
     );
     """,
+    ),
     # Names, so notes needn't parse git's branch ids for them; branches iced so far were all
     # `<repo dir>\t<name>`.
-    """
+    Migration(
+        "0003_iced_names",
+        """
     ALTER TABLE notes_iced ADD COLUMN name TEXT NOT NULL DEFAULT '';
     ALTER TABLE notes_iced ADD COLUMN repo_dir TEXT;
     UPDATE notes_iced
@@ -112,7 +120,10 @@ MIGRATIONS = [
     WHERE kind = 'branch' AND instr(ref_id, char(9)) > 0;
     UPDATE notes_iced SET name = ref_id WHERE name = '';
     """,
-    """
+    ),
+    Migration(
+        "0004_check_ins",
+        """
     ALTER TABLE notes_entries ADD COLUMN checked_on TEXT;     -- the skill last checked in
     ALTER TABLE notes_entries ADD COLUMN asked_done_on TEXT;  -- it last asked if it's done
     UPDATE notes_entries SET
@@ -122,7 +133,10 @@ MIGRATIONS = [
                          WHERE entry_id = notes_entries.id AND text = 'Asked-done');
     DELETE FROM notes_declined WHERE text IN ('Checked', 'Asked-done');
     """,
-    """
+    ),
+    Migration(
+        "0005_offers",
+        """
     CREATE TABLE notes_offers (        -- kept: what the skill offered about a PR, and when;
         pr TEXT NOT NULL,              -- pruned after prune_days
         kind TEXT NOT NULL CHECK (kind IN ('nudge', 'fresh-review')),
@@ -130,12 +144,18 @@ MIGRATIONS = [
         PRIMARY KEY (pr, kind)
     );
     """,
-    """
+    ),
+    Migration(
+        "0006_condition_prs",
+        """
     ALTER TABLE notes_conditions ADD COLUMN pr TEXT;  -- the PR it holds; NULL for one from
                                                       -- before, until it's given its PR
     """,
+    ),
     # Kinds named for the plugins that publish them, and pull requests' family `pull_request`.
-    """
+    Migration(
+        "0007_kinds_named_for_plugins",
+        """
     UPDATE notes_links SET kind = CASE kind
         WHEN 'pr' THEN 'pull_request'
         WHEN 'branch' THEN 'git.branch'
@@ -161,6 +181,7 @@ MIGRATIONS = [
         ELSE kind
     END;
     """,
+    ),
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
 only the notes know what's in them."""

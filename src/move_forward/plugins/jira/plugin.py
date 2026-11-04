@@ -26,6 +26,7 @@ from ...api import (
     Link,
     LinkingRequest,
     LoadRequest,
+    Migration,
     Model,
     Panel,
     PanelsRequest,
@@ -359,7 +360,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     config_model = JiraConfig
     teams_field = "teams"
     snapshot_model = JiraSnapshot
-    migrations: ClassVar[list[str]] = MIGRATIONS
+    migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         TICKET: KindSpec(JiraTicket, linking=None, fetchable=True, resolvable=True)
     }

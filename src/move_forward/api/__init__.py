@@ -17,7 +17,7 @@ from ..asking import (
     url,
     word,
 )
-from ..db import Database, Params
+from ..db import Database, Migration, Params
 from ..domain import KindModel, Model
 from ..graph import Entity, Graph, KindSpec, Ref, attrs
 from ..markdown import cell, tables
@@ -118,6 +118,7 @@ __all__ = [
     "Link",
     "LinkingRequest",
     "LoadRequest",
+    "Migration",
     "Model",
     "PageHandler",
     "PageRequest",

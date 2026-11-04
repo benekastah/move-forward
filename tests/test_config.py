@@ -6,7 +6,7 @@ from conftest import NOW, section
 from pydantic import ValidationError
 
 from move_forward import config, registry
-from move_forward.db import Database
+from move_forward.db import Database, Migration
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS, GitHubConfig
 from move_forward.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV, JiraConfig
@@ -146,7 +146,9 @@ def test_the_jira_site_must_be_https(tmp_path: Path) -> None:
 
 
 class _JiraWithTable(JiraPlugin):
-    migrations: ClassVar[list[str]] = ["CREATE TABLE jira_seen (key TEXT PRIMARY KEY);"]
+    migrations: ClassVar[list[Migration]] = [
+        Migration("0001_seen", "CREATE TABLE jira_seen (key TEXT PRIMARY KEY);")
+    ]
 
 
 def test_plugin_migrations_run_when_migrated_not_on_every_page(
@@ -159,7 +161,7 @@ def test_plugin_migrations_run_when_migrated_not_on_every_page(
     calls: list[str] = []
     real_migrate = db.migrate
 
-    def counting(owner: str, migrations: list[str]) -> int:
+    def counting(owner: str, migrations: list[Migration]) -> int:
         calls.append(owner)
         return real_migrate(owner, migrations)
 

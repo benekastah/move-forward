@@ -3,12 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database
+from move_forward import registry
+from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database, Migration
 from move_forward.private import is_private
 from move_forward.repositories import KvRepository
 
-CREATE_A = "CREATE TABLE p_a (x INTEGER);"
-CREATE_B = "CREATE TABLE p_b (x INTEGER);"
+CREATE_A = Migration("0001_a", "CREATE TABLE p_a (x INTEGER);")
+CREATE_B = Migration("0002_b", "CREATE TABLE p_b (x INTEGER);")
 
 
 def _versions(db: Database) -> dict[str, int]:
@@ -44,7 +45,7 @@ def test_reopening_runs_nothing_again(tmp_path: Path) -> None:
 def test_a_failing_migration_keeps_the_ones_before_it_and_records_neither_its_change() -> None:
     db = Database(":memory:")
     with pytest.raises(sqlite3.OperationalError):
-        db.migrate("p", [CREATE_A, CREATE_B + " NOT SQL"])
+        db.migrate("p", [CREATE_A, Migration("0002_b", "CREATE TABLE p_b (x INTEGER); NOT SQL")])
     assert _versions(db)["p"] == 1
     assert not db.query("SELECT name FROM sqlite_master WHERE name = 'p_b'")
     db.execute("INSERT INTO p_a VALUES (1)")  # the connection is usable afterwards
@@ -156,7 +157,7 @@ def test_foreign_keys_cascade(tmp_path: Path) -> None:
     db = Database(tmp_path / "a.db")
     parent = "CREATE TABLE p_parent (id INTEGER PRIMARY KEY);"
     child = "CREATE TABLE p_child (parent INTEGER REFERENCES p_parent ON DELETE CASCADE);"
-    db.migrate("p", [parent + child])
+    db.migrate("p", [Migration("0001_tables", parent + child)])
     db.execute("INSERT INTO p_parent VALUES (1)")
     db.execute("INSERT INTO p_child VALUES (1)")
     db.execute("DELETE FROM p_parent")
@@ -173,11 +174,12 @@ def test_a_file_database_lets_another_process_read_while_one_writes(tmp_path: Pa
 def test_the_database_and_its_backups_are_mine_alone(tmp_path: Path) -> None:
     path = tmp_path / "data" / "dashboard.db"
     db = Database(path)
-    db.migrate("test", ["CREATE TABLE t (x);"])
-    db.execute("INSERT INTO t VALUES (1)")
+    t = Migration("0001_t", "CREATE TABLE test_t (x);")
+    db.migrate("test", [t])
+    db.execute("INSERT INTO test_t VALUES (1)")
     assert is_private(path)
     again = Database(path)
-    again.migrate("test", ["CREATE TABLE t (x);", "CREATE TABLE u (y);"])  # backs up first
+    again.migrate("test", [t, Migration("0002_u", "CREATE TABLE test_u (y);")])  # backs up first
     [backup] = (path.parent / "backups").iterdir()
     assert is_private(backup)
     assert is_private(path.parent / "backups")
@@ -187,8 +189,8 @@ def test_kinds_kept_by_core_are_renamed_for_the_plugins_that_publish_them(tmp_pa
     path = tmp_path / "old.db"
     conn = sqlite3.connect(path)
     conn.execute("CREATE TABLE schema_versions (plugin TEXT PRIMARY KEY, version INTEGER)")
-    for sql in CORE_MIGRATIONS[:10]:
-        conn.executescript(sql)
+    for migration in CORE_MIGRATIONS[:10]:
+        conn.executescript(str(migration.run))
     conn.execute("INSERT INTO schema_versions VALUES ('core', 10)")
     old = ["pr", "branch", "repo", "stack_branch", "entry", "todo", "iced", "ticket", "person"]
     for kind in old:
@@ -221,8 +223,8 @@ def test_feedback_kept_by_verb_is_kept_by_task(tmp_path: Path) -> None:
     path = tmp_path / "old.db"
     conn = sqlite3.connect(path)
     conn.execute("CREATE TABLE schema_versions (plugin TEXT PRIMARY KEY, version INTEGER)")
-    for sql in CORE_MIGRATIONS[:11]:
-        conn.executescript(sql)
+    for migration in CORE_MIGRATIONS[:11]:
+        conn.executescript(str(migration.run))
     conn.execute("INSERT INTO schema_versions VALUES ('core', 11)")
     verbs = [
         "Review",
@@ -254,3 +256,68 @@ def test_feedback_kept_by_verb_is_kept_by_task(tmp_path: Path) -> None:
     db.execute(
         "INSERT INTO act_now_feedback VALUES ('k', 'x', 't', 'opened', NULL, 'f', '2026-10-30')"
     )  # a new kind of feedback needs no rebuild
+
+
+def test_a_database_from_before_the_ledger_gets_its_migrations_names(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE schema_versions (plugin TEXT PRIMARY KEY, version INTEGER)")
+    for migration in CORE_MIGRATIONS:
+        conn.executescript(str(migration.run))
+    conn.execute("INSERT INTO schema_versions VALUES ('core', ?)", (len(CORE_MIGRATIONS),))
+    conn.execute("CREATE TABLE p_a (x INTEGER)")
+    conn.execute("INSERT INTO schema_versions VALUES ('p', 1)")
+    conn.commit()
+    conn.close()
+
+    db = Database(path)
+    assert db.migrate("p", [CREATE_A, CREATE_B]) == 1  # p_a's isn't run again
+    ledger = [(r["owner"], r["name"]) for r in db.query("SELECT * FROM migrations ORDER BY rowid")]
+    assert ledger == [
+        *((CORE, m.name) for m in CORE_MIGRATIONS),
+        ("p", "0001_a"),
+        ("p", "0002_b"),
+    ]
+
+
+def test_a_renamed_or_reordered_migration_is_refused() -> None:
+    db = Database(":memory:")
+    db.migrate("p", [CREATE_A, CREATE_B])
+    renamed = Migration("0001_first", "CREATE TABLE p_a (x INTEGER);")
+    with pytest.raises(RuntimeError, match="renamed or reordered"):
+        db.migrate("p", [renamed, CREATE_B])
+    with pytest.raises(RuntimeError, match="renamed or reordered"):
+        db.migrate("p", [CREATE_B, CREATE_A])
+
+
+def test_a_plugins_migration_may_make_only_tables_named_for_it() -> None:
+    db = Database(":memory:")
+    stray = Migration("0001_prs", "CREATE TABLE p_prs (x); CREATE INDEX prs_x ON p_prs (x);")
+    with pytest.raises(ValueError, match="p's migration 0001_prs made prs_x"):
+        db.migrate("p", [stray])
+    assert not db.query("SELECT name FROM sqlite_master WHERE name = 'p_prs'")  # rolled back
+    assert db.migrate("p", [CREATE_A]) == 1  # nothing recorded for the refused one
+
+
+def test_a_python_migration_runs_in_its_transaction() -> None:
+    db = Database(":memory:")
+    db.migrate("p", [CREATE_A])
+
+    def fill(conn: sqlite3.Connection) -> None:
+        conn.executemany("INSERT INTO p_a VALUES (?)", [(n,) for n in range(3)])
+
+    def fail(conn: sqlite3.Connection) -> None:
+        conn.execute("INSERT INTO p_a VALUES (99)")
+        raise RuntimeError("halfway")
+
+    with pytest.raises(RuntimeError, match="halfway"):
+        db.migrate("p", [CREATE_A, Migration("0002_fail", fail)])
+    assert db.query("SELECT * FROM p_a") == []  # its insert rolled back with it
+    assert db.migrate("p", [CREATE_A, Migration("0002_fill", fill)]) == 1
+    assert [r["x"] for r in db.query("SELECT x FROM p_a")] == [0, 1, 2]
+
+
+def test_every_built_in_plugins_migrations_make_only_its_tables() -> None:
+    db = Database(":memory:")
+    for plugin in registry.BUILTINS:
+        db.migrate(plugin.name, plugin.migrations)  # raises on a stray table

@@ -1,7 +1,11 @@
 """The github plugin's tables: the people it knows, and what its PR searches found."""
 
+from ...api import Migration
+
 MIGRATIONS = [
-    """
+    Migration(
+        "0001_people",
+        """
     CREATE TABLE github_people (       -- kept: logins and their commit emails
         login TEXT PRIMARY KEY,
         email TEXT,                    -- NULL: looked up, and none found
@@ -13,7 +17,10 @@ MIGRATIONS = [
         SELECT login, email, CASE source WHEN 'lookup' THEN 'lookup' ELSE 'import' END
         FROM reviewer_users WHERE email IS NOT NULL OR source = 'lookup';
     """,
-    """
+    ),
+    Migration(
+        "0002_prs",
+        """
     CREATE TABLE github_account (      -- fetched: whose PRs these are
         login TEXT PRIMARY KEY
     );
@@ -169,7 +176,10 @@ MIGRATIONS = [
         AND list.key IN ('mine', 'direct_requests', 'reviewed_by_me', 'team_requests',
             'merged_recent', 'closed_recent');
     """,
-    """
+    ),
+    Migration(
+        "0003_reviewer_suggestions",
+        """
     CREATE TABLE github_reviewer_suggestions (  -- fetched: whom to ask, for my team-requested PRs
         pr_url TEXT NOT NULL,
         position INTEGER NOT NULL,     -- most commits first
@@ -196,24 +206,42 @@ MIGRATIONS = [
         FROM snapshots, json_each(snapshots.payload, '$.team_scores') AS score
         WHERE snapshots.source = 'github.derived' AND snapshots.payload IS NOT NULL;
     """,
-    """
+    ),
+    Migration(
+        "0004_people_looked_up_at",
+        """
     ALTER TABLE github_people ADD COLUMN looked_up_at TEXT;  -- a lookup's time; NULL: before kept
     """,
-    """
+    ),
+    Migration(
+        "0005_thread_comment_count",
+        """
     ALTER TABLE github_pr_threads ADD COLUMN comment_count INTEGER NOT NULL DEFAULT 1;
     """,
-    """
+    ),
+    Migration(
+        "0006_event_state",
+        """
     ALTER TABLE github_pr_events ADD COLUMN state TEXT;  -- a review's state; NULL: not one, or before kept
     """,
-    """
+    ),
+    Migration(
+        "0007_event_has_body",
+        """
     ALTER TABLE github_pr_events ADD COLUMN has_body INTEGER NOT NULL DEFAULT 0;  -- a review has text
     """,
-    """
+    ),
+    Migration(
+        "0008_file_lines",
+        """
     ALTER TABLE github_pr_files ADD COLUMN lines INTEGER NOT NULL DEFAULT 0;  -- added plus deleted
     ALTER TABLE github_team_scores ADD COLUMN part_files INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE github_team_scores ADD COLUMN part_lines INTEGER NOT NULL DEFAULT 0;
     """,
-    """
+    ),
+    Migration(
+        "0009_account_again",
+        """
     -- A new search, `mentioned`: the `list` check can't be altered, so the PR tables are
     -- rebuilt. What they held is fetched again: with no account the next refresh is a full one.
     DELETE FROM github_account;
@@ -302,5 +330,6 @@ MIGRATIONS = [
         FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
     );
     """,
+    ),
 ]
 """The github plugin's migrations."""
