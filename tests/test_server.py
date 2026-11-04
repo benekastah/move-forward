@@ -25,6 +25,7 @@ from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.plugin import SlackPlugin
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import migrate
 from move_forward.repositories import LayoutRepository, SessionRepository
@@ -730,3 +731,18 @@ def test_every_answer_forbids_framing(client: HTTPConnection) -> None:
         response.read()
         assert response.getheader("X-Frame-Options") == "DENY"
         assert response.getheader("Content-Security-Policy") == "frame-ancestors 'none'"
+
+
+def test_a_failing_plugin_page_answers_500_and_the_rest_stays_up(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(ctx: object, graph: object, query: object) -> str:
+        raise RuntimeError("boom")
+
+    def pages(self: SlackPlugin) -> dict[str, object]:
+        return {"/ping": boom}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages)
+    failed = get(client, "/ping")
+    assert failed.status == 500 and "failed" in failed.read().decode()
+    assert get(client, "/").status == 200

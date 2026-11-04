@@ -1,6 +1,9 @@
 """The built-in plugins, and the enabled ones with their contexts."""
 
 import logging
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -24,6 +27,12 @@ if TYPE_CHECKING:
     from .config import Config
 
 log = logging.getLogger(__name__)
+
+LOG_AGAIN_SECONDS = 600
+"""How long a plugin hook's failure isn't logged again, so a broken hook called on every
+page doesn't fill the log."""
+_last_logged: dict[tuple[str, str], float] = {}
+_last_logged_lock = threading.Lock()
 
 PLUGINS: list[Plugin[Any, Any]] = [
     GitHubPlugin(),
@@ -66,7 +75,26 @@ class Enabled:
         return self.plugin.name
 
     def snapshot(self) -> BaseModel | None:
-        return self.plugin.load(self.ctx)
+        """What the plugin last stored; None when it has nothing, or its `load` fails."""
+        return call(self.name, "load", lambda: self.plugin.load(self.ctx), None)
+
+
+def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:
+    """`fn()`, a plugin's hook; `default` when it raises, so one plugin's bug can't take the
+    page or another plugin's refresh down. The failure is logged, at most once per plugin and
+    hook every `LOG_AGAIN_SECONDS`."""
+    try:
+        return fn()
+    except Exception:
+        now = time.monotonic()
+        with _last_logged_lock:
+            last = _last_logged.get((name, hook))
+            due = last is None or now - last >= LOG_AGAIN_SECONDS
+            if due:
+                _last_logged[(name, hook)] = now
+        if due:
+            log.exception("%s: %s failed", name, hook)
+        return default
 
 
 def enabled_names(config: "Config") -> list[str]:
@@ -136,7 +164,8 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     """The graph of every plugin's entities. A plugin publishes only the kinds it declares,
     and owns them unless an earlier plugin declared them first; each entity must fit its
     kind's model, and be the only one of its ref. One that isn't is a plugin bug: it's
-    logged and left out, and the page goes on without it."""
+    logged and left out, and the page goes on without it. So is a plugin whose `entities`,
+    `url_for` or `linking_patterns` raises: the graph is built without its answer."""
     owners: dict[str, str] = {}
     for e in plugins:
         for kind in e.plugin.kinds:
@@ -148,7 +177,10 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     entities: list[Entity] = []
     seen: set[Ref] = set()
     for e in plugins:
-        for entity in e.plugin.entities(e.ctx, snapshots.get(e.name)):
+        published: list[Entity] = call(
+            e.name, "entities", lambda e=e: e.plugin.entities(e.ctx, snapshots.get(e.name)), []
+        )
+        for entity in published:
             ref = entity.ref
             if owners.get(ref.kind) != e.name:
                 log.error("%s published %s %s, a kind it doesn't own", e.name, ref.kind, ref.id)
@@ -165,7 +197,13 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
             entities.append(entity)
 
     def url_for(kind: str, id: str) -> str | None:
-        return next((url for e in plugins if (url := e.plugin.url_for(e.ctx, kind, id))), None)
+        for e in plugins:
+            url: str | None = call(
+                e.name, "url_for", lambda e=e: e.plugin.url_for(e.ctx, kind, id), None
+            )
+            if url:
+                return url
+        return None
 
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
         """Each plugin's answer; one that fails is logged and left out, so its entities just
@@ -180,6 +218,11 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
                 log.exception("%s: fetching %s failed", e.name, kind)
         return found
 
-    linking = {kind: p for e in plugins for kind, p in e.plugin.linking_patterns(e.ctx).items()}
+    linking: dict[str, str | None] = {}
+    for e in plugins:
+        patterns: dict[str, str | None] = call(
+            e.name, "linking_patterns", lambda e=e: e.plugin.linking_patterns(e.ctx), {}
+        )
+        linking.update(patterns)
     hiding = [kind for e in plugins for kind in e.plugin.hides]
     return Graph(entities, url_for, fetch, linking, hiding)

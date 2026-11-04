@@ -24,6 +24,7 @@ from .notifications import NotificationRepository
 from .panels import Layout
 from .plugin import KEPT, ActionError
 from .refresh import (
+    PageFailed,
     build_dashboard,
     kept_item,
     perform_action,
@@ -382,6 +383,8 @@ class App:
 
 
 NOTICE = "notice"
+PAGE_FAILED = "<p>This page failed; the log says why.</p>"
+"""What a plugin's page answers when its handler raised."""
 """The query parameter a plugin's page reads its notice from (see `App.plugin_page`)."""
 
 
@@ -552,7 +555,12 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._login(url.query)
                 return
             if url.path in app.sign_in_pages():  # proves itself; see Plugin.sign_in_pages
-                if (page := app.plugin_page(url.path, url.query)) is None:
+                try:
+                    page = app.plugin_page(url.path, url.query)
+                except PageFailed:
+                    self._html(HTTPStatus.INTERNAL_SERVER_ERROR, PAGE_FAILED)
+                    return
+                if page is None:
                     self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
                 else:
                     self._html(HTTPStatus.OK, page)
@@ -575,10 +583,16 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     self._html(HTTPStatus.NOT_FOUND, "<p>No such focus category.</p>")
                 else:
                     self._html(HTTPStatus.OK, page)
-            elif (page := app.plugin_page(url.path, url.query, self._take_notice())) is not None:
-                self._html(HTTPStatus.OK, page)
             else:
-                self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
+                try:
+                    page = app.plugin_page(url.path, url.query, self._take_notice())
+                except PageFailed:
+                    self._html(HTTPStatus.INTERNAL_SERVER_ERROR, PAGE_FAILED)
+                    return
+                if page is None:
+                    self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
+                else:
+                    self._html(HTTPStatus.OK, page)
 
         def _read_body(self) -> bytes | None:
             """The request's body, read whole before anything is answered, refusals

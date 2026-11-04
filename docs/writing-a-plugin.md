@@ -111,7 +111,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with
-  what it stored last.
+  what it stored last. It has `collect_timeout_seconds` (300) to finish: past that, the
+  refresh records it as timed out and goes on, and leaves it out of later refreshes until
+  its collect returns (a thread can't be stopped). Set a timeout on whatever it calls, too.
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
   for every page. Nothing is kept as JSON.
 - `me(ctx, snapshot)` says who I am in the tool (a login), for the page's footer; the first
@@ -264,8 +266,10 @@ Set `Item.fingerprint` to what would make a snoozed or dismissed item worth anot
   ActionResult`; a button posts to `/actions/<plugin>/<name>`. Check every field: they
   come from a form, so treat them as untrusted (a repo must be configured, a worktree must
   be the repo's, an id must exist). Anything that deletes or rewrites sets `confirm`, and
-  nothing force-pushes, resets or stashes. Raise `ActionError` with a message the page can
-  show.
+  nothing force-pushes, resets or stashes. Read a required field with
+  `form_field(fields, name)`, which says "missing field" when the form lacks it. Raise
+  `ActionError` with a message the page can show; anything else a handler raises is shown
+  as "<plugin>/<name> failed" and logged.
 - **Buttons on other plugins' items.** `item_actions(ctx, item, graph)` adds buttons by an
   item's subjects; a plugin that reads its tables for them does so once per page in
   `prepare_item_actions(ctx, graph)`.
@@ -277,6 +281,11 @@ Set `Item.fingerprint` to what would make a snoozed or dismissed item worth anot
   another site, so it's served without one, and must check OAuth's single-use `state`
   before doing anything.
 - **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`.
+
+A hook that raises takes down only what it was building: a failing `entities` leaves the
+plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their
+place, a failing page answers 500, and each is logged (once every ten minutes for the same
+plugin and hook). The rest of the page, and the other plugins' refreshes, go on.
 
 ## Upkeep
 

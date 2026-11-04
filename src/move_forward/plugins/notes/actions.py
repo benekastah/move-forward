@@ -10,7 +10,15 @@ from pathlib import Path
 
 from ...domain import Model
 from ...graph import Graph
-from ...plugin import KEPT, ActionError, ActionHandler, ActionResult, Context, SourceError
+from ...plugin import (
+    KEPT,
+    ActionError,
+    ActionHandler,
+    ActionResult,
+    Context,
+    SourceError,
+    form_field,
+)
 from .config import NotesConfig
 from .covers import covers
 from .markdown import links_in
@@ -109,8 +117,8 @@ def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
 def ice(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str:
     """Put the branch's stack on ice, recording each branch's commit as git last saw it. An
     optional `note` says why."""
-    repo = _repo(graph, fields["repo"])
-    branch = fields["branch"]
+    repo = _repo(graph, form_field(fields, "repo"))
+    branch = form_field(fields, "branch")
     branches = _branches(graph, repo)
     if branch not in branches:
         raise ActionError(f"{branch} doesn't exist in {repo}")
@@ -134,7 +142,7 @@ def ice_item(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) ->
     """Put a PR, ticket or work entry on ice, by `kind` and `id`, with what it links: an
     entry its PRs and tickets, a ticket the PRs that mention it. An optional `note` says
     why."""
-    kind, ref_id = fields["kind"], fields["id"]
+    kind, ref_id = form_field(fields, "kind"), form_field(fields, "id")
     if kind not in ICEABLE:
         raise ActionError(f"notes puts PRs, tickets and work entries on ice, not a {kind!r}")
     entity = graph.get(kind, ref_id)
@@ -153,7 +161,7 @@ def ice_item(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) ->
 
 def _ice_id(fields: dict[str, str]) -> int:
     try:
-        return int(fields["ice"])
+        return int(form_field(fields, "ice"))
     except ValueError as e:
         raise ActionError(f"no such stack on ice: {fields['ice']!r}") from e
 
@@ -175,7 +183,7 @@ def thaw(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -> str
 def _todo(notes: NotesRepository, fields: dict[str, str], done: bool) -> tuple[Entry, Todo]:
     """The todo the `todo` field names by id, and its entry; it must be done or open as said."""
     try:
-        todo_id = int(fields["todo"])
+        todo_id = int(form_field(fields, "todo"))
     except ValueError as e:
         raise ActionError(f"bad todo id {fields['todo']!r}") from e
     for entry in notes.entries():
@@ -236,7 +244,7 @@ def todo_link(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) -
     """Link an open todo to a Jira ticket or a PR."""
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, fields, done=False)
-    link = link_for(graph, fields["input"].strip())
+    link = link_for(graph, form_field(fields, "input").strip())
     if link in todo.links:
         raise ActionError(f"{link.ref} is already linked to that todo")
     notes.link_todo(todo.id, link)
@@ -256,7 +264,7 @@ def todo_add(ctx: Context[NotesConfig], graph: Graph, fields: dict[str, str]) ->
     if size not in ("", "quick", "big"):
         raise ActionError(f"size must be quick or big, not {size!r}")
     notes = NotesRepository(ctx.db)
-    title = fields["entry"]
+    title = form_field(fields, "entry")
     entry_id = notes.entry_id(title)
     if entry_id is None and fields.get("create"):
         where = fields.get("where", "")

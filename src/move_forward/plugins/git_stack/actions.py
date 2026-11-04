@@ -9,7 +9,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ...graph import Graph
-from ...plugin import ActionError, Context
+from ...plugin import ActionError, Context, form_field
 from ...shell import DEFAULT_TIMEOUT_SECONDS, CommandError, git
 from .config import GitStackConfig
 from .panels import STACK_BRANCH, StackBranchView, repo_dirs
@@ -98,9 +98,9 @@ def stack_clean(ctx: Context[GitStackConfig], graph: Graph, fields: dict[str, st
     too, and delete them, saying what it did, or how far it got before it failed. It never
     restacks or pushes, so an iced stack's unmerged branches are left as they are, and a
     merged one it deletes can be restored at its iced commit by reopening the stack."""
-    if fields["repo"] not in repo_dirs(graph):
+    if form_field(fields, "repo") not in repo_dirs(graph):
         raise ActionError(f"{fields['repo']} is not a configured repo")
-    repo = Path(fields["repo"])
+    repo = Path(form_field(fields, "repo"))
     found = run_json(
         repo,
         ["clean", "-d", "local"],

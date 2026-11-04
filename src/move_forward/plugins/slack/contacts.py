@@ -6,7 +6,7 @@ import re
 from ... import render
 from ...domain import Model
 from ...graph import Graph
-from ...plugin import ActionError, Context
+from ...plugin import ActionError, Context, form_field
 from . import client, oauth, scopes
 from .config import SlackConfig
 from .pings import my_open_prs
@@ -57,13 +57,15 @@ def set_team_channel(slack: SlackRepository, team: str, name: str, channel_id: s
 
 
 def set_contact_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
-    return set_contact(SlackRepository(ctx.db), fields["login"], fields.get("slack_id", ""))
+    return set_contact(
+        SlackRepository(ctx.db), form_field(fields, "login"), fields.get("slack_id", "")
+    )
 
 
 def set_team_channel_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
     return set_team_channel(
         SlackRepository(ctx.db),
-        fields["team"],
+        form_field(fields, "team"),
         fields.get("channel_name", ""),
         fields.get("channel_id", ""),
     )
