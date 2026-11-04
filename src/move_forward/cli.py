@@ -91,6 +91,7 @@ my-team = "#team-my-team"
 # status_in_review = ["In Review"]        # e.g. ["In Review", "Code Review"]
 # status_closed = ["Closed"]
 # status_blocked = ["Blocked"]           # tickets in it count as blocked, with or without blocker links
+# status_rollout = ["Rollout"]         # merged, waiting on monitoring: never proposed for closing until its PRs merge (empty: off)
 # blocked_by_links = []                  # more link names meaning "blocked by", e.g. ["depends on"]
 # escalation_label_prefix = ""            # labels that rank incidents, e.g. "escalated-to-"
 # escalation_levels = []                  # what follows it, lowest first, e.g. ["manager", "director", "vp"]

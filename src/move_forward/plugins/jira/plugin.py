@@ -78,6 +78,31 @@ def in_status(issue: JiraIssue, names: list[str]) -> bool:
     return issue.status.casefold() in {name.casefold() for name in names}
 
 
+def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) -> Item:
+    """The low-urgency item for a ticket in rollout whose PRs have all merged: close it once
+    monitoring is done."""
+    closed = config.status_closed
+    return Item(
+        title=f"{issue.key} {issue.summary}",
+        url=issue.url,
+        subtitle=f"{issue.status}: all PRs merged",
+        details=["all PRs merged; close once monitoring is done"],
+        links=[Link(text=f"#{p.number}", url=p.url or p.id) for p in prs],
+        subjects=[ticket_ref(issue.key)],
+        actions=[
+            Action(
+                name="jira/transition",
+                label="Close",
+                fields={"key": issue.key, "to": closed[0]}
+                | ({"also": "\n".join(closed[1:])} if closed[1:] else {}),
+            )
+        ]
+        if closed
+        else [],
+        signals=Signals(verb="Finish the rollout", importance=-1, effort="hour"),
+    )
+
+
 def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
     items: list[Item] = []
     for issue in snapshot.issues:
@@ -87,6 +112,10 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
         proposal = None
         targets: list[str] = []
         closing = False
+        if in_status(issue, config.status_rollout):
+            if merged and not open_prs:
+                items.append(_finish_rollout(config, issue, prs))
+            continue  # while it has open PRs, they drive it
         if (
             in_status(issue, config.status_in_progress)
             and open_prs
@@ -168,6 +197,10 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
             why = "bug" + (f", escalated ({level})" if level else "")
             why += ", blocked" if blocked else ""
             importance, verb = min(2, (1 if level else 0) + top), "Fix the bug"
+        elif in_status(issue, config.status_rollout):
+            rank = -1000  # below blocked work: nothing to do but watch
+            why = "in rollout"
+            importance, verb = 0, "Watch the rollout"
         elif not blocked:
             rank = 1000
             why = "unblocked" + (f", under {issue.parent}" if issue.parent else "")
@@ -188,7 +221,10 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                 badges=badges,
                 rank=rank,
                 subjects=[ticket_ref(issue.key)],
-                signals=Signals(
+                signals=None  # the rollout's own item asks for what's left
+                if in_status(issue, config.status_rollout)
+                and not any(t in kind for t in (*config.incident_types, *config.bug_types))
+                else Signals(
                     verb=verb,
                     importance=importance,
                     due=end_of(issue.due, now) if issue.due else None,

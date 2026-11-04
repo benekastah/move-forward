@@ -31,6 +31,10 @@ returns at most one key.
 matches a role if its status is any of them (without regard to case), and a move goes to the
 first one the ticket can move to. A ticket in
 `status_blocked` counts as blocked (in What next and Act now) even without blocker links.
+A ticket in `status_rollout` (default `["Rollout"]`, empty: off) is waiting on monitoring: it is
+never proposed for closing, nothing is suggested while it has open PRs, and once they have
+all merged one low-urgency Act now item, "Finish the rollout", offers to close it. Nothing
+moves a ticket into rollout, and What next ranks it below unblocked work.
 `blocked_by_links` (e.g. `["depends on"]`) names more links, as the blocked ticket sees
 them, that mean "blocked by", besides "is blocked by".
 `escalation_label_prefix` (e.g. `escalated-to-`) and `escalation_levels` (what follows it,

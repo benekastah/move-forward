@@ -168,3 +168,40 @@ def test_any_name_of_a_status_matches_and_a_move_offers_them_in_order() -> None:
     [item] = panel(dashboard, "jira.jira_transitions").items
     assert item.subtitle == "doing → Code Review: all PRs open and non-draft"
     assert item.actions[0].fields == {"key": "APP-2", "to": "Code Review", "also": "In Review"}
+
+
+def test_a_ticket_in_rollout_is_closed_by_hand_once_its_prs_merged() -> None:
+    merged = pr(1, state="MERGED", merged_at=NOW)
+    open_pr = pr(2)
+    dashboard = build(
+        github=snapshot(mine=[open_pr], merged_recent=[merged]),
+        jira=JiraSnapshot(
+            issues=[
+                issue("APP-1", status="Rollout"),  # merged: one low-urgency item
+                issue("APP-2", status="Rollout"),  # open PR: the PR drives, no item
+                issue("APP-3", status="Rollout"),  # no PRs
+            ]
+        ),
+    )
+    [item] = panel(dashboard, "jira.jira_transitions").items
+    assert item.title.startswith("APP-1")
+    assert item.details == ["all PRs merged; close once monitoring is done"]
+    assert [(a.label, a.fields["to"]) for a in item.actions if a.name == "jira/transition"] == [
+        ("Close", "Closed")
+    ]
+    assert item.signals and item.signals.verb == "Finish the rollout"
+    assert item.signals.importance == -1 and item.signals.closes is None
+    assert "Finish the rollout: APP-1 Do the thing" in [i.title for i in dashboard.act_now()]
+
+
+def test_what_next_ranks_a_rollout_below_unblocked_work_and_never_nominates_it() -> None:
+    dashboard = build(
+        jira=JiraSnapshot(
+            issues=[issue("APP-1", status="Rollout"), issue("APP-2", status="Accepted")]
+        )
+    )
+    items = panel(dashboard, "jira.jira_next").items
+    ranked = [i.title.split()[0] for i in sorted(items, key=lambda i: -i.rank)]
+    assert ranked == ["APP-2", "APP-1"]
+    assert {i.title.split()[0]: i.signals is None for i in items} == {"APP-1": True, "APP-2": False}
+    assert items[0].badges[0] == "in rollout" or items[1].badges[0] == "in rollout"

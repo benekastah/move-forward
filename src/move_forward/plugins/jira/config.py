@@ -13,6 +13,7 @@ DEFAULT_STATUS_IN_PROGRESS = "In Progress"
 DEFAULT_STATUS_IN_REVIEW = "In Review"
 DEFAULT_STATUS_CLOSED = "Closed"
 DEFAULT_STATUS_BLOCKED = "Blocked"
+DEFAULT_STATUS_ROLLOUT = "Rollout"
 DEFAULT_PRIORITIES = ["Lowest", "Low", "Medium", "High", "Highest"]
 DEFAULT_INCIDENT_TYPES = ["incident"]
 DEFAULT_BUG_TYPES = ["bug"]
@@ -48,6 +49,11 @@ class JiraConfig(Strict):
     status_blocked: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_BLOCKED])
     """A ticket in one of these statuses counts as blocked in "What next" and Act now, even
     with no blocker links, e.g. `["Blocked", "On Hold"]`."""
+    status_rollout: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_ROLLOUT])
+    """Names for a rollout, e.g. `["Rollout"]`: the code is merged and the ticket waits on
+    monitoring. Such a ticket is never proposed for closing when its PRs merge; once they
+    all have, one low-urgency Act now item asks to finish the rollout. It is never moved
+    into, and "What next" ranks it below unblocked work. Empty: no such status."""
     priorities: list[str] = Field(default_factory=lambda: list(DEFAULT_PRIORITIES))
     """Jira's priority names, lowest first, for `priority_raised` notifications: a priority
     not listed here is never counted as raised."""
