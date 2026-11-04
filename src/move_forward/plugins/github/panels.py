@@ -63,6 +63,11 @@ def _badges(pr: PullRequest) -> list[str]:
     return badges
 
 
+def _or(words: list[str]) -> str:
+    """ "A", "A or B", "A, B or C"."""
+    return f"{', '.join(words[:-1])} or {words[-1]}" if len(words) > 1 else "".join(words)
+
+
 def pr_item(
     now: datetime,
     pr: PullRequest,
@@ -162,6 +167,20 @@ class Builder:
             return ticket_keys(pr)
         entity = self.graph.get(PR, pr.url)
         return [r.id for r in entity.refs if r.kind == "ticket"] if entity else []
+
+    def _team_line(self, pr: PullRequest, score: TeamPrScore) -> str:
+        """How much of the PR is my teams': my part (lines and files, as sized for the review)
+        when CODEOWNERS gives me some, with how many files are required, and the files in
+        directories I work in when there are any."""
+        if score.part_files:
+            line = f"my part: {score.part_lines} lines in {score.part_files} of {pr.changed_files} files"
+        else:
+            line = f"{score.owned_files} files owned by my teams"
+        if score.required_files:
+            line += f" ({score.required_files} required)"
+        if score.my_files or not score.part_files:
+            line += f", {score.my_files} in dirs I work in"
+        return line
 
     def _slugs(self) -> list[str]:
         """My teams' GitHub slugs."""
@@ -451,7 +470,7 @@ class Builder:
             keys = self._ticket_keys(pr)
             prefixes = self.config.ticket_link_prefixes
             if keys and prefixes and not has_ticket_link_line(pr.body, prefixes):
-                problems.append(f"no {' or '.join(prefixes)} line for {keys[0]}")
+                problems.append(f"no {_or(prefixes)} line for {keys[0]}")
             if not pr.body.strip():
                 problems.append("empty description")
             idle = self.now - pr.updated_at
@@ -494,18 +513,16 @@ class Builder:
             for pr in self.gh.team_requests:
                 if pr.url in direct or pr.is_draft:
                     continue
+                if approved(pr):
+                    # GitHub's decision (or, where no review is required, anyone's approval)
+                    # says the review needed is in, whatever its request on my team says.
+                    continue
                 score = scores.get(pr.url)
-                details: list[str] = [*self._my_part(pr)]
+                details: list[str] = []
                 rank = 0.0
                 if score:
-                    details.append(
-                        f"{score.owned_files} files owned by my teams"
-                        f" ({score.required_files} required), {score.my_files} in dirs I work in"
-                    )
+                    details.append(self._team_line(pr, score))
                     rank = score.required_files * 100 + score.owned_files + score.my_files * 10
-                if approved(pr):
-                    details.append("already approved")
-                    rank -= 1000
                 items.append(pr_item(self.now, pr, details=details, rank=rank))
         return Panel(
             key="team_prs",

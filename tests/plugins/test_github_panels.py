@@ -329,7 +329,7 @@ def test_team_prs_rank_by_codeowners_and_skip_direct_requests() -> None:
     direct = pr(1, author="alice")
     owned = pr(2, author="alice", files=["a", "b"])
     unowned = pr(3, author="alice")
-    already = pr(4, author="alice", reviews=[approved_review("bob")])
+    already = pr(4, author="alice", reviews=[approved_review("bob")], review_decision="APPROVED")
     dashboard = build(
         github=snapshot(direct_requests=[direct], team_requests=[direct, unowned, owned, already]),
         derived=DerivedSnapshot(
@@ -339,7 +339,7 @@ def test_team_prs_rank_by_codeowners_and_skip_direct_requests() -> None:
             }
         ),
     )
-    assert titles(dashboard, "github.team_prs") == ["PR 2", "PR 3", "PR 4"]
+    assert titles(dashboard, "github.team_prs") == ["PR 2", "PR 3"]  # PR 4 is approved
     assert panel(dashboard, "github.team_prs").items[0].details == [
         "2 files owned by my teams (1 required), 1 in dirs I work in"
     ]
@@ -663,3 +663,36 @@ def test_a_pr_that_mentions_me_is_a_reply_unless_already_asked_for_or_a_draft() 
     assert items["PR 2"].details == ["review requested"]  # once, as a review request
     assert "PR 3" not in items
     assert "Reply: PR 1" in [i.title for i in built.act_now()]
+
+
+def test_a_team_pr_says_my_part_and_the_required_files_on_one_line() -> None:
+    mine = pr(1, author="alice", changed_files=23)
+    score = TeamPrScore(owned_files=5, required_files=1, my_files=0, part_files=5, part_lines=51)
+    built = build(
+        github=snapshot(team_requests=[mine]),
+        derived=DerivedSnapshot(team_scores={mine.url: score}),
+    )
+    assert panel(built, "github.team_prs").items[0].details == [
+        "my part: 51 lines in 5 of 23 files (1 required)"
+    ]
+    worked = score.model_copy(update={"my_files": 3})
+    built = build(
+        github=snapshot(team_requests=[mine]),
+        derived=DerivedSnapshot(team_scores={mine.url: worked}),
+    )
+    assert panel(built, "github.team_prs").items[0].details == [
+        "my part: 51 lines in 5 of 23 files (1 required), 3 in dirs I work in"
+    ]
+
+
+def test_ticket_link_prefixes_in_the_message_are_joined_with_commas_and_or() -> None:
+    def message(prefixes: list[str]) -> str:
+        unlinked = pr(1, body="text", head="me/x", title="Fix APP-9")
+        built = build(
+            github=snapshot(mine=[unlinked]), ticket_link_prefixes=prefixes, jira_site="https://j"
+        )
+        return panel(built, "github.metadata").items[0].details[0]
+
+    assert message(["Link"]) == "no Link line for APP-9"
+    assert message(["Link", "Closes"]) == "no Link or Closes line for APP-9"
+    assert message(["Link", "Links", "Closes"]) == "no Link, Links or Closes line for APP-9"
