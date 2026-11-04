@@ -143,6 +143,13 @@ class LinkingRequest[C: BaseModel]:
 
 
 @dataclass(frozen=True)
+class RelateRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+    """Every plugin's entities, before any relations."""
+
+
+@dataclass(frozen=True)
 class PanelsRequest[C: BaseModel, S: BaseModel]:
     ctx: Context[C]
     snapshot: S | None
@@ -503,6 +510,14 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return False
 
     # Reading
+
+    def relate(self, req: RelateRequest[C]) -> list[tuple[Ref, Ref]]:
+        """Relations the plugin knows between one of its entities and another plugin's,
+        which neither's own data says: github relates each pull request to the local
+        `git.branch` it comes from. Each `(mine, theirs)` becomes a ref from `mine` to
+        `theirs`, so `graph.related(theirs, kind)` finds `mine`. Core asks every time it
+        builds the graph, so it must be cheap: no I/O."""
+        return []
 
     def linking_patterns(self, req: LinkingRequest[C]) -> dict[str, str | None]:
         """Its `linking` kinds with the patterns of their ids as of now, e.g. only the project

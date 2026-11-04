@@ -28,6 +28,7 @@ from move_forward.plugin import (
     PageRequest,
     Plugin,
     PrepareItemActionsRequest,
+    RelateRequest,
 )
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
@@ -371,3 +372,21 @@ def test_the_page_says_who_i_am_in_each_tool_that_knows() -> None:
     built = dashboard(github=snapshot())  # github knows my login
     assert built.identities == [Identity(tool="GitHub", login=ME)]
     assert dashboard(local=local_snapshot()).identities == []  # nothing fetched yet
+
+
+class _Relating(JiraPlugin):
+    """Jira, relating its ticket to PR 1, and (wrongly) github's PR to its ticket."""
+
+    def relate(self, req: RelateRequest[JiraConfig]) -> list[tuple[Ref, Ref]]:
+        [ticket] = req.graph.of_kind("ticket")
+        the_pr = Ref(kind="pull_request", id=pr(1).url)
+        return [(ticket.ref, the_pr), (the_pr, ticket.ref)]
+
+
+def test_a_plugin_relates_only_its_own_entities(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    graph = _graph_with(_Relating(), monkeypatch)
+    [ticket] = graph.of_kind("ticket")
+    assert Ref(kind="pull_request", id=pr(1).url) in ticket.refs
+    assert f"jira related pull_request {pr(1).url}, which it doesn't publish" in caplog.text

@@ -30,4 +30,7 @@ class BranchAttrs(KindModel):
     behind: int
     gone: bool
     """Its upstream was deleted."""
+    upstream: str | None = None
+    """What it tracks, e.g. `origin/me/fix`; None for a branch never pushed. A branch renamed
+    since it was pushed still tracks the old name."""
     checked_out_in: str | None

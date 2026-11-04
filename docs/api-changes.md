@@ -9,6 +9,13 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Since version 1, additive
+
+- `Plugin.relate(req)` (`RelateRequest(ctx, graph)`): a plugin's relations between its own
+  entities and another's. github relates PRs to their local branches; read them with
+  `graph.related(branch, "pull_request")`.
+- `git.branch` has `upstream`; `git_stack.stack_branch` has `stack`.
+
 ## Version 1
 
 The first frozen version. Everything below came before it, while only the built-ins used

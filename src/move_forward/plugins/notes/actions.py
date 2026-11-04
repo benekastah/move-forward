@@ -17,6 +17,7 @@ from ...api import (
     Model,
     SourceError,
 )
+from ...api.ids import branch_parts
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .config import NotesConfig
@@ -46,12 +47,9 @@ class _BranchView(Model):
 
 
 class _StackBranchView(Model):
-    """What notes reads of a `git_stack.stack_branch`."""
+    """What notes reads of a `git_stack.stack_branch`: what git-stack acts on with it."""
 
-    repo_dir: str
-    name: str
-    stack_parent: str
-    stack_group: str | None = None
+    stack: list[str]
 
 
 def _branches(graph: Graph, repo: Path) -> dict[str, _BranchView]:
@@ -71,43 +69,16 @@ def _repo(graph: Graph, repo_dir: str) -> Path:
 
 
 def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
-    """The branch's whole stack as git-stack sees it, from the `git_stack.stack_branch`es:
-    its stack, and the other stacks in its group, since git-stack's `restack`, `sync` and
-    `push` act on all of them. Each stack bottom first, the branch's own first of all; just
-    the branch when it isn't in a stack (or git_stack isn't on). Only branches git still
-    has are iced."""
+    """The branch's whole stack as git-stack sees it (`git_stack.stack_branch`'s `stack`): its
+    stack, and the other stacks in its group, since git-stack's `restack`, `sync` and `push`
+    act on all of them; just the branch when it isn't in a stack (or git_stack isn't on).
+    Only branches git still has are iced."""
     here = _branches(graph, repo)
-    tracked = [
-        b
-        for b in graph.view(STACK_BRANCH, _StackBranchView)
-        if Path(b.repo_dir) == repo and b.name in here
-    ]
-    parents = {b.name: b.stack_parent for b in tracked}
-    if branch not in parents:
+    tracked = graph.view_one(STACK_BRANCH, here[branch].id, _StackBranchView)
+    if tracked is None:
         return [branch]
-    bottom, seen = branch, {branch}
-    while parents[bottom] in parents and parents[bottom] not in seen:  # up to the root
-        bottom = parents[bottom]
-        seen.add(bottom)
-    groups = {b.name: b.stack_group for b in tracked if b.stack_group}
-    group = groups.get(bottom)
-    bottoms = [bottom] + sorted(
-        name
-        for name, other in groups.items()
-        if group is not None and other == group and name != bottom and parents[name] not in parents
-    )
-    children: dict[str, list[str]] = {}
-    for name, parent in parents.items():
-        children.setdefault(parent, []).append(name)
-    stack: list[str] = []
-    for start in bottoms:
-        pending = [start]
-        while pending:
-            name = pending.pop()
-            if name not in stack:
-                stack.append(name)
-                pending += reversed(children.get(name, []))
-    return stack
+    names = [branch_parts(id)[1] for id in tracked.stack]
+    return [name for name in names if name in here]
 
 
 def ice(req: ActionRequest[NotesConfig]) -> str:

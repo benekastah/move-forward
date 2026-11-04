@@ -6,6 +6,7 @@ would see mine only at its next `refresh_seconds`."""
 import json
 
 from ...api import Graph, Model, Ref
+from ...api.kinds import PULL_REQUEST as PR
 
 BRANCH = "git.branch"
 """git's kind for a local branch."""
@@ -31,18 +32,15 @@ class _Branch(Model):
     behind: int = 0
 
 
-def tips(graph: Graph, pr_kind: str, repo_kind: str) -> dict[str, str]:
+def tips(graph: Graph, own_kind: str) -> dict[str, str]:
     """Where the local branch of each open PR of mine is, and how it stands against its
     upstream, by the PR's `owner/name#number`: a value changes when its branch moves."""
     seen: dict[str, str] = {}
-    for pr in graph.view(pr_kind, _MyPr):
+    for pr in graph.view(own_kind, _MyPr):
         if not pr.mine or pr.state != "open":
             continue
-        for branch in graph.view_related(Ref(kind=repo_kind, id=pr.repo), BRANCH, _Branch):
-            if branch.name == pr.head:
-                seen[f"{pr.repo}#{pr.number}"] = json.dumps(
-                    [branch.sha, branch.ahead, branch.behind]
-                )
+        for branch in graph.view_related(Ref(kind=PR, id=pr.id), BRANCH, _Branch):
+            seen[f"{pr.repo}#{pr.number}"] = json.dumps([branch.sha, branch.ahead, branch.behind])
     return seen
 
 
