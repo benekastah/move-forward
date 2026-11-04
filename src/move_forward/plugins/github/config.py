@@ -28,12 +28,12 @@ class GitHubConfig(Strict):
     """How far back to fetch my merged and closed PRs (Jira transitions, cleanup, PR states)."""
     policy_checks: list[str] = Field(default_factory=lambda: list(DEFAULT_POLICY_CHECKS))
     """Names of checks that enforce PR policy rather than test the code (e.g. a check that
-    fails until the PR has a risk label, or enough assignees). A failing one is a PR policy
-    item, not a CI failure."""
+    fails until the PR has a risk label, or enough assignees), e.g. `["pr-policy"]`. A
+    failing one is a PR policy item, not a CI failure."""
     ignored_reviewers: list[str] = Field(default_factory=list)
-    """Logins whose comments and reviews aren't review feedback, e.g. a policy bot that
-    comments "update the risk label". Like bots, they're left out of feedback to address,
-    review activity, nudge blockers and notifications."""
+    """Logins whose comments and reviews aren't review feedback, such as a policy bot that
+    comments "update the risk label", e.g. `["policy-bot"]`. Like bots, they're left out of
+    feedback to address, review activity, nudge blockers and notifications."""
     required_owner_marker: str = ""
     """A comment marker on a CODEOWNERS line whose owners' approval is required, e.g.
     `#required`. Such files count first in team PR scores. Empty: no such convention."""

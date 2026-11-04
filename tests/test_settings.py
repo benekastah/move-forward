@@ -113,3 +113,17 @@ def test_the_page_lists_the_kinds_with_the_subscribed_ticked() -> None:
     html = settings.page(config)
     assert "name='notify:dashboard.source_failing' checked" in html
     assert "name='notify:dashboard.certificate_ending'>" in html
+
+
+def test_empty_fields_show_the_example_from_their_help_one_list_item_per_line() -> None:
+    config = config_module.Config.model_validate({"email": "me@x", "github": {"org": "acme"}})
+    html = settings.page(config)
+    assert "name='github:policy_checks' rows='3' placeholder='pr-policy'" in html
+    jira = config_module.Config.model_validate(
+        {"email": "me@x", "jira": {"site": "https://x.atlassian.net"}}
+    )
+    assert (
+        "name='jira:escalation_levels' rows='3' placeholder='manager&#10;director&#10;vp'"
+        in settings.page(jira)
+    )
+    assert "name='github:refresh_seconds'" in html and "placeholder='300'" not in html

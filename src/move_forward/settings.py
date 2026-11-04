@@ -13,6 +13,7 @@ changed here: changing them moves the server.
 """
 
 import os
+import re
 import tempfile
 import tomllib
 from dataclasses import dataclass
@@ -56,6 +57,30 @@ class Setting:
     def name(self) -> str:
         """The form field's name: `<section>:<key>`."""
         return f"{self.section or ''}:{self.key}"
+
+
+EXAMPLE_RE = re.compile(r"e\.g\. (?:`([^`]+)`|((?:https?://|#)[^\s;,]*[^\s.;,]))")
+"""Finds a setting's example in its help: the backticked text after `e.g.`, or an unquoted
+URL or channel."""
+
+
+def example(setting: Setting) -> str | None:
+    """What an empty field could hold, from the `e.g.` in the setting's help (config
+    docstrings carry them): a list example, written as a TOML list, is one item per line,
+    the way the form takes lists. None when the help has none."""
+    match = EXAMPLE_RE.search(setting.help)
+    if match is None:
+        return None
+    text = match.group(1) or match.group(2)
+    if setting.kind != "list" or not text.startswith("["):
+        return text
+    try:
+        items = cast(object, tomllib.loads(f"x = {text}")["x"])
+    except tomllib.TOMLDecodeError:
+        return None
+    if not isinstance(items, list):
+        return None
+    return "\n".join(str(item) for item in cast(list[object], items))
 
 
 def _kind(annotation: object) -> Kind | None:
@@ -207,9 +232,20 @@ def _input(setting: Setting) -> str:
         )
     if setting.kind == "list":
         lines = "\n".join(str(v) for v in cast(list[object], setting.value))
-        return f"<textarea name='{e(setting.name)}' rows='3'{disabled}>{e(lines)}</textarea>"
+        hint = _placeholder(setting)
+        return f"<textarea name='{e(setting.name)}' rows='3'{hint}{disabled}>{e(lines)}</textarea>"
     kind = "number' step='any" if setting.kind in ("int", "float") else "text"
-    return f"<input type='{kind}' name='{e(setting.name)}' value='{e(setting.value)}'{disabled}>"
+    return (
+        f"<input type='{kind}' name='{e(setting.name)}' value='{e(setting.value)}'"
+        f"{_placeholder(setting)}{disabled}>"
+    )
+
+
+def _placeholder(setting: Setting) -> str:
+    """The attribute showing the setting's example in its empty field."""
+    if setting.kind in ("bool", "int", "float") or (text := example(setting)) is None:
+        return ""
+    return f" placeholder='{render.e(text).replace(chr(10), '&#10;')}'"
 
 
 ENABLE_SCRIPT = (
