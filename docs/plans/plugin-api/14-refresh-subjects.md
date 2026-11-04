@@ -22,16 +22,19 @@ doesn't contradict it. github already has the cheap path: `client.fetch_prs`
 @dataclass(frozen=True)
 class SubjectsRequest:
     ctx: Context[Any]
-    refs: list[Ref]            # only kinds this plugin publishes; at most 50
+    refs: list[Ref]  # only kinds this plugin publishes; at most 50
+
 
 @dataclass(frozen=True)
 class SubjectsResult:
-    updated: list[Ref]         # fetched and stored; the rest the tool didn't know
+    updated: list[Ref]  # fetched and stored; the rest the tool didn't know
+
 
 class Plugin:
     subjects_timeout_seconds: ClassVar[int] = 60
+
     def refresh_subjects(self, req: SubjectsRequest) -> SubjectsResult | None:
-        return None            # unsupported: core refreshes the whole plugin instead
+        return None  # unsupported: core refreshes the whole plugin instead
 ```
 
 Core groups refs by the plugins that publish each kind (`KindSpec` + `publishes`, 05; a
