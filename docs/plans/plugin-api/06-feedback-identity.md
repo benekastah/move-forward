@@ -27,7 +27,8 @@ would otherwise learn the hard way that their verb is an identity.
   `watch_the_rollout`; notes `close_out` (dynamic verb: existing notes snoozes lapse);
   git `delete_the_branch`.
 - `snooze.py` imports `REVIEW_ACTION = "review"` from the place github defines it
-  (`api.kinds` beside `PR`, since it's about the shared kind), removing the duplicate.
+  (`api.kinds` beside `PULL_REQUEST`, since it's about the family), removing the
+  duplicate.
 - README: `mfd snoozes` JSON field `verb` → `action`; the skill reads it (`cli.py:400-413`),
   so note the skill change.
 

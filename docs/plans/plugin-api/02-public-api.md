@@ -48,8 +48,9 @@ only from it, enforced by ruff.
   then `check_plugins`, subplan 09) disables a mismatching plugin with an error line from
   `mfd check` and in the page footer, rather than raising at import.
 - `docs/writing-a-plugin.md` rewritten for a separate package: layout, `pyproject` with
-  the entry point, the `api` surface, the testing harness, migrations, shared vs private
-  kinds, reserved names, what counts as a breaking change (an `API_VERSION` bump).
+  the entry point, the `api` surface, the testing harness, migrations, families and a
+  plugin's own kinds, reserved names, what counts as a breaking change (an `API_VERSION`
+  bump).
 - `docs/api-changes.md`: the changelog going forward (what each subplan moved).
 - `plan.md`: drop what the stack finished ("Class variables to the top" rides along in
   subplan 04).

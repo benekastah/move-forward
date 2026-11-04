@@ -1,4 +1,4 @@
-# 10 — A tighter entity contract: strict models, one `pr` shape, opaque ids, core-held relations
+# 10 — A tighter entity contract: strict models, one pull request shape, opaque ids, core-held relations
 
 ## Problem 9: the entity contract is loose
 
@@ -23,15 +23,19 @@ publisher must do). **After** for relations and the git-stack membership attribu
 
 ## PR 10a — strict kind models, validated `fetch`, id helpers (before the cut)
 
-- `KindModel(Model)` with `extra="forbid"` as the base of every kind's attrs (core's shared
-  ones from 05 already); `registry.build_graph` validates with it.
+- `KindModel(Model)` with `extra="forbid"` as the base of every kind's attrs (05's family
+  models already; a plugin's model extending a family adds fields, and a misspelt one is
+  still caught); `registry.build_graph` validates with it.
 - `KindSpec.fetched_attrs`: the model `fetch()` results must fit (default: the kind's attrs
-  with every field optional). github declares `PrFetched(closed_at)`, jira
-  `TicketFetched(resolved_at)`; fetched entities must carry `lifecycle`. `Graph.fetch`
+  with every field optional). A family's fetched shape is core's, since notes' prune reads
+  it whoever publishes: `PullRequestFetched(closed_at)` and `TicketFetched(resolved_at)`
+  in `api.kinds`; fetched entities must carry `lifecycle`. `Graph.fetch`
   validates and logs/drops misfits. `entities.md`'s "Fetched on demand" table is checked by
   `test_entities_doc.py` like the others.
-- `api.kinds.branch_id(repo_dir, name)` / `branch_parts(id)`; git, git_stack and notes use
-  them; the three separator constants go. Format unchanged (decision below).
+- `api.ids.branch_id(repo_dir, name)` / `branch_parts(id)`; git, git_stack and notes use
+  them; the three separator constants go. Format unchanged (decision below). `git.branch`
+  stays git's kind (05); core holds only the id format, which three plugins build and
+  parse.
 
 **Tests.** A misspelt attribute is rejected (flip the assertion that today's
 `_Declaring` test leaves implicit); a fetched entity without `lifecycle` is dropped;
@@ -40,12 +44,13 @@ publisher must do). **After** for relations and the git-stack membership attribu
 ## PR 10b — `relate` hook and stack membership (after the cut)
 
 - `Plugin.relate(RelateRequest(ctx, graph)) -> list[tuple[Ref, Ref]]`, run by core after
-  every `entities`; results indexed like `refs`. github relates each `pr` to the `branch`
-  it comes from using git's `repo` entities, folding in the upstream-name and same-sha
-  fallbacks from `git/panels.py:81-101`. Then `git/panels.py`, `git_stack/panels.py:102-110`,
-  `notes/covers.py:36-52` and `github/pushes.py` read `graph.related(branch, PR)`.
+  every `entities`; results indexed like `refs`. github relates each pull request to the
+  `git.branch` it comes from using git's `git.repo` entities, folding in the upstream-name
+  and same-sha fallbacks from `git/panels.py:81-101`. Then `git/panels.py`,
+  `git_stack/panels.py:102-110`, `notes/covers.py:36-52` and `github/pushes.py` read
+  `graph.related(branch, PULL_REQUEST)`, so a second code host's plugin relates its own.
 - git_stack publishes `stack: list[str]` (the stack's branch ids, group included) on each
-  `stack_branch`; notes' `_stack_branches` becomes a lookup.
+  `git_stack.stack_branch`; notes' `_stack_branches` becomes a lookup.
 - `docs/graph.md` (a "Relations" section), `plugins.md`.
 
 **Tests.** Table-driven: renamed branch, same-sha branch, two repos; the four consumers
@@ -61,9 +66,10 @@ and test the others against it).
 - Branch id format: **keep the tab** behind helpers; `"<dir>#<name>"` would migrate notes'
   `notes_ice_items.ref_id` and `iced.shas` keys for no consumer-visible gain.
 - Relations as a publisher hook (**recommended**: core stays tool-agnostic) vs a core join
-  rule on shared attrs (`pr.repo + pr.head` vs `branch`): the hook can use the fallbacks.
+  rule on family attrs (`pull_request.repo` and `.head` against `git.branch`): the hook can
+  use the fallbacks.
 
 ## Dependencies
 
-05 (`KindSpec`, shared kind models). 10b after the cut; 12's harness should offer
+05 (`KindSpec`, family models). 10b after the cut; 12's harness should offer
 `with_relations` once 10b exists.

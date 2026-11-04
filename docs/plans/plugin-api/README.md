@@ -72,9 +72,12 @@ Do them in file order, with 02's second PR (the `api_version` freeze) after 12:
 
 ## Decisions needed (recommendations in bold)
 
-1. **Kinds** ([05](05-kinds-and-lifecycle.md)): **shared core-owned kinds plus core-prefixed
-   private kinds, migrated now**; not "namespace everything" (a GitLab plugin would be
-   invisible to git/jira/notes) and not "first declarer" (private names still collide).
+1. **Kinds** ([05](05-kinds-and-lifecycle.md)): **families modeled in core (`pull_request`,
+   `ticket`, `person`; `email` with its first publisher), which a plugin's kind extends;
+   every kind named by its plugin (`github.pull_request`, `git.branch`); refs to a
+   family's entities by the family; migrated now**. Not namespacing with no core models
+   (what a PR has would be a convention nobody owns) and not "first declarer" (names
+   collide).
 2. **Hook style** ([04](04-hook-request-objects.md)): **one frozen request dataclass per
    hook**; `ctx` stays the plugin's environment.
 3. **URL namespace** ([07](07-qualified-names-and-pages.md)): **`/<plugin>/…`** (keeps
@@ -89,8 +92,10 @@ Do them in file order, with 02's second PR (the `api_version` freeze) after 12:
    changes.
 8. **`ActionResult.refresh` default** ([04](04-hook-request-objects.md)): **own plugin
    only**; an action names others when it changes their tool.
-9. **Rename `pr`/`ticket` to `code_review`/`work_item`?** ([05](05-kinds-and-lifecycle.md)):
-   **no**; the names fit a GitLab MR or a Linear issue, and renaming migrates every row.
+9. **Family names** ([05](05-kinds-and-lifecycle.md)): **`pull_request`** (shown as "PR")
+   and `ticket`; no tool's numbering in a family (a PR has a `handle` to show, its URL to
+   identify it). Not `code_review`/`work_item`: the names fit a GitLab MR or a Linear
+   issue.
 10. **Named migrations before the freeze?** ([11](11-named-migrations.md)): **yes**; the
     list format is the one thing that can't change after others ship lists.
 11. **Branch id format** ([10](10-entity-contract.md)): **keep `"<dir>\t<name>"` behind
