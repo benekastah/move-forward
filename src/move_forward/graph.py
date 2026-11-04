@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, JsonValue
 
-from .domain import Model
+from .domain import KindModel, Model
 from .kinds import fits
 
 UrlFor = Callable[[str, str], str | None]
@@ -63,7 +63,7 @@ class Entity(Model):
 class KindSpec:
     """What a plugin says of a kind it publishes (`Plugin.kinds`)."""
 
-    attrs: type[BaseModel]
+    attrs: type[KindModel]
     """The model its entities' `attrs` must fit."""
     linking: str | None | Literal[False] = False
     """Whether it links what it's about (see `Graph.related`): False if not; else the pattern
@@ -80,6 +80,10 @@ class KindSpec:
     (notes' todos), and keeps them where only finishing removes them."""
     resolvable: bool = False
     """Whether `mfd priority <id>`, given no kind, looks among its entities by id."""
+    fetched_attrs: type[KindModel] | None = None
+    """The model the `attrs` of its entities `Plugin.fetch` returns must fit. None: its
+    family's (`kinds.Family.fetched`: what the prune reads, whoever publishes), else any of
+    `attrs`' fields, each optional."""
 
 
 def _no_url(kind: str, id: str) -> str | None:

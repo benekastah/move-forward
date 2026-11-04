@@ -10,10 +10,11 @@ from importlib.metadata import entry_points
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
+from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
 from .kinds import FAMILIES, fits, named_for
 from .plugin import (
@@ -131,6 +132,12 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                 raise RuntimeError(
                     f"{plugin.name}'s kind {kind!r} must be named {plugin.name}.<name>,"
                     f" or for a family: {', '.join(FAMILIES)}"
+                )
+            # The type says so, but a plugin needn't be type-checked.
+            if not issubclass(cast(type[BaseModel], spec.attrs), KindModel):
+                raise TypeError(
+                    f"{plugin.name}'s {kind} attributes must be a KindModel, not"
+                    f" {spec.attrs.__name__}"
                 )
             if family is not None and not issubclass(spec.attrs, family.model):
                 raise RuntimeError(
@@ -265,6 +272,28 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
     return result
 
 
+def _unfit_fetched(entity: Entity, spec: KindSpec) -> str | None:
+    """Why a fetched entity doesn't fit its kind, or None: it must say its `lifecycle`, and
+    its `attrs` fit `spec.fetched_attrs`, its family's fetched model, or else are fields of
+    `spec.attrs`, each of its type."""
+    if "lifecycle" not in entity.model_fields_set:
+        return "no lifecycle"
+    family = FAMILIES.get(entity.ref.kind)
+    model = spec.fetched_attrs or (family.fetched if family else None)
+    try:
+        if model is not None:
+            model.model_validate(entity.attrs)
+            return None
+        fields = spec.attrs.model_fields
+        for name, value in entity.attrs.items():
+            if name not in fields:
+                return f"no attribute {name!r}"
+            TypeAdapter[object](fields[name].annotation or object).validate_python(value)
+    except ValidationError as error:
+        return str(error)
+    return None
+
+
 def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) -> Graph:
     """The graph of every plugin's entities. A plugin publishes only the kinds it declares;
     each entity must fit its kind's model, and be the only one of its ref (the first
@@ -328,15 +357,25 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
 
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
         """Each plugin's answer; one that fails is logged and left out, so its entities just
-        aren't known (the prune keeps what it can't check)."""
+        aren't known (the prune keeps what it can't check). So is an entity that doesn't fit
+        what its kind's fetched entities carry (`KindSpec.fetched_attrs`)."""
         found: list[Entity] = []
         for e in plugins:
             try:
-                found += e.plugin.fetch(FetchRequest(e.ctx, kind, ids))
+                answer = e.plugin.fetch(FetchRequest(e.ctx, kind, ids))
             except SourceError:
                 raise
             except Exception:
                 log.exception("%s: fetching %s failed", e.name, kind)
+                continue
+            for entity in answer:
+                spec = e.plugin.kinds.get(entity.ref.kind)
+                if spec is None:
+                    log.error("%s fetched %s, a kind it doesn't declare", e.name, entity.ref.kind)
+                elif problem := _unfit_fetched(entity, spec):
+                    log.error("%s fetched a bad %s %s: %s", e.name, kind, entity.ref.id, problem)
+                else:
+                    found.append(entity)
         return found
 
     linking: dict[str, str | None] = {}

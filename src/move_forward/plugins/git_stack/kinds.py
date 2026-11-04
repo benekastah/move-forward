@@ -1,9 +1,9 @@
 """The entity kind git_stack publishes, with its attributes; see `docs/entities.md`."""
 
-from ...api import Model
+from ...api import KindModel
 
 
-class StackBranchAttrs(Model):
+class StackBranchAttrs(KindModel):
     """A `git_stack.stack_branch`: a branch git-stack tracks, by its `git.branch` id, even
     after git has deleted it."""
 

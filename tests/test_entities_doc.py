@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from move_forward import registry
+from move_forward.kinds import FAMILIES
 
 DOC = Path(__file__).parent.parent / "docs" / "entities.md"
 _ROW_RE = re.compile(r"^\| `([\w.]+)`( \((\w+)\))? \| (\w+)", re.MULTILINE)
@@ -44,3 +45,22 @@ def test_each_kind_documents_exactly_its_models_attributes() -> None:
             cells = _ATTRIBUTE_CELL_RE.findall(section)
             documented = {name for cell in cells for name in re.findall(r"`(\w+)`", cell)}
             assert documented == set(spec.attrs.model_fields), kind
+
+
+def test_the_fetched_table_names_every_fetchable_kind_and_what_it_carries() -> None:
+    table = _section(DOC.read_text(), "## Fetched on demand")
+    documented = {
+        kind: set(re.findall(r"`(\w+)`:", attributes))
+        for kind, attributes in re.findall(
+            r"^\| `([\w.]+)` \|.*\| ([^|]*) \|$", table, re.MULTILINE
+        )
+    }
+    fetchable: dict[str, set[str]] = {}
+    for plugin in registry.BUILTINS:
+        for kind, spec in plugin.kinds.items():
+            if not spec.fetchable:
+                continue
+            family = FAMILIES.get(kind)
+            model = spec.fetched_attrs or (family.fetched if family else None)
+            fetchable[kind] = set(model.model_fields) if model else set()
+    assert documented == fetchable
