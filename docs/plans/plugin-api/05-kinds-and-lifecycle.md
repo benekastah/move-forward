@@ -55,12 +55,14 @@ class PullRequest(KindModel):
     mine: bool
     ...
 
+
 # github
 class GitHubPullRequest(PullRequest):
     number: int
     review_blockers: list[str] = []
     review_stale: bool = False
     ...
+
 
 kinds = {"pull_request": KindSpec(GitHubPullRequest), "person": KindSpec(GitHubPerson)}
 ```
