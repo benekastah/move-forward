@@ -357,6 +357,36 @@ def test_a_ticket_in_the_blocked_status_is_blocked_without_blocker_links() -> No
     assert items["XY-3"].badges[0] == "unblocked" and not items["XY-3"].signals.blocked
 
 
+def test_incidents_and_bugs_at_equal_escalation_rank_by_jira_priority() -> None:
+    dashboard = build(
+        jira=JiraSnapshot(
+            issues=[
+                issue("XY-1", type="Incident", priority="Low"),
+                issue("XY-2", type="Incident", priority="Highest"),
+                issue("XY-3", type="Incident", priority="High"),
+                issue("XY-4", type="Bug", priority="Highest"),
+                issue("XY-5", type="Bug", priority="Low"),
+            ]
+        )
+    )
+    items = panel(dashboard, "jira.jira_next").items
+    assert [i.title.split()[0] for i in sorted(items, key=lambda i: -i.rank)] == [
+        "XY-2",
+        "XY-3",
+        "XY-1",
+        "XY-4",
+        "XY-5",
+    ]
+    # Act now only gets a bump at the top priority
+    assert {i.title.split()[0]: i.signals.importance for i in items} == {
+        "XY-1": 1,
+        "XY-2": 2,
+        "XY-3": 1,
+        "XY-4": 1,
+        "XY-5": 0,
+    }
+
+
 def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now() -> None:
     built = dashboard(
         github=snapshot(),

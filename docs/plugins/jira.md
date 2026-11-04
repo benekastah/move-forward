@@ -32,6 +32,8 @@ returns at most one key.
 `escalation_label_prefix` (e.g. `escalated-to-`) and `escalation_levels` (what follows it,
 lowest first) rank escalated incidents and bugs in What next, and `incident_types` and
 `bug_types` are the issue types (lower-case substrings) that count as each.
+At equal escalation, incidents and bugs rank by `priorities` (Jira's priority names, lowest
+first), and the top one raises their importance in Act now by a step.
 `[jira.teams]` isn't used yet.
 
 ## Publishes

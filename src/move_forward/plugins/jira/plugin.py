@@ -50,6 +50,12 @@ def escalation(issue: JiraIssue, label_prefix: str, levels: list[str]) -> int:
     return best
 
 
+def priority_level(issue: JiraIssue, priorities: list[str]) -> int:
+    """An issue's priority as its 1-based position in `priorities` (lowest first); 0 when it
+    has none or one that isn't listed."""
+    return priorities.index(issue.priority) + 1 if issue.priority in priorities else 0
+
+
 class _PrView(Model):
     """What jira reads of a `pr` (github's), to suggest status changes."""
 
@@ -127,25 +133,28 @@ def end_of(day: date, now: datetime) -> datetime:
 
 def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Panel:
     """My open tickets in the order to take them, each with signals for Act now: an incident
-    is important, critical once escalated, and an escalated bug important; a due date
+    is important, critical once escalated, and an escalated bug important (one step more
+    at the top priority); a due date
     counts, and a ticket with open blockers, or in the blocked status, is blocked."""
     items: list[Item] = []
     for issue in snapshot.issues:
         kind = issue.type.lower()
         level = escalation(issue, config.escalation_label_prefix, config.escalation_levels)
+        priority = priority_level(issue, config.priorities)
+        top = bool(config.priorities) and priority == len(config.priorities)
         blocked = bool(issue.open_blockers) or issue.status.casefold() == (
             config.status_blocked.casefold()
         )
         if any(t in kind for t in config.incident_types):
-            rank = 3000 + level * 100
+            rank = 3000 + level * 100 + priority * 20
             why = "incident" + (f", escalated ({level})" if level else "")
             why += ", blocked" if blocked else ""
-            importance, verb = (2 if level else 1), "Look at the incident"
+            importance, verb = min(2, (2 if level else 1) + top), "Look at the incident"
         elif any(t in kind for t in config.bug_types):
-            rank = 2000 + level * 100
+            rank = 2000 + level * 100 + priority * 20
             why = "bug" + (f", escalated ({level})" if level else "")
             why += ", blocked" if blocked else ""
-            importance, verb = (1 if level else 0), "Fix the bug"
+            importance, verb = min(2, (1 if level else 0) + top), "Fix the bug"
         elif not blocked:
             rank = 1000
             why = "unblocked" + (f", under {issue.parent}" if issue.parent else "")
