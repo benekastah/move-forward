@@ -696,3 +696,34 @@ def test_ticket_link_prefixes_in_the_message_are_joined_with_commas_and_or() -> 
     assert message(["Link"]) == "no Link line for APP-9"
     assert message(["Link", "Closes"]) == "no Link or Closes line for APP-9"
     assert message(["Link", "Links", "Closes"]) == "no Link, Links or Closes line for APP-9"
+
+
+def test_a_review_whose_author_has_open_threads_is_not_listed_twice() -> None:
+    pushed = NOW - timedelta(days=1)
+    reviewed = pr(
+        1,
+        last_commit_at=pushed,
+        threads=[thread(author="copilot-pull-request-reviewer")],
+        events=[
+            event(
+                "PullRequestReview",
+                pushed + timedelta(hours=1),
+                actor="copilot-pull-request-reviewer",
+                state="COMMENTED",
+            ),
+            event("PullRequestReview", pushed + timedelta(hours=2), actor="bob", state="COMMENTED"),
+        ],
+    )
+    resolved = pr(
+        2,
+        last_commit_at=pushed,
+        threads=[thread(author="bob", resolved=True)],
+        events=[event("PullRequestReview", pushed + timedelta(hours=1), actor="bob")],
+    )
+    built = build(github=snapshot(mine=[reviewed, resolved]))
+    items = {i.title: i.details for i in panel(built, "github.feedback").items}
+    assert items["PR 1"] == [
+        "copilot-pull-request-reviewer on src/x.py: Please rename this",
+        "reviewed by bob",  # bob left no thread: the review is the feedback
+    ]
+    assert items["PR 2"] == ["reviewed by bob"]  # nothing open: the review stands

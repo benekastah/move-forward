@@ -117,8 +117,13 @@ def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ())
     Review tools' (bots') count, unless they are `ignored`. A comment of mine on the
     conversation answers what came before it. A review of mine doesn't: replying in a
     review thread submits one, and the threads' own answers are tracked by whether they are
-    resolved, so it mustn't clear other reviewers' pending items."""
+    resolved, so it mustn't clear other reviewers' pending items.
+
+    A review whose author has an unresolved thread on the PR isn't listed: its inline
+    comments are the feedback, and show as those threads. (A "changes requested" decision is
+    its own line in Feedback to address.)"""
     since = last_push_at(pr)
+    threaded = {t.author for t in unresolved_threads(pr, ignored)}
     pending: list[str] = []
     for event in sorted(pr.events, key=lambda e: e.at):
         if event.type not in ("PullRequestReview", "IssueComment"):
@@ -128,6 +133,8 @@ def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ())
         if event.actor == me:
             if event.type == "IssueComment":
                 pending.clear()
+        elif event.type == "PullRequestReview" and event.actor in threaded:
+            continue
         elif event.actor and event.actor not in ignored and not _bare_approval(event):
             pending.append(f"{_feedback_verb(event)} {event.actor}")
     return pending
