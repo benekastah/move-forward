@@ -339,3 +339,11 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
         r["subject_id"]: r["action"] for r in Database(path).query("SELECT * FROM act_now_feedback")
     }
     assert actions == {"x": "opened", "y": "pin"}
+
+
+def test_a_plugins_migration_may_not_remove_what_isnt_its_own() -> None:
+    db = Database(":memory:")
+    dropping = Migration("0001_tidy", "DROP TABLE kv;")
+    with pytest.raises(ValueError, match="p's migration 0001_tidy removed kv"):
+        db.migrate("p", [dropping])
+    assert db.query("SELECT name FROM sqlite_master WHERE name = 'kv'")  # rolled back

@@ -913,3 +913,25 @@ def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
     with pytest.raises(KeyboardInterrupt):
         app.run_refresh_loop()
     assert done == ["refresh all", "subjects", "refresh ['github', 'jira']"]
+
+
+def test_a_page_answering_a_bad_response_fails_rather_than_sending_it(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def injected(req: PageRequest[Any]) -> Response:
+        where = req.query.get("to", [""])[0]
+        return Response.redirect(where)
+
+    def odd(req: PageRequest[Any]) -> Response:
+        return Response(status=999)
+
+    def pages(self: SlackPlugin) -> dict[str, object]:
+        return {"away": injected, "odd": odd}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages)
+    response = get(client, "/slack/away?to=" + quote("/x\r\nSet-Cookie: evil=1"))
+    assert response.status == 500 and response.getheader("Set-Cookie") is None
+    response.read()
+    response = get(client, "/slack/odd")
+    assert response.status == 500
+    response.read()
