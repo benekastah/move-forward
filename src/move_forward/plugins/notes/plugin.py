@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ...api import (
     ActionHandler,
     ActNowRequest,
+    AfterCollectRequest,
     CliHandler,
     Context,
     EntitiesRequest,
@@ -26,6 +27,7 @@ from ...api import (
     PanelsRequest,
     Plugin,
     PrepareItemActionsRequest,
+    PruneRequest,
 )
 from . import actions, cli, prune
 from .config import NotesConfig
@@ -66,9 +68,10 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         notes = NotesRepository(ctx.db)
         return entities(notes.entries(), notes.ices(), notes.covers())
 
-    def after_collect(self, ctx: Context[NotesConfig], graph: Graph) -> None:
+    def after_collect(self, req: AfterCollectRequest[NotesConfig]) -> None:
         """Find again what each act of icing covers besides its items, e.g. new PRs from its
         branches."""
+        ctx, graph = req.ctx, req.graph
         notes = NotesRepository(ctx.db)
         ices = notes.ices()
         notes.replace_covers([i.id for i in ices], covers(graph, ices))
@@ -105,7 +108,8 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         todo = _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
         return (TODOS, todo) if todo else None
 
-    def prune(self, ctx: Context[NotesConfig], graph: Graph) -> list[str]:
+    def prune(self, req: PruneRequest[NotesConfig]) -> list[str]:
+        ctx, graph = req.ctx, req.graph
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         return prune.prune(NotesRepository(ctx.db), graph, cutoff)
 

@@ -1,4 +1,5 @@
 import json
+import logging
 import socket
 import threading
 from collections.abc import Callable, Iterator
@@ -19,7 +20,15 @@ from move_forward.graph import Graph
 from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Action, Item
 from move_forward.panels import Layout
-from move_forward.plugin import KEPT, ActionError, ActionResult, Context, PageHandler
+from move_forward.plugin import (
+    KEPT,
+    ActionError,
+    ActionResult,
+    Changed,
+    ChangedRequest,
+    Context,
+    PageHandler,
+)
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -587,9 +596,9 @@ class _GitHubWithChecks(GitHubPlugin):
     """github whose change check answers from `answers`, raising for an exception."""
 
     change_check_seconds: ClassVar[int | None] = 60
-    answers: ClassVar[list[bool | Exception]] = []
+    answers: ClassVar[list[bool | Changed | Exception]] = []
 
-    def changed(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
@@ -614,6 +623,20 @@ def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
     assert _GitHubWithChecks.answers == [True]
     assert app.check_for_changes(2030.0) == set() and _GitHubWithChecks.answers == [True]
     assert app.check_for_changes(2060.0) == {"github"}
+
+
+def test_why_a_plugin_changed_is_logged(
+    app: server.App, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    swap = {"github": _GitHubWithChecks()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    monkeypatch.setattr(
+        _GitHubWithChecks, "answers", [Changed(True, "2 PRs notified"), Changed(False, "x")]
+    )
+    with caplog.at_level(logging.INFO):
+        assert app.check_for_changes(1000.0) == {"github"}
+        assert app.check_for_changes(1060.0) == set()  # said no, whatever its reason
+    assert "changed: github (2 PRs notified); refreshing" in caplog.messages
 
 
 class _GitHubWatchingGit(_GitHubWithChecks):

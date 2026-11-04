@@ -12,7 +12,7 @@ from conftest import NOW
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Context
+from move_forward.plugin import ChangedRequest, CollectRequest, Context, StoreRequest
 from move_forward.plugins.git import changes, watch
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.plugin import MOVED, GitPlugin
@@ -182,11 +182,11 @@ def test_the_plugin_refreshes_the_repo_an_edit_changed(tmp_path: Path) -> None:
     db.migrate("git", MIGRATIONS)
     plugin = GitPlugin()
     ctx = _plugin_context(repo, db)
-    plugin.store(ctx(0), plugin.collect(ctx(0)))
+    plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
     try:
-        assert not plugin.changed(ctx(0), Graph([]))  # starts watching
+        assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # starts watching
         (repo / "src" / "deep" / "a.py").write_text("changed\n")
-        assert _until(lambda: plugin.changed(ctx(1), Graph([])))
+        assert _until(lambda: plugin.changed(ChangedRequest(ctx(1), Graph([]))))
         assert KvRepository(db, "git").get(MOVED) == json.dumps([str(changes.common_dir(repo))])
     finally:
         plugin.stop_watching()
@@ -198,11 +198,13 @@ def test_ignored_files_dont_refresh_the_repo(tmp_path: Path) -> None:
     db.migrate("git", MIGRATIONS)
     plugin = GitPlugin()
     ctx = _plugin_context(repo, db)
-    plugin.store(ctx(0), plugin.collect(ctx(0)))
+    plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
     try:
-        assert not plugin.changed(ctx(0), Graph([]))  # starts watching
+        assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # starts watching
         (repo / "src" / "node_modules" / "dep" / "index.js").write_text("x\n")
         time.sleep(QUIET_SECONDS)
-        assert not plugin.changed(ctx(1), Graph([]))  # git status counts nothing new
+        assert not plugin.changed(
+            ChangedRequest(ctx(1), Graph([]))
+        )  # git status counts nothing new
     finally:
         plugin.stop_watching()

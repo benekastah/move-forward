@@ -22,7 +22,7 @@ from .db import Database
 from .graph import Graph
 from .notifications import NotificationRepository
 from .panels import Layout
-from .plugin import KEPT, ActionError
+from .plugin import KEPT, ActionError, Changed, ChangedRequest
 from .refresh import (
     PageFailed,
     build_dashboard,
@@ -201,23 +201,23 @@ class App:
         for e in refreshed:
             self._last_checked[e.name] = now
             self._changed(e, graph)
-        changed = {e.name for e in watchers if self._changed(e, graph)}
+        changed = {e.name: why for e in watchers if (why := self._changed(e, graph)) is not None}
         if changed:
-            log.info(
-                "changed with %s: %s; refreshing",
-                ", ".join(sorted(names)),
-                ", ".join(sorted(changed)),
-            )
-            self.request_refresh(changed)
+            log.info("changed with %s: %s; refreshing", ", ".join(sorted(names)), _said(changed))
+            self.request_refresh(set(changed))
 
-    def _changed(self, e: Enabled, graph: Graph) -> bool:
-        """`e.plugin.changed`, False when it fails: logged at debug, since the plugin's
-        refresh shows the error, and tried again next time."""
+    def _changed(self, e: Enabled, graph: Graph) -> str | None:
+        """Why `e.plugin.changed` says its tool has something new ("" when it doesn't say);
+        None when it hasn't, or the check fails: logged at debug, since the plugin's refresh
+        shows the error, and tried again next time."""
         try:
-            return e.plugin.changed(e.ctx, graph)
+            answer = e.plugin.changed(ChangedRequest(e.ctx, graph))
         except Exception:
             log.debug("%s: change check failed", e.name, exc_info=True)
-            return False
+            return None
+        if isinstance(answer, Changed):
+            return answer.reason if answer.changed else None
+        return "" if answer else None
 
     def check_for_changes(self, now: float | None = None) -> set[str]:
         """Ask each plugin whose `change_check_seconds` have passed whether it `changed`,
@@ -235,15 +235,15 @@ class App:
         if not due:
             return set()
         graph, _ = stored_graph(self.db, plugins)  # once for every check due
-        changed: set[str] = set()
+        changed: dict[str, str] = {}
         for e in due:
             self._last_checked[e.name] = now
-            if self._changed(e, graph):
-                changed.add(e.name)
+            if (why := self._changed(e, graph)) is not None:
+                changed[e.name] = why
         if changed:
-            log.info("changed: %s; refreshing", ", ".join(sorted(changed)))
-            self.request_refresh(changed)
-        return changed
+            log.info("changed: %s; refreshing", _said(changed))
+            self.request_refresh(set(changed))
+        return set(changed)
 
     def run_change_loop(self) -> None:
         """Check for changes (`check_for_changes`) every `CHANGE_LOOP_SECONDS`."""
@@ -380,6 +380,11 @@ class App:
     def _alert(self) -> str:
         """The certificate banner, for focus mode's pages."""
         return render.banner(*self.certificate_warning())
+
+
+def _said(changed: dict[str, str]) -> str:
+    """The plugins that changed, each with why when it said, for the log."""
+    return ", ".join(f"{name} ({why})" if why else name for name, why in sorted(changed.items()))
 
 
 NOTICE = "notice"

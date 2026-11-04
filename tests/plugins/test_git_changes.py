@@ -11,7 +11,7 @@ from conftest import NOW
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Context
+from move_forward.plugin import ChangedRequest, CollectRequest, Context, LoadRequest, StoreRequest
 from move_forward.plugins.git import changes, client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalRepo
@@ -82,14 +82,14 @@ def test_the_plugin_says_changed_after_a_move_until_a_refresh_reads_it(tmp_path:
         kv=KvRepository(db, "git"),
     )
     plugin = GitPlugin(watching=False)
-    assert not plugin.changed(ctx, Graph([]))  # nothing to compare against yet
+    assert not plugin.changed(ChangedRequest(ctx, Graph([])))  # nothing to compare against yet
     git(repo, "commit", "-q", "--allow-empty", "-m", "second")
-    assert plugin.changed(ctx, Graph([]))
+    assert plugin.changed(ChangedRequest(ctx, Graph([])))
     # Still, until a refresh reads it: core ignores the check right after a refresh, and a
     # move seen there mustn't wait for the next one.
-    assert plugin.changed(ctx, Graph([]))
-    plugin.store(ctx, plugin.collect(ctx))
-    assert not plugin.changed(ctx, Graph([]))
+    assert plugin.changed(ChangedRequest(ctx, Graph([])))
+    plugin.store(StoreRequest(ctx, plugin.collect(CollectRequest(ctx))))
+    assert not plugin.changed(ChangedRequest(ctx, Graph([])))
 
 
 def test_after_a_change_only_the_repos_that_moved_are_read_again(
@@ -121,20 +121,20 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     monkeypatch.setattr(client, "collect_repo", counting)
 
     def refresh(minutes: int) -> None:
-        plugin.store(ctx(minutes), plugin.collect(ctx(minutes)))
+        plugin.store(StoreRequest(ctx(minutes), plugin.collect(CollectRequest(ctx(minutes)))))
 
-    assert not plugin.changed(ctx(0), Graph([]))  # the first look
+    assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # the first look
     refresh(0)
     assert sorted(read) == ["a", "b"]
     git(b, "commit", "-q", "--allow-empty", "-m", "second")
-    assert plugin.changed(ctx(1), Graph([]))
+    assert plugin.changed(ChangedRequest(ctx(1), Graph([])))
     read.clear()
     refresh(1)
     assert read == ["b"]  # a is kept as stored
-    stored = plugin.load(ctx(1))
+    stored = plugin.load(LoadRequest(ctx(1)))
     assert stored is not None and [r.dir for r in stored.repos] == [str(a), str(b)]
     git(a, "commit", "-q", "--allow-empty", "-m", "second")
-    assert plugin.changed(ctx(11), Graph([]))
+    assert plugin.changed(ChangedRequest(ctx(11), Graph([])))
     read.clear()
     refresh(11)  # ten minutes since every repo was read: all of them, whatever moved
     assert sorted(read) == ["a", "b"]
@@ -157,12 +157,14 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
             kv=KvRepository(db, "git"),
         )
 
-    plugin.store(ctx(0), plugin.collect(ctx(0)))
-    assert not plugin.changed(ctx(0), Graph([]))  # as stored
+    plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
+    assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # as stored
     (repo / "new.txt").write_text("x\n")
-    assert not plugin.changed(ctx(10), Graph([]))  # status_seconds not up yet
-    assert not plugin.changed(ctx(40, status_seconds=0), Graph([]))  # off
-    assert plugin.changed(ctx(40), Graph([]))
+    assert not plugin.changed(ChangedRequest(ctx(10), Graph([])))  # status_seconds not up yet
+    assert not plugin.changed(ChangedRequest(ctx(40, status_seconds=0), Graph([])))  # off
+    assert plugin.changed(ChangedRequest(ctx(40), Graph([])))
     assert KvRepository(db, "git").get(MOVED) == json.dumps([str(changes.common_dir(repo))])
-    plugin.store(ctx(40), plugin.collect(ctx(40)))  # reads it, untracked file and all
-    assert not plugin.changed(ctx(80), Graph([]))
+    plugin.store(
+        StoreRequest(ctx(40), plugin.collect(CollectRequest(ctx(40))))
+    )  # reads it, untracked file and all
+    assert not plugin.changed(ChangedRequest(ctx(80), Graph([])))

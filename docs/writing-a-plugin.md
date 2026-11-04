@@ -95,14 +95,14 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     snapshot_model = LinearSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
 
-    def collect(self, ctx: Context[LinearConfig]) -> LinearSnapshot:
-        return client.collect(ctx.config, ctx.email)
+    def collect(self, req: CollectRequest[LinearConfig]) -> LinearSnapshot:
+        return client.collect(req.ctx.config, req.ctx.email)
 
-    def store(self, ctx: Context[LinearConfig], snapshot: LinearSnapshot) -> None:
-        IssueRepository(ctx.db).replace(snapshot)
+    def store(self, req: StoreRequest[LinearConfig, LinearSnapshot]) -> None:
+        IssueRepository(req.ctx.db).replace(req.snapshot)
 
-    def load(self, ctx: Context[LinearConfig]) -> LinearSnapshot | None:
-        return IssueRepository(ctx.db).load()
+    def load(self, req: LoadRequest[LinearConfig]) -> LinearSnapshot | None:
+        return IssueRepository(req.ctx.db).load()
 ```
 
 - `name` is the config section, the kv namespace and migrations' owner, the tables'
@@ -118,8 +118,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   that suits its tool): the server refreshes it that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
   request answered "not modified", another plugin's entities in the graph) sets
-  `change_check_seconds` and implements `changed(ctx, graph)`: the server asks that often, and refreshes the plugin as soon as it says
-  True. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
+  `change_check_seconds` and implements `changed(req)`: the server asks that often, and
+  refreshes the plugin as soon as it says True, or `Changed(True, reason)`, whose reason
+  goes into the log line. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
   the server asks once more and ignores the answer, so what the refresh did itself isn't
   taken for a change. With `changed`, `refresh_seconds` can be long. A `changed` that
   reads another plugin's entities from the graph names that plugin in `watches`: the
@@ -134,21 +135,30 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   what it stored last. It has `collect_timeout_seconds` (300) to finish: past that, the
   refresh records it as timed out and goes on, and leaves it out of later refreshes until
   its collect returns (a thread can't be stopped). Set a timeout on whatever it calls, too.
+  With more to fetch than fits, return `Collected(snapshot, more=True)` and keep your
+  place in `ctx.kv`: core stores that piece and calls `collect` again in the same refresh,
+  each piece with the timeout to itself.
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
   for every page. Nothing is kept as JSON.
 - `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
   the page's footer, which lists each plugin's.
 - A plugin that needs other plugins' entities to know what to fetch sets
-  `collects_after_graph = True` and implements `collect_after(ctx, graph)` instead (see
+  `collects_after_graph = True` and implements `collect_after(req)` instead (see
   git_stack).
-- `notification_kinds` and `events(ctx, before, after)` make browser notifications: when
-  the user has subscribed to one of the kinds (`<plugin>.<kind>`), `events` gets the last
-  good snapshot and the one just collected, and returns an `Event` for what changed: its
+- `notification_kinds` and `events(req)` make browser notifications: when the user has
+  subscribed to one of the kinds (`<plugin>.<kind>`), `events` gets the last good
+  snapshot (`req.before`), the one just collected (`req.after`) and the graph from before
+  the refresh, and returns an `Event` for what changed: its
   `thing` (events with the same one are told together), `title`, `text`, and `anchor` (an
   item's `page.anchor(kind, id)`, to open the dashboard at it). Say it on a change of state,
   not while it holds, and nothing about what `before` has no state for. A failure is
   logged and the refresh goes on.
-- `after_collect(ctx, graph)` runs after every refresh, for work that needs the graph and
+- `graph_events(req)` makes events from what the graph says, e.g. a ticket's PRs all
+  merged: compare what holds now (`req.graph`, `req.snapshot`) with what held before the
+  refresh (`req.previous_graph`, `req.previous_snapshot`) and say what became true. Before
+  the plugin's first snapshot `previous_snapshot` is None: say nothing then. After a
+  restart, "before" is what was stored when the dashboard stopped.
+- `after_collect(req)` runs after every refresh, for work that needs the graph and
   writes the plugin's tables, e.g. notes finding what its ice covers.
 
 ### Tables and migrations
@@ -313,7 +323,7 @@ plugin and hook). The rest of the page, and the other plugins' refreshes, go on.
 
 ## Upkeep
 
-`prune(ctx, graph)` runs once a day: clear kept data about work finished more than
+`prune(req)` runs once a day: clear kept data about work finished more than
 `ctx.prune_days` ago, and return what was done.
 
 ## Tests

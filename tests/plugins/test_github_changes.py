@@ -9,10 +9,9 @@ from conftest import ME, NOW, approved_review, event, pr, snapshot
 from move_forward import refresh, registry
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.graph import Graph
 from move_forward.notifications import NotificationRepository
 from move_forward.page import anchor
-from move_forward.plugin import Context
+from move_forward.plugin import AfterCollectRequest, CollectRequest
 from move_forward.plugins.github.changes import KINDS, changes
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import Check, GitHubSnapshot, Review, Thread
@@ -165,10 +164,10 @@ class _Scripted(GitHubPlugin):
 
     snapshots: ClassVar[list[GitHubSnapshot]] = []
 
-    def collect(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot:
+    def collect(self, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
         return self.snapshots.pop(0)
 
-    def after_collect(self, ctx: Context[GitHubConfig], graph: Graph) -> None:
+    def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
         pass
 
 

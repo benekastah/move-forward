@@ -3,6 +3,7 @@
 import pytest
 from conftest import NOW, local_branch, local_snapshot, pr, snapshot, stored
 
+from move_forward.plugin import ChangedRequest
 from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.github import notifications
 from move_forward.plugins.github.plugin import CHANGED, GitHubPlugin
@@ -29,7 +30,9 @@ def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
             LocalRepository(db).replace(local_snapshot(branches=list(branches)))
         plugins = enabled(config, db, NOW)
         github = next(e for e in plugins if e.name == "github")
-        return GitHubPlugin().changed(github.ctx, stored_graph(db, plugins)[0])
+        return bool(
+            GitHubPlugin().changed(ChangedRequest(github.ctx, stored_graph(db, plugins)[0]))
+        )
 
     assert not changed_after()  # the first look notes where things stand
     assert not changed_after()

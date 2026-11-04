@@ -8,22 +8,30 @@ from pydantic import BaseModel
 
 from ...api import (
     ActNowRequest,
+    AfterCollectRequest,
     Asker,
+    Changed,
+    ChangedRequest,
     CliHandler,
+    CollectRequest,
     Context,
     EntitiesRequest,
     Entity,
     Event,
+    EventsRequest,
     FetchRequest,
     Graph,
     Identity,
     IdentityRequest,
     InitSetup,
     Item,
+    LoadRequest,
     Panel,
     PanelsRequest,
     Plugin,
+    PruneRequest,
     Ref,
+    StoreRequest,
     UrlRequest,
     attrs,
     collect_into,
@@ -89,16 +97,17 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     cli_help = "import reviewers' emails from the skill's reviewer map"
     snapshot_model = GitHubSnapshot
 
-    def collect(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot:
+    def collect(self, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, after `changed` saw only some PRs change, just those PRs, placed
         in the stored lists as the searches would find them. Every search runs when a full
         collect is due (`refresh_seconds` since the last), so frequent changes can't put it
         off, when a change wasn't about a PR (a CI run), when more PRs changed than a search
         page holds (a request for them all would time out), and when fetching them fails."""
+        ctx = req.ctx
         config = ctx.config
         changed = self._take_changed(ctx)
         everything = EVERYTHING in changed or len(changed) > client.PAGE_SIZE
-        previous = None if everything or self._full_due(ctx) else self.load(ctx)
+        previous = None if everything or self._full_due(ctx) else self.load(LoadRequest(ctx))
         if previous is not None and changed:
             ids = [_pr_id(pr) for pr in sorted(changed)]
             try:
@@ -138,21 +147,26 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             ctx.kv.set_json(CHANGED, sorted(pending))
         return pending
 
-    def store(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot) -> None:
+    def store(self, req: StoreRequest[GitHubConfig, GitHubSnapshot]) -> None:
+        ctx, snapshot = req.ctx, req.snapshot
         PrRepository(ctx.db).replace(snapshot)
 
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
     watches: ClassVar[list[str]] = ["git"]
 
-    def changed(self, ctx: Context[GitHubConfig], graph: Graph) -> bool:
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
         refresh of git, which it watches), or I have a notification about something in the
         org, polled as often as GitHub allows. Which PRs changed is kept for `collect`, to
         fetch just those, and asks for a refresh until it has."""
+        ctx, graph = req.ctx, req.graph
         changed = self._branches_moved(ctx, graph) | self._notified(ctx)
         # Pending until `collect` fetches them: what's seen in the check core makes right
         # after a refresh (whose answer it ignores) still asks for a refresh at the next one.
-        return bool(self._note_changed(ctx, changed))
+        pending = self._note_changed(ctx, changed)
+        if EVERYTHING in pending:
+            return Changed(True, "every search")
+        return Changed(bool(pending), f"{len(pending)} PR(s) to fetch")
 
     def _branches_moved(self, ctx: Context[GitHubConfig], graph: Graph) -> set[str]:
         now = pushes.tips(graph, PR, REPO)
@@ -192,19 +206,19 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             elif n.kind not in notifications.UNRELATED:
                 prs.add(EVERYTHING)
         if ci_repos:
-            if (snapshot := self.load(ctx)) is None:
+            if (snapshot := self.load(LoadRequest(ctx))) is None:
                 return prs | {EVERYTHING}
             prs |= {f"{pr.repo}#{pr.number}" for pr in snapshot.mine if pr.repo.lower() in ci_repos}
         return prs
 
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
 
-    def events(
-        self, ctx: Context[GitHubConfig], before: GitHubSnapshot, after: GitHubSnapshot
-    ) -> list[Event]:
+    def events(self, req: EventsRequest[GitHubConfig, GitHubSnapshot]) -> list[Event]:
+        ctx, before, after = req.ctx, req.before, req.after
         return changes.changes(before, after, ctx.config.ignored_reviewers)
 
-    def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
+    def load(self, req: LoadRequest[GitHubConfig]) -> GitHubSnapshot | None:
+        ctx = req.ctx
         return PrRepository(ctx.db).load()
 
     def identity(self, req: IdentityRequest[GitHubConfig, GitHubSnapshot]) -> Identity | None:
@@ -238,10 +252,11 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 people.save_looked_up(login, email, ctx.now)
                 known[login] = email
 
-    def after_collect(self, ctx: Context[GitHubConfig], graph: Graph) -> None:
+    def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the
         local checkouts the graph's `repo` entities describe."""
-        gh = self.load(ctx)
+        ctx, graph = req.ctx, req.graph
+        gh = self.load(LoadRequest(ctx))
         if gh is None:
             return
         self._lookup_emails(ctx, gh)
@@ -375,8 +390,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
 
-    def prune(self, ctx: Context[GitHubConfig], graph: Graph) -> list[str]:
+    def prune(self, req: PruneRequest[GitHubConfig]) -> list[str]:
         """Forget email lookups that found none `prune_days` ago, to try them again."""
+        ctx = req.ctx
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         retried = PeopleRepository(ctx.db).forget_misses_before(cutoff)
         return [f"will look up {retried} reviewer email(s) again"] if retried else []

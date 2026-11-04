@@ -16,6 +16,7 @@ from ...api import (
     Action,
     ActionError,
     ActionHandler,
+    AfterCollectRequest,
     Asker,
     CliHandler,
     Context,
@@ -28,6 +29,7 @@ from ...api import (
     PanelsRequest,
     Plugin,
     PrepareItemActionsRequest,
+    PruneRequest,
     age,
     html,
 )
@@ -202,8 +204,9 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
 
     sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK_PATH})
 
-    def after_collect(self, ctx: Context[SlackConfig], graph: Graph) -> None:
+    def after_collect(self, req: AfterCollectRequest[SlackConfig]) -> None:
         """Look up the Slack ids of requested reviewers nothing names one for."""
+        ctx, graph = req.ctx, req.graph
         found = contacts.look_up_requested(ctx, graph)
         if found:
             ctx.log.info("found Slack ids for %s", ", ".join(found))
@@ -237,7 +240,8 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             "disconnect": account.disconnect_action,
         }
 
-    def prune(self, ctx: Context[SlackConfig], graph: Graph) -> list[str]:
+    def prune(self, req: PruneRequest[SlackConfig]) -> list[str]:
+        ctx = req.ctx
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         slack = SlackRepository(ctx.db)
         deleted = slack.delete_pings_before(cutoff)

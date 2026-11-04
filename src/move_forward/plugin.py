@@ -159,6 +159,92 @@ class KeptItemRequest[C: BaseModel]:
     """What the action put after `<plugin>:` in its `KEPT` parameter."""
 
 
+@dataclass(frozen=True)
+class CollectRequest[C: BaseModel]:
+    ctx: Context[C]
+
+
+@dataclass(frozen=True)
+class CollectAfterRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+    """The graph with what the plugins collecting first just stored."""
+
+
+@dataclass(frozen=True)
+class Collected[S: BaseModel]:
+    """What `collect` returns when it did part of the work: core stores `snapshot` and runs
+    `collect` again right after the other due plugins, until `more` is False."""
+
+    snapshot: S
+    more: bool = False
+
+
+@dataclass(frozen=True)
+class StoreRequest[C: BaseModel, S: BaseModel]:
+    ctx: Context[C]
+    snapshot: S
+
+
+@dataclass(frozen=True)
+class LoadRequest[C: BaseModel]:
+    ctx: Context[C]
+
+
+@dataclass(frozen=True)
+class EventsRequest[C: BaseModel, S: BaseModel]:
+    ctx: Context[C]
+    before: S
+    """The last good snapshot."""
+    after: S
+    """The one just collected."""
+    graph: Graph
+    """The graph as it was before this refresh."""
+
+
+@dataclass(frozen=True)
+class GraphEventsRequest[C: BaseModel, S: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+    snapshot: S | None
+    previous_graph: Graph
+    """The graph as it was before this refresh: after a start, what was stored when the
+    dashboard stopped."""
+    previous_snapshot: S | None
+    """The plugin's snapshot before this refresh; None when it had none (nothing to compare
+    with: say nothing yet)."""
+
+
+@dataclass(frozen=True)
+class AfterCollectRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+
+
+@dataclass(frozen=True)
+class ChangedRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+
+
+@dataclass(frozen=True)
+class Changed:
+    """`changed`'s answer, with why, for the log."""
+
+    changed: bool
+    reason: str = ""
+    """What changed, e.g. "notifications about 2 PRs"; it goes into the log line."""
+
+    def __bool__(self) -> bool:
+        return self.changed
+
+
+@dataclass(frozen=True)
+class PruneRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+
+
 PageHandler = Callable[[Context[Any], Graph, dict[str, list[str]]], str | None]
 """Renders a page from the query parameters; None means not found."""
 CliHandler = Callable[[Context[Any], Graph, argparse.Namespace], int]
@@ -229,17 +315,19 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Refresh
 
-    def collect(self, ctx: Context[C]) -> S:
+    def collect(self, req: CollectRequest[C]) -> "S | Collected[S]":
         """Fetch the plugin's snapshot. Runs in parallel with other plugins' and may raise;
-        the error is shown and the last good snapshot kept."""
+        the error is shown and the last good snapshot kept. It has `collect_timeout_seconds`;
+        with more to do than fits, return `Collected(snapshot, more=True)` and keep your
+        place in `ctx.kv`: core stores the piece and calls `collect` again."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
-    def store(self, ctx: Context[C], snapshot: S) -> None:
+    def store(self, req: StoreRequest[C, S]) -> None:
         """Keep what `collect` fetched in the plugin's tables, replacing what the last good
         collect kept, in one transaction."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no store")
 
-    def load(self, ctx: Context[C]) -> S | None:
+    def load(self, req: LoadRequest[C]) -> S | None:
         """What the last good collect kept, for `entities` and `panels`; None when there's
         nothing (no snapshot model, say)."""
         return None
@@ -249,7 +337,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
     `github.pr_mergeable`."""
 
-    def events(self, ctx: Context[C], before: S, after: S) -> list[Event]:
+    def events(self, req: EventsRequest[C, S]) -> list[Event]:
         """What happened between the last good snapshot (`before`) and the one just collected
         (`after`), as events of its `notification_kinds`; only asked when I've subscribed to
         one of them, and never for the first snapshot, which has nothing to compare with.
@@ -258,20 +346,20 @@ class Plugin[C: BaseModel, S: BaseModel]:
         the refresh goes on."""
         return []
 
-    def graph_events(self, ctx: Context[C], graph: Graph) -> list[Event]:
+    def graph_events(self, req: GraphEventsRequest[C, S]) -> list[Event]:
         """Events from what other plugins' entities say, e.g. a ticket's PRs all merged,
         asked after every refresh of anything, when I've subscribed to one of its kinds.
-        Nothing compares snapshots for it: keep what was said in `ctx.kv` and say a thing
-        once, and keep it without saying anything the first time asked."""
+        Compare what holds now (`graph`, `snapshot`) with what held before this refresh
+        (`previous_graph`, `previous_snapshot`), and say what became true."""
         return []
 
-    def collect_after(self, ctx: Context[C], graph: Graph) -> S:
+    def collect_after(self, req: CollectAfterRequest[C]) -> "S | Collected[S]":
         """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
         repos git found. Runs once their snapshots are stored, in parallel with other
         `collect_after`s, and fails like `collect`."""
         raise NotImplementedError(f"{self.name} collects after the graph but has no collect_after")
 
-    def after_collect(self, ctx: Context[C], graph: Graph) -> None:
+    def after_collect(self, req: AfterCollectRequest[C]) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.
         caching lookups in the plugin's tables."""
 
@@ -282,7 +370,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
     rather than waiting for `change_check_seconds`."""
 
-    def changed(self, ctx: Context[C], graph: Graph) -> bool:
+    def changed(self, req: ChangedRequest[C]) -> bool | Changed:
         """Whether what the plugin collects has changed since this was last asked, by a check
         far cheaper than `collect` (files' times, a request answered "not modified", other
         plugins' entities in `graph`, built from what's stored), so the plugin refreshes soon
@@ -404,7 +492,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         init knows so far; a plugin can add to its `teams`."""
         return {}
 
-    def prune(self, ctx: Context[C], graph: Graph) -> list[str]:
+    def prune(self, req: PruneRequest[C]) -> list[str]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns
         what was done, one line each."""
         return []

@@ -12,7 +12,15 @@ from legacy import save_json_snapshot
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.page import Identity
-from move_forward.plugin import Context, EntitiesRequest, FetchRequest, IdentityRequest
+from move_forward.plugin import (
+    CollectRequest,
+    Context,
+    EntitiesRequest,
+    FetchRequest,
+    IdentityRequest,
+    PruneRequest,
+    StoreRequest,
+)
 from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import (
@@ -227,8 +235,8 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
     def refresh(minutes: int, *changed: str) -> GitHubSnapshot:
         at = replace(ctx, now=NOW + timedelta(minutes=minutes))
         at.kv.set(CHANGED, json.dumps(list(changed)))
-        gh = plugin.collect(at)
-        plugin.store(at, gh)
+        gh = plugin.collect(CollectRequest(at))
+        plugin.store(StoreRequest(at, gh))
         assert at.kv.get(CHANGED) is None
         return gh
 
@@ -255,7 +263,9 @@ def test_the_daily_prune_looks_up_old_misses_again() -> None:
     people = PeopleRepository(ctx.db)
     people.save_looked_up("bob", None, NOW.replace(year=2025))
     people.save_looked_up("alice", "a@x", NOW.replace(year=2025))
-    assert GitHubPlugin().prune(ctx, Graph()) == ["will look up 1 reviewer email(s) again"]
+    assert GitHubPlugin().prune(PruneRequest(ctx, Graph())) == [
+        "will look up 1 reviewer email(s) again"
+    ]
     assert people.emails() == {"alice": "a@x"}
 
 

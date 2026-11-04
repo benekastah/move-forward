@@ -19,6 +19,7 @@ from .plugin import (
     EntitiesRequest,
     FetchRequest,
     LinkingRequest,
+    LoadRequest,
     Plugin,
     SourceError,
     UrlRequest,
@@ -85,7 +86,7 @@ class Enabled:
 
     def snapshot(self) -> BaseModel | None:
         """What the plugin last stored; None when it has nothing, or its `load` fails."""
-        return call(self.name, "load", lambda: self.plugin.load(self.ctx), None)
+        return call(self.name, "load", lambda: self.plugin.load(LoadRequest(self.ctx)), None)
 
 
 def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:

@@ -9,18 +9,22 @@ from pydantic import BaseModel
 from ...api import (
     ActionHandler,
     Asker,
+    ChangedRequest,
+    CollectRequest,
     Context,
     EntitiesRequest,
     Entity,
     Event,
-    Graph,
+    GraphEventsRequest,
     InitSetup,
     ItemActionsRequest,
     ItemAdditions,
+    LoadRequest,
     Panel,
     PanelsRequest,
     Plugin,
     Ref,
+    StoreRequest,
     attrs,
 )
 from ...api.shell import CommandError
@@ -65,10 +69,11 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {REPO: RepoAttrs, BRANCH: BranchAttrs}
 
-    def collect(self, ctx: Context[GitConfig]) -> LocalSnapshot:
+    def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         """Every repo; or, after `changed` saw only some move, just those, keeping the rest
         as stored, unless a full collect is due (`refresh_seconds` since the last), so
         frequent changes can't put it off."""
+        ctx = req.ctx
         moved = set(ctx.kv.get_json(MOVED, list[str]) or [])
         ctx.kv.delete(MOVED)
         last_full = ctx.kv.get(LAST_FULL)
@@ -77,7 +82,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             or (ctx.now - datetime.fromisoformat(last_full)).total_seconds()
             >= ctx.config.refresh_seconds
         )
-        previous = None if full_due or not moved else self.load(ctx)
+        previous = None if full_due or not moved else self.load(LoadRequest(ctx))
         if previous is None:
             ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         return client.collect(
@@ -90,9 +95,10 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             github_hosts=ctx.config.github_hosts,
         )
 
-    def store(self, ctx: Context[GitConfig], snapshot: LocalSnapshot) -> None:
+    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
         """Keep the snapshot, and watch the worktrees it found (once `changed` has started
         watching: only the server asks it)."""
+        ctx, snapshot = req.ctx, req.snapshot
         LocalRepository(ctx.db).replace(snapshot)
         if self._watcher is not None:
             self._watch(snapshot)
@@ -109,7 +115,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 ctx.log.warning("can't watch the repos, so polling them: %s", e)
                 self._watching = False
                 return None
-            if snapshot := self.load(ctx):
+            if snapshot := self.load(LoadRequest(ctx)):
                 self._watch(snapshot)
         return self._watcher
 
@@ -130,12 +136,13 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 worktrees[Path(wt.path).resolve()] = common.resolve()
         self._watcher.sync(worktrees)
 
-    def changed(self, ctx: Context[GitConfig], graph: Graph) -> bool:
+    def changed(self, req: ChangedRequest[GitConfig]) -> bool:
         """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a
         worktree's uncommitted edits changed. Watched repos say so as it happens (see
         `watch`); the rest are polled, their refs by their files' times (see `changes`) and
         their edits every `status_seconds` by `git status`. Which repos moved is kept for
         `collect`, to read just those, and asks for a refresh until it has."""
+        ctx = req.ctx
         watcher = self._watcher_for(ctx)
         moved_now, edited_now = watcher.take() if watcher else (set[Path](), set[Path]())
         watched: set[str] = (
@@ -174,7 +181,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         if not poll and not edited:
             return set()
         found: set[str] = set()
-        for repo in snapshot.repos if (snapshot := self.load(ctx)) else []:
+        for repo in snapshot.repos if (snapshot := self.load(LoadRequest(ctx))) else []:
             for wt in repo.worktrees:
                 path = Path(wt.path)
                 resolved = path.resolve()
@@ -188,7 +195,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                     found.add(str(changes.common_dir(Path(repo.dir))))
         return found
 
-    def load(self, ctx: Context[GitConfig]) -> LocalSnapshot | None:
+    def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:
+        ctx = req.ctx
         return LocalRepository(ctx.db).load()
 
     def entities(self, req: EntitiesRequest[GitConfig, LocalSnapshot]) -> list[Entity]:
@@ -240,9 +248,15 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 
-    def graph_events(self, ctx: Context[GitConfig], graph: Graph) -> list[Event]:
-        built = Builder(ctx.config, ctx.now, self.load(ctx), graph)
-        return events.deletable(ctx.kv, built.cleanup())
+    def graph_events(self, req: GraphEventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
+        """`branch_deletable`: a branch Cleanup lists now and didn't before this refresh."""
+        if req.previous_snapshot is None:
+            return []
+        config, now = req.ctx.config, req.ctx.now
+        before = Builder(config, now, req.previous_snapshot, req.previous_graph).cleanup()
+        return events.newly_deletable(
+            before, Builder(config, now, req.snapshot, req.graph).cleanup()
+        )
 
     def item_actions(self, req: ItemActionsRequest[GitConfig]) -> ItemAdditions:
         item, graph = req.item, req.graph

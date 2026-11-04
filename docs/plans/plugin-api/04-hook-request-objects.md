@@ -55,14 +55,12 @@ focus page; two identities in the footer. **Size.** L.
 - `EventsRequest(ctx, before, after, graph)`: `_store` (`refresh.py:41-58`) gets the graph
   built before the collect phase (already in hand at `refresh.py:147` for `collect_after`;
   for phase one, build it once before `_collect_all`).
-- `GraphEventsRequest(ctx, graph, previous: Graph)`: what was true before this refresh, so
-  a notification fires when something becomes true, not every refresh while it stays so.
-  `App` keeps the last graph it built and passes it through `refresh(..., previous=)`. On
-  the first refresh after a start, and for `mfd refresh`, `previous` is the graph built
-  from the stored snapshots before collecting: what the dashboard knew when it stopped,
-  since every plugin keeps its last fetch in its tables. Nothing new is stored, and what
-  changed while the dashboard was down notifies once. jira's `CLOSEABLE` kv and git's
-  `deletable` kv go: they diff graphs instead.
+- `GraphEventsRequest(ctx, graph, snapshot, previous_graph, previous_snapshot)`: what held
+  before this refresh, so a notification fires when something becomes true, not every
+  refresh while it stays so. git's and jira's events come from their snapshot and the
+  graph together, so both are passed. "Before" is what was stored before collecting: after
+  a start, what the dashboard knew when it stopped. `refresh` builds it first, so nothing
+  is kept in memory or stored. jira's `CLOSEABLE` kv and git's `deletable` kv go.
 - `ChangedRequest(ctx, graph)` → `bool | Changed(changed, reason: str, subjects: list[Ref])`;
   the reason joins the "changed: …; refreshing" log lines.
 - Collecting in pieces: `collect` may return `Collected(snapshot, more=True)` for work too
