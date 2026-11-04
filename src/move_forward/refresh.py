@@ -288,27 +288,29 @@ def publishers(graph: Graph, refs: list[Ref]) -> dict[str, list[Ref]]:
 def refresh_subjects(
     config: Config, db: Database, refs: list[Ref], now: datetime | None = None
 ) -> set[str]:
-    """Fetch these entities again through their plugins' `refresh_subjects`, keeping what
-    each returns as a refresh would (its events too); returns the plugins that couldn't,
-    for a full refresh instead. At most `MAX_SUBJECTS` refs are fetched."""
+    """Fetch these entities again through their plugins' `refresh_subjects`, `MAX_SUBJECTS`
+    at a time, keeping what each returns as a refresh would (its events too); returns the
+    plugins that couldn't, for a full refresh instead."""
     now = now or datetime.now(UTC)
     plugins = {e.name: e for e in enabled(config, db, now)}
     graph, _ = stored_graph(db, list(plugins.values()))
     subscribed = set(config.notifications.subscribe)
     fallback: set[str] = set()
-    for name, mine in publishers(graph, refs[:MAX_SUBJECTS]).items():
+    for name, mine in publishers(graph, refs).items():
         e = plugins[name]
         if not e.plugin.collects:
             continue
-        result = _subjects(e, mine)
-        if result is None:
-            fallback.add(name)
-            continue
-        try:
-            _store(e, result.snapshot, subscribed, now, graph)
-        except Exception:
-            log.exception("%s: storing its subjects failed", name)
-            fallback.add(name)
+        for start in range(0, len(mine), MAX_SUBJECTS):
+            result = _subjects(e, mine[start : start + MAX_SUBJECTS])
+            if result is None:
+                fallback.add(name)
+                break
+            try:
+                _store(e, result.snapshot, subscribed, now, graph)
+            except Exception:
+                log.exception("%s: storing its subjects failed", name)
+                fallback.add(name)
+                break
     return fallback
 
 

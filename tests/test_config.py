@@ -205,3 +205,8 @@ def test_an_unknown_section_names_the_plugins(tmp_path: Path) -> None:
 def test_a_bad_section_says_which_of_its_fields(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match=r"github\.orgg\n  Extra inputs"):
         _load(tmp_path, MINIMAL + '\n[github]\norg = "acme"\norgg = "x"\n')
+
+
+def test_sections_isnt_a_setting(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="`sections` isn't a setting"):
+        _load(tmp_path, MINIMAL + '\n[sections.github]\norg = "acme"\n')

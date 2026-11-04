@@ -335,9 +335,9 @@ class Database:
 
     def migrate(self, owner: str, migrations: Sequence[Migration]) -> int:
         """Apply `owner`'s migrations that haven't run yet, in order, each in its own
-        transaction with its line in the ledger. A plugin's (any owner but core's) may make
-        only tables, indexes, views and triggers named `<owner>_...`; one that makes another
-        is rolled back and refused.
+        transaction with its line in the ledger. A plugin's (any owner but core's) may make or
+        remove only tables, indexes, views and triggers named `<owner>_...`; one that touches
+        another is rolled back and refused.
 
         Foreign keys are enforced, and SQLite can't turn them off inside a transaction, so a
         migration that rebuilds a referenced table copies it under a new name and renames,
@@ -411,12 +411,14 @@ class Database:
                 conn.execute("BEGIN")
                 migration.run(conn)
             if owner != CORE:
-                made = sorted(self._objects() - before)
-                if stray := [name for name in made if not name.startswith(f"{owner}_")]:
-                    raise ValueError(
-                        f"{owner}'s migration {migration.name} made {', '.join(stray)}:"
-                        f" a plugin's tables are named {owner}_..."
-                    )
+                after = self._objects()
+                changed = {"made": after - before, "removed": before - after}
+                for did, names in changed.items():
+                    if stray := sorted(n for n in names if not n.startswith(f"{owner}_")):
+                        raise ValueError(
+                            f"{owner}'s migration {migration.name} {did} {', '.join(stray)}:"
+                            f" a plugin's tables are named {owner}_..., and only its own"
+                        )
             conn.execute(
                 "INSERT INTO migrations VALUES (?, ?, ?)",
                 (owner, migration.name, datetime.now(UTC).isoformat()),

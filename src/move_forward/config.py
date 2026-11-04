@@ -96,8 +96,8 @@ class Config(Strict):
         if not isinstance(data, dict):
             return data
         settings = dict(cast(dict[str, object], data))
-        if "sections" in settings:  # already split, e.g. by `model_copy`'s validation
-            return settings
+        if "sections" in settings:
+            raise ValueError("`sections` isn't a setting: give each plugin its own table")
         plugins = {p.name: p for p in registry.PLUGINS}
         sections: dict[str, BaseModel] = {}
         errors: list[InitErrorDetails] = []

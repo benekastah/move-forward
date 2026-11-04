@@ -496,6 +496,20 @@ def _int(query_params: dict[str, list[str]], name: str) -> int:
         return 0
 
 
+def _bad_response(response: Response) -> str | None:
+    """What's wrong with a plugin page's `Response`, or None: a status HTTP has, and header
+    names and values on one line each (a newline in one would let a value from the page's
+    query, say a redirect's URL, add headers of its own)."""
+    try:
+        HTTPStatus(response.status)
+    except ValueError:
+        return f"no HTTP status {response.status}"
+    texts = [response.content_type, *response.headers, *response.headers.values()]
+    if any("\r" in text or "\n" in text for text in texts):
+        return "a header with a line break"
+    return None
+
+
 def _form_fields(body: bytes) -> dict[str, str]:
     """The first value of each form field."""
     fields = parse_qs(body.decode(errors="replace"), keep_blank_values=True)
@@ -656,6 +670,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
             elif isinstance(page, str):
                 self._html(HTTPStatus.OK, page)
+            elif (problem := _bad_response(page)) is not None:
+                log.error("page %s answered a bad Response: %s", path, problem)
+                self._html(HTTPStatus.INTERNAL_SERVER_ERROR, PAGE_FAILED)
             else:
                 self._send(HTTPStatus(page.status), page.body, page.content_type, page.headers)
 

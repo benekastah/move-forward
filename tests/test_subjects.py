@@ -85,3 +85,12 @@ def test_a_url_that_isnt_one_of_the_hosts_prs_isnt_fetched() -> None:
     assert pr_id_of("github.com", pr(1).url) == client.PrId(repo="acme/widgets", number=1)
     assert pr_id_of("github.com", "https://github.acme.com/a/b/pull/1") is None
     assert pr_id_of("github.com", "https://github.com/a/b/issues/1") is None
+
+
+@pytest.mark.usefixtures("recording")
+def test_many_entities_are_fetched_fifty_at_a_time() -> None:
+    prs = [pr(n) for n in range(1, 56)]
+    config, db = stored(github=snapshot(mine=prs))
+    refs = [Ref(kind="pull_request", id=p.url) for p in prs]
+    assert refresh.refresh_subjects(config, db, refs, NOW) == set()
+    assert [len(asked) for asked in _Recording.asked] == [50, 5]
