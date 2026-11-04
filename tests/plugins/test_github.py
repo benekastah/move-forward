@@ -242,3 +242,8 @@ def test_prs_are_fetched_by_repo_and_number_in_one_request(
     query = args[-1]
     assert "pr1: repository(owner: $o1, name: $n1)" in query and "fragment PrFields" in query
     assert github.fetch_prs("github.com", []) == [] and len(calls) == 1
+
+
+def test_the_timeline_asks_for_the_most_events_graphql_gives_for_one_connection() -> None:
+    query = github.FIELDS_PATH.read_text()
+    assert "timelineItems(last: 100," in query  # a busy PR's recent events aren't cut at 40

@@ -52,7 +52,7 @@ fragment PrFields on PullRequest {
       }
     }
   }
-  timelineItems(last: 40, itemTypes: [REVIEW_REQUESTED_EVENT, HEAD_REF_FORCE_PUSHED_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT, ADDED_TO_MERGE_QUEUE_EVENT, PULL_REQUEST_REVIEW, ISSUE_COMMENT]) {
+  timelineItems(last: 100, itemTypes: [REVIEW_REQUESTED_EVENT, HEAD_REF_FORCE_PUSHED_EVENT, REMOVED_FROM_MERGE_QUEUE_EVENT, ADDED_TO_MERGE_QUEUE_EVENT, PULL_REQUEST_REVIEW, ISSUE_COMMENT]) {
     nodes {
       __typename
       ... on ReviewRequestedEvent { createdAt requestedReviewer { __typename ... on User { login } ... on Team { slug } } }

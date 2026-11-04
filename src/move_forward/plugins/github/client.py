@@ -14,8 +14,12 @@ from ...shell import CommandError, run, stopping
 from .models import Check, GitHubSnapshot, PullRequest, Review, Thread, TimelineEvent
 
 COMMIT_EMAIL_LOOKUP_COUNT = 10
-PAGE_SIZE = 25
-"""PRs per search page. Each carries threads, checks and events, and large pages time out."""
+PAGE_SIZE = 20
+"""PRs per search page. Each carries threads, checks and events (up to 100 of them, GraphQL's
+most for one connection), and large pages time out; 20 PRs with 100 events weigh about what
+25 with 40 did. A PR with more than 100 such events loses only its oldest, which no panel
+reads: feedback and evictions are about recent history. Paginating them would cost a
+request per busy PR, every refresh."""
 PAGE_ATTEMPTS = 2
 """GitHub sometimes answers a heavy search with an empty body; one retry usually fixes it."""
 PARALLEL_REQUESTS = 8
