@@ -22,6 +22,7 @@ from .kinds import FAMILIES
 from .notifications import Event, NotificationRepository
 from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
 from .plugin import (
+    MAX_SUBJECTS,
     ActionError,
     ActionRequest,
     ActionResult,
@@ -42,6 +43,8 @@ from .plugin import (
     PruneRequest,
     Response,
     StoreRequest,
+    Subjects,
+    SubjectsRequest,
     collect_into,
 )
 from .prune import prune_if_due
@@ -269,6 +272,61 @@ def _identify_kept(db: Database, graph: Graph) -> None:
     moved += FeedbackRepository(db).rekey(families, graph.identify)
     if moved:
         log.info("gave %s kept row(s) their entities' ids", moved)
+
+
+def publishers(graph: Graph, refs: list[Ref]) -> dict[str, list[Ref]]:
+    """`refs` by the plugin that published each: a family's by whoever published that id, a
+    plugin's own kind by that plugin. Refs the graph doesn't have are left out."""
+    found: dict[str, list[Ref]] = {}
+    for ref in dict.fromkeys(refs):
+        entity = graph.get(ref.kind, ref.id)
+        if entity is not None and entity.kind:
+            found.setdefault(entity.kind.split(".", 1)[0], []).append(ref)
+    return found
+
+
+def refresh_subjects(
+    config: Config, db: Database, refs: list[Ref], now: datetime | None = None
+) -> set[str]:
+    """Fetch these entities again through their plugins' `refresh_subjects`, keeping what
+    each returns as a refresh would (its events too); returns the plugins that couldn't,
+    for a full refresh instead. At most `MAX_SUBJECTS` refs are fetched."""
+    now = now or datetime.now(UTC)
+    plugins = {e.name: e for e in enabled(config, db, now)}
+    graph, _ = stored_graph(db, list(plugins.values()))
+    subscribed = set(config.notifications.subscribe)
+    fallback: set[str] = set()
+    for name, mine in publishers(graph, refs[:MAX_SUBJECTS]).items():
+        e = plugins[name]
+        if not e.plugin.collects:
+            continue
+        result = _subjects(e, mine)
+        if result is None:
+            fallback.add(name)
+            continue
+        try:
+            _store(e, result.snapshot, subscribed, now, graph)
+        except Exception:
+            log.exception("%s: storing its subjects failed", name)
+            fallback.add(name)
+    return fallback
+
+
+def _subjects(e: Enabled, refs: list[Ref]) -> Subjects[BaseModel] | None:
+    """The plugin's `refresh_subjects`, within its `subjects_timeout_seconds`; None when it
+    can't, fails or takes longer (the thread is left to finish, as a collect's is)."""
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"subjects-{e.name}")
+    future = pool.submit(
+        lambda: e.plugin.refresh_subjects(SubjectsRequest(e.ctx, refs, e.snapshot()))
+    )
+    pool.shutdown(wait=False)
+    try:
+        return future.result(timeout=e.plugin.subjects_timeout_seconds)
+    except FutureTimeout:
+        log.warning("%s: refreshing %s subject(s) took too long", e.name, len(refs))
+    except Exception:
+        log.exception("%s: refreshing subjects failed", e.name)
+    return None
 
 
 def _graph_events(

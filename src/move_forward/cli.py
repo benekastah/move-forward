@@ -14,9 +14,10 @@ from . import auth, init, keychain, localtime, priority, registry, signin, snooz
 from . import config as config_module
 from .act_now import PRIORITIES
 from .db import Database
+from .graph import Ref
 from .kinds import label
 from .plugin import CliHandler, CliRequest
-from .refresh import build_dashboard, refresh, stored_graph
+from .refresh import build_dashboard, refresh, refresh_subjects, stored_graph
 from .registry import enabled, enabled_names, migrate
 from .repositories import FeedbackRepository, PriorityRepository, SessionRepository
 from .server import scheme, serve
@@ -152,7 +153,14 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     commands.add_parser(
         "logout", help="sign every browser out: end all sessions (`mfd open` signs one in again)"
     )
-    commands.add_parser("refresh", help="refresh every source once and exit")
+    refresh_parser = commands.add_parser("refresh", help="refresh every source once and exit")
+    refresh_parser.add_argument(
+        "--subject",
+        nargs=2,
+        action="append",
+        metavar=("KIND", "ID"),
+        help="fetch just this entity again, e.g. pull_request <URL>; may be repeated",
+    )
     commands.add_parser(
         "check", help="load the config and every plugin, and exit; fails with what's wrong"
     )
@@ -360,7 +368,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ended {SessionRepository(db).revoke_all()} session(s)")
         return 0
     if args.command == "refresh":
-        refresh(config, db)
+        if args.subject:
+            refs = [Ref(kind=kind, id=id) for kind, id in args.subject]
+            if fallback := refresh_subjects(config, db, refs):
+                refresh(config, db, None, fallback)
+        else:
+            refresh(config, db)
         dashboard = build_dashboard(config, db)
         for source, status in dashboard.sources.items():
             print(f"{source}: {'error: ' + status.error if status.error else 'ok'}")

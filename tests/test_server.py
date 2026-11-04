@@ -782,7 +782,7 @@ def test_a_failing_plugin_page_answers_500_and_the_rest_stays_up(
     assert get(client, "/").status == 200
 
 
-def test_an_action_refreshes_its_plugin_and_whoever_publishes_what_it_touched(
+def test_an_action_refreshes_its_plugin_and_fetches_what_it_touched_again(
     app: server.App, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def perform(
@@ -796,7 +796,8 @@ def test_an_action_refreshes_its_plugin_and_whoever_publishes_what_it_touched(
     assert app._pending == {"slack"}  # pyright: ignore[reportPrivateUsage]
     app._pending = set()  # pyright: ignore[reportPrivateUsage]
     app.run_action("slack/react", {})
-    assert app._pending == {"slack", "github"}  # pyright: ignore[reportPrivateUsage]
+    assert app._pending == {"slack"}  # pyright: ignore[reportPrivateUsage]
+    assert app._subjects == [Ref(kind="pull_request", id=pr(1).url)]  # pyright: ignore[reportPrivateUsage]
 
 
 def test_a_plugin_page_knows_its_path(
@@ -845,3 +846,70 @@ def test_core_paths_are_reserved() -> None:
     paths = ["/focus", settings.PATH, server.LOGIN_PATH, server.NOTIFICATIONS_PATH, "/refresh"]
     paths += ["/layout", "/actions/x", *server.STATIC_FILES]
     assert {p.strip("/").split("/")[0] for p in paths} <= server.RESERVED_PATHS
+
+
+def _post_subjects(
+    client: HTTPConnection, body: str, headers: dict[str, str] | None = None
+) -> HTTPResponse:
+    client.request(
+        "POST",
+        server.SUBJECTS_PATH,
+        body=body,
+        headers={"Content-Type": "application/json", **SIGNED_IN, **(headers or {})},
+    )
+    return client.getresponse()
+
+
+def test_entities_are_asked_to_be_fetched_again_through_the_endpoint(
+    client: HTTPConnection, app: server.App
+) -> None:
+    one = json.dumps([{"kind": "pull_request", "id": pr(1).url}])
+    response = _post_subjects(client, one)
+    response.read()
+    assert response.status == 204
+    assert app._subjects == [Ref(kind="pull_request", id=pr(1).url)]  # pyright: ignore[reportPrivateUsage]
+    too_many = json.dumps([{"kind": "pull_request", "id": str(n)} for n in range(51)])
+    for body, headers in [
+        (too_many, {}),
+        ("not json", {}),
+        (one, {"Origin": "https://evil.example"}),
+        (one, {"Authorization": "Bearer wrong"}),
+    ]:
+        response = _post_subjects(client, body, headers)
+        response.read()
+        assert response.status in (400, 401, 403)
+
+
+def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    done: list[str] = []
+    waits = [0]
+
+    def subjects_now(refs: list[Ref]) -> set[str]:
+        done.append("subjects")
+        return {"jira"}  # couldn't: refreshed whole
+
+    def refresh_now(only: set[str] | None = None) -> bool:
+        done.append(f"refresh {sorted(only) if only is not None else 'all'}")
+        return True
+
+    def wait(timeout: float | None = None) -> bool:
+        waits[0] += 1
+        if waits[0] > 1:
+            raise KeyboardInterrupt  # one round is enough
+        app.request_refresh({"github"})
+        app.request_refresh_subjects([Ref(kind="pull_request", id=pr(1).url)])
+        return True
+
+    monkeypatch.setattr(app, "refresh_subjects_now", subjects_now)
+    monkeypatch.setattr(app, "refresh_now", refresh_now)
+
+    def due(now: float | None = None) -> set[str]:
+        return set()
+
+    monkeypatch.setattr(app, "due", due)
+    monkeypatch.setattr(app._wake, "wait", wait)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(KeyboardInterrupt):
+        app.run_refresh_loop()
+    assert done == ["refresh all", "subjects", "refresh ['github', 'jira']"]

@@ -39,6 +39,7 @@ from ..page import (
 from ..plugin import (
     API_VERSION,
     KEPT,
+    MAX_SUBJECTS,
     ActionError,
     ActionHandler,
     ActionRequest,
@@ -73,6 +74,8 @@ from ..plugin import (
     Response,
     SourceError,
     StoreRequest,
+    Subjects,
+    SubjectsRequest,
     UrlRequest,
     collect_into,
 )
@@ -82,6 +85,7 @@ from ..strict import Strict
 __all__ = [
     "API_VERSION",
     "KEPT",
+    "MAX_SUBJECTS",
     "ActNowRequest",
     "Action",
     "ActionError",
@@ -139,6 +143,8 @@ __all__ = [
     "SourceError",
     "StoreRequest",
     "Strict",
+    "Subjects",
+    "SubjectsRequest",
     "Surface",
     "UrlRequest",
     "age",

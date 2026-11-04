@@ -143,6 +143,29 @@ class LinkingRequest[C: BaseModel]:
 
 
 @dataclass(frozen=True)
+class SubjectsRequest[C: BaseModel, S: BaseModel]:
+    ctx: Context[C]
+    refs: list[Ref]
+    """What to fetch again: entities the plugin publishes, at most `MAX_SUBJECTS`."""
+    snapshot: S | None
+    """What the plugin last stored, to fold them into; None before its first refresh."""
+
+
+@dataclass(frozen=True)
+class Subjects[S: BaseModel]:
+    """What `refresh_subjects` fetched: the plugin's snapshot with them folded in."""
+
+    snapshot: S
+    """Kept with `store`, as a refresh's would be."""
+    updated: list[Ref] = field(default_factory=list[Ref])
+    """The refs fetched; the rest the tool didn't know."""
+
+
+MAX_SUBJECTS = 50
+"""How many entities one refresh of subjects fetches at most."""
+
+
+@dataclass(frozen=True)
 class RelateRequest[C: BaseModel]:
     ctx: Context[C]
     graph: Graph
@@ -403,6 +426,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     None for a plugin without one."""
     collects_after_graph: ClassVar[bool] = False
     """Whether the snapshot comes from `collect_after` instead of `collect`."""
+    subjects_timeout_seconds: ClassVar[int] = 60
+    """How long `refresh_subjects` may take before core refreshes the plugin instead."""
     collect_timeout_seconds: ClassVar[int] = 300
     """How long `collect` (or `collect_after`) may take. Past it, the refresh records the
     plugin as failed and goes on; the plugin is left out of refreshes until its collect
@@ -510,6 +535,15 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return False
 
     # Reading
+
+    def refresh_subjects(self, req: SubjectsRequest[C, S]) -> Subjects[S] | None:
+        """Fetch just these of its entities again, now (an item I opened, a PR an action
+        touched), and fold them into its snapshot, rather than fetching everything. Core
+        keeps the result as a refresh would, events and all, but it doesn't count as the
+        plugin's refresh (`fetched_at` stays). None, by default, when the plugin can't:
+        core refreshes the whole plugin instead, as it does when this fails or takes longer
+        than `subjects_timeout_seconds`."""
+        return None
 
     def relate(self, req: RelateRequest[C]) -> list[tuple[Ref, Ref]]:
         """Relations the plugin knows between one of its entities and another plugin's,

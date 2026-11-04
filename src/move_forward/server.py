@@ -11,18 +11,18 @@ from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, cast
+from typing import Annotated, Any, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from pydantic import ValidationError
+from pydantic import Field, TypeAdapter, ValidationError
 
 from . import act_now, auth, render, settings, shell, tls
 from .config import Config
 from .db import Database
-from .graph import Graph
+from .graph import Graph, Ref
 from .notifications import NotificationRepository
 from .panels import Layout
-from .plugin import KEPT, ActionError, Changed, ChangedRequest, Response, page_path
+from .plugin import KEPT, MAX_SUBJECTS, ActionError, Changed, ChangedRequest, Response, page_path
 from .refresh import (
     PageFailed,
     build_dashboard,
@@ -31,6 +31,7 @@ from .refresh import (
     plugin_page,
     refresh,
     refresh_seconds,
+    refresh_subjects,
     stored_graph,
     to_collect,
 )
@@ -71,6 +72,9 @@ LOGIN_CODE_PATH = "/login/code"
 HANDSHAKE_PATHS = (LOGIN_CHALLENGE_PATH, LOGIN_CODE_PATH)
 """`mfd open`'s steps; see `auth.Handshake`."""
 NOTIFICATIONS_PATH = "/notifications"
+SUBJECTS_PATH = "/refresh/subjects"
+_SUBJECTS = TypeAdapter(Annotated[list[Ref], Field(max_length=MAX_SUBJECTS)])
+"""`POST /refresh/subjects`'s body: the entities to fetch again, as `[{kind, id}]`."""
 RESERVED_PATHS = frozenset(
     {
         "focus",
@@ -145,6 +149,9 @@ class App:
         """Plugins asked for since the loop last ran: by a page load (stale ones) or the
         Refresh buttons (None: all of them)."""
         self._pending_lock = threading.Lock()
+        self._subjects: list[Ref] = []
+        """Entities asked to be fetched again (`request_refresh_subjects`), under
+        `_pending_lock`."""
         self._last_checked: dict[str, float] = {}
         """`time.monotonic()` when each plugin was last asked whether it `changed`."""
 
@@ -278,6 +285,19 @@ class App:
                 self._pending |= only
         self._wake.set()
 
+    def request_refresh_subjects(self, refs: list[Ref]) -> None:
+        """Ask the background loop to fetch these entities again, ahead of any full refresh
+        due (see `refresh.refresh_subjects`)."""
+        with self._pending_lock:
+            self._subjects = list(dict.fromkeys([*self._subjects, *refs]))
+        self._wake.set()
+
+    def refresh_subjects_now(self, refs: list[Ref]) -> set[str]:
+        """Fetch these entities again, waiting for a refresh that's running (a subject's
+        `store` mustn't race a full collect's); returns the plugins to refresh in full."""
+        with self._refresh_lock:
+            return refresh_subjects(self.config, self.db, refs)
+
     def refresh_if_stale(self) -> None:
         """Ask for the plugins whose data is older than `refresh_on_load_seconds`."""
         if self.refreshing:
@@ -303,10 +323,15 @@ class App:
 
     def run_refresh_loop(self) -> None:
         """Refresh everything at start, then each plugin as it falls due, and what's asked
-        for (`request_refresh`) at once."""
+        for (`request_refresh`) at once; entities asked for (`request_refresh_subjects`)
+        first, so a tab coming back to focus doesn't wait on a full collect."""
         only: set[str] | None = None
+        subjects: list[Ref] = []
         while True:
             try:
+                if subjects:
+                    fallback = self.refresh_subjects_now(subjects)
+                    only = None if only is None else only | fallback
                 if only is None or only:
                     self.refresh_now(only)
             except Exception:
@@ -315,6 +340,7 @@ class App:
             self._wake.clear()
             with self._pending_lock:
                 pending, self._pending = self._pending, set()
+                subjects, self._subjects = self._subjects, []
             only = None if pending is None else pending | self.due()
 
     def dashboard_page(self, notice: str = "", spot: render.Spot | None = None) -> str:
@@ -342,7 +368,8 @@ class App:
         self, name: str, fields: dict[str, str], back: str | None = None
     ) -> tuple[str, dict[str, str]]:
         """Run a button's action and refresh afterwards, so the page reflects it soon: the
-        acting plugin, and those publishing what it says it touched (`ActionResult.touched`).
+        acting plugin, and what it says it touched (`ActionResult.touched`), fetched again
+        through its publisher's `refresh_subjects`.
         `back` is the page the button was on, when it wasn't the dashboard.
 
         Returns the notice for the page and, when it succeeded, its redirect parameters.
@@ -353,10 +380,9 @@ class App:
             return f"failed: {e}", {}
         plugin = name.partition("/")[0]
         if plugin != act_now.ACTIONS:  # Act now's own only change what's shown
-            kinds = {ref.kind for ref in result.touched}
-            plugins = enabled(self.config, self.db, datetime.now(UTC))
-            publishers = {e.name for e in plugins if kinds.intersection(e.plugin.kinds)}
-            self.request_refresh({plugin} | publishers)
+            self.request_refresh({plugin})
+            if result.touched:
+                self.request_refresh_subjects(result.touched)
         return result.notice, result.params
 
     def take_notifications(self) -> str:
@@ -702,6 +728,15 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                     self._html(HTTPStatus.BAD_REQUEST, "<p>No such plugin to refresh.</p>")
                     return
                 self._redirect(_back_to_page(url.query))
+            elif url.path == SUBJECTS_PATH:
+                try:
+                    refs = _SUBJECTS.validate_json(body)
+                except ValidationError:
+                    self._html(HTTPStatus.BAD_REQUEST, "<p>Not a list of entities.</p>")
+                    return
+                app.request_refresh_subjects(refs)
+                self.send_response(HTTPStatus.NO_CONTENT)
+                self.end_headers()
             elif url.path == NOTIFICATIONS_PATH:
                 self._send(HTTPStatus.OK, app.take_notifications(), "application/json")
             elif url.path == "/layout":
