@@ -15,12 +15,16 @@ LISTS = (
     "team_requests",
     "merged_recent",
     "closed_recent",
+    "mentioned",
 )
 """The snapshot's lists of PRs, one per search."""
 
 
-def _lists(pr: PullRequest, me: str, team_slugs: list[str], reviewed_before: bool) -> set[str]:
-    """The snapshot lists `pr` belongs in."""
+def _lists(
+    pr: PullRequest, me: str, team_slugs: list[str], reviewed_before: bool, mentioned_before: bool
+) -> set[str]:
+    """The snapshot lists `pr` belongs in. A PR is `mentioned` while it is open and was before:
+    what mentions me can't be read from the PR itself."""
     mine = pr.author == me
     is_open = pr.state == "OPEN"
     found: set[str] = set()
@@ -38,6 +42,8 @@ def _lists(pr: PullRequest, me: str, team_slugs: list[str], reviewed_before: boo
             found.add("reviewed_by_me")
         if any(team in team_slugs for team in pr.requested_teams):
             found.add("team_requests")
+        if mentioned_before:
+            found.add("mentioned")
     return found
 
 
@@ -47,7 +53,11 @@ def place(
     """`snapshot` with each of `fetched` in the lists it now belongs in, and out of the rest."""
     by_url = {pr.url: pr for pr in fetched}
     reviewed = {pr.url for pr in snapshot.reviewed_by_me}
-    belongs = {pr.url: _lists(pr, snapshot.login, team_slugs, pr.url in reviewed) for pr in fetched}
+    mentioned = {pr.url for pr in snapshot.mentioned}
+    belongs = {
+        pr.url: _lists(pr, snapshot.login, team_slugs, pr.url in reviewed, pr.url in mentioned)
+        for pr in fetched
+    }
     update: dict[str, list[PullRequest]] = {}
     for name in LISTS:
         old: list[PullRequest] = getattr(snapshot, name)

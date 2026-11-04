@@ -222,13 +222,27 @@ class Builder:
                             fingerprint=pr.head_oid,
                         )
                     )
+            asked = {pr.url for pr in (*self.gh.direct_requests, *self.gh.reviewed_by_me)}
+            for pr in self.gh.mentioned:
+                if pr.url not in asked and not pr.is_draft:
+                    items.append(
+                        pr_item(
+                            self.now,
+                            pr,
+                            details=["mentions you"],
+                            rank=pr.updated_at.timestamp(),
+                            signals=Signals(verb="Reply", effort="minutes"),
+                            fingerprint=pr.head_oid,
+                        )
+                    )
         return Panel(
             key="reviews_for_me",
             priority=10,  # 1. reviews asked of me
             act_now=True,
             snoozable=True,
             title="Reviews for me",
-            description="PRs asking for my review directly, or that changed since I reviewed them.",
+            description="PRs asking for my review directly, that changed since I reviewed them, or"
+            " that mention me.",
             items=items,
         )
 

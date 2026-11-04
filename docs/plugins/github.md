@@ -57,7 +57,9 @@ tickets they name), and `person` for me and everyone it knows an email for; see
 ## Panels
 
 - **Reviews for me**: PRs requesting my review as a person, and PRs I reviewed that were
-  pushed or re-requested since.
+  pushed or re-requested since. Also open non-draft PRs of others that mention me (updated
+  within `history_days`, found by one search without files) and that aren't otherwise
+  here, with Act now's "Reply".
 - **Feedback to address**: unresolved threads, changes requested, comments since my last
   push I haven't answered.
 - **CI failures**: failing checks and merge-queue evictions in the last

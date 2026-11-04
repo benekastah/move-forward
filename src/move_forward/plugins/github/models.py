@@ -109,6 +109,8 @@ class GitHubSnapshot(Model):
     """My PRs merged within `history_days`."""
     closed_recent: list[PullRequest] = Field(default_factory=list)
     """My PRs closed without merging within `history_days`."""
+    mentioned: list[PullRequest] = Field(default_factory=list)
+    """Open PRs by others that mention me, updated within `history_days`."""
     team_members: list[str]
 
 

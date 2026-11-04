@@ -648,3 +648,18 @@ def test_housekeeping_flags_my_drafts_untouched_for_stale_draft_days() -> None:
     assert details == {"PR 1": ["stale draft: untouched 15d"]}
     off = build(github=snap, stale_draft_days=0)
     assert titles(off, "github.metadata") == []
+
+
+def test_a_pr_that_mentions_me_is_a_reply_unless_already_asked_for_or_a_draft() -> None:
+    mention = pr(1, author="alice")
+    asked = pr(2, author="bob")
+    draft = pr(3, author="carol", is_draft=True)
+    built = build(
+        github=snapshot(direct_requests=[asked], mentioned=[mention, asked, draft]),
+    )
+    items = {i.title: i for i in panel(built, "github.reviews_for_me").items}
+    assert items["PR 1"].details == ["mentions you"]
+    assert items["PR 1"].signals and items["PR 1"].signals.verb == "Reply"
+    assert items["PR 2"].details == ["review requested"]  # once, as a review request
+    assert "PR 3" not in items
+    assert "Reply: PR 1" in [i.title for i in built.act_now()]

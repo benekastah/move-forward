@@ -454,6 +454,9 @@ def collect(
             )
             for team in teams
         ]
+        mentioned = search(
+            f"is:pr is:open mentions:@me -author:@me archived:false updated:>={since}{within}"
+        )
         merged = search(f"is:pr is:merged author:@me merged:>={since}{within}")
         closed = search(f"is:pr is:closed is:unmerged author:@me closed:>={since}{within}")
         member_futures = [pool.submit(team_members, host, org, team) for team in teams]
@@ -469,5 +472,6 @@ def collect(
         team_requests=list(team_requests.values()),
         merged_recent=merged.result(),
         closed_recent=closed.result(),
+        mentioned=mentioned.result(),
         team_members=sorted({login for f in member_futures for login in f.result()}),
     )

@@ -213,5 +213,94 @@ MIGRATIONS = [
     ALTER TABLE github_team_scores ADD COLUMN part_files INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE github_team_scores ADD COLUMN part_lines INTEGER NOT NULL DEFAULT 0;
     """,
+    """
+    -- A new search, `mentioned`: the `list` check can't be altered, so the PR tables are
+    -- rebuilt. What they held is fetched again: with no account the next refresh is a full one.
+    DELETE FROM github_account;
+    DROP TABLE github_pr_checks;
+    DROP TABLE github_pr_events;
+    DROP TABLE github_pr_files;
+    DROP TABLE github_pr_labels;
+    DROP TABLE github_pr_requests;
+    DROP TABLE github_pr_reviews;
+    DROP TABLE github_pr_threads;
+    DROP TABLE github_prs;
+    CREATE TABLE github_prs (          -- fetched: a PR, once per search that found it
+        list TEXT NOT NULL CHECK (list IN ('mine', 'direct_requests', 'reviewed_by_me',
+            'team_requests', 'merged_recent', 'closed_recent', 'mentioned')),
+        url TEXT NOT NULL,
+        position INTEGER NOT NULL,     -- the search's order
+        number INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        default_branch TEXT,
+        is_draft INTEGER NOT NULL,
+        state TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        merged_at TEXT,
+        body TEXT NOT NULL,
+        head TEXT NOT NULL,
+        head_oid TEXT NOT NULL,
+        base TEXT NOT NULL,
+        author TEXT,
+        size INTEGER NOT NULL,
+        changed_files INTEGER NOT NULL,
+        mergeable TEXT NOT NULL,
+        merge_state TEXT NOT NULL,
+        review_decision TEXT,
+        in_merge_queue INTEGER NOT NULL,
+        rollup_state TEXT,
+        last_commit_at TEXT,
+        PRIMARY KEY (list, url)
+    );
+    CREATE TABLE github_pr_labels (
+        list TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL,
+        label TEXT NOT NULL,
+        PRIMARY KEY (list, url, position),
+        FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
+    );
+    CREATE TABLE github_pr_requests (
+        list TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('user', 'team')),
+        name TEXT NOT NULL,
+        PRIMARY KEY (list, url, kind, position),
+        FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
+    );
+    CREATE TABLE github_pr_reviews (
+        list TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL,
+        author TEXT, state TEXT NOT NULL, submitted_at TEXT,
+        PRIMARY KEY (list, url, position),
+        FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
+    );
+    CREATE TABLE github_pr_threads (
+        list TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL,
+        resolved INTEGER NOT NULL, outdated INTEGER NOT NULL, path TEXT, author TEXT,
+        body TEXT NOT NULL, comment_url TEXT, created_at TEXT,
+        comment_count INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (list, url, position),
+        FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
+    );
+    CREATE TABLE github_pr_checks (
+        list TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL,
+        name TEXT NOT NULL, state TEXT NOT NULL, check_url TEXT,
+        PRIMARY KEY (list, url, position),
+        FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
+    );
+    CREATE TABLE github_pr_events (
+        list TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL,
+        type TEXT NOT NULL, at TEXT NOT NULL, actor TEXT,
+        reviewer_kind TEXT CHECK (reviewer_kind IN ('user', 'team')), reviewer TEXT,
+        reason TEXT, state TEXT, has_body INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (list, url, position),
+        FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
+    );
+    CREATE TABLE github_pr_files (
+        list TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL,
+        path TEXT NOT NULL, lines INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (list, url, position),
+        FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
+    );
+    """,
 ]
 """The github plugin's migrations."""

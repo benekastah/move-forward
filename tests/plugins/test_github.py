@@ -266,8 +266,8 @@ def test_searches_stay_in_the_org_unless_the_scope_is_everywhere(
         return queries
 
     inside = run("org")
-    assert len(inside) == 6 and all(
+    assert len(inside) == 7 and all(
         "org:acme" in q or "team-review-requested:acme/web" in q for q in inside
     )
-    assert sum("org:acme" in q for q in inside) == 5  # every search but the team's, which names it
+    assert sum("org:acme" in q for q in inside) == 6  # every search but the team's, which names it
     assert not any("org:" in q for q in run("everywhere"))

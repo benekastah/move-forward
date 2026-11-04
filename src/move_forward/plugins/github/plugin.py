@@ -305,6 +305,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             (snapshot.direct_requests, "open", False),
             (snapshot.reviewed_by_me, "open", False),
             (snapshot.team_requests, "open", False),
+            (snapshot.mentioned, "open", False),
         ]
         entities: dict[str, Entity] = {}
         for prs, state, mine in groups:

@@ -141,7 +141,7 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
     )
     db = Database(":memory:")
     save_json_snapshot(db, "github", gh)
-    db.migrate("github", MIGRATIONS)
+    db.migrate("github", MIGRATIONS[:-1])  # the last one rebuilds the tables, emptied
     store = PrRepository(db)
     assert store.load() == gh
     smaller = snapshot(mine=[pr(4)], team_members=["x"])
@@ -272,3 +272,15 @@ def test_each_files_changed_lines_are_kept() -> None:
     changed = pr(1, files=["a.py", "b.py"], file_lines=[3, 40])
     store.replace(snapshot(mine=[changed]))
     assert store.load() == snapshot(mine=[changed])
+
+
+def test_the_mentioned_list_round_trips_and_the_rebuild_asks_for_a_fresh_collect() -> None:
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS[:-1])
+    store = PrRepository(db)
+    store.replace(snapshot(mine=[pr(1)]))
+    db.migrate("github", MIGRATIONS)
+    assert store.load() is None  # no account: the next refresh collects everything
+    store.replace(snapshot(mentioned=[pr(2, author="alice")]))
+    loaded = store.load()
+    assert loaded is not None and [p.number for p in loaded.mentioned] == [2]

@@ -18,7 +18,13 @@ from .models import (
 )
 
 ListName = Literal[
-    "mine", "direct_requests", "reviewed_by_me", "team_requests", "merged_recent", "closed_recent"
+    "mine",
+    "direct_requests",
+    "reviewed_by_me",
+    "team_requests",
+    "merged_recent",
+    "closed_recent",
+    "mentioned",
 ]
 LISTS: tuple[ListName, ...] = (
     "mine",
@@ -27,6 +33,7 @@ LISTS: tuple[ListName, ...] = (
     "team_requests",
     "merged_recent",
     "closed_recent",
+    "mentioned",
 )
 """The searches, as `GitHubSnapshot` names them."""
 CHILD_TABLES = (
