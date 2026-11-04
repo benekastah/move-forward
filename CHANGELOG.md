@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Fetching one PR again
+
+`mfd refresh --subject pull_request <URL>` fetches just that PR (any number of
+`--subject KIND ID`), instead of every search; `POST /refresh/subjects` does the same with
+`[{"kind": "pull_request", "id": "<URL>"}]`. Nothing to change; a faster way to see a PR
+you just acted on.
+
 ### Plugins' pages live under the plugin's name
 
 A plugin's pages are served at `/<plugin>/<page>`: slack's ping page moved from

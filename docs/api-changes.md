@@ -53,3 +53,7 @@ catch up.
   `Link.done` strikes out a link to what's over (was `Link.pr_state`; `PrState` is gone);
   `Item.deferred` (was `Item.draft`) sorts an item last, and Act now leaves it out unless
   the plugin's `act_now` nominates it. A graph view also gets an entity's `lifecycle`.
+- **Fetching some entities again**: `Plugin.refresh_subjects(req)`
+  (`SubjectsRequest(ctx, refs, snapshot)`) returns `Subjects(snapshot, updated)`, or None
+  to be refreshed whole; `subjects_timeout_seconds`. An action's `touched` refs are
+  fetched this way, not by refreshing their publishers whole.

@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, timedelta
 from typing import ClassVar, cast
+from urllib.parse import urlsplit
 
 from ...api import (
     API_VERSION,
@@ -35,6 +36,8 @@ from ...api import (
     RelateRequest,
     Signals,
     StoreRequest,
+    Subjects,
+    SubjectsRequest,
     UrlRequest,
     attrs,
     collect_into,
@@ -79,6 +82,16 @@ LAST_FULL = "last_full_collect"
 def _pr_id(changed: str) -> client.PrId:
     repo, _, number = changed.rpartition("#")
     return client.PrId(repo=repo, number=int(number))
+
+
+def pr_id_of(host: str, url: str) -> client.PrId | None:
+    """The PR a URL on `host` is, `https://<host>/<owner>/<name>/pull/<number>`; None for
+    anything else."""
+    parts = urlsplit(url)
+    path = parts.path.strip("/").split("/")
+    if parts.netloc != host or len(path) != 4 or path[2] != "pull" or not path[3].isdigit():
+        return None
+    return client.PrId(repo=f"{path[0]}/{path[1]}", number=int(path[3]))
 
 
 def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
@@ -367,6 +380,23 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             for login in dict.fromkeys([snapshot.login, *emails])
         ]
         return [*entities.values(), *people]
+
+    def refresh_subjects(
+        self, req: SubjectsRequest[GitHubConfig, GitHubSnapshot]
+    ) -> Subjects[GitHubSnapshot] | None:
+        """These PRs fetched now, in one request, placed in the stored lists as the searches
+        would find them; None before the first full collect, or for a ref that isn't one of
+        the host's PRs."""
+        ctx, snapshot = req.ctx, req.snapshot
+        ids = [pr_id_of(ctx.config.host, ref.id) for ref in req.refs]
+        if snapshot is None or not ids or any(i is None for i in ids):
+            return None
+        fetched = client.fetch_prs(ctx.config.host, [i for i in ids if i is not None])
+        urls = {pr.url for pr in fetched}
+        return Subjects(
+            placing.place(snapshot, fetched, _team_slugs(ctx)),
+            [ref for ref in req.refs if ref.id in urls],
+        )
 
     def relate(self, req: RelateRequest[GitHubConfig]) -> list[tuple[Ref, Ref]]:
         """Each of its PRs to the local branch it comes from (see `relations`)."""

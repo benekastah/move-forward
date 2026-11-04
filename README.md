@@ -126,7 +126,7 @@ before the command's name.
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
 | `mfd cert [--trust] [--force]` | Make the certificates `mfd serve` uses for HTTPS, unless they're there (`--force` replaces them); `--trust` adds their authority to the system's and browsers' stores. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
-| `mfd refresh` | Refresh every source once, print each source's status, exit. |
+| `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <PR URL>` ends it. |
 | `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. Act now's buttons do the same. |
@@ -262,6 +262,10 @@ Pages (GET, HTML):
 
 Plugins add pages and buttons of their own, listed on their pages (see
 [Plugins](#plugins)).
+
+`POST /refresh/subjects` (JSON, `[{"kind": ..., "id": ...}]`, at most 50) asks for those
+entities to be fetched again, ahead of any refresh that's due; a plugin that can't fetch
+one is refreshed whole. It answers `204 No Content`, or `400` for a body that isn't one.
 
 `POST /layout` (JSON, sent by the page's drag script) stores the page's order:
 `{"groups": [group keys], "panels": {group key: [panel keys]}}`. It answers

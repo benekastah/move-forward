@@ -383,7 +383,14 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   `prepare_item_actions(req)`, returning the per-item function.
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in
-  `ActionResult(notice, touched=[ref])`, and that plugin is refreshed too.
+  `ActionResult(notice, touched=[ref])`, and that entity is fetched again (below).
+- **Fetching a few entities again.** `refresh_subjects(req)` (`req.refs`, of kinds the
+  plugin publishes; `req.snapshot`, what it last stored) fetches just those entities now
+  and returns `Subjects(snapshot, updated)`, the snapshot with them folded in, which core
+  keeps as a refresh's would (events too). It's what an action's `touched` refs, a tab
+  coming back to focus and `mfd refresh --subject` use; returning None (the default), or
+  failing or taking longer than `subjects_timeout_seconds`, refreshes the plugin whole
+  instead. github fetches the PRs in one request.
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, req.ctx.kept(key))` and implement `kept_item`.
 - **Pages.** `pages()` maps keys to handlers `(req: PageRequest) -> str | Response | None`

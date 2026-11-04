@@ -20,6 +20,9 @@ refresh of git it compares where `git.branch` entities for those PRs' heads stan
 commit, and how far ahead of or behind their upstream) with what it saw last. Other changes that notify nobody, like a PR falling into
 conflict, wait for `refresh_seconds`.
 
+An action that touched a PR (a ping, a reaction) and `mfd refresh --subject pull_request
+<URL>` fetch just that PR the same way (`refresh_subjects`).
+
 Such a refresh fetches only the PRs that changed, in one request, and places them in the
 lists the searches fill (mine, merged or closed; requesting my review or my team's;
 reviewed by me), keeping the rest as they were. A CI run's notification names its repo,
