@@ -9,7 +9,10 @@ sees the file change and starts the server again with it (see `supervisor`).
 The settings shown are the top level's, `[act_now]`'s and each enabled plugin's, of the
 kinds a form can hold (numbers, true or false, text, lists); tables such as
 `[github.teams]` stay for editing by hand. `db_path`, `port` and `https` are shown but not
-changed here: changing them moves the server.
+changed here: changing them moves the server. Nor are the settings that choose where a
+credential is sent or which one is read, or what runs where (see `SECRET_LOCKED`): the page
+is reached with the dashboard's cookie, and a page that could point the Jira site, say, at
+another server could send it the API token.
 """
 
 import os
@@ -29,7 +32,17 @@ from .config import Config
 PATH = "/settings"
 Kind = Literal["int", "float", "bool", "text", "list"]
 LOCKED = {"db_path", "port", "https"}
-"""Top-level settings shown but not changed here."""
+"""Top-level settings shown but not changed here: changing them moves the server."""
+SECRET_LOCKED: dict[str | None, set[str]] = {
+    None: {"email"},
+    "github": {"host"},
+    "jira": {"site", "token_env", "keychain_service"},
+    "slack": {"client_id", "workspace_url", "token_env", "keychain_service"},
+    "git": {"repos", "github_hosts"},
+}
+"""Settings, by section, only the file changes: where a credential goes (a host, a site, a
+client id, the account a token is keyed by) or comes from (an environment variable, a
+keychain service), and which checkouts `git` runs commands in."""
 NOTIFICATIONS = "notifications"
 SUBSCRIBE = "subscribe"
 """`[notifications]`'s list of kinds, shown as a checkbox each."""
@@ -108,7 +121,7 @@ def _fields(model: BaseModel, section: str | None, skip: set[str]) -> list[Setti
         if key in skip or (kind := _kind(field.annotation)) is None:
             continue
         help = " ".join((field.description or "").split())
-        locked = section is None and key in LOCKED
+        locked = (section is None and key in LOCKED) or key in SECRET_LOCKED.get(section, set())
         default = field.get_default(call_default_factory=True)
         found.append(Setting(section, key, kind, getattr(model, key), help, locked, default))
     return found
@@ -301,6 +314,13 @@ def _notifications(config: Config) -> str:
     )
 
 
+def _why_locked(setting: Setting) -> str:
+    """The note on a setting this page doesn't change."""
+    if setting.section is None and setting.key in LOCKED:
+        return " Not changed here: it moves the server."
+    return " Not changed here: it says where a credential goes or comes from, or where commands run, so only the config file sets it."
+
+
 def page(config: Config, notice: str = "") -> str:
     """The form, a table of settings per section."""
     e = render.e
@@ -309,7 +329,7 @@ def page(config: Config, notice: str = "") -> str:
         rows.setdefault(setting.section, []).append(
             f"<tr><th><label>{e(setting.key)}</label></th><td>{_input(setting)}"
             f"<p class='help'>{e(setting.help)}"
-            + (" Not changed here: it moves the server." if setting.locked else "")
+            + (_why_locked(setting) if setting.locked else "")
             + "</p></td></tr>"
         )
     tables = "".join(

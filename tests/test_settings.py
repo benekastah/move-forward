@@ -132,3 +132,38 @@ def test_fields_show_their_default_as_a_placeholder_else_the_example_from_their_
         in page
     )
     assert "name='jira:status_in_progress' rows='3' placeholder='In Progress'" in page
+
+
+def test_settings_that_choose_where_a_credential_goes_are_only_changed_in_the_file(
+    tmp_path: Path,
+) -> None:
+    text = (
+        'email = "me@x"\n\n[github]\norg = "acme"\nhost = "github.com"\n\n'
+        '[jira]\nsite = "https://acme.atlassian.net"\ntoken_env = "JIRA_API_TOKEN"\n\n'
+        '[slack]\nworkspace_url = "https://acme.slack.com"\nclient_id = "C1"\n\n'
+        '[git]\nrepos = ["/src/app"]\n'
+    )
+    path = tmp_path / "config.toml"
+    path.write_text(text)
+    path.chmod(0o600)
+    config = config_module.load(path)
+    form = _form(
+        text,
+        **{
+            ":email": "evil@x",
+            "github:host": "evil.example",
+            "jira:site": "https://evil.example",
+            "jira:token_env": "AWS_SECRET_ACCESS_KEY",
+            "jira:keychain_service": "login",
+            "slack:workspace_url": "https://evil.example",
+            "slack:client_id": "EVIL",
+            "git:repos": "/tmp/evil",
+        },
+    )
+    assert settings.save(path, config, form) == "nothing changed"
+    assert path.read_text() == text
+    shown = settings.page(config)
+    for name in (":email", "github:host", "jira:site", "slack:client_id", "git:repos"):
+        assert f"name='{name}'" in shown  # still shown, read-only
+    # email; host; site, token_env, keychain_service; four of slack's; repos, github_hosts
+    assert shown.count("only the config file sets it") == 11
