@@ -3,6 +3,7 @@
 import json
 from datetime import UTC, datetime
 
+import pytest
 from conftest import (
     NOW,
     dashboard,
@@ -513,7 +514,7 @@ def test_a_plugins_buttons_in_act_now_carry_the_items_pending_fields_but_acts_ow
                     Item(
                         title="x",
                         subjects=[Ref(kind="pull_request", id="p")],
-                        signals=Signals(verb="Go"),
+                        signals=Signals(verb="Go", task="go"),
                         actions=[action],
                     )
                 ],
@@ -526,3 +527,22 @@ def test_a_plugins_buttons_in_act_now_carry_the_items_pending_fields_but_acts_ow
     assert ours["Do it"].fields["pending"] == item.pending
     assert "pending" not in ours["Snooze"].fields
     assert item.pending is not None and json.loads(item.pending)["plugin"] == "github"
+
+
+def test_a_nomination_without_a_task_is_left_out_of_act_now_and_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def nominated(title: str, task: str) -> Item:
+        return Item(
+            title=title,
+            subjects=[Ref(kind="pull_request", id=title)],
+            signals=Signals(verb="Go", task=task),
+        )
+
+    page = panels.build(
+        NOW,
+        [panels.PluginPanels("linear", "Linear", [], [nominated("a", "go"), nominated("b", "")])],
+        {},
+    )
+    assert [i.title for i in page.act_now()] == ["Go: a"]
+    assert "linear nominated 'b' for Act now without a task" in caplog.text

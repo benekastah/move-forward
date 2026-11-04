@@ -299,7 +299,7 @@ Core's Act now ranks what every plugin nominates. Mark a panel `act_now=True` an
 default `signals`, and its items are nominated:
 
 ```python
-Panel(..., act_now=True, signals=Signals(verb="Triage", effort="minutes"))
+Panel(..., act_now=True, signals=Signals(verb="Triage", task="triage", effort="minutes"))
 ```
 
 An item can carry its own `signals` (`effort`, `closes`, `waiting` and `waiting_since`,
@@ -309,6 +309,11 @@ importance (a priority, an escalation) onto `importance`, in the plugin. An item
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
 Set `Item.fingerprint` to what would make a snoozed or dismissed item worth another look.
+
+Every nominated item needs a `task`: a stable id for what doing it is (`triage`,
+`transition`), lower-case letters, digits and `_`. Act now keeps a snooze, dismissal or pin
+by the item's main subject and its task, so `verb`, the words shown, can change (a status
+name, a count) without losing them. Core leaves out, and logs, a nomination without one.
 
 ## Buttons, pages and commands
 

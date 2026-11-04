@@ -211,6 +211,7 @@ class Pinger:
                     subjects=[Ref(kind=PR, id=pr.id)],
                     signals=Signals(
                         verb="Bump the review" if follow_up else "Ping the reviewers",
+                        task="ping",
                         effort="minutes",
                     ),
                 )

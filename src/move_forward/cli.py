@@ -177,7 +177,7 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     unsnooze_parser.add_argument("url", help="the PR's URL")
     commands.add_parser(
         "snoozes",
-        help="print the Act now items snoozed now as JSON: kind, id, verb, until, fingerprint",
+        help="print the Act now items snoozed now as JSON: kind, id, task, until, fingerprint",
     )
     init_parser = commands.add_parser("init", help="ask for each setting and write the config")
     init_parser.add_argument(
@@ -404,11 +404,11 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "kind": kind,
                 "id": id,
-                "verb": verb,
+                "task": task,
                 "until": f.until.isoformat(),
                 "fingerprint": f.fingerprint,
             }
-            for (kind, id, verb), f in FeedbackRepository(db).all().items()
+            for (kind, id, task), f in FeedbackRepository(db).all().items()
             if f.action == "snooze" and f.until is not None and f.until > now
         ]
         print(json.dumps(snoozes, indent=2))

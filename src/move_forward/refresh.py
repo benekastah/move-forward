@@ -480,7 +480,7 @@ def kept_item(config: Config, db: Database, kept: str) -> tuple[str, Item] | Non
 _MEMBERS = TypeAdapter(
     Annotated[list[tuple[str, str, str, str]], Field(max_length=act_now.MAX_MEMBERS)]
 )
-"""An Act now button's `also`: the items joined to its own, as kind, id, verb, fingerprint."""
+"""An Act now button's `also`: the items joined to its own, as kind, id, task, fingerprint."""
 
 
 def _set_priority(db: Database, fields: dict[str, str], now: datetime) -> ActionResult:
@@ -505,7 +505,7 @@ def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
     """Act now's own buttons: snooze an item (for as long as `config` says), dismiss it, or pin
-    or unpin it, by its main subject and verb, and the items joined to it (`also`) alike; and
+    or unpin it, by its main subject and task, and the items joined to it (`also`) alike; and
     set or clear the priority of its main subject."""
     now = datetime.now(UTC)
     if action == "priority":
@@ -514,7 +514,7 @@ def _act_now_action(
         except KeyError as err:
             raise ActionError(f"missing field {err}") from err
     try:
-        members = [(fields["kind"], fields["id"], fields["verb"], fields["fingerprint"])]
+        members = [(fields["kind"], fields["id"], fields["task"], fields["fingerprint"])]
         members += _MEMBERS.validate_json(fields.get("also") or "[]")
     except KeyError as err:
         raise ActionError(f"missing field {err}") from err
@@ -524,16 +524,16 @@ def _act_now_action(
     if action == "pending":
         # What I did elsewhere isn't a choice to keep: it never replaces a pin or a snooze.
         said = feedback.all()
-        for kind, id, verb, f in members:
-            if (kind, id, verb) not in said:
+        for kind, id, task, f in members:
+            if (kind, id, task) not in said:
                 until = now + act_now.PENDING
                 feedback.say(
-                    (kind, id, verb), Feedback(action="pending", fingerprint=f, until=until), now
+                    (kind, id, task), Feedback(action="pending", fingerprint=f, until=until), now
                 )
         return ActionResult("hidden until it's fetched again")
     if action == "unpin":
-        for kind, id, verb, _ in members:
-            feedback.forget((kind, id, verb))
+        for kind, id, task, _ in members:
+            feedback.forget((kind, id, task))
         return ActionResult("unpinned")
     if action == "snooze":
         said = [
@@ -548,8 +548,8 @@ def _act_now_action(
         result = "dismissed" if action == "dismiss" else "pinned"
     else:
         raise ActionError(f"unknown action {act_now.ACTIONS}/{action}")
-    for (kind, id, verb, _), one in zip(members, said, strict=True):
-        feedback.say((kind, id, verb), one, now)
+    for (kind, id, task, _), one in zip(members, said, strict=True):
+        feedback.say((kind, id, task), one, now)
     return ActionResult(result)
 
 

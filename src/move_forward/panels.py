@@ -5,6 +5,7 @@ other panel sits in its plugin's group. Panels and groups go in priority order (
 step order); focus mode goes through them as the page shows them.
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,6 +16,23 @@ from pydantic import Field
 from . import act_now
 from .domain import Model
 from .page import Action, Group, Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
+
+log = logging.getLogger(__name__)
+
+_said_untasked: set[str] = set()
+"""The plugins already logged for nominating an item without a task."""
+
+
+def _tasked(plugin: str, item: Item) -> bool:
+    """Whether a nominated item has a task (`Signals.task`), which Act now keeps what I say
+    of it by. One without is a plugin bug: it's left out of Act now, logged once a plugin."""
+    if item.signals and item.signals.task:
+        return True
+    if plugin not in _said_untasked:
+        _said_untasked.add(plugin)
+        log.error("%s nominated %r for Act now without a task; it's left out", plugin, item.title)
+    return False
+
 
 ACT_NOW = "act"
 """Act now's group key."""
@@ -208,8 +226,8 @@ def _snoozable(
         if key is None:
             items.append(item)
         elif not act_now.set_aside(nomination, feedback.get(key), now, fetched):
-            kind, id, verb = key
-            fields = {"kind": kind, "id": id, "verb": verb, "fingerprint": nomination.fingerprint}
+            kind, id, task = key
+            fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
             snooze = Action(name=f"{act_now.ACTIONS}/snooze", label="Snooze", fields=fields)
             items.append(item.model_copy(update={"actions": [*item.actions, snooze]}))
     return panel.model_copy(update={"items": items})
@@ -287,7 +305,7 @@ def build(
         act_now.Nomination(plugin.key, item)
         for plugin in plugins
         for item in plugin.nominations
-        if not hidden(item)
+        if not hidden(item) and _tasked(plugin.key, item)
     ]
     titles = {plugin.key: plugin.title for plugin in plugins}
     fetched = {source: status.fetched_at for source, status in sources.items() if status.fetched_at}

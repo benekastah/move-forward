@@ -211,6 +211,37 @@ END;
 """Kinds a plugin publishes are named for it (`git.branch`), and pull requests' family is
 `pull_request`. No row can collide: no kind had a dot before, and `pull_request` is new."""
 
+_V12_FEEDBACK_BY_TASK = """
+CREATE TABLE act_now_feedback_new (    -- kept: what I said of an Act now item; pruned
+    subject_kind TEXT NOT NULL,        -- after prune_days, snoozes once they're over
+    subject_id TEXT NOT NULL,
+    task TEXT NOT NULL,                -- the item's `Signals.task`, e.g. review
+    action TEXT NOT NULL,              -- snooze, dismiss, pin or pending
+    until TEXT,                        -- for a snooze, or a pending hide
+    fingerprint TEXT NOT NULL,         -- the item's when it was set aside
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (subject_kind, subject_id, task)
+);
+INSERT OR IGNORE INTO act_now_feedback_new
+SELECT subject_kind, subject_id,
+    CASE
+        WHEN verb LIKE 'Move to %' OR verb = 'Update the status' THEN 'transition'
+        WHEN verb IN ('Bump the review', 'Ping the reviewers') THEN 'ping'
+        WHEN verb LIKE 'Finish % quick todos' THEN 'close_out'
+        ELSE lower(replace(trim(verb), ' ', '_'))
+    END,
+    action, until, fingerprint, created_at
+FROM act_now_feedback
+WHERE trim(verb) != '';
+DROP TABLE act_now_feedback;
+ALTER TABLE act_now_feedback_new RENAME TO act_now_feedback;
+"""
+"""Act now keeps what I said of an item by its task, a stable id, rather than its verb, the
+words it shows: rewording a verb, or a count in it changing, dropped the item's snooze.
+Each verb becomes its task (`Review` is `review`), the ones that held a status or a count
+their plugin's task; an item without a verb took no feedback. `action` loses its CHECK, so a
+new kind of feedback needs no rebuild."""
+
 CORE_MIGRATIONS = [
     V1_SCHEMA,
     _V2_KV_AND_LAYOUT,
@@ -223,6 +254,7 @@ CORE_MIGRATIONS = [
     _V9_NOTIFICATIONS,
     _V10_SESSIONS,
     _V11_KINDS_NAMED_FOR_PLUGINS,
+    _V12_FEEDBACK_BY_TASK,
 ]
 
 _SCHEMA_VERSIONS = """

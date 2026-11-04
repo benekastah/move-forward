@@ -41,7 +41,7 @@ from . import changes, cli, client, derive, notifications, placing, pushes
 from .config import GitHubConfig
 from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
-from .panels import PR, REVIEW, Builder
+from .panels import PR, REVIEW_TASK, Builder
 from .people import PeopleRepository
 from .prs import (
     changes_requested,
@@ -406,7 +406,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return [
             item
             for item in super().act_now(req)
-            if not (item.draft and item.signals and item.signals.verb == REVIEW)
+            if not (item.draft and item.signals and item.signals.task == REVIEW_TASK)
         ]
 
     def panels(self, req: PanelsRequest[GitHubConfig, GitHubSnapshot]) -> list[Panel]:

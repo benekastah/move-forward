@@ -382,6 +382,7 @@ class Builder:
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
                     # Only a close-out has signals: what notes nominates for Act now.
                     signals=Signals(
+                        task="close_out",
                         verb=ordered[0].text
                         if len(ordered) == 1
                         else f"Finish {len(quick)} quick todos",

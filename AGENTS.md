@@ -60,7 +60,8 @@ is what's left to build.
   shown; a plugin that reads its tables for them does so once per page in
   `prepare_item_actions`. A plugin nominates items for
   core's Act now with `act_now`, each with `Signals` (effort, what it closes,
-  who's waiting); by default, the items of its panels marked `act_now`.
+  who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
+  default, the items of its panels marked `act_now`.
 - Every request needs the dashboard's token, except the pages a tool's
   sign-in (OAuth) returns to, which a plugin lists in `sign_in_pages`: they
   must check their own single-use proof (OAuth's `state`) before doing

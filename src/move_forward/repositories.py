@@ -202,7 +202,7 @@ class FeedbackRepository:
 
     def all(self) -> dict[FeedbackKey, Feedback]:
         return {
-            (row["subject_kind"], row["subject_id"], row["verb"]): Feedback(
+            (row["subject_kind"], row["subject_id"], row["task"]): Feedback(
                 action=row["action"],
                 fingerprint=row["fingerprint"],
                 until=datetime.fromisoformat(row["until"]) if row["until"] else None,
@@ -221,7 +221,7 @@ class FeedbackRepository:
 
     def forget(self, key: FeedbackKey) -> None:
         self._db.execute(
-            "DELETE FROM act_now_feedback WHERE subject_kind = ? AND subject_id = ? AND verb = ?",
+            "DELETE FROM act_now_feedback WHERE subject_kind = ? AND subject_id = ? AND task = ?",
             key,
         )
 

@@ -5,6 +5,20 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Act now keeps snoozes, dismissals and pins by task, not verb
+
+Each item Act now shows has a `task`, a stable id for what doing it is (`review`, `merge`,
+`transition`, `close_out`), beside its `verb`, the words shown ("Move to In Review").
+
+- `mfd snoozes` JSON: `verb` is now `task`, e.g. `"task": "review"`.
+- `/actions/act_now/*`: the field `verb` is now `task`, and `also`'s entries are
+  `[kind, id, task, fingerprint]`.
+
+What was kept by verb gets its task when the dashboard next opens the database: `Review` is
+`review`, `Fix CI` `fix_ci`. Jira's "Move to …" becomes `transition`, slack's pings `ping`, and
+notes' "Finish N quick todos" `close_out`, so a status rename or a count changing no longer
+drops a snooze. A notes close-out of a single todo, kept by the todo's text, lapses once.
+
 ### Tickets are known by their URL, people by `<host>/<login>`
 
 A ticket's id is now its URL (`https://acme.atlassian.net/browse/APP-12`), not its key,

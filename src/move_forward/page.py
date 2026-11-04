@@ -88,6 +88,10 @@ class Signals(Model):
     """A deadline, or when it goes stale: it ranks higher as that nears, most once past."""
     verb: str = ""
     """What to do, as a short imperative: "Reply to 2 threads", "Merge", "Review"."""
+    task: str = Field(default="", pattern=r"^([a-z][a-z0-9_]*)?$")
+    """What doing it is, as a stable id: `review`, `merge`, `transition`. Act now keeps what I
+    said of an item (a snooze, a pin) by its main subject and this, so rewording `verb`, or
+    a count in it changing, keeps it. A nominated item must have one."""
 
 
 class Item(Model):
@@ -113,7 +117,7 @@ class Item(Model):
     """What would make it worth another look once snoozed or dismissed in Act now, e.g. a
     PR's head and review count; None hashes its title, badges and details."""
     pending: str | None = None
-    """In Act now: the JSON fields (`kind`, `id`, `verb`, `fingerprint`, `also`, `plugin`) that
+    """In Act now: the JSON fields (`kind`, `id`, `task`, `fingerprint`, `also`, `plugin`) that
     hide the item once I act on it elsewhere (a link, a button), until its plugin has fetched
     again; see `Feedback`."""
     parts: list["Item"] = Field(default_factory=list)

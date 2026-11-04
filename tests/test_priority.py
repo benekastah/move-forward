@@ -37,7 +37,8 @@ def _items(nominations: list[Nomination], priority_of: act_now.PriorityOf) -> li
 
 def _nomination(title: str, ref: Ref | None = None, **signals: object) -> Nomination:
     subjects = [ref] if ref else []
-    return Nomination("github", Item(title=title, subjects=subjects, signals=Signals(**signals)))  # pyright: ignore[reportArgumentType]
+    validated = Signals.model_validate({"task": "do_it", **signals})
+    return Nomination("github", Item(title=title, subjects=subjects, signals=validated))
 
 
 def test_a_priority_replaces_the_plugins_importance() -> None:

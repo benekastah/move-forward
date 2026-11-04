@@ -20,7 +20,7 @@ def _item(title: str, subject: str | None = None, **signals: object) -> Item:
     return Item(
         title=title,
         subjects=[Ref(kind="pull_request", id=subject)] if subject else [],
-        signals=Signals.model_validate(signals),
+        signals=Signals.model_validate({"task": "do_it", **signals}),
     )
 
 
@@ -160,7 +160,7 @@ def test_no_plugin_fills_more_than_its_share_and_the_list_is_short() -> None:
 
 
 def test_by_default_a_plugin_nominates_its_act_now_panels_items_with_their_signals() -> None:
-    own = Item(title="own", signals=Signals(verb="Merge"))
+    own = Item(title="own", signals=Signals(verb="Merge", task="merge"))
     plain = Item(title="plain")
     panels = [
         Panel(
@@ -169,7 +169,7 @@ def test_by_default_a_plugin_nominates_its_act_now_panels_items_with_their_signa
             description="",
             items=[own, plain],
             act_now=True,
-            signals=Signals(verb="Review", effort="minutes"),
+            signals=Signals(verb="Review", task="review", effort="minutes"),
         ),
         Panel(key="b", title="B", description="", items=[Item(title="not nominated")]),
     ]
@@ -185,8 +185,8 @@ def test_by_default_a_plugin_nominates_its_act_now_panels_items_with_their_signa
     )
     nominated = JiraPlugin().act_now(ActNowRequest(ctx, None, Graph(), panels))
     assert [(i.title, i.signals) for i in nominated] == [
-        ("own", Signals(verb="Merge")),
-        ("plain", Signals(verb="Review", effort="minutes")),
+        ("own", Signals(verb="Merge", task="merge")),
+        ("plain", Signals(verb="Review", task="review", effort="minutes")),
     ]
 
 
@@ -217,6 +217,15 @@ def test_dismissed_and_snoozed_items_stay_away_until_they_change_or_wake() -> No
     assert _titles(_ranked(nominations, feedback=snoozed, now=later))[0] == "Review: PR 1"
 
 
+def test_rewording_an_items_verb_keeps_what_i_said_of_it() -> None:
+    move = _item("APP-1", "u1", verb="Move to In Review", task="transition")
+    snoozed = _feedback("snooze", move, until=NOW + timedelta(hours=1))
+    renamed = move.model_copy(
+        update={"signals": Signals(verb="Move to Code Review", task="transition")}
+    )
+    assert _titles(_ranked([Nomination("jira", renamed)], feedback=snoozed, now=NOW)) == []
+
+
 def test_a_pinned_item_comes_first_and_says_so() -> None:
     plain = _item("PR 1", "u1")
     quick = _item("PR 2", "u2", effort="minutes")
@@ -232,7 +241,7 @@ def test_a_pinned_item_comes_first_and_says_so() -> None:
     assert ranked.items[1].actions[0].fields == {
         "kind": "pull_request",
         "id": "u2",
-        "verb": "",
+        "task": "do_it",
         "fingerprint": Nomination("github", quick).fingerprint,
     }
     nothing = _ranked([Nomination("notes", Item(title="about nothing"))])
@@ -268,7 +277,7 @@ def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it(
         title="APP-1 Do it",
         url="https://jira/APP-1",
         subjects=[ticket],
-        signals=Signals(verb="Move to In Review", effort="minutes"),
+        signals=Signals(verb="Move to In Review", task="move_to_in_review", effort="minutes"),
         actions=[Action(name="jira/transition", label="Move", fields={"key": "APP-1"})],
     )
     todo = Item(title="Write it up", subjects=[entry], signals=Signals(effort="minutes"))
@@ -291,5 +300,5 @@ def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it(
     assert [a.label for a in joined.actions][:4] == ["Move", "Snooze", "Dismiss", "Pin"]
     assert [link.url for link in joined.links] == ["https://jira/APP-1"]
     also = json.loads(joined.actions[1].fields["also"])
-    assert also == [["ticket", "APP-1", "Move to In Review", Nomination("jira", move).fingerprint]]
+    assert also == [["ticket", "APP-1", "move_to_in_review", Nomination("jira", move).fingerprint]]
     assert [p.key for p in panels] == ["github", "notes"]  # the ticket's item went with its PR

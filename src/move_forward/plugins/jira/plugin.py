@@ -116,6 +116,7 @@ def _advance_rollout(issue: JiraIssue, prs: list[_PrView]) -> Item:
         subjects=[ticket_ref(issue)],
         signals=Signals(
             verb="Advance the rollout",
+            task="advance_the_rollout",
             importance=0 if ready else -1,
             effort="minutes" if ready else "hour",
         ),
@@ -148,7 +149,9 @@ def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) ->
         ]
         if closed
         else [],
-        signals=Signals(verb="Finish the rollout", importance=-1, effort="hour"),
+        signals=Signals(
+            verb="Finish the rollout", task="finish_the_rollout", importance=-1, effort="hour"
+        ),
     )
 
 
@@ -237,6 +240,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                     else [],
                     signals=Signals(
                         verb=f"Move to {to}" if to else "Update the status",
+                        task="transition",
                         effort="minutes",
                         closes=issue.key if closing else None,
                     ),
@@ -273,26 +277,31 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
             rank = 3000 + level * 100 + priority * 20
             why = "incident" + (f", escalated ({level})" if level else "")
             why += ", blocked" if blocked else ""
-            importance, verb = min(2, (2 if level else 1) + top), "Look at the incident"
+            importance = min(2, (2 if level else 1) + top)
+            verb, task = "Look at the incident", "look_at_the_incident"
         elif any(t in kind for t in config.bug_types):
             rank = 2000 + level * 100 + priority * 20
             why = "bug" + (f", escalated ({level})" if level else "")
             why += ", blocked" if blocked else ""
-            importance, verb = min(2, (1 if level else 0) + top), "Fix the bug"
+            importance = min(2, (1 if level else 0) + top)
+            verb, task = "Fix the bug", "fix_the_bug"
         elif in_status(issue, config.status_rollout):
             rank = -1000  # below blocked work: nothing to do but watch
             why = "in rollout"
-            importance, verb = 0, "Watch the rollout"
+            importance = 0
+            verb, task = "Watch the rollout", "watch_the_rollout"
         elif not blocked:
             rank = 1000
             why = "unblocked" + (f", under {issue.parent}" if issue.parent else "")
-            importance, verb = 0, "Work on it"
+            importance = 0
+            verb, task = "Work on it", "work_on_it"
         else:
             rank = 0
             why = (
                 "blocked by " + ", ".join(issue.open_blockers) if issue.open_blockers else "blocked"
             )
-            importance, verb = 0, "Chase the blockers"
+            importance = 0
+            verb, task = "Chase the blockers", "chase_the_blockers"
         rank += min(999, (now - issue.created).days)
         badges = [why] + ([f"due {issue.due:%b} {issue.due.day}"] if issue.due else [])
         items.append(
@@ -308,6 +317,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                 and not any(t in kind for t in (*config.incident_types, *config.bug_types))
                 else Signals(
                     verb=verb,
+                    task=task,
                     importance=importance,
                     due=end_of(issue.due, now) if issue.due else None,
                     blocked=blocked,

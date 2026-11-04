@@ -20,6 +20,10 @@ TICKET = "ticket"
 PERSON = "person"
 """The family of people."""
 
+REVIEW = "review"
+"""The task (`Signals.task`) of reviewing a pull request, whoever publishes it: `mfd snooze`
+snoozes it."""
+
 _OWN_KIND = re.compile(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*")
 
 

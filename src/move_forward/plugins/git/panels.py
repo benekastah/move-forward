@@ -294,7 +294,7 @@ class Builder:
             key="cleanup",
             priority=100,  # 10. cleanup
             act_now=True,
-            signals=Signals(verb="Delete the branch", effort="minutes"),
+            signals=Signals(verb="Delete the branch", task="delete_the_branch", effort="minutes"),
             title="Cleanup",
             description="Local branches whose PR merged or whose remote branch is gone.",
             items=items,

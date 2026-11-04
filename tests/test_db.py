@@ -215,3 +215,42 @@ def test_kinds_kept_by_core_are_renamed_for_the_plugins_that_publish_them(tmp_pa
     assert sorted(r["kind"] for r in db.query("SELECT kind FROM priorities")) == sorted(new)
     feedback = db.query("SELECT subject_kind FROM act_now_feedback")
     assert sorted(r["subject_kind"] for r in feedback) == sorted(new)
+
+
+def test_feedback_kept_by_verb_is_kept_by_task(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE schema_versions (plugin TEXT PRIMARY KEY, version INTEGER)")
+    for sql in CORE_MIGRATIONS[:11]:
+        conn.executescript(sql)
+    conn.execute("INSERT INTO schema_versions VALUES ('core', 11)")
+    verbs = [
+        "Review",
+        "Fix CI",
+        "Move to In Review",
+        "Update the status",
+        "Ping the reviewers",
+        "Finish 3 quick todos",
+        "",
+    ]
+    for n, verb in enumerate(verbs):
+        conn.execute(
+            "INSERT INTO act_now_feedback VALUES ('k', ?, ?, 'pin', NULL, 'f', '2026-10-30')",
+            (str(n), verb),
+        )
+    conn.commit()
+    conn.close()
+
+    db = Database(path)
+    tasks = {r["subject_id"]: r["task"] for r in db.query("SELECT * FROM act_now_feedback")}
+    assert tasks == {
+        "0": "review",
+        "1": "fix_ci",
+        "2": "transition",
+        "3": "transition",
+        "4": "ping",
+        "5": "close_out",
+    }  # an item without a verb took no feedback
+    db.execute(
+        "INSERT INTO act_now_feedback VALUES ('k', 'x', 't', 'opened', NULL, 'f', '2026-10-30')"
+    )  # a new kind of feedback needs no rebuild
