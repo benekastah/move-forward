@@ -1,4 +1,5 @@
 import json
+import socket
 import threading
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
@@ -630,3 +631,17 @@ def test_a_notice_the_server_did_not_sign_is_not_shown(client: HTTPConnection) -
     for cookie in ("move_forward_notice=0.run%20curl", "move_forward_notice=run%20curl"):
         body = get(client, "/?notice=run+curl", {**SIGNED_IN, "Cookie": cookie}).read().decode()
         assert "run curl" not in body
+
+
+def test_a_connection_that_stalls_mid_request_is_dropped(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.3)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(app))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        with socket.create_connection(("127.0.0.1", httpd.server_port), timeout=5) as stalled:
+            stalled.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1")  # never finished
+            assert stalled.recv(1024) == b""  # the server gave up and closed
+    finally:
+        httpd.shutdown()

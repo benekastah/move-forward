@@ -48,6 +48,11 @@ STATIC_FILES = {
 MAX_BODY_BYTES = 64 * 1024
 TLS_HANDSHAKE_SECONDS = 10
 """A connection that hasn't finished its TLS handshake by then is dropped."""
+REQUEST_TIMEOUT_SECONDS = 30
+"""How long a connection can sit silent while a request is read before it is dropped, so a
+client that opens one and sends a byte at a time can't hold a thread for ever. Requests
+close their connection (HTTP/1.0), so no idle keep-alive is cut off, and the notifications
+poll is a short request of its own."""
 CHANGE_LOOP_SECONDS = 1.0
 """How often the change loop looks for plugins whose `change_check_seconds` have passed."""
 TLS_RECHECK_SECONDS = 3600
@@ -413,6 +418,8 @@ def _form_fields(body: bytes) -> dict[str, str]:
 
 def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
+        timeout = REQUEST_TIMEOUT_SECONDS
+
         def log_message(self, format: str, *args: object) -> None:
             log.debug(format, *(_redact(str(a)) for a in args))
 
