@@ -645,3 +645,21 @@ def test_a_connection_that_stalls_mid_request_is_dropped(
             assert stalled.recv(1024) == b""  # the server gave up and closed
     finally:
         httpd.shutdown()
+
+
+def test_every_answer_forbids_framing(client: HTTPConnection) -> None:
+    pages = [
+        ("/", SIGNED_IN),  # HTML
+        ("/nope", SIGNED_IN),  # an error
+        ("/", {}),  # refused
+        ("/style.css", {}),
+    ]
+    for path, headers in pages:
+        response = get(client, path, headers)
+        response.read()
+        assert response.getheader("X-Frame-Options") == "DENY"
+        assert response.getheader("Content-Security-Policy") == "frame-ancestors 'none'"
+    for response in [post(client, "/layout/reset", {})]:  # a redirect
+        response.read()
+        assert response.getheader("X-Frame-Options") == "DENY"
+        assert response.getheader("Content-Security-Policy") == "frame-ancestors 'none'"

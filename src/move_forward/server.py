@@ -48,6 +48,13 @@ STATIC_FILES = {
 MAX_BODY_BYTES = 64 * 1024
 TLS_HANDSHAKE_SECONDS = 10
 """A connection that hasn't finished its TLS handshake by then is dropped."""
+FRAME_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'",
+}
+"""Sent with every answer. `frame-ancestors` is the modern form; `X-Frame-Options` covers older
+browsers. A fuller policy (`script-src`) would have to allow the pages' inline scripts, which
+need a nonce per page: not worth the risk of breaking them here."""
 REQUEST_TIMEOUT_SECONDS = 30
 """How long a connection can sit silent while a request is read before it is dropped, so a
 client that opens one and sends a byte at a time can't hold a thread for ever. Requests
@@ -419,6 +426,13 @@ def _form_fields(body: bytes) -> dict[str, str]:
 def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         timeout = REQUEST_TIMEOUT_SECONDS
+
+        def end_headers(self) -> None:
+            """Every answer, redirects and errors included, forbids being framed by another
+            page, which would let it overlay the dashboard's buttons (clickjacking)."""
+            for name, value in FRAME_HEADERS.items():
+                self.send_header(name, value)
+            super().end_headers()
 
         def log_message(self, format: str, *args: object) -> None:
             log.debug(format, *(_redact(str(a)) for a in args))
