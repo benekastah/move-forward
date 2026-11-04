@@ -335,6 +335,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{config_path}: {e}", file=sys.stderr)
             return 1
         print(f"{config_path}: ok; plugins: {', '.join(enabled_names(checked))}")
+        for error in registry.DISCOVERY_ERRORS:
+            print(f"warning: {error}")
         if checked.https and (problem := tls.problem(tls.Paths.beside(checked.db_path))):
             print(f"warning: {problem}")
         return 0

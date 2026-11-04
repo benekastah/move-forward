@@ -109,6 +109,6 @@ def test_a_collect_past_its_timeout_fails_alone_and_isnt_run_again_until_it_retu
         assert sources["github"].error == "timed out after 0.1s"
         assert sources["git"].error is None and sources["git"].fetched_at == NOW
         refresh.refresh(config, db, NOW)  # github's first collect hasn't returned
-        assert calls == ["github", "git", "git"]
+        assert sorted(calls[:2]) == ["git", "github"] and calls[2:] == ["git"]
     finally:
         release.set()

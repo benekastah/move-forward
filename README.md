@@ -108,6 +108,10 @@ Each plugin's page has its config, setup, panels, commands and buttons:
 | [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages; connects to the workspace's Slack app |
 | [notes](docs/plugins/notes.md) | `[notes]`, optional: always on | the skill's work notes (entries and todos) and what's on ice, in the database |
 
+Plugins from other packages are found by their `move_forward.plugins` entry point: install
+one beside the dashboard, e.g. `uv tool install move-forward --with move-forward-linear`,
+and give it its section. `mfd check` says when one is left out, and why.
+
 ## Commands
 
 Every command takes `-c`/`--config <path>` (default

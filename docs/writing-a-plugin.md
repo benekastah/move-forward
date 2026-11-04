@@ -42,11 +42,26 @@ change without notice. Its submodules group the rest: `api.html` (`page`, `e` to
 (`token`, `read`, `write`, `delete`). Ruff refuses any other core import in a plugin, and
 `tests/test_api.py` checks it too.
 
-## Registering it
+## Packaging it
 
-Add an instance to `PLUGINS` in `registry.py`: that's a core change, so land it in its own
-commit, ahead of the plugin's own. Its `[linear]` section is then read as its
-`config_model` (`config.section("linear")`); with no section, it's disabled.
+A plugin of your own is a package that declares an entry point in the
+`move_forward.plugins` group, naming its `Plugin` subclass:
+
+```toml
+# pyproject.toml
+[project.entry-points."move_forward.plugins"]
+linear = "move_forward_linear:LinearPlugin"
+```
+
+Install it beside the dashboard (`uv tool install move-forward --with move-forward-linear`)
+and it's found when `mfd` starts. Its `[linear]` section is read as its `config_model`
+(`config.section("linear")`); with no section, it's disabled. A plugin that won't import,
+or whose name is taken (by a built-in, or by core: `registry.RESERVED_NAMES`, such as
+`settings` or `serve`), is left out, and `mfd check` says why. Plugins load in name order.
+
+The built-in plugins are listed in `registry.BUILTINS` instead, so a checkout run without
+installing still has them; adding one there is a core change, landed in its own commit
+ahead of the plugin's own.
 
 ## Config
 
