@@ -20,7 +20,9 @@ tick (`server.py:146,152,171,188,225,348`), so discovery must be cached.
   level only, with a `model_validator(mode="after")` that validates each extra key against
   the discovered plugin's `config_model` and rejects an unknown section naming the known
   plugins. `Config.sections: dict[str, BaseModel]`; `Config.section(name)`. `always_on`
-  plugins get a default section when absent.
+  plugins get a default section when absent. A section failing its model reports its
+  errors under the section's name (`github.orgg`). `Config.with_section(name, section)`
+  replaces one, as tests do.
 - `_known_teams` uses `Plugin.teams_field` (08); `_requirements` and
   `_known_notifications` read sections by name.
 - `settings.py`, `init.py`, `cli.py`, `registry.py`, `tests/conftest.py` read sections by

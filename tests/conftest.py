@@ -347,3 +347,10 @@ def know_jira_projects(db: Database, *keys: str) -> None:
     link (see `JiraPlugin.linking_patterns`)."""
     for key in keys:
         db.execute("INSERT OR IGNORE INTO jira_projects VALUES (?)", (key,))
+
+
+def section[M: BaseModel](config: Config, name: str, model: type[M]) -> M:
+    """The plugin's section of `config`, as `model`; fails the test when it isn't there."""
+    found = config.section(name, model)
+    assert found is not None, f"no [{name}]"
+    return found

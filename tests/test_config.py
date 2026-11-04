@@ -1,17 +1,21 @@
-import typing
 from pathlib import Path
 from typing import ClassVar
 
 import pytest
-from conftest import NOW
+from conftest import NOW, section
 from pydantic import ValidationError
 
 from move_forward import config, registry
 from move_forward.db import Database
-from move_forward.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS
-from move_forward.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV
+from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS, GitHubConfig
+from move_forward.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV, JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
-from move_forward.plugins.slack.config import DEFAULT_PING_FIRST, DEFAULT_PING_FOLLOW_UP
+from move_forward.plugins.slack.config import (
+    DEFAULT_PING_FIRST,
+    DEFAULT_PING_FOLLOW_UP,
+    SlackConfig,
+)
 from move_forward.registry import enabled
 
 MINIMAL = 'email = "me@acme.com"\n'
@@ -31,18 +35,36 @@ def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
         '[git]\nrepos = ["~/src/a"]\n\n[slack.teams]\ncore = "#team-core"\n\n'
         '[jira]\nsite = "https://j"\n',
     )
-    assert loaded.git is not None and loaded.git.repos == [Path("~/src/a").expanduser()]
-    assert loaded.github is not None and loaded.github.policy_checks == []
-    assert [loaded.github.slug(t) for t in loaded.teams] == ["core", "web-reviewers"]
-    assert loaded.slack is not None and loaded.slack.teams == {"core": "#team-core"}
-    assert loaded.slack.ping_first == DEFAULT_PING_FIRST
+    assert loaded.section("git") is not None and section(loaded, "git", GitConfig).repos == [
+        Path("~/src/a").expanduser()
+    ]
+    assert (
+        loaded.section("github") is not None
+        and section(loaded, "github", GitHubConfig).policy_checks == []
+    )
+    assert [section(loaded, "github", GitHubConfig).slug(t) for t in loaded.teams] == [
+        "core",
+        "web-reviewers",
+    ]
+    assert loaded.section("slack") is not None and section(loaded, "slack", SlackConfig).teams == {
+        "core": "#team-core"
+    }
+    assert section(loaded, "slack", SlackConfig).ping_first == DEFAULT_PING_FIRST
     assert loaded.port == config.DEFAULT_PORT
-    assert loaded.jira is not None and loaded.jira.token_env == DEFAULT_JIRA_TOKEN_ENV
+    assert (
+        loaded.section("jira") is not None
+        and section(loaded, "jira", JiraConfig).token_env == DEFAULT_JIRA_TOKEN_ENV
+    )
 
 
 def test_a_config_with_no_sections_enables_no_plugins(tmp_path: Path) -> None:
     loaded = _load(tmp_path, MINIMAL)
-    assert (loaded.github, loaded.git, loaded.jira, loaded.slack) == (None, None, None, None)
+    assert (
+        loaded.section("github"),
+        loaded.section("git"),
+        loaded.section("jira"),
+        loaded.section("slack"),
+    ) == (None, None, None, None)
     assert loaded.teams == []
 
 
@@ -85,14 +107,15 @@ def test_naming_settings_have_defaults_and_load(tmp_path: Path) -> None:
         '[slack]\nping_first = "Look: {url}"\n\n'
         '[jira]\nsite = "https://j"\nstatus_closed = ["Done"]\nincident_types = ["sev"]\n',
     )
-    assert loaded.slack is not None and loaded.prune_days == 30
-    assert loaded.slack.ping_first == "Look: {url}"
-    assert loaded.slack.ping_follow_up == DEFAULT_PING_FOLLOW_UP
-    assert loaded.github is not None
-    assert loaded.github.placeholder_labels == DEFAULT_PLACEHOLDER_LABELS
-    assert loaded.jira is not None
-    assert loaded.jira.status_closed == ["Done"] and loaded.jira.status_in_review == ["In Review"]
-    assert loaded.jira.incident_types == ["sev"] and loaded.jira.bug_types == ["bug"]
+    assert loaded.section("slack") is not None and loaded.prune_days == 30
+    assert section(loaded, "slack", SlackConfig).ping_first == "Look: {url}"
+    assert section(loaded, "slack", SlackConfig).ping_follow_up == DEFAULT_PING_FOLLOW_UP
+    assert loaded.section("github") is not None
+    assert section(loaded, "github", GitHubConfig).placeholder_labels == DEFAULT_PLACEHOLDER_LABELS
+    assert loaded.section("jira") is not None
+    jira = section(loaded, "jira", JiraConfig)
+    assert jira.status_closed == ["Done"] and jira.status_in_review == ["In Review"]
+    assert jira.incident_types == ["sev"] and jira.bug_types == ["bug"]
 
 
 def test_only_plugins_with_a_section_are_enabled(tmp_path: Path) -> None:
@@ -113,7 +136,7 @@ def test_a_plugin_needs_the_plugins_it_requires(
     with pytest.raises(ValidationError, match=r"\[jira\] needs \[git\]"):
         _load(tmp_path, MINIMAL + jira)
     loaded = _load(tmp_path, MINIMAL + jira + "\n[git]\nrepos = []\n")
-    assert loaded.jira is not None
+    assert loaded.section("jira") is not None
 
 
 def test_the_jira_site_must_be_https(tmp_path: Path) -> None:
@@ -164,11 +187,19 @@ def test_refresh_seconds_moved_into_each_plugins_section(tmp_path: Path) -> None
         _load(tmp_path, MINIMAL + "refresh_seconds = 60\n")
 
 
-def test_every_plugin_has_a_config_section_of_its_own_model() -> None:
-    """`Config` lists a field per plugin, typed by hand: each must match the registry's."""
-    for plugin in registry.PLUGINS:
-        field = config.Config.model_fields.get(plugin.name)
-        assert field is not None, f"Config has no [{plugin.name}] section"
-        annotation = field.annotation
-        models = typing.get_args(annotation) or (annotation,)
-        assert plugin.config_model in models, f"[{plugin.name}] isn't a {plugin.config_model}"
+def test_each_plugin_section_is_its_plugins_model(tmp_path: Path) -> None:
+    loaded = _load(tmp_path, MINIMAL + '\n[git]\nrepos = []\n\n[github]\norg = "acme"\n')
+    for name in ("git", "github", "notes"):  # notes is always on
+        plugin = next(p for p in registry.PLUGINS if p.name == name)
+        assert isinstance(loaded.section(name), plugin.config_model)
+    assert loaded.section("jira") is None
+
+
+def test_an_unknown_section_names_the_plugins(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match=r"no plugin is named \[linear\]; the plugins are"):
+        _load(tmp_path, MINIMAL + "\n[linear]\nteam = 'x'\n")
+
+
+def test_a_bad_section_says_which_of_its_fields(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match=r"github\.orgg\n  Extra inputs"):
+        _load(tmp_path, MINIMAL + '\n[github]\norg = "acme"\norgg = "x"\n')

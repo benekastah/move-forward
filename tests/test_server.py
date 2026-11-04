@@ -43,12 +43,14 @@ from move_forward.repositories import LayoutRepository, SessionRepository
 
 @pytest.fixture
 def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
-    config = Config(
-        email="me@acme.com",
-        github=GitHubConfig(org="acme"),
-        teams=["core"],
-        slack=SlackConfig(),
-        db_path=tmp_path / "x.db",
+    config = Config.model_validate(
+        {
+            "email": "me@acme.com",
+            "github": GitHubConfig(org="acme"),
+            "teams": ["core"],
+            "slack": SlackConfig(),
+            "db_path": tmp_path / "x.db",
+        }
     )
     db = Database(":memory:")
     migrate(config, db)
@@ -579,8 +581,8 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
 ) -> None:
     clock = [1000.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
-    app.config = app.config.model_copy(
-        update={"git": GitConfig(repos=[], refresh_seconds=60), "refresh_on_load_seconds": 120}
+    app.config = app.config.with_section("git", GitConfig(repos=[], refresh_seconds=60)).model_copy(
+        update={"refresh_on_load_seconds": 120}
     )
     migrate(app.config, app.db)  # git's tables, as `mfd serve` makes them
     assert app.intervals() == {"github": 300, "git": 60}
@@ -654,7 +656,7 @@ def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
 ) -> None:
     swap = {"github": _GitHubWatchingGit()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    app.config = app.config.model_copy(update={"git": GitConfig(repos=[])})
+    app.config = app.config.with_section("git", GitConfig(repos=[]))
     migrate(app.config, app.db)
     monkeypatch.setattr(_GitHubWatchingGit, "answers", [True, False, False])
     app.refresh_now({"git"})

@@ -6,20 +6,16 @@ section, e.g. `[github]`; a plugin is enabled when its section is there.
 
 import tomllib
 from pathlib import Path
-from typing import cast
+from typing import cast, overload
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic_core import InitErrorDetails
 
 from . import registry
 from .act_now import ActNowConfig
 from .db import DEFAULT_KEEP_BACKUPS
 from .notifications import NotificationsConfig
-from .plugins.git.config import GitConfig
-from .plugins.git_stack.config import GitStackConfig
-from .plugins.github.config import GitHubConfig
-from .plugins.jira.config import JiraConfig
-from .plugins.notes.config import IMPORT_ONCE, NotesConfig
-from .plugins.slack.config import SlackConfig
+from .plugins.notes.config import IMPORT_ONCE
 from .strict import Strict
 
 BASE_DIR = Path("~/.config/move-forward")
@@ -71,13 +67,64 @@ class Config(Strict):
     """`[act_now]`: how core ranks what the plugins nominate for Act now."""
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
     """`[notifications]`: which events to be told of in the browser; none until subscribed."""
-    github: GitHubConfig | None = None
-    git: GitConfig | None = None
-    git_stack: GitStackConfig | None = None
-    jira: JiraConfig | None = None
-    slack: SlackConfig | None = None
-    notes: NotesConfig = Field(default_factory=NotesConfig)
-    """Always on, so always there; `[notes]` only changes its settings."""
+    sections: dict[str, BaseModel] = Field(default_factory=dict[str, BaseModel])
+    """The plugins' sections, by plugin name, each its plugin's `config_model`: a plugin is
+    enabled when its section is there. An `always_on` plugin's is there without one in the
+    file. Read with `section`."""
+
+    @overload
+    def section(self, name: str) -> BaseModel | None: ...
+    @overload
+    def section[M: BaseModel](self, name: str, model: type[M]) -> M | None: ...
+    def section[M: BaseModel](self, name: str, model: type[M] | None = None) -> BaseModel | None:
+        """The plugin's section, e.g. `[github]`; None when the plugin isn't enabled. With
+        `model`, as that model: raises TypeError if it's another."""
+        found = self.sections.get(name)
+        if found is not None and model is not None and not isinstance(found, model):
+            raise TypeError(f"[{name}] is a {type(found).__name__}, not a {model.__name__}")
+        return found
+
+    def with_section(self, name: str, section: BaseModel) -> "Config":
+        """This config with the plugin's section set (or replaced)."""
+        return self.model_copy(update={"sections": {**self.sections, name: section}})
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plugin_sections(cls, data: object) -> object:
+        """Each key that isn't one of the top level's is a plugin's section, checked against
+        its plugin's `config_model`; one no plugin has is an error naming the plugins."""
+        if not isinstance(data, dict):
+            return data
+        settings = dict(cast(dict[str, object], data))
+        if "sections" in settings:  # already split, e.g. by `model_copy`'s validation
+            return settings
+        plugins = {p.name: p for p in registry.PLUGINS}
+        sections: dict[str, BaseModel] = {}
+        errors: list[InitErrorDetails] = []
+        for key in [k for k in settings if k not in cls.model_fields]:
+            plugin = plugins.get(key)
+            if plugin is None:
+                continue  # not a plugin's: `_moved` names it, or it's refused as extra
+            raw = settings.pop(key)
+            try:
+                sections[key] = plugin.config_model.model_validate(raw)
+            except ValidationError as e:
+                errors += [
+                    InitErrorDetails(
+                        type=err["type"],
+                        loc=(key, *err["loc"]),
+                        input=err["input"],
+                        ctx=err.get("ctx", {}),
+                    )
+                    for err in e.errors()
+                ]
+        if errors:
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        for plugin in registry.PLUGINS:
+            if plugin.always_on and plugin.name not in sections:
+                sections[plugin.name] = plugin.config_model()
+        settings["sections"] = sections
+        return settings
 
     @model_validator(mode="before")
     @classmethod
@@ -94,6 +141,14 @@ class Config(Strict):
             moved.append(f"`notes_dir` is gone; {IMPORT_ONCE}")
         if "refresh_seconds" in settings:
             moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")
+        plugins = [p.name for p in registry.PLUGINS]
+        moved += [
+            f"no plugin is named [{key}]; the plugins are {', '.join(plugins)}"
+            for key in map(str, settings)
+            if isinstance(settings[key], dict)
+            and key not in cls.model_fields
+            and key not in plugins
+        ]
         if moved:
             raise ValueError("; ".join(moved))
         return settings
@@ -105,8 +160,7 @@ class Config(Strict):
         for plugin in registry.PLUGINS:
             if plugin.teams_field is None:
                 continue
-            section: object = getattr(self, plugin.name, None)
-            teams: object = getattr(section, plugin.teams_field, None)
+            teams: object = getattr(self.section(plugin.name), plugin.teams_field, None)
             if not isinstance(teams, dict):
                 continue
             name = plugin.name
