@@ -4,8 +4,8 @@ from ...api import Model
 
 
 class StackBranchAttrs(Model):
-    """A `stack_branch`: a branch git-stack tracks, by its `branch` id, even after git has
-    deleted it."""
+    """A `git_stack.stack_branch`: a branch git-stack tracks, by its `git.branch` id, even
+    after git has deleted it."""
 
     repo_dir: str
     name: str

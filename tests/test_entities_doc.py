@@ -7,7 +7,7 @@ from pathlib import Path
 from move_forward import registry
 
 DOC = Path(__file__).parent.parent / "docs" / "entities.md"
-_ROW_RE = re.compile(r"^\| `(\w+)`( \((\w+)\))? \| (\w+)", re.MULTILINE)
+_ROW_RE = re.compile(r"^\| `([\w.]+)`( \((\w+)\))? \| (\w+)", re.MULTILINE)
 _ATTRIBUTE_CELL_RE = re.compile(r"^\| ((?:`\w+`(?:, )?)+) \|", re.MULTILINE)
 
 

@@ -189,4 +189,4 @@ def test_a_refresh_stores_the_events_of_subscribed_kinds(monkeypatch: pytest.Mon
     refresh.refresh(config, db, NOW)
     [told] = NotificationRepository(db).take(NOW, timedelta(hours=1))
     assert (told.body, told.tag) == ("can be merged", pr(1).url)
-    assert told.url == f"/#{anchor('pr', pr(1).url)}"
+    assert told.url == f"/#{anchor('pull_request', pr(1).url)}"

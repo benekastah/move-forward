@@ -181,3 +181,37 @@ def test_the_database_and_its_backups_are_mine_alone(tmp_path: Path) -> None:
     [backup] = (path.parent / "backups").iterdir()
     assert is_private(backup)
     assert is_private(path.parent / "backups")
+
+
+def test_kinds_kept_by_core_are_renamed_for_the_plugins_that_publish_them(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE schema_versions (plugin TEXT PRIMARY KEY, version INTEGER)")
+    for sql in CORE_MIGRATIONS[:10]:
+        conn.executescript(sql)
+    conn.execute("INSERT INTO schema_versions VALUES ('core', 10)")
+    old = ["pr", "branch", "repo", "stack_branch", "entry", "todo", "iced", "ticket", "person"]
+    for kind in old:
+        conn.execute("INSERT INTO priorities VALUES (?, 'x', 1, '2026-10-30')", (kind,))
+        conn.execute(
+            "INSERT INTO act_now_feedback VALUES (?, 'x', 'Review', 'pin', NULL, 'f', '2026-10-30')",
+            (kind,),
+        )
+    conn.commit()
+    conn.close()
+
+    db = Database(path)
+    new = [
+        "pull_request",
+        "git.branch",
+        "git.repo",
+        "git_stack.stack_branch",
+        "notes.entry",
+        "notes.todo",
+        "notes.iced",
+        "ticket",
+        "person",
+    ]
+    assert sorted(r["kind"] for r in db.query("SELECT kind FROM priorities")) == sorted(new)
+    feedback = db.query("SELECT subject_kind FROM act_now_feedback")
+    assert sorted(r["subject_kind"] for r in feedback) == sorted(new)

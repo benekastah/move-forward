@@ -22,7 +22,8 @@ is what's left to build.
   import each other or read each other's config, snapshots or tables. What one needs
   from another goes through the graph. A plugin that's built on another declares it in
   `requires`.
-- A plugin declares the kinds it publishes in `kinds`, each with a `KindSpec`: the
+- A plugin declares the kinds it publishes in `kinds`, named for it (`git.branch`) or for a
+  family (below), each with a `KindSpec`: the
   model of its attributes, which the graph checks its entities against, and its flags
   (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`). An entity says
   whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
@@ -73,6 +74,9 @@ is what's left to build.
   not in a docs pass afterwards:
   - the README for core: its config keys, commands, command-line options,
     HTTP endpoints and the page; its plugins table must match the code.
+  - `CHANGELOG.md`, under Unreleased, for a change someone driving `mfd` from
+    outside must act on (the work-notes skill reads it): a command, its options
+    or JSON, a config key, an HTTP endpoint's fields, a page link. Say what to do.
   - the plugin's page, `docs/plugins/<name>.md`, for a plugin: its config keys
     and setup, what it publishes, its panels, what it nominates for Act now, its
     buttons, pages and commands.

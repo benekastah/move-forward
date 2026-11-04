@@ -67,7 +67,7 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
         for e in GitHubPlugin().entities(
             EntitiesRequest(_context(teams={"web": "web-reviewers"}), gh)
         )
-        if e.ref.kind == "pr"
+        if e.ref.kind == "pull_request"
     }
     assert [(e.state, e.attrs["mine"]) for e in entities.values()] == [
         ("open", True),
@@ -112,7 +112,7 @@ def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(client, "pr_state", pr_state)
     fetched = GitHubPlugin().fetch(
-        FetchRequest(_context(), "pr", ["https://pr/1", "https://pr/2", "https://gone"])
+        FetchRequest(_context(), "pull_request", ["https://pr/1", "https://pr/2", "https://gone"])
     )
     assert [(e.ref.id, e.state, e.attrs["closed_at"]) for e in fetched] == [
         ("https://pr/1", "merged", "2026-06-01T00:00:00+00:00"),

@@ -310,7 +310,7 @@ def iced(branch: str, repo_dir: str = "/src/widgets") -> Ice:
         iced_on=NOW.date(),
         items=[
             IcedItem(
-                kind="branch",
+                kind="git.branch",
                 ref_id=f"{repo_dir}\t{branch}",
                 name=branch,
                 repo_dir=repo_dir,

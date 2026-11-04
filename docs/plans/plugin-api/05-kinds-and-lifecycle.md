@@ -157,42 +157,52 @@ a key two trackers share links both tickets. **Size.** M/L.
 
 ## PR 5c — plugin-prefixed kinds, `pull_request` (core migration V11, notes migration)
 
-- Core publishes every kind as `<plugin>.<name>` and every family's refs by the family; a
-  plugin makes refs to its own kinds with `ctx.ref(name, id)` (and `ctx.kind(name)` for
-  the string); other plugins write the full string (`"git.branch"`,
-  `"git_stack.stack_branch"`, `"notes.entry"`), as they write a family's constant.
+- A plugin's own kinds are named for it: it declares and writes the full name
+  (`kinds = {BRANCH: ...}` with `BRANCH = "git.branch"`), as other plugins write it. The
+  registry refuses a kind named neither for the plugin nor for a family. A family's kinds
+  are declared and referred to by the family (`pull_request`); core sets `Entity.kind` to
+  the publisher's full kind (`github.pull_request`) and indexes it, so `of_kind` and `view`
+  take a family or a full kind.
 - The `pr` family is renamed `pull_request`; `ticket` and `person` keep their names.
-- Ids by the family rules: jira publishes tickets by URL (`<site>/browse/<key>`, the key as
-  `handle`), github people as `<host>/<login>` (the login as `handle`). github's own
-  `github_people` table stays keyed by login: it's github's.
 - Core migration, in `priorities.kind` and `act_now_feedback.subject_kind`: `pr` →
   `pull_request`, `branch` → `git.branch`, `repo` → `git.repo`, `stack_branch` →
   `git_stack.stack_branch`, `entry` → `notes.entry`, `todo` → `notes.todo`, `iced` →
-  `notes.iced`. notes migration, in its link, todo link and ice item tables: `pr` →
-  `pull_request`, `branch` → `git.branch`, `entry` → `notes.entry`; and notes'
-  `markdown.py` constants, which turn `on-ice.md` text into kinds.
+  `notes.iced`. notes migration, in its link, todo link, ice item and cover tables: `pr` →
+  `pull_request`, `branch` → `git.branch`, `entry` → `notes.entry`.
+- **User config**: `[act_now] snooze_days` keys are kinds (`pr = 7` → `pull_request = 7`,
+  `entry = 2` → `"notes.entry" = 2`); a validator names the new key. Where a family's kind
+  is shown (`mfd priority`'s messages), its label is.
+- **The skill** reads `CHANGELOG.md`, new here, and updates itself: the kinds it passes to
+  `mfd notes ice --item <kind> <id>` and `mfd priority --kind`, and reads in `mfd notes`
+  and `mfd snoozes` JSON. The CLI takes only the new names: there's one user, so no
+  compatibility shim.
+- Anchors change (`page.anchor` is built from the kind); bookmarks to `#item-pr-…` and
+  `#item-entry-…` break. `notifications.anchor` is transient.
+
+**Tests.** A kind not named for its plugin is refused; two plugins publish one family, each
+under its own full kind, and a shared id is the first one's; the core migration over a V10
+database with a row of each kind; notes' migration over its tables; `snooze_days = { pr =
+7 }` fails to load naming `pull_request`. **Risk.** Medium (stored data). **Size.** L.
+
+## PR 5d — family ids (no SQL migration; re-keying at refresh)
+
+- `Family.id_rule` checks ids as entities are published (an absolute URL, or
+  `<host>/<login>`); an entity breaking it is dropped and logged.
+- jira publishes tickets by URL (`<site>/browse/<key>`, the key as `handle`), github people
+  as `<host>/<login>` (the login as `handle`). github's own `github_people` table stays
+  keyed by login: it's github's.
 - Stored ticket keys and person logins can't be rewritten by SQL: a migration doesn't know
   Jira's site or GitHub's host. They're re-keyed once, at the first refresh after the
   upgrade, from the graph: core in `priorities` and `act_now_feedback`, notes in its link
   and ice tables, slack in its contacts and pings (keyed by GitHub login today), each
   mapping a stored key to the entity whose `handle` it is. A row nothing matches (its
-  ticket long done) is dropped and logged. A kv flag per owner marks it done.
-- **User config**: `[act_now] snooze_days` keys are kinds (`pr = 7` → `pull_request = 7`,
-  `entry = 2` → `"notes.entry" = 2`); a `Config` validator names the new key, like
-  `MOVED_SETTINGS` (`config.py:33-42`). Where a kind is shown (`mfd priority`'s
-  messages, snooze notices), its label is.
-- **The skill** changes in the same PR: it passes kinds to `mfd notes ice --item <kind>
-  <id>` (`notes/cli.py:306`) and `mfd priority --kind`, and reads ticket ids in `mfd notes`
-  JSON, which become URLs. The CLI takes only the new names: there's one user, so no
-  compatibility shim.
-- Anchors change (`page.anchor` is built from the kind); bookmarks to `#item-pr-…` and
-  `#item-entry-…` break. `notifications.anchor` is transient.
+  ticket long done) is kept as it is, and the daily prune clears it once it's finished. A
+  kv flag per owner marks the re-keying done.
+- `mfd notes` JSON gives tickets' ids as URLs; `CHANGELOG.md` says so.
 
-**Tests.** Kinds are published prefixed and `ctx.ref` agrees; family refs aren't
-prefixed; the migration over a V10 database with a row of each kind; notes' migration over
-its tables; the re-keying turns a stored `APP-1` into its URL and drops a key nothing
-publishes, once; `snooze_days = { pr = 7 }` fails to load naming `pull_request`.
-**Risk.** Medium (stored data). **Size.** M/L.
+**Tests.** The re-keying turns a stored `APP-1` into its URL and keeps a key nothing
+publishes, once; an id breaking its family's rule is dropped. **Risk.** Medium (stored
+data). **Size.** M.
 
 ## Decisions
 

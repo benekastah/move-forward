@@ -62,6 +62,17 @@ def test_moved_settings_say_where_they_went(tmp_path: Path) -> None:
         _load(tmp_path, MINIMAL + '\n[notes]\ndir = "~/n"\n')
 
 
+def test_a_snooze_days_key_with_a_kinds_old_name_says_its_new_one(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="the kind 'pr' is called 'pull_request' now"):
+        _load(tmp_path, MINIMAL + "\n[act_now]\nsnooze_days = { pr = 7 }\n")
+    with pytest.raises(ValidationError, match="the kind 'entry' is called 'notes.entry' now"):
+        _load(tmp_path, MINIMAL + "\n[act_now]\nsnooze_days = { entry = 2 }\n")
+    config = _load(
+        tmp_path, MINIMAL + '\n[act_now]\nsnooze_days = { pull_request = 7, "notes.entry" = 2 }\n'
+    )
+    assert config.act_now.snooze_days == {"pull_request": 7, "notes.entry": 2}
+
+
 def test_a_plugin_team_must_be_a_top_level_team(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match=r"\[slack.teams\] has wbe"):
         _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[slack.teams]\nwbe = "#web"\n')

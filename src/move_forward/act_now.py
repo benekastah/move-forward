@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from . import localtime
 from .domain import Model
@@ -82,6 +82,19 @@ class Weights(Strict):
     """A blocked item, until it's been untouched for `blocked_stale_days`."""
 
 
+RENAMED_KINDS = {
+    "pr": "pull_request",
+    "branch": "git.branch",
+    "repo": "git.repo",
+    "stack_branch": "git_stack.stack_branch",
+    "entry": "notes.entry",
+    "todo": "notes.todo",
+    "iced": "notes.iced",
+}
+"""Kinds by the names they had before plugins' kinds were named for them, to say what a
+`snooze_days` key is called now."""
+
+
 class ActNowConfig(Strict):
     """`[act_now]`: how core ranks the plugins' nominations."""
 
@@ -99,12 +112,20 @@ class ActNowConfig(Strict):
     default_snooze_days: int = Field(default=1, ge=1)
     """How many days a snooze lasts, counted in local days: 1 is until tomorrow."""
     snooze_days: dict[str, int] = Field(default_factory=dict)
-    """`default_snooze_days` for a kind of subject, e.g. `pr = 7` to snooze a PR for a week.
-    A snooze still ends early when its item changes."""
+    """`default_snooze_days` for a kind of subject, e.g. `pull_request = 7` to snooze a PR for
+    a week, or `"notes.entry" = 2`. A snooze still ends early when its item changes."""
 
     snooze_until_hour: int = Field(default=0, ge=0, le=23)
     """The local hour a snooze ends at on its last day: 0 is midnight, 9 shows a snooze made at
     5pm again at 9am the next morning."""
+
+    @field_validator("snooze_days")
+    @classmethod
+    def _no_old_kinds(cls, value: dict[str, int]) -> dict[str, int]:
+        for kind in value:
+            if kind in RENAMED_KINDS:
+                raise ValueError(f"the kind {kind!r} is called {RENAMED_KINDS[kind]!r} now")
+        return value
 
     def snooze_until(self, kind: str, now: datetime) -> datetime:
         """When a snooze of an item about a `kind` of subject, made at `now`, ends: that many

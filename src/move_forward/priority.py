@@ -8,7 +8,7 @@ from .act_now import PriorityOf
 from .graph import Entity, Graph, Ref
 from .repositories import PriorityRepository
 
-TODO = "todo"
+TODO = "notes.todo"
 """The kind of a work entry's todo, published by notes."""
 
 

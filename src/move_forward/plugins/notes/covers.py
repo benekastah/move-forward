@@ -7,21 +7,21 @@ from ...api import Graph, Model, Ref
 from ...api.kinds import PULL_REQUEST as PR
 from .models import Ice
 
-REPO = "repo"
-BRANCH = "branch"
-STACK_BRANCH = "stack_branch"
-ENTRY = "entry"
+REPO = "git.repo"
+BRANCH = "git.branch"
+STACK_BRANCH = "git_stack.stack_branch"
+ENTRY = "notes.entry"
 
 
 class _RepoView(Model):
-    """What notes reads of a `repo` (git's): where it's checked out."""
+    """What notes reads of a `git.repo`: where it's checked out."""
 
     id: str
     dir: str
 
 
 class _PrView(Model):
-    """What notes reads of a `pr` (github's): where it's from."""
+    """What notes reads of a `pull_request`: where it's from."""
 
     id: str
     repo: str

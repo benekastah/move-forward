@@ -15,12 +15,12 @@ from .models import Condition, Entry, Ice, Todo
 
 NOT_BLOCKED_RE = re.compile(r"^\s*(nothing|none|no|-|n/a)\b", re.IGNORECASE)
 
-ENTRY = "entry"
-ICED = "iced"
-TODO = "todo"
+ENTRY = "notes.entry"
+ICED = "notes.iced"
+TODO = "notes.todo"
 TODOS = "todos"
 """The todos panel's key."""
-BRANCH = "branch"
+BRANCH = "git.branch"
 TODO_ADD = "notes/todo_add"
 PR_STATES: dict[str, PrState] = {"open": "open", "merged": "merged", "closed": "closed"}
 
@@ -225,7 +225,7 @@ def entities(entries: list[Entry], ices: list[Ice], covers: dict[int, list[Ref]]
 
 
 class _PrView(Model):
-    """What notes reads of a `pr` (github's)."""
+    """What notes reads of a `pull_request`."""
 
     id: str
     title: str
@@ -234,7 +234,7 @@ class _PrView(Model):
 
 
 class _BranchView(Model):
-    """What notes reads of a `branch` (git's); a branch only git-stack still tracks has
+    """What notes reads of a `git.branch`; a branch only git-stack still tracks has
     neither."""
 
     id: str

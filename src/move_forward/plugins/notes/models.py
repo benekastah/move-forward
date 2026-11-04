@@ -18,7 +18,7 @@ class Link(Model):
     """Something an entry or todo is about: a PR by URL, a ticket by key."""
 
     kind: str
-    """A graph kind, e.g. "pr" or "ticket"."""
+    """A graph kind, e.g. "pull_request" or "ticket"."""
     ref: str
     """The entity's id in that kind."""
 
@@ -92,7 +92,7 @@ class IcedItem(Model):
     """One thing an act of icing covers: today, a branch."""
 
     kind: str
-    """A graph kind; "branch" for now."""
+    """A graph kind: "git.branch", or what `ice_item` puts on ice."""
     ref_id: str
     """The entity's id, e.g. `<repo dir>\\t<branch>`: whatever its publisher made it, never
     parsed."""

@@ -15,7 +15,7 @@ MAX_SUGGESTIONS = 5
 
 
 class Checkout(Model):
-    """A local checkout of a GitHub repo, from the graph's `repo` entities."""
+    """A local checkout of a GitHub repo, from the graph's `git.repo` entities."""
 
     github_repo: str
     """owner/name."""

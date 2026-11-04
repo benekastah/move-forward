@@ -1,8 +1,8 @@
 """The git-stack plugin's panel and entities.
 
 Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from the graph's
-`pr` entities, matched by their `repo` and `head`, and a checkout's GitHub repo from git's
-`repo` entities.
+`pull_request` entities, matched by their `repo` and `head`, and a checkout's GitHub repo from git's
+`git.repo` entities.
 """
 
 from pathlib import Path
@@ -12,11 +12,11 @@ from ...api.kinds import PULL_REQUEST as PR
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
 
-BRANCH = "branch"
-STACK_BRANCH = "stack_branch"
-REPO = "repo"
+BRANCH = "git.branch"
+STACK_BRANCH = "git_stack.stack_branch"
+REPO = "git.repo"
 BRANCH_ID_SEPARATOR = "\t"
-"""Joins a repo dir and a branch name in a `branch` entity's id."""
+"""Joins a repo dir and a branch name in a `git.branch` entity's id."""
 
 
 def branch_ref(repo_dir: str, branch: str) -> Ref:
@@ -37,20 +37,20 @@ class StackBranchView(Model):
 
 
 class _BranchView(Model):
-    """What git_stack reads of a `branch` (git's): its checkout."""
+    """What git_stack reads of a `git.branch`: its checkout."""
 
     repo_dir: str
 
 
 class _RepoView(Model):
-    """What git_stack reads of a `repo` (git's): GitHub's name for a checkout."""
+    """What git_stack reads of a `git.repo`: GitHub's name for a checkout."""
 
     id: str
     dir: str
 
 
 class _PrView(Model):
-    """What git_stack reads of a `pr` (github's)."""
+    """What git_stack reads of a `pull_request`."""
 
     id: str
     url: str | None = None
@@ -70,8 +70,8 @@ def repo_dirs(graph: Graph) -> list[str]:
 
 
 def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
-    """A `stack_branch` per tracked branch, pointing at git's `branch` of it, which git may
-    have deleted."""
+    """A `git_stack.stack_branch` per tracked branch, pointing at its `git.branch`, which git
+    may have deleted."""
     return [
         Entity(
             ref=stack_branch_ref(repo.dir, b.name),
@@ -168,7 +168,7 @@ class Builder:
 
 def untrack_iced_action(item: Item, graph: Graph) -> Action | None:
     """An Untrack button for an item about what hides its branches, i.e. notes' On ice item,
-    when git-stack still tracks some of them. A `stack_branch`'s id is its branch's."""
+    when git-stack still tracks some of them. A `git_stack.stack_branch`'s id is its branch's."""
     if not any(graph.hides(ref.kind) for ref in item.subjects):
         return None
     tracked = [

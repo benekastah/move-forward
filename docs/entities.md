@@ -11,12 +11,15 @@ from every enabled plugin's entities on each refresh and page load.
 file is the contract. Adding a kind or an attribute, or changing what one
 means, is a deliberate change: update this file in the same commit.
 
-Each kind has one publisher: the plugin that declares it (the first, should two
-declare one). An entity of a kind its plugin doesn't own, or a second entity of
-the same ref, is left out of the graph and logged.
+A plugin's own kinds are named for it, `<plugin>.<name>` (`git.branch`,
+`notes.entry`), so only it publishes them. A family's kind (`pull_request`, `ticket`,
+`person`; see below) can have several publishers: its entities' refs name the family, and
+each says which plugin's kind it is in `kind` (`github.pull_request`). An entity of a kind
+its plugin doesn't declare, or a second entity of the same ref (two plugins publishing one
+PR), is left out of the graph and logged; the first stands.
 
 Some kinds are **linking**: their entities stand for a unit of work, and link
-what's about it. `ticket` (jira) and `entry` (notes) are. `Graph.related(ref,
+what's about it. `ticket` (jira) and `notes.entry` are. `Graph.related(ref,
 kind)` finds entities of `kind` one hop from `ref` in either direction, or
 linked with it by a linking entity: a work entry naming APP-1 is related to
 every PR whose branch, title or body mentions APP-1. A linking kind with a
@@ -27,33 +30,37 @@ in, e.g. `APP-12`, so `UTF-8` isn't one) is found in other entities'
 
 ## Families
 
-Core models what more than one tool may represent, in `move_forward.api.kinds`: the `pr`
-family (`PullRequest`, shown as "PR"), `ticket` (`Ticket`) and `person` (`Person`). A
-plugin's kind named for a family must extend its model, adding its own fields (github's
-`number`, jira's `status`); the registry refuses one that doesn't. Every family's model has
+Core models what more than one tool may represent, in `move_forward.api.kinds`: the
+`pull_request` family (`PullRequest`, shown as "PR"), `ticket` (`Ticket`) and `person`
+(`Person`). A plugin's kind named for a family must extend its model, adding its own fields
+(github's `number`, jira's `status`); the registry refuses one that doesn't. Refs to a
+family's entities name the family, whoever publishes them, so `Ref("pull_request", url)`
+finds a PR without knowing its plugin; `graph.of_kind("github.pull_request")` reads one
+plugin's. Every family's model has
 `handle`, how its tool shows an entity (`#7`, `APP-12`, a login): text names a family's
 entities by handle (see [graph.md](graph.md)), and each entity says its `family`.
 
 ## Kinds
 
 Every entity also says whether its work is over, in `lifecycle`: `done` for a merged or
-closed `pr` and a `ticket` in a done status category (also when fetched), `open` otherwise.
-`entry` and `todo` are published only while open, and are done once gone.
+closed `pull_request` and a `ticket` in a done status category (also when fetched), `open`
+otherwise. `notes.entry` and `notes.todo` are published only while open, and are done once
+gone.
 
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
-| `pr` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket` keys its branch, title and body mention |
+| `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket` keys its branch, title and body mention |
 | `person` | github: me, and everyone it knows an email for | GitHub login | | |
-| `repo` | git | GitHub `owner/name` | | |
-| `branch` | git | `<repo dir>\t<branch>` | | its `repo` |
-| `stack_branch` | git_stack | its `branch`'s id | | its `branch`, which git may have deleted |
+| `git.repo` | git | GitHub `owner/name` | | |
+| `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |
+| `git_stack.stack_branch` | git_stack | its `git.branch`'s id | | its `git.branch`, which git may have deleted |
 | `ticket` (linking) | jira | the issue key, e.g. `APP-1` | the issue's status | |
-| `entry` (linking) | notes | the entry's title | | the `pr` URLs and `ticket` keys linked to it and its open todos (each open todo is a `todo` that points back at its entry), and the `ticket` keys its title mentions |
-| `todo` | notes | the todo's id (a number) | `open` (a ticked-off todo is gone) | its `entry` |
-| `iced` (hiding) | notes | the act of icing's id | | what it puts on ice (a stack's `branch`es, or a `pr`, `ticket` or `entry`), and what else that covers: the branches' `pr`s and `stack_branch`es, an entry's refs |
+| `notes.entry` (linking) | notes | the entry's title | | the `pull_request` URLs and `ticket` keys linked to it and its open todos (each open todo is a `notes.todo` that points back at its entry), and the `ticket` keys its title mentions |
+| `notes.todo` | notes | the todo's id (a number) | `open` (a ticked-off todo is gone) | its `notes.entry` |
+| `notes.iced` (hiding) | notes | the act of icing's id | | what it puts on ice (a stack's `git.branch`es, or a `pull_request`, `ticket` or `notes.entry`), and what else that covers: the branches' `pull_request`s and `git_stack.stack_branch`es, an entry's refs |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
-answers for `pr` (the id is the URL), jira for `ticket` (from its `site`).
+answers for `pull_request` (the id is the URL), jira for `ticket` (from its `site`).
 
 ## Fetched on demand
 
@@ -63,12 +70,12 @@ fetched entity carries:
 
 | Kind | Fetched by | state | Attributes |
 | --- | --- | --- | --- |
-| `pr` | github, with `gh pr view` | `open`, `merged` or `closed` | `closed_at`: ISO datetime or null, when it was merged or closed |
+| `pull_request` | github, with `gh pr view` | `open`, `merged` or `closed` | `closed_at`: ISO datetime or null, when it was merged or closed |
 | `ticket` | jira, open or resolved; it remembers their projects | the ticket's status | `resolved_at`: ISO datetime, or null while open |
 
 ## Attributes
 
-### `pr`
+### `pull_request`
 
 The pull request family, modeled in core (`api.kinds.PullRequest`); github adds `number`,
 `base` and `author`.
@@ -110,7 +117,7 @@ The person family, modeled in core (`api.kinds.Person`); github adds `me`.
 | `me` | bool | (github's) the person using the dashboard |
 | `email` | string or null | their commit email, imported or looked up from commits |
 
-### `repo`
+### `git.repo`
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
@@ -119,7 +126,7 @@ The person family, modeled in core (`api.kinds.Person`); github adds `me`.
 | `default_refs` | list of strings | the default branch on each remote (`origin/main`, `upstream/main`), or the local one when no remote has it, as refs `git log` takes in `dir` |
 | `my_dirs` | list of strings | directories I committed to within `[git] commit_history_days` |
 
-### `branch`
+### `git.branch`
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
@@ -130,13 +137,13 @@ The person family, modeled in core (`api.kinds.Person`); github adds `me`.
 | `sha` | string or null | the commit it points at, as of the last refresh (git) |
 | `checked_out_in` | string or null | the worktree it's checked out in |
 
-### `stack_branch`
+### `git_stack.stack_branch`
 
 A branch git-stack tracks, including one git no longer has.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `repo_dir`, `name` | string | its checkout and name, as git's `branch` has them |
+| `repo_dir`, `name` | string | its checkout and name, as `git.branch` has them |
 | `stack_parent` | string | the branch it's built on |
 | `stack_status` | string or null | git-stack's status, e.g. `up-to-date`, `needs-restack`, `merged` |
 | `stack_group` | string or null | on a stack's bottom branch, the group its stack is in when the group has other stacks; git-stack's `restack`, `sync` and `push` act on the whole group |
@@ -154,21 +161,21 @@ The ticket family, modeled in core (`api.kinds.Ticket`); jira adds `status`,
 | `status_category` | string | Jira's `new`, `indeterminate` or `done` |
 | `type` | string | the issue type |
 
-### `entry`
+### `notes.entry`
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `merge_conditions` | object of lists of strings | what must happen before each of its PRs merges, by the PR's URL; a PR without conditions isn't in it |
 | `open_todos` | list of strings | its open todos' text |
 
-### `todo`
+### `notes.todo`
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `entry` | string | its entry's title |
 | `size` | string or null | `quick` or `big`; null while unsized |
 
-### `iced`
+### `notes.iced`
 
 One act of icing, e.g. a stack. Core leaves items about whatever it hides off the page (see
 [graph.md](graph.md#hidden-entities)).

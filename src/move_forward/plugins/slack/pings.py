@@ -1,6 +1,6 @@
 """Who to ping about each of my open PRs, how, and whether it's time.
 
-Pure functions of my PRs (the graph's `pr` entities), the reviewer map and the pings
+Pure functions of my PRs (the graph's `pull_request` entities), the reviewer map and the pings
 recorded so far; no I/O.
 """
 
@@ -42,7 +42,7 @@ class PrPing(Model):
 
 
 class PrView(Model):
-    """What slack reads of a `pr` (github's)."""
+    """What slack reads of a `pull_request`."""
 
     id: str
     title: str

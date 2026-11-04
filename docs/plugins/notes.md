@@ -10,8 +10,8 @@ Notes kept as the skill's markdown files (`work-notes.md`, `on-ice.md`,
 
 ## Publishes
 
-`entry` for each work entry, pointing at the PRs and tickets it's linked to and mentioning
-its title (for the tickets it names), and `iced` for each act of icing, hiding what it
+`notes.entry` for each work entry, pointing at the PRs and tickets it's linked to and mentioning
+its title (for the tickets it names), and `notes.iced` for each act of icing, hiding what it
 covers; see [entities.md](../entities.md). Entries are a linking kind: two things an entry
 names are related through it.
 
@@ -59,7 +59,7 @@ unless it's blocked.
 | `/actions/notes/todo_delete` | `todo` | Drops the todo without recording it. |
 | `/actions/notes/todo_link` | `todo`, `input` (Jira key or PR URL) | Links the todo to the ticket or PR; a key in a project jira hasn't seen yet is looked up in Jira. |
 | `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack and the other stacks in its git-stack group when git_stack knows them (git-stack's `restack`, `sync` and `push` act on the whole group), recording each branch's commit. |
-| `/actions/notes/ice_item` | `kind` (`pr`, `ticket` or `entry`), `id`, optional `note` | Puts the PR, ticket or work entry on ice, with what it links. |
+| `/actions/notes/ice_item` | `kind` (`pull_request`, `ticket` or `notes.entry`), `id`, optional `note` | Puts the PR, ticket or work entry on ice, with what it links. |
 | `/actions/notes/thaw` | `ice` (its id, as the On ice panel's buttons have it) | Takes what's on ice off it. |
 
 ## Commands
@@ -86,7 +86,7 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes offers [--pr URL]` | When the skill last offered each kind on each PR, newest first. |
 | `mfd notes asked <question> [--on DATE]` | Record that the skill asked a once-a-day question (e.g. `ice`, whether anything should go on ice) today. `ice`'s date is also `on-ice.md`'s `Last asked`, which import and export read and write. |
 | `mfd notes last-asked <question>` | When the skill last asked it, or `never`. |
-| `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack and group, on ice, or a `pr` (by URL), `ticket` (by key) or `entry` (by title); needs a refresh first, so the graph has it. |
+| `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack and group, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
 | `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database. Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`, which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |

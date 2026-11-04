@@ -38,6 +38,8 @@ from ...api import (
     due_pressure,
     localtime,
 )
+from ...api.kinds import PULL_REQUEST as PR
+from ...api.kinds import TICKET
 from . import actions, changes, client
 from .config import JiraConfig
 from .kinds import JiraTicket
@@ -45,9 +47,6 @@ from .models import JiraIssue, JiraSnapshot
 from .repository import MIGRATIONS, IssueRepository
 from .setup import EXAMPLE, TEMPLATE, questions
 
-TICKET = "ticket"
-PR = "pr"
-"""The kv key of the tickets already said to be closeable."""
 CHECKED = "changes_checked_at"
 """The kv key of when `changed` last looked."""
 
@@ -83,7 +82,7 @@ def _first(names: list[str]) -> str:
 
 
 class _PrView(Model):
-    """What jira reads of a `pr` (github's), to suggest status changes."""
+    """What jira reads of a `pull_request`, to suggest status changes."""
 
     id: str
     url: str | None = None

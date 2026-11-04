@@ -1,7 +1,7 @@
 """The git plugin's panels: local work and branches to clean up.
 
 Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from the graph's
-`pr` entities, matched by their `repo` and `head`.
+`pull_request` entities, matched by their `repo` and `head`.
 """
 
 from datetime import datetime
@@ -13,10 +13,10 @@ from .models import Branch, LocalRepo, LocalSnapshot
 
 TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
-BRANCH = "branch"
-STACK_BRANCH = "stack_branch"
+BRANCH = "git.branch"
+STACK_BRANCH = "git_stack.stack_branch"
 """git_stack's kind for a branch git-stack tracks."""
-ICED = "iced"
+ICED = "notes.iced"
 
 
 def action(name: str, label: str, fields: dict[str, str], confirm: str | None = None) -> Action:
@@ -24,7 +24,7 @@ def action(name: str, label: str, fields: dict[str, str], confirm: str | None = 
 
 
 class _PrView(Model):
-    """What git reads of a `pr` (github's): whose, from which branch, and its state."""
+    """What git reads of a `pull_request`: whose, from which branch, and its state."""
 
     id: str
     url: str | None = None
@@ -47,8 +47,8 @@ def _named(repo: LocalRepo, name: str | None) -> Branch | None:
 
 
 class _StackBranchView(Model):
-    """What git reads of a `stack_branch` (git_stack's): which branch, and whether git-stack
-    sees it merged."""
+    """What git reads of a `git_stack.stack_branch`: which branch, and whether git-stack sees
+    it merged."""
 
     repo_dir: str
     name: str

@@ -18,7 +18,7 @@ from move_forward.plugins.notes.models import (
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
 DAY = date(2026, 10, 30)
-PR = Link(kind="pr", ref="https://github.com/acme/widgets/pull/1")
+PR = Link(kind="pull_request", ref="https://github.com/acme/widgets/pull/1")
 
 
 @pytest.fixture
@@ -64,10 +64,14 @@ def test_todos_reopen_get_links_and_go(notes: NotesRepository) -> None:
 def test_icing_and_thawing(notes: NotesRepository) -> None:
     items = [
         IcedItem(
-            kind="branch", ref_id="/src/w\tme/bottom", name="me/bottom", repo_dir="/src/w", sha="a1"
+            kind="git.branch",
+            ref_id="/src/w\tme/bottom",
+            name="me/bottom",
+            repo_dir="/src/w",
+            sha="a1",
         ),
         IcedItem(
-            kind="branch", ref_id="/src/w\tme/top", name="me/top", repo_dir="/src/w", sha="b2"
+            kind="git.branch", ref_id="/src/w\tme/top", name="me/top", repo_dir="/src/w", sha="b2"
         ),
     ]
     ice = notes.add_ice("me/bottom", DAY, "parked", items)
@@ -105,7 +109,7 @@ def test_replace_all_keeps_everything_an_import_read(notes: NotesRepository) -> 
         id=0,
         title="me/b",
         iced_on=DAY,
-        items=[IcedItem(kind="branch", ref_id="/w\tme/b", name="me/b", repo_dir="/w")],
+        items=[IcedItem(kind="git.branch", ref_id="/w\tme/b", name="me/b", repo_dir="/w")],
     )
     sections = [Section(heading=None, body="Intro."), Section(heading="Reviews", body="- x")]
     notes.replace_all([entry], [ice], sections)
@@ -126,14 +130,45 @@ def test_branches_iced_before_names_were_kept_get_theirs_from_their_ids() -> Non
     db.migrate("notes", MIGRATIONS)
     [ice] = NotesRepository(db).ices()
     assert ice.items == [
-        IcedItem(kind="branch", ref_id="/src/w\tme/b", name="me/b", repo_dir="/src/w", sha="a1")
+        IcedItem(kind="git.branch", ref_id="/src/w\tme/b", name="me/b", repo_dir="/src/w", sha="a1")
     ]
+
+
+def test_kinds_kept_before_they_were_named_for_their_plugins_are_renamed() -> None:
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS[:6])
+    pr = "https://github.com/acme/w/pull/1"
+    db.execute("INSERT INTO notes_entries (id, title) VALUES (1, 'APP-1 Fix')")
+    db.execute("INSERT INTO notes_links VALUES (1, 'pr', ?), (1, 'ticket', 'APP-1')", (pr,))
+    db.execute("INSERT INTO notes_todos (id, entry_id, position, text) VALUES (1, 1, 0, 'x')")
+    db.execute("INSERT INTO notes_todo_links VALUES (1, 'pr', ?)", (pr,))
+    for ice_id, kind, ref_id in [
+        (1, "branch", "/w\tme/b"),
+        (2, "pr", pr),
+        (3, "entry", "APP-1 Fix"),
+    ]:
+        db.execute(
+            "INSERT INTO notes_ice (id, title, iced_on) VALUES (?, 't', '2026-10-01')", (ice_id,)
+        )
+        db.execute(
+            "INSERT INTO notes_iced (ice_id, position, kind, ref_id) VALUES (?, 0, ?, ?)",
+            (ice_id, kind, ref_id),
+        )
+    db.execute("INSERT INTO notes_ice_covers VALUES (1, 'pr', ?)", (pr,))
+    db.migrate("notes", MIGRATIONS)
+    notes = NotesRepository(db)
+    [entry] = notes.entries()
+    assert entry.links == [Link(kind="pull_request", ref=pr), Link(kind="ticket", ref="APP-1")]
+    assert entry.todos[0].links == [Link(kind="pull_request", ref=pr)]
+    kinds = [item.kind for ice in notes.ices() for item in ice.items]
+    assert kinds == ["git.branch", "pull_request", "notes.entry"]
+    assert [r["kind"] for r in db.query("SELECT kind FROM notes_ice_covers")] == ["pull_request"]
 
 
 def test_an_import_replaces_stacks_on_ice_but_not_what_was_iced_on_its_own(
     notes: NotesRepository,
 ) -> None:
-    stack = [IcedItem(kind="branch", ref_id="/w\tme/a", name="me/a", repo_dir="/w")]
+    stack = [IcedItem(kind="git.branch", ref_id="/w\tme/a", name="me/a", repo_dir="/w")]
     ticket = [IcedItem(kind="ticket", ref_id="APP-1", name="APP-1 Fix")]
     notes.add_ice("me/a", DAY, None, stack)
     notes.add_ice("APP-1 Fix", DAY, None, ticket)
@@ -168,7 +203,7 @@ def test_check_ins_written_as_declines_move_into_their_fields() -> None:
 
 def test_conditions_kept_before_they_named_their_pr_are_given_one_once() -> None:
     db = Database(":memory:")
-    db.migrate("notes", MIGRATIONS[:-1])  # before conditions named their PR
+    db.migrate("notes", MIGRATIONS[:5])  # before conditions named their PR
     one, two = "https://github.com/acme/w/pull/1", "https://github.com/acme/w/pull/2"
     db.execute("INSERT INTO notes_entries (id, title) VALUES (1, 'APP-1 two PRs')")
     db.execute("INSERT INTO notes_entries (id, title) VALUES (2, 'APP-2 no PR')")

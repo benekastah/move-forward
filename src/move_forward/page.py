@@ -16,8 +16,9 @@ ANCHOR_PREFIX = "item-"
 
 
 def anchor(kind: str, id: str) -> str:
-    """The id of the item about an entity (its main subject) on the page, e.g. `item-pr-acme-
-    widgets-12`: a link to `/#<id>` opens the dashboard at it."""
+    """The id of the item about an entity (its main subject) on the page, e.g.
+    `item-pull_request-https-github-com-acme-widgets-pull-12`: a link to `/#<id>` opens the
+    dashboard at it."""
     return ANCHOR_PREFIX + re.sub(r"[^A-Za-z0-9_-]+", "-", f"{kind}-{id}").strip("-")
 
 
@@ -126,7 +127,7 @@ class Item(Model):
         return anchor(self.subjects[0].kind, self.subjects[0].id) if self.subjects else None
 
     def subject(self, kind: str) -> Ref | None:
-        """The item's subject of `kind`, e.g. "pr", if it has one."""
+        """The item's subject of `kind`, e.g. "pull_request", if it has one."""
         return next((r for r in self.subjects if r.kind == kind), None)
 
 

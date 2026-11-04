@@ -32,7 +32,7 @@ def test_branches_are_published_with_their_checkout() -> None:
         local=local_snapshot(branches=[local_branch("me/a", ahead=2, sha="c0ffee")])
     )
     graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
-    branch = graph.get("branch", "/src/widgets\tme/a")
+    branch = graph.get("git.branch", "/src/widgets\tme/a")
     assert branch is not None
     assert branch.attrs["repo_dir"] == "/src/widgets" and branch.attrs["ahead"] == 2
     assert branch.attrs["sha"] == "c0ffee"
@@ -139,7 +139,10 @@ def test_cleanup_of_a_merged_branch_can_be_put_on_ice_but_is_still_about_its_pr(
     local = local_snapshot(branches=[local_branch("me/done", upstream="origin/me/done", gone=True)])
     dashboard = build(github=snapshot(merged_recent=[merged]), local=local)
     [item] = panel(dashboard, "git.cleanup").items
-    assert [s.kind for s in item.subjects] == ["pr", "branch"]  # the PR keys and anchors it
+    assert [s.kind for s in item.subjects] == [
+        "pull_request",
+        "git.branch",
+    ]  # the PR keys and anchors it
     assert "notes/ice" in [a.name for a in item.actions]
 
 

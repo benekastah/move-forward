@@ -13,13 +13,16 @@ the plugins' own tables.
 
 ## Entities and refs
 
-An entity is named by a **ref**: a kind (`pr`, `branch`, `ticket`, ...) and an id within it
-(a PR's URL, `<repo dir>\t<branch>`, a ticket's key). Besides its ref it has a title, an
+An entity is named by a **ref**: a kind and an id within it (a PR's URL, `<repo dir>\t<branch>`,
+a ticket's key). A plugin's own kinds are named for it (`git.branch`, `notes.entry`); a
+family's (`pull_request`, `ticket`, `person`, modeled in core) are named for the family,
+whoever publishes them, and core sets the entity's `kind` to the publisher's
+(`github.pull_request`). Besides its ref it has a title, an
 optional URL and state, the refs it points at, and attributes:
 
 ```python
 class Entity(Model):
-    ref: Ref  # e.g. Ref(kind="pr", id="https://github.com/acme/widgets/pull/12")
+    ref: Ref  # e.g. Ref(kind="pull_request", id="https://github.com/acme/widgets/pull/12")
     title: str
     url: str | None
     state: str | None  # "open", "merged", a ticket's status, ...
@@ -34,17 +37,17 @@ Today's kinds and the refs between them:
 
 ```mermaid
 flowchart LR
-    entry["entry<br/>(notes)"] -->|names| pr["pr<br/>(github)"]
+    entry["notes.entry"] -->|names| pr["pull_request<br/>(github)"]
     entry -->|names| ticket["ticket<br/>(jira)"]
     pr -->|mentions| ticket
-    branch["branch<br/>(git)"] -->|in| repo["repo<br/>(git)"]
-    stack_branch["stack_branch<br/>(git_stack)"] -->|tracks| branch
-    ice["iced<br/>(notes)"] -->|hides| branch
+    branch["git.branch"] -->|in| repo["git.repo"]
+    stack_branch["git_stack.stack_branch"] -->|tracks| branch
+    ice["notes.iced"] -->|hides| branch
     ice -->|hides| pr
     person["person<br/>(github)"]
 ```
 
-`iced` hides what it points at; see [hidden entities](#hidden-entities). `person` stands alone: slack reads their emails.
+`notes.iced` hides what it points at; see [hidden entities](#hidden-entities). `person` stands alone: slack reads their emails.
 
 ## How it's built
 
@@ -89,9 +92,9 @@ sequenceDiagram
 ## Reading it
 
 ```python
-graph.get("pr", url)  # one entity, or None
-graph.of_kind("pr")  # every entity of a kind
-graph.related(ref, "entry")  # see below
+graph.get("pull_request", url)  # one entity, or None
+graph.of_kind("pull_request")  # every publisher's PRs; "github.pull_request" for github's
+graph.related(ref, "notes.entry")  # see below
 graph.units(ref)  # the linking entities it's part of, see below
 graph.named("APP-1: fix it")  # the linking entities a text names, see below
 graph.hidden(ref)  # whether something on ice covers it, see below
@@ -105,7 +108,7 @@ model of its own, a **view**, and reads entities through it:
 
 ```python
 class _PrView(Model):
-    """What jira reads of a `pr` (github's)."""
+    """What jira reads of a `pull_request`."""
 
     id: str
     url: str | None = None
@@ -115,7 +118,7 @@ class _PrView(Model):
     mine: bool
 
 
-for pr in graph.view_related(ticket_ref, "pr", _PrView):
+for pr in graph.view_related(ticket_ref, PULL_REQUEST, _PrView):
     if pr.mine and not pr.draft:
         ...
 ```
@@ -139,14 +142,14 @@ a pattern from what it has seen, as jira does to the project keys it knows):
 
 ```python
 class JiraPlugin(Plugin[JiraConfig]):
-    linking = {"ticket": None}
+    kinds = {TICKET: KindSpec(JiraTicket, linking=None)}
 
-    def linking_patterns(self, ctx):  # keys of the projects my tickets have been in
-        return {"ticket": key_pattern(IssueRepository(ctx.db).projects())}
+    def linking_patterns(self, req):  # keys of the projects my tickets have been in
+        return {TICKET: key_pattern(IssueRepository(req.ctx.db).projects())}
 
 
 class NotesPlugin(Plugin[NotesConfig]):
-    linking = {"entry": None}  # an entry points at what it links itself
+    kinds = {"notes.entry": KindSpec(EntryAttrs, linking=None)}  # it points at what it links
 ```
 
 `related(ref, kind)` finds entities of `kind` one hop from `ref`, in either direction, or
@@ -159,9 +162,10 @@ flowchart LR
     entry -->|names| pr13["pr 13"]
 ```
 
-Here `related(entry, "pr")` is PR 13 (the entry names it) and PR 12 (the ticket links
-them), `related(pr12, "entry")` is the entry, and `related(ticket, "pr")` is PR 12 and
-PR 13 (the entry links them). It goes one link deep: `related(pr12, "pr")` is nothing,
+Here `related(entry, "pull_request")` is PR 13 (the entry names it) and PR 12 (the ticket
+links them), `related(pr12, "notes.entry")` is the entry, and `related(ticket,
+"pull_request")` is PR 12 and PR 13 (the entry links them). It goes one link deep:
+`related(pr12, "pull_request")` is nothing,
 since PR 13 is two links away, through the ticket and then the entry. Core knows no
 linking kind by name; a Linear or GitHub issue would join in by declaring its kind.
 
@@ -182,9 +186,9 @@ names with it).
 
 A plugin can declare kinds whose entities **hide** what they point at, with
 `KindSpec(..., hides=True)`. notes'
-`iced` is one: what's on ice stays off the page until it's thawed. It points at what's on
+`notes.iced` is one: what's on ice stays off the page until it's thawed. It points at what's on
 ice (a stack's branches, a PR, a ticket or a work entry) and at what notes finds for it
-after each refresh: the branches' PRs and git_stack's `stack_branch`es, and what an iced
+after each refresh: the branches' PRs and git_stack's `git_stack.stack_branch`es, and what an iced
 entry points at.
 `graph.hidden(ref)` says whether a hiding entity covers `ref`, directly or through a
 linking entity next to it: icing a ticket hides the PRs that mention it, icing a work entry

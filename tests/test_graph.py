@@ -4,11 +4,11 @@ from pydantic import ValidationError
 from move_forward.domain import Model
 from move_forward.graph import Entity, Graph, Ref
 
-PR = Ref(kind="pr", id="https://github.com/o/r/pull/1")
-OTHER_PR = Ref(kind="pr", id="https://github.com/o/r/pull/2")
+PR = Ref(kind="pull_request", id="https://github.com/o/r/pull/1")
+OTHER_PR = Ref(kind="pull_request", id="https://github.com/o/r/pull/2")
 TICKET = Ref(kind="ticket", id="APP-1")
-ENTRY = Ref(kind="entry", id="1")
-LINKING: dict[str, str | None] = {"ticket": r"\bAPP-\d+\b", "entry": None}
+ENTRY = Ref(kind="notes.entry", id="1")
+LINKING: dict[str, str | None] = {"ticket": r"\bAPP-\d+\b", "notes.entry": None}
 
 
 def _graph() -> Graph:
@@ -30,11 +30,19 @@ def _ids(entities: list[Entity]) -> list[str]:
 
 def test_related_goes_both_ways_and_through_linking_entities() -> None:
     graph = _graph()
-    assert _ids(graph.related(ENTRY, "pr")) == [OTHER_PR.id, PR.id]  # direct, then via APP-1
-    assert _ids(graph.related(PR, "entry")) == [ENTRY.id]  # via APP-1
-    assert _ids(graph.related(OTHER_PR, "entry")) == [ENTRY.id]  # pointed at
-    assert _ids(graph.related(TICKET, "pr")) == [PR.id, OTHER_PR.id]  # mentions it; via the entry
-    assert graph.related(PR, "pr") == []  # OTHER_PR is two links away: APP-1, then the entry
+    assert _ids(graph.related(ENTRY, "pull_request")) == [
+        OTHER_PR.id,
+        PR.id,
+    ]  # direct, then via APP-1
+    assert _ids(graph.related(PR, "notes.entry")) == [ENTRY.id]  # via APP-1
+    assert _ids(graph.related(OTHER_PR, "notes.entry")) == [ENTRY.id]  # pointed at
+    assert _ids(graph.related(TICKET, "pull_request")) == [
+        PR.id,
+        OTHER_PR.id,
+    ]  # mentions it; via the entry
+    assert (
+        graph.related(PR, "pull_request") == []
+    )  # OTHER_PR is two links away: APP-1, then the entry
 
 
 def test_units_are_the_linking_entities_a_ref_is_part_of() -> None:
@@ -42,42 +50,42 @@ def test_units_are_the_linking_entities_a_ref_is_part_of() -> None:
     assert graph.units(PR) == [TICKET]  # it mentions the ticket
     assert graph.units(OTHER_PR) == [ENTRY]  # the entry names it
     assert graph.units(TICKET) == [ENTRY, TICKET]  # named by the entry, and a unit itself
-    assert graph.units(Ref(kind="pr", id="unknown")) == []
+    assert graph.units(Ref(kind="pull_request", id="unknown")) == []
 
 
 def test_a_shared_ref_links_only_through_a_linking_kind() -> None:
-    repo = Ref(kind="repo", id="o/r")
+    repo = Ref(kind="git.repo", id="o/r")
     prs = [
         Entity(ref=PR, title="pr 1", refs=[repo]),
         Entity(ref=OTHER_PR, title="pr 2", refs=[repo]),
     ]
-    assert Graph(prs, linking=LINKING).related(PR, "pr") == []
-    assert _ids(Graph(prs, linking={"repo": None}).related(PR, "pr")) == [OTHER_PR.id]
+    assert Graph(prs, linking=LINKING).related(PR, "pull_request") == []
+    assert _ids(Graph(prs, linking={"git.repo": None}).related(PR, "pull_request")) == [OTHER_PR.id]
 
 
 def test_mentions_point_at_the_linking_entities_they_name() -> None:
     pr = Entity(ref=PR, title="pr 1", refs=[TICKET], mentions=["me/APP-1-fix", "APP-2 and APP-1"])
     graph = Graph([pr], linking=LINKING)
-    found = graph.get("pr", PR.id)
+    found = graph.get("pull_request", PR.id)
     assert found is not None
     assert found.refs == [TICKET, Ref(kind="ticket", id="APP-2")]  # once each
-    assert _ids(graph.related(Ref(kind="ticket", id="APP-2"), "pr")) == [PR.id]
-    unlinked = Graph([pr]).get("pr", PR.id)  # no plugin declares tickets: nothing found
+    assert _ids(graph.related(Ref(kind="ticket", id="APP-2"), "pull_request")) == [PR.id]
+    unlinked = Graph([pr]).get("pull_request", PR.id)  # no plugin declares tickets: nothing found
     assert unlinked is not None and unlinked.refs == [TICKET]
 
 
 def test_url_for_prefers_the_graph_then_asks_the_plugins() -> None:
     graph = _graph()
-    assert graph.url_for("pr", PR.id) == PR.id
+    assert graph.url_for("pull_request", PR.id) == PR.id
     assert graph.url_for("ticket", "APP-9") == "https://jira/APP-9"
-    assert graph.url_for("branch", "x") is None
+    assert graph.url_for("git.branch", "x") is None
 
 
 def test_get_and_of_kind() -> None:
     graph = _graph()
     assert graph.get("ticket", "APP-1") is not None
     assert graph.get("ticket", "APP-2") is None
-    assert _ids(graph.of_kind("pr")) == [PR.id, OTHER_PR.id]
+    assert _ids(graph.of_kind("pull_request")) == [PR.id, OTHER_PR.id]
 
 
 def test_the_first_entity_of_a_ref_stands() -> None:
@@ -95,18 +103,18 @@ class _PrView(Model):
 
 def test_a_consumer_reads_entities_through_its_own_view() -> None:
     pr = Entity(
-        ref=Ref(kind="pr", id="https://pr/1"),
+        ref=Ref(kind="pull_request", id="https://pr/1"),
         title="Fix",
         state="open",
         attrs={"head": "me/x", "draft": True, "extra": 1},
     )
-    graph = Graph([pr, Entity(ref=Ref(kind="pr", id="https://pr/2"), title="No head")])
-    assert graph.view_one("pr", "https://pr/1", _PrView) == _PrView(
+    graph = Graph([pr, Entity(ref=Ref(kind="pull_request", id="https://pr/2"), title="No head")])
+    assert graph.view_one("pull_request", "https://pr/1", _PrView) == _PrView(
         id="https://pr/1", state="open", head="me/x", draft=True
     )
-    assert graph.view_one("pr", "https://pr/9", _PrView) is None
+    assert graph.view_one("pull_request", "https://pr/9", _PrView) is None
     with pytest.raises(ValidationError, match="head"):
-        graph.view("pr", _PrView)  # the second PR has no head: loud, not quiet
+        graph.view("pull_request", _PrView)  # the second PR has no head: loud, not quiet
 
 
 def test_related_entities_through_a_view() -> None:
@@ -114,7 +122,9 @@ def test_related_entities_through_a_view() -> None:
         id: str
         title: str
 
-    assert _graph().view_related(PR, "entry", Titled) == [Titled(id=ENTRY.id, title="APP-1 work")]
+    assert _graph().view_related(PR, "notes.entry", Titled) == [
+        Titled(id=ENTRY.id, title="APP-1 work")
+    ]
 
 
 def test_named_finds_linking_ids_in_any_text() -> None:
@@ -128,7 +138,7 @@ def test_named_finds_linking_ids_in_any_text() -> None:
 
 def test_a_hiding_entity_hides_what_it_covers_and_what_its_linkers_link() -> None:
     ice = Ref(kind="ice", id="1")
-    branch = Ref(kind="branch", id="b")
+    branch = Ref(kind="git.branch", id="b")
 
     def graph(covers: list[Ref]) -> Graph:
         return Graph(

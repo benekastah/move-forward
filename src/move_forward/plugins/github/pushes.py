@@ -1,4 +1,4 @@
-"""Telling that a branch of one of my open PRs moved, from git's `branch` entities: a commit,
+"""Telling that a branch of one of my open PRs moved, from git's `git.branch` entities: a commit,
 a push (it's no longer ahead of its upstream), or a fetch bringing commits pushed from
 elsewhere (it's behind). GitHub notifies nobody of their own pushes, so without this github
 would see mine only at its next `refresh_seconds`."""
@@ -7,12 +7,12 @@ import json
 
 from ...api import Graph, Model, Ref
 
-BRANCH = "branch"
+BRANCH = "git.branch"
 """git's kind for a local branch."""
 
 
 class _MyPr(Model):
-    """What this reads of github's own `pr` entities."""
+    """What this reads of github's own `pull_request` entities."""
 
     id: str
     state: str | None = None
@@ -23,7 +23,7 @@ class _MyPr(Model):
 
 
 class _Branch(Model):
-    """What this reads of git's `branch` entities."""
+    """What this reads of git's `git.branch` entities."""
 
     name: str
     sha: str | None = None

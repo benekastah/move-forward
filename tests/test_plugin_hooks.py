@@ -41,7 +41,7 @@ class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /hello."""
 
     def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
-        pr = req.item.subject("pr")
+        pr = req.item.subject("pull_request")
         if pr is None:
             return ItemAdditions()
         return ItemAdditions(
@@ -53,7 +53,7 @@ class Hooked(JiraPlugin):
         def hello(req: PageRequest[JiraConfig]) -> str | None:
             graph, query = req.graph, req.query
             pr_url = query.get("pr", [""])[0]
-            entity = graph.get("pr", pr_url)
+            entity = graph.get("pull_request", pr_url)
             return render.page("Hello", "hello", render.e(entity.title)) if entity else None
 
         return {"/hello": hello}
@@ -147,7 +147,7 @@ class _Fetching(JiraPlugin):
         if kind != "ticket":
             return []
         return [Entity(ref=Ref(kind="ticket", id=i), title=i) for i in ids] + [
-            Entity(ref=Ref(kind="pr", id="https://pr/1"), title="stray")
+            Entity(ref=Ref(kind="pull_request", id="https://pr/1"), title="stray")
         ]
 
 
@@ -162,7 +162,7 @@ def test_the_graph_fetches_through_the_plugin_that_owns_the_kind(
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
     assert list(graph.fetch("ticket", ["APP-1", "APP-2"])) == ["APP-1", "APP-2"]
     assert graph.fetch("ticket", []) == {}
-    assert graph.fetch("pr", ["https://pr/1"]) == {}
+    assert graph.fetch("pull_request", ["https://pr/1"]) == {}
     assert _Fetching.asked == [["APP-1", "APP-2"], ["https://pr/1"]]
 
 
@@ -226,7 +226,7 @@ class _Veiling(Hooked):
         veil = Entity(
             ref=Ref(kind="veil", id="1"),
             title="veil",
-            refs=[Ref(kind="pr", id=pr(1).url), Ref(kind="ticket", id="APP-3")],
+            refs=[Ref(kind="pull_request", id=pr(1).url), Ref(kind="ticket", id="APP-3")],
         )
         return [*super().entities(req), veil]
 
@@ -253,15 +253,9 @@ class _Unruly(JiraPlugin):
         return [
             ticket,
             ticket.model_copy(update={"title": "again"}),
-            Entity(ref=Ref(kind="pr", id=pr(1).url), title="not mine to publish"),
+            Entity(ref=Ref(kind="pull_request", id=pr(1).url), title="not mine to publish"),
             Entity(ref=Ref(kind="thing", id="1"), title="undeclared"),
         ]
-
-
-class _Claiming(JiraPlugin):
-    """Jira, declaring github's `pr` too."""
-
-    kinds: ClassVar[dict[str, KindSpec]] = {**JiraPlugin.kinds, "pr": KindSpec(_VeilAttrs)}
 
 
 def _graph_with(plugin: JiraPlugin, monkeypatch: pytest.MonkeyPatch) -> Graph:
@@ -271,24 +265,16 @@ def _graph_with(plugin: JiraPlugin, monkeypatch: pytest.MonkeyPatch) -> Graph:
     return refresh.stored_graph(db, registry.enabled(config, db, NOW))[0]
 
 
-def test_a_plugin_publishes_only_the_kinds_it_owns_and_each_ref_once(
+def test_a_plugin_publishes_only_the_kinds_it_declares_and_each_ref_once(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     graph = _graph_with(_Unruly(), monkeypatch)
     assert [e.title for e in graph.of_kind("ticket")] == ["APP-1 Do the thing"]
-    assert [e.title for e in graph.of_kind("pr")] == [pr(1).title]  # github's own
+    assert [e.title for e in graph.of_kind("pull_request")] == [pr(1).title]  # github's own
     assert graph.of_kind("thing") == []
     assert "jira published ticket APP-1 twice" in caplog.text
-    assert f"jira published pr {pr(1).url}, a kind it doesn't own" in caplog.text
-    assert "jira published thing 1, a kind it doesn't own" in caplog.text
-
-
-def test_a_kind_two_plugins_declare_is_the_first_ones(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    graph = _graph_with(_Claiming(), monkeypatch)
-    assert [e.title for e in graph.of_kind("pr")] == [pr(1).title]
-    assert "github and jira both declare pr; jira's are left out" in caplog.text
+    assert f"jira published pull_request {pr(1).url}, a kind it doesn't declare" in caplog.text
+    assert "jira published thing 1, a kind it doesn't declare" in caplog.text
 
 
 class _Narrowed(JiraPlugin):
@@ -312,10 +298,10 @@ class _Prepared(JiraPlugin):
         self, req: PrepareItemActionsRequest[JiraConfig]
     ) -> Callable[[ItemActionsRequest[JiraConfig]], ItemAdditions]:
         _Prepared.prepared += 1
-        prs = {e.ref.id for e in req.graph.of_kind("pr")}
+        prs = {e.ref.id for e in req.graph.of_kind("pull_request")}
 
         def actions(each: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
-            pr = each.item.subject("pr")
+            pr = each.item.subject("pull_request")
             if pr is None or pr.id not in prs:
                 return ItemAdditions()
             look = Action(name="", label="Look", fields={}, href=f"/look?pr={pr.id}")

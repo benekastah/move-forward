@@ -186,6 +186,31 @@ CREATE TABLE sessions (                -- kept until they expire or are revoked:
 """
 """Browser sessions: what a signed-in browser's cookie names, instead of the token itself."""
 
+_V11_KINDS_NAMED_FOR_PLUGINS = """
+UPDATE priorities SET kind = CASE kind
+    WHEN 'pr' THEN 'pull_request'
+    WHEN 'branch' THEN 'git.branch'
+    WHEN 'repo' THEN 'git.repo'
+    WHEN 'stack_branch' THEN 'git_stack.stack_branch'
+    WHEN 'entry' THEN 'notes.entry'
+    WHEN 'todo' THEN 'notes.todo'
+    WHEN 'iced' THEN 'notes.iced'
+    ELSE kind
+END;
+UPDATE act_now_feedback SET subject_kind = CASE subject_kind
+    WHEN 'pr' THEN 'pull_request'
+    WHEN 'branch' THEN 'git.branch'
+    WHEN 'repo' THEN 'git.repo'
+    WHEN 'stack_branch' THEN 'git_stack.stack_branch'
+    WHEN 'entry' THEN 'notes.entry'
+    WHEN 'todo' THEN 'notes.todo'
+    WHEN 'iced' THEN 'notes.iced'
+    ELSE subject_kind
+END;
+"""
+"""Kinds a plugin publishes are named for it (`git.branch`), and pull requests' family is
+`pull_request`. No row can collide: no kind had a dot before, and `pull_request` is new."""
+
 CORE_MIGRATIONS = [
     V1_SCHEMA,
     _V2_KV_AND_LAYOUT,
@@ -197,6 +222,7 @@ CORE_MIGRATIONS = [
     _V8_PENDING_FEEDBACK,
     _V9_NOTIFICATIONS,
     _V10_SESSIONS,
+    _V11_KINDS_NAMED_FOR_PLUGINS,
 ]
 
 _SCHEMA_VERSIONS = """

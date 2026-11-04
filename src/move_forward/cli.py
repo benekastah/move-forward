@@ -14,6 +14,7 @@ from . import auth, init, keychain, localtime, priority, registry, signin, snooz
 from . import config as config_module
 from .act_now import PRIORITIES
 from .db import Database
+from .kinds import label
 from .plugin import CliHandler, CliRequest
 from .refresh import build_dashboard, refresh, stored_graph
 from .registry import enabled, enabled_names, migrate
@@ -109,7 +110,7 @@ my-team = "#team-my-team"
 # due_warning_days = 7                  # a due date starts raising an item this many days ahead
 # default_snooze_days = 1                # days a snooze lasts (1 = until tomorrow)
 # snooze_until_hour = 0                # the local hour a snooze ends at on its last day (9: 9am)
-# snooze_days = { pr = 7 }               # ...for a kind of subject, e.g. a PR's review for a week
+# snooze_days = { pull_request = 7 }     # ...for a kind of subject, e.g. a PR's review for a week
 
 """
 
@@ -171,7 +172,7 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
     )
     priority_parser.add_argument("level", choices=["0", "1", "2", "clear"])
-    priority_parser.add_argument("--kind", help="the entity's kind, e.g. todo")
+    priority_parser.add_argument("--kind", help="the entity's kind, e.g. notes.todo")
     unsnooze_parser = commands.add_parser("unsnooze", help="end a PR's review snooze")
     unsnooze_parser.add_argument("url", help="the PR's URL")
     commands.add_parser(
@@ -388,10 +389,10 @@ def main(argv: list[str] | None = None) -> int:
         priorities = PriorityRepository(db)
         if args.level == "clear":
             priorities.clear(ref)
-            print(f"priority of {ref.kind} {ref.id} cleared")
+            print(f"priority of {label(ref.kind)} {ref.id} cleared")
         else:
             priorities.set(ref, int(args.level), datetime.now(UTC))
-            print(f"{ref.kind} {ref.id}: {PRIORITIES[int(args.level)].lower()}")
+            print(f"{label(ref.kind)} {ref.id}: {PRIORITIES[int(args.level)].lower()}")
         return 0
     if args.command == "unsnooze":
         snooze.wake_review(FeedbackRepository(db), args.url)
