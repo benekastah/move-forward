@@ -32,7 +32,7 @@ def test_a_snoozed_review_leaves_reviews_for_me_until_the_head_moves_or_it_is_wo
 
     assert until == NOW + timedelta(days=7)
     assert refresh.build_dashboard(config, db, NOW).panel("github.reviews_for_me").items == []
-    assert feedback.all()[("pull_request", url, "Review")].fingerprint == "a1"
+    assert feedback.all()[("pull_request", url, "review")].fingerprint == "a1"
     snooze.wake_review(feedback, url)
     assert len(refresh.build_dashboard(config, db, NOW).panel("github.reviews_for_me").items) == 1
 

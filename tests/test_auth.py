@@ -217,19 +217,19 @@ def test_mfd_snoozes_lists_the_snoozes_still_running(
     feedback = FeedbackRepository(Database(db_path))
     for id, until in (("over", now - timedelta(hours=1)), ("running", now + timedelta(days=2))):
         feedback.say(
-            ("pull_request", id, "Review"),
+            ("pull_request", id, "review"),
             Feedback(action="snooze", fingerprint="f1", until=until),
             now,
         )
     feedback.say(
-        ("pull_request", "pinned", "Review"), Feedback(action="pin", fingerprint="f1"), now
+        ("pull_request", "pinned", "review"), Feedback(action="pin", fingerprint="f1"), now
     )
     assert cli.main(["-c", str(config), "snoozes"]) == 0
     [snooze] = json.loads(capsys.readouterr().out)
     assert snooze | {"until": ""} == {
         "kind": "pull_request",
         "id": "running",
-        "verb": "Review",
+        "task": "review",
         "until": "",
         "fingerprint": "f1",
     }

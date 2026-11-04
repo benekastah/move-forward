@@ -42,7 +42,8 @@ Units = Callable[[Ref], list[Ref]]
 PriorityOf = Callable[[Ref], int | None]
 """The priority I set on what a subject is, is part of or contains, 0 to 2; None if none."""
 FeedbackKey = tuple[str, str, str]
-"""An item's main subject's kind and id, and its verb: what feedback is kept by."""
+"""An item's main subject's kind and id, and its task (`Signals.task`): what feedback is kept
+by."""
 
 
 class Feedback(Model):
@@ -150,10 +151,10 @@ class Nomination:
 
     @property
     def key(self) -> FeedbackKey | None:
-        """What feedback on it is kept by; None for an item about nothing, which can't take
-        any."""
-        subjects = self.item.subjects
-        return (subjects[0].kind, subjects[0].id, self.signals.verb) if subjects else None
+        """What feedback on it is kept by; None for an item about nothing, or without a
+        task, which can't take any."""
+        subjects, task = self.item.subjects, self.signals.task
+        return (subjects[0].kind, subjects[0].id, task) if subjects and task else None
 
     @property
     def fingerprint(self) -> str:
@@ -448,8 +449,8 @@ def _member_fields(
 ) -> dict[str, str]:
     """The fields that name an item (by its `key`), and the items joined to it (`also`), to
     the buttons that set it aside."""
-    kind, id, verb = key
-    fields = {"kind": kind, "id": id, "verb": verb, "fingerprint": nomination.fingerprint}
+    kind, id, task = key
+    fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
     members = [[*n.key, n.fingerprint] for n in then if n.key is not None]
     if members:
         fields["also"] = json.dumps(members)

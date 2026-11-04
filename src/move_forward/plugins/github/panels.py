@@ -10,6 +10,7 @@ from pydantic import Field
 
 from ...api import Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
 from ...api.kinds import PULL_REQUEST as PR
+from ...api.kinds import REVIEW as REVIEW_TASK
 from ...api.kinds import TICKET
 from .config import GitHubConfig
 from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
@@ -130,6 +131,7 @@ def _review(
     lines, files = (part.part_lines, part.part_files) if part else (pr.size, pr.changed_files)
     return Signals(
         verb=REVIEW,
+        task=REVIEW_TASK,
         effort=review_effort(lines, files, config),
         waiting=[pr.author] if pr.author else [],
         waiting_since=waiting_since or requested_of(pr, me, team_slugs),
@@ -250,7 +252,7 @@ class Builder:
                             pr,
                             details=["mentions you"],
                             rank=pr.updated_at.timestamp(),
-                            signals=Signals(verb="Reply", effort="minutes"),
+                            signals=Signals(verb="Reply", task="reply", effort="minutes"),
                             fingerprint=pr.head_oid,
                         )
                     )
@@ -310,7 +312,11 @@ class Builder:
                 )
                 since = min((t.created_at for t in threads if t.created_at), default=None)
                 waiting = Signals(
-                    verb="Reply", effort="minutes", waiting=authors, waiting_since=since
+                    verb="Reply",
+                    task="reply",
+                    effort="minutes",
+                    waiting=authors,
+                    waiting_since=since,
                 )
                 items.append(
                     pr_item(
@@ -361,7 +367,7 @@ class Builder:
             key="ci_failures",
             priority=40,  # 4. CI failures
             act_now=True,
-            signals=Signals(verb="Fix CI", effort="hour"),
+            signals=Signals(verb="Fix CI", task="fix_ci", effort="hour"),
             title="CI failures",
             description="Failing checks and recent merge-queue evictions on my non-draft PRs.",
             items=items,
@@ -381,7 +387,7 @@ class Builder:
             key="policy",
             priority=45,  # 4. CI failures, but quick
             act_now=True,
-            signals=Signals(verb="Meet PR policy", effort="minutes"),
+            signals=Signals(verb="Meet PR policy", task="meet_pr_policy", effort="minutes"),
             title="PR policy",
             description="Failing policy checks on my non-draft PRs: a label, an assignee or the"
             " like is missing.",
@@ -398,13 +404,15 @@ class Builder:
             signals = None
             if pr.base in my_heads:  # stacked on another of my branches: restacking fixes it
                 details.insert(0, f"stacked on {pr.base}: restack (git stack sync)")
-                signals = Signals(verb="Restack the stack", effort="minutes")
+                signals = Signals(
+                    verb="Restack the stack", task="restack_the_stack", effort="minutes"
+                )
             items.append(pr_item(self.now, pr, details=details, signals=signals))
         return Panel(
             key="conflicts",
             priority=20,  # 2. sync stacks
             act_now=True,
-            signals=Signals(verb="Resolve conflicts", effort="hour"),
+            signals=Signals(verb="Resolve conflicts", task="resolve_conflicts", effort="hour"),
             title="Merge conflicts",
             description="My open, non-draft PRs that conflict with their base.",
             items=items,
@@ -425,7 +433,9 @@ class Builder:
             if conditions:
                 held.append(pr_item(self.now, pr, details=[f"held: {c}" for c in conditions]))
             else:
-                merge = Signals(verb="Merge", effort="minutes", closes=f"{pr.repo}#{pr.number}")
+                merge = Signals(
+                    verb="Merge", task="merge", effort="minutes", closes=f"{pr.repo}#{pr.number}"
+                )
                 ready.append(
                     pr_item(
                         self.now, pr, details=["approved, green, base is default"], signals=merge

@@ -5,11 +5,9 @@ from datetime import datetime, timedelta
 
 from .act_now import ActNowConfig, Feedback
 from .graph import Graph
-from .kinds import PULL_REQUEST
+from .kinds import PULL_REQUEST, REVIEW
 from .repositories import FeedbackRepository
 
-REVIEW = "Review"
-"""The verb of the Reviews for me items a snooze applies to."""
 _DURATION = re.compile(r"(\d+)([dh])")
 
 
