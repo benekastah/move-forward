@@ -217,7 +217,6 @@ def _snoozable(
     plugin: str,
     feedback: dict[act_now.FeedbackKey, act_now.Feedback],
     now: datetime,
-    fetched: dict[str, datetime],
 ) -> Panel:
     """A snoozable panel's items without those set aside there (snoozed, or dismissed, and
     not changed since), and each of the rest with a Snooze button, as in Act now itself."""
@@ -229,7 +228,7 @@ def _snoozable(
         key = nomination.key
         if key is None:
             items.append(item)
-        elif not act_now.set_aside(nomination, feedback.get(key), now, fetched):
+        elif not act_now.set_aside(nomination, feedback.get(key), now):
             kind, id, task = key
             fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
             snooze = Action(name=f"{act_now.ACTIONS}/snooze", label="Snooze", fields=fields)
@@ -292,17 +291,32 @@ def _with_item_actions(
     return panel.model_copy(update={"items": [add(item) for item in panel.items]})
 
 
-def _pending_on_buttons(panel: Panel) -> Panel:
+def _as_given(item: Item) -> Item:
+    """A plugin's item without what only core sets (`act_now_fields`, `opened_at`)."""
+    if item.act_now_fields is None and item.opened_at is None and not item.parts:
+        return item
+    return item.model_copy(
+        update={
+            "act_now_fields": None,
+            "opened_at": None,
+            "parts": [_as_given(part) for part in item.parts],
+        }
+    )
+
+
+def _opened_on_buttons(panel: Panel) -> Panel:
     """Act now's items with their plugins' buttons (not Act now's own) carrying the item's
-    `pending` fields, so that running one hides the item until its plugin has fetched again."""
+    `act_now_fields`, so that running one marks the item opened, dimmed until it changes."""
 
     def tag(item: Item) -> Item:
-        if item.pending is None:
+        if item.act_now_fields is None:
             return item
         actions = [
             a
             if a.href is not None or a.name.startswith(f"{act_now.ACTIONS}/")
-            else a.model_copy(update={"fields": {**a.fields, act_now.PENDING_FIELD: item.pending}})
+            else a.model_copy(
+                update={"fields": {**a.fields, act_now.OPENED_FIELD: item.act_now_fields}}
+            )
             for a in item.actions
         ]
         return item.model_copy(update={"actions": actions})
@@ -336,8 +350,16 @@ def build(
         PluginPanels(
             plugin.key,
             plugin.title,
-            [p.model_copy(update={"key": panel_key(plugin.key, p.key)}) for p in plugin.panels],
-            plugin.nominations,
+            [
+                p.model_copy(
+                    update={
+                        "key": panel_key(plugin.key, p.key),
+                        "items": [_as_given(i) for i in p.items],
+                    }
+                )
+                for p in plugin.panels
+            ],
+            [_as_given(i) for i in plugin.nominations],
         )
         for plugin in plugins
     ]
@@ -348,21 +370,18 @@ def build(
         if not hidden(item) and _tasked(plugin.key, item)
     ]
     titles = {plugin.key: plugin.title for plugin in plugins}
-    fetched = {source: status.fetched_at for source, status in sources.items() if status.fetched_at}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
     ranked = [
         _with_item_actions(p, p.key, "act_now", item_actions, known_action).model_copy(
             update={"key": panel_key(ACT_NOW, p.key)}
         )
-        for p in act_now.panels(
-            nominations, ranking, feedback, now, titles, units, priority_of, fetched
-        )
+        for p in act_now.panels(nominations, ranking, feedback, now, titles, units, priority_of)
     ]
     return Dashboard(
         generated_at=now,
         identities=identities or [],
         panels=[
-            *(_pending_on_buttons(panel) for panel in ranked),
+            *(_opened_on_buttons(panel) for panel in ranked),
             *(
                 _sorted(
                     _with_item_actions(
@@ -376,9 +395,7 @@ def build(
                 for plugin in plugins
                 for panel in plugin.panels
                 for shown in [
-                    _snoozable(panel, plugin.key, feedback or {}, now, fetched)
-                    if panel.snoozable
-                    else panel
+                    _snoozable(panel, plugin.key, feedback or {}, now) if panel.snoozable else panel
                 ]
             ),
         ],

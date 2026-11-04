@@ -124,10 +124,12 @@ class Item(Model):
     fingerprint: str | None = None
     """What would make it worth another look once snoozed or dismissed in Act now, e.g. a
     PR's head and review count; None hashes its title, badges and details."""
-    pending: str | None = None
-    """In Act now: the JSON fields (`kind`, `id`, `task`, `fingerprint`, `also`, `plugin`) that
-    hide the item once I act on it elsewhere (a link, a button), until its plugin has fetched
-    again; see `Feedback`."""
+    act_now_fields: str | None = None
+    """Set by core, in Act now: the JSON fields (`kind`, `id`, `task`, `fingerprint`, `also`)
+    naming the item for its feedback, which opening it posts (`act_now/opened`)."""
+    opened_at: datetime | None = None
+    """Set by core, in Act now: when I opened the item, if it hasn't changed since; it's
+    shown dimmed."""
     parts: list["Item"] = Field(default_factory=list)
     """Pieces focus mode shows one at a time instead of this item, e.g. a work item's todos.
 

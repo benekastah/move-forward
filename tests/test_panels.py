@@ -513,7 +513,7 @@ def test_empty_notes_say_how_to_fill_them() -> None:
     assert "mfd notes import" not in some.description
 
 
-def test_a_plugins_buttons_in_act_now_carry_the_items_pending_fields_but_acts_own_do_not() -> None:
+def test_a_plugins_buttons_in_act_now_carry_the_items_fields_but_acts_own_do_not() -> None:
     action = Action(name="github/anything", label="Do it", fields={"pr": "1"})
     page = panels.build(
         NOW,
@@ -536,9 +536,10 @@ def test_a_plugins_buttons_in_act_now_carry_the_items_pending_fields_but_acts_ow
     )
     (item,) = page.act_now()
     ours = {a.label: a for a in item.actions}
-    assert ours["Do it"].fields["pending"] == item.pending
-    assert "pending" not in ours["Snooze"].fields
-    assert item.pending is not None and json.loads(item.pending)["plugin"] == "github"
+    assert ours["Do it"].fields["opened"] == item.act_now_fields
+    assert "opened" not in ours["Snooze"].fields
+    assert item.act_now_fields is not None
+    assert json.loads(item.act_now_fields)["kind"] == "pull_request"
 
 
 def test_a_nomination_without_a_task_is_left_out_of_act_now_and_logged(
@@ -583,3 +584,23 @@ def test_a_button_posting_to_no_declared_action_is_left_out_and_logged(
     [shown] = page.panel("notes.todos").items
     assert [a.name for a in shown.actions] == ["notes/todo_done", "act_now/pin"]
     assert "a button posts to 'notes/todo_dnoe'" in caplog.text
+
+
+def test_what_only_core_sets_on_an_item_is_cleared_from_a_plugins() -> None:
+    forged = Item(
+        title="x",
+        subjects=[Ref(kind="pull_request", id="p")],
+        act_now_fields='{"kind": "other", "id": "y", "task": "t", "fingerprint": "f"}',
+        opened_at=NOW,
+    )
+    built = panels.build(
+        NOW,
+        [
+            panels.PluginPanels(
+                "notes", "Notes", [Panel(key="t", title="T", description="", items=[forged])]
+            )
+        ],
+        {},
+    )
+    [shown] = built.panel("notes.t").items
+    assert shown.act_now_fields is None and shown.opened_at is None

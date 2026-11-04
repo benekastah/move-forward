@@ -20,16 +20,16 @@ from pydantic import Field, field_validator
 from . import localtime
 from .domain import Model
 from .graph import Ref
-from .page import Action, Item, Link, Panel, Signals, age
+from .page import Action, Badge, Item, Link, Panel, Signals, age
 from .strict import Strict
 
 KEY = "now"
 """The Act now panel's key within core's Act now group."""
 ACTIONS = "act_now"
-PENDING_FIELD = "pending"
-"""The field a plugin's button carries, in Act now, to hide its item once the button has run:
-the item's `pending`."""
-"""The prefix of Act now's own buttons, `act_now/<snooze|dismiss|pin|unpin>`."""
+"""The prefix of Act now's own buttons, `act_now/<snooze|dismiss|pin|unpin|opened>`."""
+OPENED_FIELD = "opened"
+"""The field a plugin's button carries, in Act now, to mark its item opened once the button
+has run: the item's `act_now_fields`."""
 DUE_HORIZON = timedelta(days=7)
 """How far ahead a due date starts to count, unless `[act_now] due_warning_days` says."""
 DUE_MOST = 4.0
@@ -49,19 +49,20 @@ by."""
 class Feedback(Model):
     """What I said of an Act now item."""
 
-    action: Literal["snooze", "dismiss", "pin", "pending"]
-    """`pending` is no choice of mine: I acted on the item elsewhere (a link, a button), so it's
-    hidden until its plugin has fetched again, to show how that went."""
+    action: Literal["snooze", "dismiss", "pin", "opened"]
+    """`opened` is no choice of mine: I acted on the item elsewhere (a link, a button), so it's
+    dimmed until it changes, or for `OPENED_FOR`."""
     fingerprint: str
     """The item's when I said it; a snooze or dismissal of an item that changed lapses."""
     until: datetime | None = None
-    """When a snooze, or a pending hide, ends."""
+    """When a snooze ends, or an opened item stops being dimmed."""
     said_at: datetime | None = None
     """When I said it; set when feedback is read back."""
 
 
-PENDING = timedelta(minutes=10)
-"""The longest an item I acted on stays hidden, should its plugin not fetch again by then."""
+OPENED_FOR = timedelta(hours=24)
+"""The longest an item I opened stays dimmed, should it not change: one opened and left
+shouldn't stay grey for weeks."""
 
 
 class Weights(Strict):
@@ -184,27 +185,23 @@ def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomina
     ), level
 
 
-def set_aside(
-    nomination: Nomination,
-    feedback: Feedback | None,
-    now: datetime,
-    fetched: dict[str, datetime] | None = None,
-) -> bool:
-    """Snoozed until later, or dismissed, and not changed since; or acted on, and its plugin
-    not fetched since (`fetched`, by plugin), within `PENDING`."""
+def set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> bool:
+    """Snoozed until later, or dismissed, and not changed since."""
     if feedback is None or feedback.fingerprint != nomination.fingerprint:
         return False
     if feedback.action == "dismiss":
         return True
-    if feedback.action == "pending":
-        fetched_at = (fetched or {}).get(nomination.plugin)
-        acted = feedback.said_at or now
-        return (
-            feedback.until is not None
-            and feedback.until > now
-            and (fetched_at is None or fetched_at <= acted)
-        )
     return feedback.action == "snooze" and feedback.until is not None and feedback.until > now
+
+
+def opened_at(nomination: Nomination, feedback: Feedback | None, now: datetime) -> datetime | None:
+    """When I opened the item, if it hasn't changed since and that's within `OPENED_FOR`:
+    it's shown dimmed, in its place."""
+    if feedback is None or feedback.action != "opened" or feedback.said_at is None:
+        return None
+    if feedback.fingerprint != nomination.fingerprint or now - feedback.said_at >= OPENED_FOR:
+        return None
+    return feedback.said_at
 
 
 def _days(since: timedelta) -> float:
@@ -365,10 +362,9 @@ def panels(
     titles: dict[str, str] | None = None,
     units: Units = no_units,
     priority_of: PriorityOf = no_priority,
-    fetched: dict[str, datetime] | None = None,
 ) -> list[Panel]:
-    """Act now's panels: nominations not snoozed or dismissed (or acted on, until their
-    plugin has fetched again: `fetched` says when it last did), pinned ones first and
+    """Act now's panels: nominations not snoozed or dismissed (those I opened dimmed, in
+    their place), pinned ones first and
     then the best (by score, then the plugin's own rank, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
     in all, each with buttons to snooze, dismiss, pin or prioritize it; a priority I set
@@ -400,7 +396,7 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not (now and set_aside(nom, said(nom), now, fetched))
+        if not (now and set_aside(nom, said(nom), now))
     ]
     candidates.sort(
         key=lambda c: (
@@ -429,6 +425,9 @@ def panels(
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1
         is_pinned = any(pinned(n) for n in [nomination, *group.then])
         shown = _shown(group, place, size, is_pinned, now, levels, stale_after, horizon)
+        if now and (when := opened_at(nomination, said(nomination), now)):
+            opened = Badge(text=f"opened {age(now, when)} ago")
+            shown = shown.model_copy(update={"opened_at": when, "badges": [*shown.badges, opened]})
         by_plugin.setdefault(nomination.plugin, []).append(shown)
         place += 1
     if not by_plugin:
@@ -520,16 +519,12 @@ def _shown(
     links += [
         Link(text=joined.item.title, url=joined.item.url) for joined in then if joined.item.url
     ]
-    pending = (
-        json.dumps(
-            {**_member_fields(nomination, nomination.key, then), "plugin": nomination.plugin}
-        )
-        if nomination.key
-        else None
+    fields = (
+        json.dumps(_member_fields(nomination, nomination.key, then)) if nomination.key else None
     )
     return item.model_copy(
         update={
-            "pending": pending,
+            "act_now_fields": fields,
             "title": _titled(nomination),
             "details": details,
             "badges": [f"#{place + 1}", *item.badges],

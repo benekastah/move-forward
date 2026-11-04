@@ -257,6 +257,12 @@ Each verb becomes its task (`Review` is `review`), the ones that held a status o
 their plugin's task; an item without a verb took no feedback. `action` loses its CHECK, so a
 new kind of feedback needs no rebuild."""
 
+_V13_OPENED = """
+UPDATE act_now_feedback SET action = 'opened' WHERE action = 'pending';
+"""
+"""An item I acted on elsewhere is dimmed until it changes (`opened`), rather than hidden
+until its plugin fetches again (`pending`)."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -270,6 +276,7 @@ CORE_MIGRATIONS = [
     Migration("0010_sessions", _V10_SESSIONS),
     Migration("0011_kinds_named_for_plugins", _V11_KINDS_NAMED_FOR_PLUGINS),
     Migration("0012_feedback_by_task", _V12_FEEDBACK_BY_TASK),
+    Migration("0013_opened", _V13_OPENED),
 ]
 
 _SCHEMA_VERSIONS = """
