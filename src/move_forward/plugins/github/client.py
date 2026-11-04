@@ -427,9 +427,16 @@ def pr_state(url: str) -> tuple[str, datetime | None]:
 
 
 def collect(
-    host: str, org: str, teams: list[str], history_days: int, now: datetime
+    host: str,
+    org: str,
+    teams: list[str],
+    history_days: int,
+    now: datetime,
+    scope: str = "org",
 ) -> GitHubSnapshot:
-    """Every PR search the panels need, on `host`."""
+    """Every PR search the panels need, on `host`: within `org` when `scope` is "org", else
+    across the host."""
+    within = f" org:{org}" if scope == "org" else ""
     since = (now - timedelta(days=history_days)).date().isoformat()
     with ThreadPoolExecutor(max_workers=PARALLEL_REQUESTS) as pool:
 
@@ -437,9 +444,9 @@ def collect(
             return pool.submit(search_prs, host, query, with_files)
 
         login_future = pool.submit(login, host)
-        mine = search("is:pr is:open author:@me archived:false", True)
-        direct = search("is:pr is:open user-review-requested:@me archived:false", True)
-        reviewed = search("is:pr is:open reviewed-by:@me -author:@me archived:false", True)
+        mine = search(f"is:pr is:open author:@me archived:false{within}", True)
+        direct = search(f"is:pr is:open user-review-requested:@me archived:false{within}", True)
+        reviewed = search(f"is:pr is:open reviewed-by:@me -author:@me archived:false{within}", True)
         team_futures = [
             search(
                 f"is:pr is:open team-review-requested:{org}/{team} -author:@me archived:false",
@@ -447,8 +454,8 @@ def collect(
             )
             for team in teams
         ]
-        merged = search(f"is:pr is:merged author:@me merged:>={since}")
-        closed = search(f"is:pr is:closed is:unmerged author:@me closed:>={since}")
+        merged = search(f"is:pr is:merged author:@me merged:>={since}{within}")
+        closed = search(f"is:pr is:closed is:unmerged author:@me closed:>={since}{within}")
         member_futures = [pool.submit(team_members, host, org, team) for team in teams]
     team_requests: dict[str, PullRequest] = {}
     for future in team_futures:

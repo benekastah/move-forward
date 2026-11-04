@@ -30,7 +30,7 @@ notification about anything else, when more PRs changed than a search page holds
 when fetching the PRs fails. A PR that newly concerns me without a notification (one I
 just opened, say) waits for that.
 
-`[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
+`[github]` needs `org`. `search_scope` (`"org"` by default, or `"everywhere"`) says whether my PR searches stay in that organization's repositories. `history_days` says how far back my merged and closed PRs are
 fetched. Its conventions that differ between organisations are off by default:
 `policy_checks` (checks that enforce PR policy, such as labels or assignees, rather than test the code), `ignored_reviewers` (logins whose comments and
 reviews, like a policy bot's, aren't feedback; other bots' are), `required_owner_marker` (a

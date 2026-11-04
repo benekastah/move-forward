@@ -1,5 +1,7 @@
 """`[github]`."""
 
+from typing import Literal
+
 from pydantic import Field
 
 from ...strict import Strict
@@ -32,6 +34,9 @@ class GitHubConfig(Strict):
     which `gh` must be logged in to (`gh auth login --hostname <host>`)."""
     org: str
     """The GitHub organization, as in https://<host>/<org>."""
+    search_scope: Literal["org", "everywhere"] = "org"
+    """Where my PR searches look: `org` (default) only in `org`'s repositories, `everywhere`
+    in every repository on the host that I author, review or am asked to review in."""
     history_days: int = DEFAULT_HISTORY_DAYS
     """How far back to fetch my merged and closed PRs (Jira transitions, cleanup, PR states)."""
     policy_checks: list[str] = Field(default_factory=lambda: list(DEFAULT_POLICY_CHECKS))

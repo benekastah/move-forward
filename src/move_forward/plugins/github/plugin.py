@@ -95,7 +95,12 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 return placing.place(previous, fetched, _team_slugs(ctx))
         ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         return client.collect(
-            config.host, config.org, _team_slugs(ctx), config.history_days, ctx.now
+            config.host,
+            config.org,
+            _team_slugs(ctx),
+            config.history_days,
+            ctx.now,
+            config.search_scope,
         )
 
     def _full_due(self, ctx: Context[GitHubConfig]) -> bool:

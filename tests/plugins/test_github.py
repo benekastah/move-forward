@@ -247,3 +247,27 @@ def test_prs_are_fetched_by_repo_and_number_in_one_request(
 def test_the_timeline_asks_for_the_most_events_graphql_gives_for_one_connection() -> None:
     query = github.FIELDS_PATH.read_text()
     assert "timelineItems(last: 100," in query  # a busy PR's recent events aren't cut at 40
+
+
+def test_searches_stay_in_the_org_unless_the_scope_is_everywhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def run(scope: str) -> list[str]:
+        queries: list[str] = []
+
+        def search_prs(host: str, query: str, with_files: bool = False) -> list[object]:
+            queries.append(query)
+            return []
+
+        monkeypatch.setattr(github, "search_prs", search_prs)
+        monkeypatch.setattr(github, "login", lambda host: "me")
+        monkeypatch.setattr(github, "team_members", lambda host, org, team: [])
+        github.collect("github.com", "acme", ["web"], 14, datetime(2026, 10, 30, tzinfo=UTC), scope)
+        return queries
+
+    inside = run("org")
+    assert len(inside) == 6 and all(
+        "org:acme" in q or "team-review-requested:acme/web" in q for q in inside
+    )
+    assert sum("org:acme" in q for q in inside) == 5  # every search but the team's, which names it
+    assert not any("org:" in q for q in run("everywhere"))

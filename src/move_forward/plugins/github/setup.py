@@ -11,6 +11,7 @@ GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 TEMPLATE = """\
 # host = "github.com"                   # a GitHub Enterprise Server's host instead
 # refresh_seconds = 300                 # how often it refreshes (GitHub's API is rate-limited)
+# search_scope = "org"                 # my PR searches: "org" (this org's repos) or "everywhere"
 # history_days = 14                      # how far back merged and closed PRs are fetched
 # policy_checks = []                     # checks that enforce PR policy, not CI, e.g. ["pr-policy"]
 # ignored_reviewers = []                 # logins whose comments aren't feedback, e.g. a policy bot

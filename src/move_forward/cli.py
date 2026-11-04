@@ -38,6 +38,7 @@ teams = ["my-team"]                   # the teams I'm on or review for, by name
 org = "example-org"
 # host = "github.com"                    # a GitHub Enterprise Server's host instead
 # refresh_seconds = 300
+# search_scope = "org"                 # my PR searches: "org" (this org's repos) or "everywhere"
 # history_days = 14
 # policy_checks = []                     # checks that enforce PR policy, not CI
 # ignored_reviewers = []                 # logins whose comments aren't review feedback

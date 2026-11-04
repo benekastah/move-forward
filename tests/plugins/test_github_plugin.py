@@ -204,7 +204,9 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
     fetched: list[list[client.PrId]] = []
     failing = False
 
-    def collect(host: str, org: str, teams: list[str], days: int, now: datetime) -> object:
+    def collect(
+        host: str, org: str, teams: list[str], days: int, now: datetime, scope: str = "org"
+    ) -> object:
         searched.append(now)
         return snapshot(mine=[pr(1), pr(2)])
 
