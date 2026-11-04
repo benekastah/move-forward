@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from ...api import (
+    API_VERSION,
     ActionHandler,
     ChangedRequest,
     CollectAfterRequest,
@@ -40,6 +41,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     name = "git_stack"
     title = "git-stack"
     config_model = GitStackConfig
+    api_version = API_VERSION
     init_template = TEMPLATE
     requires: ClassVar[list[str]] = ["git"]
     watches: ClassVar[list[str]] = ["git"]

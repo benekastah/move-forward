@@ -13,7 +13,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from . import act_now, localtime, notifications, panels, priority, shell, tls
+from . import act_now, localtime, notifications, panels, priority, registry, shell, tls
 from .act_now import Feedback
 from .config import Config
 from .db import CORE, Database
@@ -411,7 +411,7 @@ def build_dashboard(
         return any(graph.hidden(s) for s in item.subjects)
 
     layout = LayoutRepository(db).load()
-    return panels.build(
+    built = panels.build(
         now,
         plugin_panels,
         sources,
@@ -426,6 +426,7 @@ def build_dashboard(
         surface,
         _known_action(plugins),
     )
+    return built.model_copy(update={"problems": list(registry.DISCOVERY_ERRORS)})
 
 
 def _failed(e: Enabled) -> Panel:

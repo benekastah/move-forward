@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from ...api import (
+    API_VERSION,
     ActionHandler,
     Asker,
     ChangedRequest,
@@ -53,6 +54,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     title = "Local"
     init_template = TEMPLATE
     config_model = GitConfig
+    api_version = API_VERSION
     snapshot_model = LocalSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {

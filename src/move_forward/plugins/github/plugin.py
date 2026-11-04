@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import ClassVar, cast
 
 from ...api import (
+    API_VERSION,
     ActNowRequest,
     AfterCollectRequest,
     Asker,
@@ -88,6 +89,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     init_template = TEMPLATE
     init_finds_teams = True
     config_model = GitHubConfig
+    api_version = API_VERSION
     teams_field = "teams"
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {

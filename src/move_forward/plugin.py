@@ -309,6 +309,10 @@ PageHandler = Callable[[PageRequest[Any]], str | Response | None]
 """Renders a page, as HTML or a `Response`; None means not found."""
 CliHandler = Callable[[CliRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
+API_VERSION = 1
+"""The version of `move_forward.api` this dashboard offers. A change that would break a
+plugin built against it (a hook's request losing a field, a name leaving `api`) raises it;
+see `docs/api-changes.md`."""
 KEPT = "kept"
 """The redirect parameter naming an item to keep on the focus page: `<plugin>:<key>`."""
 
@@ -383,6 +387,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     snapshot_model: ClassVar[type[BaseModel] | None] = None
     """S, or None when the plugin fetches nothing and `collect` is never called (see
     `collects`)."""
+    api_version: ClassVar[int | None] = None
+    """The `API_VERSION` the plugin was built against: one built against another is left
+    out, with the reason in `mfd check` and the page's footer."""
     teams_field: ClassVar[str | None] = None
     """The field of the plugin's section mapping each top-level team to what the tool calls
     it (`teams`, e.g. `[github.teams]`), so the config can check it names only teams it has;

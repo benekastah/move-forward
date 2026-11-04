@@ -30,6 +30,7 @@ from .notifications import Event
 from .page import Item, Panel, Surface
 from .panels import Dashboard
 from .plugin import (
+    API_VERSION,
     Context,
     EntitiesRequest,
     GraphEventsRequest,
@@ -62,6 +63,7 @@ class _Seed(Plugin[BaseModel, BaseModel]):
     (`<plugin>.<kind>`), as that plugin would publish them."""
 
     always_on: ClassVar[bool] = True
+    api_version = API_VERSION
     config_model = _NoSettings
 
     def __init__(self, name: str, entities: Sequence[Entity]):

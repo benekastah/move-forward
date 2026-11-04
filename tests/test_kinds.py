@@ -12,7 +12,7 @@ from move_forward.domain import KindModel, Model
 from move_forward.graph import Entity, Graph, KindSpec, Ref, attrs
 from move_forward.ids import branch_id, branch_parts
 from move_forward.kinds import PULL_REQUEST, TICKET, PullRequest, Ticket
-from move_forward.plugin import EntitiesRequest, Plugin
+from move_forward.plugin import API_VERSION, EntitiesRequest, Plugin
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
@@ -25,7 +25,10 @@ class _OwnTicket(KindModel):
 
 def _plugin(name: str, kinds: dict[str, KindSpec]) -> Plugin[Any, Any]:
     """A plugin publishing `kinds`, as `name`."""
-    return cast(Plugin[Any, Any], type("Publishing", (Plugin,), {"name": name, "kinds": kinds})())
+    return cast(
+        Plugin[Any, Any],
+        type("Publishing", (Plugin,), {"name": name, "kinds": kinds, "api_version": API_VERSION})(),
+    )
 
 
 def test_a_kind_named_for_a_family_must_extend_its_model() -> None:

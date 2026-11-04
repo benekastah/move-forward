@@ -123,6 +123,8 @@ class Dashboard(Model):
     panels: list[Panel]
     groups: list[Group]
     sources: dict[str, SourceStatus]
+    problems: list[str] = Field(default_factory=list[str])
+    """What's wrong with the installed plugins: those left out, and why."""
 
     def panel(self, key: str) -> Panel:
         return next(p for p in self.panels if p.key == key)

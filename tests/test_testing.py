@@ -5,6 +5,7 @@ from typing import Any, ClassVar
 import pytest
 
 from move_forward.api import (
+    API_VERSION,
     ActionHandler,
     ActionRequest,
     EntitiesRequest,
@@ -58,6 +59,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 
     name: ClassVar[str] = "linear"
     title: ClassVar[str] = "Linear"
+    api_version = API_VERSION
     config_model = LinearConfig
     snapshot_model = LinearSnapshot
     kinds: ClassVar[dict[str, KindSpec]] = {ISSUE: KindSpec(IssueAttrs)}

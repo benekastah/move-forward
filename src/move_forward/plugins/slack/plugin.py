@@ -13,6 +13,7 @@ from urllib.parse import quote
 from pydantic import BaseModel, Field
 
 from ...api import (
+    API_VERSION,
     Action,
     ActionError,
     ActionHandler,
@@ -141,6 +142,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     init_template = TEMPLATE
     init_example = EXAMPLE
     config_model = SlackConfig
+    api_version = API_VERSION
     teams_field = "teams"
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     cli_help = "see and set where review pings go, or import them from the skill's markdown"
