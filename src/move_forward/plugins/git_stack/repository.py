@@ -2,11 +2,13 @@
 
 from collections import defaultdict
 
-from ...api import Database
+from ...api import Database, Migration
 from .models import GitStackSnapshot, StackBranch, StackRepo
 
 MIGRATIONS = [
-    """
+    Migration(
+        "0001_branches",
+        """
     CREATE TABLE git_stack_branches (  -- fetched: `git stack info` in each checkout
         repo_dir TEXT NOT NULL,
         position INTEGER NOT NULL,     -- git stack info's order
@@ -28,7 +30,8 @@ MIGRATIONS = [
             json_each(snapshots.payload, '$.repos') AS repo,
             json_each(repo.value, '$.branches') AS branch
         WHERE snapshots.source = 'git_stack' AND snapshots.payload IS NOT NULL;
-    """
+    """,
+    )
 ]
 """The git_stack plugin's migrations."""
 

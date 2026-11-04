@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from ...api import Database
+from ...api import Database, Migration
 from .models import Contact, Ping, TeamChannel
 
 Source = Literal["import", "dashboard", "lookup"]
@@ -16,7 +16,9 @@ LOOKED_UP: Source = "lookup"
 """Slack ids found through Slack's API by email; an import or a hand overrides them."""
 
 MIGRATIONS = [
-    """
+    Migration(
+        "0001_contacts_and_pings",
+        """
     CREATE TABLE slack_contacts (      -- kept: where a person's pings go
         login TEXT PRIMARY KEY,
         slack_id TEXT,
@@ -51,7 +53,10 @@ MIGRATIONS = [
             CASE source WHEN 'dashboard' THEN 'dashboard' ELSE 'import' END
         FROM pings;
     """,
-    """
+    ),
+    Migration(
+        "0002_looked_up_contacts",
+        """
     -- Slack ids looked up through Slack's API, too. A CHECK can't be changed in place.
     CREATE TABLE slack_contacts_new (  -- kept: where a person's pings go
         login TEXT PRIMARY KEY,
@@ -62,11 +67,15 @@ MIGRATIONS = [
     DROP TABLE slack_contacts;
     ALTER TABLE slack_contacts_new RENAME TO slack_contacts;
     """,
-    """
+    ),
+    Migration(
+        "0003_contact_looked_up_at",
+        """
     -- When a lookup ran, so one that found nobody is tried again later. Misses from before
     -- have none, and are tried again at the next prune.
     ALTER TABLE slack_contacts ADD COLUMN looked_up_at TEXT;
     """,
+    ),
 ]
 """The slack plugin's migrations. Every table is kept: only the dashboard knows these."""
 

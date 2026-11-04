@@ -16,6 +16,7 @@ from ...api import (
     ItemAdditions,
     KindSpec,
     LoadRequest,
+    Migration,
     Panel,
     PanelsRequest,
     Plugin,
@@ -44,7 +45,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     watches: ClassVar[list[str]] = ["git"]
     snapshot_model = GitStackSnapshot
     collects_after_graph = True
-    migrations: ClassVar[list[str]] = MIGRATIONS
+    migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 

@@ -110,7 +110,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     title = "Linear"
     config_model = LinearConfig
     snapshot_model = LinearSnapshot
-    migrations: ClassVar[list[str]] = MIGRATIONS
+    migrations: ClassVar[list[Migration]] = MIGRATIONS
 
     def collect(self, req: CollectRequest[LinearConfig]) -> LinearSnapshot:
         return client.collect(req.ctx.config, req.ctx.email)
@@ -183,11 +183,16 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 
 ### Tables and migrations
 
-`MIGRATIONS` is a list of SQL scripts, applied in order and counted in
-`schema_versions`. The rules:
+`MIGRATIONS` is a list of `Migration(name, run)`: `run` is SQL, or a function given the
+connection for a data fix SQL can't say (it runs inside the migration's transaction and
+mustn't commit). They're applied in order, and the database keeps which ran by name.
+The rules:
 
-- **Append-only.** Never edit a migration that's on `main`; add a new one.
-- **Prefixed.** Every table starts with the plugin's name: `linear_issues`.
+- **Append-only.** Never edit, rename or reorder a migration that's on `main`; add a new
+  one, named with the next number: `Migration("0002_projects", "...")`. Core refuses a
+  list whose names don't start with the ones the database ran.
+- **Prefixed.** Every table, index, view and trigger starts with the plugin's name:
+  `linear_issues`. Core rolls back, and refuses, a migration that makes another.
 - **Fetched or kept**, and the table's comment says which. A fetched table holds what
   `collect` brought back and is replaced wholesale by `store`. A kept table holds what
   only the dashboard knows (notes, pings sent, projects seen); it survives refreshes, and

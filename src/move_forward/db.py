@@ -1,8 +1,9 @@
 """The SQLite connection and migrations. Queries live in `repositories`.
 
-Core and every plugin own a list of migrations, SQL scripts applied in order. How many of
-each have run is kept in `schema_versions`, so a migration runs once per database and new
-ones are appended, never edited.
+Core and every plugin own a list of migrations, each named, applied in order: SQL scripts,
+or Python for a data fix SQL can't say. Which have run is kept by name in the
+`migrations` ledger, so a migration runs once per database, and new ones are appended,
+never edited, renamed or reordered.
 """
 
 import logging
@@ -10,8 +11,9 @@ import os
 import re
 import sqlite3
 import threading
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,7 +22,20 @@ from .private import make_private
 log = logging.getLogger(__name__)
 
 CORE = "core"
-"""The `schema_versions` key of core's own migrations."""
+"""The owner of core's own migrations."""
+
+
+@dataclass(frozen=True)
+class Migration:
+    """One step of an owner's tables, kept by `name` once it has run."""
+
+    name: str
+    """What the ledger keeps it as, e.g. `0002_projects`: never renamed once shipped."""
+    run: str | Callable[[sqlite3.Connection], None]
+    """SQL to run, or a function given the connection, inside the migration's
+    transaction (it mustn't commit)."""
+
+
 OWNER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 """What a migrations owner may be called; owner names are written into SQL."""
 BACKUPS_DIR = "backups"
@@ -243,18 +258,18 @@ their plugin's task; an item without a verb took no feedback. `action` loses its
 new kind of feedback needs no rebuild."""
 
 CORE_MIGRATIONS = [
-    V1_SCHEMA,
-    _V2_KV_AND_LAYOUT,
-    _V3_PLUGIN_SOURCES,
-    _V4_NOTES_IN_THE_NOTES_PLUGIN,
-    _V5_ACT_NOW_FEEDBACK,
-    _V6_NO_SNAPSHOT_JSON,
-    _V7_PRIORITIES,
-    _V8_PENDING_FEEDBACK,
-    _V9_NOTIFICATIONS,
-    _V10_SESSIONS,
-    _V11_KINDS_NAMED_FOR_PLUGINS,
-    _V12_FEEDBACK_BY_TASK,
+    Migration("0001_schema", V1_SCHEMA),
+    Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
+    Migration("0003_plugin_sources", _V3_PLUGIN_SOURCES),
+    Migration("0004_notes_in_the_notes_plugin", _V4_NOTES_IN_THE_NOTES_PLUGIN),
+    Migration("0005_act_now_feedback", _V5_ACT_NOW_FEEDBACK),
+    Migration("0006_no_snapshot_json", _V6_NO_SNAPSHOT_JSON),
+    Migration("0007_priorities", _V7_PRIORITIES),
+    Migration("0008_pending_feedback", _V8_PENDING_FEEDBACK),
+    Migration("0009_notifications", _V9_NOTIFICATIONS),
+    Migration("0010_sessions", _V10_SESSIONS),
+    Migration("0011_kinds_named_for_plugins", _V11_KINDS_NAMED_FOR_PLUGINS),
+    Migration("0012_feedback_by_task", _V12_FEEDBACK_BY_TASK),
 ]
 
 _SCHEMA_VERSIONS = """
@@ -262,7 +277,16 @@ CREATE TABLE IF NOT EXISTS schema_versions (
     plugin TEXT PRIMARY KEY,
     version INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS migrations (  -- the ledger: which migrations ran, by name
+    owner TEXT NOT NULL,
+    name TEXT NOT NULL,
+    applied_at TEXT NOT NULL,
+    PRIMARY KEY (owner, name)
+);
 """
+"""What every database has before any migration runs: the ledger of migrations by name,
+and `schema_versions`, how many of each owner's ran, from before the ledger (kept up to
+date for a version of the dashboard from before it)."""
 
 Params = tuple[object, ...]
 
@@ -302,43 +326,109 @@ class Database:
             self._conn.executescript(_SCHEMA_VERSIONS)
         self.migrate(CORE, CORE_MIGRATIONS)
 
-    def migrate(self, owner: str, migrations: Sequence[str]) -> int:
-        """Apply `owner`'s migrations that haven't run yet, each in its own transaction.
+    def migrate(self, owner: str, migrations: Sequence[Migration]) -> int:
+        """Apply `owner`'s migrations that haven't run yet, in order, each in its own
+        transaction with its line in the ledger. A plugin's (any owner but core's) may make
+        only tables, indexes, views and triggers named `<owner>_...`; one that makes another
+        is rolled back and refused.
 
         Foreign keys are enforced, and SQLite can't turn them off inside a transaction, so a
         migration that rebuilds a referenced table copies it under a new name and renames,
         rather than dropping the original first.
 
-        Returns how many ran. Fails if the database has run more than `migrations` holds,
-        i.e. it was used by a newer version of the dashboard.
+        Returns how many ran. Fails, running nothing, when the ledger's names aren't the
+        first of `migrations`, in order: one was renamed or reordered, or the database was
+        used by a newer version of the dashboard.
         """
         if not OWNER_RE.match(owner):
             raise ValueError(f"bad migrations owner {owner!r}")
+        names = [m.name for m in migrations]
+        if duplicates := sorted({n for n in names if names.count(n) > 1}):
+            raise ValueError(f"{owner} has two migrations named {', '.join(duplicates)}")
         with self._lock:
-            row = self._conn.execute(
-                "SELECT version FROM schema_versions WHERE plugin = ?", (owner,)
-            ).fetchone()
-            done: int = row["version"] if row else 0
-            if done > len(migrations):
+            applied = self._applied(owner, names)
+            if applied[: len(names)] != names[: len(applied)]:
                 raise RuntimeError(
-                    f"the database has {done} {owner} migrations but this version knows"
-                    f" {len(migrations)}; upgrade the dashboard"
+                    f"{owner}'s migrations were renamed or reordered: the database ran"
+                    f" {', '.join(applied)}, in that order"
                 )
-            if done < len(migrations):
+            if len(applied) > len(names):
+                raise RuntimeError(
+                    f"the database has run {owner} migrations this version doesn't know"
+                    f" ({', '.join(applied[len(names) :])}); upgrade the dashboard"
+                )
+            pending = migrations[len(applied) :]
+            if pending:
                 self._backup()
-            for version, sql in enumerate(migrations[done:], start=done + 1):
-                # executescript commits any open transaction first, so the script carries
-                # its own, which records the version together with the change.
-                try:
-                    self._conn.executescript(
-                        f"BEGIN;\n{sql}\nINSERT OR REPLACE INTO schema_versions"
-                        f" VALUES ('{owner}', {version});\nCOMMIT;"
+            for version, migration in enumerate(pending, start=len(applied) + 1):
+                self._run(owner, version, migration)
+            return len(pending)
+
+    def _applied(self, owner: str, names: list[str]) -> list[str]:
+        """The names of `owner`'s migrations the database has run, in order. A database from
+        before the ledger counted them in `schema_versions`: those are the first of `names`,
+        written to the ledger now. Call with the lock held."""
+        rows = self._conn.execute(
+            "SELECT name FROM migrations WHERE owner = ? ORDER BY rowid", (owner,)
+        ).fetchall()
+        if rows:
+            return [row["name"] for row in rows]
+        row = self._conn.execute(
+            "SELECT version FROM schema_versions WHERE plugin = ?", (owner,)
+        ).fetchone()
+        counted: int = row["version"] if row else 0
+        if counted > len(names):
+            raise RuntimeError(
+                f"the database has {counted} {owner} migrations but this version knows"
+                f" {len(names)}; upgrade the dashboard"
+            )
+        if counted:
+            now = datetime.now(UTC).isoformat()
+            with self._conn:
+                self._conn.executemany(
+                    "INSERT INTO migrations VALUES (?, ?, ?)",
+                    [(owner, name, now) for name in names[:counted]],
+                )
+        return names[:counted]
+
+    def _run(self, owner: str, version: int, migration: Migration) -> None:
+        """Run one migration and record it, in one transaction. Call with the lock held."""
+        conn = self._conn
+        before = self._objects()
+        try:
+            if isinstance(migration.run, str):
+                # executescript commits any open transaction first, then runs the script,
+                # which opens one of its own and leaves it open for the checks and records.
+                conn.executescript(f"BEGIN;\n{migration.run}")
+            else:
+                conn.execute("BEGIN")
+                migration.run(conn)
+            if owner != CORE:
+                made = sorted(self._objects() - before)
+                if stray := [name for name in made if not name.startswith(f"{owner}_")]:
+                    raise ValueError(
+                        f"{owner}'s migration {migration.name} made {', '.join(stray)}:"
+                        f" a plugin's tables are named {owner}_..."
                     )
-                except sqlite3.Error:
-                    if self._conn.in_transaction:
-                        self._conn.rollback()
-                    raise
-            return len(migrations) - done
+            conn.execute(
+                "INSERT INTO migrations VALUES (?, ?, ?)",
+                (owner, migration.name, datetime.now(UTC).isoformat()),
+            )
+            conn.execute("INSERT OR REPLACE INTO schema_versions VALUES (?, ?)", (owner, version))
+            conn.commit()
+        except BaseException:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+
+    def _objects(self) -> set[str]:
+        """The names of the database's tables, indexes, views and triggers, but SQLite's own."""
+        return {
+            row["name"]
+            for row in self._conn.execute(
+                "SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite\\_%' ESCAPE '\\'"
+            )
+        }
 
     def _backup(self) -> None:
         """Copy the database into `BACKUPS_DIR` before its first migration in this process,

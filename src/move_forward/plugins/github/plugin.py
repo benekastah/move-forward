@@ -25,6 +25,7 @@ from ...api import (
     Item,
     KindSpec,
     LoadRequest,
+    Migration,
     Panel,
     PanelsRequest,
     Plugin,
@@ -88,7 +89,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     init_finds_teams = True
     config_model = GitHubConfig
     teams_field = "teams"
-    migrations: ClassVar[list[str]] = MIGRATIONS
+    migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),
         PERSON: KindSpec(GitHubPerson),

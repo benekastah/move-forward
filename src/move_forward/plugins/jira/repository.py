@@ -5,11 +5,13 @@ import sqlite3
 from collections import defaultdict
 from datetime import date, datetime
 
-from ...api import Database
+from ...api import Database, Migration
 from .models import JiraComment, JiraIssue, JiraSnapshot
 
 MIGRATIONS = [
-    """
+    Migration(
+        "0001_issues",
+        """
     CREATE TABLE jira_issues (         -- fetched: my open tickets
         key TEXT PRIMARY KEY,
         position INTEGER NOT NULL,     -- the search's order: most recently updated first
@@ -57,17 +59,26 @@ MIGRATIONS = [
             json_each(issue.value, '$.open_blockers') AS blocker
         WHERE snapshots.source = 'jira' AND snapshots.payload IS NOT NULL;
     """,
-    """
+    ),
+    Migration(
+        "0002_projects",
+        """
     CREATE TABLE jira_projects (       -- kept: every project a ticket of mine has been in, so
         key TEXT PRIMARY KEY           -- its keys still link once its last ticket closes; a
     );                                 -- handful of rows, never pruned
     INSERT OR IGNORE INTO jira_projects
         SELECT substr(key, 1, instr(key, '-') - 1) FROM jira_issues WHERE instr(key, '-') > 1;
     """,
-    """
+    ),
+    Migration(
+        "0003_issue_due",
+        """
     ALTER TABLE jira_issues ADD COLUMN due TEXT;  -- its due date, YYYY-MM-DD; NULL: none
     """,
-    """
+    ),
+    Migration(
+        "0004_issue_comments",
+        """
     CREATE TABLE jira_issue_comments ( -- fetched: the latest comments, oldest first
         key TEXT NOT NULL REFERENCES jira_issues ON DELETE CASCADE,
         position INTEGER NOT NULL,
@@ -79,6 +90,7 @@ MIGRATIONS = [
         PRIMARY KEY (key, position)
     );
     """,
+    ),
 ]
 """The jira plugin's migrations."""
 

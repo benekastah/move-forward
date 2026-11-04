@@ -25,6 +25,7 @@ from ...api import (
     InitSetup,
     ItemActionsRequest,
     ItemAdditions,
+    Migration,
     PageHandler,
     PageRequest,
     Panel,
@@ -141,7 +142,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     init_example = EXAMPLE
     config_model = SlackConfig
     teams_field = "teams"
-    migrations: ClassVar[list[str]] = MIGRATIONS
+    migrations: ClassVar[list[Migration]] = MIGRATIONS
     cli_help = "see and set where review pings go, or import them from the skill's markdown"
     sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK})
 

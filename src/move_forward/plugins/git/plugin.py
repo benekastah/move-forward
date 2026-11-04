@@ -19,6 +19,7 @@ from ...api import (
     ItemAdditions,
     KindSpec,
     LoadRequest,
+    Migration,
     Panel,
     PanelsRequest,
     Plugin,
@@ -53,7 +54,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     init_template = TEMPLATE
     config_model = GitConfig
     snapshot_model = LocalSnapshot
-    migrations: ClassVar[list[str]] = MIGRATIONS
+    migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         REPO: KindSpec(RepoAttrs),
         BRANCH: KindSpec(BranchAttrs, resolvable=True),
