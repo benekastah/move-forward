@@ -260,8 +260,15 @@ def test_searches_stay_in_the_org_unless_the_scope_is_everywhere(
             return []
 
         monkeypatch.setattr(github, "search_prs", search_prs)
-        monkeypatch.setattr(github, "login", lambda host: "me")
-        monkeypatch.setattr(github, "team_members", lambda host, org, team: [])
+
+        def login(host: str) -> str:
+            return "me"
+
+        def team_members(host: str, org: str, team: str) -> list[str]:
+            return []
+
+        monkeypatch.setattr(github, "login", login)
+        monkeypatch.setattr(github, "team_members", team_members)
         github.collect("github.com", "acme", ["web"], 14, datetime(2026, 10, 30, tzinfo=UTC), scope)
         return queries
 

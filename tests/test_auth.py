@@ -113,7 +113,12 @@ def test_mfd_open_proves_the_server_knows_the_token_then_opens_a_login_code(
     token = auth.load_or_create(auth.token_path(tmp_path / "dashboard.db"))
     httpd, port = _server(tmp_path, token)
     opened: list[str] = []
-    monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url) or True)
+
+    def record_open(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr(cli.webbrowser, "open", record_open)
     try:
         assert cli.main(["-c", str(_config(tmp_path, port)), "open"]) == 0
     finally:
@@ -147,7 +152,12 @@ def test_mfd_open_sends_no_token_to_a_server_that_cannot_prove_it_has_it(
     squatting = ThreadingHTTPServer(("127.0.0.1", 0), Squatter)
     threading.Thread(target=squatting.serve_forever, daemon=True).start()
     opened: list[str] = []
-    monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url) or True)
+
+    def record_open(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr(cli.webbrowser, "open", record_open)
     try:
         config = _config(tmp_path, squatting.server_port)
         assert cli.main(["-c", str(config), "open"]) == 1
@@ -165,7 +175,11 @@ def test_mfd_open_says_when_nothing_is_listening(
     free.bind(("127.0.0.1", 0))
     port = free.getsockname()[1]
     free.close()
-    monkeypatch.setattr(cli.webbrowser, "open", lambda url: True)
+
+    def refuse_open(url: str) -> bool:
+        return True
+
+    monkeypatch.setattr(cli.webbrowser, "open", refuse_open)
     assert cli.main(["-c", str(_config(tmp_path, port)), "open"]) == 1
     assert "is `mfd serve` running?" in capsys.readouterr().err
 

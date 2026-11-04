@@ -468,10 +468,14 @@ def test_a_review_is_sized_by_the_part_i_or_my_teams_own() -> None:
         derived=DerivedSnapshot(team_scores={big.url: score}),
     )
     items = {i.title: i for i in panel(built, "github.reviews_for_me").items}
-    assert items[big.title].signals and items[big.title].signals.effort == "minutes"
+    big_signals = items[big.title].signals
+    assert big_signals is not None
+    assert big_signals.effort == "minutes"
     assert "my part: 12 lines in 2 of 119 files" in items[big.title].details
     assert items[big.title].badges == ["+900 lines", "119 files"]
-    assert items[whole.title].signals and items[whole.title].signals.effort == "day"
+    whole_signals = items[whole.title].signals
+    assert whole_signals is not None
+    assert whole_signals.effort == "day"
     assert items[whole.title].details == ["review requested"]
 
 

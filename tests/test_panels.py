@@ -369,9 +369,13 @@ def test_a_ticket_in_the_blocked_status_is_blocked_without_blocker_links() -> No
         )
     )
     items = {i.title.split()[0]: i for i in panel(dashboard, "jira.jira_next").items}
-    assert items["XY-1"].badges[0] == "blocked" and items["XY-1"].signals.blocked
-    assert items["XY-2"].badges[0] == "incident, blocked" and items["XY-2"].signals.blocked
-    assert items["XY-3"].badges[0] == "unblocked" and not items["XY-3"].signals.blocked
+    signals = {key: item.signals for key, item in items.items()}
+    assert all(s is not None for s in signals.values())
+    assert items["XY-1"].badges[0] == "blocked" and signals["XY-1"] and signals["XY-1"].blocked
+    assert items["XY-2"].badges[0] == "incident, blocked" and signals["XY-2"]
+    assert signals["XY-2"].blocked
+    assert items["XY-3"].badges[0] == "unblocked" and signals["XY-3"]
+    assert not signals["XY-3"].blocked
 
 
 def test_incidents_and_bugs_at_equal_escalation_rank_by_jira_priority() -> None:
@@ -395,7 +399,8 @@ def test_incidents_and_bugs_at_equal_escalation_rank_by_jira_priority() -> None:
         "XY-5",
     ]
     # Act now only gets a bump at the top priority
-    assert {i.title.split()[0]: i.signals.importance for i in items} == {
+    assert all(i.signals is not None for i in items)
+    assert {i.title.split()[0]: i.signals.importance for i in items if i.signals} == {
         "XY-1": 1,
         "XY-2": 2,
         "XY-3": 1,

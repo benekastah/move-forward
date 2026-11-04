@@ -237,7 +237,7 @@ def test_open_slack_is_only_a_link_for_an_http_url() -> None:
         ping = slack_plugin.PrPing(
             pr_url="https://x/pull/1", title="t", targets=[target], blockers=[], stale=True
         )
-        return slack_plugin._target_form(ping, target, NOW)
+        return slack_plugin._target_form(ping, target, NOW)  # pyright: ignore[reportPrivateUsage]
 
     assert "href='https://acme.slack.com/archive/C1'" in form("https://acme.slack.com/archive/C1")
     assert "javascript" not in form("javascript:alert(1)")

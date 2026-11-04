@@ -715,7 +715,7 @@ def test_a_connection_that_stalls_mid_request_is_dropped(
 
 
 def test_every_answer_forbids_framing(client: HTTPConnection) -> None:
-    pages = [
+    pages: list[tuple[str, dict[str, str]]] = [
         ("/", SIGNED_IN),  # HTML
         ("/nope", SIGNED_IN),  # an error
         ("/", {}),  # refused
