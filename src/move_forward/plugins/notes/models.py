@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ...domain import Model
+from ...api import Model
 
 Size = Literal["quick", "big"]
 CheckIn = Literal["checked", "asked_done"]

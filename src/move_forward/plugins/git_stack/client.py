@@ -4,7 +4,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ...shell import git
+from ...api.shell import git
 from .models import GitStackSnapshot, StackBranch, StackRepo
 
 

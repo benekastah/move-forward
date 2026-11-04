@@ -6,9 +6,7 @@ read from the Cleanup panel as built from the graph (`Plugin.graph_events`).
 
 import json
 
-from ...notifications import Event
-from ...page import Panel
-from ...repositories import KvRepository
+from ...api import Event, KvRepository, Panel
 
 KINDS = {"branch_deletable": "a local branch's PR is merged (or its remote branch is gone)"}
 """The kinds, with what each says, for the settings page."""

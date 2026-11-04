@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 
-from ...db import Database
+from ...api import Database
 from .models import GitStackSnapshot, StackBranch, StackRepo
 
 MIGRATIONS = [

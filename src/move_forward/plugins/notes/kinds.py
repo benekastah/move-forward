@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from ...domain import Model
+from ...api import Model
 
 
 class EntryAttrs(Model):

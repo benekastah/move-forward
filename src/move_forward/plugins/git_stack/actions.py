@@ -8,9 +8,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from ...graph import Graph
-from ...plugin import ActionError, Context, form_field
-from ...shell import DEFAULT_TIMEOUT_SECONDS, CommandError, git
+from ...api import ActionError, Context, Graph, form_field
+from ...api.shell import DEFAULT_TIMEOUT_SECONDS, CommandError, git
 from .config import GitStackConfig
 from .panels import STACK_BRANCH, StackBranchView, repo_dirs
 

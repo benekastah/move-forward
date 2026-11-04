@@ -2,7 +2,7 @@
 
 from pydantic import Field, field_validator
 
-from ...strict import Strict
+from ...api import Strict
 
 DEFAULT_PING_FIRST = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 DEFAULT_PING_FOLLOW_UP = "Gentle bump on this review request"

@@ -253,7 +253,7 @@ def _empty_search_with_myself(monkeypatch: pytest.MonkeyPatch, status: int) -> l
         return b'{"issues": []}'
 
     monkeypatch.setattr(jira, "_search_page", fake_page)
-    monkeypatch.setattr(jira.https.opener, "open", fake_open)
+    monkeypatch.setattr(jira.http.opener, "open", fake_open)
     return asked
 
 

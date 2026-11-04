@@ -28,6 +28,16 @@ src/move_forward/plugins/linear/
 A plugin never imports another plugin, or reads another's config, snapshot or tables.
 What it needs from another goes through the graph.
 
+## Imports
+
+A plugin uses core only through `move_forward.api` (relatively, `from ...api import
+Plugin, Context, Graph`): everything a plugin may use is there, and core's own modules may
+change without notice. Its submodules group the rest: `api.html` (`page`, `e` to escape,
+`buttons`, `linkable`), `api.shell` (`run`, `git`, `CommandError`), `api.http`
+(`opener`, `require_https`), `api.localtime` (`local`, `day`) and `api.keychain`
+(`token`, `read`, `write`, `delete`). Ruff refuses any other core import in a plugin, and
+`tests/test_api.py` checks it too.
+
 ## Registering it
 
 1. Add an instance to `PLUGINS` in `registry.py`.
@@ -65,7 +75,8 @@ class LinearConfig(Strict):
   required ones, commented, written when the plugin isn't chosen).
 - Secrets never go in the config. Give the section `token_env` and `keychain_service`, as
   jira and slack do, and read the token with `keychain.token(config, email)`: then
-  `mfd token set <plugin>` stores it and `mfd token check` finds it. Anything sent with a token must go over HTTPS (`move_forward.https`).
+  `mfd token set <plugin>` stores it and `mfd token check` finds it. Anything sent with a
+  token must go over HTTPS (`api.http`).
 - A tool whose sign-in sends the browser back to the dashboard (OAuth) is given
   `ctx.dashboard_url` (`http://localhost:8765`, or `https://` when it serves HTTPS) to
   build its redirect URL from, and a page of the plugin's to land on.
@@ -275,8 +286,8 @@ Set `Item.fingerprint` to what would make a snoozed or dismissed item worth anot
   `prepare_item_actions(ctx, graph)`.
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, {KEPT: "<plugin>:<key>"})` and implement `kept_item`.
-- **Pages.** `pages()` maps paths to handlers returning HTML (use `render.page` and
-  `render.e` to escape everything). A page a tool's sign-in (OAuth) redirects back to goes
+- **Pages.** `pages()` maps paths to handlers returning HTML (use `api.html.page` and
+  `api.html.e` to escape everything). A page a tool's sign-in (OAuth) redirects back to goes
   in `sign_in_pages` too: browsers don't send the dashboard's cookie on a redirect from
   another site, so it's served without one, and must check OAuth's single-use `state`
   before doing anything.

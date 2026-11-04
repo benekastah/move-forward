@@ -4,8 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from ...graph import Graph
-from ...plugin import CliHandler, Context
+from ...api import CliHandler, Context, Graph
 from .config import GitHubConfig
 from .people import REVIEWER_MAP_FILE, PeopleRepository, read_reviewer_map
 

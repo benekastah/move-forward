@@ -11,8 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from ...domain import Model
-from ...graph import Graph
+from ...api import Graph, Model
 
 BRANCH = "branch"
 

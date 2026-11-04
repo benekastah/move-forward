@@ -10,9 +10,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from ...graph import Entity, Graph
-from ...page import Action, Item, Panel
-from ...plugin import ActionHandler, CliHandler, Context, Plugin
+from ...api import Action, ActionHandler, CliHandler, Context, Entity, Graph, Item, Panel, Plugin
 from . import actions, cli, prune
 from .config import NotesConfig
 from .covers import covers

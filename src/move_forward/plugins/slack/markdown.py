@@ -5,7 +5,7 @@ skill logged in `work-notes.md`."""
 import re
 from datetime import UTC, datetime
 
-from ...markdown import cell, tables
+from ...api import cell, tables
 from .models import Contact, Ping, TeamChannel
 
 REVIEWER_MAP_FILE = "reviewer-map.md"

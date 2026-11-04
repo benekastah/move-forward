@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[slack]`."""
 
-from ...asking import Asker, InitSetup, channel, url
+from ...api import Asker, InitSetup, channel, url
 
 TEMPLATE = """\
 # client_id = ""                        # the workspace's Slack app, to connect on slack's page

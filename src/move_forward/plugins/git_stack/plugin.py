@@ -6,10 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from ...graph import Entity, Graph
-from ...notifications import Event
-from ...page import Action, Item, Panel
-from ...plugin import ActionHandler, Context, Plugin
+from ...api import Action, ActionHandler, Context, Entity, Event, Graph, Item, Panel, Plugin
 from . import actions, changes, client, events
 from .config import GitStackConfig
 from .kinds import StackBranchAttrs

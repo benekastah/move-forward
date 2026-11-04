@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...shell import CommandError, run, stopping
+from ...api.shell import CommandError, run, stopping
 from .models import Check, GitHubSnapshot, PullRequest, Review, Thread, TimelineEvent
 
 COMMIT_EMAIL_LOOKUP_COUNT = 10

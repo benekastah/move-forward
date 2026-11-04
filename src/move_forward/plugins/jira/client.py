@@ -12,8 +12,7 @@ from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ... import https, keychain
-from ...plugin import SourceError
+from ...api import SourceError, http, keychain
 from .config import JiraConfig
 from .models import MAX_COMMENTS, JiraComment, JiraIssue, JiraSnapshot
 
@@ -190,7 +189,7 @@ def to_issue(
 def _search_page(config: JiraConfig, email: str, api_token: str, body: dict[str, object]) -> bytes:
     """One page of a JQL search: the response to `body`."""
     url = config.site.rstrip("/") + SEARCH_PATH
-    https.require_https(url, "the Jira token")
+    http.require_https(url, "the Jira token")
     request = urllib.request.Request(
         url,
         data=json.dumps(body).encode(),
@@ -201,7 +200,7 @@ def _search_page(config: JiraConfig, email: str, api_token: str, body: dict[str,
         },
         method="POST",
     )
-    with https.opener.open(request, timeout=60) as response:
+    with http.opener.open(request, timeout=60) as response:
         return response.read()
 
 
@@ -214,7 +213,7 @@ def _request(
 ) -> bytes:
     """A GET of `path`, or a POST of `body` to it, answered with Jira's response."""
     url = config.site.rstrip("/") + path
-    https.require_https(url, "the Jira token")
+    http.require_https(url, "the Jira token")
     headers = {"Authorization": _basic_auth(email, api_token), "Accept": "application/json"}
     if body is not None:
         headers["Content-Type"] = "application/json"
@@ -224,7 +223,7 @@ def _request(
         headers=headers,
         method="POST" if body is not None else "GET",
     )
-    with https.opener.open(request, timeout=60) as response:
+    with http.opener.open(request, timeout=60) as response:
         return response.read()
 
 
@@ -237,12 +236,12 @@ def verify_token(config: JiraConfig, email: str, api_token: str) -> None:
     isn't refused: Jira answers it as an anonymous user, with no issues, so an empty search
     can't tell a bad token from no tickets."""
     url = config.site.rstrip("/") + MYSELF_PATH
-    https.require_https(url, "the Jira token")
+    http.require_https(url, "the Jira token")
     request = urllib.request.Request(
         url, headers={"Authorization": _basic_auth(email, api_token), "Accept": "application/json"}
     )
     try:
-        https.opener.open(request, timeout=60).close()
+        http.opener.open(request, timeout=60).close()
     except urllib.error.HTTPError as e:
         if e.code == HTTPStatus.UNAUTHORIZED:
             raise SourceError(

@@ -8,12 +8,22 @@ from typing import ClassVar, cast
 
 from pydantic import BaseModel
 
-from ...asking import Asker, InitSetup
-from ...graph import Entity, Graph, Ref, attrs
-from ...notifications import Event
-from ...page import Item, Panel
-from ...plugin import CliHandler, Context, Plugin, collect_into
-from ...shell import CommandError
+from ...api import (
+    Asker,
+    CliHandler,
+    Context,
+    Entity,
+    Event,
+    Graph,
+    InitSetup,
+    Item,
+    Panel,
+    Plugin,
+    Ref,
+    attrs,
+    collect_into,
+)
+from ...api.shell import CommandError
 from . import changes, cli, client, derive, notifications, placing, pushes
 from .config import GitHubConfig
 from .kinds import PersonAttrs, PrAttrs

@@ -10,9 +10,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ...domain import Model
-from ...graph import Graph, Ref
-from ...page import Item, Panel, Signals, age
+from ...api import Graph, Item, Model, Panel, Ref, Signals, age
 from .config import SlackConfig
 from .models import Contact, Ping, TeamChannel
 

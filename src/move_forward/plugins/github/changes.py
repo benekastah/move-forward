@@ -6,8 +6,7 @@ has no state to compare, so it only ever says it's new (a review requested of me
 
 from collections.abc import Collection
 
-from ...notifications import Event
-from ...page import anchor
+from ...api import Event, anchor
 from .models import GitHubSnapshot, PullRequest, Review, TimelineEvent
 from .panels import PR
 

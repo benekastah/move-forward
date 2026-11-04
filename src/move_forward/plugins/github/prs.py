@@ -4,7 +4,7 @@ import re
 from collections.abc import Collection
 from datetime import datetime
 
-from ... import localtime
+from ...api import localtime
 from .models import Check, PullRequest, Thread, TimelineEvent
 
 JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")

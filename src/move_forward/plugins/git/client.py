@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from ...shell import CommandError, git
+from ...api.shell import CommandError, git
 from . import changes
 from .models import Branch, LocalRepo, LocalSnapshot, Worktree
 

@@ -13,11 +13,22 @@ from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 
-from ... import render
-from ...asking import Asker, InitSetup
-from ...graph import Graph
-from ...page import Action, Item, Panel, age
-from ...plugin import ActionError, ActionHandler, CliHandler, Context, PageHandler, Plugin
+from ...api import (
+    Action,
+    ActionError,
+    ActionHandler,
+    Asker,
+    CliHandler,
+    Context,
+    Graph,
+    InitSetup,
+    Item,
+    PageHandler,
+    Panel,
+    Plugin,
+    age,
+    html,
+)
 from . import account, cli, contacts, oauth
 from .config import SlackConfig
 from .models import Ping, TeamChannel
@@ -71,12 +82,12 @@ def pinger(ctx: Context[SlackConfig], graph: Graph) -> Pinger:
 
 
 def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> str:
-    e = render.e
+    e = html.e
     last = f" · last {age(now, target.last_ping)} ago" if target.last_ping else ""
     open_link = (
         f"<a class='button' href='{e(target.slack_link)}' target='_blank' rel='noopener'>"
         "Open Slack</a>"
-        if render.linkable(target.slack_link)
+        if html.linkable(target.slack_link)
         else "<span class='target-note'>no Slack link known for this target</span>"
     )
     return (
@@ -95,7 +106,7 @@ def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> str:
 
 
 def ping_page(ping: PrPing, now: datetime) -> str:
-    e = render.e
+    e = html.e
     blockers = (
         "<ul class='blockers'>" + "".join(f"<li>{e(b)}</li>" for b in ping.blockers) + "</ul>"
         if ping.blockers
@@ -113,7 +124,7 @@ def ping_page(ping: PrPing, now: datetime) -> str:
         f" next ping is a follow-up. <a href='{contacts.CONTACTS_PATH}'>Where pings go</a></p>"
         "</article>"
     )
-    return render.page(f"Ping: {ping.title}", "ping", body, COPY_SCRIPT)
+    return html.page(f"Ping: {ping.title}", "ping", body, COPY_SCRIPT)
 
 
 class SlackPlugin(Plugin[SlackConfig, BaseModel]):

@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from pydantic import Field
 
-from ...domain import Model
+from ...api import Model
 
 MAX_COMMENTS = 10
 """Comments kept per ticket: the latest."""

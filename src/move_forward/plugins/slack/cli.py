@@ -6,8 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from ...graph import Graph
-from ...plugin import ActionError, CliHandler, Context
+from ...api import ActionError, CliHandler, Context, Graph
 from . import contacts, markdown
 from .config import SlackConfig
 from .repository import SlackRepository

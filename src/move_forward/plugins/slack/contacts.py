@@ -3,10 +3,7 @@ what `mfd slack` shares with them."""
 
 import re
 
-from ... import render
-from ...domain import Model
-from ...graph import Graph
-from ...plugin import ActionError, Context, form_field
+from ...api import ActionError, Context, Graph, Model, form_field, html
 from . import client, oauth, scopes
 from .config import SlackConfig
 from .pings import my_open_prs
@@ -82,7 +79,7 @@ def _requested(graph: Graph) -> tuple[set[str], set[str]]:
 
 
 def _form(action: str, hidden: dict[str, str], inputs: list[tuple[str, str, str]]) -> str:
-    e = render.e
+    e = html.e
     fields = "".join(
         f"<input type='hidden' name='{e(k)}' value='{e(v)}'>" for k, v in hidden.items()
     )
@@ -100,7 +97,7 @@ def _form(action: str, hidden: dict[str, str], inputs: list[tuple[str, str, str]
 def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
     """Everyone and every team pings can go to: the ones my open PRs ask for, and the ones
     imported or set, with where their pings go and an edit form each."""
-    e = render.e
+    e = html.e
     slack = SlackRepository(ctx.db)
     contacts, channels, sources = slack.contacts(), slack.team_channels(), slack.sources()
     users, teams = _requested(graph)
@@ -148,7 +145,7 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
         " <code>[slack.teams]</code> in the config wins over what's here.</p>"
         f"<table>{team_rows}</table></article>"
     )
-    return render.page("Where pings go", "slack contacts", body)
+    return html.page("Where pings go", "slack contacts", body)
 
 
 def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:

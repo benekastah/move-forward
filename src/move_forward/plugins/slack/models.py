@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from ...domain import Model
+from ...api import Model
 
 PingKind = Literal["first", "follow-up"]
 

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from ...domain import Model
+from ...api import Model
 
 
 class Worktree(Model):

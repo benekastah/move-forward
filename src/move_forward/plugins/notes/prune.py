@@ -10,8 +10,7 @@ known as such, so an entry naming only tickets goes once it hasn't been updated 
 
 from datetime import UTC, date, datetime
 
-from ...domain import Model
-from ...graph import Entity, Graph
+from ...api import Entity, Graph, Model
 from .models import Entry, Ice
 from .panels import entry_keys
 from .repository import NotesRepository

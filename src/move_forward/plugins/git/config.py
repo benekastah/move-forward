@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import Field, field_validator
 
-from ...strict import Strict
+from ...api import Strict
 
 DEFAULT_REFRESH_SECONDS = 1800
 DEFAULT_STATUS_SECONDS = 30

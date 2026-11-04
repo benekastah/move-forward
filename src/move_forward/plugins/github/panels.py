@@ -8,9 +8,7 @@ from datetime import datetime, timedelta
 
 from pydantic import Field
 
-from ...domain import Model
-from ...graph import Graph, Ref
-from ...page import Effort, Item, Link, Panel, Signals, age
+from ...api import Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
 from .config import GitHubConfig
 from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
 from .prs import (

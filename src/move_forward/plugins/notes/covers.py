@@ -3,8 +3,7 @@ them (git_stack's `stack_branch`), and what an iced work entry links. Nothing in
 ties a PR to its branch, and an entry's links change, so notes finds them after every
 refresh and when something is iced."""
 
-from ...domain import Model
-from ...graph import Graph, Ref
+from ...api import Graph, Model, Ref
 from .models import Ice
 
 PR = "pr"

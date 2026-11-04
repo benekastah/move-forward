@@ -24,10 +24,8 @@ from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
-from ... import keychain
-from ...domain import Model
-from ...plugin import Context
-from ...shell import CommandError
+from ...api import Context, Model, keychain
+from ...api.shell import CommandError
 from . import client, scopes
 from .config import SlackConfig
 

@@ -2,8 +2,7 @@
 
 import urllib.error
 
-from ...graph import Graph
-from ...plugin import ActionError, ActionHandler, Context, form_field
+from ...api import ActionError, ActionHandler, Context, Graph, form_field
 from . import client
 from .config import JiraConfig
 

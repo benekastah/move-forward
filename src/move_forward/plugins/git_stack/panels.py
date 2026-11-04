@@ -7,9 +7,7 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 
 from pathlib import Path
 
-from ...domain import Model
-from ...graph import Entity, Graph, Ref, attrs
-from ...page import Action, Item, Panel
+from ...api import Action, Entity, Graph, Item, Model, Panel, Ref, attrs
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
 

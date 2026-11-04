@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[jira]`."""
 
-from ...asking import Asker, InitSetup, https_url
+from ...api import Asker, InitSetup, https_url
 
 TEMPLATE = """\
 # refresh_seconds = 900                 # how often it refreshes (tickets change slowly)
