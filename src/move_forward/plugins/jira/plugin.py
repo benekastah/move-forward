@@ -357,6 +357,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     init_template = TEMPLATE
     init_example = EXAMPLE
     config_model = JiraConfig
+    teams_field = "teams"
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
