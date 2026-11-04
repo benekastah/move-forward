@@ -87,15 +87,17 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     title = "GitHub"
     init_template = TEMPLATE
     init_finds_teams = True
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
-        return questions(ask, setup)
-
     config_model = GitHubConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {PR: PrAttrs, PERSON: PersonAttrs}
     cli_help = "import reviewers' emails from the skill's reviewer map"
     snapshot_model = GitHubSnapshot
+    change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
+    watches: ClassVar[list[str]] = ["git"]
+    notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
+
+    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+        return questions(ask, setup)
 
     def collect(self, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, after `changed` saw only some PRs change, just those PRs, placed
@@ -150,9 +152,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def store(self, req: StoreRequest[GitHubConfig, GitHubSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
         PrRepository(ctx.db).replace(snapshot)
-
-    change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
-    watches: ClassVar[list[str]] = ["git"]
 
     def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
@@ -210,8 +209,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 return prs | {EVERYTHING}
             prs |= {f"{pr.repo}#{pr.number}" for pr in snapshot.mine if pr.repo.lower() in ci_repos}
         return prs
-
-    notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
 
     def events(self, req: EventsRequest[GitHubConfig, GitHubSnapshot]) -> list[Event]:
         ctx, before, after = req.ctx, req.before, req.after

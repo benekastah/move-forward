@@ -13,7 +13,7 @@ from conftest import NOW
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import ActionError, Context
+from move_forward.plugin import ActionError, ActionRequest, Context, PageRequest
 from move_forward.plugins.slack import account, client, oauth, scopes
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.plugin import SlackPlugin
@@ -197,31 +197,36 @@ def test_without_the_app_the_token_set_by_hand_is_used(monkeypatch: pytest.Monke
 def test_disconnecting_revokes_and_forgets_the_token(monkeypatch: pytest.MonkeyPatch) -> None:
     secrets, slack, db = _connected(monkeypatch)
     slack.answers.append({"ok": True, "revoked": True})
-    assert account.disconnect_action(_ctx(db), Graph([]), {}) == "disconnected Slack"
+    assert account.disconnect_action(ActionRequest(_ctx(db), Graph([]), {})) == "disconnected Slack"
     assert slack.asked == [("auth.revoke", "xoxe.xoxp-1", {})]
     assert secrets.stored == {} and oauth.connection(_ctx(db)) is None
     with pytest.raises(ActionError, match="isn't connected"):
-        account.disconnect_action(_ctx(db), Graph([]), {})
+        account.disconnect_action(ActionRequest(_ctx(db), Graph([]), {}))
 
 
 def test_slacks_page_sets_up_connects_and_shows_the_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db = Database(":memory:")
-    setup = account.page(_ctx(db, client_id=""), Graph([]), {})
+    setup = account.page(PageRequest(_ctx(db, client_id=""), Graph([]), {}, "/slack"))
     assert "Set up the Slack app" in setup and "Connect Slack" not in setup
     assert "users:read.email" in setup  # the manifest, to paste
-    assert account.connect(_ctx(db, client_id=""), Graph([]), {}) is None
-    page = account.page(_ctx(db), Graph([]), {})
+    assert (
+        account.connect(PageRequest(_ctx(db, client_id=""), Graph([]), {}, "/slack/connect"))
+        is None
+    )
+    page = account.page(PageRequest(_ctx(db), Graph([]), {}, "/slack"))
     assert "action='/actions/slack/connect?back=%2Fslack%2Fconnect'" in page  # a POST button
     assert "href='/slack/connect'" not in page
-    assert "No sign-in under way" in (account.connect(_ctx(db), Graph([]), {}) or "")
+    assert "No sign-in under way" in (
+        account.connect(PageRequest(_ctx(db), Graph([]), {}, "/slack/connect")) or ""
+    )
     assert oauth.pending_url(_ctx(db)) is None  # loading the page started nothing
-    account.connect_action(_ctx(db), Graph([]), {})
-    connect = account.connect(_ctx(db), Graph([]), {}) or ""
+    account.connect_action(ActionRequest(_ctx(db), Graph([]), {}))
+    connect = account.connect(PageRequest(_ctx(db), Graph([]), {}, "/slack/connect")) or ""
     assert 'location.replace("https://slack.com/oauth/v2/authorize?' in connect
     _, _, db = _connected(monkeypatch)
-    shown = account.page(_ctx(db), Graph([]), {})
+    shown = account.page(PageRequest(_ctx(db), Graph([]), {}, "/slack"))
     assert "Connected" in shown and "Acme" in shown and "slack/disconnect" in shown
     assert SlackPlugin.sign_in_pages == {oauth.CALLBACK_PATH}
 
@@ -238,17 +243,21 @@ def test_a_secret_store_that_wont_keep_the_token_is_said_not_crashed(
     monkeypatch.setattr(oauth.keychain, "write", no_store)
     state = _started(db)["state"]
     slack.answers.append(SIGNED_IN)
-    page = account.callback(_ctx(db), Graph([]), {"code": ["c"], "state": state})
+    page = account.callback(
+        PageRequest(_ctx(db), Graph([]), {"code": ["c"], "state": state}, oauth.CALLBACK_PATH)
+    )
     assert "Not connected: couldn&#x27;t keep the token" in page
     assert oauth.connection(_ctx(db)) is None
 
 
 def test_loading_the_connect_page_does_not_restart_a_sign_in_under_way() -> None:
     db = Database(":memory:")
-    account.connect_action(_ctx(db), Graph([]), {})
+    account.connect_action(ActionRequest(_ctx(db), Graph([]), {}))
     state = parse_qs(urlsplit(oauth.pending_url(_ctx(db)) or "").query)["state"]
-    account.connect(_ctx(db), Graph([]), {})  # as a link or an image on another site could
-    account.connect(_ctx(db), Graph([]), {})
+    account.connect(
+        PageRequest(_ctx(db), Graph([]), {}, "/slack/connect")
+    )  # as a link or an image on another site could
+    account.connect(PageRequest(_ctx(db), Graph([]), {}, "/slack/connect"))
     assert parse_qs(urlsplit(oauth.pending_url(_ctx(db)) or "").query)["state"] == state
     with pytest.raises(ActionError, match="client_id"):
-        account.connect_action(_ctx(db, client_id=""), Graph([]), {})
+        account.connect_action(ActionRequest(_ctx(db, client_id=""), Graph([]), {}))

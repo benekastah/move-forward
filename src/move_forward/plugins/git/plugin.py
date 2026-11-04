@@ -52,6 +52,12 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     name = "git"
     title = "Local"
     init_template = TEMPLATE
+    config_model = GitConfig
+    snapshot_model = LocalSnapshot
+    migrations: ClassVar[list[str]] = MIGRATIONS
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {REPO: RepoAttrs, BRANCH: BranchAttrs}
+    change_check_seconds: ClassVar[int | None] = 2
+    notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 
     def __init__(self, watching: bool = True) -> None:
         self._watching = watching
@@ -63,11 +69,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
-
-    config_model = GitConfig
-    snapshot_model = LocalSnapshot
-    migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {REPO: RepoAttrs, BRANCH: BranchAttrs}
 
     def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         """Every repo; or, after `changed` saw only some move, just those, keeping the rest
@@ -102,8 +103,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         LocalRepository(ctx.db).replace(snapshot)
         if self._watcher is not None:
             self._watch(snapshot)
-
-    change_check_seconds: ClassVar[int | None] = 2
 
     def _watcher_for(self, ctx: Context[GitConfig]) -> watch.Watcher | None:
         """The watcher, started on the first call; None when not watching, or when it can't
@@ -245,8 +244,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     def panels(self, req: PanelsRequest[GitConfig, LocalSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
-
-    notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 
     def graph_events(self, req: GraphEventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
         """`branch_deletable`: a branch Cleanup lists now and didn't before this refresh."""

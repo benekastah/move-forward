@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from ...api import CliHandler, Context, Graph
+from ...api import CliHandler, CliRequest
 from .config import GitHubConfig
 from .people import REVIEWER_MAP_FILE, PeopleRepository, read_reviewer_map
 
@@ -16,7 +16,8 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     )
     import_parser.add_argument("dir", type=Path)
 
-    def run(ctx: Context[GitHubConfig], graph: Graph, args: argparse.Namespace) -> int:
+    def run(req: CliRequest[GitHubConfig]) -> int:
+        ctx, args = req.ctx, req.args
         path = Path(args.dir).expanduser() / REVIEWER_MAP_FILE
         if not path.exists():
             print(f"mfd github import: no {path}", file=sys.stderr)

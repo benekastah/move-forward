@@ -346,6 +346,14 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     title = "Jira"
     init_template = TEMPLATE
     init_example = EXAMPLE
+    config_model = JiraConfig
+    snapshot_model = JiraSnapshot
+    migrations: ClassVar[list[str]] = MIGRATIONS
+    kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
+    linking: ClassVar[dict[str, str | None]] = {TICKET: None}
+    """Tickets link; `linking_patterns` gives the pattern of their keys."""
+    notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
+    change_check_seconds: ClassVar[int | None] = 60
 
     def init_suggested(self) -> bool:
         """Only when asked for: it needs a site (jira) or workspace (slack) to be useful."""
@@ -353,15 +361,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
-
-    config_model = JiraConfig
-    snapshot_model = JiraSnapshot
-    migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
-    linking: ClassVar[dict[str, str | None]] = {TICKET: None}
-    """Tickets link; `linking_patterns` gives the pattern of their keys."""
-
-    notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
 
     def events(self, req: EventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
         ctx, before, after = req.ctx, req.before, req.after
@@ -389,8 +388,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     def store(self, req: StoreRequest[JiraConfig, JiraSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
         IssueRepository(ctx.db).replace(snapshot)
-
-    change_check_seconds: ClassVar[int | None] = 60
 
     def changed(self, req: ChangedRequest[JiraConfig]) -> bool:
         """Whether a ticket of mine was updated since the last look (and a minute before

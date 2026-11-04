@@ -39,11 +39,6 @@ TEMPLATE = """\
 class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     name = "git_stack"
     title = "git-stack"
-
-    def init_suggested(self) -> bool:
-        """Only when git-stack is installed, i.e. `git stack` would run."""
-        return shutil.which("git-stack") is not None
-
     config_model = GitStackConfig
     init_template = TEMPLATE
     requires: ClassVar[list[str]] = ["git"]
@@ -52,6 +47,11 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     collects_after_graph = True
     migrations: ClassVar[list[str]] = MIGRATIONS
     kinds: ClassVar[dict[str, type[BaseModel]]] = {STACK_BRANCH: StackBranchAttrs}
+    notification_kinds: ClassVar[dict[str, str]] = events.KINDS
+
+    def init_suggested(self) -> bool:
+        """Only when git-stack is installed, i.e. `git stack` would run."""
+        return shutil.which("git-stack") is not None
 
     def collect_after(self, req: CollectAfterRequest[GitStackConfig]) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""
@@ -84,8 +84,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     def panels(self, req: PanelsRequest[GitStackConfig, GitStackSnapshot]) -> list[Panel]:
         snapshot, graph = req.snapshot, req.graph
         return [Builder(snapshot, graph).stacks()]
-
-    notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 
     def events(self, req: EventsRequest[GitStackConfig, GitStackSnapshot]) -> list[Event]:
         before, after = req.before, req.after
