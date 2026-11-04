@@ -32,7 +32,8 @@ just opened, say) waits for that.
 
 `[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
 fetched. Its conventions that differ between organisations are off by default:
-`policy_checks` (checks that enforce PR policy, such as labels or assignees, rather than test the code), `required_owner_marker` (a
+`policy_checks` (checks that enforce PR policy, such as labels or assignees, rather than test the code), `ignored_reviewers` (logins whose comments and
+reviews, like a policy bot's, aren't feedback), `required_owner_marker` (a
 CODEOWNERS comment such as `#required`), `ticket_link_prefix` (the PR body line that links
 the ticket, e.g. `Link`) and `placeholder_labels` (template labels to replace).
 `email_domains` picks reviewers' emails from their commits (default: your email's domain;

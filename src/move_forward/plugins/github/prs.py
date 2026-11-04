@@ -1,6 +1,7 @@
 """What a PR's fields say about it: its review state, checks, tickets and feedback."""
 
 import re
+from collections.abc import Collection
 from datetime import datetime
 
 from ... import localtime
@@ -14,8 +15,9 @@ FAILING_CHECK_STATES = frozenset(
 PASSING_CHECK_STATES = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
 
 
-def is_bot(login: str | None) -> bool:
-    return login is None or bool(BOT_LOGIN_RE.search(login))
+def is_bot(login: str | None, ignored: Collection[str] = ()) -> bool:
+    """Whether `login` is a bot or one of the `ignored` logins, whose feedback doesn't count."""
+    return login is None or login in ignored or bool(BOT_LOGIN_RE.search(login))
 
 
 def approved(pr: PullRequest) -> bool:
@@ -28,8 +30,9 @@ def changes_requested(pr: PullRequest) -> bool:
     )
 
 
-def unresolved_threads(pr: PullRequest) -> list[Thread]:
-    return [t for t in pr.threads if not t.resolved]
+def unresolved_threads(pr: PullRequest, ignored: Collection[str] = ()) -> list[Thread]:
+    """The open threads, except those started by an `ignored` login."""
+    return [t for t in pr.threads if not t.resolved and t.author not in ignored]
 
 
 def failing_checks(pr: PullRequest) -> list[Check]:
@@ -60,7 +63,7 @@ def ticket_keys(pr: PullRequest) -> list[str]:
     return seen
 
 
-def unanswered_feedback(pr: PullRequest, me: str) -> list[str]:
+def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ()) -> list[str]:
     """Review and comment events by others after my last push that I haven't followed up on."""
     since = pr.last_commit_at
     pending: list[str] = []
@@ -71,7 +74,7 @@ def unanswered_feedback(pr: PullRequest, me: str) -> list[str]:
             continue
         if event.actor == me:
             pending.clear()
-        elif not is_bot(event.actor):
+        elif not is_bot(event.actor, ignored):
             pending.append(f"{event.type.removeprefix('PullRequest').lower()} by {event.actor}")
     return pending
 
@@ -93,19 +96,21 @@ def needs_re_review(pr: PullRequest, me: str) -> str | None:
     return None
 
 
-def last_review_activity(pr: PullRequest) -> datetime | None:
+def last_review_activity(pr: PullRequest, ignored: Collection[str] = ()) -> datetime | None:
     """The latest review request, review or non-bot comment."""
     times = [
         e.at
         for e in pr.events
         if e.type == "ReviewRequestedEvent"
-        or (e.type in ("PullRequestReview", "IssueComment") and not is_bot(e.actor))
+        or (e.type in ("PullRequestReview", "IssueComment") and not is_bot(e.actor, ignored))
     ]
     times += [r.submitted_at for r in pr.reviews if r.submitted_at]
     return max(times) if times else None
 
 
-def review_blockers(pr: PullRequest, me: str, policy_checks: list[str]) -> list[str]:
+def review_blockers(
+    pr: PullRequest, me: str, policy_checks: list[str], ignored: Collection[str] = ()
+) -> list[str]:
     """Why the skill wouldn't nudge reviewers of my PR yet; empty when it's in order."""
     blockers: list[str] = []
     if approved(pr):
@@ -116,8 +121,8 @@ def review_blockers(pr: PullRequest, me: str, policy_checks: list[str]) -> list[
         blockers.append("conflicts")
     if any(c.name not in policy_checks for c in failing_checks(pr)):
         blockers.append("failing checks")
-    if unresolved_threads(pr):
+    if unresolved_threads(pr, ignored):
         blockers.append("unresolved threads")
-    if unanswered_feedback(pr, me):
+    if unanswered_feedback(pr, me, ignored):
         blockers.append("unanswered feedback")
     return blockers

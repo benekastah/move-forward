@@ -130,6 +130,19 @@ def test_feedback_collects_threads_changes_requested_and_unanswered_comments() -
     assert items["PR 2"].details == ["changes requested", "issuecomment by alice"]
 
 
+def test_feedback_leaves_out_comments_and_threads_of_ignored_reviewers() -> None:
+    pushed = NOW - timedelta(days=1)
+    noisy = pr(
+        1,
+        last_commit_at=pushed,
+        threads=[thread(author="policy-bot")],
+        events=[event("IssueComment", pushed + timedelta(hours=1), actor="policy-bot")],
+    )
+    dashboard = build(github=snapshot(mine=[noisy]), ignored_reviewers=["policy-bot"])
+    assert panel(dashboard, "github.feedback").items == []
+    assert panel(build(github=snapshot(mine=[noisy])), "github.feedback").items != []
+
+
 def test_feedback_marks_outdated_threads() -> None:
     dashboard = build(github=snapshot(mine=[pr(1, threads=[thread(outdated=True)])]))
     assert panel(dashboard, "github.feedback").items[0].details[0].startswith("(outdated) ")

@@ -183,7 +183,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def events(
         self, ctx: Context[GitHubConfig], before: GitHubSnapshot, after: GitHubSnapshot
     ) -> list[Event]:
-        return changes.changes(before, after)
+        return changes.changes(before, after, ctx.config.ignored_reviewers)
 
     def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
         return PrRepository(ctx.db).load()
@@ -268,9 +268,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             "requested_teams": [team_names.get(slug, slug) for slug in pr.requested_teams],
         }
         if mine and state == "open":
-            last = last_review_activity(pr)
+            ignored = ctx.config.ignored_reviewers
+            last = last_review_activity(pr, ignored)
             stale_after = ctx.config.stale_review_hours * 3600
-            fields["review_blockers"] = review_blockers(pr, me, ctx.config.policy_checks)
+            fields["review_blockers"] = review_blockers(pr, me, ctx.config.policy_checks, ignored)
             fields["last_review_activity"] = last.isoformat() if last else None
             fields["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
         pr_attrs = PrAttrs.model_validate(fields)

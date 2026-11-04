@@ -40,6 +40,7 @@ org = "example-org"
 # refresh_seconds = 300
 # history_days = 14
 # policy_checks = []                     # checks that enforce PR policy, not CI
+# ignored_reviewers = []                 # logins whose comments aren't review feedback
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners
 # ticket_link_prefix = ""                # PR body line that links the ticket, e.g. "Link"
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]

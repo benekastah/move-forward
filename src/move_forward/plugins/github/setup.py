@@ -13,6 +13,7 @@ TEMPLATE = """\
 # refresh_seconds = 300                 # how often it refreshes (GitHub's API is rate-limited)
 # history_days = 14                      # how far back merged and closed PRs are fetched
 # policy_checks = []                     # checks that enforce PR policy, not CI, e.g. ["pr-policy"]
+# ignored_reviewers = []                 # logins whose comments aren't feedback, e.g. a policy bot
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners, e.g. "#required"
 # ticket_link_prefix = ""                # PR body line that links the ticket, e.g. "Link"
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]

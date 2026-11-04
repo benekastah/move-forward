@@ -200,7 +200,7 @@ class Builder:
     def feedback(self) -> Panel:
         items: list[Item] = []
         for pr in self.mine:
-            threads = unresolved_threads(pr)
+            threads = unresolved_threads(pr, self.config.ignored_reviewers)
             details = [
                 f"{'(outdated) ' if t.outdated else ''}{t.author or '?'} on {t.path or 'PR'}:"
                 f" {t.body.strip().splitlines()[0][:120] if t.body.strip() else ''}"
@@ -209,7 +209,7 @@ class Builder:
             links = [Link(text=f"thread {n}", url=t.url) for n, t in enumerate(threads, 1) if t.url]
             if changes_requested(pr):
                 details.insert(0, "changes requested")
-            details += unanswered_feedback(pr, self.me)
+            details += unanswered_feedback(pr, self.me, self.config.ignored_reviewers)
             if details:
                 authors = list(dict.fromkeys(t.author for t in threads if t.author))
                 since = min((t.created_at for t in threads if t.created_at), default=None)

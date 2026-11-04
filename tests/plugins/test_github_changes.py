@@ -83,6 +83,14 @@ def test_new_comments_on_the_conversation_are_said() -> None:
     ]
 
 
+def test_comments_and_reviews_by_ignored_reviewers_are_not_said() -> None:
+    comment = event("IssueComment", NOW, actor="policy-bot")
+    review = Review(author="policy-bot", state="COMMENTED", submitted_at=NOW)
+    after = _mine(events=[comment], reviews=[review])
+    assert changes(_mine(), after) != []
+    assert changes(_mine(), after, ["policy-bot"]) == []
+
+
 def test_a_pr_merged_or_closed_is_said_whoever_did_it() -> None:
     assert _kinds(_mine(), snapshot(merged_recent=[pr(1, state="MERGED")])) == [
         ("pr_merged", "was merged")
