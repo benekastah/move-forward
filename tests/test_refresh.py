@@ -393,3 +393,10 @@ def test_a_plugin_with_more_to_collect_is_collected_again_in_one_refresh(
     refresh.refresh(config, db, NOW)
     assert pieces == [0, 1, 2]
     assert SnapshotRepository(db).all()["git"].error is None
+
+
+def test_the_known_actions_are_the_enabled_plugins_declared_ones() -> None:
+    config, db = stored()
+    known = refresh._known_action(registry.enabled(config, db, NOW))  # pyright: ignore[reportPrivateUsage]
+    assert known("notes/todo_done") and known("git/push_branch")
+    assert not known("notes/nope") and not known("jira/transition")  # jira isn't on

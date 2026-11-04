@@ -149,7 +149,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   subscribed to one of the kinds (`<plugin>.<kind>`), `events` gets the last good
   snapshot (`req.before`), the one just collected (`req.after`) and the graph from before
   the refresh, and returns an `Event` for what changed: its
-  `thing` (events with the same one are told together), `title`, `text`, and `anchor` (an
+  `thing` (the plugin's events with the same one are told together; core keeps it as
+  `<plugin>:<thing>`, so another plugin's events about one URL stay apart), `title`, `text`, and `anchor` (an
   item's `page.anchor(kind, id)`, to open the dashboard at it). Say it on a change of state,
   not while it holds, and nothing about what `before` has no state for. A failure is
   logged and the refresh goes on.
@@ -318,7 +319,11 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 ## Buttons, pages and commands
 
 - **Actions.** `actions()` maps names to handlers `(req: ActionRequest) -> str |
-  ActionResult`; a button posts to `/actions/<plugin>/<name>`. `req.fields` are its form
+  ActionResult`; a button posts to `/actions/<plugin>/<name>`, which is its `Action.name`.
+  Core leaves out (and logs) a button whose name no enabled plugin's `actions()` has, so a
+  typo can't post to a 404. An action that keeps its item on the focus page returns
+  `ActionResult(notice, req.ctx.kept(key))`, and `kept_item` gets `key` back.
+  `req.fields` are its form
   fields, `req.surface` where the button was (`dashboard` or `focus`). Check every field: they
   come from a form, so treat them as untrusted (a repo must be configured, a worktree must
   be the repo's, an id must exist). Anything that deletes or rewrites sets `confirm`, and

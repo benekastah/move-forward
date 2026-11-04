@@ -233,17 +233,51 @@ def _snoozable(
     return panel.model_copy(update={"items": items})
 
 
+KnownAction = Callable[[str], bool]
+"""Whether a button's name, `<plugin>/<action>`, is an action an enabled plugin declares."""
+
+
+def _any_action(name: str) -> bool:
+    return True
+
+
+_said_unknown: set[str] = set()
+"""The button names already logged as naming no action."""
+
+
+def _known(action: Action, known: KnownAction) -> bool:
+    """Whether a button posts to an action that's there: Act now's own, a link, or one an
+    enabled plugin declares. One that isn't is a plugin bug (a typo, a plugin not enabled):
+    it's left out, so it can't post to a 404, and logged once."""
+    if action.href is not None or action.name.startswith(f"{act_now.ACTIONS}/"):
+        return True
+    if known(action.name):
+        return True
+    if action.name not in _said_unknown:
+        _said_unknown.add(action.name)
+        log.error(
+            "a button posts to %r, which no enabled plugin declares; it's left out", action.name
+        )
+    return False
+
+
 def _with_item_actions(
-    panel: Panel, owner: str, surface: Surface, item_actions: ItemActions
+    panel: Panel,
+    owner: str,
+    surface: Surface,
+    item_actions: ItemActions,
+    known: KnownAction = _any_action,
 ) -> Panel:
     """Each item, and each of its focus-mode parts, with what the plugins add: buttons,
-    badges, details and links. `owner` is the plugin whose panel it is."""
+    badges, details and links. `owner` is the plugin whose panel it is. Buttons posting to
+    no action `known` knows are left out."""
 
     def add(item: Item) -> Item:
         added = item_actions(item, owner, surface)
+        actions = [a for a in [*item.actions, *added.actions] if _known(a, known)]
         return item.model_copy(
             update={
-                "actions": [*item.actions, *added.actions],
+                "actions": actions,
                 "badges": [*item.badges, *added.badges],
                 "details": [*item.details, *added.details],
                 "links": [*item.links, *added.links],
@@ -285,12 +319,14 @@ def build(
     units: act_now.Units = act_now.no_units,
     priority_of: act_now.PriorityOf = act_now.no_priority,
     surface: Surface = "dashboard",
+    known_action: KnownAction = _any_action,
 ) -> Dashboard:
     """The dashboard: Act now, ranked from the plugins' nominations, then the plugins' panels in
     their groups, without hidden items, each item with the plugins' buttons, sorted, in the
     `layout`'s order. `ranking` is `[act_now]`, `feedback` what I said of its items, and
     `units` the graph's, for Act now to join items about the same unit of work, and
-    `priority_of` what I set as the priority of what an item is about. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
+    `priority_of` what I set as the priority of what an item is about; `known_action` says
+    which buttons post to an action that's there. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
     so two plugins' panels never clash."""
     plugins = [
         PluginPanels(
@@ -311,7 +347,7 @@ def build(
     fetched = {source: status.fetched_at for source, status in sources.items() if status.fetched_at}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
     ranked = [
-        _with_item_actions(p, p.key, "act_now", item_actions).model_copy(
+        _with_item_actions(p, p.key, "act_now", item_actions, known_action).model_copy(
             update={"key": panel_key(ACT_NOW, p.key)}
         )
         for p in act_now.panels(
@@ -326,7 +362,11 @@ def build(
             *(
                 _sorted(
                     _with_item_actions(
-                        _without_hidden(shown, hidden), plugin.key, surface, item_actions
+                        _without_hidden(shown, hidden),
+                        plugin.key,
+                        surface,
+                        item_actions,
+                        known_action,
                     )
                 )
                 for plugin in plugins

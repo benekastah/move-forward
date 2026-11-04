@@ -265,7 +265,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         ]
         collect_into(
             ctx.db,
-            f"{self.name}.{DERIVED}",
+            ctx.part(DERIVED),
             ctx.now,
             lambda: derive.collect(
                 gh,

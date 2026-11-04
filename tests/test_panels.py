@@ -22,7 +22,7 @@ from conftest import (
 
 from move_forward import panels
 from move_forward.graph import Ref
-from move_forward.page import Action, Group, Item, Signals
+from move_forward.page import Action, Group, Item, Panel, Signals
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
@@ -546,3 +546,28 @@ def test_a_nomination_without_a_task_is_left_out_of_act_now_and_logged(
     )
     assert [i.title for i in page.act_now()] == ["Go: a"]
     assert "linear nominated 'b' for Act now without a task" in caplog.text
+
+
+def test_a_button_posting_to_no_declared_action_is_left_out_and_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def button(name: str) -> Action:
+        return Action(name=name, label=name, fields={})
+
+    item = Item(
+        title="x",
+        actions=[button("notes/todo_done"), button("notes/todo_dnoe"), button("act_now/pin")],
+    )
+    page = panels.build(
+        NOW,
+        [
+            panels.PluginPanels(
+                "notes", "Notes", [Panel(key="todos", title="Todos", description="", items=[item])]
+            )
+        ],
+        {},
+        known_action={"notes/todo_done"}.__contains__,
+    )
+    [shown] = page.panel("notes.todos").items
+    assert [a.name for a in shown.actions] == ["notes/todo_done", "act_now/pin"]
+    assert "a button posts to 'notes/todo_dnoe'" in caplog.text
