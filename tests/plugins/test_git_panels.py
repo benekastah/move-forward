@@ -19,6 +19,7 @@ from legacy import save_json_snapshot
 
 from move_forward import refresh
 from move_forward.db import Database
+from move_forward.page import Badge
 from move_forward.plugins.git.models import Worktree
 from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
 from move_forward.plugins.git_stack.models import StackBranch
@@ -64,7 +65,7 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
     both = "me/APP-1-branch: 2 modified, 1 untracked, 3 unpushed commits"
     assert set(items) == {both, "me/new: 2 commits, never pushed"}  # me/iced is on ice: hidden
     assert items[both].url == pr(1).url
-    assert items[both].badges == ["uncommitted", "has PR"]
+    assert items[both].badges == [Badge(text="uncommitted", tone="warn"), "has PR"]
     assert [(a.name, a.fields) for a in items[both].actions if a.name != "notes/todo_add"] == [
         ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
         ("git/push_branch", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),

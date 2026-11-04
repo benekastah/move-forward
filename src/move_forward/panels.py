@@ -185,8 +185,10 @@ class Dashboard(Model):
 
 
 def _sorted(panel: Panel) -> Panel:
-    """Highest rank first, drafts last."""
-    return panel.model_copy(update={"items": sorted(panel.items, key=lambda i: (i.draft, -i.rank))})
+    """Highest rank first, deferred items last."""
+    return panel.model_copy(
+        update={"items": sorted(panel.items, key=lambda i: (i.deferred, -i.rank))}
+    )
 
 
 ItemActions = Callable[[Item, str, Surface], ItemAdditions]

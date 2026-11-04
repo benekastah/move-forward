@@ -252,9 +252,9 @@ def test_strong_links_get_a_class() -> None:
     item = page.Item(
         title="x",
         links=[
-            page.Link(text="PR 1", url="https://g/1", strong=True, pr_state="merged"),
+            page.Link(text="PR 1", url="https://g/1", strong=True, done=True),
             page.Link(text="PR 2", url="https://g/2"),
-            page.Link(text="PR 3", url="https://g/3", pr_state="closed"),
+            page.Link(text="PR 3", url="https://g/3", done=True),
         ],
         actions=[
             page.Action(
@@ -272,11 +272,10 @@ def test_strong_links_get_a_class() -> None:
     html = render.focus_page(dashboard, "todos", 0)
     assert html is not None
     assert (
-        "<a href='https://g/1' class='strong merged' target='_blank' rel='noopener'>PR 1</a>"
-        in html
+        "<a href='https://g/1' class='strong done' target='_blank' rel='noopener'>PR 1</a>" in html
     )
     assert "<a href='https://g/2' target='_blank' rel='noopener'>PR 2</a>" in html
-    assert "<a href='https://g/3' class='closed' target='_blank' rel='noopener'>PR 3</a>" in html
+    assert "<a href='https://g/3' class='done' target='_blank' rel='noopener'>PR 3</a>" in html
     assert "<label class='check suggested'>" in html
 
 

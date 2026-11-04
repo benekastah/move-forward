@@ -6,7 +6,7 @@ from html import escape
 from urllib.parse import urlencode
 
 from . import localtime
-from .page import Action, Group, Item, Link, Panel, SourceStatus, age
+from .page import Action, Badge, Group, Item, Link, Panel, SourceStatus, age
 from .panels import ACT_NOW, FOCUS_ALL, Dashboard
 
 PAGE_RELOAD_SECONDS = 60
@@ -210,7 +210,6 @@ FOCUS_KEYS_SCRIPT = (
 """Focus mode: the left and right arrow keys go to the previous and next item."""
 LOGO = "<a href='/' class='logo'><img src='/logo.svg' alt=''> Move forward</a>"
 """The header's home link: the arrow (the favicon without its circle) and the name."""
-WARNING_BADGE_WORDS = ("conflict", "blocked", "uncommitted", "draft", "failing", "iced", "unpushed")
 
 
 def _e(text: object) -> str:
@@ -282,9 +281,12 @@ def banner(text: str, urgency: str | None) -> str:
     return f"<div class='banner {_e(urgency)}' role='alert'>{_e(text)}</div>"
 
 
-def _badge(text: str) -> str:
-    warn = any(word in text.lower() for word in WARNING_BADGE_WORDS)
-    return f"<span class='badge{' warn' if warn else ''}'>{_e(text)}</span>"
+def _badge(badge: str | Badge) -> str:
+    """A badge, coloured by its tone."""
+    if isinstance(badge, str):
+        return f"<span class='badge'>{_e(badge)}</span>"
+    tone = "" if badge.tone == "plain" else f" {badge.tone}"
+    return f"<span class='badge{tone}'>{_e(badge.text)}</span>"
 
 
 def _link_action(action: Action) -> str:
@@ -338,8 +340,8 @@ def buttons(actions: list[Action], back: str = "", at: str = "", pos: int | None
 
 
 def _link(link: Link) -> str:
-    """A link; a PR's gets its state as a class (merged and closed are struck through)."""
-    classes = [c for c, on in (("strong", link.strong), (link.pr_state, True)) if on and c]
+    """A link; one to what's over is struck through."""
+    classes = [c for c, on in (("strong", link.strong), ("done", link.done)) if on]
     cls = f" class='{' '.join(classes)}'" if classes else ""
     if not linkable(link.url):
         return f"<span{cls}>{_e(link.text)}</span>"

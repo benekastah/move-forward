@@ -17,6 +17,7 @@ from conftest import (
 )
 
 from move_forward import refresh
+from move_forward.page import Badge
 from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.refresh import build_dashboard
@@ -98,7 +99,7 @@ def test_jira_next_ranks_incidents_then_bugs_then_unblocked_work() -> None:
     assert keys == ["APP-5", "APP-4", "APP-6", "APP-3", "APP-1", "APP-2"]
     badges = {i.title.split()[0]: i.badges for i in panel(jira.dashboard(), "jira.jira_next").items}
     assert badges["APP-5"] == ["incident, escalated (3)"]
-    assert badges["APP-2"] == ["blocked by APP-9"]
+    assert badges["APP-2"] == [Badge(text="blocked by APP-9", tone="warn")]
 
 
 def test_a_ticket_whose_prs_merged_is_nominated_to_close() -> None:

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from pydantic import Field
 
-from ...api import Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
+from ...api import Badge, Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import REVIEW as REVIEW_TASK
 from ...api.kinds import TICKET
@@ -56,10 +56,10 @@ def _subtitle(now: datetime, pr: PullRequest) -> str:
     return " · ".join(parts)
 
 
-def _badges(pr: PullRequest) -> list[str]:
-    badges = [f"+{pr.size} lines", f"{pr.changed_files} files"]
+def _badges(pr: PullRequest) -> list[str | Badge]:
+    badges: list[str | Badge] = [f"+{pr.size} lines", f"{pr.changed_files} files"]
     if pr.is_draft:
-        badges.insert(0, "draft")
+        badges.insert(0, Badge(text="draft", tone="warn"))
     return badges
 
 
@@ -85,7 +85,7 @@ def pr_item(
         details=details or [],
         links=links or [],
         rank=rank,
-        draft=pr.is_draft,
+        deferred=pr.is_draft,
         subjects=[pr_ref(pr)],
         signals=signals,
         fingerprint=fingerprint,

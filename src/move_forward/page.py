@@ -22,16 +22,22 @@ def anchor(kind: str, id: str) -> str:
     return ANCHOR_PREFIX + re.sub(r"[^A-Za-z0-9_-]+", "-", f"{kind}-{id}").strip("-")
 
 
-PrState = Literal["open", "merged", "closed"]
-
-
 class Link(Model):
     text: str
     url: str
     strong: bool = False
     """Highlighted, e.g. the PR a todo is about among its entry's PRs."""
-    pr_state: PrState | None = None
-    """For a PR link: its state if the GitHub snapshot has the PR, else None."""
+    done: bool = False
+    """What it links to is over (a PR merged or closed, a ticket resolved): struck through."""
+
+
+class Badge(Model):
+    """A badge with a tone; a plain string is a `plain` one."""
+
+    text: str
+    tone: Literal["plain", "warn", "good"] = "plain"
+    """`warn` for what needs attention (conflicts, failing CI, blocked), `good` for what's
+    going well."""
 
 
 class Action(Model):
@@ -98,15 +104,17 @@ class Item(Model):
     title: str
     url: str | None = None
     subtitle: str = ""
-    badges: list[str] = Field(default_factory=list)
-    """Short tags, e.g. `draft`, `conflicts`, `+120`."""
+    badges: list[str | Badge] = Field(default_factory=list[str | Badge])
+    """Short tags, e.g. `+120`, or `Badge("conflicts", "warn")` for one that needs
+    attention."""
     details: list[str] = Field(default_factory=list)
     """Longer lines shown under the title."""
     links: list[Link] = Field(default_factory=list)
     rank: float = 0
     """Higher sorts first within a panel."""
-    draft: bool = False
-    """A draft PR; drafts sort after everything else whatever their rank."""
+    deferred: bool = False
+    """Not for now, e.g. a draft PR: it sorts after everything else in its panel, whatever
+    its rank, and Act now leaves it out unless its plugin nominates it in `act_now`."""
     actions: list[Action] = Field(default_factory=list)
     subjects: list[Ref] = Field(default_factory=list)
     """The entities the item is about, the main one first, e.g. a PR and its branch; other
@@ -164,7 +172,7 @@ class ItemAdditions(Model):
     """What a plugin adds to another plugin's item (`Plugin.item_actions`)."""
 
     actions: list[Action] = Field(default_factory=list)
-    badges: list[str] = Field(default_factory=list)
+    badges: list[str | Badge] = Field(default_factory=list[str | Badge])
     details: list[str] = Field(default_factory=list)
     links: list[Link] = Field(default_factory=list)
 

@@ -33,6 +33,7 @@ from ...api import (
     PruneRequest,
     Ref,
     RelateRequest,
+    Signals,
     StoreRequest,
     UrlRequest,
     attrs,
@@ -410,12 +411,17 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return [f"will look up {retried} reviewer email(s) again"] if retried else []
 
     def act_now(self, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
-        """The panels' items, but not reviews of drafts: they aren't ready for one, so the
-        panel lists them last and Act now leaves them out."""
+        """The panels' items, my drafts' too (their CI, their conflicts), but not reviews of
+        drafts: they aren't ready for one, so the panel lists them last and Act now leaves
+        them out."""
         return [
-            item
-            for item in super().act_now(req)
-            if not (item.draft and item.signals and item.signals.task == REVIEW_TASK)
+            item if item.signals else item.model_copy(update={"signals": panel.signals})
+            for panel in req.panels
+            if panel.act_now
+            for item in panel.items
+            if not (
+                item.deferred and (item.signals or panel.signals or Signals()).task == REVIEW_TASK
+            )
         ]
 
     def panels(self, req: PanelsRequest[GitHubConfig, GitHubSnapshot]) -> list[Panel]:

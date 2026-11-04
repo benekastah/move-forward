@@ -6,7 +6,7 @@ import re
 import textwrap
 from datetime import UTC, datetime, time
 
-from ...api import Action, Entity, Graph, Item, Link, Model, Panel, PrState, Ref, Signals, attrs
+from ...api import Action, Badge, Entity, Graph, Item, Link, Model, Panel, Ref, Signals, attrs
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
@@ -22,7 +22,6 @@ TODOS = "todos"
 """The todos panel's key."""
 BRANCH = "git.branch"
 TODO_ADD = "notes/todo_add"
-PR_STATES: dict[str, PrState] = {"open": "open", "merged": "merged", "closed": "closed"}
 
 
 # Output models
@@ -105,9 +104,7 @@ def _is_blocked(entry: Entry) -> bool:
     return bool(entry.blocked_on) and not NOT_BLOCKED_RE.match(entry.blocked_on or "")
 
 
-def _todo_links(
-    todo: Todo, urls: list[str], states: dict[str, PrState], graph: Graph
-) -> list[Link]:
+def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph) -> list[Link]:
     """The entry's PR links, with the ones the todo mentions first and highlighted, then the
     PRs and Jira tickets only the todo is about (named in it, or linked with its Link button).
 
@@ -124,12 +121,12 @@ def _todo_links(
     for u in urls:
         number = u.rsplit("/", 1)[1]
         mentioned = u in own_prs or re.search(rf"(?<![\w/])#?{number}\b", text) is not None
-        links.append(Link(text=f"PR {number}", url=u, strong=mentioned, pr_state=states.get(u)))
+        links.append(Link(text=f"PR {number}", url=u, strong=mentioned, done=done.get(u, False)))
     links.sort(key=lambda link: not link.strong)
     for u in dict.fromkeys(own_prs):
         if u not in urls:
             number = u.rsplit("/", 1)[1]
-            links.append(Link(text=f"PR {number}", url=u, strong=True, pr_state=states.get(u)))
+            links.append(Link(text=f"PR {number}", url=u, strong=True, done=done.get(u, False)))
     for ticket in dict.fromkeys(own_tickets):
         if url := graph.url_for(TICKET, ticket):
             links.append(Link(text=graph.handle(TICKET, ticket), url=url, strong=True))
@@ -140,8 +137,8 @@ def _todo_part(
     entry: str,
     todo: Todo,
     urls: list[str],
-    states: dict[str, PrState],
-    badges: list[str],
+    done: dict[str, bool],
+    badges: list[str | Badge],
     graph: Graph,
 ) -> Item:
     """One todo as focus mode shows it, linked to the PR it mentions if any.
@@ -149,10 +146,10 @@ def _todo_part(
     When every PR it mentions is merged or closed, the todo is probably done: it says so and
     its Done box is drawn bigger.
     """
-    links = _todo_links(todo, urls, states, graph)
+    links = _todo_links(todo, urls, done, graph)
     mentioned = [link for link in links if link.strong]
-    known = [link.pr_state for link in mentioned if link.pr_state is not None]
-    probably_done = bool(known) and all(state in ("merged", "closed") for state in known)
+    known = [done[link.url] for link in mentioned if link.url in done]
+    probably_done = bool(known) and all(known)
     return Item(
         title=todo.text,
         url=mentioned[0].url if mentioned else None,
@@ -232,6 +229,7 @@ class _PrView(Model):
     id: str
     title: str
     state: str | None = None
+    lifecycle: str
     mine: bool
 
 
@@ -321,12 +319,9 @@ class Builder:
             name="notes/ice_item", label="Put on ice", fields={"kind": ref.kind, "id": ref.id}
         )
 
-    def _pr_states(self) -> dict[str, PrState]:
-        return {
-            pr.id: PR_STATES[pr.state]
-            for pr in self.graph.view(PR, _PrView)
-            if pr.state in PR_STATES
-        }
+    def _pr_done(self) -> dict[str, bool]:
+        """Whether each PR the graph has is over (merged or closed), by URL."""
+        return {pr.id: pr.lifecycle == "done" for pr in self.graph.view(PR, _PrView)}
 
     def kept_todo(self, todo_id: int) -> Item | None:
         """A todo just ticked off (or back on), for the focus page to keep showing with its box
@@ -334,7 +329,7 @@ class Builder:
         for entry in self.entries:
             for todo in entry.todos:
                 if todo.id == todo_id:
-                    links = _todo_links(todo, _entry_urls(entry), self._pr_states(), self.graph)
+                    links = _todo_links(todo, _entry_urls(entry), self._pr_done(), self.graph)
                     mentioned = [link for link in links if link.strong]
                     return Item(
                         title=todo.text,
@@ -348,7 +343,7 @@ class Builder:
 
     def todos(self) -> Panel:
         items: list[Item] = []
-        states = self._pr_states()
+        states = self._pr_done()
         for entry in self.entries:
             open_todos = entry.open_todos
             if not open_todos:
@@ -358,14 +353,14 @@ class Builder:
             blocked = _is_blocked(entry)
             quick = [t for t in open_todos if t.size == "quick"]
             close_out = len(quick) == len(open_todos)
-            badges: list[str] = []
+            badges: list[str | Badge] = []
             if close_out:
                 badges.append(f"close-out: {len(open_todos)} quick todo(s)")
             if blocked:
-                badges.append(
-                    "blocked: "
-                    + textwrap.shorten(entry.blocked_on or "", BLOCKED_BADGE_WIDTH, placeholder="…")
+                shown = textwrap.shorten(
+                    entry.blocked_on or "", BLOCKED_BADGE_WIDTH, placeholder="…"
                 )
+                badges.append(Badge(text=f"blocked: {shown}", tone="warn"))
             url = urls[0] if urls else None
             links = [Link(text=f"PR {u.rsplit('/', 1)[1]}", url=u) for u in urls]
             ordered = sorted(open_todos, key=lambda t: t.size != "quick")

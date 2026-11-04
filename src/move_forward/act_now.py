@@ -161,7 +161,8 @@ class Nomination:
         item = self.item
         if item.fingerprint is not None:
             return item.fingerprint
-        seen = json.dumps([item.title, item.badges, item.details])
+        badges = [b if isinstance(b, str) else b.text for b in item.badges]
+        seen = json.dumps([item.title, badges, item.details])
         return hashlib.sha256(seen.encode()).hexdigest()[:16]
 
 
@@ -534,7 +535,7 @@ def _shown(
             "badges": [f"#{place + 1}", *item.badges],
             "links": links,
             "rank": size - place,
-            "draft": False,
+            "deferred": False,
             "parts": [],
             "actions": [
                 *item.actions,
