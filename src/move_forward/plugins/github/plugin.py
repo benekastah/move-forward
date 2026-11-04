@@ -22,6 +22,7 @@ from .panels import PR, REVIEW, Builder
 from .people import PeopleRepository
 from .prs import (
     changes_requested,
+    failing_checks,
     last_review_activity,
     progress,
     review_blockers,
@@ -280,6 +281,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             fields["review_blockers"] = review_blockers(pr, me, ctx.config.policy_checks, ignored)
             fields["last_review_activity"] = last.isoformat() if last else None
             fields["stale_review_hours"] = ctx.config.stale_review_hours
+            fields["failing_policy_checks"] = [
+                c.name for c in failing_checks(pr) if c.name in ctx.config.policy_checks
+            ]
             fields["progress"] = progress(pr, ignored)
             fields["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
         pr_attrs = PrAttrs.model_validate(fields)

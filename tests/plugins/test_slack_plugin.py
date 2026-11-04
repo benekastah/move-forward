@@ -10,6 +10,7 @@ from conftest import (
     dashboard,
     event,
     iced,
+    panel,
     pings,
     pr,
     snapshot,
@@ -241,3 +242,23 @@ def test_open_slack_is_only_a_link_for_an_http_url() -> None:
     assert "href='https://acme.slack.com/archive/C1'" in form("https://acme.slack.com/archive/C1")
     assert "javascript" not in form("javascript:alert(1)")
     assert "no Slack link known" in form("javascript:alert(1)")
+
+
+def test_a_nudge_says_which_policy_checks_are_failing() -> None:
+    policy = pr(
+        1,
+        requested_teams=["web"],
+        events=[event("ReviewRequestedEvent", NOW - timedelta(days=2), reviewer="web")],
+        checks=[
+            Check(name="CODEOWNERS", state="FAILURE"),
+            Check(name="guidelines", state="ERROR"),
+            Check(name="tests", state="SUCCESS"),
+        ],
+    )
+    built = dashboard(
+        slack=True,
+        github=snapshot(mine=[policy]),
+        policy_checks=["CODEOWNERS", "guidelines", "tests"],
+    )
+    [item] = panel(built, "slack.nudges").items
+    assert "PR policy failing: CODEOWNERS, guidelines" in item.details

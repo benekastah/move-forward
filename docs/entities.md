@@ -80,6 +80,7 @@ On my open PRs only:
 | `last_review_activity` | ISO datetime or null | the latest review request, review or human comment |
 | `review_stale` | bool | no review activity for `[github] stale_review_hours` |
 | `stale_review_hours` | integer | `[github] stale_review_hours`, for what says how long a review request must be quiet |
+| `failing_policy_checks` | list of strings | the failing checks named in `[github] policy_checks` |
 | `progress` | string | where it is: `draft`, `ready to merge`, `CI failing` or `in review` |
 
 ### `person`
