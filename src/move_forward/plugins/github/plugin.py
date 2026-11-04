@@ -35,6 +35,7 @@ from ...api import (
     attrs,
     collect_into,
 )
+from ...api.kinds import PERSON
 from ...api.shell import CommandError
 from . import changes, cli, client, derive, notifications, placing, pushes
 from .config import GitHubConfig
@@ -56,8 +57,7 @@ from .tables import MIGRATIONS
 DERIVED = "derived"
 """`after_collect`'s part of the refresh, `github.derived`: team scores and reviewer
 suggestions. Its status is recorded under that name; what it found goes to its tables."""
-PERSON = "person"
-REPO = "repo"
+REPO = "git.repo"
 NOTIFICATIONS_SEEN = "notifications_last_modified"
 """The kv key of the notifications' last `Last-Modified`, for `changed`."""
 NOTIFICATIONS_WAIT = "notifications_poll_after"
@@ -253,7 +253,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the
-        local checkouts the graph's `repo` entities describe."""
+        local checkouts the graph's `git.repo` entities describe."""
         ctx, graph = req.ctx, req.graph
         gh = self.load(LoadRequest(ctx))
         if gh is None:

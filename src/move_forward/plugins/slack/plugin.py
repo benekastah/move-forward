@@ -35,6 +35,7 @@ from ...api import (
     age,
     html,
 )
+from ...api.kinds import PULL_REQUEST as PR
 from . import account, cli, contacts, oauth
 from .config import SlackConfig
 from .models import Ping, TeamChannel
@@ -161,7 +162,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         pings = pinger(req.ctx, req.graph).pings()
 
         def ping_action(each: ItemActionsRequest[SlackConfig]) -> ItemAdditions:
-            pr = each.item.subject("pr")
+            pr = each.item.subject(PR)
             ping = pings.get(pr.id) if pr else None
             if ping is None:
                 return ItemAdditions()

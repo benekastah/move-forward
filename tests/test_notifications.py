@@ -58,8 +58,8 @@ def test_an_event_without_an_anchor_opens_the_dashboard() -> None:
 
 
 def test_an_item_gets_the_anchor_of_its_main_subject() -> None:
-    item = Item(title="PR", subjects=[Ref(kind="pr", id="https://github.com/a/b/pull/1")])
-    assert item.anchor == anchor("pr", "https://github.com/a/b/pull/1")
+    item = Item(title="PR", subjects=[Ref(kind="pull_request", id="https://github.com/a/b/pull/1")])
+    assert item.anchor == anchor("pull_request", "https://github.com/a/b/pull/1")
     assert item.anchor is not None and " " not in item.anchor and "/" not in item.anchor
     assert Item(title="no subject").anchor is None
 

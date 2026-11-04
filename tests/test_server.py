@@ -782,7 +782,7 @@ def test_an_action_refreshes_its_plugin_and_whoever_publishes_what_it_touched(
     def perform(
         config: object, db: object, name: str, fields: dict[str, str], back: str | None = None
     ) -> ActionResult:
-        touched = [Ref(kind="pr", id=pr(1).url)] if name == "slack/react" else []
+        touched = [Ref(kind="pull_request", id=pr(1).url)] if name == "slack/react" else []
         return ActionResult("done", touched=touched)
 
     monkeypatch.setattr(server, "perform_action", perform)

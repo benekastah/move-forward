@@ -40,8 +40,8 @@ def test_an_entry_is_read_field_by_field() -> None:
         (date(2026, 10, 28), "skip the review"),
     ]
     assert entry.links == [
-        Link(kind="pr", ref=PR_12),
-        Link(kind="pr", ref=PR_13),
+        Link(kind="pull_request", ref=PR_12),
+        Link(kind="pull_request", ref=PR_13),
     ]  # APP-1 in its title isn't a link: the graph finds it
     assert [s.heading for s in sections] == [None, markdown.REVIEWS_SECTION]
     assert sections[0].body == "# Work notes\n\nIntro text."

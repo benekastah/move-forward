@@ -512,7 +512,7 @@ def test_a_plugins_buttons_in_act_now_carry_the_items_pending_fields_but_acts_ow
                 [
                     Item(
                         title="x",
-                        subjects=[Ref(kind="pr", id="p")],
+                        subjects=[Ref(kind="pull_request", id="p")],
                         signals=Signals(verb="Go"),
                         actions=[action],
                     )

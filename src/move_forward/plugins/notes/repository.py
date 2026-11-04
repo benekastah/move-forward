@@ -5,7 +5,8 @@ from collections import defaultdict
 from datetime import date, datetime
 
 from ...api import Database, Ref
-from .markdown import attach_conditions
+from ...api.kinds import PULL_REQUEST as PR
+from .markdown import BRANCH, attach_conditions
 from .models import (
     CheckIn,
     Condition,
@@ -131,6 +132,33 @@ MIGRATIONS = [
     """
     ALTER TABLE notes_conditions ADD COLUMN pr TEXT;  -- the PR it holds; NULL for one from
                                                       -- before, until it's given its PR
+    """,
+    # Kinds named for the plugins that publish them, and pull requests' family `pull_request`.
+    """
+    UPDATE notes_links SET kind = CASE kind
+        WHEN 'pr' THEN 'pull_request'
+        WHEN 'branch' THEN 'git.branch'
+        WHEN 'entry' THEN 'notes.entry'
+        ELSE kind
+    END;
+    UPDATE notes_todo_links SET kind = CASE kind
+        WHEN 'pr' THEN 'pull_request'
+        WHEN 'branch' THEN 'git.branch'
+        WHEN 'entry' THEN 'notes.entry'
+        ELSE kind
+    END;
+    UPDATE notes_iced SET kind = CASE kind
+        WHEN 'pr' THEN 'pull_request'
+        WHEN 'branch' THEN 'git.branch'
+        WHEN 'entry' THEN 'notes.entry'
+        ELSE kind
+    END;
+    UPDATE notes_ice_covers SET kind = CASE kind
+        WHEN 'pr' THEN 'pull_request'
+        WHEN 'branch' THEN 'git.branch'
+        WHEN 'entry' THEN 'notes.entry'
+        ELSE kind
+    END;
     """,
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
@@ -361,9 +389,8 @@ class NotesRepository:
                 prs = [
                     row["ref"]
                     for row in conn.execute(
-                        "SELECT ref FROM notes_links WHERE entry_id = ? AND kind = 'pr'"
-                        " ORDER BY ref",
-                        (entry_id,),
+                        "SELECT ref FROM notes_links WHERE entry_id = ? AND kind = ? ORDER BY ref",
+                        (entry_id, PR),
                     )
                 ]
                 conditions, lines = attach_conditions(written, prs)
@@ -506,7 +533,8 @@ class NotesRepository:
                 conn.execute(f"DELETE FROM {table}")
             conn.execute(
                 "DELETE FROM notes_ice WHERE NOT EXISTS"
-                " (SELECT 1 FROM notes_iced WHERE ice_id = notes_ice.id AND kind != 'branch')"
+                " (SELECT 1 FROM notes_iced WHERE ice_id = notes_ice.id AND kind != ?)",
+                (BRANCH,),
             )
             for entry in entries:
                 cursor = conn.execute(

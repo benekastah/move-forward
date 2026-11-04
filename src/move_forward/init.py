@@ -39,7 +39,7 @@ OPTIONAL_ACT_NOW_SETTINGS = """\
 # due_warning_days = 7                  # a due date starts raising an item this many days ahead
 # default_snooze_days = 1                # days a snooze lasts (1 = until tomorrow)
 # snooze_until_hour = 0                # the local hour a snooze ends at on its last day (9: 9am)
-# snooze_days = { pr = 7 }               # ...for a kind of subject, e.g. a PR's review for a week
+# snooze_days = { pull_request = 7 }     # ...for a kind of subject, e.g. a PR's review for a week
 """
 
 

@@ -4,7 +4,7 @@ from ...api.kinds import Person, PullRequest
 
 
 class GitHubPullRequest(PullRequest):
-    """A `pr` (the pull request family), with what only github has."""
+    """A `pull_request` (the pull request family), with what only github has."""
 
     number: int
     """Its number in its repo; `handle` is `#<number>`."""

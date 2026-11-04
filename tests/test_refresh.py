@@ -50,7 +50,7 @@ class _JiraAfterGit(JiraPlugin):
     def collect_after(self, req: CollectAfterRequest[JiraConfig]) -> JiraSnapshot:
         graph = req.graph
         return JiraSnapshot(
-            issues=[issue(summary=f"about {r.ref.id}") for r in graph.of_kind("repo")]
+            issues=[issue(summary=f"about {r.ref.id}") for r in graph.of_kind("git.repo")]
         )
 
     def after_collect(self, req: AfterCollectRequest[JiraConfig]) -> None:
@@ -112,13 +112,13 @@ def test_a_plugin_can_keep_its_snapshot_itself(
     status = SnapshotRepository(db).all()["git"]
     assert status.error is None and status.fetched_at == NOW
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
-    assert graph.get("repo", "acme/widgets") is not None
+    assert graph.get("git.repo", "acme/widgets") is not None
     # A failed collect keeps what the last good one stored, and says why.
     monkeypatch.setattr(_GitInKv, "broken", True)
     refresh.refresh(config, db, NOW)
     assert "git is gone" in (SnapshotRepository(db).all()["git"].error or "")
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
-    assert graph.get("repo", "acme/widgets") is not None
+    assert graph.get("git.repo", "acme/widgets") is not None
 
 
 class _GitThatCantStore(_GitInKv):
@@ -169,7 +169,7 @@ def test_act_now_buttons_snooze_dismiss_pin_and_unpin(monkeypatch: pytest.Monkey
 
 def test_a_review_snoozed_in_its_panel_stays_away_for_the_days_set_for_prs() -> None:
     config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
-    config = config.model_copy(update={"act_now": ActNowConfig(snooze_days={"pr": 7})})
+    config = config.model_copy(update={"act_now": ActNowConfig(snooze_days={"pull_request": 7})})
 
     def reviews() -> list[Item]:
         return panel(refresh.build_dashboard(config, db, NOW), "github.reviews_for_me").items
@@ -204,13 +204,17 @@ def test_a_snoozed_review_returns_when_the_prs_head_moves() -> None:
 def test_feedback_that_is_over_or_old_is_pruned() -> None:
     db = Database(":memory:")
     feedback = FeedbackRepository(db)
-    feedback.say(("pr", "1", ""), Feedback(action="snooze", fingerprint="f", until=NOW), NOW)
     feedback.say(
-        ("pr", "2", ""), Feedback(action="dismiss", fingerprint="f"), NOW - timedelta(days=100)
+        ("pull_request", "1", ""), Feedback(action="snooze", fingerprint="f", until=NOW), NOW
     )
-    feedback.say(("pr", "3", ""), Feedback(action="pin", fingerprint="f"), NOW)
+    feedback.say(
+        ("pull_request", "2", ""),
+        Feedback(action="dismiss", fingerprint="f"),
+        NOW - timedelta(days=100),
+    )
+    feedback.say(("pull_request", "3", ""), Feedback(action="pin", fingerprint="f"), NOW)
     assert feedback.prune(NOW + timedelta(seconds=1), NOW - timedelta(days=90)) == 2
-    assert list(feedback.all()) == [("pr", "3", "")]
+    assert list(feedback.all()) == [("pull_request", "3", "")]
 
 
 def test_refreshing_some_plugins_brings_the_ones_built_on_them_along(

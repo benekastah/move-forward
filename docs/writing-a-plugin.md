@@ -181,8 +181,11 @@ What other plugins can know of yours is the entities it publishes. Declare each 
 a model of its attributes, and build the attributes from that model:
 
 ```python
+ISSUE = "linear.issue"
+
+
 class IssueAttrs(Model):
-    """An `issue`: one of my Linear issues, by its identifier, e.g. `ENG-12`."""
+    """A `linear.issue`: one of my Linear issues, by its identifier, e.g. `ENG-12`."""
 
     state: str
     estimate: int | None = None
@@ -207,15 +210,18 @@ class LinearPlugin(...):
         ]
 ```
 
-- A plugin publishes only kinds it declares, each ref once. Core checks every entity
-  against its kind's model and leaves out (and logs) one that doesn't fit.
+- A plugin's kinds are named for it, `<plugin>.<name>` (`linear.issue`), or for a family
+  (below); the registry refuses any other name. It publishes only kinds it declares, each
+  ref once. Core checks every entity against its kind's model and leaves out (and logs) one
+  that doesn't fit.
 - Document the kind and its attributes in [entities.md](entities.md);
   `tests/test_entities_doc.py` fails until you do. [plugins.md](plugins.md) draws who
   publishes and reads what.
 - **Families.** A kind that more than one tool could publish (a pull request, a ticket, a
   person) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
   extend its model (`class LinearIssue(Ticket)`), setting `handle` to how your tool shows
-  it. Other plugins read it through the family's model, whoever publishes it.
+  it. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
+  through the family's model, whoever publishes it.
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
   declared `linking`, so the graph relates what's about it. Give it the pattern of its ids
   (`KindSpec(..., linking=r"...")`, or None and narrow it from what the plugin has seen)
@@ -229,7 +235,7 @@ class LinearPlugin(...):
   A publisher puts text that might name a unit of work in `Entity.mentions` (github does
   with a PR's branch, title and body), never refs to another plugin's kind.
 - **Hiding kinds**, declared `KindSpec(..., hides=True)`, hide what their entities point at
-  (notes' `iced`).
+  (`notes.iced`).
 - **Lifecycle.** Each entity says whether its work is over: `lifecycle="done"` for a merged
   PR or a resolved issue (its `state` keeps the tool's own word). Core clears priorities by
   it. A kind whose entities are published only while open (notes' todos) is
@@ -247,14 +253,14 @@ fields you use:
 
 ```python
 class _PrView(Model):
-    """What linear reads of a `pr` (github's)."""
+    """What linear reads of a `pull_request`."""
 
     id: str
     state: str | None = None
     mine: bool
 
 
-for pr in graph.view_related(Ref(kind=ISSUE, id=key), "pr", _PrView):
+for pr in graph.view_related(Ref(kind=ISSUE, id=key), PULL_REQUEST, _PrView):
     ...
 ```
 

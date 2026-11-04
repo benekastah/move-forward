@@ -17,20 +17,20 @@ Solid arrows publish, dashed arrows read.
 ```mermaid
 flowchart LR
     subgraph Graph["Entity graph"]
-        pr[pr]
+        pr[pull_request]
         person[person]
-        repo[repo]
-        branch[branch]
+        repo[git.repo]
+        branch[git.branch]
         ticket[ticket]
-        entry[entry]
-        ice[iced]
+        entry[notes.entry]
+        ice[notes.iced]
     end
 
     github([github]) -- publishes --> pr
     github -- "publishes (me, emails)" --> person
     git([git]) -- publishes --> repo
     git -- "publishes (repo_dir, ahead, ...)" --> branch
-    git_stack([git_stack]) -- "publishes, pointing at branch" --> stack_branch[stack_branch]
+    git_stack([git_stack]) -- "publishes, pointing at branch" --> stack_branch[git_stack.stack_branch]
     jira([jira]) -- publishes --> ticket
     notes([notes]) -- publishes --> entry
     notes -- "publishes, pointing at what it hides" --> ice
@@ -80,10 +80,10 @@ flowchart TB
     git_stack == "requires" ==> git
 
     subgraph Items["Items, by their subjects"]
-        prItems["items about a pr<br/>(github, git, git_stack, slack)"]
+        prItems["items about a pull_request<br/>(github, git, git_stack, slack)"]
         ticketItems["items about a ticket<br/>(jira)"]
-        branchItems["items about a branch<br/>(git's Local work)"]
-        icedItems["items about an iced, with its branches<br/>(notes' On ice)"]
+        branchItems["items about a git.branch<br/>(git's Local work)"]
+        icedItems["items about a notes.iced, with its branches<br/>(notes' On ice)"]
     end
     slack([slack]) -- "Ping / Bump link" --> prItems
     notes([notes]) -- "Add todo" --> prItems

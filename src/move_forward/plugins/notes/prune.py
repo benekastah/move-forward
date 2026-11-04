@@ -17,8 +17,8 @@ from .models import Entry, Ice
 from .panels import entry_keys
 from .repository import NotesRepository
 
-ENTRY = "entry"
-BRANCH = "branch"
+ENTRY = "notes.entry"
+BRANCH = "git.branch"
 
 
 def _by(day: date | None, cutoff: datetime) -> bool:
@@ -27,7 +27,7 @@ def _by(day: date | None, cutoff: datetime) -> bool:
 
 
 class _Ended(Model):
-    """What notes reads of a fetched `pr` (`closed_at`) or `ticket` (`resolved_at`)."""
+    """What notes reads of a fetched `pull_request` (`closed_at`) or `ticket` (`resolved_at`)."""
 
     closed_at: str | None = None
     resolved_at: str | None = None

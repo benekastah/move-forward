@@ -223,11 +223,11 @@ def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     [ice] = _notes(config).ices()
     assert (ice.title, ice.note) == ("wip", ICED_FROM_DASHBOARD_NOTE)
     assert [(i.kind, i.ref_id, i.sha) for i in ice.items] == [
-        ("branch", f"{repo}\twip", git(repo, "rev-parse", "wip").strip())
+        ("git.branch", f"{repo}\twip", git(repo, "rev-parse", "wip").strip())
     ]
-    iced_wip = graph(config).get("iced", str(ice.id))
+    iced_wip = graph(config).get("notes.iced", str(ice.id))
     assert iced_wip is not None and iced_wip.attrs["shas"] == {f"{repo}\twip": ice.items[0].sha}
-    assert graph(config).hidden(Ref(kind="branch", id=f"{repo}\twip"))
+    assert graph(config).hidden(Ref(kind="git.branch", id=f"{repo}\twip"))
     with pytest.raises(ActionError, match="already on ice"):
         _ice(config, repo, "wip")
     assert run("notes/thaw", config, {"ice": str(ice.id)}) == "thawed wip"
@@ -414,7 +414,10 @@ def test_todo_link_links_a_jira_ticket_or_a_pr(config: Config, work_notes: None)
     pr = "https://github.com/acme/widgets/pull/5"
     run("notes/todo_link", config, {**fields, "input": pr})
     [todo] = [t for t in _entry(config).todos if t.text == "get it merged"]
-    assert [(link.kind, link.ref) for link in todo.links] == [("pr", pr), ("ticket", "APP-9")]
+    assert [(link.kind, link.ref) for link in todo.links] == [
+        ("pull_request", pr),
+        ("ticket", "APP-9"),
+    ]
     with pytest.raises(ActionError, match="neither a PR URL nor a ticket key"):
         run("notes/todo_link", config, {**fields, "input": "something else"})
 
@@ -427,7 +430,7 @@ def test_todo_add(config: Config, work_notes: None) -> None:
     assert _open(config)[-2:] == ["[None] write docs", "[quick] ship it"]
     pr = "https://github.com/acme/widgets/pull/8"
     run("notes/todo_add", config, {"entry": APP_1, "text": f"review {pr}"})
-    assert _entry(config).todos[-1].links == [Link(kind="pr", ref=pr)]
+    assert _entry(config).todos[-1].links == [Link(kind="pull_request", ref=pr)]
     with pytest.raises(ActionError, match="empty"):
         run("notes/todo_add", config, {"entry": APP_1, "input": "  "})
     with pytest.raises(ActionError, match="size must be"):
@@ -448,7 +451,10 @@ def test_todo_add_can_create_the_entry(config: Config, work_notes: None) -> None
     entry = _entry(config, "APP-7 New thing")
     assert (entry.status, entry.where) == ("inferred", "https://github.com/acme/widgets/pull/9")
     assert [(link.kind, link.ref) for link in entry.links] == [
-        ("pr", "https://github.com/acme/widgets/pull/9"),  # APP-7, in its title, isn't a link
+        (
+            "pull_request",
+            "https://github.com/acme/widgets/pull/9",
+        ),  # APP-7, in its title, isn't a link
     ]
     assert _open(config, "APP-7 New thing") == ["[None] start", "[None] again"]
 

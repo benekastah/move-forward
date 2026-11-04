@@ -18,7 +18,7 @@ WIP_MESSAGE = "WIP"
 
 
 class _IcedView(Model):
-    """What git reads of an `iced` (notes'): the commits its branches were iced at."""
+    """What git reads of a `notes.iced`: the commits its branches were iced at."""
 
     shas: dict[str, str] = Field(default_factory=dict[str, str])
 

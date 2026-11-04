@@ -14,7 +14,7 @@ from pydantic import BaseModel, ValidationError
 from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
 from .graph import Entity, Graph, KindSpec, Ref
-from .kinds import FAMILIES
+from .kinds import FAMILIES, named_for
 from .plugin import (
     Context,
     EntitiesRequest,
@@ -61,7 +61,8 @@ def check_names(plugins: list[Plugin[Any, Any]]) -> None:
     config section, its kv namespace and migrations' owner, its tables' prefix and the
     first part of its actions' paths, so two plugins sharing one would share all of those;
     and it mustn't be core's (`core`) or Act now's (`act_now`), which use the same places.
-    A kind a plugin names for a family (`kinds.FAMILIES`) must extend the family's model."""
+    A plugin's kinds are named for it (`git.branch`), or for a family (`kinds.FAMILIES`),
+    whose model they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -73,6 +74,11 @@ def check_names(plugins: list[Plugin[Any, Any]]) -> None:
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():
             family = FAMILIES.get(kind)
+            if family is None and not named_for(plugin.name, kind):
+                raise RuntimeError(
+                    f"{plugin.name}'s kind {kind!r} must be named {plugin.name}.<name>,"
+                    f" or for a family: {', '.join(FAMILIES)}"
+                )
             if family is not None and not issubclass(spec.attrs, family.model):
                 raise RuntimeError(
                     f"{plugin.name}'s {kind} must extend core's {family.model.__name__}"
@@ -183,19 +189,12 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
 
 
 def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) -> Graph:
-    """The graph of every plugin's entities. A plugin publishes only the kinds it declares,
-    and owns them unless an earlier plugin declared them first; each entity must fit its
-    kind's model, and be the only one of its ref. One that isn't is a plugin bug: it's
-    logged and left out, and the page goes on without it. So is a plugin whose `entities`,
-    `url_for` or `linking_patterns` raises: the graph is built without its answer."""
-    owners: dict[str, str] = {}
-    for e in plugins:
-        for kind in e.plugin.kinds:
-            owner = owners.setdefault(kind, e.name)
-            if owner != e.name:
-                log.error(
-                    "%s and %s both declare %s; %s's are left out", owner, e.name, kind, e.name
-                )
+    """The graph of every plugin's entities. A plugin publishes only the kinds it declares;
+    each entity must fit its kind's model, and be the only one of its ref (the first
+    stands when two plugins publish one entity of a family). One that isn't is a plugin bug:
+    it's logged and left out, and the page goes on without it. So is a plugin whose
+    `entities`, `url_for` or `linking_patterns` raises: the graph is built without its
+    answer."""
     entities: list[Entity] = []
     seen: set[Ref] = set()
     for e in plugins:
@@ -207,8 +206,8 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         )
         for entity in published:
             ref = entity.ref
-            if owners.get(ref.kind) != e.name:
-                log.error("%s published %s %s, a kind it doesn't own", e.name, ref.kind, ref.id)
+            if ref.kind not in e.plugin.kinds:
+                log.error("%s published %s %s, a kind it doesn't declare", e.name, ref.kind, ref.id)
                 continue
             if ref in seen:
                 log.error("%s published %s %s twice", e.name, ref.kind, ref.id)
@@ -219,9 +218,9 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
                 log.error("%s published a bad %s %s: %s", e.name, ref.kind, ref.id, error)
                 continue
             seen.add(ref)
-            if ref.kind in FAMILIES:
-                entity = entity.model_copy(update={"family": ref.kind})
-            entities.append(entity)
+            family = ref.kind if ref.kind in FAMILIES else None
+            kind = f"{e.name}.{family}" if family else ref.kind
+            entities.append(entity.model_copy(update={"family": family, "kind": kind}))
 
     def url_for(kind: str, id: str) -> str | None:
         for e in plugins:
@@ -254,11 +253,9 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
             {},
         )
         linking.update(patterns)
-    specs: dict[str, KindSpec] = {
-        kind: spec
-        for e in plugins
-        for kind, spec in e.plugin.kinds.items()
-        if owners.get(kind) == e.name
-    }
+    specs: dict[str, KindSpec] = {}
+    for e in plugins:
+        for kind, spec in e.plugin.kinds.items():
+            specs.setdefault(kind, spec)  # a family's first publisher's
     hiding = [kind for kind, spec in specs.items() if spec.hides]
     return Graph(entities, url_for, fetch, linking, hiding, specs)

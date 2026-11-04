@@ -21,7 +21,8 @@ Fetch = Callable[[str, list[str]], list["Entity"]]
 
 
 class Ref(Model):
-    """Names an entity: its kind, e.g. "pr", and its id within the kind, e.g. a PR's URL."""
+    """Names an entity: its family or kind, e.g. "pull_request" or "git.branch", and its id
+    within it, e.g. a PR's URL."""
 
     kind: str
     id: str
@@ -46,6 +47,9 @@ class Entity(Model):
     family: str | None = None
     """The family of kinds it's in (a pull request, a ticket), set by core; None for a kind
     that's a plugin's own."""
+    kind: str | None = None
+    """Its kind's full name, set by core: `github.pull_request` for a family's (whose `ref`
+    names the family), else `ref.kind`."""
     lifecycle: Literal["open", "done"] = "open"
     """Whether the work it stands for is over (a PR merged or closed, a ticket resolved), as
     its publisher says; `state` is the tool's own word for it."""
@@ -155,6 +159,8 @@ class Graph:
             ref = entity.ref
             self._by_ref[ref] = entity
             self._by_kind[ref.kind].append(entity)
+            if entity.kind and entity.kind != ref.kind:
+                self._by_kind[entity.kind].append(entity)
             for target in entity.refs:
                 self._pointing_at[target].append(entity)
 
@@ -166,6 +172,8 @@ class Graph:
         return kind in self._patterns
 
     def of_kind(self, kind: str) -> list[Entity]:
+        """The entities of a family (`pull_request`: every publisher's) or of a kind by its
+        full name (`github.pull_request`, `git.branch`)."""
         return list(self._by_kind.get(kind, []))
 
     def _neighbours(self, ref: Ref) -> list[Entity]:

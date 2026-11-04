@@ -6,7 +6,7 @@ from ...api import Model
 
 
 class RepoAttrs(Model):
-    """A `repo`: a checkout on GitHub, by `owner/name`."""
+    """A `git.repo`: a checkout on GitHub, by `owner/name`."""
 
     dir: str
     """The main checkout's path."""
@@ -20,7 +20,7 @@ class RepoAttrs(Model):
 
 
 class BranchAttrs(Model):
-    """A `branch`: a local branch, by `<repo dir>\\t<name>`."""
+    """A `git.branch`: a local branch, by `<repo dir>\\t<name>`."""
 
     repo_dir: str
     name: str

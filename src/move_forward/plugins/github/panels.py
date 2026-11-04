@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pydantic import Field
 
 from ...api import Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
+from ...api.kinds import PULL_REQUEST as PR
 from .config import GitHubConfig
 from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
 from .prs import (
@@ -28,12 +29,11 @@ from .prs import (
     unresolved_threads,
 )
 
-PR = "pr"
-ENTRY = "entry"
+ENTRY = "notes.entry"
 
 
 class _EntryView(Model):
-    """What github reads of an `entry` (notes')."""
+    """What github reads of a `notes.entry`."""
 
     merge_conditions: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
     """By PR URL."""

@@ -38,7 +38,7 @@ def test_failing_entities_leave_that_plugin_out_of_the_graph_logged_once(
         refresh.build_dashboard(config, db, NOW)
         graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
         dashboard = refresh.build_dashboard(config, db, NOW)
-    assert graph.of_kind("branch") == [] and graph.get("pr", pr(1).url) is not None
+    assert graph.of_kind("git.branch") == [] and graph.get("pull_request", pr(1).url) is not None
     assert dashboard.panels  # the page still builds
     assert [r.message for r in caplog.records].count("git: entities failed") == 1
 

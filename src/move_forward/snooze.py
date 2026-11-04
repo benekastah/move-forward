@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from .act_now import ActNowConfig, Feedback
 from .graph import Graph
+from .kinds import PULL_REQUEST
 from .repositories import FeedbackRepository
 
 REVIEW = "Review"
@@ -32,15 +33,17 @@ def snooze_review(
     """Snooze the review of PR `url` until its head commit moves or `duration` passes (by
     default as long as `config` says for PRs); when the snooze ends. Raises LookupError when
     the PR isn't one github knows."""
-    pr = graph.get("pr", url)
+    pr = graph.get(PULL_REQUEST, url)
     head = str(pr.attrs.get("head_oid") or "") if pr else ""
     if not head:
         raise LookupError(f"{url} isn't a PR the dashboard knows; run `mfd refresh`")
-    until = now + duration if duration else config.snooze_until("pr", now)
-    feedback.say(("pr", url, REVIEW), Feedback(action="snooze", fingerprint=head, until=until), now)
+    until = now + duration if duration else config.snooze_until(PULL_REQUEST, now)
+    feedback.say(
+        (PULL_REQUEST, url, REVIEW), Feedback(action="snooze", fingerprint=head, until=until), now
+    )
     return until
 
 
 def wake_review(feedback: FeedbackRepository, url: str) -> None:
     """End the snooze of PR `url`'s review, if there is one."""
-    feedback.forget(("pr", url, REVIEW))
+    feedback.forget((PULL_REQUEST, url, REVIEW))

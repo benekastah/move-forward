@@ -1,20 +1,29 @@
 """The families of entity kinds core models: what more than one tool may represent (a pull
 request, a ticket, a person). A plugin's kind named for a family must extend its model,
 adding the plugin's own fields, so every publisher's entities of the family carry what the
-family's model says and other plugins read them through it. See `docs/entities.md`."""
+family's model says and other plugins read them through it. A plugin's other kinds are its
+own, named for it (`git.branch`). See `docs/entities.md`."""
 
+import re
 from dataclasses import dataclass
 
 from pydantic import Field
 
 from .domain import Model
 
-PULL_REQUEST = "pr"
+PULL_REQUEST = "pull_request"
 """The family of pull requests (and merge requests): shown as "PR"."""
 TICKET = "ticket"
 """The family of tickets (issues), which link what's about them."""
 PERSON = "person"
 """The family of people."""
+
+_OWN_KIND = re.compile(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*")
+
+
+def named_for(plugin: str, kind: str) -> bool:
+    """Whether `kind` is named for `plugin`, as a plugin's own kinds are: `git.branch`."""
+    return _OWN_KIND.fullmatch(kind) is not None and kind.startswith(f"{plugin}.")
 
 
 class PullRequest(Model):
@@ -85,3 +94,9 @@ FAMILIES = {
     )
 }
 """Every family, by name."""
+
+
+def label(kind: str) -> str:
+    """What the page and the CLI call a kind: its family's label ("PR"), else its name."""
+    family = FAMILIES.get(kind)
+    return family.label if family else kind

@@ -66,10 +66,12 @@ def _graph(with_jira: bool = True) -> tuple[Graph, list[tuple[str, list[str]]]]:
 
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
         asked.append((kind, ids))
-        if kind == "pr":
+        if kind == "pull_request":
             return [
                 Entity(
-                    ref=Ref(kind="pr", id=u), title=u, attrs={"closed_at": CLOSED[u].isoformat()}
+                    ref=Ref(kind="pull_request", id=u),
+                    title=u,
+                    attrs={"closed_at": CLOSED[u].isoformat()},
                 )
                 for u in ids
                 if u in CLOSED
@@ -107,7 +109,10 @@ def test_finished_entries_and_old_done_todos_go() -> None:
     ]
     assert [t.text for t in entries[0].todos] == ["write the wrap-up", "tested"]
     # One fetch per kind, for the entries with no open todos only.
-    assert asked == [("pr", [PR + "1", PR + "3", PR + "4"]), ("ticket", ["APP-1", "APP-3"])]
+    assert asked == [
+        ("pull_request", [PR + "1", PR + "3", PR + "4"]),
+        ("ticket", ["APP-1", "APP-3"]),
+    ]
     assert notes_prune.prune(NotesRepository(db), graph, CUTOFF) == []
 
 
@@ -120,7 +125,7 @@ def test_without_jira_ticket_keys_hold_no_entry() -> None:
         "cleared entry APP-3 PR merged long ago, ticket open",  # its PR is all notes knows of
         "cleared entry No ticket, no PR, stale",
     ]
-    assert [kind for kind, _ in asked] == ["pr"]
+    assert [kind for kind, _ in asked] == ["pull_request"]
 
 
 def test_what_is_on_ice_goes_when_its_work_is_over_but_stacks_stay() -> None:
@@ -130,12 +135,12 @@ def test_what_is_on_ice_goes_when_its_work_is_over_but_stacks_stay() -> None:
     def ice(kind: str, ref_id: str) -> None:
         notes.add_ice(ref_id, NOW.date(), None, [IcedItem(kind=kind, ref_id=ref_id, name=ref_id)])
 
-    ice("pr", PR + "1")  # closed long ago
-    ice("pr", PR + "4")  # closed recently
+    ice("pull_request", PR + "1")  # closed long ago
+    ice("pull_request", PR + "4")  # closed recently
     ice("ticket", "APP-1")  # resolved long ago
     ice("ticket", "APP-3")  # not resolved
-    ice("entry", "No ticket, no PR, stale")  # cleared by this prune
-    ice("branch", "/src/w\tme/x")  # a stack: kept for its commits
+    ice("notes.entry", "No ticket, no PR, stale")  # cleared by this prune
+    ice("git.branch", "/src/w\tme/x")  # a stack: kept for its commits
     graph, _ = _graph()
     notices = notes_prune.prune(notes, graph, CUTOFF)
     assert [n for n in notices if "off ice" in n] == [

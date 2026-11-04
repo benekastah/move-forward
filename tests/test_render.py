@@ -376,7 +376,7 @@ def test_the_page_after_an_action_has_an_anchor_where_its_item_was() -> None:
 
 def test_items_carry_their_anchor_for_notifications_to_open() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset())
-    assert re.search(r"<li class='item' id='item-pr-[^']+'", html)
+    assert re.search(r"<li class='item' id='item-pull_request-[^']+'", html)
 
 
 def test_the_footer_says_who_i_am_in_each_tool() -> None:

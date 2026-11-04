@@ -6,7 +6,7 @@ from ...api import Model
 
 
 class EntryAttrs(Model):
-    """An `entry`: a piece of work in the notes, by title."""
+    """An `notes.entry`: a piece of work in the notes, by title."""
 
     merge_conditions: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
     """What must happen before each of its PRs merges, by the PR's URL."""
@@ -14,7 +14,7 @@ class EntryAttrs(Model):
 
 
 class TodoAttrs(Model):
-    """A `todo`: one open todo of a work entry, by its id. Ticking it off takes it away."""
+    """A `notes.todo`: one open todo of a work entry, by its id. Ticking it off takes it away."""
 
     entry: str
     """Its entry's title."""
@@ -23,7 +23,7 @@ class TodoAttrs(Model):
 
 
 class IcedAttrs(Model):
-    """An `iced`: one act of icing, by its id. It hides what it points at: its items, and
+    """An `notes.iced`: one act of icing, by its id. It hides what it points at: its items, and
     what else it covers, like its branches' PRs."""
 
     iced_on: str

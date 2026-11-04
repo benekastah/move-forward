@@ -19,7 +19,7 @@ from move_forward.repositories import KvRepository
 def _item(title: str, subject: str | None = None, **signals: object) -> Item:
     return Item(
         title=title,
-        subjects=[Ref(kind="pr", id=subject)] if subject else [],
+        subjects=[Ref(kind="pull_request", id=subject)] if subject else [],
         signals=Signals.model_validate(signals),
     )
 
@@ -230,7 +230,7 @@ def test_a_pinned_item_comes_first_and_says_so() -> None:
     assert [a.label for a in ranked.items[0].actions][:3] == ["Snooze", "Dismiss", "Unpin"]
     assert [a.label for a in ranked.items[1].actions][:3] == ["Snooze", "Dismiss", "Pin"]
     assert ranked.items[1].actions[0].fields == {
-        "kind": "pr",
+        "kind": "pull_request",
         "id": "u2",
         "verb": "",
         "fingerprint": Nomination("github", quick).fingerprint,
@@ -257,10 +257,10 @@ def test_act_now_is_split_by_plugin_in_its_best_items_order_and_numbered_overall
 
 
 def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it() -> None:
-    ticket, entry = Ref(kind="ticket", id="APP-1"), Ref(kind="entry", id="9")
+    ticket, entry = Ref(kind="ticket", id="APP-1"), Ref(kind="notes.entry", id="9")
     units = {
-        Ref(kind="pr", id="1"): [ticket],
-        Ref(kind="pr", id="2"): [ticket],
+        Ref(kind="pull_request", id="1"): [ticket],
+        Ref(kind="pull_request", id="2"): [ticket],
         ticket: [ticket],
         entry: [entry],
     }

@@ -31,8 +31,8 @@ REVIEWS_SECTION = "Reviews requested of me"
 """A work-notes section that logs offered reviews and nudges, not a piece of work."""
 ON_ICE_TITLE = "# Stacks on ice"
 BRANCH_ID_SEPARATOR = "\t"
-"""Joins a repo dir and a branch name in a `branch` entity's id."""
-BRANCH = "branch"
+"""Joins a repo dir and a branch name in a `git.branch` entity's id."""
+BRANCH = "git.branch"
 
 PR_URL_RE = re.compile(r"https://[\w.-]+(?::\d+)?/[\w.-]+/[\w.-]+/pull/\d+")
 """A pull request's URL, on github.com or a GitHub Enterprise Server."""

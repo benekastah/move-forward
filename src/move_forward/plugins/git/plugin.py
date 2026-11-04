@@ -35,8 +35,8 @@ from .panels import Builder, branch_ref, delete_iced_action, restore_iced_action
 from .repository import MIGRATIONS, LocalRepository
 from .setup import TEMPLATE, questions
 
-REPO = "repo"
-BRANCH = "branch"
+REPO = "git.repo"
+BRANCH = "git.branch"
 FINGERPRINTS = "refs_fingerprints"
 """The kv key of the last `changes.fingerprints` of the repos."""
 MOVED = "repos_moved"

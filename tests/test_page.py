@@ -15,8 +15,8 @@ def test_age() -> None:
 
 
 def test_an_item_finds_its_subject_of_a_kind() -> None:
-    pr = Ref(kind="pr", id="https://github.com/acme/widgets/pull/1")
-    branch = Ref(kind="branch", id="/src/widgets\tme/a")
+    pr = Ref(kind="pull_request", id="https://github.com/acme/widgets/pull/1")
+    branch = Ref(kind="git.branch", id="/src/widgets\tme/a")
     item = Item(title="x", subjects=[pr, branch])
-    assert item.subject("branch") == branch and item.subject("pr") == pr
+    assert item.subject("git.branch") == branch and item.subject("pull_request") == pr
     assert item.subject("ticket") is None

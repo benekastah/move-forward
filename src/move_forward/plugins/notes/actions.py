@@ -28,10 +28,10 @@ from .repository import NotesRepository
 
 ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
 TARGET_SEPARATOR = "\t"
-"""Joins a repo dir and a branch name in a `branch` entity's id."""
-BRANCH = "branch"
-STACK_BRANCH = "stack_branch"
-ENTRY = "entry"
+"""Joins a repo dir and a branch name in a `git.branch` entity's id."""
+BRANCH = "git.branch"
+STACK_BRANCH = "git_stack.stack_branch"
+ENTRY = "notes.entry"
 ICEABLE = (PR, TICKET, ENTRY)
 """What `ice_item` puts on ice on its own; branches go with their stacks, through `ice`."""
 INFERRED = "inferred"
@@ -39,7 +39,7 @@ INFERRED = "inferred"
 
 
 class _BranchView(Model):
-    """What notes reads of a `branch` (git's, with what git_stack adds)."""
+    """What notes reads of a `git.branch` (git's, with what git_stack adds)."""
 
     id: str
     repo_dir: str | None = None
@@ -49,7 +49,7 @@ class _BranchView(Model):
 
 
 class _StackBranchView(Model):
-    """What notes reads of a `stack_branch` (git_stack's)."""
+    """What notes reads of a `git_stack.stack_branch`."""
 
     repo_dir: str
     name: str
@@ -74,8 +74,8 @@ def _repo(graph: Graph, repo_dir: str) -> Path:
 
 
 def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
-    """The branch's whole stack as git-stack sees it, from git_stack's `stack_branch`es: its
-    stack, and the other stacks in its group, since git-stack's `restack`, `sync` and
+    """The branch's whole stack as git-stack sees it, from the `git_stack.stack_branch`es:
+    its stack, and the other stacks in its group, since git-stack's `restack`, `sync` and
     `push` act on all of them. Each stack bottom first, the branch's own first of all; just
     the branch when it isn't in a stack (or git_stack isn't on). Only branches git still
     has are iced."""

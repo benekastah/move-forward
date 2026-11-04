@@ -46,7 +46,8 @@ GitHub when its host, as the remote URL names it, is one of `github_hosts`
 
 ## Publishes
 
-`repo` for each checkout (by its GitHub `owner/name`) and `branch` for each local branch;
+`git.repo` for each checkout (by its GitHub `owner/name`) and `git.branch` for each local
+branch;
 see [entities.md](../entities.md).
 
 ## Panels

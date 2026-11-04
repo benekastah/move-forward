@@ -92,8 +92,8 @@ def test_tracked_branches_are_stack_branches_pointing_at_gits() -> None:
         ),
     )
     graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
-    top = graph.get("stack_branch", "/src/widgets\tme/top")
-    assert top is not None and top.refs == [Ref(kind="branch", id="/src/widgets\tme/top")]
+    top = graph.get("git_stack.stack_branch", "/src/widgets\tme/top")
+    assert top is not None and top.refs == [Ref(kind="git.branch", id="/src/widgets\tme/top")]
     assert top.attrs == {
         "repo_dir": "/src/widgets",
         "name": "me/top",
@@ -102,10 +102,10 @@ def test_tracked_branches_are_stack_branches_pointing_at_gits() -> None:
         "stack_group": "g",
     }
     # git's own branch is left as git published it, and a branch git deleted isn't git's.
-    branch = graph.get("branch", "/src/widgets\tme/top")
+    branch = graph.get("git.branch", "/src/widgets\tme/top")
     assert branch is not None and "stack_parent" not in branch.attrs
-    assert graph.get("branch", "/src/widgets\tme/gone") is None
-    assert graph.get("stack_branch", "/src/widgets\tmain") is None  # a root, not tracked
+    assert graph.get("git.branch", "/src/widgets\tme/gone") is None
+    assert graph.get("git_stack.stack_branch", "/src/widgets\tmain") is None  # a root, not tracked
     assert repo_dirs(graph) == ["/src/widgets"]
 
 

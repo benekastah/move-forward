@@ -80,7 +80,7 @@ def test_add_entries_and_todos_then_list_and_show(run: Run, config: Path) -> Non
     [shown] = [e for e in _json(run, "list") if e["title"].startswith("APP-1")]
     assert [t["text"] for t in shown["todos"]] == ["reply to the thread", f"review {PR}", "big one"]
     assert [(link["kind"], link["ref"]) for link in shown["todos"][1]["links"]] == [
-        ("pr", PR),
+        ("pull_request", PR),
         ("ticket", "APP-2"),
     ]
     text = run("show", "1")[1]
@@ -185,9 +185,9 @@ def test_a_plugin_command_needs_its_section(
 
 def test_ice_a_work_entry_by_kind_and_id(run: Run) -> None:
     run("add-entry", "APP-1 Fix")
-    assert run("ice", "--item", "entry", "APP-1 Fix")[1] == "put APP-1 Fix on ice\n"
-    code, _, err = run("ice", "--item", "entry", "nope")
-    assert code == 1 and "no entry 'nope'" in err
+    assert run("ice", "--item", "notes.entry", "APP-1 Fix")[1] == "put APP-1 Fix on ice\n"
+    code, _, err = run("ice", "--item", "notes.entry", "nope")
+    assert code == 1 and "no notes.entry 'nope'" in err
     assert "APP-1 Fix" in run("ices")[1]
 
 

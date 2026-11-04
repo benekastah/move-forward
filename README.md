@@ -75,7 +75,7 @@ update or comment, an entry's last edit. Then it's worth chasing, and ranks as
 if it weren't blocked.
 A due date starts raising an item `due_warning_days` (7) ahead.
 A snooze lasts `default_snooze_days` (1: until tomorrow), or `snooze_days[<kind>]`
-for a kind of subject (`snooze_days = { pr = 7 }` snoozes a PR for a week),
+for a kind of subject (`snooze_days = { pull_request = 7 }` snoozes a PR for a week),
 or until the item changes. It ends at local midnight, or at `snooze_until_hour` (9: nine
 in the morning) on its last day.
 
@@ -125,7 +125,7 @@ before the command's name.
 | `mfd refresh` | Refresh every source once, print each source's status, exit. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <PR URL>` ends it. |
-| `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind todo` or `--kind branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. Act now's buttons do the same. |
+| `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. Act now's buttons do the same. |
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, verb, until, fingerprint), for the skill. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 | `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account. |

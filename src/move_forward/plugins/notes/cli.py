@@ -454,7 +454,10 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     what = ice.add_mutually_exclusive_group(required=True)
     what.add_argument("--branch", nargs=2, metavar=("REPO", "BRANCH"))
     what.add_argument(
-        "--item", nargs=2, metavar=("KIND", "ID"), help="pr URL, ticket KEY or entry TITLE"
+        "--item",
+        nargs=2,
+        metavar=("KIND", "ID"),
+        help="pull_request URL, ticket KEY or notes.entry TITLE",
     )
     ice.add_argument("--note")
     add("thaw", "take what's on ice off it").add_argument("ice", type=int)
