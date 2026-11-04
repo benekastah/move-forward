@@ -7,16 +7,18 @@ from typing import ClassVar
 from pydantic import BaseModel
 
 from ...api import (
-    Action,
     ActionHandler,
     Asker,
     Context,
+    EntitiesRequest,
     Entity,
     Event,
     Graph,
     InitSetup,
-    Item,
+    ItemActionsRequest,
+    ItemAdditions,
     Panel,
+    PanelsRequest,
     Plugin,
     Ref,
     attrs,
@@ -189,8 +191,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     def load(self, ctx: Context[GitConfig]) -> LocalSnapshot | None:
         return LocalRepository(ctx.db).load()
 
-    def entities(self, ctx: Context[GitConfig], snapshot: LocalSnapshot | None) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[GitConfig, LocalSnapshot]) -> list[Entity]:
         """A `repo` per checkout on GitHub, and a `branch` per local branch."""
+        snapshot = req.snapshot
         entities: list[Entity] = []
         for repo in snapshot.repos if snapshot else []:
             repo_ref = Ref(kind=REPO, id=repo.github_repo) if repo.github_repo else None
@@ -231,9 +234,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 )
         return entities
 
-    def panels(
-        self, ctx: Context[GitConfig], snapshot: LocalSnapshot | None, graph: Graph
-    ) -> list[Panel]:
+    def panels(self, req: PanelsRequest[GitConfig, LocalSnapshot]) -> list[Panel]:
+        ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
 
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
@@ -242,9 +244,10 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         built = Builder(ctx.config, ctx.now, self.load(ctx), graph)
         return events.deletable(ctx.kv, built.cleanup())
 
-    def item_actions(self, ctx: Context[GitConfig], item: Item, graph: Graph) -> list[Action]:
+    def item_actions(self, req: ItemActionsRequest[GitConfig]) -> ItemAdditions:
+        item, graph = req.item, req.graph
         found = (delete_iced_action(item, graph), restore_iced_action(item, graph))
-        return [action for action in found if action]
+        return ItemAdditions(actions=[action for action in found if action])
 
     def actions(self) -> dict[str, ActionHandler]:
         return {

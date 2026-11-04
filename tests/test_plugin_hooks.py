@@ -15,23 +15,37 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import Model
 from move_forward.graph import Entity, Graph, Ref
-from move_forward.page import Action, Item
-from move_forward.plugin import CliHandler, Context, PageHandler, Plugin
+from move_forward.page import Action, Identity, ItemAdditions
+from move_forward.plugin import (
+    CliHandler,
+    Context,
+    EntitiesRequest,
+    FetchRequest,
+    ItemActionsRequest,
+    LinkingRequest,
+    PageHandler,
+    Plugin,
+    PrepareItemActionsRequest,
+)
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.refresh import build_dashboard
 from move_forward.repositories import KvRepository
 
 
 class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /hello."""
 
-    def item_actions(self, ctx: Context[JiraConfig], item: Item, graph: Graph) -> list[Action]:
-        pr = item.subject("pr")
+    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
+        pr = req.item.subject("pr")
         if pr is None:
-            return []
-        return [Action(name="", label="Look", fields={}, href=f"/hello?pr={pr.id}")]
+            return ItemAdditions()
+        return ItemAdditions(
+            actions=[Action(name="", label="Look", fields={}, href=f"/hello?pr={pr.id}")],
+            badges=[f"seen by {self.name} on {req.surface}, {req.owner}'s"],
+        )
 
     def pages(self) -> dict[str, PageHandler]:
         def hello(
@@ -57,6 +71,18 @@ def test_a_plugin_adds_buttons_to_another_plugins_items() -> None:
     html = render.dashboard_page(built, refreshing=frozenset())
     assert f"<a class='button link-action' href='/hello?pr={pr(1).url}'>Look</a>" in html
     assert all(not a.href for a in built.panel("notes.todos").actions)
+
+
+def test_what_a_plugin_adds_says_whose_item_and_where_it_is_shown() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1, merge_state="DIRTY")]), jira_site="https://j")
+    built = build_dashboard(config, db, NOW)
+    [item] = built.panel("github.conflicts").items
+    assert "seen by jira on dashboard, github's" in item.badges
+    html = render.dashboard_page(built, refreshing=frozenset())
+    assert "seen by jira on dashboard, github&#x27;s" in html  # a badge, as the page shows it
+    focus = build_dashboard(config, db, NOW, surface="focus")
+    [item] = focus.panel("github.conflicts").items
+    assert "seen by jira on focus, github's" in item.badges
 
 
 def test_without_its_section_a_plugin_adds_nothing() -> None:
@@ -113,7 +139,8 @@ class _Fetching(JiraPlugin):
 
     asked: ClassVar[list[list[str]]] = []
 
-    def fetch(self, ctx: Context[JiraConfig], kind: str, ids: list[str]) -> list[Entity]:
+    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
+        kind, ids = req.kind, req.ids
         self.asked.append(ids)
         if kind != "ticket":
             return []
@@ -138,7 +165,7 @@ def test_the_graph_fetches_through_the_plugin_that_owns_the_kind(
 
 
 class _Failing(JiraPlugin):
-    def fetch(self, ctx: Context[JiraConfig], kind: str, ids: list[str]) -> list[Entity]:
+    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
         raise RuntimeError("no Jira token")
 
 
@@ -161,7 +188,7 @@ class _Declaring(JiraPlugin):
 
     kinds: ClassVar[dict[str, type[BaseModel]]] = {"ticket": _TicketAttrs}
 
-    def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
         return [
             Entity(ref=Ref(kind="ticket", id="APP-1"), title="good", attrs={"summary": "s"}),
             Entity(ref=Ref(kind="ticket", id="APP-2"), title="bad", attrs={"summary": 3.5}),
@@ -191,13 +218,13 @@ class _Veiling(Hooked):
     kinds: ClassVar[dict[str, type[BaseModel]]] = {**JiraPlugin.kinds, "veil": _VeilAttrs}
     hides: ClassVar[list[str]] = ["veil"]
 
-    def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
         veil = Entity(
             ref=Ref(kind="veil", id="1"),
             title="veil",
             refs=[Ref(kind="pr", id=pr(1).url), Ref(kind="ticket", id="APP-3")],
         )
-        return [*super().entities(ctx, snapshot), veil]
+        return [*super().entities(req), veil]
 
 
 def test_core_leaves_out_items_about_what_a_hiding_kind_covers(
@@ -217,8 +244,8 @@ def test_core_leaves_out_items_about_what_a_hiding_kind_covers(
 class _Unruly(JiraPlugin):
     """Jira, publishing a ticket twice, one of github's PRs, and a kind it never declared."""
 
-    def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
-        [ticket] = super().entities(ctx, snapshot)
+    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
+        [ticket] = super().entities(req)
         return [
             ticket,
             ticket.model_copy(update={"title": "again"}),
@@ -263,7 +290,7 @@ def test_a_kind_two_plugins_declare_is_the_first_ones(
 class _Narrowed(JiraPlugin):
     """Jira, finding only OPS keys in text."""
 
-    def linking_patterns(self, ctx: Context[JiraConfig]) -> dict[str, str | None]:
+    def linking_patterns(self, req: LinkingRequest[JiraConfig]) -> dict[str, str | None]:
         return {"ticket": r"\bOPS-\d+\b"}
 
 
@@ -278,16 +305,17 @@ class _Prepared(JiraPlugin):
     prepared = 0
 
     def prepare_item_actions(
-        self, ctx: Context[JiraConfig], graph: Graph
-    ) -> Callable[[Item], list[Action]]:
+        self, req: PrepareItemActionsRequest[JiraConfig]
+    ) -> Callable[[ItemActionsRequest[JiraConfig]], ItemAdditions]:
         _Prepared.prepared += 1
-        prs = {e.ref.id for e in graph.of_kind("pr")}
+        prs = {e.ref.id for e in req.graph.of_kind("pr")}
 
-        def actions(item: Item) -> list[Action]:
-            pr = item.subject("pr")
+        def actions(each: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
+            pr = each.item.subject("pr")
             if pr is None or pr.id not in prs:
-                return []
-            return [Action(name="", label="Look", fields={}, href=f"/look?pr={pr.id}")]
+                return ItemAdditions()
+            look = Action(name="", label="Look", fields={}, href=f"/look?pr={pr.id}")
+            return ItemAdditions(actions=[look])
 
         return actions
 
@@ -334,7 +362,7 @@ def test_plugin_names_are_each_their_own_and_none_is_cores() -> None:
         registry.check_names([_named("My-Plugin")])
 
 
-def test_the_page_says_who_i_am_as_the_first_plugin_that_knows() -> None:
+def test_the_page_says_who_i_am_in_each_tool_that_knows() -> None:
     built = dashboard(github=snapshot())  # github knows my login
-    assert built.login == ME
-    assert dashboard(local=local_snapshot()).login == ""  # github with nothing fetched yet
+    assert built.identities == [Identity(tool="GitHub", login=ME)]
+    assert dashboard(local=local_snapshot()).identities == []  # nothing fetched yet

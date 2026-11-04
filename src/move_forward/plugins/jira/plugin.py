@@ -11,19 +11,25 @@ from pydantic import BaseModel
 from ...api import (
     Action,
     ActionHandler,
+    ActNowRequest,
     Asker,
     Context,
+    EntitiesRequest,
     Entity,
     Event,
+    FetchRequest,
     Graph,
     InitSetup,
     Item,
     Link,
+    LinkingRequest,
     Model,
     Panel,
+    PanelsRequest,
     Plugin,
     Ref,
     Signals,
+    UrlRequest,
     age,
     attrs,
     due_pressure,
@@ -395,12 +401,14 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     def load(self, ctx: Context[JiraConfig]) -> JiraSnapshot | None:
         return IssueRepository(ctx.db).load()
 
-    def linking_patterns(self, ctx: Context[JiraConfig]) -> dict[str, str | None]:
+    def linking_patterns(self, req: LinkingRequest[JiraConfig]) -> dict[str, str | None]:
         """Keys of the projects my tickets have been in, so `UTF-8` or `SHA-256` in a PR
         isn't taken for a ticket; none at all before jira has seen a ticket of mine."""
+        ctx = req.ctx
         return {TICKET: key_pattern(IssueRepository(ctx.db).projects())}
 
-    def entities(self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
+        snapshot = req.snapshot
         return [
             Entity(
                 ref=ticket_ref(issue.key),
@@ -419,9 +427,10 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for issue in (snapshot.issues if snapshot else [])
         ]
 
-    def fetch(self, ctx: Context[JiraConfig], kind: str, ids: list[str]) -> list[Entity]:
+    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
         """Tickets by key, open or resolved, with `resolved_at` (null while open). Their
         projects are remembered, so their keys link from then on (see `linking_patterns`)."""
+        ctx, kind, ids = req.ctx, req.kind, req.ids
         keys = [k for k in ids if client.is_key(k)]
         if kind != TICKET or not keys:
             return []
@@ -439,12 +448,12 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for i in found
         ]
 
-    def url_for(self, ctx: Context[JiraConfig], kind: str, id: str) -> str | None:
+    def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
+        ctx, kind, id = req.ctx, req.kind, req.id
         return f"{ctx.config.site.rstrip('/')}/browse/{id}" if kind == TICKET else None
 
-    def panels(
-        self, ctx: Context[JiraConfig], snapshot: JiraSnapshot | None, graph: Graph
-    ) -> list[Panel]:
+    def panels(self, req: PanelsRequest[JiraConfig, JiraSnapshot]) -> list[Panel]:
+        ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         if snapshot is None:
             return []
         return [
@@ -453,17 +462,12 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             what_next(ctx.config, snapshot, ctx.now),
         ]
 
-    def act_now(
-        self,
-        ctx: Context[JiraConfig],
-        snapshot: JiraSnapshot | None,
-        graph: Graph,
-        panels: list[Panel],
-    ) -> list[Item]:
+    def act_now(self, req: ActNowRequest[JiraConfig, JiraSnapshot]) -> list[Item]:
         """Its transitions, and the tickets in What next that matter now: important ones
         (incidents, escalated bugs), those due within the week, and blocked ones, which Act
         now ranks down until they've sat untouched for a while."""
-        nominated = super().act_now(ctx, snapshot, graph, panels)
+        ctx, panels = req.ctx, req.panels
+        nominated = super().act_now(req)
         for panel in panels:
             if panel.key != "jira_next":
                 continue

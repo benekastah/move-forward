@@ -10,7 +10,23 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from ...api import Action, ActionHandler, CliHandler, Context, Entity, Graph, Item, Panel, Plugin
+from ...api import (
+    ActionHandler,
+    ActNowRequest,
+    CliHandler,
+    Context,
+    EntitiesRequest,
+    Entity,
+    Graph,
+    Item,
+    ItemActionsRequest,
+    ItemAdditions,
+    KeptItemRequest,
+    Panel,
+    PanelsRequest,
+    Plugin,
+    PrepareItemActionsRequest,
+)
 from . import actions, cli, prune
 from .config import NotesConfig
 from .covers import covers
@@ -45,7 +61,8 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     hides: ClassVar[list[str]] = [ICED]
     cli_help = "import the skill's markdown notes, or export them back"
 
-    def entities(self, ctx: Context[NotesConfig], snapshot: BaseModel | None) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[NotesConfig, BaseModel]) -> list[Entity]:
+        ctx = req.ctx
         notes = NotesRepository(ctx.db)
         return entities(notes.entries(), notes.ices(), notes.covers())
 
@@ -56,37 +73,35 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         ices = notes.ices()
         notes.replace_covers([i.id for i in ices], covers(graph, ices))
 
-    def panels(
-        self, ctx: Context[NotesConfig], snapshot: BaseModel | None, graph: Graph
-    ) -> list[Panel]:
+    def panels(self, req: PanelsRequest[NotesConfig, BaseModel]) -> list[Panel]:
+        ctx, graph = req.ctx, req.graph
         builder = _builder(ctx, graph)
         todos = builder.todos()
         if NotesRepository(ctx.db).is_empty():  # e.g. just upgraded, before an import
             todos = todos.model_copy(update={"description": EMPTY_NOTES})
         return [todos, builder.iced()]
 
-    def act_now(
-        self,
-        ctx: Context[NotesConfig],
-        snapshot: BaseModel | None,
-        graph: Graph,
-        panels: list[Panel],
-    ) -> list[Item]:
+    def act_now(self, req: ActNowRequest[NotesConfig, BaseModel]) -> list[Item]:
         """Close-outs: entries whose open todos are all quick, finishing the entry."""
+        panels = req.panels
         return [i for p in panels if p.key == TODOS for i in p.items if i.signals]
 
     def prepare_item_actions(
-        self, ctx: Context[NotesConfig], graph: Graph
-    ) -> Callable[[Item], list[Action]]:
+        self, req: PrepareItemActionsRequest[NotesConfig]
+    ) -> Callable[[ItemActionsRequest[NotesConfig]], ItemAdditions]:
         """Put on ice and Add todo on other plugins' items, from the notes read once for the
         page."""
-        builder = _builder(ctx, graph)
-        return lambda item: [a for a in (builder.put_on_ice(item), builder.add_todo(item)) if a]
+        builder = _builder(req.ctx, req.graph)
 
-    def kept_item(
-        self, ctx: Context[NotesConfig], graph: Graph, key: str
-    ) -> tuple[str, Item] | None:
+        def additions(each: ItemActionsRequest[NotesConfig]) -> ItemAdditions:
+            found = (builder.put_on_ice(each.item), builder.add_todo(each.item))
+            return ItemAdditions(actions=[a for a in found if a])
+
+        return additions
+
+    def kept_item(self, req: KeptItemRequest[NotesConfig]) -> tuple[str, Item] | None:
         """The todo `todo_done` just ticked off, by id, with its box ticked."""
+        ctx, graph, key = req.ctx, req.graph, req.key
         todo = _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
         return (TODOS, todo) if todo else None
 

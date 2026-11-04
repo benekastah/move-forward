@@ -371,7 +371,7 @@ class App:
         so it can be undone; see `Plugin.kept_item`.
         """
         self.refresh_if_stale()
-        dashboard = build_dashboard(self.config, self.db)
+        dashboard = build_dashboard(self.config, self.db, surface="focus")
         if not category:
             return render.focus_categories_page(dashboard, self._alert())
         done_item = kept_item(self.config, self.db, kept) if kept else None

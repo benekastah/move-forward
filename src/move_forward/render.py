@@ -488,8 +488,9 @@ def _sources(dashboard: Dashboard) -> str:
                 f"<span><strong>{_e(name)}:</strong>"
                 f" {age(dashboard.generated_at, status.fetched_at)} ago</span>"
             )
-    if dashboard.login:
-        spans.append(f"<span>as {_e(dashboard.login)}</span>")
+    if dashboard.identities:
+        who = " · ".join(f"{_e(i.tool)}: {_e(i.login)}" for i in dashboard.identities)
+        spans.append(f"<span>as {who}</span>")
     return "".join(spans)
 
 

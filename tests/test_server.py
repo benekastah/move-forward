@@ -128,7 +128,7 @@ def test_dashboard_page_renders_panels_and_ping_links(client: HTTPConnection) ->
     body = response.read().decode()
     assert response.status == 200
     assert "Needs a reviewer" in body
-    assert f"as {ME}" in body
+    assert f"as GitHub: {ME}" in body
     assert "/ping?pr=" + quote(pr(1).url, safe="") in body
 
 

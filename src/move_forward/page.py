@@ -151,6 +151,27 @@ class Panel(Model):
     until they change or the snooze ends: the same snooze as Act now's."""
 
 
+Surface = Literal["dashboard", "focus", "act_now"]
+"""Where an item is shown: the dashboard's panels, focus mode, or Act now."""
+
+
+class ItemAdditions(Model):
+    """What a plugin adds to another plugin's item (`Plugin.item_actions`)."""
+
+    actions: list[Action] = Field(default_factory=list)
+    badges: list[str] = Field(default_factory=list)
+    details: list[str] = Field(default_factory=list)
+    links: list[Link] = Field(default_factory=list)
+
+
+class Identity(Model):
+    """Who I am in a tool, for the page's footer."""
+
+    tool: str
+    """The plugin's title, e.g. "GitHub"."""
+    login: str
+
+
 class SourceStatus(Model):
     fetched_at: datetime | None = None
     error: str | None = None
