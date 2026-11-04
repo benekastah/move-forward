@@ -223,7 +223,8 @@ script (or Claude) can drive it. Browsers use `mfd.localhost:<port>` (browsers s
 `*.localhost` name to this machine), a name no other program on the machine uses: cookies ignore ports, so
 a cookie for `127.0.0.1` or `localhost` would go to every other server there. `mfd dump` prints the same data as JSON.
 
-Every request but `/login`, the static files and a plugin's sign-in pages (where a tool's
+Every request but `/login`, the sign-in handshake (`/login/challenge`, `/login/code`),
+the static files and a plugin's sign-in pages (where a tool's
 sign-in returns, e.g. `/slack/callback`, which check their own single-use proof) must carry
 the dashboard's token, so other programs and users on the machine can't read the page or press
 its buttons. The token is in `token` next to the database
