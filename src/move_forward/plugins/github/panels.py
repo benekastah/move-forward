@@ -384,6 +384,12 @@ class Builder:
                 problems.append(f"no {prefix} line for {keys[0]}")
             if not pr.body.strip():
                 problems.append("empty description")
+            if size_label := next((x for x in pr.labels if x in self.config.split_pr_labels), None):
+                problems.append(f"worth splitting: labeled {size_label}")
+            elif pr.size >= self.config.split_pr_lines:
+                problems.append(f"worth splitting: {pr.size} lines")
+            elif pr.size >= self.config.split_pr_suggest_lines:
+                problems.append(f"may need splitting: {pr.size} lines")
             if (
                 pr.is_draft
                 and pr.rollup_state == "SUCCESS"
@@ -397,7 +403,7 @@ class Builder:
             key="metadata",
             priority=70,  # 7. PR metadata
             title="PR housekeeping",
-            description="Unknown labels, missing ticket links, drafts that look ready.",
+            description="Unknown labels, missing ticket links, drafts that look ready, big PRs.",
             items=items,
         )
 

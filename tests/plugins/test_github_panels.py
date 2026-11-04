@@ -436,3 +436,18 @@ def test_the_merge_queue_panel_lists_my_queued_prs_and_is_not_for_act_now() -> N
     assert [i.title for i in queue.items] == [queued.title]
     assert not queue.act_now
     assert all(i.title != queued.title or i.signals is None for i in queue.items)
+
+
+def test_housekeeping_says_when_a_pr_may_need_or_is_worth_splitting() -> None:
+    body = "text"
+    maybe = pr(1, body=body, size=600)
+    worth = pr(2, body=body, size=800)
+    labeled = pr(3, body=body, size=10, labels=["size/XL"])
+    fine = pr(4, body=body, size=599)
+    built = build(github=snapshot(mine=[maybe, worth, labeled, fine]), split_pr_labels=["size/XL"])
+    details = {i.title: i.details for i in panel(built, "github.metadata").items}
+    assert details == {
+        maybe.title: ["may need splitting: 600 lines"],
+        worth.title: ["worth splitting: 800 lines"],
+        labeled.title: ["worth splitting: labeled size/XL"],
+    }

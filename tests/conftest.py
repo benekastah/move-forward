@@ -175,6 +175,9 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         "quick_review_max_files",
         "hour_review_max_lines",
         "hour_review_max_files",
+        "split_pr_suggest_lines",
+        "split_pr_lines",
+        "split_pr_labels",
     ):
         if key in o:
             github[key] = o.pop(key)

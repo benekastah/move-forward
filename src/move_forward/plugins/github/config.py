@@ -14,6 +14,8 @@ DEFAULT_QUICK_REVIEW_MAX_LINES = 100
 DEFAULT_QUICK_REVIEW_MAX_FILES = 5
 DEFAULT_HOUR_REVIEW_MAX_LINES = 300
 DEFAULT_HOUR_REVIEW_MAX_FILES = 12
+DEFAULT_SPLIT_PR_SUGGEST_LINES = 600
+DEFAULT_SPLIT_PR_LINES = 800
 DEFAULT_REVIEWER_HISTORY_DAYS = 180
 
 
@@ -66,6 +68,14 @@ class GitHubConfig(Strict):
     """The most lines an hour's review can change, e.g. `300`."""
     hour_review_max_files: int = Field(default=DEFAULT_HOUR_REVIEW_MAX_FILES, ge=0)
     """The most files an hour's review can change, e.g. `12`."""
+    split_pr_suggest_lines: int = Field(default=DEFAULT_SPLIT_PR_SUGGEST_LINES, ge=0)
+    """My open PRs changing at least this many lines (added plus deleted), e.g. `600`, get a
+    "may need splitting" line in PR housekeeping."""
+    split_pr_lines: int = Field(default=DEFAULT_SPLIT_PR_LINES, ge=0)
+    """My open PRs changing at least this many lines, e.g. `800`, are "worth splitting"."""
+    split_pr_labels: list[str] = Field(default_factory=list)
+    """Labels that mark a PR as worth splitting whatever its lines, e.g.
+    `["size/XL", "size/XXL"]`."""
     reviewer_history_days: int = DEFAULT_REVIEWER_HISTORY_DAYS
     """How far back commits count when suggesting reviewers."""
 

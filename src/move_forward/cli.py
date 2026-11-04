@@ -50,6 +50,9 @@ org = "example-org"
 # quick_review_max_files = 5
 # hour_review_max_lines = 300            # within these, an hour; beyond, a day
 # hour_review_max_files = 12
+# split_pr_suggest_lines = 600           # my PRs this big "may need splitting"
+# split_pr_lines = 800                   # ...and this big are "worth splitting"
+# split_pr_labels = []                   # labels that mean worth splitting, e.g. ["size/XL"]
 # reviewer_history_days = 180
 
 # [github.teams]                        # a team's slug, where it isn't the team's name
