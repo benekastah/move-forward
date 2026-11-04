@@ -80,7 +80,9 @@ def _bare_approval(event: TimelineEvent) -> bool:
 
 
 def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ()) -> list[str]:
-    """Review and comment events by others after my last push that I haven't followed up on."""
+    """Review and comment events by others after my last push that I haven't followed up on.
+
+    Review tools' (bots') count, unless they are `ignored`."""
     since = pr.last_commit_at
     pending: list[str] = []
     for event in sorted(pr.events, key=lambda e: e.at):
@@ -90,7 +92,7 @@ def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ())
             continue
         if event.actor == me:
             pending.clear()
-        elif not is_bot(event.actor, ignored) and not _bare_approval(event):
+        elif event.actor and event.actor not in ignored and not _bare_approval(event):
             pending.append(f"{_feedback_verb(event)} {event.actor}")
     return pending
 

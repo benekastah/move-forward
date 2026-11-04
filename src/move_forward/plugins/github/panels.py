@@ -18,6 +18,7 @@ from .prs import (
     failing_checks,
     has_conflicts,
     has_ticket_link_line,
+    is_bot,
     needs_re_review,
     pending_checks,
     ticket_keys,
@@ -211,7 +212,9 @@ class Builder:
                 details.insert(0, "changes requested")
             details += unanswered_feedback(pr, self.me, self.config.ignored_reviewers)
             if details:
-                authors = list(dict.fromkeys(t.author for t in threads if t.author))
+                authors = list(
+                    dict.fromkeys(t.author for t in threads if t.author and not is_bot(t.author))
+                )
                 since = min((t.created_at for t in threads if t.created_at), default=None)
                 waiting = Signals(
                     verb="Reply", effort="minutes", waiting=authors, waiting_since=since

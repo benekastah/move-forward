@@ -127,7 +127,11 @@ def test_feedback_collects_threads_changes_requested_and_unanswered_comments() -
     assert set(items) == {"PR 1", "PR 2"}
     assert items["PR 1"].details == ["alice on src/x.py: Please rename this"]
     assert [link.text for link in items["PR 1"].links] == ["thread 1"]
-    assert items["PR 2"].details == ["changes requested", "comments by alice"]
+    assert items["PR 2"].details == [
+        "changes requested",
+        "comments by alice",
+        "comments by some-bot",  # review tools are bots too: theirs is feedback
+    ]
 
 
 def test_feedback_words_a_review_by_its_state_and_skips_a_bare_approval() -> None:

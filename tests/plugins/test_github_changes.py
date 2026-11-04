@@ -61,7 +61,7 @@ def test_a_merge_conflict_is_said_when_it_appears() -> None:
     ]
 
 
-def test_new_reviews_by_others_are_said_but_not_mine_or_bots() -> None:
+def test_new_reviews_by_others_are_said_bots_included_but_not_mine() -> None:
     reviews = [
         approved_review("alice"),
         Review(author=ME, state="COMMENTED", submitted_at=NOW),
@@ -70,6 +70,7 @@ def test_new_reviews_by_others_are_said_but_not_mine_or_bots() -> None:
     ]
     assert _kinds(_mine(), _mine(reviews=reviews)) == [
         ("review_received", "alice approved"),
+        ("review_received", "dependabot[bot] reviewed"),
         ("review_received", "bob requested changes"),
     ]
     assert _kinds(_mine(reviews=reviews), _mine(reviews=reviews)) == []

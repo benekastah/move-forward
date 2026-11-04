@@ -50,11 +50,14 @@ def _event(pr: PullRequest, kind: str, text: str) -> Event:
     )
 
 
+def _other(login: str | None, me: str, ignored: Collection[str]) -> str | None:
+    """`login` unless it's me or an ignored reviewer: bots' reviews and comments count."""
+    return login if login and login != me and login not in ignored else None
+
+
 def _human(login: str | None, me: str, ignored: Collection[str]) -> str | None:
-    """`login` unless it's me, a bot or an ignored reviewer."""
-    if login in ignored:
-        return None
-    return login if login and login != me and not login.endswith("[bot]") else None
+    """`login` unless it's me, a bot or an ignored reviewer: for what only a person does."""
+    return _other(login, me, ignored) if login and not login.endswith("[bot]") else None
 
 
 def ready(pr: PullRequest) -> bool:
@@ -87,7 +90,7 @@ def _new_reviews(
         for r in pr.reviews
         if (r.author, r.state, r.submitted_at) not in seen
         and r.state in REVIEW_TEXT
-        and _human(r.author, me, ignored)
+        and _other(r.author, me, ignored)
     ]
 
 
@@ -112,7 +115,7 @@ def _mine(pr: PullRequest, old: PullRequest, me: str, ignored: Collection[str]) 
     for review in _new_reviews(pr, old, me, ignored):
         found.append(_event(pr, "review_received", f"{review.author} {REVIEW_TEXT[review.state]}"))
     for comment in _new_events(pr, old, "IssueComment"):
-        if who := _human(comment.actor, me, ignored):
+        if who := _other(comment.actor, me, ignored):
             found.append(_event(pr, "conversation_comment", f"{who} commented"))
     if pr.in_merge_queue and not old.in_merge_queue:
         queued = _new_events(pr, old, "AddedToMergeQueueEvent")
@@ -131,7 +134,7 @@ def _reviewed(pr: PullRequest, old: PullRequest, me: str, ignored: Collection[st
     if pr.head_oid != old.head_oid:
         found.append(_event(pr, "new_push", "new commits were pushed"))
     for comment in _new_events(pr, old, "IssueComment"):
-        if pr.author and comment.actor == pr.author and _human(comment.actor, me, ignored):
+        if pr.author and comment.actor == pr.author and _other(comment.actor, me, ignored):
             found.append(_event(pr, "author_replied", f"{pr.author} commented"))
     return found
 

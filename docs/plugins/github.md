@@ -33,7 +33,7 @@ just opened, say) waits for that.
 `[github]` needs `org`. `history_days` says how far back my merged and closed PRs are
 fetched. Its conventions that differ between organisations are off by default:
 `policy_checks` (checks that enforce PR policy, such as labels or assignees, rather than test the code), `ignored_reviewers` (logins whose comments and
-reviews, like a policy bot's, aren't feedback), `required_owner_marker` (a
+reviews, like a policy bot's, aren't feedback; other bots' are), `required_owner_marker` (a
 CODEOWNERS comment such as `#required`), `ticket_link_prefix` (the PR body line that links
 the ticket, e.g. `Link`) and `placeholder_labels` (template labels to replace).
 `email_domains` picks reviewers' emails from their commits (default: your email's domain;
@@ -92,8 +92,8 @@ a PR the last refresh didn't hold says nothing of its state.
 | --- | --- |
 | `pr_mergeable` | my PR is approved, green, conflict-free, not a draft and not queued |
 | `ci_failed`, `ci_recovered` | CI fails on my PR (naming the checks), or passes again |
-| `review_received` | someone but me or a bot approves, requests changes on or comments in a review of my PR |
-| `conversation_comment` | someone but me or a bot comments on my PR's conversation |
+| `review_received` | someone but me approves, requests changes on or comments in a review of my PR |
+| `conversation_comment` | someone but me comments on my PR's conversation |
 | `merge_conflict` | my PR gets a conflict |
 | `pr_merged`, `pr_closed` | my PR is merged, or closed without merging, by anyone |
 | `merge_queue_added` | someone else queues my PR (unsaid when GitHub's recent timeline doesn't say who) |
