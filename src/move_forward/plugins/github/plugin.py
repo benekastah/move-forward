@@ -23,6 +23,7 @@ from .people import PeopleRepository
 from .prs import (
     changes_requested,
     last_review_activity,
+    progress,
     review_blockers,
 )
 from .setup import TEMPLATE, questions
@@ -273,6 +274,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             stale_after = ctx.config.stale_review_hours * 3600
             fields["review_blockers"] = review_blockers(pr, me, ctx.config.policy_checks, ignored)
             fields["last_review_activity"] = last.isoformat() if last else None
+            fields["progress"] = progress(pr, ignored)
             fields["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
         pr_attrs = PrAttrs.model_validate(fields)
         return Entity(

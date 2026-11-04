@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from conftest import (
     NOW,
+    approved_review,
     dashboard,
     issue,
     panel,
@@ -172,16 +173,11 @@ def test_any_name_of_a_status_matches_and_a_move_offers_them_in_order() -> None:
 
 def test_a_ticket_in_rollout_is_closed_by_hand_once_its_prs_merged() -> None:
     merged = pr(1, state="MERGED", merged_at=NOW)
-    open_pr = pr(2)
     dashboard = build(
-        github=snapshot(mine=[open_pr], merged_recent=[merged]),
+        github=snapshot(merged_recent=[merged]),
         jira=JiraSnapshot(
-            issues=[
-                issue("APP-1", status="Rollout"),  # merged: one low-urgency item
-                issue("APP-2", status="Rollout"),  # open PR: the PR drives, no item
-                issue("APP-3", status="Rollout"),  # no PRs
-            ]
-        ),
+            issues=[issue("APP-1", status="Rollout"), issue("APP-3", status="Rollout")]
+        ),  # APP-3 has no PRs: nothing to say
     )
     [item] = panel(dashboard, "jira.jira_transitions").items
     assert item.title.startswith("APP-1")
@@ -192,6 +188,30 @@ def test_a_ticket_in_rollout_is_closed_by_hand_once_its_prs_merged() -> None:
     assert item.signals and item.signals.verb == "Finish the rollout"
     assert item.signals.importance == -1 and item.signals.closes is None
     assert "Finish the rollout: APP-1 Do the thing" in [i.title for i in dashboard.act_now()]
+
+
+def test_a_rollout_with_open_prs_lists_them_and_rises_when_one_is_ready_to_merge() -> None:
+    merged = pr(1, state="MERGED", merged_at=NOW)
+    ready = pr(2, reviews=[approved_review()], review_decision="APPROVED")
+    waiting = pr(3, review_decision="REVIEW_REQUIRED")
+    draft = pr(4, is_draft=True)
+    dashboard = build(
+        github=snapshot(mine=[ready, waiting, draft], merged_recent=[merged]),
+        jira=JiraSnapshot(
+            issues=[issue("APP-2", status="Rollout"), issue("APP-3", status="Rollout")]
+        ),
+    )
+    items = {i.title.split()[0]: i for i in panel(dashboard, "jira.jira_transitions").items}
+    assert items["APP-2"].details == ["ready to merge: #2"]
+    assert items["APP-2"].signals and items["APP-2"].signals.verb == "Advance the rollout"
+    assert (items["APP-2"].signals.importance, items["APP-2"].signals.effort) == (0, "minutes")
+    assert items["APP-3"].details == ["in review: #3"]
+    assert items["APP-3"].signals and items["APP-3"].signals.importance == -1
+    # Act now joins it to the PR's own Merge item, not a second line
+    titles_now = [i.title for i in dashboard.act_now()]
+    assert titles_now == ["Merge: PR 2", "Advance the rollout: APP-3 Do the thing"]
+    merge = next(i for i in dashboard.act_now() if i.title.startswith("Merge"))
+    assert any("Advance the rollout" in d for d in merge.details)
 
 
 def test_what_next_ranks_a_rollout_below_unblocked_work_and_never_nominates_it() -> None:

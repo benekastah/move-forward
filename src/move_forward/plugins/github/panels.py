@@ -19,8 +19,8 @@ from .prs import (
     has_conflicts,
     has_ticket_link_line,
     is_bot,
+    merge_blockers,
     needs_re_review,
-    pending_checks,
     ticket_keys,
     unanswered_feedback,
     unresolved_threads,
@@ -344,19 +344,7 @@ class Builder:
         for pr in self.mine:
             if pr.is_draft or pr.in_merge_queue:
                 continue
-            reasons: list[str] = []
-            if not approved(pr):
-                reasons.append("not approved")
-            if unresolved_threads(pr, self.config.ignored_reviewers):
-                reasons.append("unresolved threads")
-            if failing_checks(pr):
-                reasons.append("failing checks")
-            if pending_checks(pr):
-                reasons.append("checks pending")
-            if has_conflicts(pr):
-                reasons.append("conflicts")
-            if pr.default_branch and pr.base != pr.default_branch:
-                reasons.append(f"stacked on {pr.base}")
+            reasons = merge_blockers(pr, self.config.ignored_reviewers)
             if reasons:
                 continue
             conditions = [c for e in self._entries(pr) for c in e.merge_conditions.get(pr.url, [])]

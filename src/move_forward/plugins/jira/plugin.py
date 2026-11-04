@@ -71,11 +71,35 @@ class _PrView(Model):
     draft: bool
     mine: bool
     changes_requested: bool
+    progress: str | None = None
+    """github's word for where my open PR is: `ready to merge`, `CI failing`, ..."""
 
 
 def in_status(issue: JiraIssue, names: list[str]) -> bool:
     """Whether the issue's status is any of `names`, without regard to case."""
     return issue.status.casefold() in {name.casefold() for name in names}
+
+
+def _advance_rollout(issue: JiraIssue, prs: list[_PrView]) -> Item:
+    """The item for a ticket in rollout with PRs still open, listing where each is. Low
+    urgency, unless one is ready to merge: merging the next one is the step. Act now joins it
+    to the best item about one of its PRs ("Merge, then: Advance the rollout")."""
+    lines = [f"{p.progress or p.state}: #{p.number}" for p in prs]
+    ready = any(p.progress == "ready to merge" for p in prs)
+    lines.sort(key=lambda line: not line.startswith("ready to merge"))
+    return Item(
+        title=f"{issue.key} {issue.summary}",
+        url=issue.url,
+        subtitle=f"{issue.status}: PRs still open",
+        details=lines,
+        links=[Link(text=f"#{p.number}", url=p.url or p.id) for p in prs],
+        subjects=[ticket_ref(issue.key)],
+        signals=Signals(
+            verb="Advance the rollout",
+            importance=0 if ready else -1,
+            effort="minutes" if ready else "hour",
+        ),
+    )
 
 
 def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) -> Item:
@@ -113,9 +137,11 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
         targets: list[str] = []
         closing = False
         if in_status(issue, config.status_rollout):
-            if merged and not open_prs:
+            if open_prs:
+                items.append(_advance_rollout(issue, prs))
+            elif merged:
                 items.append(_finish_rollout(config, issue, prs))
-            continue  # while it has open PRs, they drive it
+            continue
         if (
             in_status(issue, config.status_in_progress)
             and open_prs

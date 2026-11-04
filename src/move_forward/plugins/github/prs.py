@@ -128,6 +128,34 @@ def last_review_activity(pr: PullRequest, ignored: Collection[str] = ()) -> date
     return max(times) if times else None
 
 
+def merge_blockers(pr: PullRequest, ignored: Collection[str] = ()) -> list[str]:
+    """Why a PR can't be merged yet; empty when it's ready (Ready to merge's rule, besides
+    the work notes' merge conditions)."""
+    reasons: list[str] = []
+    if not approved(pr):
+        reasons.append("not approved")
+    if unresolved_threads(pr, ignored):
+        reasons.append("unresolved threads")
+    if failing_checks(pr):
+        reasons.append("failing checks")
+    if pending_checks(pr):
+        reasons.append("checks pending")
+    if has_conflicts(pr):
+        reasons.append("conflicts")
+    if pr.default_branch and pr.base != pr.default_branch:
+        reasons.append(f"stacked on {pr.base}")
+    return reasons
+
+
+def progress(pr: PullRequest, ignored: Collection[str] = ()) -> str:
+    """Where an open PR is, in a word or two: draft, ready to merge, CI failing or in review."""
+    if pr.is_draft:
+        return "draft"
+    if not merge_blockers(pr, ignored):
+        return "ready to merge"
+    return "CI failing" if failing_checks(pr) else "in review"
+
+
 def review_blockers(
     pr: PullRequest, me: str, policy_checks: list[str], ignored: Collection[str] = ()
 ) -> list[str]:
