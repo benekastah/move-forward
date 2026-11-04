@@ -34,7 +34,7 @@ from .refresh import (
     to_collect,
 )
 from .registry import Enabled, enabled
-from .repositories import LayoutRepository
+from .repositories import LayoutRepository, SessionRepository
 
 log = logging.getLogger(__name__)
 
@@ -67,9 +67,10 @@ TLS_RECHECK_SECONDS = 3600
 LOGIN_PATH = "/login"
 NOTIFICATIONS_PATH = "/notifications"
 NOT_SIGNED_IN = "<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
-LOCAL_HOSTS = ("127.0.0.1", "localhost")
-"""Names the page is served under. A request naming any other host is refused, which stops a
-web page from reaching the server through a DNS name it controls (DNS rebinding)."""
+LOCAL_HOSTS = (auth.HOST, "127.0.0.1", "localhost")
+"""Names the server answers to. A request naming any other host is refused, which stops a web
+page from reaching the server through a DNS name it controls (DNS rebinding). Browsers are
+sent on to `auth.HOST` (see `do_GET`); the others are for scripts with the token."""
 
 
 def _allowed_hosts(port: int) -> set[str]:
@@ -485,8 +486,11 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
 
         def _refuse_strangers(self) -> bool:
             """Answer 401 to a request without the token; returns whether it did."""
-            given = auth.from_request(self.headers.get("Authorization"), self.headers.get("Cookie"))
-            if auth.matches(app.token, given):
+            if auth.matches(app.token, auth.bearer(self.headers.get("Authorization"))):
+                return False
+            port = cast(HTTPServer, self.server).server_port
+            session = auth.session_from(self.headers.get("Cookie"), port)
+            if session and SessionRepository(app.db).valid(session, datetime.now(UTC)):
                 return False
             self._html(HTTPStatus.UNAUTHORIZED, NOT_SIGNED_IN)
             return True
@@ -498,8 +502,12 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if not auth.matches(app.token, given):
                 self._html(HTTPStatus.UNAUTHORIZED, NOT_SIGNED_IN)
                 return
+            port = cast(HTTPServer, self.server).server_port
+            session = SessionRepository(app.db).create(
+                datetime.now(UTC), timedelta(days=auth.SESSION_DAYS)
+            )
             self.send_response(HTTPStatus.SEE_OTHER)
-            self.send_header("Set-Cookie", auth.set_cookie(app.token, app.scheme == "https"))
+            self.send_header("Set-Cookie", auth.set_cookie(session, port, app.scheme == "https"))
             self.send_header("Location", "/")
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -508,12 +516,15 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if self._refuse_other_sites(check_origin=False):
                 return
             port = cast(HTTPServer, self.server).server_port
-            if self.headers.get("Host") == f"localhost:{port}":
-                # The sign-in cookie is 127.0.0.1's, and cookies are per host: send the
-                # browser there, to the same path. The host is ours, so this can't send it
-                # anywhere else.
+            if self.headers.get("Host") != f"{auth.HOST}:{port}" and not self.headers.get(
+                "Authorization", ""
+            ).startswith(auth.BEARER):
+                # The session cookie is `auth.HOST`'s, and cookies are per host: send the
+                # browser there, to the same path. Scripts with a token are served where
+                # they are. The host is one of ours (checked above), so this can't send the
+                # browser anywhere else.
                 self.send_response(HTTPStatus.FOUND)
-                self.send_header("Location", f"{app.scheme}://127.0.0.1:{port}{self.path}")
+                self.send_header("Location", f"{auth.origin(port, app.scheme)}{self.path}")
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return

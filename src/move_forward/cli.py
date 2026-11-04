@@ -17,7 +17,7 @@ from .db import Database
 from .plugin import CliHandler
 from .refresh import build_dashboard, refresh, stored_graph
 from .registry import enabled, enabled_names, migrate
-from .repositories import FeedbackRepository, PriorityRepository
+from .repositories import FeedbackRepository, PriorityRepository, SessionRepository
 from .server import scheme, serve
 from .shell import CommandError
 
@@ -148,6 +148,9 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     open_parser = commands.add_parser("open", help="open the running dashboard, signed in")
     open_parser.add_argument("--port", type=int, help="override the configured port")
+    commands.add_parser(
+        "logout", help="sign every browser out: end all sessions (`mfd open` signs one in again)"
+    )
     commands.add_parser("refresh", help="refresh every source once and exit")
     commands.add_parser(
         "check", help="load the config and every plugin, and exit; fails with what's wrong"
@@ -327,6 +330,9 @@ def main(argv: list[str] | None = None) -> int:
     db = Database(config.db_path, config.db_backups)
     migrate(config, db)
 
+    if args.command == "logout":
+        print(f"ended {SessionRepository(db).revoke_all()} session(s)")
+        return 0
     if args.command == "refresh":
         refresh(config, db)
         dashboard = build_dashboard(config, db)

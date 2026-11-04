@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from cryptography import x509
+from cryptography.x509.verification import PolicyBuilder, Store
 
 from move_forward import server, tls
 from move_forward.config import Config
@@ -29,11 +30,19 @@ def test_the_certificate_names_only_this_machine_and_its_authority_only_vouches_
     assert all(is_private(key) for _, key in paths.certs())
     cert = x509.load_pem_x509_certificate(first.read_bytes())
     names = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-    assert names.get_values_for_type(x509.DNSName) == ["localhost"]
+    assert names.get_values_for_type(x509.DNSName) == ["localhost", "mfd.localhost"]
     assert [str(a) for a in names.get_values_for_type(x509.IPAddress)] == ["127.0.0.1", "::1"]
     ca = x509.load_pem_x509_certificate(paths.ca.read_bytes())
     constraints = ca.extensions.get_extension_for_class(x509.NameConstraints)
     assert constraints.critical and constraints.value.permitted_subtrees is not None
+    # The authority vouches for `localhost`, and so for everything below it: `mfd.localhost`.
+    verifier = (
+        PolicyBuilder().store(Store([ca])).build_server_verifier(x509.DNSName("mfd.localhost"))
+    )
+    verifier.verify(cert, [])
+    wrong = PolicyBuilder().store(Store([ca])).build_server_verifier(x509.DNSName("evil.example"))
+    with pytest.raises(Exception, match="(?i)name|subject|match"):
+        wrong.verify(cert, [])
     assert not list(paths.dir.glob("*ca*key*"))  # the authority's key isn't kept
     assert first_key.exists()
 
@@ -77,13 +86,14 @@ def test_the_dashboard_answers_over_https_with_a_secure_sign_in_cookie(
     https: tuple[HTTPSConnection, tls.Paths],
 ) -> None:
     client, _ = https
-    client.request("GET", f"/login?token={TOKEN}")
+    host = f"mfd.localhost:{client.port}"
+    client.request("GET", f"/login?token={TOKEN}", headers={"Host": host})
     response = client.getresponse()
     response.read()
     assert response.status == 303
     assert "Secure" in (response.getheader("Set-Cookie") or "")
-    origin = f"https://127.0.0.1:{client.port}"
-    headers = {"Authorization": f"Bearer {TOKEN}", "Origin": origin}
+    origin = f"https://{host}"
+    headers = {"Authorization": f"Bearer {TOKEN}", "Origin": origin, "Host": host}
     client.request("POST", "/refresh", headers=headers)
     response = client.getresponse()
     response.read()
@@ -94,6 +104,19 @@ def test_the_dashboard_answers_over_https_with_a_secure_sign_in_cookie(
     response = client.getresponse()
     response.read()
     assert response.status == 403  # the plain-HTTP origin isn't this dashboard any more
+
+
+def test_a_certificate_from_before_mfd_localhost_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = tls.Paths(tmp_path / "tls")
+    tls.make(paths)
+    assert tls.problem(paths) is None
+    monkeypatch.setattr(tls, "NAMES", ["localhost"])  # a chain as the earlier version made it
+    old = tls.Paths(tmp_path / "old")
+    tls.make(old)
+    problem = tls.problem(old) or ""
+    assert "mfd.localhost" in problem and "mfd cert --force --trust" in problem
 
 
 def test_without_a_certificate_the_dashboard_stays_on_plain_http(tmp_path: Path) -> None:

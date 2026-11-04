@@ -27,7 +27,7 @@ from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import migrate
-from move_forward.repositories import LayoutRepository
+from move_forward.repositories import LayoutRepository, SessionRepository
 
 
 @pytest.fixture
@@ -68,6 +68,11 @@ def client(app: server.App) -> Iterator[HTTPConnection]:
 
 TOKEN = "s3cret"
 SIGNED_IN = {"Authorization": f"Bearer {TOKEN}"}
+
+
+def browser(client: HTTPConnection, **headers: str) -> dict[str, str]:
+    """A browser's headers: it reaches the dashboard as `auth.HOST`, with `headers`."""
+    return {"Host": f"{auth.HOST}:{client.port}", **headers}
 
 
 def notice_cookie(response: HTTPResponse) -> str:
@@ -384,7 +389,12 @@ def test_being_stopped_shuts_down_quietly(
 
 
 def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: server.App) -> None:
-    for headers in ({}, {"Authorization": "Bearer wrong"}, {"Cookie": "move_forward_token=wrong"}):
+    wrong_session = f"{auth.session_cookie(client.port)}=wrong"
+    for headers in (
+        browser(client),
+        browser(client, Authorization="Bearer wrong"),
+        browser(client, Cookie=wrong_session),
+    ):
         response = get(client, "/", headers)
         assert response.status == 401 and "mfd open" in response.read().decode()
     response = post(client, "/actions/slack/mark_sent", SENT, {"Authorization": "Bearer wrong"})
@@ -394,31 +404,55 @@ def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: ser
 
 
 def test_static_files_need_no_token(client: HTTPConnection) -> None:
-    response = get(client, "/style.css", {})
+    response = get(client, "/style.css", browser(client))
     assert response.status == 200
     response.read()
 
 
-def test_login_signs_the_browser_in_with_a_cookie(client: HTTPConnection) -> None:
-    response = get(client, "/login?token=wrong", {})
+def test_login_signs_the_browser_in_with_a_session_not_the_token(
+    client: HTTPConnection, app: server.App
+) -> None:
+    response = get(client, "/login?token=wrong", browser(client))
     assert response.status == 401 and "Set-Cookie" not in response.headers
     response.read()
-    response = get(client, f"/login?token={TOKEN}", {})
+    response = get(client, f"/login?token={TOKEN}", browser(client))
     assert response.status == 303 and response.getheader("Location") == "/"
     cookie = response.getheader("Set-Cookie") or ""
-    assert cookie.startswith(f"move_forward_token={TOKEN};")
-    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+    name = auth.session_cookie(client.port)
+    assert cookie.startswith(f"{name}=") and TOKEN not in cookie  # an id, not the token
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie and "Domain" not in cookie
     response.read()
-    response = get(client, "/", {"Cookie": cookie.split(";")[0]})
+    response = get(client, "/", browser(client, Cookie=cookie.split(";")[0]))
     assert response.status == 200
     response.read()
+    assert SessionRepository(app.db).revoke_all() == 1  # `mfd logout`
+    response = get(client, "/", browser(client, Cookie=cookie.split(";")[0]))
+    assert response.status == 401
+    response.read()
+
+
+def test_browsers_are_sent_to_the_dashboards_own_host_but_scripts_are_served_where_they_are(
+    client: HTTPConnection,
+) -> None:
+    canonical = f"http://{auth.HOST}:{client.port}"
+    for host in (f"localhost:{client.port}", f"127.0.0.1:{client.port}"):
+        response = get(client, "/focus?cat=all&i=2", {"Host": host})
+        assert response.status == 302
+        assert response.getheader("Location") == f"{canonical}/focus?cat=all&i=2"
+        response.read()
+        response = get(client, "//evil.example/x", {"Host": host})
+        assert response.getheader("Location", "").startswith(f"{canonical}/")
+        response.read()
+    script = get(client, "/", {"Host": f"127.0.0.1:{client.port}", **SIGNED_IN})
+    assert script.status == 200  # a token in a header, so no browser: served here
+    script.read()
 
 
 def test_the_token_stays_out_of_the_log(
     client: HTTPConnection, caplog: pytest.LogCaptureFixture
 ) -> None:
     with caplog.at_level("DEBUG", logger="move_forward.server"):
-        get(client, f"/login?token={TOKEN}", {}).read()
+        get(client, f"/login?token={TOKEN}", browser(client)).read()
     assert "/login?token=" in caplog.text and TOKEN not in caplog.text
 
 
@@ -480,17 +514,6 @@ def test_a_post_whose_length_is_too_large_or_not_a_length_is_refused(
     client.endheaders()
     response = client.getresponse()
     assert response.status == 413 and response.getheader("Connection") == "close"
-    response.read()
-
-
-def test_localhost_goes_to_127_0_0_1_where_the_sign_in_cookie_is(client: HTTPConnection) -> None:
-    host = f"localhost:{client.port}"
-    response = get(client, "/focus?cat=all&i=2", {"Host": host})
-    assert response.status == 302
-    assert response.getheader("Location") == f"http://127.0.0.1:{client.port}/focus?cat=all&i=2"
-    response.read()
-    response = get(client, "//evil.example/x", {"Host": host})
-    assert response.getheader("Location", "").startswith(f"http://127.0.0.1:{client.port}/")
     response.read()
 
 
@@ -594,9 +617,11 @@ def test_a_sign_in_page_is_served_without_the_cookie_and_the_rest_still_need_it(
 ) -> None:
     swap = {"github": _GitHubWithASignIn()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    response = get(client, "/github/back?state=s1", {})  # as a redirect from Slack comes
+    response = get(
+        client, "/github/back?state=s1", browser(client)
+    )  # as a redirect from Slack comes
     assert response.status == 200 and response.read().decode() == "back with s1"
-    response = get(client, "/github/private?state=s1", {})
+    response = get(client, "/github/private?state=s1", browser(client))
     assert response.status == 401
     response.read()
 
@@ -613,7 +638,7 @@ def test_the_settings_page_shows_and_saves_the_config(
     assert response.status == 303 and response.getheader("Location") == "/settings"
     assert "saved github.history_days" in (notice_of(response) or "")
     assert "history_days = 30" in path.read_text()
-    response = get(client, "/settings", {})  # without the token
+    response = get(client, "/settings", browser(client))  # without the token
     assert response.status == 401
     response.read()
 

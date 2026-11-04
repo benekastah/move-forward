@@ -1,6 +1,8 @@
 """Core's repositories: the queries over core's own tables. Plugins keep theirs."""
 
-from datetime import datetime
+import hashlib
+import secrets
+from datetime import datetime, timedelta
 
 from pydantic import BaseModel
 
@@ -66,6 +68,44 @@ class KvRepository:
 
     def set(self, key: str, value: str) -> None:
         self._db.execute("INSERT OR REPLACE INTO kv VALUES (?, ?, ?)", (self._owner, key, value))
+
+
+class SessionRepository:
+    """Browser sessions (`sessions`): a random id in the browser's cookie, kept here only as
+    its hash, expiring, and revocable (`mfd logout`, a new token), unlike the token itself."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    @staticmethod
+    def _hash(session_id: str) -> str:
+        return hashlib.sha256(session_id.encode()).hexdigest()
+
+    def create(self, now: datetime, lasts: timedelta) -> str:
+        """Start a session lasting `lasts`; its id, which only the browser is told."""
+        session_id = secrets.token_urlsafe(32)
+        self._db.execute(
+            "INSERT INTO sessions VALUES (?, ?, ?)",
+            (self._hash(session_id), now.isoformat(), (now + lasts).isoformat()),
+        )
+        return session_id
+
+    def valid(self, session_id: str, now: datetime) -> bool:
+        """Whether `session_id` names a session that hasn't expired or been revoked."""
+        rows = self._db.query(
+            "SELECT expires_at FROM sessions WHERE id_hash = ?", (self._hash(session_id),)
+        )
+        return bool(rows) and datetime.fromisoformat(rows[0]["expires_at"]) > now
+
+    def revoke_all(self) -> int:
+        """End every session; how many there were."""
+        count = int(self._db.query("SELECT COUNT(*) AS n FROM sessions")[0]["n"])
+        self._db.execute("DELETE FROM sessions")
+        return count
+
+    def prune(self, now: datetime) -> None:
+        """Forget the expired ones."""
+        self._db.execute("DELETE FROM sessions WHERE expires_at <= ?", (now.isoformat(),))
 
 
 class LayoutRepository:

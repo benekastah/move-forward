@@ -26,7 +26,8 @@ mfd serve --open
 The dashboard listens only on localhost, over plain HTTP. To serve it over HTTPS
 instead, set `https = true` and run `mfd cert --trust`.
 
-`mfd cert` makes certificates for `127.0.0.1` and `localhost`, signed by a local
+`mfd cert` makes certificates for `mfd.localhost` (where browsers reach the dashboard),
+`localhost`, `127.0.0.1` and `::1`, signed by a local
 authority that can vouch for nothing else (its key signs them and is thrown away), so `mfd
 serve` answers on `https://`. It signs three ahead, each starting 25 days before the one
 before it ends, and `mfd serve` moves to the next by itself, without a restart: about six
@@ -216,23 +217,27 @@ Buttons on a focused item come back to the same item afterwards.
 ## API
 
 Everything the page does goes through plain HTTP on `127.0.0.1:<port>`, so a
-script (or Claude) can drive it. `mfd dump` prints the same data as JSON.
+script (or Claude) can drive it. Browsers use `mfd.localhost:<port>` (browsers send every
+`*.localhost` name to this machine), a name no other program on the machine uses: cookies ignore ports, so
+a cookie for `127.0.0.1` or `localhost` would go to every other server there. `mfd dump` prints the same data as JSON.
 
 Every request but `/login`, the static files and a plugin's sign-in pages (where a tool's
 sign-in returns, e.g. `/slack/callback`, which check their own single-use proof) must carry
 the dashboard's token, so other programs and users on the machine can't read the page or press
 its buttons. The token is in `token` next to the database
 (`~/.local/share/move-forward/token`), made on first start and readable only by
-you. Scripts send it as `Authorization: Bearer <token>`. Browsers get it as a
-cookie: `mfd open` visits `/login?token=<token>`, which sets the cookie and
-goes to the dashboard. A request without the token gets `401 Unauthorized`;
-delete the file to make a new token, which signs every browser out.
+you. Scripts send it as `Authorization: Bearer <token>`. Browsers never hold it: `mfd open`
+visits `/login?token=<token>`, which starts a session (a random id the server keeps
+only as a hash, good for 400 days) and sets its cookie (`move_forward_session_<port>`,
+`HttpOnly`, `SameSite=Strict`, host-only) before going to the dashboard. A request without
+the token or a session gets `401 Unauthorized`. `mfd logout` ends every session.
 
 With the certificate, everything is on `https://` and the cookie is marked `Secure`.
-Requests must also name the server as `127.0.0.1:<port>` or `localhost:<port>`
-in their `Host` header (a page asked for at `localhost` is sent to the same path at
-`127.0.0.1`, where the sign-in cookie is), and a POST that carries an `Origin` header must come
-from one of those. So other web pages open in the browser can't use the
+Requests must also name the server as `mfd.localhost:<port>`, `127.0.0.1:<port>` or
+`localhost:<port>` in their `Host` header (a page asked for under either of the last two,
+without a token in a header, is sent to the same path at `mfd.localhost`, where the session
+cookie is; scripts with the token are served where they are), and a POST that carries an
+`Origin` header must come from one of those. So other web pages open in the browser can't use the
 dashboard's buttons, while scripts like `curl`, which send no `Origin`, work.
 Anything else gets `403 Forbidden`.
 

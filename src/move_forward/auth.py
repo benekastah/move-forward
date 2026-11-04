@@ -1,8 +1,14 @@
 """The server's token: a secret in a file only my account can read.
 
 Anyone on the machine can connect to the server's port; the token is what tells my requests
-from theirs. Browsers get it as a cookie from `/login?token=…`, which `mfd open` visits;
-scripts send it as `Authorization: Bearer <token>`.
+from theirs. Scripts send it as `Authorization: Bearer <token>`. Browsers don't hold it: a
+visit to `/login`, which `mfd open` makes, starts a session, and the browser's cookie names
+that session (see `repositories.SessionRepository`), which can expire or be revoked.
+
+Browsers reach the dashboard under `HOST`, not its address. Cookies ignore ports, so a
+cookie for `127.0.0.1` would go to every other program on the machine that listens on that
+address, and one for `localhost` to every other `localhost` page; `mfd.localhost` (browsers
+send every `*.localhost` name to this machine) is a name nothing else uses.
 """
 
 import hmac
@@ -20,8 +26,11 @@ log = logging.getLogger(__name__)
 TOKEN_FILE = "token"
 """The token's file, next to the database."""
 TOKEN_BYTES = 32
-COOKIE = "move_forward_token"
-COOKIE_MAX_AGE_SECONDS = 400 * 24 * 3600
+HOST = "mfd.localhost"
+"""The name browsers use for the dashboard."""
+SESSION_COOKIE = "move_forward_session"
+SESSION_DAYS = 400
+COOKIE_MAX_AGE_SECONDS = SESSION_DAYS * 24 * 3600
 """As long as browsers keep a cookie (400 days), so a browser restart doesn't sign me out."""
 BEARER = "Bearer "
 NOTICE_COOKIE = "move_forward_notice"
@@ -73,11 +82,23 @@ def matches(token: str, given: str | None) -> bool:
     return given is not None and hmac.compare_digest(token.encode(), given.encode())
 
 
-def from_request(authorization: str | None, cookie: str | None) -> str | None:
-    """The token a request carries: its `Authorization: Bearer` header, else its cookie."""
+def bearer(authorization: str | None) -> str | None:
+    """The token in an `Authorization: Bearer` header, if it has one."""
     if authorization and authorization.startswith(BEARER):
         return authorization[len(BEARER) :].strip()
-    return _cookie(cookie, COOKIE)
+    return None
+
+
+def session_cookie(port: int) -> str:
+    """The session cookie's name. It has the port in it, since cookies ignore ports: two
+    dashboards on this machine (a second, for development) would otherwise sign each other
+    out."""
+    return f"{SESSION_COOKIE}_{port}"
+
+
+def session_from(cookie: str | None, port: int) -> str | None:
+    """The session id a `Cookie` header carries for the dashboard on `port`."""
+    return _cookie(cookie, session_cookie(port))
 
 
 def _cookie(cookie: str | None, wanted: str) -> str | None:
@@ -91,17 +112,24 @@ def _cookie(cookie: str | None, wanted: str) -> str | None:
     return None
 
 
-def set_cookie(token: str, secure: bool = False) -> str:
+def set_cookie(session_id: str, port: int, secure: bool = False) -> str:
     """The `Set-Cookie` value signing a browser in: scripts can't read it and other sites'
-    requests don't carry it; `secure`, over HTTPS, it's never sent over plain HTTP."""
+    requests don't carry it; `secure`, over HTTPS, it's never sent over plain HTTP. It has
+    no `Domain`, so only the host that set it gets it back."""
     cookie = (
-        f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={COOKIE_MAX_AGE_SECONDS}"
+        f"{session_cookie(port)}={session_id}; Path=/; HttpOnly; SameSite=Strict;"
+        f" Max-Age={COOKIE_MAX_AGE_SECONDS}"
     )
     return cookie + ("; Secure" if secure else "")
 
 
+def origin(port: int, scheme: str = "http") -> str:
+    """Where browsers reach the dashboard."""
+    return f"{scheme}://{HOST}:{port}"
+
+
 def login_url(port: int, token: str, scheme: str = "http") -> str:
-    return f"{scheme}://127.0.0.1:{port}/login?token={token}"
+    return f"{origin(port, scheme)}/login?token={token}"
 
 
 def _sign(token: str, text: str) -> str:

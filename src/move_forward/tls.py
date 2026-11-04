@@ -1,7 +1,8 @@
-"""The dashboard's certificates, so `mfd serve` can answer on https://127.0.0.1.
+"""The dashboard's certificates, so `mfd serve` can answer on https://mfd.localhost.
 
 `mfd cert` makes a local certificate authority and, with it, a chain of server
-certificates for `127.0.0.1`, `localhost` and `::1`, each starting a little before the one
+certificates for `mfd.localhost` (where browsers reach the dashboard), `localhost` (where
+OAuth sign-ins come back), `127.0.0.1` and `::1`, each starting a little before the one
 before it ends, so they cover years between them. The authority can only vouch for those
 names (its name constraints say so), and its private key is never written down: it signs
 the certificates, future ones included, and is dropped, so nothing on disk can make a
@@ -31,6 +32,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+from .auth import HOST
 from .private import make_private
 from .shell import CommandError, run
 
@@ -46,7 +48,11 @@ RENEW_WITHIN_DAYS = 30
 BANNER_DAYS = {"notice": 14, "soon": 7, "now": 3}
 """Within how many days of the last certificate ending a banner across every page says so,
 and how loudly: blue, then yellow, then red (red too once they've ended)."""
-NAMES = ["localhost"]
+NAMES = ["localhost", HOST]
+"""The server certificates' DNS names."""
+CONSTRAINED = ["localhost"]
+"""What the authority may vouch for: `localhost` and, as a name constraint always does, every
+name below it, which is where `HOST` is."""
 ADDRESSES = [ipaddress.ip_address("127.0.0.1"), ipaddress.ip_address("::1")]
 
 
@@ -121,7 +127,7 @@ def make(paths: Paths, now: datetime | None = None) -> None:
         .add_extension(
             x509.NameConstraints(
                 permitted_subtrees=[
-                    *(x509.DNSName(name) for name in NAMES),
+                    *(x509.DNSName(name) for name in CONSTRAINED),
                     x509.IPAddress(ipaddress.ip_network("127.0.0.0/8")),
                     x509.IPAddress(ipaddress.ip_network("::1/128")),
                 ],
@@ -206,12 +212,27 @@ def expires(paths: Paths) -> datetime:
     return max(_window(cert)[1] for cert, _ in paths.certs() if cert.exists())
 
 
+def _covers_host(paths: Paths) -> bool:
+    """Whether the first certificate names `HOST`."""
+    first = next((cert for cert, _ in paths.certs() if cert.exists()), None)
+    if first is None:
+        return True
+    loaded = x509.load_pem_x509_certificate(first.read_bytes())
+    names = loaded.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+    return HOST in names.value.get_values_for_type(x509.DNSName)
+
+
 def problem(paths: Paths, now: datetime | None = None) -> str | None:
     """What's wrong with the certificates, for `mfd check` and the page: missing, ended, or
     the last ending soon."""
     if not paths.ready():
         return f"no certificate in {paths.dir}; `mfd cert` makes one (until then, plain HTTP)"
     now = now or datetime.now(UTC)
+    if not _covers_host(paths):
+        return (
+            f"the certificate predates {HOST}, where browsers reach the dashboard now;"
+            " `mfd cert --force --trust` makes new ones"
+        )
     left = expires(paths) - now
     if left <= timedelta(0) or current(paths, now) is None:
         return "the certificates have ended; `mfd cert --force --trust` makes new ones"

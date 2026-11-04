@@ -177,6 +177,15 @@ CREATE TABLE notifications (           -- kept for `keep_hours`: events waiting 
 """
 """Browser notifications' events, until a dashboard tab has shown them."""
 
+_V10_SESSIONS = """
+CREATE TABLE sessions (                -- kept until they expire or are revoked: browsers
+    id_hash TEXT PRIMARY KEY,          -- signed in; the id's SHA-256, so the table can't sign in
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+"""
+"""Browser sessions: what a signed-in browser's cookie names, instead of the token itself."""
+
 CORE_MIGRATIONS = [
     V1_SCHEMA,
     _V2_KV_AND_LAYOUT,
@@ -187,6 +196,7 @@ CORE_MIGRATIONS = [
     _V7_PRIORITIES,
     _V8_PENDING_FEEDBACK,
     _V9_NOTIFICATIONS,
+    _V10_SESSIONS,
 ]
 
 _SCHEMA_VERSIONS = """
