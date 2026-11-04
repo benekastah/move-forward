@@ -84,9 +84,14 @@ def pr_item(
     )
 
 
-def review_effort(pr: PullRequest) -> Effort:
-    """How long reviewing it takes, by its size: minutes up to 100 lines, an hour up to 500."""
-    return "minutes" if pr.size <= 100 else "hour" if pr.size <= 500 else "day"
+def review_effort(lines: int, files: int, config: GitHubConfig) -> Effort:
+    """How long reviewing a change takes: minutes within both quick limits, else an hour
+    within both hour limits, else a day."""
+    if lines <= config.quick_review_max_lines and files <= config.quick_review_max_files:
+        return "minutes"
+    if lines <= config.hour_review_max_lines and files <= config.hour_review_max_files:
+        return "hour"
+    return "day"
 
 
 def requested_of(pr: PullRequest, me: str) -> datetime | None:
@@ -99,11 +104,11 @@ def requested_of(pr: PullRequest, me: str) -> datetime | None:
     return max(times, default=None)
 
 
-def _review(pr: PullRequest, me: str) -> Signals:
+def _review(pr: PullRequest, me: str, config: GitHubConfig) -> Signals:
     """Review it: its author waits, since my review was asked for."""
     return Signals(
         verb=REVIEW,
-        effort=review_effort(pr),
+        effort=review_effort(pr.size, pr.changed_files, config),
         waiting=[pr.author] if pr.author else [],
         waiting_since=requested_of(pr, me),
     )
@@ -144,7 +149,7 @@ class Builder:
                         pr,
                         details=["review requested"],
                         rank=pr.updated_at.timestamp(),
-                        signals=_review(pr, self.me),
+                        signals=_review(pr, self.me, self.config),
                         fingerprint=pr.head_oid,
                     )
                 )
@@ -158,7 +163,7 @@ class Builder:
                             pr,
                             details=[reason],
                             rank=pr.updated_at.timestamp(),
-                            signals=_review(pr, self.me),
+                            signals=_review(pr, self.me, self.config),
                             fingerprint=pr.head_oid,
                         )
                     )

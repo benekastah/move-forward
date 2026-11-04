@@ -10,6 +10,10 @@ DEFAULT_HISTORY_DAYS = 14
 DEFAULT_POLICY_CHECKS: list[str] = []
 DEFAULT_PLACEHOLDER_LABELS: list[str] = []
 DEFAULT_STALE_REVIEW_HOURS = 24
+DEFAULT_QUICK_REVIEW_MAX_LINES = 100
+DEFAULT_QUICK_REVIEW_MAX_FILES = 5
+DEFAULT_HOUR_REVIEW_MAX_LINES = 300
+DEFAULT_HOUR_REVIEW_MAX_FILES = 12
 DEFAULT_REVIEWER_HISTORY_DAYS = 180
 
 
@@ -51,6 +55,17 @@ class GitHubConfig(Strict):
     domain of the top-level `email`; set this when the organisation uses several."""
     stale_review_hours: int = DEFAULT_STALE_REVIEW_HOURS
     """A review request with no review activity for this long is nudgeable."""
+    quick_review_max_lines: int = Field(default=DEFAULT_QUICK_REVIEW_MAX_LINES, ge=0)
+    """A review takes minutes when the PR changes at most this many lines (added plus
+    deleted), e.g. `100`, and at most `quick_review_max_files` files. Otherwise it takes an
+    hour within the `hour_review_max_*` limits, and a day beyond them. The limits grow
+    slowly on purpose: a PR's complexity grows faster than its size."""
+    quick_review_max_files: int = Field(default=DEFAULT_QUICK_REVIEW_MAX_FILES, ge=0)
+    """The most files a quick (minutes) review can change, e.g. `5`."""
+    hour_review_max_lines: int = Field(default=DEFAULT_HOUR_REVIEW_MAX_LINES, ge=0)
+    """The most lines an hour's review can change, e.g. `300`."""
+    hour_review_max_files: int = Field(default=DEFAULT_HOUR_REVIEW_MAX_FILES, ge=0)
+    """The most files an hour's review can change, e.g. `12`."""
     reviewer_history_days: int = DEFAULT_REVIEWER_HISTORY_DAYS
     """How far back commits count when suggesting reviewers."""
 

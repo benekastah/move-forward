@@ -65,6 +65,37 @@ def test_act_now_does_not_suggest_reviewing_a_draft() -> None:
     assert len(panel(dashboard, "github.reviews_for_me").items) == 2
 
 
+def test_review_effort_needs_both_the_lines_and_the_files_within_a_limit() -> None:
+    def efforts(**settings: object) -> dict[str, str | None]:
+        sizes = {
+            "small": (100, 5),
+            "many files": (50, 6),
+            "medium": (300, 12),
+            "many lines": (301, 3),
+            "big": (100, 13),
+        }
+        prs = [
+            pr(n, author="alice", size=lines, changed_files=files)
+            for n, (lines, files) in enumerate(sizes.values(), 1)
+        ]
+        built = build(github=snapshot(direct_requests=prs), **settings)
+        by_pr = {
+            i.title: i.signals.effort
+            for i in panel(built, "github.reviews_for_me").items
+            if i.signals
+        }
+        return dict(zip(sizes, [by_pr[p.title] for p in prs], strict=True))
+
+    assert efforts() == {
+        "small": "minutes",
+        "many files": "hour",
+        "medium": "hour",
+        "many lines": "day",
+        "big": "day",
+    }
+    assert efforts(quick_review_max_files=6)["many files"] == "minutes"
+
+
 def test_drafts_sort_last_in_every_panel() -> None:
     newest_draft = pr(1, author="alice", is_draft=True, updated_at=NOW)
     older = pr(2, author="alice", updated_at=NOW - timedelta(days=3))

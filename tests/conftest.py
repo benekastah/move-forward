@@ -171,6 +171,10 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         "placeholder_labels",
         "ticket_link_prefix",
         "stale_review_hours",
+        "quick_review_max_lines",
+        "quick_review_max_files",
+        "hour_review_max_lines",
+        "hour_review_max_files",
     ):
         if key in o:
             github[key] = o.pop(key)

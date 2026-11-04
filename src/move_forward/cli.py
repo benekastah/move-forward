@@ -46,6 +46,10 @@ org = "example-org"
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
 # email_domains = []                     # reviewers' email domains, if not just your email's
 # stale_review_hours = 24
+# quick_review_max_lines = 100           # a review within these limits takes minutes
+# quick_review_max_files = 5
+# hour_review_max_lines = 300            # within these, an hour; beyond, a day
+# hour_review_max_files = 12
 # reviewer_history_days = 180
 
 # [github.teams]                        # a team's slug, where it isn't the team's name

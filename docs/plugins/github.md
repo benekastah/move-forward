@@ -38,7 +38,10 @@ CODEOWNERS comment such as `#required`), `ticket_link_prefix` (the PR body line 
 the ticket, e.g. `Link`) and `placeholder_labels` (template labels to replace).
 `email_domains` picks reviewers' emails from their commits (default: your email's domain;
 an email found is kept, and a lookup that found none is tried again after `prune_days`),
-`stale_review_hours` says when a review request can be nudged, and `reviewer_history_days`
+`stale_review_hours` says when a review request can be nudged,
+`quick_review_max_lines`/`_files` and `hour_review_max_lines`/`_files` size a review (minutes
+within the quick limits, an hour within the hour ones, else a day; they grow slowly because
+complexity grows faster than size), and `reviewer_history_days`
 how far back commits count for reviewer suggestions. `[github.teams]` gives a team's GitHub
 slug where it isn't the team's name.
 
