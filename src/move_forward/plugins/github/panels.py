@@ -13,6 +13,7 @@ from ...page import Effort, Item, Link, Panel, Signals, age
 from .config import GitHubConfig
 from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
 from .prs import (
+    STATE_REASONS,
     approved,
     changes_requested,
     failing_checks,
@@ -345,6 +346,8 @@ class Builder:
             if pr.is_draft or pr.in_merge_queue:
                 continue
             reasons = merge_blockers(pr, self.config.ignored_reviewers)
+            if reasons and all(r in STATE_REASONS for r in reasons):
+                held.append(pr_item(self.now, pr, details=[f"held: {r}" for r in reasons]))
             if reasons:
                 continue
             conditions = [c for e in self._entries(pr) for c in e.merge_conditions.get(pr.url, [])]
@@ -370,7 +373,8 @@ class Builder:
                 key="held",
                 priority=91,  # 9, with merge conditions
                 title="Held by merge conditions",
-                description="Would be ready, but the work notes hold them.",
+                description="Would be ready, but the work notes hold them, or GitHub says the branch is"
+                " behind or blocked.",
                 items=held,
             ),
         )

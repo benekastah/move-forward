@@ -513,3 +513,18 @@ def test_an_eviction_stops_showing_once_the_pr_is_queued_again_or_green_and_the_
         github=snapshot(mine=[stale, back, queued_since, green]), merge_queue_eviction_days=4
     )
     assert titles(wider, "github.ci_failures") == ["PR 1"]
+
+
+def test_a_pr_behind_its_base_or_blocked_is_held_with_the_reason_not_ready() -> None:
+    approved = {"reviews": [approved_review()], "review_decision": "APPROVED"}
+    behind = pr(1, merge_state="BEHIND", **approved)
+    blocked = pr(2, merge_state="BLOCKED", **approved)
+    unapproved_blocked = pr(3, merge_state="BLOCKED")
+    clean = pr(4, merge_state="CLEAN", **approved)
+    built = build(github=snapshot(mine=[behind, blocked, unapproved_blocked, clean]))
+    assert titles(built, "github.ready_to_merge") == ["PR 4"]
+    held = {i.title: i.details for i in panel(built, "github.held").items}
+    assert held == {
+        "PR 1": ["held: behind base: update the branch"],
+        "PR 2": ["held: blocked by branch protection"],
+    }

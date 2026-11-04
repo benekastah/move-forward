@@ -72,7 +72,7 @@ tickets they name), and `person` for me and everyone it knows an email for; see
 - **Needs a reviewer**: no person requested and no approval. PRs requesting one of my
   `teams` get recent committers to the PR's directories as suggestions for whom to assign
   instead.
-- **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs).
+- **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs). A PR that GitHub's merge state calls BEHIND ("behind base: update the branch") or BLOCKED with nothing else we can see ("blocked by branch protection") isn't ready either: it's held, with that reason.
 - **In the merge queue**: my PRs waiting in it. Nothing to act on, so Act now ignores it.
 - **Requested from my teams**: PRs waiting on any of my `teams`, ranked by how many files
   CODEOWNERS gives those teams (required first) and how many are in directories I commit

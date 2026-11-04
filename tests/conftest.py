@@ -80,7 +80,7 @@ def pr(number: int = 1, **overrides: object) -> PullRequest:
         "size": 10,
         "changed_files": 1,
         "mergeable": "MERGEABLE",
-        "merge_state": "BLOCKED",
+        "merge_state": "CLEAN",
         "review_decision": "REVIEW_REQUIRED",
         "checks": [Check(name="tests", state="SUCCESS", url="https://ci/1")],
         "rollup_state": "SUCCESS",

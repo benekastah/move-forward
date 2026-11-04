@@ -128,6 +128,14 @@ def last_review_activity(pr: PullRequest, ignored: Collection[str] = ()) -> date
     return max(times) if times else None
 
 
+BEHIND_REASON = "behind base: update the branch"
+BLOCKED_REASON = "blocked by branch protection"
+STATE_REASONS = (BEHIND_REASON, BLOCKED_REASON)
+"""What GitHub's `mergeStateStatus` says on its own (BEHIND, BLOCKED): the PR looks ready
+otherwise. The other states: CLEAN, HAS_HOOKS and UNSTABLE (only non-required checks
+failing) can merge, DIRTY is a conflict, DRAFT a draft, and UNKNOWN isn't computed yet."""
+
+
 def merge_blockers(pr: PullRequest, ignored: Collection[str] = ()) -> list[str]:
     """Why a PR can't be merged yet; empty when it's ready (Ready to merge's rule, besides
     the work notes' merge conditions)."""
@@ -144,6 +152,10 @@ def merge_blockers(pr: PullRequest, ignored: Collection[str] = ()) -> list[str]:
         reasons.append("conflicts")
     if pr.default_branch and pr.base != pr.default_branch:
         reasons.append(f"stacked on {pr.base}")
+    if pr.merge_state == "BEHIND":
+        reasons.append(BEHIND_REASON)
+    elif pr.merge_state == "BLOCKED" and not reasons:
+        reasons.append(BLOCKED_REASON)  # something GitHub requires that we can't see
     return reasons
 
 
