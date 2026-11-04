@@ -18,6 +18,7 @@ from .act_now import Feedback
 from .config import Config
 from .db import CORE, Database
 from .graph import Graph, Ref
+from .kinds import FAMILIES
 from .notifications import Event, NotificationRepository
 from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
 from .plugin import (
@@ -245,6 +246,7 @@ def refresh(
         if shell.stopping():
             return
         graph, _ = stored_graph(db, plugins)
+    _identify_kept(db, graph)
     snapshots = {e.name: e.snapshot() for e in plugins}
     _graph_events(plugins, graph, snapshots, previous, previous_snapshots, subscribed, now)
     _dashboard_events(config, db, subscribed, now)
@@ -256,6 +258,18 @@ def refresh(
             e.plugin.after_collect(AfterCollectRequest(e.ctx, graph))
         except Exception:
             log.exception("%s: after_collect failed", e.name)
+
+
+def _identify_kept(db: Database, graph: Graph) -> None:
+    """Give what core keeps about a family's entities (priorities, Act now's feedback) the
+    ids those entities have now: a ticket kept by its key, from before tickets' ids were their
+    URLs, gets its URL once the graph can say it. Plugins do the same for their own tables,
+    in `after_collect`. What nothing can identify is kept as it is."""
+    families = list(FAMILIES)
+    moved = PriorityRepository(db).rekey(families, graph.identify)
+    moved += FeedbackRepository(db).rekey(families, graph.identify)
+    if moved:
+        log.info("gave %s kept row(s) their entities' ids", moved)
 
 
 def _graph_events(

@@ -30,6 +30,7 @@ from ...api import (
     PrepareItemActionsRequest,
     PruneRequest,
 )
+from ...api.kinds import FAMILIES
 from . import actions, cli, prune
 from .config import NotesConfig
 from .covers import covers
@@ -69,10 +70,13 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         return entities(notes.entries(), notes.ices(), notes.covers())
 
     def after_collect(self, req: AfterCollectRequest[NotesConfig]) -> None:
-        """Find again what each act of icing covers besides its items, e.g. new PRs from its
-        branches."""
+        """Give links and what's on ice the ids their entities have now (a ticket kept by its
+        key gets its URL once jira can say it), then find again what each act of icing
+        covers besides its items, e.g. new PRs from its branches."""
         ctx, graph = req.ctx, req.graph
         notes = NotesRepository(ctx.db)
+        if moved := notes.rekey(list(FAMILIES), graph.identify):
+            ctx.log.info("gave %s link(s) and iced item(s) their entities' ids", moved)
         ices = notes.ices()
         notes.replace_covers([i.id for i in ices], covers(graph, ices))
 

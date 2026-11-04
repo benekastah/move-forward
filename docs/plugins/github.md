@@ -51,7 +51,7 @@ slug where it isn't the team's name.
 ## Publishes
 
 `pull_request` (as `github.pull_request`) for every PR it fetched, mentioning its branch, title and body (so it points at the
-tickets they name), and `person` for me and everyone it knows an email for; see
+tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows an email for; see
 [entities.md](../entities.md).
 
 ## Panels

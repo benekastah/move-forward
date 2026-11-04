@@ -77,7 +77,7 @@ def test_a_plugin_collects_from_the_graph_of_the_others(tmp_path: Path) -> None:
     refresh.refresh(config, db, NOW)
     stored = IssueRepository(db).load()
     assert [i.summary for i in stored.issues] == ["about acme/widgets"]
-    assert _JiraAfterGit.seen_by_after_collect == ["APP-1"]
+    assert _JiraAfterGit.seen_by_after_collect == ["https://jira/browse/APP-1"]
 
 
 class _GitInKv(GitPlugin):

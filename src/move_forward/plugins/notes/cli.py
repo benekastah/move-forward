@@ -23,6 +23,7 @@ from ...api import (
     Graph,
     localtime,
 )
+from ...api.kinds import TICKET
 from . import actions, markdown, panels
 from .config import NotesConfig
 from .models import CheckIn, Condition, Entry, Ice, Size, Todo
@@ -98,11 +99,13 @@ class Result:
 def find_entry(entries: list[Entry], ref: str, graph: Graph) -> Entry:
     """The entry `ref` names: by id or title, else by a PR URL or ticket key it's about."""
     ref = ref.strip()
+    ticket = graph.identify(TICKET, ref)
     found = [e for e in entries if str(e.id) == ref or e.title == ref]
     found = found or [
         e
         for e in entries
-        if any(link.ref == ref for link in e.links) or ref in panels.entry_keys(e, graph)
+        if any(link.ref in (ref, ticket) for link in e.links)
+        or ticket in panels.entry_tickets(e, graph)
     ]
     if not found:
         raise ValueError(f"no entry {ref!r}")
@@ -212,9 +215,9 @@ def cmd_link(req: CliRequest[NotesConfig]) -> Result:
     entry = find_entry(notes.entries(), args.entry, graph)
     link = actions.link_for(graph, args.ref)
     if not notes.link_entry(entry.id, link):
-        raise ValueError(f"{entry.title} is already about {link.ref}")
+        raise ValueError(f"{entry.title} is already about {args.ref}")
     notes.touch(entry.id, ctx.today)
-    return Result(f"{entry.title}: linked {link.ref}")
+    return Result(f"{entry.title}: linked {args.ref}")
 
 
 def cmd_todo_add(req: CliRequest[NotesConfig]) -> Result:

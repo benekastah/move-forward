@@ -192,8 +192,8 @@ class _Declaring(JiraPlugin):
 
     def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
         return [
-            Entity(ref=Ref(kind="ticket", id="APP-1"), title="good", attrs={"summary": "s"}),
-            Entity(ref=Ref(kind="ticket", id="APP-2"), title="bad", attrs={"summary": 3.5}),
+            Entity(ref=Ref(kind="ticket", id="https://j/1"), title="good", attrs={"summary": "s"}),
+            Entity(ref=Ref(kind="ticket", id="https://j/2"), title="bad", attrs={"summary": 3.5}),
         ]
 
 
@@ -206,8 +206,8 @@ def test_an_entity_that_doesnt_fit_its_kind_is_left_out(
     db = Database(":memory:")
     registry.migrate(config, db)
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
-    assert [t.ref.id for t in graph.of_kind("ticket")] == ["APP-1"]
-    assert "published a bad ticket APP-2" in caplog.text
+    assert [t.ref.id for t in graph.of_kind("ticket")] == ["https://j/1"]
+    assert "published a bad ticket https://j/2" in caplog.text
 
 
 class _VeilAttrs(Model):
@@ -219,14 +219,17 @@ class _Veiling(Hooked):
 
     kinds: ClassVar[dict[str, KindSpec]] = {
         **JiraPlugin.kinds,
-        "veil": KindSpec(_VeilAttrs, hides=True),
+        "jira.veil": KindSpec(_VeilAttrs, hides=True),
     }
 
     def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
         veil = Entity(
-            ref=Ref(kind="veil", id="1"),
+            ref=Ref(kind="jira.veil", id="1"),
             title="veil",
-            refs=[Ref(kind="pull_request", id=pr(1).url), Ref(kind="ticket", id="APP-3")],
+            refs=[
+                Ref(kind="pull_request", id=pr(1).url),
+                Ref(kind="ticket", id="https://j/browse/APP-3"),
+            ],
         )
         return [*super().entities(req), veil]
 
@@ -272,7 +275,7 @@ def test_a_plugin_publishes_only_the_kinds_it_declares_and_each_ref_once(
     assert [e.title for e in graph.of_kind("ticket")] == ["APP-1 Do the thing"]
     assert [e.title for e in graph.of_kind("pull_request")] == [pr(1).title]  # github's own
     assert graph.of_kind("thing") == []
-    assert "jira published ticket APP-1 twice" in caplog.text
+    assert "jira published ticket https://jira/browse/APP-1 twice" in caplog.text
     assert f"jira published pull_request {pr(1).url}, a kind it doesn't declare" in caplog.text
     assert "jira published thing 1, a kind it doesn't declare" in caplog.text
 
@@ -286,7 +289,7 @@ class _Narrowed(JiraPlugin):
 
 def test_a_plugin_can_narrow_its_linking_patterns(monkeypatch: pytest.MonkeyPatch) -> None:
     graph = _graph_with(_Narrowed(), monkeypatch)
-    assert graph.named("APP-1 and OPS-2") == [Ref(kind="ticket", id="OPS-2")]
+    assert graph.named("APP-1 and OPS-2") == [Ref(kind="ticket", id="https://jira/browse/OPS-2")]
 
 
 class _Prepared(JiraPlugin):

@@ -19,6 +19,7 @@ from ...api import (
     FetchRequest,
     Graph,
     GraphEventsRequest,
+    HandleRequest,
     InitSetup,
     Item,
     KindSpec,
@@ -51,8 +52,9 @@ CHECKED = "changes_checked_at"
 """The kv key of when `changed` last looked."""
 
 
-def ticket_ref(key: str) -> Ref:
-    return Ref(kind=TICKET, id=key)
+def ticket_ref(issue: JiraIssue) -> Ref:
+    """A ticket's ref: by its URL, as the ticket family's ids are."""
+    return Ref(kind=TICKET, id=issue.url)
 
 
 def escalation(issue: JiraIssue, label_prefix: str, levels: list[str]) -> int:
@@ -111,7 +113,7 @@ def _advance_rollout(issue: JiraIssue, prs: list[_PrView]) -> Item:
         url=issue.url,
         subtitle=f"{issue.status}: PRs still open",
         links=[_state_link(p) for p in ordered],
-        subjects=[ticket_ref(issue.key)],
+        subjects=[ticket_ref(issue)],
         signals=Signals(
             verb="Advance the rollout",
             importance=0 if ready else -1,
@@ -135,7 +137,7 @@ def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) ->
         subtitle=f"{issue.status}: all PRs merged",
         details=["all PRs merged; close once monitoring is done"],
         links=[_state_link(p) for p in prs],
-        subjects=[ticket_ref(issue.key)],
+        subjects=[ticket_ref(issue)],
         actions=[
             Action(
                 name="jira/transition",
@@ -156,7 +158,7 @@ def rollouts(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
     for issue in snapshot.issues:
         if not in_status(issue, config.status_rollout):
             continue
-        prs = [p for p in graph.view_related(ticket_ref(issue.key), PR, _PrView) if p.mine]
+        prs = [p for p in graph.view_related(ticket_ref(issue), PR, _PrView) if p.mine]
         if any(p.state == "open" for p in prs):
             items.append(_advance_rollout(issue, prs))
         elif any(p.state == "merged" for p in prs):
@@ -174,7 +176,7 @@ def rollouts(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
 def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
     items: list[Item] = []
     for issue in snapshot.issues:
-        prs = [p for p in graph.view_related(ticket_ref(issue.key), PR, _PrView) if p.mine]
+        prs = [p for p in graph.view_related(ticket_ref(issue), PR, _PrView) if p.mine]
         open_prs = [p for p in prs if p.state == "open"]
         merged = [p for p in prs if p.state == "merged"]
         closed = [p for p in prs if p.state == "closed"]
@@ -222,7 +224,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                     url=issue.url,
                     subtitle=proposal,
                     links=[Link(text=p.handle, url=p.url or p.id) for p in prs],
-                    subjects=[ticket_ref(issue.key)],
+                    subjects=[ticket_ref(issue)],
                     actions=[
                         Action(
                             name="jira/transition",
@@ -300,7 +302,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                 subtitle=f"{issue.status} · {issue.priority or ''} · {age(now, issue.created)} old",
                 badges=badges,
                 rank=rank,
-                subjects=[ticket_ref(issue.key)],
+                subjects=[ticket_ref(issue)],
                 signals=None  # the rollout's own item asks for what's left
                 if in_status(issue, config.status_rollout)
                 and not any(t in kind for t in (*config.incident_types, *config.bug_types))
@@ -415,7 +417,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         snapshot = req.snapshot
         return [
             Entity(
-                ref=ticket_ref(issue.key),
+                ref=ticket_ref(issue),
                 title=f"{issue.key} {issue.summary}",
                 url=issue.url,
                 state=issue.status,
@@ -434,10 +436,10 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         ]
 
     def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
-        """Tickets by key, open or resolved, with `resolved_at` (null while open). Their
+        """Tickets by URL, open or resolved, with `resolved_at` (null while open). Their
         projects are remembered, so their keys link from then on (see `linking_patterns`)."""
         ctx, kind, ids = req.ctx, req.kind, req.ids
-        keys = [k for k in ids if client.is_key(k)]
+        keys = [k for id in ids if (k := client.key_of(ctx.config.site, id))]
         if kind != TICKET or not keys:
             return []
         token = client.token(ctx.config, ctx.email)
@@ -445,7 +447,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         IssueRepository(ctx.db).remember_projects([i.key for i in found])
         return [
             Entity(
-                ref=ticket_ref(i.key),
+                ref=ticket_ref(i),
                 title=f"{i.key} {i.summary}",
                 url=i.url,
                 state=i.status,
@@ -456,8 +458,18 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         ]
 
     def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
+        """A ticket's URL, from its URL or its key alone."""
         ctx, kind, id = req.ctx, req.kind, req.id
-        return f"{ctx.config.site.rstrip('/')}/browse/{id}" if kind == TICKET else None
+        if kind != TICKET:
+            return None
+        if client.key_of(ctx.config.site, id):
+            return id
+        return client.ticket_url(ctx.config.site, id) if client.is_key(id) else None
+
+    def handle_for(self, req: HandleRequest[JiraConfig]) -> str | None:
+        """A ticket's key, from its URL."""
+        ctx, kind, id = req.ctx, req.kind, req.id
+        return client.key_of(ctx.config.site, id) if kind == TICKET else None
 
     def panels(self, req: PanelsRequest[JiraConfig, JiraSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph

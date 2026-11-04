@@ -14,7 +14,7 @@ from ...api import Entity, Graph, Model
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .models import Entry, Ice
-from .panels import entry_keys
+from .panels import entry_tickets
 from .repository import NotesRepository
 
 ENTRY = "notes.entry"
@@ -44,20 +44,20 @@ def _over_by(entity: Entity | None, cutoff: datetime) -> bool:
 
 def _finished(
     entry: Entry,
-    keys: list[str],
+    ticket_ids: list[str],
     cutoff: datetime,
     prs: dict[str, Entity],
     tickets: dict[str, Entity],
 ) -> bool:
-    """Whether an entry's work (its PRs, and `keys`, its tickets) was all over by `cutoff`, so
+    """Whether an entry's work (its PRs, and its tickets, `ticket_ids`) was all over by `cutoff`, so
     the entry can go."""
     if entry.open_todos:
         return False
     urls = [link.ref for link in entry.links if link.kind == PR]
-    if not urls and not keys:
+    if not urls and not ticket_ids:
         return _by(entry.updated_on, cutoff)
     return all(_over_by(prs.get(u), cutoff) for u in urls) and all(
-        _over_by(tickets.get(k), cutoff) for k in keys
+        _over_by(tickets.get(k), cutoff) for k in ticket_ids
     )
 
 
@@ -86,18 +86,16 @@ def prune(notes: NotesRepository, graph: Graph, cutoff: datetime) -> list[str]:
     old offers and declines; returns what was done."""
     entries = notes.entries()
     ices = notes.ices()
-    keys = {e.id: entry_keys(e, graph) for e in entries}
+    ticket_ids = {e.id: entry_tickets(e, graph) for e in entries}
     candidates = [e for e in entries if not e.open_todos]
     iced = [item for ice in ices for item in ice.items]
     urls = {link.ref for e in candidates for link in e.links if link.kind == PR}
     prs = graph.fetch(PR, sorted(urls | {i.ref_id for i in iced if i.kind == PR}))
-    ticket_keys = {k for e in candidates for k in keys[e.id]}
-    tickets = graph.fetch(
-        TICKET, sorted(ticket_keys | {i.ref_id for i in iced if i.kind == TICKET})
-    )
+    ids = {t for e in candidates for t in ticket_ids[e.id]}
+    tickets = graph.fetch(TICKET, sorted(ids | {i.ref_id for i in iced if i.kind == TICKET}))
     notices: list[str] = []
     for entry in entries:
-        if _finished(entry, keys[entry.id], cutoff, prs, tickets):
+        if _finished(entry, ticket_ids[entry.id], cutoff, prs, tickets):
             notes.delete_entry(entry.id)
             notices.append(f"cleared entry {entry.title}")
             continue

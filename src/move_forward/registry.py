@@ -14,11 +14,12 @@ from pydantic import BaseModel, ValidationError
 from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
 from .graph import Entity, Graph, KindSpec, Ref
-from .kinds import FAMILIES, named_for
+from .kinds import FAMILIES, fits, named_for
 from .plugin import (
     Context,
     EntitiesRequest,
     FetchRequest,
+    HandleRequest,
     LinkingRequest,
     LoadRequest,
     Plugin,
@@ -191,7 +192,8 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
 def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) -> Graph:
     """The graph of every plugin's entities. A plugin publishes only the kinds it declares;
     each entity must fit its kind's model, and be the only one of its ref (the first
-    stands when two plugins publish one entity of a family). One that isn't is a plugin bug:
+    stands when two plugins publish one entity of a family), with an id its family takes
+    (`kinds.Family.id_rule`). One that isn't is a plugin bug:
     it's logged and left out, and the page goes on without it. So is a plugin whose
     `entities`, `url_for` or `linking_patterns` raises: the graph is built without its
     answer."""
@@ -208,6 +210,11 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
             ref = entity.ref
             if ref.kind not in e.plugin.kinds:
                 log.error("%s published %s %s, a kind it doesn't declare", e.name, ref.kind, ref.id)
+                continue
+            if not fits(ref.kind, ref.id):
+                log.error(
+                    "%s published %s %s, an id its family doesn't take", e.name, ref.kind, ref.id
+                )
                 continue
             if ref in seen:
                 log.error("%s published %s %s twice", e.name, ref.kind, ref.id)
@@ -229,6 +236,18 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
             )
             if url:
                 return url
+        return None
+
+    def handle_for(kind: str, id: str) -> str | None:
+        for e in plugins:
+            handle: str | None = call(
+                e.name,
+                "handle_for",
+                lambda e=e: e.plugin.handle_for(HandleRequest(e.ctx, kind, id)),
+                None,
+            )
+            if handle:
+                return handle
         return None
 
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
@@ -258,4 +277,4 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         for kind, spec in e.plugin.kinds.items():
             specs.setdefault(kind, spec)  # a family's first publisher's
     hiding = [kind for kind, spec in specs.items() if spec.hides]
-    return Graph(entities, url_for, fetch, linking, hiding, specs)
+    return Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)

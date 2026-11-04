@@ -98,7 +98,9 @@ graph.related(ref, "notes.entry")  # see below
 graph.units(ref)  # the linking entities it's part of, see below
 graph.named("APP-1: fix it")  # the linking entities a text names, see below
 graph.hidden(ref)  # whether something on ice covers it, see below
-graph.url_for("ticket", "APP-1")
+graph.url_for("ticket", "APP-1")  # jira makes it from the key
+graph.handle("ticket", url)  # what to call it: "APP-1"
+graph.identify("ticket", "APP-1")  # the id for a key kept before ids were URLs
 ```
 
 ### Through a view
@@ -133,8 +135,8 @@ A view lists only what its consumer reads, so publishers can add attributes free
 
 Text names a family's entities by their `handle` (a ticket's key): a pattern's match is
 looked up among the entities with that handle (`graph.by_handle(kind, handle)`), all of
-them when two trackers share a key; a match no entity has yet becomes a ref with that text
-as its id.
+them when two trackers share a key; a match no entity has yet becomes a ref with the id its
+plugin's `url_for` gives it (a ticket's URL, from its key), else with that text as its id.
 
 Some kinds stand for a unit of work and link what's about it. A plugin declares them with
 `KindSpec(..., linking=...)`, giving the pattern of its ids, or None (its `linking_patterns` hook can narrow
@@ -201,7 +203,13 @@ stay. So plugins never check for ice themselves.
 ### URLs, and entities not in the graph
 
 `url_for(kind, id)` gives an entity's URL from the graph, else asks the plugins: github
-answers for any PR URL, jira makes a ticket's link from its key alone.
+answers for any PR URL, jira makes a ticket's link from its key alone. `handle(kind, id)`
+gives what to call it the same way: its `handle` from the graph, else the plugins'
+`handle_for` (jira's: a ticket's key from its URL), else the id.
+
+`identify(kind, id)` gives the id an entity of a family has, for an id kept before the
+family's ids were what they are: a ticket kept by its key gets the ticket with that handle,
+or else the URL jira makes. Core and notes run what they keep through it at each refresh.
 
 `fetch(kind, ids)` asks the plugin that owns a kind to fetch entities now, from its tool,
 even ones long gone from its tables: notes' daily prune asks when old PRs closed and tickets

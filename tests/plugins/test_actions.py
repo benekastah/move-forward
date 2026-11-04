@@ -416,7 +416,7 @@ def test_todo_link_links_a_jira_ticket_or_a_pr(config: Config, work_notes: None)
     [todo] = [t for t in _entry(config).todos if t.text == "get it merged"]
     assert [(link.kind, link.ref) for link in todo.links] == [
         ("pull_request", pr),
-        ("ticket", "APP-9"),
+        ("ticket", "https://j.example/browse/APP-9"),  # by its URL, its id
     ]
     with pytest.raises(ActionError, match="neither a PR URL nor a ticket key"):
         run("notes/todo_link", config, {**fields, "input": "something else"})
@@ -467,7 +467,7 @@ def test_linking_a_ticket_in_a_project_new_to_jira_fetches_it_and_jira_learns_th
 
     def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
         asked.append(keys)
-        return [issue(key) for key in keys if key == "OPS-5"]
+        return [issue(key, url=f"https://j.example/browse/{key}") for key in keys if key == "OPS-5"]
 
     def token(config: JiraConfig, email: str) -> str:
         return "t"
@@ -479,7 +479,9 @@ def test_linking_a_ticket_in_a_project_new_to_jira_fetches_it_and_jira_learns_th
     with pytest.raises(ActionError, match="nor a ticket key Jira knows"):
         run("notes/todo_link", config, {**fields, "input": "NEW-404"})
     assert asked == [["OPS-5"], ["NEW-404"]]
-    assert graph(config).named("see OPS-6") == [Ref(kind="ticket", id="OPS-6")]
+    assert graph(config).named("see OPS-6") == [
+        Ref(kind="ticket", id="https://j.example/browse/OPS-6")
+    ]
 
 
 def test_linking_a_ticket_says_why_when_jira_turns_the_fetch_away(

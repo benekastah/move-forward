@@ -5,6 +5,28 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Tickets are known by their URL, people by `<host>/<login>`
+
+A ticket's id is now its URL (`https://acme.atlassian.net/browse/APP-12`), not its key,
+and a person's is `<host>/<login>` (`github.com/alice`), not the login, so two trackers'
+`APP-12` or two hosts' `alice` are never taken for one. The key and the login are still
+there, as the entity's `handle`.
+
+Where you'll meet them:
+
+- `mfd notes list` and `show` JSON: a ticket link's `ref` is the ticket's URL. `mfd notes
+  show`'s text prints it too.
+- `mfd notes ices` JSON: an iced ticket's `ref_id` is its URL.
+- `mfd snoozes` JSON: an item about a ticket has the ticket's URL as its `id`.
+- `/actions/notes/ice_item` and `/actions/act_now/*`: the page sends tickets' URLs.
+
+What still takes a key: `mfd priority APP-12 1`, `mfd notes ice --item ticket APP-12`,
+`mfd notes show APP-12`, `mfd notes link <entry> APP-12` and `mfd notes todo link <id>
+APP-12` find the ticket by its key, as before.
+
+What the dashboard kept by a ticket's key (priorities, Act now's feedback, the notes'
+links and what's on ice) gets the ticket's URL at the next refresh, once jira is set up.
+
 ### Entity kinds are named for their plugins; pull requests are `pull_request`
 
 A plugin's own kinds now carry its name, and the PR family is spelled out. A family's kinds

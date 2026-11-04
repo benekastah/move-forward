@@ -94,8 +94,8 @@ def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
         if e.ref.kind == "person"
     }
     assert people == {
-        ME: {"handle": ME, "me": True, "email": "me@x"},
-        "alice": {"handle": "alice", "me": False, "email": "a@x"},
+        f"github.com/{ME}": {"handle": ME, "me": True, "email": "me@x"},
+        "github.com/alice": {"handle": "alice", "me": False, "email": "a@x"},
     }
 
 

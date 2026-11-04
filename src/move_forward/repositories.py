@@ -2,6 +2,7 @@
 
 import hashlib
 import secrets
+from collections.abc import Callable, Collection
 from datetime import datetime, timedelta
 
 from pydantic import BaseModel, TypeAdapter
@@ -10,6 +11,9 @@ from .act_now import Feedback, FeedbackKey
 from .db import Database
 from .graph import Ref
 from .panels import Layout
+
+Identify = Callable[[str, str], str]
+"""The id an entity has now, by kind and an id kept before: `Graph.identify`."""
 
 
 class SnapshotRow(BaseModel):
@@ -184,6 +188,11 @@ class PriorityRepository:
     def clear(self, ref: Ref) -> None:
         self._db.execute("DELETE FROM priorities WHERE kind = ? AND id = ?", (ref.kind, ref.id))
 
+    def rekey(self, kinds: Collection[str], identify: Identify) -> int:
+        """Give the priorities on entities of `kinds` the ids `identify` says they have now
+        (see `Graph.identify`); one already set on the new id stays. How many changed."""
+        return _rekey(self._db, "priorities", "kind", "id", kinds, identify)
+
 
 class FeedbackRepository:
     """What I said of Act now's items (`act_now_feedback`): kept, pruned with `prune`."""
@@ -216,6 +225,10 @@ class FeedbackRepository:
             key,
         )
 
+    def rekey(self, kinds: Collection[str], identify: Identify) -> int:
+        """`PriorityRepository.rekey`, for what was said of items about `kinds`."""
+        return _rekey(self._db, "act_now_feedback", "subject_kind", "subject_id", kinds, identify)
+
     def prune(self, now: datetime, before: datetime) -> int:
         """Drop snoozes that are over, and anything said before `before`; how many went."""
         with self._db.transaction() as conn:
@@ -223,3 +236,23 @@ class FeedbackRepository:
                 "DELETE FROM act_now_feedback WHERE until < ? OR created_at < ?",
                 (now.isoformat(), before.isoformat()),
             ).rowcount
+
+
+def _rekey(
+    db: Database, table: str, kind: str, id: str, kinds: Collection[str], identify: Identify
+) -> int:
+    """Rewrite `table`'s ids of `kinds` (in its `kind` and `id` columns) to what `identify`
+    says; where a row with the new id is there already, it stays and the old one goes."""
+    marks = ", ".join("?" * len(kinds))
+    rows = db.query(
+        f"SELECT DISTINCT {kind}, {id} FROM {table} WHERE {kind} IN ({marks})", (*kinds,)
+    )
+    moves = [(r[kind], r[id], new) for r in rows if (new := identify(r[kind], r[id])) != r[id]]
+    with db.transaction() as conn:
+        for k, old, new in moves:
+            conn.execute(
+                f"UPDATE OR IGNORE {table} SET {id} = ? WHERE {kind} = ? AND {id} = ?",
+                (new, k, old),
+            )
+            conn.execute(f"DELETE FROM {table} WHERE {kind} = ? AND {id} = ?", (k, old))
+    return len(moves)

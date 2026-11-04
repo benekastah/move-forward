@@ -10,6 +10,7 @@ from pydantic import Field
 
 from ...api import Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
 from ...api.kinds import PULL_REQUEST as PR
+from ...api.kinds import TICKET
 from .config import GitHubConfig
 from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
 from .prs import (
@@ -161,10 +162,11 @@ class Builder:
     def _ticket_keys(self, pr: PullRequest) -> list[str]:
         """The tickets a PR names: Jira's, when the graph finds them by Jira's project keys
         (so `UTF-8` isn't one); else a guess from the text."""
-        if not self.graph.links("ticket"):
+        if not self.graph.links(TICKET):
             return ticket_keys(pr)
         entity = self.graph.get(PR, pr.url)
-        return [r.id for r in entity.refs if r.kind == "ticket"] if entity else []
+        refs = [r for r in entity.refs if r.kind == TICKET] if entity else []
+        return [self.graph.handle(r.kind, r.id) for r in refs]
 
     def _team_line(self, pr: PullRequest, score: TeamPrScore) -> str:
         """How much of the PR is my teams': my part (lines and files, as sized for the review)

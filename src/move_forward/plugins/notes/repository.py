@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections import defaultdict
+from collections.abc import Callable, Collection
 from datetime import date, datetime
 
 from ...api import Database, Ref
@@ -499,6 +500,38 @@ class NotesRepository:
                 ],
             )
         return ice_id
+
+    def rekey(self, kinds: Collection[str], identify: Callable[[str, str], str]) -> int:
+        """Give the links and what's on ice of `kinds` the ids `identify` says their entities
+        have now (`Graph.identify`: a ticket kept by its key gets its URL); where the new
+        id is there already, the old row goes. How many ids changed."""
+        marks = ", ".join("?" * len(kinds))
+        tables = [
+            ("notes_links", "ref"),
+            ("notes_todo_links", "ref"),
+            ("notes_iced", "ref_id"),
+        ]
+        moved = 0
+        with self._db.transaction() as conn:
+            for table, column in tables:
+                rows = conn.execute(
+                    f"SELECT DISTINCT kind, {column} AS id FROM {table} WHERE kind IN ({marks})",
+                    (*kinds,),
+                ).fetchall()
+                for row in rows:
+                    new = identify(row["kind"], row["id"])
+                    if new == row["id"]:
+                        continue
+                    conn.execute(
+                        f"UPDATE OR IGNORE {table} SET {column} = ? WHERE kind = ? AND {column} = ?",
+                        (new, row["kind"], row["id"]),
+                    )
+                    conn.execute(
+                        f"DELETE FROM {table} WHERE kind = ? AND {column} = ?",
+                        (row["kind"], row["id"]),
+                    )
+                    moved += 1
+        return moved
 
     def replace_covers(self, ice_ids: list[int], covers: dict[int, list[Ref]]) -> None:
         """Replace what the acts of icing `ice_ids` hide besides their own items. Others' are

@@ -13,9 +13,13 @@ from typing import Literal
 from pydantic import BaseModel, Field, JsonValue
 
 from .domain import Model
+from .kinds import fits
 
 UrlFor = Callable[[str, str], str | None]
 """Asks the plugins for an entity's URL by kind and id, whether or not it's in the graph."""
+HandleFor = Callable[[str, str], str | None]
+"""Asks the plugins for an entity's `handle` by kind and id, whether or not it's in the
+graph."""
 Fetch = Callable[[str, list[str]], list["Entity"]]
 """Asks the plugins to fetch entities of a kind by id, now; see `Graph.fetch`."""
 
@@ -95,29 +99,34 @@ def _handle(entity: Entity) -> str | None:
     return handle if isinstance(handle, str) else None
 
 
+Unknown = Callable[[str, str], Ref]
+"""The ref for a kind's handle no entity in the graph has."""
+
+
 def _named(
-    texts: Iterable[str], patterns: dict[str, re.Pattern[str]], handles: Handles
+    texts: Iterable[str], patterns: dict[str, re.Pattern[str]], handles: Handles, unknown: Unknown
 ) -> list[Ref]:
     """The linking entities `texts` name, in order, once each: those whose `handle` it is,
-    or, for text no entity in the graph has as its handle, the ref with that text as id."""
+    or, for text no entity in the graph has as its handle, `unknown`'s ref for it."""
     return list(
         dict.fromkeys(
             ref
             for text in texts
             for kind, pattern in patterns.items()
             for match in pattern.finditer(text)
-            for ref in handles.get((kind, match[0])) or [Ref(kind=kind, id=match[0])]
+            for ref in handles.get((kind, match[0])) or [unknown(kind, match[0])]
         )
     )
 
 
 def _with_mentions(
-    entity: Entity, patterns: dict[str, re.Pattern[str]], handles: Handles
+    entity: Entity, patterns: dict[str, re.Pattern[str]], handles: Handles, unknown: Unknown
 ) -> Entity:
     """The entity pointing, too, at each linking entity its mentions name."""
     if not entity.mentions or not patterns:
         return entity
-    refs = list(dict.fromkeys([*entity.refs, *_named(entity.mentions, patterns, handles)]))
+    named = _named(entity.mentions, patterns, handles, unknown)
+    refs = list(dict.fromkeys([*entity.refs, *named]))
     return entity.model_copy(update={"refs": refs}) if len(refs) != len(entity.refs) else entity
 
 
@@ -132,12 +141,14 @@ class Graph:
         linking: Mapping[str, str | None] | None = None,
         hiding: Iterable[str] = (),
         kinds: Mapping[str, KindSpec] | None = None,
+        handle_for: HandleFor = _no_url,
     ):
         """`linking` names the kinds that link what they're about (see `related`), each with
         the pattern of its ids, for finding them in entities' `mentions`; None for a kind
         whose entities point at what they link themselves. `hiding` names the kinds whose
         entities hide what they point at (see `hidden`). `kinds` are the publishers' specs
-        of their kinds (see `spec`)."""
+        of their kinds (see `spec`). `url_for` and `handle_for` ask the plugins about an
+        entity that may not be in the graph."""
         self._kinds = dict(kinds or {})
         self._linking = dict(linking or {})
         self._hiding = set(hiding)
@@ -147,12 +158,15 @@ class Graph:
         for entity in entities:
             if (handle := _handle(entity)) is not None:
                 self._handles[(entity.ref.kind, handle)].append(entity.ref)
-        entities = [_with_mentions(e, self._patterns, self._handles) for e in entities]
+        self._url_for = url_for
+        self._handle_for = handle_for
+        self._fetch = fetch
+        entities = [
+            _with_mentions(e, self._patterns, self._handles, self._unknown) for e in entities
+        ]
         self._by_ref: dict[Ref, Entity] = {}
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
-        self._url_for = url_for
-        self._fetch = fetch
         for entity in entities:
             if entity.ref in self._by_ref:
                 continue  # a plugin bug, which `build_graph` logs: the first one stands
@@ -237,7 +251,33 @@ class Graph:
         """The linking entities `text` names (by handle), as an entity's `mentions` would find them,
         whether or not they're in the graph: e.g. the tickets a todo names by key. For a
         plugin to find another's ids in text without knowing their pattern."""
-        return _named([text], self._patterns, self._handles)
+        return _named([text], self._patterns, self._handles, self._unknown)
+
+    def _unknown(self, kind: str, handle: str) -> Ref:
+        """A ref to the entity of `kind` with `handle` that the graph doesn't have: by the id
+        its plugin gives it (a ticket's URL, from its key), else by the handle itself."""
+        url = self._url_for(kind, handle)
+        return Ref(kind=kind, id=url if url and url != handle and fits(kind, url) else handle)
+
+    def identify(self, kind: str, id: str) -> str:
+        """The id an entity of a family has, for one kept before its family's ids were what
+        they are (a ticket's key, now its URL): the one entity with that handle, else the id
+        its plugin gives it. `id` itself when it fits already, or nothing knows better."""
+        if fits(kind, id):
+            return id
+        found = {e.ref.id for e in self.by_handle(kind, id)}
+        if len(found) == 1:
+            return found.pop()
+        ref = self._unknown(kind, id)
+        return ref.id if fits(kind, ref.id) else id
+
+    def handle(self, kind: str, id: str) -> str:
+        """What to call an entity, e.g. a ticket's key: its `handle` if it's in the graph,
+        else whatever its plugin makes of the id, else the id."""
+        entity = self.get(kind, id)
+        if entity is not None and (handle := _handle(entity)) is not None:
+            return handle
+        return self._handle_for(kind, id) or id
 
     def by_handle(self, kind: str, handle: str) -> list[Entity]:
         """The entities of `kind` whose `handle` is `handle`: e.g. the tickets keyed `APP-12`,
@@ -269,6 +309,10 @@ class Graph:
     def view_related[V: BaseModel](self, ref: Ref, kind: str, model: type[V]) -> list[V]:
         """`related(ref, kind)`, each as `model` (see `view`)."""
         return [_as(entity, model) for entity in self.related(ref, kind)]
+
+    def view_by_handle[V: BaseModel](self, kind: str, handle: str, model: type[V]) -> list[V]:
+        """`by_handle(kind, handle)`, each as `model` (see `view`)."""
+        return [_as(entity, model) for entity in self.by_handle(kind, handle)]
 
     def view_one[V: BaseModel](self, kind: str, id: str, model: type[V]) -> V | None:
         """One entity as `model` (see `view`); None when the graph doesn't have it."""

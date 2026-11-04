@@ -40,6 +40,20 @@ plugin's. Every family's model has
 `handle`, how its tool shows an entity (`#7`, `APP-12`, a login): text names a family's
 entities by handle (see [graph.md](graph.md)), and each entity says its `family`.
 
+A family's ids are unique whoever publishes them, so two tools' `OPS-12`, or two people
+named `alice`, are never taken for one; core leaves out (and logs) an entity whose id
+breaks its family's rule:
+
+| Family | id | `handle` |
+| --- | --- | --- |
+| `pull_request` | its URL | `#7`, `!12` |
+| `ticket` | its URL | its key, `APP-12` |
+| `person` | `<host>/<login>`, e.g. `github.com/alice` | the login |
+
+What the dashboard kept by a handle before (a priority on `APP-12`, a todo linked to it)
+gets the entity's id at each refresh, once the graph can say it (`Graph.identify`); until
+then it's kept as it is.
+
 ## Kinds
 
 Every entity also says whether its work is over, in `lifecycle`: `done` for a merged or
@@ -49,18 +63,20 @@ gone.
 
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
-| `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket` keys its branch, title and body mention |
-| `person` | github: me, and everyone it knows an email for | GitHub login | | |
+| `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket`s its branch, title and body mention by key |
+| `person` | github: me, and everyone it knows an email for | `<host>/<login>` | | |
 | `git.repo` | git | GitHub `owner/name` | | |
 | `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |
 | `git_stack.stack_branch` | git_stack | its `git.branch`'s id | | its `git.branch`, which git may have deleted |
-| `ticket` (linking) | jira | the issue key, e.g. `APP-1` | the issue's status | |
-| `notes.entry` (linking) | notes | the entry's title | | the `pull_request` URLs and `ticket` keys linked to it and its open todos (each open todo is a `notes.todo` that points back at its entry), and the `ticket` keys its title mentions |
+| `ticket` (linking) | jira | the issue's URL, `<site>/browse/<key>` | the issue's status | |
+| `notes.entry` (linking) | notes | the entry's title | | the `pull_request`s and `ticket`s linked to it and its open todos (each open todo is a `notes.todo` that points back at its entry), and the `ticket`s its title mentions by key |
 | `notes.todo` | notes | the todo's id (a number) | `open` (a ticked-off todo is gone) | its `notes.entry` |
 | `notes.iced` (hiding) | notes | the act of icing's id | | what it puts on ice (a stack's `git.branch`es, or a `pull_request`, `ticket` or `notes.entry`), and what else that covers: the branches' `pull_request`s and `git_stack.stack_branch`es, an entry's refs |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
-answers for `pull_request` (the id is the URL), jira for `ticket` (from its `site`).
+answers for `pull_request` (the id is the URL), jira for `ticket` (its id, or from its key
+and `site`). `handle(kind, id)` gives its handle: jira's makes a ticket's key from its
+URL.
 
 ## Fetched on demand
 

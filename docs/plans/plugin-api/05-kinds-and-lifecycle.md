@@ -184,25 +184,32 @@ under its own full kind, and a shared id is the first one's; the core migration 
 database with a row of each kind; notes' migration over its tables; `snooze_days = { pr =
 7 }` fails to load naming `pull_request`. **Risk.** Medium (stored data). **Size.** L.
 
-## PR 5d — family ids (no SQL migration; re-keying at refresh)
+## PR 5d — family ids (no SQL migration; kept rows re-keyed at refresh)
 
 - `Family.id_rule` checks ids as entities are published (an absolute URL, or
   `<host>/<login>`); an entity breaking it is dropped and logged.
 - jira publishes tickets by URL (`<site>/browse/<key>`, the key as `handle`), github people
   as `<host>/<login>` (the login as `handle`). github's own `github_people` table stays
   keyed by login: it's github's.
-- Stored ticket keys and person logins can't be rewritten by SQL: a migration doesn't know
-  Jira's site or GitHub's host. They're re-keyed once, at the first refresh after the
-  upgrade, from the graph: core in `priorities` and `act_now_feedback`, notes in its link
-  and ice tables, slack in its contacts and pings (keyed by GitHub login today), each
-  mapping a stored key to the entity whose `handle` it is. A row nothing matches (its
-  ticket long done) is kept as it is, and the daily prune clears it once it's finished. A
-  kv flag per owner marks the re-keying done.
-- `mfd notes` JSON gives tickets' ids as URLs; `CHANGELOG.md` says so.
+- Showing and finding by handle: `graph.handle(kind, id)` (the entity's `handle`, else the
+  new `handle_for` hook: jira makes a key from a URL), `graph.identify(kind, id)` (the one
+  entity with that handle, else the id the plugin's `url_for` makes: a URL from a key), and
+  `view_by_handle`. A mention of a key no entity in the graph has becomes a ref by the URL
+  jira makes for it, so a note's link and a PR's mention of one ticket stay one ref. The
+  CLI still takes keys (`mfd priority APP-1`, `mfd notes ice --item ticket APP-1`).
+- Kept rows by a stored key can't be rewritten by SQL: a migration doesn't know Jira's site
+  or GitHub's host. At every refresh, core (`priorities`, `act_now_feedback`) and notes (its
+  links, todo links and ice) run the ids they keep of a family's kinds through
+  `graph.identify`; where the new id is there already, the old row goes. A row nothing can
+  identify (no jira) is kept as it is, and converts once jira can say; so no kv flag.
+  slack keeps logins (its contacts and pings are GitHub's people by login) and finds the
+  `person` by handle, so it has nothing to re-key.
+- `CHANGELOG.md` says what changed for the skill.
 
-**Tests.** The re-keying turns a stored `APP-1` into its URL and keeps a key nothing
-publishes, once; an id breaking its family's rule is dropped. **Risk.** Medium (stored
-data). **Size.** M.
+**Tests.** Ids fit their family's rule and an entity breaking it is left out; `identify` and
+`handle` from the graph, else the plugin; an unknown key is named by its URL; core's and
+notes' kept keys get their tickets' URLs, a newer row wins a clash, and without jira they're
+kept. **Risk.** Medium (stored data). **Size.** L.
 
 ## Decisions
 
