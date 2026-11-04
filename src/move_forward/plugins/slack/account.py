@@ -13,6 +13,7 @@ from .config import SlackConfig
 
 SLACK_PATH = "/slack"
 MANIFEST = "manifest.json"
+CONNECT = Action(name="slack/connect", label="Connect Slack", fields={})
 DISCONNECT = Action(
     name="slack/disconnect",
     label="Disconnect",
@@ -72,8 +73,7 @@ def page(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -
         if ctx.config.client_id:
             parts.append(
                 "<h2>Connect</h2><p>Sign in to the workspace's Slack app, for your own"
-                " token.</p>"
-                f"<p><a class='button' href='{oauth.CONNECT_PATH}'>Connect Slack</a></p>"
+                " token.</p>" + render.buttons([CONNECT], oauth.CONNECT_PATH)
             )
         parts.append(_setup(ctx))
     body = "<article class='panel padded'>" + "".join(parts) + "</article>"
@@ -81,11 +81,18 @@ def page(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -
 
 
 def connect(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -> str | None:
-    """Start signing in and send the browser to Slack; None (not found) without a
-    `client_id`."""
+    """Send the browser to Slack for the sign-in the Connect button started (see
+    `connect_action`); a read that starts nothing, so a link or an image can't overwrite a
+    sign-in under way. None (not found) without a `client_id`."""
     if not ctx.config.client_id:
         return None
-    url = oauth.start(ctx)
+    url = oauth.pending_url(ctx)
+    if url is None:
+        body = (
+            "<article class='panel padded'><p>No sign-in under way: use the Connect button on"
+            f" <a href='{SLACK_PATH}'>Slack's page</a>.</p></article>"
+        )
+        return render.page("Connect Slack", "slack", body)
     # The URL is ours, built with urlencode; JSON-quoted, with "</" broken so it can't end
     # the script.
     quoted = json.dumps(url).replace("</", "<\\/")
@@ -95,6 +102,15 @@ def connect(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]
         f"<p><a class='button' href='{render.e(url)}'>Continue to Slack</a></p></article>"
     )
     return render.page("Connect Slack", "slack", body, script)
+
+
+def connect_action(ctx: Context[SlackConfig], graph: Graph, fields: dict[str, str]) -> str:
+    """Start signing in: a fresh `state` and verifier replace any sign-in started before.
+    A button, so it is a POST, which the server only takes from the dashboard's own pages."""
+    if not ctx.config.client_id:
+        raise ActionError("set client_id in [slack] first")
+    oauth.start(ctx)
+    return "taking you to Slack"
 
 
 def callback(ctx: Context[SlackConfig], graph: Graph, query: dict[str, list[str]]) -> str:

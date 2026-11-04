@@ -56,6 +56,8 @@ class Pending(Model):
     verifier: str
     redirect_uri: str
     started: datetime
+    url: str = ""
+    """The Slack URL to send the browser to, so the page that does can be a plain read."""
 
 
 class _Tokens(Model):
@@ -116,7 +118,6 @@ def start(ctx: Context[SlackConfig]) -> str:
         redirect_uri=ctx.dashboard_url + CALLBACK_PATH,
         started=ctx.now,
     )
-    ctx.kv.set(PENDING, pending.model_dump_json())
     query = {
         "client_id": ctx.config.client_id,
         "scope": "",
@@ -126,7 +127,24 @@ def start(ctx: Context[SlackConfig]) -> str:
         "code_challenge": _challenge(pending.verifier),
         "code_challenge_method": "S256",
     }
-    return f"{client.AUTHORIZE}?{urlencode(query)}"
+    url = f"{client.AUTHORIZE}?{urlencode(query)}"
+    ctx.kv.set(PENDING, pending.model_copy(update={"url": url}).model_dump_json())
+    return url
+
+
+def pending_url(ctx: Context[SlackConfig]) -> str | None:
+    """Where to send the browser for the sign-in `start` began, while it is still fresh; a
+    read, so loading the page that does so changes nothing."""
+    raw = ctx.kv.get(PENDING)
+    if not raw:
+        return None
+    try:
+        pending = Pending.model_validate_json(raw)
+    except ValidationError:
+        return None
+    if ctx.now - pending.started > timedelta(minutes=SIGN_IN_MINUTES):
+        return None
+    return pending.url or None
 
 
 class SignInError(Exception):

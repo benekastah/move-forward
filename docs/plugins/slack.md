@@ -69,7 +69,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | `/ping?pr=<PR URL>` | The ping page for one of my PRs. |
 | `/slack/contacts` | Where people's and teams' pings go, imported or set by hand, with a form to change each; the ping page links to it. |
 | `/slack` | Setting up the Slack app, connecting to it, and what it's connected as, with the scopes each feature lacks. |
-| `/slack/connect` | Starts signing in to the app and sends the browser to Slack (not found without `client_id`). |
+| `/slack/connect` | Sends the browser to Slack for the sign-in the Connect button (a POST, which starts it) began; loading it starts nothing (not found without `client_id`). |
 | `/slack/callback` | Where Slack sends the browser back. Served without the dashboard's cookie, which browsers don't send on a redirect from Slack; it's refused unless it carries the single-use `state` of the sign-in started here, within 10 minutes. |
 
 ## Buttons

@@ -212,7 +212,12 @@ def test_slacks_page_sets_up_connects_and_shows_the_connection(
     assert "Set up the Slack app" in setup and "Connect Slack" not in setup
     assert "users:read.email" in setup  # the manifest, to paste
     assert account.connect(_ctx(db, client_id=""), Graph([]), {}) is None
-    assert "href='/slack/connect'" in account.page(_ctx(db), Graph([]), {})
+    page = account.page(_ctx(db), Graph([]), {})
+    assert "action='/actions/slack/connect?back=%2Fslack%2Fconnect'" in page  # a POST button
+    assert "href='/slack/connect'" not in page
+    assert "No sign-in under way" in (account.connect(_ctx(db), Graph([]), {}) or "")
+    assert oauth.pending_url(_ctx(db)) is None  # loading the page started nothing
+    account.connect_action(_ctx(db), Graph([]), {})
     connect = account.connect(_ctx(db), Graph([]), {}) or ""
     assert 'location.replace("https://slack.com/oauth/v2/authorize?' in connect
     _, _, db = _connected(monkeypatch)
@@ -236,3 +241,14 @@ def test_a_secret_store_that_wont_keep_the_token_is_said_not_crashed(
     page = account.callback(_ctx(db), Graph([]), {"code": ["c"], "state": state})
     assert "Not connected: couldn&#x27;t keep the token" in page
     assert oauth.connection(_ctx(db)) is None
+
+
+def test_loading_the_connect_page_does_not_restart_a_sign_in_under_way() -> None:
+    db = Database(":memory:")
+    account.connect_action(_ctx(db), Graph([]), {})
+    state = parse_qs(urlsplit(oauth.pending_url(_ctx(db)) or "").query)["state"]
+    account.connect(_ctx(db), Graph([]), {})  # as a link or an image on another site could
+    account.connect(_ctx(db), Graph([]), {})
+    assert parse_qs(urlsplit(oauth.pending_url(_ctx(db)) or "").query)["state"] == state
+    with pytest.raises(ActionError, match="client_id"):
+        account.connect_action(_ctx(db, client_id=""), Graph([]), {})
