@@ -55,6 +55,21 @@ def test_each_plugin_says_when_it_last_refreshed_and_refreshes_on_a_click() -> N
     assert "refresh" not in act_now  # Act now isn't a plugin
 
 
+def test_a_part_of_a_plugins_refresh_shows_in_its_header_not_the_footer() -> None:
+    built = _dashboard()
+    ok = built.sources["github"]
+    parts = {"github.derived": page.SourceStatus(fetched_at=NOW)}
+    quiet = built.model_copy(update={"sources": {"github": ok, **parts}})
+    html = render.dashboard_page(quiet, refreshing=frozenset())
+    assert "github.derived" not in html
+    broken = {"github.derived": page.SourceStatus(fetched_at=NOW, error="boom")}
+    built = built.model_copy(update={"sources": {"github": ok, **broken}})
+    html = render.dashboard_page(built, refreshing=frozenset())
+    github = html.split("data-key='github'")[1].split("</summary>")[0]
+    assert "title='github.derived: boom'>refresh failed</span>" in github
+    assert "<footer>" in html and "github.derived" not in html.split("<footer>")[1]
+
+
 def test_refreshing_disables_the_buttons_and_reloads_sooner() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset({"github"}))
     assert ">refreshing…</span>" in html.split("data-key='github'")[1].split("</summary>")[0]

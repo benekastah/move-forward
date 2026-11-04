@@ -432,6 +432,24 @@ def _refreshed(name: str, status: SourceStatus, now: datetime, refreshing: Abstr
     )
 
 
+def _plugin_of(name: str) -> str:
+    """The plugin a source belongs to: `github.derived` is part of `github`'s refresh, kept as
+    its own source (`plugin.collect_into`), and a plugin's own source is just its name."""
+    return name.partition(".")[0]
+
+
+def _status_of(key: str, sources: dict[str, SourceStatus]) -> SourceStatus | None:
+    """The plugin `key`'s status: its own source's, but with the error of a part of its
+    refresh (e.g. `github.derived`) when that failed and the plugin's own didn't."""
+    status = sources.get(key)
+    if status is None or status.error:
+        return status
+    for name, part in sources.items():
+        if name != key and _plugin_of(name) == key and part.error:
+            return status.model_copy(update={"error": f"{name}: {part.error}"})
+    return status
+
+
 def _group(
     group: Group, dashboard: Dashboard, refreshing: AbstractSet[str], spot: Spot | None = None
 ) -> str:
@@ -439,7 +457,7 @@ def _group(
     skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click."""
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
     count = sum(len(panel.items) for panel in panels)
-    status = dashboard.sources.get(group.key)
+    status = _status_of(group.key, dashboard.sources)
     refreshed = _refreshed(group.key, status, dashboard.generated_at, refreshing) if status else ""
     return (
         f"<details class='group' data-key='{_e(group.key)}'"
@@ -459,7 +477,7 @@ def _sources(dashboard: Dashboard) -> str:
     grouped = {group.key for group in dashboard.groups}
     spans: list[str] = []
     for name, status in dashboard.sources.items():
-        if name in grouped:
+        if name in grouped or _plugin_of(name) in grouped:
             continue
         if status.error:
             spans.append(
