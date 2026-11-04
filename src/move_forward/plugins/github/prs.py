@@ -92,11 +92,24 @@ def _bare_approval(event: TimelineEvent) -> bool:
     return event.type == "PullRequestReview" and event.state == "APPROVED" and not event.has_body
 
 
+def last_push_at(pr: PullRequest) -> datetime | None:
+    """When the latest push to the PR was: a force push's time, or else the head commit's
+    date (a normal push of new commits). A rebased or amended commit keeps its old date, so
+    the commit date alone would miss that push."""
+    times = [e.at for e in pr.events if e.type == "HeadRefForcePushedEvent"]
+    if pr.last_commit_at:
+        times.append(pr.last_commit_at)
+    return max(times, default=None)
+
+
 def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ()) -> list[str]:
     """Review and comment events by others after my last push that I haven't followed up on.
 
-    Review tools' (bots') count, unless they are `ignored`."""
-    since = pr.last_commit_at
+    Review tools' (bots') count, unless they are `ignored`. A comment of mine on the
+    conversation answers what came before it. A review of mine doesn't: replying in a
+    review thread submits one, and the threads' own answers are tracked by whether they are
+    resolved, so it mustn't clear other reviewers' pending items."""
+    since = last_push_at(pr)
     pending: list[str] = []
     for event in sorted(pr.events, key=lambda e: e.at):
         if event.type not in ("PullRequestReview", "IssueComment"):
@@ -104,7 +117,8 @@ def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ())
         if since and event.at <= since:
             continue
         if event.actor == me:
-            pending.clear()
+            if event.type == "IssueComment":
+                pending.clear()
         elif event.actor and event.actor not in ignored and not _bare_approval(event):
             pending.append(f"{_feedback_verb(event)} {event.actor}")
     return pending

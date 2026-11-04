@@ -540,3 +540,37 @@ def test_approval_follows_githubs_decision_and_none_is_demanded_where_no_review_
     built = build(github=snapshot(mine=[stale_approval, not_required]))
     assert titles(built, "github.ready_to_merge") == ["PR 2"]  # approval isn't required there
     assert titles(built, "github.needs_reviewer") == ["PR 1"]  # GitHub says it isn't approved
+
+
+def test_feedback_is_judged_from_the_latest_push_and_a_thread_reply_clears_nothing() -> None:
+    commit_date = NOW - timedelta(days=3)
+    rebased = pr(
+        1,
+        last_commit_at=commit_date,  # an old commit, rebased and force-pushed yesterday
+        events=[
+            event("IssueComment", NOW - timedelta(days=2), actor="alice"),  # before the push
+            event("HeadRefForcePushedEvent", NOW - timedelta(days=1)),
+            event("IssueComment", NOW - timedelta(hours=5), actor="bob"),
+        ],
+    )
+    answered_in_a_thread = pr(
+        2,
+        last_commit_at=commit_date,
+        events=[
+            event("IssueComment", NOW - timedelta(hours=5), actor="alice"),
+            event("PullRequestReview", NOW - timedelta(hours=4), actor=ME),  # a thread reply
+        ],
+    )
+    answered_in_the_conversation = pr(
+        3,
+        last_commit_at=commit_date,
+        events=[
+            event("IssueComment", NOW - timedelta(hours=5), actor="alice"),
+            event("IssueComment", NOW - timedelta(hours=4), actor=ME),
+        ],
+    )
+    built = build(
+        github=snapshot(mine=[rebased, answered_in_a_thread, answered_in_the_conversation])
+    )
+    items = {i.title: i.details for i in panel(built, "github.feedback").items}
+    assert items == {"PR 1": ["comments by bob"], "PR 2": ["comments by alice"]}
