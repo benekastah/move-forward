@@ -78,6 +78,8 @@ is what's left to build.
   not in a docs pass afterwards:
   - the README for core: its config keys, commands, command-line options,
     HTTP endpoints and the page; its plugins table must match the code.
+  - `docs/api-changes.md` for a change to `move_forward.api`; one that could
+    break a plugin built against it also raises `API_VERSION`.
   - `CHANGELOG.md`, under Unreleased, for a change someone driving `mfd` from
     outside must act on (the work-notes skill reads it): a command, its options
     or JSON, a config key, an HTTP endpoint's fields, a page link. Say what to do.

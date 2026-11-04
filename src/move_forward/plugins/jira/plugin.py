@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 from typing import ClassVar
 
 from ...api import (
+    API_VERSION,
     Action,
     ActionHandler,
     ActNowRequest,
@@ -358,6 +359,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     init_template = TEMPLATE
     init_example = EXAMPLE
     config_model = JiraConfig
+    api_version = API_VERSION
     teams_field = "teams"
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS

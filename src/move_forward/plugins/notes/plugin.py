@@ -11,6 +11,7 @@ from typing import ClassVar
 from pydantic import BaseModel
 
 from ...api import (
+    API_VERSION,
     ActionHandler,
     ActNowRequest,
     AfterCollectRequest,
@@ -56,6 +57,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     title = "Notes"
     always_on = True
     config_model = NotesConfig
+    api_version = API_VERSION
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         # Done entries and todos aren't published: one that's gone is done.

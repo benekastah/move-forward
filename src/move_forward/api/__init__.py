@@ -37,6 +37,7 @@ from ..page import (
     anchor,
 )
 from ..plugin import (
+    API_VERSION,
     KEPT,
     ActionError,
     ActionHandler,
@@ -78,6 +79,7 @@ from ..repositories import KvRepository
 from ..strict import Strict
 
 __all__ = [
+    "API_VERSION",
     "KEPT",
     "ActNowRequest",
     "Action",

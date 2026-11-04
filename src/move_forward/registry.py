@@ -18,6 +18,7 @@ from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
 from .kinds import FAMILIES, fits, named_for
 from .plugin import (
+    API_VERSION,
     Context,
     EntitiesRequest,
     FetchRequest,
@@ -114,8 +115,9 @@ config, the commands and the server."""
 
 
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
-    """Raise unless every plugin's name is its own and fit to be one: lower-case, not two
-    plugins', and none of core's (`RESERVED_NAMES`). A plugin's kinds are named for it
+    """Raise unless every plugin is built against this dashboard's `API_VERSION`, and its
+    name is its own and fit to be one: lower-case, not two plugins', and none of core's
+    (`RESERVED_NAMES`). A plugin's kinds are named for it
     (`git.branch`), or for a family (`kinds.FAMILIES`), whose model they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
@@ -125,6 +127,12 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(f"plugin name {name!r}: use lower-case letters, digits and _")
         if name in RESERVED_NAMES:
             raise RuntimeError(f"plugin name {name!r} is core's")
+    for plugin in plugins:
+        if plugin.api_version != API_VERSION:
+            raise RuntimeError(
+                f"{plugin.name} is built against API version {plugin.api_version}; this"
+                f" dashboard's is {API_VERSION}"
+            )
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():
             family = FAMILIES.get(kind)

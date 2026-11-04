@@ -42,6 +42,13 @@ change without notice. Its submodules group the rest: `api.html` (`page`, `e` to
 (`token`, `read`, `write`, `delete`). Ruff refuses any other core import in a plugin, and
 `tests/test_api.py` checks it too.
 
+## Versions
+
+Declare the version of the API the plugin is built against, `api_version = API_VERSION`
+(from `move_forward.api`). A dashboard whose `API_VERSION` differs leaves the plugin out
+and says why in `mfd check` and the page's footer, rather than running it against hooks
+that may have changed. [api-changes.md](api-changes.md) lists what each version changed.
+
 ## Packaging it
 
 A plugin of your own is a package that declares an entry point in the
@@ -108,6 +115,7 @@ class LinearConfig(Strict):
 class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     name = "linear"
     title = "Linear"
+    api_version = API_VERSION
     config_model = LinearConfig
     snapshot_model = LinearSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS

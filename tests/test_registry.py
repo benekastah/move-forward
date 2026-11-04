@@ -5,9 +5,10 @@ from importlib.metadata import EntryPoint
 from typing import Any, ClassVar
 
 import pytest
+from conftest import dashboard
 
-from move_forward import cli, config, registry, server
-from move_forward.plugin import Plugin
+from move_forward import cli, config, registry, render, server
+from move_forward.plugin import API_VERSION, Plugin
 from move_forward.strict import Strict
 
 
@@ -17,12 +18,18 @@ class LinearConfig(Strict):
 
 class LinearPlugin(Plugin[LinearConfig, Any]):
     name: ClassVar[str] = "linear"
+    api_version = API_VERSION
     config_model = LinearConfig
 
 
 class SettingsPlugin(Plugin[LinearConfig, Any]):
     name: ClassVar[str] = "settings"
+    api_version = API_VERSION
     config_model = LinearConfig
+
+
+class OldLinearPlugin(LinearPlugin):
+    api_version = 0
 
 
 def _installed(monkeypatch: pytest.MonkeyPatch, *points: tuple[str, str]) -> None:
@@ -82,3 +89,26 @@ def test_the_reserved_names_are_cores_keys_commands_and_paths() -> None:
     assert core_commands <= registry.RESERVED_NAMES
     assert set(config.Config.model_fields) <= registry.RESERVED_NAMES
     assert server.RESERVED_PATHS <= registry.RESERVED_NAMES
+
+
+def test_a_plugin_built_against_another_api_version_is_left_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _installed(monkeypatch, ("linear", f"{__name__}:OldLinearPlugin"))
+    plugins, errors = registry.discover()
+    assert "linear" not in [p.name for p in plugins]
+    said = f"linear is built against API version 0; this dashboard's is {API_VERSION}"
+    assert errors == [f"plugin linear ({__name__}:OldLinearPlugin) is left out: {said}"]
+
+
+def test_the_built_ins_are_built_against_this_api() -> None:
+    assert {p.api_version for p in registry.BUILTINS} == {API_VERSION}
+
+
+def test_the_page_says_which_installed_plugins_are_left_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(registry, "DISCOVERY_ERRORS", ["plugin linear (x:Y) is left out: boom"])
+    built = dashboard()
+    assert built.problems == ["plugin linear (x:Y) is left out: boom"]
+    assert "plugin linear (x:Y) is left out: boom" in render.dashboard_page(built, set())

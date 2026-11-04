@@ -478,7 +478,7 @@ def _group(
 
 def _sources(dashboard: Dashboard) -> str:
     """The footer: how fresh the data of plugins without a group of their own is (the
-    others' summaries say), and who I am."""
+    others' summaries say), who I am, and the installed plugins left out."""
     grouped = {group.key for group in dashboard.groups}
     spans: list[str] = []
     for name, status in dashboard.sources.items():
@@ -496,6 +496,7 @@ def _sources(dashboard: Dashboard) -> str:
     if dashboard.identities:
         who = " · ".join(f"{_e(i.tool)}: {_e(i.login)}" for i in dashboard.identities)
         spans.append(f"<span>as {who}</span>")
+    spans += [f"<span class='error'>{_e(problem)}</span>" for problem in dashboard.problems]
     return "".join(spans)
 
 
