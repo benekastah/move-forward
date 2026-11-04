@@ -31,17 +31,19 @@ the field; `settings` page still lists each enabled section. **Size.** L.
 
 ## PR 9b — entry points, reserved names, order
 
-- `pyproject.toml`: `[project.entry-points."move_forward.plugins"]` with the six built-ins.
-  `registry.discover()` loads once (cached), instantiates, runs `check_plugins`; a broken
-  entry point is an error line from `mfd check` and a disabled plugin, not an import error.
+- Built-ins stay a list in core (`registry.BUILTINS`), so a source checkout run without
+  installing, or a venv whose metadata is stale, still has them. Other packages' plugins
+  come from `[project.entry-points."move_forward.plugins"]`. `registry.discover()` loads
+  both once (cached), instantiates, runs `check_plugins`; a broken entry point is an error
+  line from `mfd check` and a disabled plugin, not an import error; an entry point naming
+  a built-in is refused.
 - Order: alphabetical by name; tests depending on graph order adjusted.
 - `RESERVED_NAMES` in one place: `core`, `act_now`, `act`, `dashboard`, `notifications`,
   `plugins`, `static`, every top-level `Config` field, every core CLI command
   (`cli.py:129-195`), every `server.RESERVED_PATHS` segment (07). `check_plugins` refuses
   them.
-- `registry.builtins()` (this distribution's entry points) for `tests/test_entities_doc.py`
-  and `conftest.git_polls`, so a third-party plugin in the dev venv doesn't change core's
-  tests.
+- `tests/test_entities_doc.py` and `conftest.git_polls` read `registry.BUILTINS`, so a
+  third-party plugin in the dev venv doesn't change core's tests.
 - Docs: "Registering it" → "Packaging it" (`pyproject` snippet, entry point); README says
   how to install one (`uv tool install move-forward --with my-plugin`).
 
@@ -57,12 +59,14 @@ order is deterministic; a plugin whose import raises is reported and the rest lo
 
 ## Decisions
 
-- Entry points only (**recommended**) vs an explicit `plugins = ["pkg:Class"]` list (works
-  without packaging, one more thing to get wrong; `--reload` already covers in-tree work).
+- **Built-ins listed in core, entry points for other packages** vs entry points for every
+  plugin (a checkout without an install, or with stale metadata, has no plugins at all) vs
+  an explicit `plugins = ["pkg:Class"]` list in the config (works without packaging, one
+  more thing to get wrong).
 - Order alphabetical (**recommended**: deterministic for third parties) vs built-ins first
   in today's list order.
 
 ## Dependencies
 
 07 (`RESERVED_PATHS`), 08 (`teams_field`, `token_settings`). 12 builds on
-`discover()`/`builtins()`; 02 PR B adds the `api_version` check to `check_plugins`.
+`discover()`/`BUILTINS`; 02 PR B adds the `api_version` check to `check_plugins`.

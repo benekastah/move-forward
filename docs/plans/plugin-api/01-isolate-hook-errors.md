@@ -45,7 +45,9 @@ plugin.
   `future.result(timeout=...)`; on `TimeoutError`, `save_error(source, now, "timed out
   after Ns")` and move on; `pool.shutdown(wait=False)`. Threads can't be killed, so `App`
   keeps a "still collecting" set and skips a plugin whose previous collect hasn't returned
-  (log once); `collect_into` clears it in `finally`.
+  (log once); `collect_into` clears it in `finally`. The timeout is per call: a plugin
+  with more work than fits splits it into pieces (04's `Collected(more=True)`), each timed
+  on its own.
 - Note in the PR (not changed): `prune_if_due` and `graph_events` still run under the
   refresh lock; a prune calling `graph.fetch` holds it for a network round trip.
 
