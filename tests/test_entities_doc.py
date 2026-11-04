@@ -30,7 +30,7 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
             plugin.name,
             "linking" if spec.linking is not False else "hiding" if spec.hides else None,
         )
-        for plugin in registry.PLUGINS
+        for plugin in registry.BUILTINS
         for kind, spec in plugin.kinds.items()
     }
     assert documented == declared
@@ -38,7 +38,7 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
 
 def test_each_kind_documents_exactly_its_models_attributes() -> None:
     text = DOC.read_text()
-    for plugin in registry.PLUGINS:
+    for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():
             section = _section(_section(text, "## Attributes"), f"### `{kind}`")
             cells = _ATTRIBUTE_CELL_RE.findall(section)

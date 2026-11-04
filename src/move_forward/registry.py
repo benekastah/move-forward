@@ -6,8 +6,9 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from importlib.metadata import entry_points
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, ValidationError
 
@@ -46,7 +47,7 @@ page doesn't fill the log."""
 _last_logged: dict[tuple[str, str], float] = {}
 _last_logged_lock = threading.Lock()
 
-PLUGINS: list[Plugin[Any, Any]] = [
+BUILTINS: list[Plugin[Any, Any]] = [
     GitHubPlugin(),
     GitPlugin(),
     GitStackPlugin(),
@@ -54,23 +55,74 @@ PLUGINS: list[Plugin[Any, Any]] = [
     SlackPlugin(),
     NotesPlugin(),
 ]
-"""Every built-in plugin. Each one's name is its section in the config (`Config.section`)."""
+"""The plugins that come with the dashboard, listed here so a checkout run without
+installing it (or a venv whose metadata is stale) still has them."""
+ENTRY_POINTS = "move_forward.plugins"
+"""The entry point group other packages' plugins are found in: each names a `Plugin`
+subclass, e.g. `linear = "move_forward_linear:LinearPlugin"`."""
+RESERVED_NAMES = frozenset(
+    {
+        # Core's own owners, keys and namespaces.
+        CORE,
+        act_now.ACTIONS,
+        "act",
+        "dashboard",
+        "plugins",
+        "static",
+        # The config's top-level keys.
+        "act_now",
+        "db_backups",
+        "db_path",
+        "email",
+        "https",
+        "notifications",
+        "port",
+        "prune_days",
+        "refresh_on_load_seconds",
+        "sections",
+        "teams",
+        # Core's commands, `mfd <command>`.
+        "cert",
+        "check",
+        "dump",
+        "init",
+        "logout",
+        "open",
+        "priority",
+        "refresh",
+        "serve",
+        "snooze",
+        "snoozes",
+        "token",
+        "unsnooze",
+        # Core's paths' first segments (`server.RESERVED_PATHS`).
+        "actions",
+        "favicon.svg",
+        "focus",
+        "layout",
+        "login",
+        "logo.svg",
+        "settings",
+        "style.css",
+    }
+)
+"""What no plugin may be named: a plugin's name is its config section, its `mfd` command,
+the first segment of its pages' and actions' paths, its kv namespace and its tables'
+prefix, so it can't be any of core's. `tests/test_registry.py` checks the list against the
+config, the commands and the server."""
 
 
-def check_names(plugins: list[Plugin[Any, Any]]) -> None:
-    """Raise unless every plugin's name is its own and fit to be one. A name is the plugin's
-    config section, its kv namespace and migrations' owner, its tables' prefix and the
-    first part of its actions' paths, so two plugins sharing one would share all of those;
-    and it mustn't be core's (`core`) or Act now's (`act_now`), which use the same places.
-    A plugin's kinds are named for it (`git.branch`), or for a family (`kinds.FAMILIES`),
-    whose model they must extend."""
+def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
+    """Raise unless every plugin's name is its own and fit to be one: lower-case, not two
+    plugins', and none of core's (`RESERVED_NAMES`). A plugin's kinds are named for it
+    (`git.branch`), or for a family (`kinds.FAMILIES`), whose model they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
     for name in names:
         if not OWNER_RE.match(name):
             raise RuntimeError(f"plugin name {name!r}: use lower-case letters, digits and _")
-        if name in (CORE, act_now.ACTIONS):
+        if name in RESERVED_NAMES:
             raise RuntimeError(f"plugin name {name!r} is core's")
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():
@@ -87,7 +139,31 @@ def check_names(plugins: list[Plugin[Any, Any]]) -> None:
                 )
 
 
-check_names(PLUGINS)
+def discover() -> tuple[list[Plugin[Any, Any]], list[str]]:
+    """Every plugin, by name: the built-ins and the other packages' (`ENTRY_POINTS`), with
+    what went wrong loading one. A plugin that won't import, isn't a `Plugin` or fails
+    `check_plugins` (a built-in's name, a reserved one) is left out, and said why; a
+    built-in failing it is a bug, and raises."""
+    plugins = list(BUILTINS)
+    check_plugins(plugins)
+    errors: list[str] = []
+    for point in entry_points(group=ENTRY_POINTS):
+        try:
+            loaded: object = point.load()
+            plugin: object = loaded() if isinstance(loaded, type) else loaded
+            if not isinstance(plugin, Plugin):
+                raise TypeError(f"{point.value} isn't a Plugin")
+            check_plugins([*plugins, cast(Plugin[Any, Any], plugin)])
+        except Exception as e:  # noqa: BLE001 (any failure leaves just this plugin out)
+            errors.append(f"plugin {point.name} ({point.value}) is left out: {e}")
+            continue
+        plugins.append(cast(Plugin[Any, Any], plugin))
+    return sorted(plugins, key=lambda p: p.name), errors
+
+
+PLUGINS, DISCOVERY_ERRORS = discover()
+"""Every plugin, built-in or installed, in name order; and why any installed one is left
+out (`mfd check` says). Each one's name is its section in the config (`Config.section`)."""
 
 
 @dataclass(frozen=True)

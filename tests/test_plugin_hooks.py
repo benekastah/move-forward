@@ -346,13 +346,18 @@ def _named(name: str) -> Plugin[BaseModel, BaseModel]:
     return Named()
 
 
+RESERVED = ["core", "act_now", "settings", "serve", "teams", "act"]
+"""Some of core's names: an owner, a page, a command, a config key, a group key."""
+
+
 def test_plugin_names_are_each_their_own_and_none_is_cores() -> None:
-    registry.check_names(registry.PLUGINS)  # the built-in ones are fine
-    for clash in ([*registry.PLUGINS, registry.PLUGINS[0]], [_named("core")], [_named("act_now")]):
-        with pytest.raises(RuntimeError, match="named github|core's"):
-            registry.check_names(clash)
+    registry.check_plugins(registry.PLUGINS)  # the built-in ones are fine
+    clashes = [[*registry.PLUGINS, registry.PLUGINS[0]], *([_named(n)] for n in RESERVED)]
+    for clash in clashes:
+        with pytest.raises(RuntimeError, match="named git|core's"):
+            registry.check_plugins(clash)
     with pytest.raises(RuntimeError, match="lower-case"):
-        registry.check_names([_named("My-Plugin")])
+        registry.check_plugins([_named("My-Plugin")])
 
 
 def test_the_page_says_who_i_am_in_each_tool_that_knows() -> None:
