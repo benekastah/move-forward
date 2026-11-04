@@ -186,7 +186,7 @@ def test_focus_page_steps_through_items() -> None:
     assert "<h2>Nudge reviewers</h2>" in last and "3 of 3" in last
     assert "<a class='button secondary prev' href='/focus?cat=all&amp;i=1'>" in last
     assert "disabled next" in last
-    assert "/ping?pr=" + quote(pr(1).url, safe="") in last
+    assert "/slack/ping?pr=" + quote(pr(1).url, safe="") in last
 
     empty = render.focus_page(built, "github.feedback", 0)
     assert empty is not None and "Nothing here" in empty

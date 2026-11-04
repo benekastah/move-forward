@@ -13,7 +13,7 @@ from conftest import NOW
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import ActionError, ActionRequest, Context, PageRequest
+from move_forward.plugin import ActionError, ActionRequest, Context, PageRequest, Response
 from move_forward.plugins.slack import account, client, oauth, scopes
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.plugin import SlackPlugin
@@ -68,6 +68,7 @@ def _ctx(db: Database, minutes: int = 0, client_id: str = "123.456") -> Context[
         db=db,
         kv=KvRepository(db, "slack"),
         dashboard_url="http://localhost:8765",
+        name="slack",
     )
 
 
@@ -218,17 +219,17 @@ def test_slacks_page_sets_up_connects_and_shows_the_connection(
     page = account.page(PageRequest(_ctx(db), Graph([]), {}, "/slack"))
     assert "action='/actions/slack/connect?back=%2Fslack%2Fconnect'" in page  # a POST button
     assert "href='/slack/connect'" not in page
-    assert "No sign-in under way" in (
-        account.connect(PageRequest(_ctx(db), Graph([]), {}, "/slack/connect")) or ""
-    )
+    idle = account.connect(PageRequest(_ctx(db), Graph([]), {}, "/slack/connect"))
+    assert isinstance(idle, str) and "No sign-in under way" in idle
     assert oauth.pending_url(_ctx(db)) is None  # loading the page started nothing
     account.connect_action(ActionRequest(_ctx(db), Graph([]), {}))
-    connect = account.connect(PageRequest(_ctx(db), Graph([]), {}, "/slack/connect")) or ""
-    assert 'location.replace("https://slack.com/oauth/v2/authorize?' in connect
+    connect = account.connect(PageRequest(_ctx(db), Graph([]), {}, "/slack/connect"))
+    assert isinstance(connect, Response) and connect.status == 303
+    assert connect.headers["Location"].startswith("https://slack.com/oauth/v2/authorize?")
     _, _, db = _connected(monkeypatch)
     shown = account.page(PageRequest(_ctx(db), Graph([]), {}, "/slack"))
     assert "Connected" in shown and "Acme" in shown and "slack/disconnect" in shown
-    assert SlackPlugin.sign_in_pages == {oauth.CALLBACK_PATH}
+    assert SlackPlugin.sign_in_pages == {oauth.CALLBACK}
 
 
 def test_a_secret_store_that_wont_keep_the_token_is_said_not_crashed(
@@ -244,7 +245,7 @@ def test_a_secret_store_that_wont_keep_the_token_is_said_not_crashed(
     state = _started(db)["state"]
     slack.answers.append(SIGNED_IN)
     page = account.callback(
-        PageRequest(_ctx(db), Graph([]), {"code": ["c"], "state": state}, oauth.CALLBACK_PATH)
+        PageRequest(_ctx(db), Graph([]), {"code": ["c"], "state": state}, "/slack/callback")
     )
     assert "Not connected: couldn&#x27;t keep the token" in page
     assert oauth.connection(_ctx(db)) is None

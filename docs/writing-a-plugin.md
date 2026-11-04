@@ -340,13 +340,16 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   something another plugin publishes (reacting to a PR, say) lists it in
   `ActionResult(notice, touched=[ref])`, and that plugin is refreshed too.
 - **Keeping an item on the focus page** after an action changes it: return
-  `ActionResult(notice, {KEPT: "<plugin>:<key>"})` and implement `kept_item`.
-- **Pages.** `pages()` maps paths to handlers `(req: PageRequest) -> str | None` (with
-  `req.query` and `req.path`) returning HTML (use `api.html.page` and
-  `api.html.e` to escape everything). A page a tool's sign-in (OAuth) redirects back to goes
-  in `sign_in_pages` too: browsers don't send the dashboard's cookie on a redirect from
-  another site, so it's served without one, and must check OAuth's single-use `state`
-  before doing anything.
+  `ActionResult(notice, req.ctx.kept(key))` and implement `kept_item`.
+- **Pages.** `pages()` maps keys to handlers `(req: PageRequest) -> str | Response | None`
+  (with `req.query` and `req.path`); core serves each at `/<plugin>/<key>`, and `""` at
+  `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML (use
+  `api.html.page` and `api.html.e` to escape everything), or a `Response`, e.g.
+  `Response.redirect(url)`. `ctx.page_url(key)` is a page's full URL. A page a tool's
+  sign-in (OAuth) redirects back to goes in `sign_in_pages` too, by its key: browsers don't
+  send the dashboard's cookie on a redirect from another site, so it's served without one,
+  and must check OAuth's single-use `state` before doing anything. Only the plugin's own
+  pages can be: a key that isn't one of `pages()` is ignored.
 - **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
   a handler `(req: CliRequest) -> int` that gets the parsed `req.args`.
 

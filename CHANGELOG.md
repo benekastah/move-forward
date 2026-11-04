@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Plugins' pages live under the plugin's name
+
+A plugin's pages are served at `/<plugin>/<page>`: slack's ping page moved from
+`/ping?pr=…` to `/slack/ping?pr=…`. Its other pages (`/slack`, `/slack/contacts`,
+`/slack/connect`, `/slack/callback`) keep their URLs, so the Slack app's redirect URL is
+unchanged. Update a bookmark or link to `/ping`.
+
 ### Act now keeps snoozes, dismissals and pins by task, not verb
 
 Each item Act now shows has a `task`, a stable id for what doing it is (`review`, `merge`,

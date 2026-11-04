@@ -20,7 +20,7 @@ def test_the_page_lists_requested_reviewers_and_where_their_pings_go() -> None:
     )
     SlackRepository(db).set_team_channel("web", "#team-web", None)
     page = refresh.plugin_page(config, db, "/slack/contacts", {})
-    assert page is not None
+    assert isinstance(page, str)
     assert "alice" in page and "value='U111111'" in page and "imported" in page
     assert "&lt;b&gt;" in page and "<b>" not in page  # escaped; and not known yet
     assert "not known" in page and "set by hand" in page and "#team-web" in page

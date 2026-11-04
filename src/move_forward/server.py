@@ -22,7 +22,7 @@ from .db import Database
 from .graph import Graph
 from .notifications import NotificationRepository
 from .panels import Layout
-from .plugin import KEPT, ActionError, Changed, ChangedRequest
+from .plugin import KEPT, ActionError, Changed, ChangedRequest, Response, page_path
 from .refresh import (
     PageFailed,
     build_dashboard,
@@ -71,6 +71,20 @@ LOGIN_CODE_PATH = "/login/code"
 HANDSHAKE_PATHS = (LOGIN_CHALLENGE_PATH, LOGIN_CODE_PATH)
 """`mfd open`'s steps; see `auth.Handshake`."""
 NOTIFICATIONS_PATH = "/notifications"
+RESERVED_PATHS = frozenset(
+    {
+        "focus",
+        "settings",
+        "login",
+        "notifications",
+        "refresh",
+        "layout",
+        "actions",
+        *(path.lstrip("/") for path in STATIC_FILES),
+    }
+)
+"""The first segments of core's own paths: no plugin may be named one, since its pages are
+served at `/<plugin>/…`."""
 NOT_SIGNED_IN = "<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
 LOCAL_HOSTS = (auth.HOST, "127.0.0.1", "localhost")
 """Names the server answers to. A request naming any other host is refused, which stops a web
@@ -353,11 +367,18 @@ class App:
         return json.dumps([n.model_dump() for n in found])
 
     def sign_in_pages(self) -> set[str]:
-        """The enabled plugins' pages a tool's sign-in returns to (`Plugin.sign_in_pages`)."""
+        """The paths of the enabled plugins' pages a tool's sign-in returns to
+        (`Plugin.sign_in_pages`): only their own pages, `/<plugin>/<key>`, so a plugin can't
+        open `/settings` or `/` to strangers."""
         plugins = enabled(self.config, self.db, datetime.now(UTC))
-        return {path for e in plugins for path in e.plugin.sign_in_pages}
+        return {
+            page_path(e.name, key)
+            for e in plugins
+            for key in e.plugin.sign_in_pages
+            if key in e.plugin.pages()
+        }
 
-    def plugin_page(self, path: str, query: str, notice: str = "") -> str | None:
+    def plugin_page(self, path: str, query: str, notice: str = "") -> str | Response | None:
         """An enabled plugin's page, with `notice` as its query's; None when there's none at
         `path`."""
         params = parse_qs(query, keep_blank_values=True)
@@ -470,9 +491,17 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
         def log_message(self, format: str, *args: object) -> None:
             log.debug(format, *(_redact(str(a)) for a in args))
 
-        def _send(self, status: HTTPStatus, body: str, content_type: str) -> None:
+        def _send(
+            self,
+            status: HTTPStatus,
+            body: str,
+            content_type: str,
+            headers: dict[str, str] | None = None,
+        ) -> None:
             data = body.encode()
             self.send_response(status)
+            for name, value in (headers or {}).items():
+                self.send_header(name, value)
             if self._notice_taken:  # one handler answers every request on its connection
                 self.send_header("Set-Cookie", auth.CLEAR_NOTICE)
                 self._notice_taken = False
@@ -567,15 +596,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._login(url.query)
                 return
             if url.path in app.sign_in_pages():  # proves itself; see Plugin.sign_in_pages
-                try:
-                    page = app.plugin_page(url.path, url.query)
-                except PageFailed:
-                    self._html(HTTPStatus.INTERNAL_SERVER_ERROR, PAGE_FAILED)
-                    return
-                if page is None:
-                    self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
-                else:
-                    self._html(HTTPStatus.OK, page)
+                self._plugin_page(url.path, url.query, "")
                 return
             if self._refuse_strangers():
                 return
@@ -596,15 +617,21 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 else:
                     self._html(HTTPStatus.OK, page)
             else:
-                try:
-                    page = app.plugin_page(url.path, url.query, self._take_notice())
-                except PageFailed:
-                    self._html(HTTPStatus.INTERNAL_SERVER_ERROR, PAGE_FAILED)
-                    return
-                if page is None:
-                    self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
-                else:
-                    self._html(HTTPStatus.OK, page)
+                self._plugin_page(url.path, url.query, self._take_notice())
+
+        def _plugin_page(self, path: str, query: str, notice: str) -> None:
+            """Answer with a plugin's page: its HTML, or its `Response`."""
+            try:
+                page = app.plugin_page(path, query, notice)
+            except PageFailed:
+                self._html(HTTPStatus.INTERNAL_SERVER_ERROR, PAGE_FAILED)
+                return
+            if page is None:
+                self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
+            elif isinstance(page, str):
+                self._html(HTTPStatus.OK, page)
+            else:
+                self._send(HTTPStatus(page.status), page.body, page.content_type, page.headers)
 
         def _read_body(self) -> bytes | None:
             """The request's body, read whole before anything is answered, refusals

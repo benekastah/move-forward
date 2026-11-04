@@ -13,7 +13,7 @@ from urllib.parse import quote, urlencode
 import pytest
 from conftest import ME, pr, snapshot
 
-from move_forward import auth, registry, server
+from move_forward import auth, registry, server, settings
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Ref
@@ -28,6 +28,7 @@ from move_forward.plugin import (
     ChangedRequest,
     PageHandler,
     PageRequest,
+    Response,
 )
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import GitHubConfig
@@ -142,7 +143,7 @@ def test_dashboard_page_renders_panels_and_ping_links(client: HTTPConnection) ->
     assert response.status == 200
     assert "Needs a reviewer" in body
     assert f"as GitHub: {ME}" in body
-    assert "/ping?pr=" + quote(pr(1).url, safe="") in body
+    assert "/slack/ping?pr=" + quote(pr(1).url, safe="") in body
 
 
 def test_stylesheet_and_404(client: HTTPConnection) -> None:
@@ -155,7 +156,7 @@ def test_stylesheet_and_404(client: HTTPConnection) -> None:
 
 
 def test_ping_page_lists_targets(client: HTTPConnection) -> None:
-    response = get(client, "/ping?pr=" + quote(pr(1).url, safe=""))
+    response = get(client, "/slack/ping?pr=" + quote(pr(1).url, safe=""))
     body = response.read().decode()
     assert response.status == 200
     assert "alice (DM)" in body and "team web" in body
@@ -175,7 +176,7 @@ def test_mark_as_sent_records_a_ping_and_redirects(client: HTTPConnection, app: 
     pings = SlackRepository(app.db).pings()
     assert [(p.target, p.kind, p.message) for p in pings] == [("user:alice", "first", "hi <there>")]
     # The next page shows the follow-up.
-    body = get(client, "/ping?pr=" + quote(pr(1).url, safe="")).read().decode()
+    body = get(client, "/slack/ping?pr=" + quote(pr(1).url, safe="")).read().decode()
     assert "Gentle bump" in body
 
 
@@ -673,14 +674,14 @@ def test_secrets_in_query_parameters_are_left_out_of_the_log() -> None:
 
 
 class _GitHubWithASignIn(GitHubPlugin):
-    sign_in_pages: ClassVar[frozenset[str]] = frozenset({"/github/back"})
+    sign_in_pages: ClassVar[frozenset[str]] = frozenset({"back", "settings"})
 
     def pages(self) -> dict[str, PageHandler]:
         def page(req: PageRequest[GitHubConfig]) -> str:
             query = req.query
             return f"back with {query.get('state', ['?'])[0]}"
 
-        return {"/github/back": page, "/github/private": page}
+        return {"back": page, "private": page}
 
 
 def test_a_sign_in_page_is_served_without_the_cookie_and_the_rest_still_need_it(
@@ -693,6 +694,9 @@ def test_a_sign_in_page_is_served_without_the_cookie_and_the_rest_still_need_it(
     )  # as a redirect from Slack comes
     assert response.status == 200 and response.read().decode() == "back with s1"
     response = get(client, "/github/private?state=s1", browser(client))
+    assert response.status == 401
+    response.read()
+    response = get(client, "/settings", browser(client))  # not its page: no way round sign-in
     assert response.status == 401
     response.read()
 
@@ -768,10 +772,10 @@ def test_a_failing_plugin_page_answers_500_and_the_rest_stays_up(
         raise RuntimeError("boom")
 
     def pages(self: SlackPlugin) -> dict[str, object]:
-        return {"/ping": boom}
+        return {"ping": boom}
 
     monkeypatch.setattr(SlackPlugin, "pages", pages)
-    failed = get(client, "/ping")
+    failed = get(client, "/slack/ping")
     assert failed.status == 500 and "failed" in failed.read().decode()
     assert get(client, "/").status == 200
 
@@ -800,7 +804,42 @@ def test_a_plugin_page_knows_its_path(
         return f"<p>at {req.path}</p>"
 
     def pages(self: SlackPlugin) -> dict[str, object]:
-        return {"/where": where}
+        return {"where": where}
 
     monkeypatch.setattr(SlackPlugin, "pages", pages)
-    assert "at /where" in get(client, "/where").read().decode()
+    assert "at /slack/where" in get(client, "/slack/where").read().decode()
+
+
+def test_two_plugins_pages_of_one_name_are_each_their_own(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def pages_of(name: str) -> Callable[[object], dict[str, object]]:
+        def ping(req: PageRequest[Any]) -> str:
+            return f"<p>{name}'s ping</p>"
+
+        return lambda self: {"ping": ping}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages_of("slack"))
+    monkeypatch.setattr(GitHubPlugin, "pages", pages_of("github"))
+    assert "slack's ping" in get(client, "/slack/ping").read().decode()
+    assert "github's ping" in get(client, "/github/ping").read().decode()
+    assert get(client, "/ping").status == 404
+
+
+def test_a_page_can_redirect(client: HTTPConnection, monkeypatch: pytest.MonkeyPatch) -> None:
+    def pages(self: SlackPlugin) -> dict[str, object]:
+        def away(req: PageRequest[Any]) -> Response:
+            return Response.redirect("https://slack.com/x")
+
+        return {"away": away}
+
+    monkeypatch.setattr(SlackPlugin, "pages", pages)
+    response = get(client, "/slack/away")
+    response.read()
+    assert (response.status, response.getheader("Location")) == (303, "https://slack.com/x")
+
+
+def test_core_paths_are_reserved() -> None:
+    paths = ["/focus", settings.PATH, server.LOGIN_PATH, server.NOTIFICATIONS_PATH, "/refresh"]
+    paths += ["/layout", "/actions/x", *server.STATIC_FILES]
+    assert {p.strip("/").split("/")[0] for p in paths} <= server.RESERVED_PATHS

@@ -263,6 +263,10 @@ Plugins add pages and buttons of their own, listed on their pages (see
 `{"groups": [group keys], "panels": {group key: [panel keys]}}`. It answers
 `204 No Content`, or `400` for a body that isn't one.
 
+A plugin's pages are served at `/<plugin>/<page>` (slack's ping page is `/slack/ping`), and
+its own page at `/<plugin>`; core's paths' first segments (`focus`, `settings`, `login`,
+`notifications`, `refresh`, `layout`, `actions`, the static files) are reserved.
+
 Forms (POST, `application/x-www-form-urlencoded`). A plugin's buttons post to
 `/actions/<plugin>/<action>`; the rest are core's. Each answers `303 See Other`
 to `/`, or to the `back` query parameter when it's a local path, with its outcome

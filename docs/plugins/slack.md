@@ -66,7 +66,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 
 | Path | Shows |
 | --- | --- |
-| `/ping?pr=<PR URL>` | The ping page for one of my PRs. |
+| `/slack/ping?pr=<PR URL>` | The ping page for one of my PRs. |
 | `/slack/contacts` | Where people's and teams' pings go, imported or set by hand, with a form to change each; the ping page links to it. |
 | `/slack` | Setting up the Slack app, connecting to it, and what it's connected as, with the scopes each feature lacks. |
 | `/slack/connect` | Sends the browser to Slack for the sign-in the Connect button (a POST, which starts it) began; loading it starts nothing (not found without `client_id`). |
