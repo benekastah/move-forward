@@ -7,6 +7,8 @@ Kinds and their attributes are a published contract, listed in `docs/entities.md
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel, Field, JsonValue
 
@@ -41,6 +43,35 @@ class Entity(Model):
     """Text that may name linking entities by id, e.g. a PR's branch, title and body; the graph
     adds a ref to each linking entity whose id it finds in it."""
     attrs: dict[str, JsonValue] = Field(default_factory=dict)
+    family: str | None = None
+    """The family of kinds it's in (a pull request, a ticket), set by core; None for a kind
+    that's a plugin's own."""
+    lifecycle: Literal["open", "done"] = "open"
+    """Whether the work it stands for is over (a PR merged or closed, a ticket resolved), as
+    its publisher says; `state` is the tool's own word for it."""
+
+
+@dataclass(frozen=True)
+class KindSpec:
+    """What a plugin says of a kind it publishes (`Plugin.kinds`)."""
+
+    attrs: type[BaseModel]
+    """The model its entities' `attrs` must fit."""
+    linking: str | None | Literal[False] = False
+    """Whether it links what it's about (see `Graph.related`): False if not; else the pattern
+    of its ids, for finding them in other entities' `mentions` (`Plugin.linking_patterns`
+    can narrow it as the plugin learns), or None when its entities point at what they link
+    themselves."""
+    hides: bool = False
+    """Whether its entities hide what they point at (notes' ice); see `Graph.hidden`."""
+    fetchable: bool = False
+    """Whether `Plugin.fetch` can look its entities up when the graph no longer has them, as
+    the daily prune does to learn whether long-gone work ended."""
+    gone_means_done: bool = False
+    """Whether an entity missing from the graph is done: its plugin publishes only open ones
+    (notes' todos), and keeps them where only finishing removes them."""
+    resolvable: bool = False
+    """Whether `mfd priority <id>`, given no kind, looks among its entities by id."""
 
 
 def _no_url(kind: str, id: str) -> str | None:
@@ -51,23 +82,38 @@ def _no_fetch(kind: str, ids: list[str]) -> list["Entity"]:
     return []
 
 
-def _named(texts: Iterable[str], patterns: dict[str, re.Pattern[str]]) -> list[Ref]:
-    """The linking entities `texts` name by id, in order, once each."""
+Handles = Mapping[tuple[str, str], list[Ref]]
+"""The entities of each kind by `handle` (the text that names them: a ticket's key)."""
+
+
+def _handle(entity: Entity) -> str | None:
+    handle = entity.attrs.get("handle")
+    return handle if isinstance(handle, str) else None
+
+
+def _named(
+    texts: Iterable[str], patterns: dict[str, re.Pattern[str]], handles: Handles
+) -> list[Ref]:
+    """The linking entities `texts` name, in order, once each: those whose `handle` it is,
+    or, for text no entity in the graph has as its handle, the ref with that text as id."""
     return list(
         dict.fromkeys(
-            Ref(kind=kind, id=match[0])
+            ref
             for text in texts
             for kind, pattern in patterns.items()
             for match in pattern.finditer(text)
+            for ref in handles.get((kind, match[0])) or [Ref(kind=kind, id=match[0])]
         )
     )
 
 
-def _with_mentions(entity: Entity, patterns: dict[str, re.Pattern[str]]) -> Entity:
-    """The entity pointing, too, at each linking entity whose id its mentions name."""
+def _with_mentions(
+    entity: Entity, patterns: dict[str, re.Pattern[str]], handles: Handles
+) -> Entity:
+    """The entity pointing, too, at each linking entity its mentions name."""
     if not entity.mentions or not patterns:
         return entity
-    refs = list(dict.fromkeys([*entity.refs, *_named(entity.mentions, patterns)]))
+    refs = list(dict.fromkeys([*entity.refs, *_named(entity.mentions, patterns, handles)]))
     return entity.model_copy(update={"refs": refs}) if len(refs) != len(entity.refs) else entity
 
 
@@ -81,15 +127,23 @@ class Graph:
         fetch: Fetch = _no_fetch,
         linking: Mapping[str, str | None] | None = None,
         hiding: Iterable[str] = (),
+        kinds: Mapping[str, KindSpec] | None = None,
     ):
         """`linking` names the kinds that link what they're about (see `related`), each with
         the pattern of its ids, for finding them in entities' `mentions`; None for a kind
         whose entities point at what they link themselves. `hiding` names the kinds whose
-        entities hide what they point at (see `hidden`)."""
+        entities hide what they point at (see `hidden`). `kinds` are the publishers' specs
+        of their kinds (see `spec`)."""
+        self._kinds = dict(kinds or {})
         self._linking = dict(linking or {})
         self._hiding = set(hiding)
         self._patterns = {k: re.compile(p) for k, p in self._linking.items() if p is not None}
-        entities = [_with_mentions(e, self._patterns) for e in entities]
+        entities = list(entities)
+        self._handles: dict[tuple[str, str], list[Ref]] = defaultdict(list)
+        for entity in entities:
+            if (handle := _handle(entity)) is not None:
+                self._handles[(entity.ref.kind, handle)].append(entity.ref)
+        entities = [_with_mentions(e, self._patterns, self._handles) for e in entities]
         self._by_ref: dict[Ref, Entity] = {}
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
@@ -147,6 +201,14 @@ class Graph:
             linkers.append(ref)
         return list(dict.fromkeys(linkers))
 
+    def spec(self, kind: str) -> KindSpec | None:
+        """What the publisher of `kind` says of it; None for a kind no plugin publishes."""
+        return self._kinds.get(kind)
+
+    def kinds(self) -> list[str]:
+        """The kinds the plugins publish, in plugin order."""
+        return list(self._kinds)
+
     def hides(self, kind: str) -> bool:
         """Whether entities of `kind` hide what they point at, e.g. notes' ice."""
         return kind in self._hiding
@@ -164,10 +226,15 @@ class Graph:
         )
 
     def named(self, text: str) -> list[Ref]:
-        """The linking entities `text` names by id, as an entity's `mentions` would find them,
+        """The linking entities `text` names (by handle), as an entity's `mentions` would find them,
         whether or not they're in the graph: e.g. the tickets a todo names by key. For a
         plugin to find another's ids in text without knowing their pattern."""
-        return _named([text], self._patterns)
+        return _named([text], self._patterns, self._handles)
+
+    def by_handle(self, kind: str, handle: str) -> list[Entity]:
+        """The entities of `kind` whose `handle` is `handle`: e.g. the tickets keyed `APP-12`,
+        one per tracker that has such a key."""
+        return [e for ref in self._handles.get((kind, handle), []) if (e := self._by_ref.get(ref))]
 
     def url_for(self, kind: str, id: str) -> str | None:
         """The entity's URL if it's in the graph, else whatever a plugin can make of it, e.g.

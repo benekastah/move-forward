@@ -10,7 +10,6 @@ from .repositories import PriorityRepository
 
 TODO = "todo"
 """The kind of a work entry's todo, published by notes."""
-_DONE_STATES = {"merged", "closed", "done"}
 
 
 def level_of(marks: dict[Ref, int], graph: Graph) -> PriorityOf:
@@ -26,19 +25,12 @@ def level_of(marks: dict[Ref, int], graph: Graph) -> PriorityOf:
     return of
 
 
-RESOLVED_KINDS = ("pr", "ticket", "entry", "branch")
-"""The kinds a priority's entity is looked for in when its kind isn't given."""
-
-
 def resolve(graph: Graph, text: str, kind: str | None = None) -> Ref:
-    """The entity `text` names: a PR's URL, a ticket's key, an entry's title or a branch's id
-    (or, with `kind`, an entity of that kind, e.g. a todo by its id). Raises LookupError when
-    the graph has none, or more than one."""
-    found = [
-        entity.ref
-        for k in ([kind] if kind else RESOLVED_KINDS)
-        if (entity := graph.get(k, text)) is not None
-    ]
+    """The entity `text` names, by id, among the kinds marked `resolvable` (a PR's URL, a
+    ticket's key, an entry's title, a branch's id), or with `kind`, among that kind's (e.g. a
+    todo by its id). Raises LookupError when the graph has none, or more than one."""
+    kinds = [kind] if kind else [k for k in graph.kinds() if (s := graph.spec(k)) and s.resolvable]
+    found = [entity.ref for k in kinds if (entity := graph.get(k, text)) is not None]
     if len(found) != 1:
         raise LookupError(
             f"{text!r} names {'several entities' if found else 'no entity the dashboard knows'}"
@@ -48,32 +40,29 @@ def resolve(graph: Graph, text: str, kind: str | None = None) -> Ref:
 
 
 def _finished(entity: Entity) -> bool:
-    """Whether the entity says it's done: a PR merged or closed, a ticket in a done status
-    category, a todo ticked off."""
-    if entity.ref.kind == "ticket":
-        return entity.attrs.get("status_category") == "done"
-    return entity.state in _DONE_STATES
+    """Whether the entity's publisher says its work is over."""
+    return entity.lifecycle == "done"
 
 
 def forget_finished(repo: PriorityRepository, graph: Graph) -> int:
-    """Clear the priorities of what's done, or gone: a merged or closed PR, a ticket in a done
-    status category, a todo ticked off, and an entry or todo the graph no longer has (notes
-    keeps them in the database, so they're only missing once they're gone; a branch can be
-    missing while git's last refresh failed, so its priority stays).
-    A PR or ticket the graph lacks (long closed, or its tool is down) is looked up; one that
-    can't be found keeps its priority. How many were cleared."""
+    """Clear the priorities of what's done (`Entity.lifecycle`), or gone where gone means done
+    (`KindSpec.gone_means_done`: notes' entries and todos). One of a kind that can be fetched
+    (`KindSpec.fetchable`: a PR long closed, a ticket) that the graph lacks is looked up; one
+    that can't be found keeps its priority, and so does one of any other kind (a branch can
+    be missing while git's last refresh failed). How many were cleared."""
     cleared = 0
     marks = repo.all()
     missing: dict[str, list[Ref]] = {}
     for ref in marks:
         entity = graph.get(ref.kind, ref.id)
+        spec = graph.spec(ref.kind)
         if entity is not None:
             done = _finished(entity)
-        elif ref.kind in ("pr", "ticket"):
+        elif spec is not None and spec.fetchable:
             missing.setdefault(ref.kind, []).append(ref)
             continue
         else:
-            done = ref.kind in ("entry", TODO)
+            done = spec is not None and spec.gone_means_done
         if done:
             repo.clear(ref)
             cleared += 1

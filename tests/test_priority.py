@@ -6,7 +6,8 @@ from conftest import NOW, pr, snapshot, stored
 from move_forward import act_now, priority, refresh
 from move_forward.act_now import Nomination
 from move_forward.db import Database
-from move_forward.graph import Entity, Graph, Ref
+from move_forward.domain import Model
+from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.page import Item, Signals
 from move_forward.repositories import PriorityRepository
 
@@ -15,10 +16,18 @@ ENTRY = Ref(kind="entry", id="APP-1 work")
 TODO = Ref(kind="todo", id="7")
 TICKET = Ref(kind="ticket", id="APP-1")
 LINKING: dict[str, str | None] = {"ticket": r"\bAPP-\d+\b", "entry": None}
+KINDS = {
+    "pr": KindSpec(Model, fetchable=True, resolvable=True),
+    "ticket": KindSpec(Model, fetchable=True, resolvable=True),
+    "entry": KindSpec(Model, gone_means_done=True, resolvable=True),
+    "todo": KindSpec(Model, gone_means_done=True),
+    "branch": KindSpec(Model, resolvable=True),
+}
+"""As the built-in plugins declare them."""
 
 
 def _graph(*entities: Entity) -> Graph:
-    return Graph(list(entities), linking=LINKING)
+    return Graph(list(entities), linking=LINKING, kinds=KINDS)
 
 
 def _items(nominations: list[Nomination], priority_of: act_now.PriorityOf) -> list[Item]:
@@ -97,10 +106,10 @@ def test_finished_work_loses_its_priority() -> None:
     merged, open_pr = Ref(kind="pr", id="m"), Ref(kind="pr", id="o")
     done_ticket, open_ticket = Ref(kind="ticket", id="APP-2"), TICKET
     graph = _graph(
-        Entity(ref=merged, title="m", state="merged"),
-        Entity(ref=open_pr, title="o", state="open"),
-        Entity(ref=done_ticket, title="d", attrs={"status_category": "done"}),
-        Entity(ref=open_ticket, title="t", attrs={"status_category": "indeterminate"}),
+        Entity(ref=merged, title="m", lifecycle="done"),
+        Entity(ref=open_pr, title="o"),
+        Entity(ref=done_ticket, title="d", lifecycle="done"),
+        Entity(ref=open_ticket, title="t"),
         Entity(ref=ENTRY, title="e"),
     )
     repo = PriorityRepository(Database(":memory:"))
@@ -117,10 +126,11 @@ def test_a_pr_the_graph_lacks_is_looked_up_and_kept_when_it_cannot_be_found() ->
     graph = Graph(
         [],
         fetch=lambda kind, ids: (
-            [Entity(ref=Ref(kind=kind, id="old"), title="o", state="closed")]
+            [Entity(ref=Ref(kind=kind, id="old"), title="o", lifecycle="done")]
             if "old" in ids
             else []
         ),
+        kinds=KINDS,
     )
     repo = PriorityRepository(Database(":memory:"))
     repo.set(old, 2, NOW - timedelta(days=90))

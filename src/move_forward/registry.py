@@ -13,7 +13,8 @@ from pydantic import BaseModel, ValidationError
 
 from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
-from .graph import Entity, Graph, Ref
+from .graph import Entity, Graph, KindSpec, Ref
+from .kinds import FAMILIES
 from .plugin import (
     Context,
     EntitiesRequest,
@@ -59,7 +60,8 @@ def check_names(plugins: list[Plugin[Any, Any]]) -> None:
     """Raise unless every plugin's name is its own and fit to be one. A name is the plugin's
     config section, its kv namespace and migrations' owner, its tables' prefix and the
     first part of its actions' paths, so two plugins sharing one would share all of those;
-    and it mustn't be core's (`core`) or Act now's (`act_now`), which use the same places."""
+    and it mustn't be core's (`core`) or Act now's (`act_now`), which use the same places.
+    A kind a plugin names for a family (`kinds.FAMILIES`) must extend the family's model."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -68,6 +70,14 @@ def check_names(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(f"plugin name {name!r}: use lower-case letters, digits and _")
         if name in (CORE, act_now.ACTIONS):
             raise RuntimeError(f"plugin name {name!r} is core's")
+    for plugin in plugins:
+        for kind, spec in plugin.kinds.items():
+            family = FAMILIES.get(kind)
+            if family is not None and not issubclass(spec.attrs, family.model):
+                raise RuntimeError(
+                    f"{plugin.name}'s {kind} must extend core's {family.model.__name__}"
+                    f" (the {family.label} family), not {spec.attrs.__name__}"
+                )
 
 
 check_names(PLUGINS)
@@ -204,11 +214,13 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
                 log.error("%s published %s %s twice", e.name, ref.kind, ref.id)
                 continue
             try:
-                e.plugin.kinds[ref.kind].model_validate(entity.attrs)
+                e.plugin.kinds[ref.kind].attrs.model_validate(entity.attrs)
             except ValidationError as error:
                 log.error("%s published a bad %s %s: %s", e.name, ref.kind, ref.id, error)
                 continue
             seen.add(ref)
+            if ref.kind in FAMILIES:
+                entity = entity.model_copy(update={"family": ref.kind})
             entities.append(entity)
 
     def url_for(kind: str, id: str) -> str | None:
@@ -242,5 +254,11 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
             {},
         )
         linking.update(patterns)
-    hiding = [kind for e in plugins for kind in e.plugin.hides]
-    return Graph(entities, url_for, fetch, linking, hiding)
+    specs: dict[str, KindSpec] = {
+        kind: spec
+        for e in plugins
+        for kind, spec in e.plugin.kinds.items()
+        if owners.get(kind) == e.name
+    }
+    hiding = [kind for kind, spec in specs.items() if spec.hides]
+    return Graph(entities, url_for, fetch, linking, hiding, specs)

@@ -7,14 +7,14 @@ import textwrap
 from datetime import UTC, datetime, time
 
 from ...api import Action, Entity, Graph, Item, Link, Model, Panel, PrState, Ref, Signals, attrs
+from ...api.kinds import PULL_REQUEST as PR
+from ...api.kinds import TICKET
 from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
 from .markdown import PR_URL_RE
 from .models import Condition, Entry, Ice, Todo
 
 NOT_BLOCKED_RE = re.compile(r"^\s*(nothing|none|no|-|n/a)\b", re.IGNORECASE)
 
-PR = "pr"
-TICKET = "ticket"
 ENTRY = "entry"
 ICED = "iced"
 TODO = "todo"

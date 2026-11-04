@@ -189,7 +189,9 @@ class IssueAttrs(Model):
 
 
 class LinearPlugin(...):
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {ISSUE: IssueAttrs}
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        ISSUE: KindSpec(IssueAttrs, linking=None, fetchable=True, resolvable=True)
+    }
 
     def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
         snapshot = req.snapshot
@@ -210,21 +212,30 @@ class LinearPlugin(...):
 - Document the kind and its attributes in [entities.md](entities.md);
   `tests/test_entities_doc.py` fails until you do. [plugins.md](plugins.md) draws who
   publishes and reads what.
+- **Families.** A kind that more than one tool could publish (a pull request, a ticket, a
+  person) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
+  extend its model (`class LinearIssue(Ticket)`), setting `handle` to how your tool shows
+  it. Other plugins read it through the family's model, whoever publishes it.
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
-  declared in `linking`, so the graph relates what's about it. Give it the pattern of its
-  ids and other plugins' entities point at it from the text they mention:
+  declared `linking`, so the graph relates what's about it. Give it the pattern of its ids
+  (`KindSpec(..., linking=r"...")`, or None and narrow it from what the plugin has seen)
+  and other plugins' entities point at it from the text they mention:
 
   ```python
-  linking: ClassVar[dict[str, str | None]] = {ISSUE: None}
-
-
-  def linking_patterns(self, ctx) -> dict[str, str | None]:
-      return {ISSUE: rf"\b{re.escape(ctx.config.team)}-\d+\b"}
+  def linking_patterns(self, req: LinkingRequest[LinearConfig]) -> dict[str, str | None]:
+      return {ISSUE: rf"\b{re.escape(req.ctx.config.team)}-\d+\b"}
   ```
 
   A publisher puts text that might name a unit of work in `Entity.mentions` (github does
   with a PR's branch, title and body), never refs to another plugin's kind.
-- **Hiding kinds**, declared in `hides`, hide what their entities point at (notes' `iced`).
+- **Hiding kinds**, declared `KindSpec(..., hides=True)`, hide what their entities point at
+  (notes' `iced`).
+- **Lifecycle.** Each entity says whether its work is over: `lifecycle="done"` for a merged
+  PR or a resolved issue (its `state` keeps the tool's own word). Core clears priorities by
+  it. A kind whose entities are published only while open (notes' todos) is
+  `gone_means_done`; one whose entities `fetch` can look up after they've left the
+  snapshot is `fetchable`; one `mfd priority <id>` should look in without `--kind` is
+  `resolvable`.
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
   graph, and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune.

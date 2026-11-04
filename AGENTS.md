@@ -22,15 +22,19 @@ is what's left to build.
   import each other or read each other's config, snapshots or tables. What one needs
   from another goes through the graph. A plugin that's built on another declares it in
   `requires`.
-- A plugin declares the kinds it publishes in `kinds`, each with a model of its
-  attributes, and the graph checks its entities against them. A consumer reads
+- A plugin declares the kinds it publishes in `kinds`, each with a `KindSpec`: the
+  model of its attributes, which the graph checks its entities against, and its flags
+  (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`). An entity says
+  whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
+  states. What more than one tool may represent (a pull request, a ticket, a person) is a
+  family core models (`api.kinds`); a plugin's kind of a family extends its model. A consumer reads
   another plugin's entities with `graph.view(kind, View)`, through its own
   small model of the fields it uses, not `attrs.get`. A kind that stands for a
-  unit of work (a ticket, a work entry) is declared in `linking` (with
+  unit of work (a ticket, a work entry) is declared `linking` (with
   `linking_patterns` narrowing its id pattern from the plugin's data); an entity
   that may name one publishes the text in `mentions` rather than refs to
   another plugin's kind. A kind whose entities hide what they point at (ice) is
-  declared in `hides`, and core leaves items about hidden things off the page;
+  declared `hides`, and core leaves items about hidden things off the page;
   plugins don't filter them out themselves.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each

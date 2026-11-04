@@ -4,8 +4,6 @@ import argparse
 from datetime import datetime, timedelta
 from typing import ClassVar, cast
 
-from pydantic import BaseModel
-
 from ...api import (
     ActNowRequest,
     AfterCollectRequest,
@@ -25,6 +23,7 @@ from ...api import (
     IdentityRequest,
     InitSetup,
     Item,
+    KindSpec,
     LoadRequest,
     Panel,
     PanelsRequest,
@@ -39,7 +38,7 @@ from ...api import (
 from ...api.shell import CommandError
 from . import changes, cli, client, derive, notifications, placing, pushes
 from .config import GitHubConfig
-from .kinds import PersonAttrs, PrAttrs
+from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
 from .panels import PR, REVIEW, Builder
 from .people import PeopleRepository
@@ -89,7 +88,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     init_finds_teams = True
     config_model = GitHubConfig
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {PR: PrAttrs, PERSON: PersonAttrs}
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),
+        PERSON: KindSpec(GitHubPerson),
+    }
     cli_help = "import reviewers' emails from the skill's reviewer map"
     snapshot_model = GitHubSnapshot
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
@@ -313,12 +315,13 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             ]
             fields["progress"] = progress(pr, ignored)
             fields["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
-        pr_attrs = PrAttrs.model_validate(fields)
+        pr_attrs = GitHubPullRequest.model_validate({**fields, "handle": f"#{pr.number}"})
         return Entity(
             ref=Ref(kind=PR, id=pr.url),
             title=pr.title,
             url=pr.url,
             state=state,
+            lifecycle="open" if state == "open" else "done",
             mentions=[pr.head, pr.title, pr.body],
             attrs=attrs(pr_attrs),
         )
@@ -351,7 +354,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             Entity(
                 ref=Ref(kind=PERSON, id=login),
                 title=login,
-                attrs=attrs(PersonAttrs(me=login == snapshot.login, email=emails.get(login))),
+                attrs=attrs(
+                    GitHubPerson(handle=login, me=login == snapshot.login, email=emails.get(login))
+                ),
             )
             for login in dict.fromkeys([snapshot.login, *emails])
         ]
@@ -375,6 +380,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                     title=url,
                     url=url,
                     state=state,
+                    lifecycle="open" if state == "open" else "done",
                     attrs={"closed_at": closed_at.isoformat() if closed_at else None},
                 )
             )

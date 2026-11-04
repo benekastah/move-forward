@@ -5,8 +5,6 @@ import re
 from datetime import date, datetime, time, timedelta
 from typing import ClassVar
 
-from pydantic import BaseModel
-
 from ...api import (
     Action,
     ActionHandler,
@@ -23,6 +21,7 @@ from ...api import (
     GraphEventsRequest,
     InitSetup,
     Item,
+    KindSpec,
     Link,
     LinkingRequest,
     LoadRequest,
@@ -41,7 +40,7 @@ from ...api import (
 )
 from . import actions, changes, client
 from .config import JiraConfig
-from .kinds import TicketAttrs
+from .kinds import JiraTicket
 from .models import JiraIssue, JiraSnapshot
 from .repository import MIGRATIONS, IssueRepository
 from .setup import EXAMPLE, TEMPLATE, questions
@@ -89,7 +88,7 @@ class _PrView(Model):
     id: str
     url: str | None = None
     state: str | None = None
-    number: int
+    handle: str
     draft: bool
     mine: bool
     changes_requested: bool
@@ -124,7 +123,7 @@ def _advance_rollout(issue: JiraIssue, prs: list[_PrView]) -> Item:
 
 def _state_link(pr: _PrView) -> Link:
     """A PR's link, saying where it is: "ready to merge #123", "draft #124", "merged #120"."""
-    return Link(text=f"{pr.progress or pr.state} #{pr.number}", url=pr.url or pr.id)
+    return Link(text=f"{pr.progress or pr.state} {pr.handle}", url=pr.url or pr.id)
 
 
 def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) -> Item:
@@ -210,7 +209,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
             and not open_prs
             and not merged
         ):
-            numbers = ", ".join(f"#{p.number}" for p in closed)
+            numbers = ", ".join(p.handle for p in closed)
             proposal = f"PR {numbers} closed unmerged: reopen it or move the ticket back"
             if in_status(issue, config.status_in_review):
                 targets = config.status_in_progress
@@ -223,7 +222,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                     title=f"{issue.key} {issue.summary}",
                     url=issue.url,
                     subtitle=proposal,
-                    links=[Link(text=f"#{p.number}", url=p.url or p.id) for p in prs],
+                    links=[Link(text=p.handle, url=p.url or p.id) for p in prs],
                     subjects=[ticket_ref(issue.key)],
                     actions=[
                         Action(
@@ -349,8 +348,9 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     config_model = JiraConfig
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {TICKET: TicketAttrs}
-    linking: ClassVar[dict[str, str | None]] = {TICKET: None}
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        TICKET: KindSpec(JiraTicket, linking=None, fetchable=True, resolvable=True)
+    }
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
     change_check_seconds: ClassVar[int | None] = 60
@@ -420,8 +420,10 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 title=f"{issue.key} {issue.summary}",
                 url=issue.url,
                 state=issue.status,
+                lifecycle="done" if issue.status_category == "done" else "open",
                 attrs=attrs(
-                    TicketAttrs(
+                    JiraTicket(
+                        handle=issue.key,
                         summary=issue.summary,
                         status=issue.status,
                         status_category=issue.status_category,
@@ -448,6 +450,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 title=f"{i.key} {i.summary}",
                 url=i.url,
                 state=i.status,
+                lifecycle="done" if i.resolved else "open",
                 attrs={"resolved_at": i.resolved.isoformat() if i.resolved else None},
             )
             for i in found

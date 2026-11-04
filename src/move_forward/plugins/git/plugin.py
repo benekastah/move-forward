@@ -4,8 +4,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import BaseModel
-
 from ...api import (
     ActionHandler,
     Asker,
@@ -19,6 +17,7 @@ from ...api import (
     InitSetup,
     ItemActionsRequest,
     ItemAdditions,
+    KindSpec,
     LoadRequest,
     Panel,
     PanelsRequest,
@@ -55,7 +54,10 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     config_model = GitConfig
     snapshot_model = LocalSnapshot
     migrations: ClassVar[list[str]] = MIGRATIONS
-    kinds: ClassVar[dict[str, type[BaseModel]]] = {REPO: RepoAttrs, BRANCH: BranchAttrs}
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        REPO: KindSpec(RepoAttrs),
+        BRANCH: KindSpec(BranchAttrs, resolvable=True),
+    }
     change_check_seconds: ClassVar[int | None] = 2
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 

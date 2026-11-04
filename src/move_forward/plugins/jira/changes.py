@@ -6,10 +6,10 @@ only ever says it was assigned.
 """
 
 from ...api import Event, anchor
+from ...api.kinds import TICKET
 from .config import JiraConfig
 from .models import JiraIssue, JiraSnapshot
 
-TICKET = "ticket"
 KINDS = {
     "assigned": "a ticket is assigned to me",
     "comment_added": "someone comments on my ticket",

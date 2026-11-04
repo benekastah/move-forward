@@ -75,6 +75,7 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
         ("closed", True),
         ("open", False),
     ]
+    assert [e.lifecycle for e in entities.values()] == ["open", "done", "done", "open"]
     first = entities[mine.url]
     assert first.attrs["requested_teams"] == ["web"]
     assert first.attrs["head_oid"] == mine.head_oid  # for git, to see a checkout fall behind
@@ -92,7 +93,10 @@ def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
         for e in GitHubPlugin().entities(EntitiesRequest(ctx, snapshot()))
         if e.ref.kind == "person"
     }
-    assert people == {ME: {"me": True, "email": "me@x"}, "alice": {"me": False, "email": "a@x"}}
+    assert people == {
+        ME: {"handle": ME, "me": True, "email": "me@x"},
+        "alice": {"handle": "alice", "me": False, "email": "a@x"},
+    }
 
 
 def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) -> None:

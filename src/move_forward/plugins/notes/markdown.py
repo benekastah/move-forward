@@ -10,6 +10,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+from ...api.kinds import PULL_REQUEST as PR
 from .models import (
     CHECK_IN_TEXTS,
     CheckIn,
@@ -31,7 +32,6 @@ REVIEWS_SECTION = "Reviews requested of me"
 ON_ICE_TITLE = "# Stacks on ice"
 BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `branch` entity's id."""
-PR = "pr"
 BRANCH = "branch"
 
 PR_URL_RE = re.compile(r"https://[\w.-]+(?::\d+)?/[\w.-]+/[\w.-]+/pull/\d+")

@@ -25,7 +25,20 @@ in, e.g. `APP-12`, so `UTF-8` isn't one) is found in other entities'
 `mentions`, so they point at it without their plugin knowing the kind; see
 [graph.md](graph.md#related-entities).
 
+## Families
+
+Core models what more than one tool may represent, in `move_forward.api.kinds`: the `pr`
+family (`PullRequest`, shown as "PR"), `ticket` (`Ticket`) and `person` (`Person`). A
+plugin's kind named for a family must extend its model, adding its own fields (github's
+`number`, jira's `status`); the registry refuses one that doesn't. Every family's model has
+`handle`, how its tool shows an entity (`#7`, `APP-12`, a login): text names a family's
+entities by handle (see [graph.md](graph.md)), and each entity says its `family`.
+
 ## Kinds
+
+Every entity also says whether its work is over, in `lifecycle`: `done` for a merged or
+closed `pr` and a `ticket` in a done status category (also when fetched), `open` otherwise.
+`entry` and `todo` are published only while open, and are done once gone.
 
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
@@ -57,10 +70,14 @@ fetched entity carries:
 
 ### `pr`
 
+The pull request family, modeled in core (`api.kinds.PullRequest`); github adds `number`,
+`base` and `author`.
+
 | Attribute | Type | Meaning |
 | --- | --- | --- |
+| `handle` | string | how its tool shows it, `#7`: for display, not identity |
 | `repo` | string | `owner/name` |
-| `number` | int | |
+| `number` | int | (github's) |
 | `head`, `base` | string | branch names |
 | `head_oid` | string or null | the commit the head branch is at on GitHub, as of github's last refresh |
 | `author` | string or null | login |
@@ -85,9 +102,12 @@ On my open PRs only:
 
 ### `person`
 
+The person family, modeled in core (`api.kinds.Person`); github adds `me`.
+
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `me` | bool | the person using the dashboard |
+| `handle` | string | their name in the tool, a login |
+| `me` | bool | (github's) the person using the dashboard |
 | `email` | string or null | their commit email, imported or looked up from commits |
 
 ### `repo`
@@ -123,8 +143,12 @@ A branch git-stack tracks, including one git no longer has.
 
 ### `ticket`
 
+The ticket family, modeled in core (`api.kinds.Ticket`); jira adds `status`,
+`status_category` and `type`.
+
 | Attribute | Type | Meaning |
 | --- | --- | --- |
+| `handle` | string | how its tool shows it, its key `APP-12`: what text names it by |
 | `summary` | string | |
 | `status` | string | |
 | `status_category` | string | Jira's `new`, `indeterminate` or `done` |
