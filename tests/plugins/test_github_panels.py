@@ -10,6 +10,7 @@ from conftest import (
     entry,
     event,
     iced,
+    issue,
     local_snapshot,
     panel,
     pr,
@@ -26,6 +27,7 @@ from move_forward.plugins.github.models import (
     TeamPrScore,
 )
 from move_forward.plugins.github.prs import has_ticket_link_line
+from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice
 
 build = dashboard
@@ -599,3 +601,18 @@ def test_a_review_waits_since_the_push_or_the_request_of_me_or_my_team() -> None
         if i.signals
     }
     assert waiting == {"PR 1": pushed_at, "PR 2": requested_at}
+
+
+def test_ticket_keys_come_from_jiras_projects_else_a_guess_that_skips_utf_8_and_cve() -> None:
+    plain = pr(1, title="Handle UTF-8 and CVE-2024-1234", body="x", head="me/plain")
+    other = pr(2, title="Fix ZZ-5", body="x", head="me/other")
+    ticketed = pr(3, title="Fix APP-7", body="x", head="me/ticketed")
+    snap = snapshot(mine=[plain, other, ticketed])
+
+    def flagged(**settings: object) -> list[str]:
+        built = build(github=snap, ticket_link_prefixes=["Link"], **settings)
+        return sorted(i.title for i in panel(built, "github.metadata").items)
+
+    assert flagged() == ["Fix APP-7", "Fix ZZ-5"]  # a guess: ZZ-5 and APP-7 look like tickets
+    known = JiraSnapshot(issues=[issue("APP-1")])  # Jira has seen project APP
+    assert flagged(jira=known) == ["Fix APP-7"]  # ZZ isn't one of its projects

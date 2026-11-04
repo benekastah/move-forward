@@ -66,12 +66,21 @@ def has_ticket_link_line(body: str, prefixes: list[str]) -> bool:
     return re.search(pattern, body, re.IGNORECASE | re.MULTILINE) is not None
 
 
+NOT_PROJECT_KEYS = frozenset(
+    {"CVE", "SHA", "UTF", "ISO", "RFC", "MD", "TLS", "SSL", "AES", "RSA", "PEP", "GH", "HTTP"}
+)
+"""Prefixes of things shaped like ticket keys (`UTF-8`, `CVE-2024-1`, `SHA-256`)."""
+
+
 def ticket_keys(pr: PullRequest) -> list[str]:
-    """Jira keys in the branch name, title or body, most specific source first."""
+    """Jira-looking keys in the branch name, title or body, most specific source first.
+
+    Only a guess, for when Jira's projects aren't known (the graph's links are better: see
+    `Builder.ticket_keys`): it leaves out prefixes that are `NOT_PROJECT_KEYS`."""
     seen: list[str] = []
     for text in (pr.head, pr.title, pr.body):
         for key in JIRA_KEY_RE.findall(text):
-            if key not in seen:
+            if key not in seen and key.split("-")[0] not in NOT_PROJECT_KEYS:
                 seen.append(key)
     return seen
 

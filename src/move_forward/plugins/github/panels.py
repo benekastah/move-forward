@@ -155,6 +155,14 @@ class Builder:
         """The work entries about the PR or its tickets."""
         return self.graph.view_related(pr_ref(pr), ENTRY, _EntryView)
 
+    def _ticket_keys(self, pr: PullRequest) -> list[str]:
+        """The tickets a PR names: Jira's, when the graph finds them by Jira's project keys
+        (so `UTF-8` isn't one); else a guess from the text."""
+        if not self.graph.links("ticket"):
+            return ticket_keys(pr)
+        entity = self.graph.get(PR, pr.url)
+        return [r.id for r in entity.refs if r.kind == "ticket"] if entity else []
+
     def _slugs(self) -> list[str]:
         """My teams' GitHub slugs."""
         return [self.config.slug(t) for t in self.teams]
@@ -425,7 +433,7 @@ class Builder:
         items: list[Item] = []
         for pr in self.mine:
             problems = [label for label in pr.labels if label in self.config.placeholder_labels]
-            keys = ticket_keys(pr)
+            keys = self._ticket_keys(pr)
             prefixes = self.config.ticket_link_prefixes
             if keys and prefixes and not has_ticket_link_line(pr.body, prefixes):
                 problems.append(f"no {' or '.join(prefixes)} line for {keys[0]}")

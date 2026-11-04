@@ -107,6 +107,10 @@ class Graph:
     def get(self, kind: str, id: str) -> Entity | None:
         return self._by_ref.get(Ref(kind=kind, id=id))
 
+    def links(self, kind: str) -> bool:
+        """Whether entities' mentions are searched for `kind`'s ids: its plugin gave a pattern."""
+        return kind in self._patterns
+
     def of_kind(self, kind: str) -> list[Entity]:
         return list(self._by_kind.get(kind, []))
 
