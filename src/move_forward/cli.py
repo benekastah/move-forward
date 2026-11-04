@@ -10,7 +10,7 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, keychain, localtime, priority, registry, snooze, supervisor, tls
+from . import auth, init, keychain, localtime, priority, registry, signin, snooze, supervisor, tls
 from . import config as config_module
 from .act_now import PRIORITIES
 from .db import Database
@@ -190,6 +190,9 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     set_parser = token_commands.add_parser("set", help="ask for a token and store it")
     set_parser.add_argument("plugin", choices=_token_plugins())
     token_commands.add_parser("check", help="say where each plugin's token is found")
+    token_commands.add_parser(
+        "rotate", help="make a new dashboard token and sign every browser out"
+    )
     plugin_commands = {
         plugin.name: plugin.cli(commands.add_parser(plugin.name, help=plugin.cli_help))
         for plugin in registry.PLUGINS
@@ -213,6 +216,13 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
         for name in enabled_names(config)
         if isinstance(section := getattr(config, name), keychain.TokenSettings)
     }
+    if args.token_command == "rotate":
+        path = auth.token_path(config.db_path)
+        auth.load_or_create(path)
+        auth.rotate(path)
+        ended = SessionRepository(Database(config.db_path, config.db_backups)).revoke_all()
+        print(f"new token in {path}; ended {ended} session(s): `mfd open` signs a browser in")
+        return 0
     if args.token_command == "check":
         for name, section in sections.items():
             if os.environ.get(section.token_env):
@@ -275,6 +285,20 @@ def _open(url: str) -> None:
         print(f"open {url} in a browser to sign in")
 
 
+def _open_signed_in(config: config_module.Config, token: str, port: int) -> int:
+    """Open the running dashboard in a browser, signed in with a one-time code it gives once
+    it has proved it knows the token (see `signin`). Returns the exit status."""
+    served = scheme(config)
+    ca = tls.Paths.beside(config.db_path).ca
+    try:
+        code = signin.login_code(port, served, token, ca if served == "https" else None)
+    except signin.SignInError as e:
+        print(e, file=sys.stderr)
+        return 1
+    _open(auth.login_url(port, code, served))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser, plugin_commands = _parser()
     args = parser.parse_args(argv)
@@ -323,8 +347,7 @@ def main(argv: list[str] | None = None) -> int:
         return supervisor.supervise(full_argv, config_path, code=args.reload)
     token = auth.load_or_create(auth.token_path(config.db_path))
     if args.command == "open":
-        _open(auth.login_url(args.port or config.port, token, scheme(config)))
-        return 0
+        return _open_signed_in(config, token, args.port or config.port)
     if args.command == "cert":
         return _cert(tls.Paths.beside(config.db_path), args.force, args.trust)
     db = Database(config.db_path, config.db_backups)
@@ -400,9 +423,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         supervisor.serve_supervised()
         port = args.port or config.port
-        if args.open:
-            _open(auth.login_url(port, token, scheme(config)))
-        serve(config, db, token, port, config_path)
+        serve(
+            config,
+            db,
+            token,
+            port,
+            config_path,
+            on_listening=(lambda: _open_signed_in(config, token, port)) if args.open else None,
+        )
     return 0
 
 

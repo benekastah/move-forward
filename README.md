@@ -117,7 +117,8 @@ before the command's name.
 | Command | Does |
 | --- | --- |
 | `mfd serve [--open] [--port N]` | Serve the page, refreshing each plugin on its own `refresh_seconds`, and when it says its tool changed; `--open` opens it signed in, like `mfd open`. The server runs in a child process: `mfd serve` starts a new one when the config file changes, once the new config passes `mfd check` (run in a separate process; if it fails, the error is logged, the running server carries on, and the next change tries again), and when the server fails, unless it keeps failing as it starts. Ctrl-c stops it. |
-| `mfd open [--port N]` | Open the running dashboard in a browser, signed in (see [API](#api)). |
+| `mfd open [--port N]` | Open the running dashboard in a browser, signed in with a one-time code the server gives once it has proved it knows the token (see [API](#api)). |
+| `mfd logout` | End every browser session, signing every browser out. |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
 | `mfd cert [--trust] [--force]` | Make the certificates `mfd serve` uses for HTTPS, unless they're there (`--force` replaces them); `--trust` adds their authority to the system's and browsers' stores. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
@@ -128,6 +129,7 @@ before the command's name.
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, verb, until, fingerprint), for the skill. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 | `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account. |
+| `mfd token rotate` | Make a new dashboard token (the one in `token` next to the database) and end every session; a running server picks it up by itself, and scripts need the new one. |
 | `mfd token check` | Say where each enabled plugin's token is found: its environment variable, the secret store, or nowhere. Never prints a token. |
 
 Plugins add commands of their own, `mfd <plugin> ...`: see
@@ -226,11 +228,15 @@ sign-in returns, e.g. `/slack/callback`, which check their own single-use proof)
 the dashboard's token, so other programs and users on the machine can't read the page or press
 its buttons. The token is in `token` next to the database
 (`~/.local/share/move-forward/token`), made on first start and readable only by
-you. Scripts send it as `Authorization: Bearer <token>`. Browsers never hold it: `mfd open`
-visits `/login?token=<token>`, which starts a session (a random id the server keeps
-only as a hash, good for 400 days) and sets its cookie (`move_forward_session_<port>`,
-`HttpOnly`, `SameSite=Strict`, host-only) before going to the dashboard. A request without
-the token or a session gets `401 Unauthorized`. `mfd logout` ends every session.
+you. Scripts send it as `Authorization: Bearer <token>`. Browsers never hold it, and it is
+never in a URL. `mfd open` first makes the server and itself prove they know the token, with
+an HMAC over fresh nonces (`POST /login/challenge`, then `POST /login/code`): a program that
+grabbed the port can't answer, so the token isn't sent to it or trusted. Then it opens
+`/login?code=<code>`, a code good once, for a minute, which starts a session (a random id the
+server keeps only as a hash, good for 400 days) and sets its cookie
+(`move_forward_session_<port>`, `HttpOnly`, `SameSite=Strict`, host-only) before going to the
+dashboard. A request without the token or a session gets `401 Unauthorized`. `mfd logout` or
+`mfd token rotate` ends every session.
 
 With the certificate, everything is on `https://` and the cookie is marked `Secure`.
 Requests must also name the server as `mfd.localhost:<port>`, `127.0.0.1:<port>` or

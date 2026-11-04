@@ -409,13 +409,28 @@ def test_static_files_need_no_token(client: HTTPConnection) -> None:
     response.read()
 
 
-def test_login_signs_the_browser_in_with_a_session_not_the_token(
+def _login_code(client: HTTPConnection, token: str = TOKEN) -> tuple[str, str]:
+    """`mfd open`'s handshake against the server: (code, the server's proof of the token)."""
+    client.request("POST", "/login/challenge", headers=browser(client))
+    nonce = json.loads(client.getresponse().read())["nonce"]
+    mine = "my-nonce"
+    body = json.dumps(
+        {"nonce": nonce, "client_nonce": mine, "proof": auth.proof(token, "client", nonce, mine)}
+    )
+    client.request("POST", "/login/code", body=body, headers=browser(client))
+    answer = json.loads(client.getresponse().read())
+    assert auth.matches(auth.proof(token, "server", mine, answer["code"]), answer["proof"])
+    return answer["code"], answer["proof"]
+
+
+def test_login_signs_the_browser_in_with_a_one_time_code_and_a_session(
     client: HTTPConnection, app: server.App
 ) -> None:
-    response = get(client, "/login?token=wrong", browser(client))
+    response = get(client, f"/login?token={TOKEN}", browser(client))  # the token is no code
     assert response.status == 401 and "Set-Cookie" not in response.headers
     response.read()
-    response = get(client, f"/login?token={TOKEN}", browser(client))
+    code, _ = _login_code(client)
+    response = get(client, f"/login?code={code}", browser(client))
     assert response.status == 303 and response.getheader("Location") == "/"
     cookie = response.getheader("Set-Cookie") or ""
     name = auth.session_cookie(client.port)
@@ -425,10 +440,36 @@ def test_login_signs_the_browser_in_with_a_session_not_the_token(
     response = get(client, "/", browser(client, Cookie=cookie.split(";")[0]))
     assert response.status == 200
     response.read()
+    response = get(client, f"/login?code={code}", browser(client))  # a code works once
+    assert response.status == 401
+    response.read()
     assert SessionRepository(app.db).revoke_all() == 1  # `mfd logout`
     response = get(client, "/", browser(client, Cookie=cookie.split(";")[0]))
     assert response.status == 401
     response.read()
+
+
+def test_the_handshake_gives_a_code_only_to_a_client_that_knows_the_token(
+    client: HTTPConnection,
+) -> None:
+    client.request("POST", "/login/challenge", headers=browser(client))
+    nonce = json.loads(client.getresponse().read())["nonce"]
+
+    def ask(nonce: str, proof: str) -> HTTPResponse:
+        body = json.dumps({"nonce": nonce, "client_nonce": "n", "proof": proof})
+        client.request("POST", "/login/code", body=body, headers=browser(client))
+        return client.getresponse()
+
+    wrong = ask(nonce, auth.proof("another token", "client", nonce, "n"))
+    assert wrong.status == 401 and b"code" not in wrong.read()
+    # The nonce is used up by the failed try, even for the right answer.
+    right = ask(nonce, auth.proof(TOKEN, "client", nonce, "n"))
+    assert right.status == 401
+    right.read()
+    client.request("POST", "/login/code", body="not json", headers=browser(client))
+    assert client.getresponse().status == 400
+    client.request("POST", "/login/challenge", headers={"Host": "evil.example"})
+    assert client.getresponse().status == 403  # not from this dashboard
 
 
 def test_browsers_are_sent_to_the_dashboards_own_host_but_scripts_are_served_where_they_are(
@@ -448,12 +489,13 @@ def test_browsers_are_sent_to_the_dashboards_own_host_but_scripts_are_served_whe
     script.read()
 
 
-def test_the_token_stays_out_of_the_log(
+def test_the_login_code_stays_out_of_the_log(
     client: HTTPConnection, caplog: pytest.LogCaptureFixture
 ) -> None:
+    code, _ = _login_code(client)
     with caplog.at_level("DEBUG", logger="move_forward.server"):
-        get(client, f"/login?token={TOKEN}", browser(client)).read()
-    assert "/login?token=" in caplog.text and TOKEN not in caplog.text
+        get(client, f"/login?code={code}", browser(client)).read()
+    assert "/login?code=" in caplog.text and code not in caplog.text
 
 
 def _post_layout(

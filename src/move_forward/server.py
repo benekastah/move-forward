@@ -65,6 +65,10 @@ CHANGE_LOOP_SECONDS = 1.0
 TLS_RECHECK_SECONDS = 3600
 """How often the HTTPS server looks for a newer certificate in the chain."""
 LOGIN_PATH = "/login"
+LOGIN_CHALLENGE_PATH = "/login/challenge"
+LOGIN_CODE_PATH = "/login/code"
+HANDSHAKE_PATHS = (LOGIN_CHALLENGE_PATH, LOGIN_CODE_PATH)
+"""`mfd open`'s steps; see `auth.Handshake`."""
 NOTIFICATIONS_PATH = "/notifications"
 NOT_SIGNED_IN = "<p>Not signed in: run <code>mfd open</code> to open the dashboard signed in.</p>"
 LOCAL_HOSTS = (auth.HOST, "127.0.0.1", "localhost")
@@ -102,15 +106,18 @@ class App:
         token: str,
         scheme: str = "http",
         config_path: Path | None = None,
+        token_file: auth.TokenFile | None = None,
     ):
         self.config = config
         self.config_path = config_path
         """The file `config` was read from, which the settings page saves into; None when
         there's none (tests), and no saving."""
         self.db = db
-        self.token = token
-        """What every request but `/login`, the static files and plugins' sign-in pages must
-        carry; see `auth`."""
+        self._token = token
+        self._token_file = token_file
+        """Where the token is read again from, when it is replaced (`mfd token rotate`)."""
+        self.handshake = auth.Handshake()
+        """The nonces and codes `mfd open` signs a browser in with (see `auth.Handshake`)."""
         self.scheme = scheme
         """"https" when serving with the certificate (see `tls`), else "http"."""
         self._refresh_lock = threading.Lock()
@@ -125,6 +132,14 @@ class App:
         self._pending_lock = threading.Lock()
         self._last_checked: dict[str, float] = {}
         """`time.monotonic()` when each plugin was last asked whether it `changed`."""
+
+    @property
+    def token(self) -> str:
+        """What every request but the sign-in handshake, `/login`, the static files and
+        plugins' sign-in pages must carry (or a session); see `auth`."""
+        if self._token_file is not None:
+            self._token = self._token_file.get()
+        return self._token
 
     def refreshable(self) -> set[str]:
         """The plugins a refresh can be asked for: those that collect."""
@@ -496,16 +511,16 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             return True
 
         def _login(self, query: str) -> None:
-            """Sign the browser in with the token from `mfd open`, then go to the dashboard, so
-            the token doesn't stay in the address bar."""
-            given = parse_qs(query).get("token", [None])[0]
-            if not auth.matches(app.token, given):
+            """Sign the browser in with the one-time code `mfd open` got (see
+            `auth.Handshake`): start a session, then go to the dashboard."""
+            code = parse_qs(query).get("code", [""])[0]
+            if not app.handshake.take_code(code):
                 self._html(HTTPStatus.UNAUTHORIZED, NOT_SIGNED_IN)
                 return
             port = cast(HTTPServer, self.server).server_port
-            session = SessionRepository(app.db).create(
-                datetime.now(UTC), timedelta(days=auth.SESSION_DAYS)
-            )
+            sessions = SessionRepository(app.db)
+            sessions.prune(datetime.now(UTC))
+            session = sessions.create(datetime.now(UTC), timedelta(days=auth.SESSION_DAYS))
             self.send_response(HTTPStatus.SEE_OTHER)
             self.send_header("Set-Cookie", auth.set_cookie(session, port, app.scheme == "https"))
             self.send_header("Location", "/")
@@ -579,9 +594,46 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 return None
             return self.rfile.read(length)
 
+        def _json(self, status: HTTPStatus, data: dict[str, str]) -> None:
+            self._send(status, json.dumps(data), "application/json")
+
+        def _handshake(self, path: str, body: bytes) -> None:
+            """`mfd open`'s two steps (see `auth.Handshake`): a nonce for the client to answer,
+            then, for a client whose answer shows it knows the token, a login code and the
+            server's own proof of knowing it. They carry no token and need no session."""
+            if path == LOGIN_CHALLENGE_PATH:
+                nonce = app.handshake.nonce()
+                if nonce is None:
+                    self._json(HTTPStatus.TOO_MANY_REQUESTS, {"error": "try again shortly"})
+                else:
+                    self._json(HTTPStatus.OK, {"nonce": nonce})
+                return
+            try:
+                fields = json.loads(body)
+                nonce, theirs, given = fields["nonce"], fields["client_nonce"], fields["proof"]
+                if not all(isinstance(v, str) for v in (nonce, theirs, given)):
+                    raise TypeError
+            except (ValueError, KeyError, TypeError):
+                self._json(HTTPStatus.BAD_REQUEST, {"error": "bad request"})
+                return
+            expected = auth.proof(app.token, "client", nonce, theirs)
+            # The nonce is used up whatever the answer, so each can be tried once.
+            fresh = app.handshake.take_nonce(nonce)
+            code = app.handshake.code() if fresh and auth.matches(expected, given) else None
+            if code is None:
+                self._json(HTTPStatus.UNAUTHORIZED, {"error": "not signed in"})
+                return
+            server_proof = auth.proof(app.token, "server", theirs, code)
+            self._json(HTTPStatus.OK, {"code": code, "proof": server_proof})
+
         def do_POST(self) -> None:
             body = self._read_body()
-            if self._refuse_other_sites(check_origin=True) or self._refuse_strangers():
+            if self._refuse_other_sites(check_origin=True):
+                return
+            if body is not None and urlsplit(self.path).path in HANDSHAKE_PATHS:
+                self._handshake(urlsplit(self.path).path, body)
+                return
+            if self._refuse_strangers():
                 return
             if body is None:
                 self._html(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "<p>Too large.</p>")
@@ -676,13 +728,22 @@ def serve(
     token: str,
     port: int | None = None,
     config_path: Path | None = None,
+    on_listening: Callable[[], object] | None = None,
 ) -> None:
     """Serve forever on localhost, refreshing in the background: over HTTPS with the
-    certificate, else plain HTTP. The settings page saves into `config_path`."""
+    certificate, else plain HTTP. The settings page saves into `config_path`. `on_listening`
+    runs in a thread once the port is bound (`mfd serve --open` signs a browser in)."""
     if port and port != config.port:  # `--port`: plugins build URLs back to the dashboard
         config = config.model_copy(update={"port": port})
     served = scheme(config)
-    app = App(config, db, token, served, config_path)
+    app = App(
+        config,
+        db,
+        token,
+        served,
+        config_path,
+        auth.TokenFile(auth.token_path(config.db_path)),
+    )
     threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
     threading.Thread(target=app.run_change_loop, name="changes", daemon=True).start()
     address = ("127.0.0.1", port or config.port)
@@ -694,6 +755,8 @@ def serve(
             log.warning("no certificate yet, so plain HTTP: `mfd cert` makes one")
         server = ThreadingHTTPServer(address, make_handler(app))
     log.info("serving on %s://127.0.0.1:%d", served, server.server_port)
+    if on_listening is not None:
+        threading.Thread(target=on_listening, name="listening", daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

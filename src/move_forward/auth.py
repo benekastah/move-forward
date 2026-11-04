@@ -5,6 +5,11 @@ from theirs. Scripts send it as `Authorization: Bearer <token>`. Browsers don't 
 visit to `/login`, which `mfd open` makes, starts a session, and the browser's cookie names
 that session (see `repositories.SessionRepository`), which can expire or be revoked.
 
+The token never goes in a URL or to a server that hasn't proved it has it. `mfd open` runs a
+handshake first (see `Handshake`): each side proves it knows the token by an HMAC over fresh
+nonces, so a program squatting on the port can't learn it, and the browser is sent to
+`/login?code=…`, a code good once, for a minute.
+
 Browsers reach the dashboard under `HOST`, not its address. Cookies ignore ports, so a
 cookie for `127.0.0.1` would go to every other program on the machine that listens on that
 address, and one for `localhost` to every other `localhost` page; `mfd.localhost` (browsers
@@ -16,6 +21,9 @@ import logging
 import os
 import secrets
 import tempfile
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -128,8 +136,95 @@ def origin(port: int, scheme: str = "http") -> str:
     return f"{scheme}://{HOST}:{port}"
 
 
-def login_url(port: int, token: str, scheme: str = "http") -> str:
-    return f"{origin(port, scheme)}/login?token={token}"
+def login_url(port: int, code: str, scheme: str = "http") -> str:
+    """Where `mfd open` sends the browser: `/login` with a one-time `code` (see `Handshake`)."""
+    return f"{origin(port, scheme)}/login?code={code}"
+
+
+def proof(token: str, role: str, *parts: str) -> str:
+    """An HMAC with the token over `role` and `parts`: what each side of the handshake sends
+    to show it knows the token, without sending it."""
+    return hmac.new(token.encode(), ":".join([role, *parts]).encode(), "sha256").hexdigest()
+
+
+NONCE_SECONDS = 30
+CODE_SECONDS = 60
+HANDSHAKE_LIMIT = 64
+"""Most nonces (and codes) kept at once, so a stream of unauthenticated requests for them
+can't grow the server's memory."""
+
+
+class Handshake:
+    """The nonces and codes `mfd open` signs a browser in with: random, single use, short-lived
+    and kept in memory only (a restart forgets them, which only costs a retry).
+
+    `mfd open` asks for a nonce, answers with `proof(token, "client", nonce, own_nonce)`, and
+    gets a code with the server's `proof(token, "server", own_nonce, code)`. Only the server
+    that knows the token can give the second, so the client checks it before sending the
+    browser anywhere, and only a client that knows the token gets a code.
+    """
+
+    def __init__(self, clock: Callable[[], float] = time.monotonic):
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._nonces: dict[str, float] = {}
+        self._codes: dict[str, float] = {}
+
+    def _issue(self, kept: dict[str, float], seconds: int) -> str | None:
+        with self._lock:
+            now = self._clock()
+            for stale in [k for k, until in kept.items() if until <= now]:
+                del kept[stale]
+            if len(kept) >= HANDSHAKE_LIMIT:
+                return None
+            value = secrets.token_urlsafe(TOKEN_BYTES)
+            kept[value] = now + seconds
+            return value
+
+    def _take(self, kept: dict[str, float], value: str) -> bool:
+        with self._lock:
+            until = kept.pop(value, None)
+            return until is not None and until > self._clock()
+
+    def nonce(self) -> str | None:
+        """A fresh nonce for a client to answer; None when too many are waiting."""
+        return self._issue(self._nonces, NONCE_SECONDS)
+
+    def take_nonce(self, nonce: str) -> bool:
+        """Use up `nonce`: whether it was issued, unused and still fresh."""
+        return self._take(self._nonces, nonce)
+
+    def code(self) -> str | None:
+        """A fresh login code; None when too many are waiting."""
+        return self._issue(self._codes, CODE_SECONDS)
+
+    def take_code(self, code: str) -> bool:
+        """Use up `code`: whether it was issued, unused and still fresh."""
+        return self._take(self._codes, code)
+
+
+def rotate(path: Path) -> str:
+    """Replace the token in `path` with a new one, in one step; the new token."""
+    os.replace(_draft(path), path)
+    return path.read_text().strip()
+
+
+class TokenFile:
+    """The token, read again whenever its file changes, so `mfd token rotate` takes effect in
+    a running server."""
+
+    def __init__(self, path: Path):
+        self._path = path
+        self._stamp: tuple[int, int] | None = None
+        self._token = ""
+
+    def get(self) -> str:
+        stat = self._path.stat()
+        stamp = (stat.st_mtime_ns, stat.st_ino)  # a replaced file has another inode
+        if stamp != self._stamp:
+            self._token = self._path.read_text().strip()
+            self._stamp = stamp
+        return self._token
 
 
 def _sign(token: str, text: str) -> str:

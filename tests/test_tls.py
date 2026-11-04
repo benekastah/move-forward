@@ -1,5 +1,6 @@
 """The dashboard's certificate, and serving over HTTPS with it."""
 
+import json
 import ssl
 import threading
 from collections.abc import Iterator
@@ -11,7 +12,7 @@ import pytest
 from cryptography import x509
 from cryptography.x509.verification import PolicyBuilder, Store
 
-from move_forward import server, tls
+from move_forward import auth, server, tls
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.plugins.github.config import GitHubConfig
@@ -87,7 +88,14 @@ def test_the_dashboard_answers_over_https_with_a_secure_sign_in_cookie(
 ) -> None:
     client, _ = https
     host = f"mfd.localhost:{client.port}"
-    client.request("GET", f"/login?token={TOKEN}", headers={"Host": host})
+    client.request("POST", "/login/challenge", headers={"Host": host})
+    nonce = json.loads(client.getresponse().read())["nonce"]
+    body = json.dumps(
+        {"nonce": nonce, "client_nonce": "n", "proof": auth.proof(TOKEN, "client", nonce, "n")}
+    )
+    client.request("POST", "/login/code", body=body, headers={"Host": host})
+    code = json.loads(client.getresponse().read())["code"]
+    client.request("GET", f"/login?code={code}", headers={"Host": host})
     response = client.getresponse()
     response.read()
     assert response.status == 303
