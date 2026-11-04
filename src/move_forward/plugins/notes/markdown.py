@@ -10,6 +10,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+from ...api.ids import branch_id
 from ...api.kinds import PULL_REQUEST as PR
 from .models import (
     CHECK_IN_TEXTS,
@@ -30,7 +31,6 @@ ON_ICE_FILE = "on-ice.md"
 REVIEWS_SECTION = "Reviews requested of me"
 """A work-notes section that logs offered reviews and nudges, not a piece of work."""
 ON_ICE_TITLE = "# Stacks on ice"
-BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `git.branch` entity's id."""
 BRANCH = "git.branch"
 
@@ -219,7 +219,7 @@ def read_on_ice(text: str, today: date) -> tuple[list[Ice], date | None]:
         for line in lines:
             if (child := _CHILD_RE.match(line)) and in_branches:
                 name, _, sha = child.group(1).partition(" ")
-                ref_id = f"{repo_dir}{BRANCH_ID_SEPARATOR}{name}"
+                ref_id = branch_id(repo_dir, name)
                 items.append(
                     IcedItem(
                         kind=BRANCH,

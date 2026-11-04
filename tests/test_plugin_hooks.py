@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from move_forward import cli, localtime, refresh, registry, render
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.domain import Model
+from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.page import Action, Identity, ItemAdditions
 from move_forward.plugin import (
@@ -137,7 +137,8 @@ def test_a_plugin_adds_an_mfd_command(
 
 
 class _Fetching(JiraPlugin):
-    """Jira, fetching any ticket asked for (and, wrongly, a PR along with it)."""
+    """Jira, fetching any ticket asked for (and, wrongly, a PR along with it, and APP-3
+    without saying whether it's done)."""
 
     asked: ClassVar[list[list[str]]] = []
 
@@ -146,7 +147,13 @@ class _Fetching(JiraPlugin):
         self.asked.append(ids)
         if kind != "ticket":
             return []
-        return [Entity(ref=Ref(kind="ticket", id=i), title=i) for i in ids] + [
+        found = [
+            Entity(ref=Ref(kind="ticket", id=i), title=i, lifecycle="open")
+            if i != "APP-3"
+            else Entity(ref=Ref(kind="ticket", id=i), title=i)
+            for i in ids
+        ]
+        return [e.model_copy(update={"attrs": {"resolved_at": None}}) for e in found] + [
             Entity(ref=Ref(kind="pull_request", id="https://pr/1"), title="stray")
         ]
 
@@ -160,10 +167,10 @@ def test_the_graph_fetches_through_the_plugin_that_owns_the_kind(
     db = Database(":memory:")
     registry.migrate(config, db)
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
-    assert list(graph.fetch("ticket", ["APP-1", "APP-2"])) == ["APP-1", "APP-2"]
+    assert list(graph.fetch("ticket", ["APP-1", "APP-2", "APP-3"])) == ["APP-1", "APP-2"]
     assert graph.fetch("ticket", []) == {}
     assert graph.fetch("pull_request", ["https://pr/1"]) == {}
-    assert _Fetching.asked == [["APP-1", "APP-2"], ["https://pr/1"]]
+    assert _Fetching.asked == [["APP-1", "APP-2", "APP-3"], ["https://pr/1"]]
 
 
 class _Failing(JiraPlugin):
@@ -181,7 +188,7 @@ def test_a_plugin_failing_to_fetch_is_left_out(monkeypatch: pytest.MonkeyPatch) 
     assert graph.fetch("ticket", ["APP-1"]) == {}
 
 
-class _TicketAttrs(Model):
+class _TicketAttrs(KindModel):
     summary: str
 
 
@@ -210,7 +217,7 @@ def test_an_entity_that_doesnt_fit_its_kind_is_left_out(
     assert "published a bad ticket https://j/2" in caplog.text
 
 
-class _VeilAttrs(Model):
+class _VeilAttrs(KindModel):
     pass
 
 

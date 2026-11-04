@@ -9,10 +9,11 @@ from pathlib import Path
 from pydantic import Field
 
 from ...api import ActionError, ActionRequest, Graph, Model
+from ...api.ids import branch_parts
 from ...api.shell import CommandError, git
 from . import client
 from .config import GitConfig
-from .panels import ICED, TARGET_SEPARATOR, branch_ref
+from .panels import ICED, branch_ref
 
 WIP_MESSAGE = "WIP"
 
@@ -87,7 +88,7 @@ def delete_together(req: ActionRequest[GitConfig]) -> str:
     ctx, graph, fields = req.ctx, req.graph, req.fields
     targets: list[tuple[Path, str]] = []
     for line in fields.get("targets", "").splitlines():
-        repo_dir, _, branch = line.partition(TARGET_SEPARATOR)
+        repo_dir, branch = branch_parts(line)
         if branch:
             targets.append((repo_path(ctx.config, repo_dir), branch))
     if not targets:
@@ -114,7 +115,7 @@ def restore_together(req: ActionRequest[GitConfig]) -> str:
     ctx, graph, fields = req.ctx, req.graph, req.fields
     targets: list[tuple[Path, str, str]] = []
     for line in fields.get("targets", "").splitlines():
-        repo_dir, _, branch = line.partition(TARGET_SEPARATOR)
+        repo_dir, branch = branch_parts(line)
         if not branch:
             continue
         repo = repo_path(ctx.config, repo_dir)
@@ -141,7 +142,7 @@ def delete_branches(req: ActionRequest[GitConfig]) -> str:
     done: list[str] = []
     failed: list[str] = []
     for line in fields.get("targets", "").splitlines():
-        repo_dir, _, branch = line.partition(TARGET_SEPARATOR)
+        repo_dir, branch = branch_parts(line)
         if not branch:
             continue
         try:

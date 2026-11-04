@@ -26,8 +26,6 @@ from .models import Entry, IcedItem, Link, Size, Todo
 from .repository import NotesRepository
 
 ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
-TARGET_SEPARATOR = "\t"
-"""Joins a repo dir and a branch name in a `git.branch` entity's id."""
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
 ENTRY = "notes.entry"

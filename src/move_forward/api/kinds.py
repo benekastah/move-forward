@@ -9,7 +9,9 @@ from ..kinds import (
     Family,
     Person,
     PullRequest,
+    PullRequestFetched,
     Ticket,
+    TicketFetched,
 )
 
 __all__ = [
@@ -21,5 +23,7 @@ __all__ = [
     "Family",
     "Person",
     "PullRequest",
+    "PullRequestFetched",
     "Ticket",
+    "TicketFetched",
 ]

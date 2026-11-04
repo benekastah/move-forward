@@ -8,6 +8,7 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 from pathlib import Path
 
 from ...api import Action, Entity, Graph, Item, Model, Panel, Ref, attrs
+from ...api.ids import branch_id
 from ...api.kinds import PULL_REQUEST as PR
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
@@ -15,12 +16,11 @@ from .models import GitStackSnapshot
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
 REPO = "git.repo"
-BRANCH_ID_SEPARATOR = "\t"
 """Joins a repo dir and a branch name in a `git.branch` entity's id."""
 
 
 def branch_ref(repo_dir: str, branch: str) -> Ref:
-    return Ref(kind=BRANCH, id=f"{repo_dir}{BRANCH_ID_SEPARATOR}{branch}")
+    return Ref(kind=BRANCH, id=branch_id(repo_dir, branch))
 
 
 def stack_branch_ref(repo_dir: str, branch: str) -> Ref:

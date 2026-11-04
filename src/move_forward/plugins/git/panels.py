@@ -7,11 +7,11 @@ Pure functions of the snapshot and the graph; no I/O. A branch's PR comes from t
 from datetime import datetime
 
 from ...api import Action, Graph, Item, Model, Panel, Ref, Signals, age
+from ...api.ids import branch_id, branch_parts
 from ...api.kinds import PULL_REQUEST as PR
 from .config import GitConfig
 from .models import Branch, LocalRepo, LocalSnapshot
 
-TARGET_SEPARATOR = "\t"
 """Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
@@ -256,7 +256,7 @@ class Builder:
                     subtitle = f"{repo.dir} · last commit {age(self.now, b.committed_at)} ago"
                 else:
                     continue
-                targets.append(f"{repo.dir}{TARGET_SEPARATOR}{b.name}")
+                targets.append(branch_id(repo.dir, b.name))
                 items.append(
                     Item(
                         title=title,
@@ -306,7 +306,7 @@ class Builder:
 
 
 def branch_ref(repo_dir: str, branch: str) -> Ref:
-    return Ref(kind=BRANCH, id=f"{repo_dir}{TARGET_SEPARATOR}{branch}")
+    return Ref(kind=BRANCH, id=branch_id(repo_dir, branch))
 
 
 def restore_iced_action(item: Item, graph: Graph) -> Action | None:
@@ -331,7 +331,7 @@ def delete_iced_action(item: Item, graph: Graph) -> Action | None:
     here = [ref.id for ref in branches if graph.get(BRANCH, ref.id) is not None]
     if not here:
         return None
-    names = ", ".join(ref_id.partition(TARGET_SEPARATOR)[2] for ref_id in here)
+    names = ", ".join(branch_parts(ref_id)[1] for ref_id in here)
     return action(
         "delete_together",
         "Delete branches",

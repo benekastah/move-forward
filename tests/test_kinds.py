@@ -5,10 +5,12 @@ from typing import Any, ClassVar, cast
 
 import pytest
 from conftest import NOW, issue, pr, snapshot, stored
+from pydantic import ValidationError
 
 from move_forward import registry
-from move_forward.domain import Model
+from move_forward.domain import KindModel, Model
 from move_forward.graph import Entity, Graph, KindSpec, Ref, attrs
+from move_forward.ids import branch_id, branch_parts
 from move_forward.kinds import PULL_REQUEST, TICKET, PullRequest, Ticket
 from move_forward.plugin import EntitiesRequest, Plugin
 from move_forward.plugins.jira.config import JiraConfig
@@ -17,7 +19,7 @@ from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.refresh import stored_graph
 
 
-class _OwnTicket(Model):
+class _OwnTicket(KindModel):
     summary: str
 
 
@@ -36,10 +38,32 @@ def test_a_kind_named_for_a_family_must_extend_its_model() -> None:
 
 
 def test_a_plugins_other_kinds_are_named_for_it() -> None:
-    registry.check_plugins([_plugin("linear", {"linear.cycle": KindSpec(Model)})])
+    registry.check_plugins([_plugin("linear", {"linear.cycle": KindSpec(KindModel)})])
     for kind in ("cycle", "github.cycle", "linear.", "linear.Cycle"):
         with pytest.raises(RuntimeError, match=f"linear's kind '{kind}' must be named linear"):
-            registry.check_plugins([_plugin("linear", {kind: KindSpec(Model)})])
+            registry.check_plugins([_plugin("linear", {kind: KindSpec(KindModel)})])
+
+
+def test_a_kinds_attributes_are_strict() -> None:
+    class Loose(Model):
+        team: str
+
+    with pytest.raises(TypeError, match="linear's linear.cycle attributes must be a KindModel"):
+        registry.check_plugins([_plugin("linear", {"linear.cycle": KindSpec(Loose)})])  # pyright: ignore[reportArgumentType]
+    with pytest.raises(ValidationError, match="requested_user"):
+        PullRequest.model_validate(
+            {
+                "handle": "#1",
+                "repo": "a/b",
+                "head": "x",
+                "draft": False,
+                "mine": True,
+                "changes_requested": False,
+                "created_at": "2026-10-30",
+                "merged_at": None,
+                "requested_user": ["alice"],  # misspelt: published nothing before
+            }
+        )
 
 
 def test_the_built_in_kinds_extend_their_families() -> None:
@@ -111,3 +135,8 @@ def test_two_plugins_publish_one_family_and_a_shared_id_is_the_first_ones(
     assert [e.ref.id for e in graph.of_kind("jira.pull_request")] == [mr]
     assert [e.ref.id for e in graph.of_kind("github.pull_request")] == [pr(1).url]
     assert f"jira published pull_request {pr(1).url} twice" in caplog.text
+
+
+def test_a_branch_id_holds_its_checkout_and_name() -> None:
+    for repo_dir, name in [("/src/w", "me/x"), ("C:\\src\\w", "main"), ("/a b", "x/y/z")]:
+        assert branch_parts(branch_id(repo_dir, name)) == (repo_dir, name)

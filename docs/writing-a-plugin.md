@@ -38,7 +38,7 @@ A plugin uses core only through `move_forward.api` (relatively, `from ...api imp
 Plugin, Context, Graph`): everything a plugin may use is there, and core's own modules may
 change without notice. Its submodules group the rest: `api.html` (`page`, `e` to escape,
 `buttons`, `linkable`), `api.shell` (`run`, `git`, `CommandError`), `api.http`
-(`opener`, `require_https`), `api.localtime` (`local`, `day`) and `api.keychain`
+(`opener`, `require_https`), `api.localtime` (`local`, `day`), `api.ids` (`branch_id`, `branch_parts`) and `api.keychain`
 (`token`, `read`, `write`, `delete`). Ruff refuses any other core import in a plugin, and
 `tests/test_api.py` checks it too.
 
@@ -204,7 +204,7 @@ a model of its attributes, and build the attributes from that model:
 ISSUE = "linear.issue"
 
 
-class IssueAttrs(Model):
+class IssueAttrs(KindModel):
     """A `linear.issue`: one of my Linear issues, by its identifier, e.g. `ENG-12`."""
 
     state: str
@@ -230,6 +230,9 @@ class LinearPlugin(...):
         ]
 ```
 
+- A kind's attributes model is a `KindModel`, which rejects unknown keys: a misspelt
+  attribute fails core's check (and is logged) rather than quietly publishing nothing.
+  Consumers' views stay plain `Model`s.
 - A plugin's kinds are named for it, `<plugin>.<name>` (`linear.issue`), or for a family
   (below); the registry refuses any other name. It publishes only kinds it declares, each
   ref once. Core checks every entity against its kind's model and leaves out (and logs) one
@@ -266,6 +269,9 @@ class LinearPlugin(...):
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
   graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune.
+  Each must say its `lifecycle`, and its attributes fit `KindSpec.fetched_attrs` (a
+  family's are core's: `PullRequestFetched`, `TicketFetched`), else any of the kind's own.
+- A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
 
 ## Reading other plugins' entities
 

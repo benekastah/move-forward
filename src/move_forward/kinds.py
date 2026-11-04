@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 from pydantic import Field
 
-from .domain import Model
+from .domain import KindModel, Model
 
 PULL_REQUEST = "pull_request"
 """The family of pull requests (and merge requests): shown as "PR"."""
@@ -32,7 +32,7 @@ def named_for(plugin: str, kind: str) -> bool:
     return _OWN_KIND.fullmatch(kind) is not None and kind.startswith(f"{plugin}.")
 
 
-class PullRequest(Model):
+class PullRequest(KindModel):
     """What every pull request has, whoever publishes it."""
 
     handle: str
@@ -67,7 +67,7 @@ class PullRequest(Model):
     """On my open PRs only: quiet for `stale_review_hours`."""
 
 
-class Ticket(Model):
+class Ticket(KindModel):
     """What every ticket has, whoever publishes it."""
 
     handle: str
@@ -75,7 +75,7 @@ class Ticket(Model):
     summary: str
 
 
-class Person(Model):
+class Person(KindModel):
     """What every person has, whoever publishes them."""
 
     handle: str
@@ -97,6 +97,20 @@ def is_host_login(id: str) -> bool:
     return _HOST_LOGIN.fullmatch(id) is not None
 
 
+class PullRequestFetched(KindModel):
+    """What a pull request fetched on demand (`Graph.fetch`) has, whoever publishes it."""
+
+    closed_at: str | None
+    """When it was merged or closed, an ISO datetime; null while it's open."""
+
+
+class TicketFetched(KindModel):
+    """What a ticket fetched on demand (`Graph.fetch`) has, whoever publishes it."""
+
+    resolved_at: str | None
+    """When it was resolved, an ISO datetime; null while it's open."""
+
+
 @dataclass(frozen=True)
 class Family:
     name: str
@@ -106,13 +120,16 @@ class Family:
     id_rule: Callable[[str], bool]
     """Whether an id fits the family: ids are unique whoever publishes them, so two tools'
     `OPS-12` (or two people's `alice`) are never taken for one."""
+    fetched: type[KindModel] | None = None
+    """What its entities fetched on demand carry (`KindSpec.fetched_attrs`), when they can
+    be."""
 
 
 FAMILIES = {
     family.name: family
     for family in (
-        Family(PULL_REQUEST, "PR", PullRequest, is_url),
-        Family(TICKET, "ticket", Ticket, is_url),
+        Family(PULL_REQUEST, "PR", PullRequest, is_url, PullRequestFetched),
+        Family(TICKET, "ticket", Ticket, is_url, TicketFetched),
         Family(PERSON, "person", Person, is_host_login),
     )
 }

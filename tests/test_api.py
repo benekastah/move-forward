@@ -15,6 +15,7 @@ API_MODULES = [
     "api.localtime",
     "api.keychain",
     "api.kinds",
+    "api.ids",
 ]
 
 

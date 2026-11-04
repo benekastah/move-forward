@@ -2,10 +2,10 @@
 
 from pydantic import Field
 
-from ...api import Model
+from ...api import KindModel
 
 
-class RepoAttrs(Model):
+class RepoAttrs(KindModel):
     """A `git.repo`: a checkout on GitHub, by `owner/name`."""
 
     dir: str
@@ -19,7 +19,7 @@ class RepoAttrs(Model):
     """Directories I committed to within `[git] commit_history_days`."""
 
 
-class BranchAttrs(Model):
+class BranchAttrs(KindModel):
     """A `git.branch`: a local branch, by `<repo dir>\\t<name>`."""
 
     repo_dir: str

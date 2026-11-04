@@ -6,7 +6,7 @@ from conftest import NOW, pr, snapshot, stored
 from move_forward import act_now, priority, refresh
 from move_forward.act_now import Nomination
 from move_forward.db import Database
-from move_forward.domain import Model
+from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.page import Item, Signals
 from move_forward.repositories import PriorityRepository
@@ -17,11 +17,11 @@ TODO = Ref(kind="notes.todo", id="7")
 TICKET = Ref(kind="ticket", id="APP-1")
 LINKING: dict[str, str | None] = {"ticket": r"\bAPP-\d+\b", "notes.entry": None}
 KINDS = {
-    "pull_request": KindSpec(Model, fetchable=True, resolvable=True),
-    "ticket": KindSpec(Model, fetchable=True, resolvable=True),
-    "notes.entry": KindSpec(Model, gone_means_done=True, resolvable=True),
-    "notes.todo": KindSpec(Model, gone_means_done=True),
-    "git.branch": KindSpec(Model, resolvable=True),
+    "pull_request": KindSpec(KindModel, fetchable=True, resolvable=True),
+    "ticket": KindSpec(KindModel, fetchable=True, resolvable=True),
+    "notes.entry": KindSpec(KindModel, gone_means_done=True, resolvable=True),
+    "notes.todo": KindSpec(KindModel, gone_means_done=True),
+    "git.branch": KindSpec(KindModel, resolvable=True),
 }
 """As the built-in plugins declare them."""
 
