@@ -339,7 +339,7 @@ class Builder:
             reasons: list[str] = []
             if not approved(pr):
                 reasons.append("not approved")
-            if unresolved_threads(pr):
+            if unresolved_threads(pr, self.config.ignored_reviewers):
                 reasons.append("unresolved threads")
             if failing_checks(pr):
                 reasons.append("failing checks")
@@ -411,7 +411,7 @@ class Builder:
             if (
                 pr.is_draft
                 and pr.rollup_state == "SUCCESS"
-                and not unresolved_threads(pr)
+                and not unresolved_threads(pr, self.config.ignored_reviewers)
                 and not any(e.open_todos for e in self._entries(pr))
             ):
                 problems.append("draft with green CI and no open todos: ready?")

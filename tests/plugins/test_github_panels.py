@@ -477,3 +477,18 @@ def test_a_ticket_link_line_starts_with_any_prefix_and_names_a_key_or_a_url() ->
     assert not has_ticket_link_line("Fixes RD-123", prefixes)
     assert not has_ticket_link_line("Closes nothing", prefixes)
     assert not has_ticket_link_line("Linkage RD-123", prefixes)  # a word boundary
+
+
+def test_threads_of_ignored_reviewers_dont_hold_a_merge_or_a_ready_draft() -> None:
+    bot_thread = thread(author="policy-bot")
+    ready = pr(1, reviews=[approved_review()], review_decision="APPROVED", threads=[bot_thread])
+    draft = pr(2, is_draft=True, rollup_state="SUCCESS", body="x", threads=[bot_thread])
+    snap = snapshot(mine=[ready, draft])
+    held = build(github=snap)
+    assert titles(held, "github.ready_to_merge") == []
+    held_details = [d for i in panel(held, "github.metadata").items for d in i.details]
+    assert "draft with green CI and no open todos: ready?" not in held_details
+    ignoring = build(github=snap, ignored_reviewers=["policy-bot"])
+    assert titles(ignoring, "github.ready_to_merge") == ["PR 1"]
+    details = [d for i in panel(ignoring, "github.metadata").items for d in i.details]
+    assert "draft with green CI and no open todos: ready?" in details
