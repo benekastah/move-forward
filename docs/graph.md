@@ -44,8 +44,7 @@ flowchart LR
     person["person<br/>(github)"]
 ```
 
-`iced` hides what it points at; see [hidden entities](#hidden-entities). `person` stands alone: core finds `me` among them, and
-slack reads their emails.
+`iced` hides what it points at; see [hidden entities](#hidden-entities). `person` stands alone: slack reads their emails.
 
 ## How it's built
 

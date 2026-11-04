@@ -23,7 +23,7 @@ from .asking import Asker, InitSetup
 from .db import Database
 from .graph import Entity, Graph
 from .notifications import Event
-from .page import Action, Item, Panel
+from .page import Identity, Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, SnapshotRepository
 
 log = logging.getLogger(__name__)
@@ -85,6 +85,78 @@ class Context[C: BaseModel]:
     def today(self) -> date:
         """Today where I am: the local date, for what's recorded as done or changed today."""
         return localtime.day(self.now)
+
+
+@dataclass(frozen=True)
+class EntitiesRequest[C: BaseModel, S: BaseModel]:
+    ctx: Context[C]
+    snapshot: S | None
+    """What the plugin last stored; None before its first refresh."""
+
+
+@dataclass(frozen=True)
+class IdentityRequest[C: BaseModel, S: BaseModel]:
+    ctx: Context[C]
+    snapshot: S | None
+
+
+@dataclass(frozen=True)
+class FetchRequest[C: BaseModel]:
+    ctx: Context[C]
+    kind: str
+    ids: list[str]
+
+
+@dataclass(frozen=True)
+class UrlRequest[C: BaseModel]:
+    ctx: Context[C]
+    kind: str
+    id: str
+
+
+@dataclass(frozen=True)
+class LinkingRequest[C: BaseModel]:
+    ctx: Context[C]
+
+
+@dataclass(frozen=True)
+class PanelsRequest[C: BaseModel, S: BaseModel]:
+    ctx: Context[C]
+    snapshot: S | None
+    graph: Graph
+
+
+@dataclass(frozen=True)
+class ActNowRequest[C: BaseModel, S: BaseModel]:
+    ctx: Context[C]
+    snapshot: S | None
+    graph: Graph
+    panels: list[Panel]
+    """The plugin's own panels, as `panels` built them."""
+
+
+@dataclass(frozen=True)
+class ItemActionsRequest[C: BaseModel]:
+    ctx: Context[C]
+    item: Item
+    graph: Graph
+    owner: str
+    """The plugin whose item it is."""
+    surface: Surface
+
+
+@dataclass(frozen=True)
+class PrepareItemActionsRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+
+
+@dataclass(frozen=True)
+class KeptItemRequest[C: BaseModel]:
+    ctx: Context[C]
+    graph: Graph
+    key: str
+    """What the action put after `<plugin>:` in its `KEPT` parameter."""
 
 
 PageHandler = Callable[[Context[Any], Graph, dict[str, list[str]]], str | None]
@@ -222,60 +294,62 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Reading
 
-    def linking_patterns(self, ctx: Context[C]) -> dict[str, str | None]:
+    def linking_patterns(self, req: LinkingRequest[C]) -> dict[str, str | None]:
         """Its `linking` kinds with the patterns of their ids as of now, e.g. only the project
         keys jira has seen; None where no id can be found in text. Read from its tables, so
         cheap: core asks every time it builds the graph."""
         return dict(self.linking)
 
-    def me(self, ctx: Context[C], snapshot: S | None) -> str | None:
-        """Who I am in the plugin's tool (a login), for the page; None when it doesn't say.
-        The first enabled plugin's answer is used."""
+    def identity(self, req: IdentityRequest[C, S]) -> Identity | None:
+        """Who I am in the plugin's tool (a login), for the page's footer, which lists each
+        plugin's; None when it doesn't say."""
         return None
 
-    def entities(self, ctx: Context[C], snapshot: S | None) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[C, S]) -> list[Entity]:
         """What the plugin publishes to the graph, from its snapshot and tables."""
         return []
 
-    def fetch(self, ctx: Context[C], kind: str, ids: list[str]) -> list[Entity]:
+    def fetch(self, req: FetchRequest[C]) -> list[Entity]:
         """Entities of a kind the plugin publishes, by id, fetched from its tool now, even ones
         its snapshot doesn't hold; `Graph.fetch` asks. [] for a kind it doesn't know."""
         return []
 
-    def url_for(self, ctx: Context[C], kind: str, id: str) -> str | None:
+    def url_for(self, req: UrlRequest[C]) -> str | None:
         """A URL for an entity of a kind the plugin knows, even one not in the graph, e.g. a
         ticket's from its key."""
         return None
 
     # Page
 
-    def panels(self, ctx: Context[C], snapshot: S | None, graph: Graph) -> list[Panel]:
+    def panels(self, req: PanelsRequest[C, S]) -> list[Panel]:
         return []
 
-    def act_now(
-        self, ctx: Context[C], snapshot: S | None, graph: Graph, panels: list[Panel]
-    ) -> list[Item]:
+    def act_now(self, req: ActNowRequest[C, S]) -> list[Item]:
         """The plugin's candidates for core's Act now, each with `signals`, from its
         `panels`. By default the items of the panels marked `act_now`, each taking its
         panel's signals if it has none of its own; a plugin that knows better nominates
         precisely."""
         return [
             item if item.signals else item.model_copy(update={"signals": panel.signals})
-            for panel in panels
+            for panel in req.panels
             if panel.act_now
             for item in panel.items
         ]
 
-    def item_actions(self, ctx: Context[C], item: Item, graph: Graph) -> list[Action]:
-        """Buttons the plugin adds to another plugin's item, e.g. "add todo" on a PR."""
-        return []
+    def item_actions(self, req: ItemActionsRequest[C]) -> ItemAdditions:
+        """What the plugin adds to another plugin's item: buttons (e.g. "add todo" on a PR),
+        badges, details and links."""
+        return ItemAdditions()
 
-    def prepare_item_actions(self, ctx: Context[C], graph: Graph) -> Callable[[Item], list[Action]]:
-        """`item_actions` for every item of one page: a plugin whose buttons need its tables
-        or a pass over the graph does that here, once, and returns the per-item function."""
-        return lambda item: self.item_actions(ctx, item, graph)
+    def prepare_item_actions(
+        self, req: PrepareItemActionsRequest[C]
+    ) -> Callable[[ItemActionsRequest[C]], ItemAdditions]:
+        """`item_actions` for every item of one page: a plugin whose additions need its
+        tables or a pass over the graph does that here, once, and returns the per-item
+        function."""
+        return self.item_actions
 
-    def kept_item(self, ctx: Context[C], graph: Graph, key: str) -> tuple[str, Item] | None:
+    def kept_item(self, req: KeptItemRequest[C]) -> tuple[str, Item] | None:
         """An item one of this plugin's actions asked to keep on the focus page after changing
         it (its result's `KEPT` parameter, `<plugin>:<key>`), e.g. a todo just ticked off,
         shown with its box ticked so the tick can be undone; with the key of the plugin's

@@ -6,7 +6,19 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from ...api import Action, ActionHandler, Context, Entity, Event, Graph, Item, Panel, Plugin
+from ...api import (
+    ActionHandler,
+    Context,
+    EntitiesRequest,
+    Entity,
+    Event,
+    Graph,
+    ItemActionsRequest,
+    ItemAdditions,
+    Panel,
+    PanelsRequest,
+    Plugin,
+)
 from . import actions, changes, client, events
 from .config import GitStackConfig
 from .kinds import StackBranchAttrs
@@ -58,14 +70,12 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""
         return StackRepository(ctx.db).load()
 
-    def entities(
-        self, ctx: Context[GitStackConfig], snapshot: GitStackSnapshot | None
-    ) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[GitStackConfig, GitStackSnapshot]) -> list[Entity]:
+        snapshot = req.snapshot
         return entities(snapshot)
 
-    def panels(
-        self, ctx: Context[GitStackConfig], snapshot: GitStackSnapshot | None, graph: Graph
-    ) -> list[Panel]:
+    def panels(self, req: PanelsRequest[GitStackConfig, GitStackSnapshot]) -> list[Panel]:
+        snapshot, graph = req.snapshot, req.graph
         return [Builder(snapshot, graph).stacks()]
 
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
@@ -75,9 +85,9 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     ) -> list[Event]:
         return events.changes(before, after)
 
-    def item_actions(self, ctx: Context[GitStackConfig], item: Item, graph: Graph) -> list[Action]:
-        action = untrack_iced_action(item, graph)
-        return [action] if action else []
+    def item_actions(self, req: ItemActionsRequest[GitStackConfig]) -> ItemAdditions:
+        action = untrack_iced_action(req.item, req.graph)
+        return ItemAdditions(actions=[action] if action else [])
 
     def actions(self) -> dict[str, ActionHandler]:
         return {"stack_clean": actions.stack_clean, "untrack": actions.untrack}

@@ -9,6 +9,10 @@ This page walks through what a plugin is made of, using a made-up `linear` plugi
 from Linear) as the example. [AGENTS.md](../AGENTS.md) has the rules every change follows;
 this page explains them as they apply to a plugin.
 
+Every hook takes one argument, a request object (`PanelsRequest`, `EntitiesRequest`, …,
+all in `move_forward.api`), whose fields are the hook's inputs: `req.ctx`, `req.snapshot`,
+`req.graph` and so on. Core can give a hook a new input without changing its signature.
+
 ## The pieces
 
 ```
@@ -132,8 +136,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   its collect returns (a thread can't be stopped). Set a timeout on whatever it calls, too.
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
   for every page. Nothing is kept as JSON.
-- `me(ctx, snapshot)` says who I am in the tool (a login), for the page's footer; the first
-  enabled plugin's answer is used.
+- `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
+  the page's footer, which lists each plugin's.
 - A plugin that needs other plugins' entities to know what to fetch sets
   `collects_after_graph = True` and implements `collect_after(ctx, graph)` instead (see
   git_stack).
@@ -177,7 +181,8 @@ class IssueAttrs(Model):
 class LinearPlugin(...):
     kinds: ClassVar[dict[str, type[BaseModel]]] = {ISSUE: IssueAttrs}
 
-    def entities(self, ctx, snapshot) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
+        snapshot = req.snapshot
         return [
             Entity(
                 ref=Ref(kind=ISSUE, id=issue.identifier),
@@ -210,8 +215,8 @@ class LinearPlugin(...):
   A publisher puts text that might name a unit of work in `Entity.mentions` (github does
   with a PR's branch, title and body), never refs to another plugin's kind.
 - **Hiding kinds**, declared in `hides`, hide what their entities point at (notes' `iced`).
-- `url_for(ctx, kind, id)` makes a link for an entity that isn't in the graph, and
-  `fetch(ctx, kind, ids)` fetches entities by id from the tool now, for rare work like the
+- `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
+  graph, and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune.
 
 ## Reading other plugins' entities
@@ -239,7 +244,8 @@ the page quietly showing less. See [graph.md](graph.md#reading-it) for `view`, `
 ## Panels
 
 ```python
-def panels(self, ctx, snapshot, graph) -> list[Panel]:
+def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel]:
+    snapshot, graph = req.snapshot, req.graph
     return [
         Panel(
             key="assigned",
@@ -270,7 +276,7 @@ Panel(..., act_now=True, signals=Signals(verb="Triage", effort="minutes"))
 
 An item can carry its own `signals` (`effort`, `closes`, `waiting` and `waiting_since`,
 `importance` from 0 to 2, `due`, `blocked`, `verb`), and a plugin can override
-`act_now(ctx, snapshot, graph, panels)` to nominate precisely. Map your tool's own idea of
+`act_now(req)` (`req.panels` are its own) to nominate precisely. Map your tool's own idea of
 importance (a priority, an escalation) onto `importance`, in the plugin. An item whose main
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
@@ -286,9 +292,11 @@ Set `Item.fingerprint` to what would make a snoozed or dismissed item worth anot
   `form_field(fields, name)`, which says "missing field" when the form lacks it. Raise
   `ActionError` with a message the page can show; anything else a handler raises is shown
   as "<plugin>/<name> failed" and logged.
-- **Buttons on other plugins' items.** `item_actions(ctx, item, graph)` adds buttons by an
-  item's subjects; a plugin that reads its tables for them does so once per page in
-  `prepare_item_actions(ctx, graph)`.
+- **Adding to other plugins' items.** `item_actions(req)` returns `ItemAdditions`
+  (buttons, badges, details, links) for `req.item`, by its subjects; `req.owner` is the
+  plugin whose item it is and `req.surface` where it's shown (`dashboard`, `focus`,
+  `act_now`). A plugin that reads its tables for them does so once per page in
+  `prepare_item_actions(req)`, returning the per-item function.
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, {KEPT: "<plugin>:<key>"})` and implement `kept_item`.
 - **Pages.** `pages()` maps paths to handlers returning HTML (use `api.html.page` and

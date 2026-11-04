@@ -7,17 +7,24 @@ from typing import ClassVar, cast
 from pydantic import BaseModel
 
 from ...api import (
+    ActNowRequest,
     Asker,
     CliHandler,
     Context,
+    EntitiesRequest,
     Entity,
     Event,
+    FetchRequest,
     Graph,
+    Identity,
+    IdentityRequest,
     InitSetup,
     Item,
     Panel,
+    PanelsRequest,
     Plugin,
     Ref,
+    UrlRequest,
     attrs,
     collect_into,
 )
@@ -200,9 +207,12 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def load(self, ctx: Context[GitHubConfig]) -> GitHubSnapshot | None:
         return PrRepository(ctx.db).load()
 
-    def me(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None) -> str | None:
+    def identity(self, req: IdentityRequest[GitHubConfig, GitHubSnapshot]) -> Identity | None:
         """My GitHub login, as the last refresh found it."""
-        return snapshot.login if snapshot and snapshot.login else None
+        snapshot = req.snapshot
+        return (
+            Identity(tool=self.title, login=snapshot.login) if snapshot and snapshot.login else None
+        )
 
     def _email_domains(self, ctx: Context[GitHubConfig]) -> list[str]:
         if ctx.config.email_domains:
@@ -301,9 +311,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             attrs=attrs(pr_attrs),
         )
 
-    def entities(self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[GitHubConfig, GitHubSnapshot]) -> list[Entity]:
         """`pr` for every PR in the snapshot, and a `person` for me and for everyone whose
         email github knows."""
+        ctx, snapshot = req.ctx, req.snapshot
         if snapshot is None:
             return []
         team_names = {ctx.config.slug(team): team for team in ctx.teams}
@@ -334,8 +345,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         ]
         return [*entities.values(), *people]
 
-    def fetch(self, ctx: Context[GitHubConfig], kind: str, ids: list[str]) -> list[Entity]:
+    def fetch(self, req: FetchRequest[GitHubConfig]) -> list[Entity]:
         """PRs by URL, with their state and `closed_at`: when they were merged or closed."""
+        ctx, kind, ids = req.ctx, req.kind, req.ids
         if kind != PR:
             return []
         found: list[Entity] = []
@@ -356,7 +368,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             )
         return found
 
-    def url_for(self, ctx: Context[GitHubConfig], kind: str, id: str) -> str | None:
+    def url_for(self, req: UrlRequest[GitHubConfig]) -> str | None:
+        kind, id = req.kind, req.id
         return id if kind == PR else None
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
@@ -368,23 +381,16 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         retried = PeopleRepository(ctx.db).forget_misses_before(cutoff)
         return [f"will look up {retried} reviewer email(s) again"] if retried else []
 
-    def act_now(
-        self,
-        ctx: Context[GitHubConfig],
-        snapshot: GitHubSnapshot | None,
-        graph: Graph,
-        panels: list[Panel],
-    ) -> list[Item]:
+    def act_now(self, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
         """The panels' items, but not reviews of drafts: they aren't ready for one, so the
         panel lists them last and Act now leaves them out."""
         return [
             item
-            for item in super().act_now(ctx, snapshot, graph, panels)
+            for item in super().act_now(req)
             if not (item.draft and item.signals and item.signals.verb == REVIEW)
         ]
 
-    def panels(
-        self, ctx: Context[GitHubConfig], snapshot: GitHubSnapshot | None, graph: Graph
-    ) -> list[Panel]:
+    def panels(self, req: PanelsRequest[GitHubConfig, GitHubSnapshot]) -> list[Panel]:
+        ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         derived = DerivedRepository(ctx.db).load()
         return Builder(ctx.config, ctx.teams, ctx.now, snapshot, derived, graph).panels()

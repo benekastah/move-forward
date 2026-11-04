@@ -5,6 +5,7 @@ from urllib.parse import quote
 from conftest import ME, NOW, dashboard, entry, pr, snapshot, stored, todo
 
 from move_forward import page, panels, render
+from move_forward.page import Identity
 from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.refresh import kept_item
 
@@ -129,7 +130,7 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
     )
     dashboard = panels.Dashboard(
         generated_at=NOW,
-        login=ME,
+        identities=[Identity(tool="GitHub", login=ME)],
         panels=[
             page.Panel(
                 key="cleanup",
@@ -199,7 +200,7 @@ def test_focus_page_actions_come_back_to_it() -> None:
     dashboard = panels.Dashboard(
         groups=[page.Group(key="git", title="Local", panel_keys=["cleanup"])],
         generated_at=NOW,
-        login=ME,
+        identities=[Identity(tool="GitHub", login=ME)],
         panels=[page.Panel(key="cleanup", title="Cleanup", description="", items=[item])],
         sources={},
     )
@@ -264,7 +265,7 @@ def test_strong_links_get_a_class() -> None:
     dashboard = panels.Dashboard(
         groups=[],
         generated_at=NOW,
-        login=ME,
+        identities=[Identity(tool="GitHub", login=ME)],
         panels=[page.Panel(key="todos", title="T", description="", items=[item])],
         sources={},
     )
@@ -291,7 +292,7 @@ def test_actions_with_an_input_render_a_text_field() -> None:
     dashboard = panels.Dashboard(
         groups=[],
         generated_at=NOW,
-        login=ME,
+        identities=[Identity(tool="GitHub", login=ME)],
         panels=[page.Panel(key="todos", title="T", description="", items=[item])],
         sources={},
     )
@@ -324,7 +325,7 @@ def test_an_act_now_item_carries_its_pending_fields_for_the_link_script() -> Non
         panel = page.Panel(key="p", title="P", description="", items=[item])
         dashboard = panels.Dashboard(
             generated_at=NOW,
-            login=ME,
+            identities=[Identity(tool="GitHub", login=ME)],
             panels=[panel],
             groups=[page.Group(key="g", title="G", panel_keys=["p"], open=True)],
             sources={},
@@ -341,7 +342,7 @@ def test_a_panels_buttons_return_to_that_panel_instead_of_the_top() -> None:
     panel = page.Panel(key="jira.jira_next", title="P", description="", items=[item])
     dashboard = panels.Dashboard(
         generated_at=NOW,
-        login=ME,
+        identities=[Identity(tool="GitHub", login=ME)],
         panels=[panel],
         groups=[page.Group(key="g", title="G", panel_keys=[panel.key], open=True)],
         sources={},
@@ -356,7 +357,7 @@ def test_the_page_after_an_action_has_an_anchor_where_its_item_was() -> None:
     panel = page.Panel(key="p", title="P", description="", items=items)
     dashboard = panels.Dashboard(
         generated_at=NOW,
-        login=ME,
+        identities=[Identity(tool="GitHub", login=ME)],
         panels=[panel],
         groups=[page.Group(key="g", title="G", panel_keys=["p"], open=True)],
         sources={},
@@ -376,3 +377,15 @@ def test_the_page_after_an_action_has_an_anchor_where_its_item_was() -> None:
 def test_items_carry_their_anchor_for_notifications_to_open() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert re.search(r"<li class='item' id='item-pr-[^']+'", html)
+
+
+def test_the_footer_says_who_i_am_in_each_tool() -> None:
+    dashboard = panels.Dashboard(
+        generated_at=NOW,
+        identities=[Identity(tool="GitHub", login=ME), Identity(tool="Jira", login="me@x")],
+        panels=[],
+        groups=[],
+        sources={},
+    )
+    html = render.dashboard_page(dashboard, refreshing=frozenset())
+    assert f"as GitHub: {ME} · Jira: me@x" in html

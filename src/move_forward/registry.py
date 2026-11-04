@@ -14,7 +14,15 @@ from pydantic import BaseModel, ValidationError
 from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
 from .graph import Entity, Graph, Ref
-from .plugin import Context, Plugin, SourceError
+from .plugin import (
+    Context,
+    EntitiesRequest,
+    FetchRequest,
+    LinkingRequest,
+    Plugin,
+    SourceError,
+    UrlRequest,
+)
 from .plugins.git.plugin import GitPlugin
 from .plugins.git_stack.plugin import GitStackPlugin
 from .plugins.github.plugin import GitHubPlugin
@@ -181,7 +189,10 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     seen: set[Ref] = set()
     for e in plugins:
         published: list[Entity] = call(
-            e.name, "entities", lambda e=e: e.plugin.entities(e.ctx, snapshots.get(e.name)), []
+            e.name,
+            "entities",
+            lambda e=e: e.plugin.entities(EntitiesRequest(e.ctx, snapshots.get(e.name))),
+            [],
         )
         for entity in published:
             ref = entity.ref
@@ -202,7 +213,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     def url_for(kind: str, id: str) -> str | None:
         for e in plugins:
             url: str | None = call(
-                e.name, "url_for", lambda e=e: e.plugin.url_for(e.ctx, kind, id), None
+                e.name, "url_for", lambda e=e: e.plugin.url_for(UrlRequest(e.ctx, kind, id)), None
             )
             if url:
                 return url
@@ -214,7 +225,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         found: list[Entity] = []
         for e in plugins:
             try:
-                found += e.plugin.fetch(e.ctx, kind, ids)
+                found += e.plugin.fetch(FetchRequest(e.ctx, kind, ids))
             except SourceError:
                 raise
             except Exception:
@@ -224,7 +235,10 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     linking: dict[str, str | None] = {}
     for e in plugins:
         patterns: dict[str, str | None] = call(
-            e.name, "linking_patterns", lambda e=e: e.plugin.linking_patterns(e.ctx), {}
+            e.name,
+            "linking_patterns",
+            lambda e=e: e.plugin.linking_patterns(LinkingRequest(e.ctx)),
+            {},
         )
         linking.update(patterns)
     hiding = [kind for e in plugins for kind in e.plugin.hides]

@@ -14,7 +14,7 @@ from pydantic import Field
 
 from . import act_now
 from .domain import Model
-from .page import Action, Group, Item, Panel, SourceStatus
+from .page import Action, Group, Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
 
 ACT_NOW = "act"
 """Act now's group key."""
@@ -100,7 +100,8 @@ FOCUS_ALL = "all"
 
 class Dashboard(Model):
     generated_at: datetime
-    login: str
+    identities: list[Identity]
+    """Who I am in each tool that says, in plugin order."""
     panels: list[Panel]
     groups: list[Group]
 
@@ -169,12 +170,13 @@ def _sorted(panel: Panel) -> Panel:
     return panel.model_copy(update={"items": sorted(panel.items, key=lambda i: (i.draft, -i.rank))})
 
 
-ItemActions = Callable[[Item], list[Action]]
-"""The buttons the plugins add to an item, whoever built it; see `Plugin.item_actions`."""
+ItemActions = Callable[[Item, str, Surface], ItemAdditions]
+"""What the plugins add to an item, whoever built it (the second argument, its plugin), on a
+surface; see `Plugin.item_actions`."""
 
 
-def _no_item_actions(item: Item) -> list[Action]:
-    return []
+def _no_item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
+    return ItemAdditions()
 
 
 Hidden = Callable[[Item], bool]
@@ -214,13 +216,20 @@ def _snoozable(
     return panel.model_copy(update={"items": items})
 
 
-def _with_item_actions(panel: Panel, item_actions: ItemActions) -> Panel:
-    """Each item, and each of its focus-mode parts, with the plugins' buttons added."""
+def _with_item_actions(
+    panel: Panel, owner: str, surface: Surface, item_actions: ItemActions
+) -> Panel:
+    """Each item, and each of its focus-mode parts, with what the plugins add: buttons,
+    badges, details and links. `owner` is the plugin whose panel it is."""
 
     def add(item: Item) -> Item:
+        added = item_actions(item, owner, surface)
         return item.model_copy(
             update={
-                "actions": [*item.actions, *item_actions(item)],
+                "actions": [*item.actions, *added.actions],
+                "badges": [*item.badges, *added.badges],
+                "details": [*item.details, *added.details],
+                "links": [*item.links, *added.links],
                 "parts": [add(part) for part in item.parts],
             }
         )
@@ -250,7 +259,7 @@ def build(
     now: datetime,
     plugins: list[PluginPanels],
     sources: dict[str, SourceStatus],
-    login: str = "",
+    identities: list[Identity] | None = None,
     item_actions: ItemActions = _no_item_actions,
     hidden: Hidden = _nothing_hidden,
     layout: Layout | None = None,
@@ -258,6 +267,7 @@ def build(
     feedback: dict[act_now.FeedbackKey, act_now.Feedback] | None = None,
     units: act_now.Units = act_now.no_units,
     priority_of: act_now.PriorityOf = act_now.no_priority,
+    surface: Surface = "dashboard",
 ) -> Dashboard:
     """The dashboard: Act now, ranked from the plugins' nominations, then the plugins' panels in
     their groups, without hidden items, each item with the plugins' buttons, sorted, in the
@@ -282,19 +292,26 @@ def build(
     ]
     titles = {plugin.key: plugin.title for plugin in plugins}
     fetched = {source: status.fetched_at for source, status in sources.items() if status.fetched_at}
+    # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
     ranked = [
-        p.model_copy(update={"key": panel_key(ACT_NOW, p.key)})
+        _with_item_actions(p, p.key, "act_now", item_actions).model_copy(
+            update={"key": panel_key(ACT_NOW, p.key)}
+        )
         for p in act_now.panels(
             nominations, ranking, feedback, now, titles, units, priority_of, fetched
         )
     ]
     return Dashboard(
         generated_at=now,
-        login=login,
+        identities=identities or [],
         panels=[
-            *(_pending_on_buttons(_with_item_actions(panel, item_actions)) for panel in ranked),
+            *(_pending_on_buttons(panel) for panel in ranked),
             *(
-                _sorted(_with_item_actions(_without_hidden(shown, hidden), item_actions))
+                _sorted(
+                    _with_item_actions(
+                        _without_hidden(shown, hidden), plugin.key, surface, item_actions
+                    )
+                )
                 for plugin in plugins
                 for panel in plugin.panels
                 for shown in [

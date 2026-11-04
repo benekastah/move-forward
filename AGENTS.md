@@ -35,6 +35,8 @@ is what's left to build.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
   plugin last fetched, and why it failed.
+- Every plugin hook takes one request object (`PanelsRequest(ctx, snapshot,
+  graph)` and so on), so a hook can gain an input without breaking its overrides.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.
@@ -46,9 +48,10 @@ is what's left to build.
   `watches`, is a cheap check that its tool has something new, so the plugin
   refreshes sooner. Rare work (the daily
   prune) can ask the owning plugin for entities its snapshot no longer holds
-  with `graph.fetch`. Buttons on other plugins' items come from
-  `item_actions`, called per item; a plugin that reads its tables for them
-  does so once per page in `prepare_item_actions`. A plugin nominates items for
+  with `graph.fetch`. Buttons, badges, details and links on other plugins' items
+  come from `item_actions`, called per item with whose item it is and where it's
+  shown; a plugin that reads its tables for them does so once per page in
+  `prepare_item_actions`. A plugin nominates items for
   core's Act now with `act_now`, each with `Signals` (effort, what it closes,
   who's waiting); by default, the items of its panels marked `act_now`.
 - Every request needs the dashboard's token, except the pages a tool's

@@ -21,10 +21,13 @@ from ...api import (
     Context,
     Graph,
     InitSetup,
-    Item,
+    ItemActionsRequest,
+    ItemAdditions,
     PageHandler,
     Panel,
+    PanelsRequest,
     Plugin,
+    PrepareItemActionsRequest,
     age,
     html,
 )
@@ -141,27 +144,26 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     migrations: ClassVar[list[str]] = MIGRATIONS
     cli_help = "see and set where review pings go, or import them from the skill's markdown"
 
-    def panels(
-        self, ctx: Context[SlackConfig], snapshot: BaseModel | None, graph: Graph
-    ) -> list[Panel]:
+    def panels(self, req: PanelsRequest[SlackConfig, BaseModel]) -> list[Panel]:
+        ctx, graph = req.ctx, req.graph
         slack = pinger(ctx, graph)
         return [slack.nudges(slack.pings())]
 
     def prepare_item_actions(
-        self, ctx: Context[SlackConfig], graph: Graph
-    ) -> Callable[[Item], list[Action]]:
+        self, req: PrepareItemActionsRequest[SlackConfig]
+    ) -> Callable[[ItemActionsRequest[SlackConfig]], ItemAdditions]:
         """A Ping link on any item about one of my open PRs: Bump once a target was pinged,
         muted while the PR isn't in order. The pings are worked out once for the page."""
-        pings = pinger(ctx, graph).pings()
+        pings = pinger(req.ctx, req.graph).pings()
 
-        def ping_action(item: Item) -> list[Action]:
-            pr = item.subject("pr")
+        def ping_action(each: ItemActionsRequest[SlackConfig]) -> ItemAdditions:
+            pr = each.item.subject("pr")
             ping = pings.get(pr.id) if pr else None
             if ping is None:
-                return []
+                return ItemAdditions()
             blocked = bool(ping.blockers)
             follow_up = any(t.ping_kind == "follow-up" for t in ping.targets)
-            return [
+            ping_link = [
                 Action(
                     name="",
                     label="Ping…" if blocked else ("Bump" if follow_up else "Ping"),
@@ -173,6 +175,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
                     muted=blocked,
                 )
             ]
+            return ItemAdditions(actions=ping_link)
 
         return ping_action
 

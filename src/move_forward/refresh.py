@@ -9,7 +9,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
@@ -19,8 +19,18 @@ from .config import Config
 from .db import CORE, Database
 from .graph import Graph, Ref
 from .notifications import Event, NotificationRepository
-from .page import Action, Item, Panel, SourceStatus
-from .plugin import ActionError, ActionResult, collect_into
+from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
+from .plugin import (
+    ActionError,
+    ActionResult,
+    ActNowRequest,
+    IdentityRequest,
+    ItemActionsRequest,
+    KeptItemRequest,
+    PanelsRequest,
+    PrepareItemActionsRequest,
+    collect_into,
+)
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, call, enabled
 from .repositories import (
@@ -249,60 +259,79 @@ def _prune_plugins(
     return notices
 
 
-def build_dashboard(config: Config, db: Database, now: datetime | None = None) -> panels.Dashboard:
-    """The dashboard from whatever is stored; cheap, no network."""
+def build_dashboard(
+    config: Config, db: Database, now: datetime | None = None, surface: Surface = "dashboard"
+) -> panels.Dashboard:
+    """The dashboard from whatever is stored; cheap, no network. `surface` is where the
+    plugins' panels are shown (the dashboard or focus mode), for what other plugins add to
+    their items."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
     plugin_panels: list[panels.PluginPanels] = []
     for e in plugins:
         snapshot = snapshots[e.name]
-        own = call(e.name, "panels", lambda e=e, s=snapshot: e.plugin.panels(e.ctx, s, graph), None)
+        own = call(
+            e.name,
+            "panels",
+            lambda e=e, s=snapshot: e.plugin.panels(PanelsRequest(e.ctx, s, graph)),
+            None,
+        )
         if own is None:
             plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, [_failed(e)], []))
             continue
         nominated = call(
             e.name,
             "act_now",
-            lambda e=e, s=snapshot, own=own: e.plugin.act_now(e.ctx, s, graph, own),
+            lambda e=e, s=snapshot, own=own: e.plugin.act_now(ActNowRequest(e.ctx, s, graph, own)),
             [],
         )
         plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
-    me = next(
-        (
-            found
-            for e in plugins
-            if (
-                found := call(e.name, "me", lambda e=e: e.plugin.me(e.ctx, snapshots[e.name]), None)
+    identities = [
+        found
+        for e in plugins
+        if (
+            found := call(
+                e.name,
+                "identity",
+                lambda e=e: e.plugin.identity(IdentityRequest(e.ctx, snapshots[e.name])),
+                None,
             )
-        ),
-        None,
-    )
+        )
+    ]
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)
         for source, row in SnapshotRepository(db).all().items()
     }
 
-    def no_actions(item: Item) -> list[Action]:
-        return []
+    def nothing(req: ItemActionsRequest[Any]) -> ItemAdditions:
+        return ItemAdditions()
 
     prepared = [
         (
-            e.name,
+            e,
             call(
                 e.name,
                 "prepare_item_actions",
-                lambda e=e: e.plugin.prepare_item_actions(e.ctx, graph),
-                no_actions,
+                lambda e=e: e.plugin.prepare_item_actions(PrepareItemActionsRequest(e.ctx, graph)),
+                nothing,
             ),
         )
         for e in plugins
     ]
 
-    def item_actions(item: Item) -> list[Action]:
-        found: list[Action] = []
-        for name, actions in prepared:
-            found += call(name, "item_actions", lambda actions=actions: actions(item), [])
+    def item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
+        found = ItemAdditions()
+        for e, add in prepared:
+            req = ItemActionsRequest(e.ctx, item, graph, owner, surface)
+            added = call(e.name, "item_actions", lambda add=add, req=req: add(req), found)
+            if added is not found:
+                found = ItemAdditions(
+                    actions=[*found.actions, *added.actions],
+                    badges=[*found.badges, *added.badges],
+                    details=[*found.details, *added.details],
+                    links=[*found.links, *added.links],
+                )
         return found
 
     def hidden(item: Item) -> bool:
@@ -316,7 +345,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         now,
         plugin_panels,
         sources,
-        me or "",
+        identities,
         item_actions,
         hidden,
         layout,
@@ -324,6 +353,7 @@ def build_dashboard(config: Config, db: Database, now: datetime | None = None) -
         FeedbackRepository(db).all(),
         graph.units,
         priority.level_of(PriorityRepository(db).all(), graph),
+        surface,
     )
 
 
@@ -367,7 +397,9 @@ def kept_item(config: Config, db: Database, kept: str) -> tuple[str, Item] | Non
     if e is None:
         return None
     graph, _ = stored_graph(db, plugins)
-    kept_item = call(e.name, "kept_item", lambda: e.plugin.kept_item(e.ctx, graph, key), None)
+    kept_item = call(
+        e.name, "kept_item", lambda: e.plugin.kept_item(KeptItemRequest(e.ctx, graph, key)), None
+    )
     if kept_item is None:
         return None
     panel, item = kept_item

@@ -11,7 +11,8 @@ from legacy import save_json_snapshot
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Context
+from move_forward.page import Identity
+from move_forward.plugin import Context, EntitiesRequest, FetchRequest, IdentityRequest
 from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import (
@@ -55,7 +56,9 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
     )
     entities = {
         e.ref.id: e
-        for e in GitHubPlugin().entities(_context(teams={"web": "web-reviewers"}), gh)
+        for e in GitHubPlugin().entities(
+            EntitiesRequest(_context(teams={"web": "web-reviewers"}), gh)
+        )
         if e.ref.kind == "pr"
     }
     assert [(e.state, e.attrs["mine"]) for e in entities.values()] == [
@@ -78,7 +81,7 @@ def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
     PeopleRepository(ctx.db).replace_imported({"alice": "a@x", ME: "me@x"})
     people = {
         e.ref.id: e.attrs
-        for e in GitHubPlugin().entities(ctx, snapshot())
+        for e in GitHubPlugin().entities(EntitiesRequest(ctx, snapshot()))
         if e.ref.kind == "person"
     }
     assert people == {ME: {"me": True, "email": "me@x"}, "alice": {"me": False, "email": "a@x"}}
@@ -97,13 +100,13 @@ def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(client, "pr_state", pr_state)
     fetched = GitHubPlugin().fetch(
-        _context(), "pr", ["https://pr/1", "https://pr/2", "https://gone"]
+        FetchRequest(_context(), "pr", ["https://pr/1", "https://pr/2", "https://gone"])
     )
     assert [(e.ref.id, e.state, e.attrs["closed_at"]) for e in fetched] == [
         ("https://pr/1", "merged", "2026-06-01T00:00:00+00:00"),
         ("https://pr/2", "open", None),
     ]
-    assert GitHubPlugin().fetch(_context(), "ticket", ["APP-1"]) == []
+    assert GitHubPlugin().fetch(FetchRequest(_context(), "ticket", ["APP-1"])) == []
 
 
 def test_the_snapshot_moves_from_json_and_round_trips() -> None:
@@ -191,8 +194,10 @@ def test_a_pr_a_search_found_twice_is_kept_once_at_its_first_place() -> None:
 
 
 def test_github_says_who_i_am_by_my_login() -> None:
-    assert GitHubPlugin().me(_context(), snapshot()) == ME
-    assert GitHubPlugin().me(_context(), None) is None
+    assert GitHubPlugin().identity(IdentityRequest(_context(), snapshot())) == Identity(
+        tool="GitHub", login=ME
+    )
+    assert GitHubPlugin().identity(IdentityRequest(_context(), None)) is None
 
 
 def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(

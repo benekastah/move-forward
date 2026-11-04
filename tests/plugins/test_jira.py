@@ -9,7 +9,7 @@ from legacy import save_json_snapshot
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Context, SourceError
+from move_forward.plugin import Context, FetchRequest, LinkingRequest, SourceError
 from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
@@ -135,14 +135,16 @@ def test_tickets_are_fetched_open_or_resolved_and_their_projects_remembered(
     db = Database(":memory:")
     db.migrate("jira", MIGRATIONS)
     ctx = _ctx(db)
-    fetched = JiraPlugin().fetch(ctx, "ticket", ["APP-1", "OPS-2", "not a key"])
+    fetched = JiraPlugin().fetch(FetchRequest(ctx, "ticket", ["APP-1", "OPS-2", "not a key"]))
     assert [(e.ref.id, e.url, e.attrs) for e in fetched] == [
         ("APP-1", resolved.url, {"resolved_at": "2026-06-01T00:00:00+00:00"}),
         ("OPS-2", open_one.url, {"resolved_at": None}),
     ]
     assert IssueRepository(db).projects() == ["APP", "OPS"]
-    assert JiraPlugin().fetch(ctx, "pr", ["x"]) == []
-    assert JiraPlugin().fetch(ctx, "ticket", ["not a key"]) == []  # without asking Jira
+    assert JiraPlugin().fetch(FetchRequest(ctx, "pr", ["x"])) == []
+    assert (
+        JiraPlugin().fetch(FetchRequest(ctx, "ticket", ["not a key"])) == []
+    )  # without asking Jira
 
 
 def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
@@ -188,13 +190,13 @@ def test_ticket_keys_are_only_those_of_projects_my_tickets_have_been_in() -> Non
     db = Database(":memory:")
     db.migrate("jira", MIGRATIONS)
     plugin = JiraPlugin()
-    assert plugin.linking_patterns(_ctx(db)) == {"ticket": None}  # nothing seen yet
+    assert plugin.linking_patterns(LinkingRequest(_ctx(db))) == {"ticket": None}  # nothing seen yet
     first = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
     repo = IssueRepository(db)
     repo.replace(JiraSnapshot(issues=[first.model_copy(update={"key": "OPS_2-7"})]))
     repo.replace(JiraSnapshot(issues=[first]))  # OPS_2's last ticket is gone: still known
     assert repo.projects() == ["APP", "OPS_2"]
-    graph = Graph(linking=plugin.linking_patterns(_ctx(db)))
+    graph = Graph(linking=plugin.linking_patterns(LinkingRequest(_ctx(db))))
     found = graph.named("APP-1, OPS_2-9, UTF-8, SHA-256, XAPP-3")
     assert [r.id for r in found] == ["APP-1", "OPS_2-9"]
 
