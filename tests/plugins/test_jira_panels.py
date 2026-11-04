@@ -225,3 +225,32 @@ def test_what_next_ranks_a_rollout_below_unblocked_work_and_never_nominates_it()
     assert ranked == ["APP-2", "APP-1"]
     assert {i.title.split()[0]: i.signals is None for i in items} == {"APP-1": True, "APP-2": False}
     assert items[0].badges[0] == "in rollout" or items[1].badges[0] == "in rollout"
+
+
+def test_a_ticket_whose_only_pr_was_closed_unmerged_is_flagged() -> None:
+    closed_review = pr(1, state="CLOSED")
+    closed_progress = pr(2, state="CLOSED")
+    merged_too = pr(3, state="MERGED", merged_at=NOW)
+    closed_with_merged = pr(4, state="CLOSED")
+    dashboard = build(
+        github=snapshot(
+            closed_recent=[closed_review, closed_progress, closed_with_merged],
+            merged_recent=[merged_too],
+        ),
+        jira=JiraSnapshot(
+            issues=[
+                issue("APP-1", status="In Review"),
+                issue("APP-2", status="In Progress"),
+                issue("APP-3", status="In Progress"),
+                issue("APP-4", status="Closed"),
+            ]
+        ),
+    )
+    items = {i.title.split()[0]: i for i in panel(dashboard, "jira.jira_transitions").items}
+    assert items["APP-1"].subtitle == "PR #1 closed unmerged: reopen it or move the ticket back"
+    assert [a.fields["to"] for a in items["APP-1"].actions if a.name == "jira/transition"] == [
+        "In Progress"
+    ]
+    assert items["APP-2"].subtitle.startswith("PR #2 closed unmerged")
+    assert not [a for a in items["APP-2"].actions if a.name == "jira/transition"]
+    assert "APP-3" not in items  # its PR merged: nothing to reopen

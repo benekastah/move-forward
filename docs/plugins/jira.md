@@ -55,7 +55,9 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
 
 - **Jira transitions**: status changes the PR states suggest, each with a "Move to …"
   button that makes it in Jira (by the workflow's transition into that status, so it fails,
-  naming the statuses the ticket can go to, when there is none).
+  naming the statuses the ticket can go to, when there is none). A ticket in progress or
+  in review whose only PRs were closed without merging is flagged too ("reopen it or move
+  the ticket back"; in review, with a button back to in progress).
 - **What next**: my tickets (with their due dates), incidents (by escalation label, if configured), then bugs,
   then unblocked work.
 

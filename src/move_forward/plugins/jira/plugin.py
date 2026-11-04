@@ -133,6 +133,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
         prs = [p for p in graph.view_related(ticket_ref(issue.key), PR, _PrView) if p.mine]
         open_prs = [p for p in prs if p.state == "open"]
         merged = [p for p in prs if p.state == "merged"]
+        closed = [p for p in prs if p.state == "closed"]
         proposal = None
         targets: list[str] = []
         closing = False
@@ -158,6 +159,19 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
         ):
             targets = config.status_in_progress
             proposal = f"{issue.status} → {_first(targets)}: a PR is draft or has changes requested"
+        elif (
+            (
+                in_status(issue, config.status_in_progress)
+                or in_status(issue, config.status_in_review)
+            )
+            and closed
+            and not open_prs
+            and not merged
+        ):
+            numbers = ", ".join(f"#{p.number}" for p in closed)
+            proposal = f"PR {numbers} closed unmerged: reopen it or move the ticket back"
+            if in_status(issue, config.status_in_review):
+                targets = config.status_in_progress
         elif issue.status_category == "new" and prs:
             proposal = f"still {issue.status} but has PRs"
         to = targets[0] if targets else None
