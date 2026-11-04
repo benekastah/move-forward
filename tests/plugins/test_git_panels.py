@@ -88,6 +88,25 @@ def test_a_branch_behind_its_upstream_says_why_it_has_no_push_button() -> None:
     assert "git/push_branch" not in [a.name for a in item.actions]
 
 
+def test_a_renamed_branch_keeps_its_pr_by_its_upstream_name_or_its_commit() -> None:
+    old = pr(1, head="me/old-name", head_oid="abc")
+    local = local_snapshot(
+        branches=[
+            local_branch("main"),
+            local_branch("me/by-upstream", upstream="origin/me/old-name", ahead=1),
+            local_branch("me/by-commit", sha="abc", ahead_of_default=1),
+            local_branch("me/unrelated", sha="zzz", ahead_of_default=1),
+        ]
+    )
+    items = {
+        i.title: i
+        for i in panel(build(github=snapshot(mine=[old]), local=local), "git.local_work").items
+    }
+    assert items["me/by-upstream: 1 unpushed commits"].url == old.url
+    assert items["me/by-commit: 1 commits, never pushed"].badges == ["has PR"]
+    assert items["me/unrelated: 1 commits, never pushed"].badges == ["no PR"]
+
+
 def test_cleanup_lists_merged_and_gone_branches() -> None:
     merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
     local = local_snapshot(

@@ -43,6 +43,11 @@ class _PrView(Model):
         return Ref(kind=PR, id=self.id)
 
 
+def _named(repo: LocalRepo, name: str | None) -> Branch | None:
+    """The repo's branch called `name`, if it has one."""
+    return next((b for b in repo.branches if b.name == name), None) if name else None
+
+
 class _StackBranchView(Model):
     """What git reads of a `stack_branch` (git_stack's): which branch, and whether git-stack
     sees it merged."""
@@ -73,16 +78,39 @@ class Builder:
         }
         """Branches git-stack tracks, by checkout and name."""
 
-    def _pr(self, repo: str | None, branch: str, state: str) -> _PrView | None:
+    def _prs_for(self, repo: str | None, name: str, branch: Branch | None) -> list[_PrView]:
+        """My PRs from the branch: by its name, else, for a branch that was renamed, from
+        the name of its upstream, else any of mine whose head is the commit it is at."""
+        key = repo or ""
+        if found := self.prs_by_branch.get((key, name)):
+            return found
+        if branch is None:
+            return []
+        if branch.upstream and "/" in branch.upstream:
+            remote_name = branch.upstream.split("/", 1)[1]
+            if found := self.prs_by_branch.get((key, remote_name)):
+                return found
+        if branch.sha:
+            return [
+                pr
+                for (pr_repo, _), prs in self.prs_by_branch.items()
+                if pr_repo == key
+                for pr in prs
+                if pr.head_oid == branch.sha
+            ]
+        return []
+
+    def _pr(
+        self, repo: str | None, name: str, state: str, branch: Branch | None = None
+    ) -> _PrView | None:
         """My PR from the branch in `state`, e.g. "open" or "merged"."""
-        prs = self.prs_by_branch.get((repo or "", branch), [])
-        return next((pr for pr in prs if pr.state == state), None)
+        return next((pr for pr in self._prs_for(repo, name, branch) if pr.state == state), None)
 
     def _is_my_branch(self, repo: str | None, branch: Branch) -> bool:
         """Mine if a PR of mine comes from it, if I have commits on it that aren't on the
         default branch, or by its name's prefix. Without prefixes, a branch whose commits
         were counted and none are mine (a review checkout) isn't; one too old to count is."""
-        if (repo or "", branch.name) in self.prs_by_branch or branch.my_commits:
+        if self._prs_for(repo, branch.name, branch) or branch.my_commits:
             return True
         prefixes = self.config.my_branch_prefixes
         if prefixes:
@@ -110,7 +138,9 @@ class Builder:
         for repo in self.local.repos if self.local else []:
             for wt in repo.worktrees:
                 if wt.modified or wt.untracked:
-                    pr = self._pr(repo.github_repo, wt.branch or "", "open")
+                    pr = self._pr(
+                        repo.github_repo, wt.branch or "", "open", _named(repo, wt.branch)
+                    )
                     actions: list[Action] = []
                     if wt.modified:
                         actions.append(
@@ -148,7 +178,7 @@ class Builder:
                     reason = f"{branch.ahead_of_default} commits, never pushed"
                 if not reason:
                     continue
-                pr = self._pr(repo.github_repo, branch.name, "open")
+                pr = self._pr(repo.github_repo, branch.name, "open", branch)
                 actions = []
                 if not branch.behind:
                     actions.append(
@@ -218,7 +248,7 @@ class Builder:
             for b in repo.branches:
                 if self._stack_cleans(repo, b):
                     continue
-                merged = self._pr(repo.github_repo, b.name, "merged")
+                merged = self._pr(repo.github_repo, b.name, "merged", b)
                 if merged:
                     when = datetime.fromisoformat(merged.merged_at) if merged.merged_at else None
                     title = f"{b.name}: PR merged {age(self.now, when)} ago"
