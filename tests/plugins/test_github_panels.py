@@ -1,6 +1,6 @@
 """The GitHub plugin's panels, built as core builds the page."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from conftest import (
     ME,
@@ -127,7 +127,33 @@ def test_feedback_collects_threads_changes_requested_and_unanswered_comments() -
     assert set(items) == {"PR 1", "PR 2"}
     assert items["PR 1"].details == ["alice on src/x.py: Please rename this"]
     assert [link.text for link in items["PR 1"].links] == ["thread 1"]
-    assert items["PR 2"].details == ["changes requested", "issuecomment by alice"]
+    assert items["PR 2"].details == ["changes requested", "comments by alice"]
+
+
+def test_feedback_words_a_review_by_its_state() -> None:
+    pushed = NOW - timedelta(days=1)
+
+    def at(hours: int) -> datetime:
+        return pushed + timedelta(hours=hours)
+
+    reviewed = pr(
+        1,
+        last_commit_at=pushed,
+        events=[
+            event("PullRequestReview", at(1), actor="alice", state="APPROVED"),
+            event("PullRequestReview", at(2), actor="bob", state="CHANGES_REQUESTED"),
+            event("PullRequestReview", at(3), actor="carol", state="COMMENTED"),
+            event("PullRequestReview", at(4), actor="dave"),  # stored before states were kept
+        ],
+    )
+    dashboard = build(github=snapshot(mine=[reviewed]))
+    [item] = panel(dashboard, "github.feedback").items
+    assert item.details == [
+        "approved by alice",
+        "changes requested by bob",
+        "reviewed by carol",
+        "reviewed by dave",
+    ]
 
 
 def test_feedback_leaves_out_comments_and_threads_of_ignored_reviewers() -> None:

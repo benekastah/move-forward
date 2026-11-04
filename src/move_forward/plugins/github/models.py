@@ -47,6 +47,9 @@ class TimelineEvent(Model):
     """Login or team slug, for ReviewRequestedEvent."""
     reason: str | None = None
     """Why it left the merge queue, for RemovedFromMergeQueueEvent."""
+    state: str | None = None
+    """APPROVED, CHANGES_REQUESTED, COMMENTED and so on, for PullRequestReview; None for
+    other events and for reviews stored before it was kept."""
 
 
 class PullRequest(Model):

@@ -202,5 +202,8 @@ MIGRATIONS = [
     """
     ALTER TABLE github_pr_threads ADD COLUMN comment_count INTEGER NOT NULL DEFAULT 1;
     """,
+    """
+    ALTER TABLE github_pr_events ADD COLUMN state TEXT;  -- a review's state; NULL: not one, or before kept
+    """,
 ]
 """The github plugin's migrations."""

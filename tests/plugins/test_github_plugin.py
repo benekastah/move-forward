@@ -125,7 +125,9 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
             )
         ],
         events=[
-            TimelineEvent(type="ReviewRequestedEvent", at=NOW, reviewer_kind="team", reviewer="web")
+            TimelineEvent(
+                type="ReviewRequestedEvent", at=NOW, reviewer_kind="team", reviewer="web"
+            ),
         ],
         files=["a.py", "b.py"],
         merged_at=NOW,
@@ -247,3 +249,12 @@ def test_the_daily_prune_looks_up_old_misses_again() -> None:
     people.save_looked_up("alice", "a@x", NOW.replace(year=2025))
     assert GitHubPlugin().prune(ctx, Graph()) == ["will look up 1 reviewer email(s) again"]
     assert people.emails() == {"alice": "a@x"}
+
+
+def test_a_reviews_state_is_kept() -> None:
+    review = TimelineEvent(type="PullRequestReview", at=NOW, actor="bob", state="APPROVED")
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    store = PrRepository(db)
+    store.replace(snapshot(mine=[pr(1, events=[review])]))
+    assert store.load() == snapshot(mine=[pr(1, events=[review])])

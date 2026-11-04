@@ -5,7 +5,7 @@ from collections.abc import Collection
 from datetime import datetime
 
 from ... import localtime
-from .models import Check, PullRequest, Thread
+from .models import Check, PullRequest, Thread, TimelineEvent
 
 JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 BOT_LOGIN_RE = re.compile(r"bot\b|\[bot\]$|^copilot", re.IGNORECASE)
@@ -63,6 +63,19 @@ def ticket_keys(pr: PullRequest) -> list[str]:
     return seen
 
 
+FEEDBACK_VERBS = {
+    "APPROVED": "approved by",
+    "CHANGES_REQUESTED": "changes requested by",
+}
+
+
+def _feedback_verb(event: TimelineEvent) -> str:
+    """How feedback reads in the list: by the review's state, or a comment."""
+    if event.type == "IssueComment":
+        return "comments by"
+    return FEEDBACK_VERBS.get(event.state or "", "reviewed by")
+
+
 def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ()) -> list[str]:
     """Review and comment events by others after my last push that I haven't followed up on."""
     since = pr.last_commit_at
@@ -75,7 +88,7 @@ def unanswered_feedback(pr: PullRequest, me: str, ignored: Collection[str] = ())
         if event.actor == me:
             pending.clear()
         elif not is_bot(event.actor, ignored):
-            pending.append(f"{event.type.removeprefix('PullRequest').lower()} by {event.actor}")
+            pending.append(f"{_feedback_verb(event)} {event.actor}")
     return pending
 
 

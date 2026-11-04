@@ -59,7 +59,7 @@ fragment PrFields on PullRequest {
       ... on HeadRefForcePushedEvent { createdAt }
       ... on RemovedFromMergeQueueEvent { createdAt reason }
       ... on AddedToMergeQueueEvent { createdAt enqueuer { login } }
-      ... on PullRequestReview { createdAt author { login } }
+      ... on PullRequestReview { createdAt author { login } state }
       ... on IssueComment { createdAt author { login } }
     }
   }
