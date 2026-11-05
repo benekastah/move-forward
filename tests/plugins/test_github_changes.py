@@ -38,6 +38,23 @@ def test_a_pr_becoming_mergeable_is_said_once() -> None:
     assert _kinds(_mine(**READY), _mine(**READY)) == []
 
 
+def test_unknown_mergeability_does_not_repeat_ready_or_conflict_notifications() -> None:
+    unknown = {**READY, "mergeable": "UNKNOWN"}
+    assert _kinds(_mine(**unknown), _mine(**READY)) == []
+    assert _kinds(_mine(mergeable="UNKNOWN"), _mine(mergeable="CONFLICTING")) == []
+    assert _kinds(
+        _mine(mergeable="UNKNOWN", review_decision="REVIEW_REQUIRED", rollup_state="SUCCESS"),
+        _mine(**READY),
+    ) == [("pr_mergeable", "can be merged")]
+    assert _kinds(_mine(**unknown), _mine(**READY, head_oid="b" * 40)) == [
+        ("pr_mergeable", "can be merged")
+    ]
+    assert _kinds(
+        _mine(mergeable="UNKNOWN"),
+        _mine(mergeable="CONFLICTING", head_oid="b" * 40),
+    ) == [("merge_conflict", "has a merge conflict")]
+
+
 def test_a_pr_that_is_new_to_the_snapshot_says_nothing_of_its_state() -> None:
     assert _kinds(snapshot(), _mine(**READY)) == []
 

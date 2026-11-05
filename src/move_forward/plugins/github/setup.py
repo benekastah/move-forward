@@ -18,6 +18,8 @@ TEMPLATE = """\
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners, e.g. "#!required"
 # ticket_link_prefixes = []             # PR body lines that link the ticket start with one, e.g. ["Link", "Closes"]
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
+# default_team_reviewer_assignment = "team" # team requests count without an individual
+# team_reviewer_assignment = {}          # by slug, e.g. { bacon = "individual" }
 # email_domains = []                     # reviewers' email domains, if not just your email's
 # stale_review_hours = 24                # a review request this old can be nudged
 # merge_queue_eviction_days = 2        # how long a merge-queue removal stays in CI failures

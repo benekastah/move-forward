@@ -395,6 +395,19 @@ def test_todo_done_and_undone(config: Config, work_notes: None) -> None:
         run("notes/todo_undone", config, fields)
 
 
+def test_an_entry_with_one_todo_can_be_done_from_the_dashboard(
+    config: Config, work_notes: None
+) -> None:
+    built = refresh.build_dashboard(config, _stored(config))
+    todos = built.find_panel("notes.todos")
+    assert todos is not None
+    single = next(item for item in todos.items if item.title == "APP-2 Other")
+    assert [(a.name, a.fields) for a in single.actions[:1]] == [
+        ("notes/todo_done", _todo(config, "only one", "APP-2 Other"))
+    ]
+    assert single.actions[0].checkbox
+
+
 def test_todo_delete_and_errors(config: Config, work_notes: None) -> None:
     fields = _todo(config, "no size here")
     assert run("notes/todo_delete", config, fields) == "dropped: no size here"

@@ -147,12 +147,30 @@ class PrRepository:
                     for i, f in enumerate(pr.files)
                 ]
         with self._db.transaction() as conn:
-            for table in ("github_prs", "github_account", "github_team_members"):
+            for table in (
+                "github_prs",
+                "github_account",
+                "github_team_members",
+                "github_team_memberships",
+                "github_membership_teams",
+            ):
                 conn.execute(f"DELETE FROM {table}")
             conn.execute("INSERT INTO github_account VALUES (?)", (snapshot.login,))
             conn.executemany(
                 "INSERT OR IGNORE INTO github_team_members VALUES (?)",
                 [(login,) for login in snapshot.team_members],
+            )
+            conn.executemany(
+                "INSERT INTO github_membership_teams VALUES (?)",
+                [(team,) for team in snapshot.team_memberships],
+            )
+            conn.executemany(
+                "INSERT OR IGNORE INTO github_team_memberships VALUES (?, ?)",
+                [
+                    (team, login)
+                    for team, members in snapshot.team_memberships.items()
+                    for login in members
+                ],
             )
             for table in ("github_prs", *CHILD_TABLES):
                 if rows[table]:
@@ -259,7 +277,20 @@ class PrRepository:
                 )
             )
         members = [r["login"] for r in self._db.query("SELECT login FROM github_team_members")]
-        return GitHubSnapshot(login=account[0]["login"], team_members=members, **lists)
+        memberships: dict[str, list[str]] = {
+            row["team"]: []
+            for row in self._db.query("SELECT team FROM github_membership_teams ORDER BY team")
+        }
+        for row in self._db.query(
+            "SELECT team, login FROM github_team_memberships ORDER BY team, login"
+        ):
+            memberships.setdefault(row["team"], []).append(row["login"])
+        return GitHubSnapshot(
+            login=account[0]["login"],
+            team_members=members,
+            team_memberships=dict(memberships),
+            **lists,
+        )
 
 
 class DerivedRepository:

@@ -1,7 +1,7 @@
 """What a PR's fields say about it: its review state, checks, tickets and feedback."""
 
 import re
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from datetime import datetime
 
 from ...api import localtime
@@ -24,6 +24,34 @@ def review_required(pr: PullRequest) -> bool:
     """Whether the base branch requires a review: GitHub's `reviewDecision` is null when none
     is required (it is APPROVED, CHANGES_REQUESTED or REVIEW_REQUIRED otherwise)."""
     return pr.review_decision is not None
+
+
+def reviewer_assignment_reasons(
+    pr: PullRequest,
+    default: str,
+    by_team: Mapping[str, str],
+    memberships: Mapping[str, list[str]],
+) -> list[str]:
+    """Missing reviewer requests, checking each individual-policy team's own members."""
+    reasons: list[str] = []
+    if (
+        review_required(pr)
+        and not approved(pr)
+        and not pr.requested_users
+        and not pr.requested_teams
+    ):
+        reasons.append("no reviewer requested")
+    owner = pr.repo.partition("/")[0]
+    requested = {login.casefold() for login in pr.requested_users}
+    for team in pr.requested_teams:
+        if by_team.get(team, default) == "team":
+            continue
+        members = memberships.get(f"{owner}/{team}")
+        if members is None:
+            reasons.append(f"cannot verify members of {team}")
+        elif requested.isdisjoint(login.casefold() for login in members):
+            reasons.append(f"request a member of {team}")
+    return reasons
 
 
 def approved(pr: PullRequest) -> bool:
@@ -211,20 +239,31 @@ def progress(pr: PullRequest, ignored: Collection[str] = ()) -> str:
 
 
 def review_blockers(
-    pr: PullRequest, me: str, policy_checks: list[str], ignored: Collection[str] = ()
+    pr: PullRequest,
+    me: str,
+    policy_checks: list[str],
+    ignored: Collection[str] = (),
+    assignment_reasons: list[str] | None = None,
 ) -> list[str]:
     """Why the skill wouldn't nudge reviewers of my PR yet; empty when it's in order."""
     blockers: list[str] = []
     if approved(pr):
         blockers.append("already approved")
-    if not pr.requested_users and not pr.requested_teams:
-        blockers.append("no reviewers requested")
+    if assignment_reasons is None:
+        if not pr.requested_users and not pr.requested_teams:
+            blockers.append("no reviewers requested")
+    else:
+        blockers.extend(assignment_reasons)
     if has_conflicts(pr):
         blockers.append("conflicts")
     if any(c.name not in policy_checks for c in failing_checks(pr)):
         blockers.append("failing checks")
+    if any(c.name in policy_checks for c in failing_checks(pr)):
+        blockers.append("failing policy checks")
     if unresolved_threads(pr, ignored):
         blockers.append("unresolved threads")
+    if changes_requested(pr):
+        blockers.append("changes requested")
     if unanswered_feedback(pr, me, ignored):
         blockers.append("unanswered feedback")
     return blockers

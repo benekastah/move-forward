@@ -184,10 +184,25 @@ class Dashboard(Model):
         ]
 
 
-def _sorted(panel: Panel) -> Panel:
-    """Highest rank first, deferred items last."""
+def _sorted(panel: Panel, priority_of: act_now.PriorityOf = act_now.no_priority) -> Panel:
+    """Highest rank first, deferred items last; optionally importance before rank."""
+
+    def importance(item: Item) -> int:
+        assigned = [priority_of(ref) for ref in item.subjects]
+        levels = [act_now.PRIORITY_IMPORTANCE[level] for level in assigned if level is not None]
+        return max(levels, default=(item.signals.importance if item.signals else 0))
+
     return panel.model_copy(
-        update={"items": sorted(panel.items, key=lambda i: (i.deferred, -i.rank))}
+        update={
+            "items": sorted(
+                panel.items,
+                key=lambda i: (
+                    i.deferred,
+                    -(importance(i) if panel.sort_by_importance else 0),
+                    -i.rank,
+                ),
+            )
+        }
     )
 
 
@@ -390,7 +405,8 @@ def build(
                         surface,
                         item_actions,
                         known_action,
-                    )
+                    ),
+                    priority_of,
                 )
                 for plugin in plugins
                 for panel in plugin.panels

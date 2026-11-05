@@ -59,9 +59,10 @@ browsers. A fuller policy (`script-src`) would have to allow the pages' inline s
 need a nonce per page: not worth the risk of breaking them here."""
 REQUEST_TIMEOUT_SECONDS = 30
 """How long a connection can sit silent while a request is read before it is dropped, so a
-client that opens one and sends a byte at a time can't hold a thread for ever. Requests
-close their connection (HTTP/1.0), so no idle keep-alive is cut off, and the notifications
-poll is a short request of its own."""
+client that opens one and sends a byte at a time can't hold a thread for ever. Regular
+requests close their connection (HTTP/1.0); the notification stream keeps writing."""
+NOTIFICATION_STREAM_SECONDS = 5
+"""How often a connected dashboard tab checks for notifications and gets a heartbeat."""
 CHANGE_LOOP_SECONDS = 1.0
 """How often the change loop looks for plugins whose `change_check_seconds` have passed."""
 TLS_RECHECK_SECONDS = 3600
@@ -72,6 +73,7 @@ LOGIN_CODE_PATH = "/login/code"
 HANDSHAKE_PATHS = (LOGIN_CHALLENGE_PATH, LOGIN_CODE_PATH)
 """`mfd open`'s steps; see `auth.Handshake`."""
 NOTIFICATIONS_PATH = "/notifications"
+NOTIFICATIONS_STREAM_PATH = "/notifications/stream"
 SUBJECTS_PATH = "/refresh/subjects"
 _SUBJECTS = TypeAdapter(Annotated[list[Ref], Field(max_length=MAX_SUBJECTS)])
 """`POST /refresh/subjects`'s body: the entities to fetch again, as `[{kind, id}]`."""
@@ -556,6 +558,25 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
         def _html(self, status: HTTPStatus, body: str) -> None:
             self._send(status, body, "text/html; charset=utf-8")
 
+        def _notification_stream(self) -> None:
+            """Send notifications as server events while the tab stays connected. The
+            heartbeat detects tabs that closed and keeps the connection from going idle."""
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            try:
+                while not shell.stopping():
+                    self.wfile.write(b": heartbeat\n\n")
+                    self.wfile.flush()
+                    found = app.take_notifications()
+                    if found != "[]":
+                        self.wfile.write(f"data: {found}\n\n".encode())
+                        self.wfile.flush()
+                    time.sleep(NOTIFICATION_STREAM_SECONDS)
+            except OSError:  # the tab closed or the browser suspended its connection
+                pass
+
         def _redirect(self, location: str, notice: str = "") -> None:
             """Send the browser to `location`, which shows `notice` (see `_take_notice`)."""
             self.send_response(HTTPStatus.SEE_OTHER)
@@ -640,7 +661,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 return
             if self._refuse_strangers():
                 return
-            if url.path == "/":
+            if url.path == NOTIFICATIONS_STREAM_PATH:
+                self._notification_stream()
+            elif url.path == "/":
                 query = parse_qs(url.query)
                 notice = self._take_notice()
                 self._html(HTTPStatus.OK, app.dashboard_page(notice, _spot(query)))

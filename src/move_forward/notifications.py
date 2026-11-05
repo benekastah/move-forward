@@ -31,7 +31,7 @@ DASHBOARD_KINDS = {
 }
 """The kinds core makes events of, with what each says, for the settings page."""
 MAX_DELIVERED_AT_ONCE = 20
-"""Events the page gets in one go; the rest are for the next time it asks."""
+"""Distinct things the page gets in one go; the rest wait for its next request."""
 MAX_TEXT = 200
 
 
@@ -109,22 +109,30 @@ class NotificationRepository:
 
     def take(self, now: datetime, keep: timedelta) -> list[Notification]:
         """The events not yet told, one notification per thing, marked told; those older
-        than `keep` are dropped. At most `MAX_DELIVERED_AT_ONCE` events: the rest stay."""
+        than `keep` are dropped. At most `MAX_DELIVERED_AT_ONCE` things are told: every
+        pending event about each of them is included, so repeats cannot starve other work."""
         cutoff = (now - keep).isoformat()
         self._db.execute("DELETE FROM notifications WHERE created_at < ?", (cutoff,))
-        rows = self._db.query(
-            "SELECT * FROM notifications WHERE told_at IS NULL ORDER BY id LIMIT ?",
+        selected = self._db.query(
+            "SELECT thing FROM notifications WHERE told_at IS NULL GROUP BY thing"
+            " ORDER BY MIN(id) LIMIT ?",
             (MAX_DELIVERED_AT_ONCE,),
+        )
+        if not selected:
+            return []
+        places = ", ".join("?" for _ in selected)
+        rows = self._db.query(
+            f"SELECT * FROM notifications WHERE told_at IS NULL AND thing IN ({places}) ORDER BY id",
+            tuple(row["thing"] for row in selected),
         )
         things: dict[str, list[tuple[str, str, str]]] = {}
         for row in rows:
             things.setdefault(row["thing"], []).append((row["title"], row["text"], row["anchor"]))
-        if rows:
-            with self._db.transaction() as conn:
-                conn.executemany(
-                    "UPDATE notifications SET told_at = ? WHERE id = ?",
-                    [(now.isoformat(), row["id"]) for row in rows],
-                )
+        with self._db.transaction() as conn:
+            conn.executemany(
+                "UPDATE notifications SET told_at = ? WHERE id = ?",
+                [(now.isoformat(), row["id"]) for row in rows],
+            )
         return [_notification(thing, found) for thing, found in things.items()]
 
 

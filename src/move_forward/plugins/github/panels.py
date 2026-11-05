@@ -26,6 +26,7 @@ from .prs import (
     merge_blockers,
     needs_re_review,
     review_required,
+    reviewer_assignment_reasons,
     ticket_keys,
     unanswered_feedback,
     unresolved_threads,
@@ -68,6 +69,13 @@ def _or(words: list[str]) -> str:
     return f"{', '.join(words[:-1])} or {words[-1]}" if len(words) > 1 else "".join(words)
 
 
+def _would_cycle(child: str, parent: str, parents: dict[str, str]) -> bool:
+    """Whether attaching `child` under `parent` would loop through existing parents."""
+    while parent != child and parent in parents:
+        parent = parents[parent]
+    return parent == child
+
+
 def pr_item(
     now: datetime,
     pr: PullRequest,
@@ -90,6 +98,12 @@ def pr_item(
         signals=signals,
         fingerprint=fingerprint,
     )
+
+
+def _housekeeping_item(now: datetime, pr: PullRequest, problems: list[str]) -> Item:
+    """A PR in housekeeping, with its target branch visible beside its usual context."""
+    item = pr_item(now, pr, details=problems)
+    return item.model_copy(update={"subtitle": f"{item.subtitle} · into {pr.base}"})
 
 
 def review_effort(lines: int, files: int, config: GitHubConfig) -> Effort:
@@ -208,6 +222,8 @@ class Builder:
         items: list[Item] = []
         if self.gh:
             for pr in self.gh.direct_requests:
+                if pr.is_draft:
+                    continue
                 items.append(
                     pr_item(
                         self.now,
@@ -220,10 +236,10 @@ class Builder:
                         fingerprint=pr.head_oid,
                     )
                 )
-            seen = {pr.url for pr in self.gh.direct_requests}
+            seen = {item.url for item in items}
             for pr in self.gh.reviewed_by_me:
                 reason = needs_re_review(pr, self.me)
-                if reason and pr.url not in seen:
+                if reason and pr.url not in seen and not pr.is_draft:
                     items.append(
                         pr_item(
                             self.now,
@@ -243,42 +259,164 @@ class Builder:
                             fingerprint=pr.head_oid,
                         )
                     )
-            asked = {pr.url for pr in (*self.gh.direct_requests, *self.gh.reviewed_by_me)}
-            for pr in self.gh.mentioned:
-                if pr.url not in asked and not pr.is_draft:
-                    items.append(
-                        pr_item(
-                            self.now,
-                            pr,
-                            details=["mentions you"],
-                            rank=pr.updated_at.timestamp(),
-                            signals=Signals(verb="Reply", task="reply", effort="minutes"),
-                            fingerprint=pr.head_oid,
-                        )
+                    seen.add(pr.url)
+            for pr in self.gh.team_requests:
+                if pr.is_draft or approved(pr) or pr.url in seen:
+                    continue
+                items.append(
+                    pr_item(
+                        self.now,
+                        pr,
+                        details=[
+                            "team review requested: " + ", ".join(pr.requested_teams),
+                            *self._my_part(pr),
+                        ],
+                        rank=pr.updated_at.timestamp(),
+                        signals=_review(
+                            pr, self.me, self.config, self._part(pr), team_slugs=self._slugs()
+                        ),
+                        fingerprint=pr.head_oid,
                     )
+                )
+                seen.add(pr.url)
         return Panel(
             key="reviews_for_me",
             priority=Band.REVIEWS,
             act_now=True,
             snoozable=True,
-            title="Reviews for me",
-            description="PRs asking for my review directly, that changed since I reviewed them, or"
-            " that mention me.",
+            title="Ready for me to review",
+            description="Direct and team requests, and PRs changed since my review.",
+            items=items,
+        )
+
+    def replies_for_me(self) -> Panel:
+        """Mentions that ask me for a reply rather than a PR review."""
+        items: list[Item] = []
+        if self.gh:
+            asked = {
+                pr.url
+                for pr in (
+                    *self.gh.direct_requests,
+                    *self.gh.reviewed_by_me,
+                    *self.gh.team_requests,
+                )
+            }
+            for pr in self.gh.mentioned:
+                if pr.url in asked or pr.is_draft:
+                    continue
+                items.append(
+                    pr_item(
+                        self.now,
+                        pr,
+                        details=["mentions you"],
+                        rank=pr.updated_at.timestamp(),
+                        signals=Signals(verb="Reply", task="reply", effort="minutes"),
+                        fingerprint=pr.head_oid,
+                    )
+                )
+        return Panel(
+            key="replies_for_me",
+            priority=Band.REVIEWS + 1,
+            act_now=True,
+            snoozable=True,
+            title="Replies for me",
+            description="Open PRs that mention me without requesting my review.",
             items=items,
         )
 
     # My PRs
 
+    def _assignment_reasons(self, pr: PullRequest) -> list[str]:
+        """Reviewer requests still needed, with membership checked for each team."""
+        return reviewer_assignment_reasons(
+            pr,
+            self.config.default_team_reviewer_assignment,
+            self.config.team_reviewer_assignment,
+            self.gh.team_memberships if self.gh else {},
+        )
+
+    def review_stages(self) -> tuple[Panel, Panel]:
+        """My PRs needing work before review, then clean ones awaiting review."""
+        fixing: list[Item] = []
+        awaiting: list[Item] = []
+        for pr in self.mine:
+            if pr.is_draft or pr.in_merge_queue:
+                continue
+            ci = [c for c in failing_checks(pr) if c.name not in self.config.policy_checks]
+            policy = [c for c in failing_checks(pr) if c.name in self.config.policy_checks]
+            threads = unresolved_threads(pr, self.config.ignored_reviewers)
+            unanswered = unanswered_feedback(pr, self.me, self.config.ignored_reviewers)
+            assignment = self._assignment_reasons(pr)
+            reasons = [
+                *(["CI failing: " + ", ".join(c.name for c in ci)] if ci else []),
+                *(["policy failing: " + ", ".join(c.name for c in policy)] if policy else []),
+                *(["merge conflict"] if has_conflicts(pr) else []),
+                *([f"{len(threads)} unresolved review thread(s)"] if threads else []),
+                *(["changes requested"] if changes_requested(pr) else []),
+                *unanswered,
+                *assignment,
+            ]
+            if reasons:
+                if threads or unanswered or changes_requested(pr):
+                    signals = Signals(verb="Address feedback", task="feedback", effort="hour")
+                elif ci:
+                    signals = Signals(verb="Fix CI", task="fix_ci", effort="hour")
+                elif policy:
+                    signals = Signals(
+                        verb="Meet PR policy", task="meet_pr_policy", effort="minutes"
+                    )
+                elif has_conflicts(pr):
+                    signals = Signals(
+                        verb="Resolve conflicts", task="resolve_conflicts", effort="hour"
+                    )
+                else:
+                    signals = Signals(
+                        verb="Request a reviewer", task="request_reviewer", effort="minutes"
+                    )
+                fixing.append(
+                    pr_item(
+                        self.now,
+                        pr,
+                        details=reasons,
+                        rank=-pr.updated_at.timestamp(),
+                        signals=signals,
+                    )
+                )
+            elif not approved(pr) and (
+                review_required(pr) or pr.requested_users or pr.requested_teams
+            ):
+                who = [*pr.requested_users, *(f"team {team}" for team in pr.requested_teams)]
+                awaiting.append(
+                    pr_item(
+                        self.now,
+                        pr,
+                        details=["ready to ping " + ", ".join(who)],
+                        rank=-pr.updated_at.timestamp(),
+                    )
+                )
+        return (
+            Panel(
+                key="fix_before_review",
+                priority=Band.REVIEWS - 2,
+                title="Fix before review",
+                description="My open PRs with failing checks, conflicts, feedback or missing reviewers.",
+                items=fixing,
+                sort_by_importance=True,
+            ),
+            Panel(
+                key="ready_for_review",
+                priority=Band.REVIEWS - 1,
+                title="Ready for review",
+                description="My clean PRs awaiting approval; pending checks do not hold them back.",
+                items=awaiting,
+            ),
+        )
+
     def needs_reviewer(self) -> Panel:
         items: list[Item] = []
         for pr in self.mine:
-            if pr.is_draft or approved(pr) or not review_required(pr) or pr.requested_users:
+            if pr.is_draft or not (details := self._assignment_reasons(pr)):
                 continue
-            details: list[str] = []
-            if pr.requested_teams:
-                details.append("requested from team: " + ", ".join(pr.requested_teams))
-            else:
-                details.append("no reviewers requested")
             if self.derived and (suggestions := self.derived.suggestions.get(pr.url)):
                 details.append(
                     "recent committers here: "
@@ -289,7 +427,7 @@ class Builder:
             key="needs_reviewer",
             priority=Band.REVIEWERS,
             title="Needs a reviewer",
-            description="My open PRs with no person requested and no approval yet.",
+            description="My open PRs missing a reviewer request under their teams' rules.",
             items=items,
         )
 
@@ -474,7 +612,9 @@ class Builder:
         )
 
     def metadata(self) -> Panel:
-        items: list[Item] = []
+        items: dict[str, Item] = {}
+        prs = {pr.url: pr for pr in self.mine}
+        by_head = {(pr.repo, pr.head): pr for pr in self.mine}
         for pr in self.mine:
             problems = [label for label in pr.labels if label in self.config.placeholder_labels]
             keys = self._ticket_keys(pr)
@@ -503,14 +643,50 @@ class Builder:
                 and not any(e.open_todos for e in self._entries(pr))
             ):
                 problems.append("draft with green CI and no open todos: ready?")
-            if problems:
-                items.append(pr_item(self.now, pr, details=problems))
+            if problems or pr.is_draft:
+                items[pr.url] = _housekeeping_item(self.now, pr, problems)
+
+        # Include parents even when they have no housekeeping flags, so a draft's
+        # target branch has a visible place in the tree.
+        parents: dict[str, str] = {}
+        for url in list(items):
+            child = prs[url]
+            seen = {url}
+            while (parent := by_head.get((child.repo, child.base))) is not None:
+                if parent.url in seen or _would_cycle(child.url, parent.url, parents):
+                    break
+                seen.add(parent.url)
+                items.setdefault(
+                    parent.url,
+                    _housekeeping_item(self.now, parent, []),
+                )
+                parents[child.url] = parent.url
+                child = parent
+
+        descendants: dict[str, list[str]] = {}
+        for child, parent in parents.items():
+            descendants.setdefault(parent, []).append(child)
+            items[child] = items[child].model_copy(update={"parent_anchor": items[parent].anchor})
+
+        def has_open(url: str) -> bool:
+            return not prs[url].is_draft or any(
+                has_open(child) for child in descendants.get(url, [])
+            )
+
+        for url, item in items.items():
+            if url in descendants:
+                items[url] = item.model_copy(
+                    update={
+                        "children_open": has_open(url),
+                        "children_title": "PRs based on this branch",
+                    }
+                )
         return Panel(
             key="metadata",
             priority=Band.METADATA,
             title="PR housekeeping",
-            description="Unknown labels, missing ticket links, drafts that look ready, big PRs.",
-            items=items,
+            description="Draft branch trees, unknown labels, missing ticket links, big PRs.",
+            items=list(items.values()),
         )
 
     # Team
@@ -544,9 +720,13 @@ class Builder:
         )
 
     def panels(self) -> list[Panel]:
+        fixing, awaiting = self.review_stages()
         ready, held = self.ready_to_merge()
         return [
+            fixing,
+            awaiting,
             self.reviews_for_me(),
+            self.replies_for_me(),
             self.feedback(),
             self.ci_failures(),
             self.policy(),

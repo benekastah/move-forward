@@ -50,6 +50,13 @@ splitting" or are "worth splitting", in PR housekeeping) and `split_pr_labels` (
 mean worth splitting whatever the lines), and `reviewer_history_days`
 how far back commits count for reviewer suggestions. `[github.teams]` gives a team's GitHub
 slug where it isn't the team's name.
+`default_team_reviewer_assignment` is `"team"` by default: a team request is enough.
+`team_reviewer_assignment` overrides it by GitHub team slug, for example
+`{ bacon = "individual" }`. For an `"individual"` team, the PR must request at least one
+member of that team as a person too. A person in several requested teams can satisfy each
+of them. Membership is fetched per team; if it cannot be verified, the PR stays in
+Fix before review with that reason. A PR requiring review with no reviewer requested
+still needs one.
 
 ## Publishes
 
@@ -59,12 +66,19 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
 
 ## Panels
 
-- **Reviews for me**: PRs requesting my review as a person, and PRs I reviewed that were
-  pushed or re-requested since. Also open non-draft PRs of others that mention me (updated
-  within `history_days`, found by one search without files) and that aren't otherwise
-  here, with Act now's "Reply".
+- **Fix before review**: my open, non-draft PRs with failing CI or policy checks, conflicts,
+  unresolved or unanswered feedback, changes requested, or reviewer assignments missing
+  under the teams' rules. A changes request counts even when another reviewer approved.
+  The reasons appear together on one item; assigned importance sorts before age.
+- **Ready for review**: my open, non-draft PRs without those blockers, waiting for approval.
+  Pending CI is allowed. Each item says whom to ping.
+- **Ready for me to review**: non-draft PRs requesting me or one of my teams, and PRs pushed
+  or re-requested since I reviewed them.
+- **Replies for me**: open non-draft PRs of others that mention me (updated within
+  `history_days`) without asking for a review, with Act now's "Reply".
 - **Feedback to address**: unresolved threads, changes requested, comments since my last
-  push I haven't answered.
+  push I haven't answered. This and the next diagnostic panels remain below the three
+  review stages, so their detailed links and Act now nominations remain available.
 - **CI failures**: failing checks and merge-queue evictions in the last
   `merge_queue_eviction_days` (2), unless the PR is back in the queue, was queued again, or
   is green now. Checks
@@ -72,20 +86,22 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
 - **PR policy**: failing checks named in `policy_checks`, linked to their details, which
   say what's missing (a label, an assignee).
 - **Merge conflicts**.
-- **Reviews for me** and **Requested from my teams** size a review by the files that
+- **Ready for me to review** and **Requested from my teams** size a review by the files that
   CODEOWNERS gives me or my teams, when there are some: "my part: 12 lines in 2 of 119
   files". The PR's badges still show the whole PR. Without owned files, the whole PR sizes it.
-- **Needs a reviewer**: no person requested and no approval. Approval is GitHub's `reviewDecision`
-  when it gives one; it is null where the base branch requires no review, and then neither
-  this panel nor Ready to merge asks for an approval. PRs requesting one of my
-  `teams` get recent committers to the PR's directories as suggestions for whom to assign
-  instead.
+- **Needs a reviewer**: the assignment reasons from Fix before review, with recent
+  committers suggested for PRs requesting a team. GitHub's `reviewDecision` is null where
+  the base branch requires no review; Ready to merge asks for no approval there.
 - **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs). A PR that GitHub's merge state calls BEHIND ("behind base: update the branch") or BLOCKED with nothing else we can see ("blocked by branch protection") isn't ready either: it's held, with that reason.
 - **In the merge queue**: my PRs waiting in it. Nothing to act on, so Act now ignores it.
 - **Requested from my teams**: PRs waiting on any of my `teams`, ranked by how many files
   CODEOWNERS gives those teams (required first) and how many are in directories I commit
   to.
-- **PR housekeeping**: unknown labels, missing ticket links, drafts that look ready.
+- **PR housekeeping**: all my drafts, plus PRs with unknown labels, missing ticket links,
+  or other housekeeping flags. Each PR says which branch it targets. PRs based on another
+  PR's head branch nest beneath that PR, including a parent with no housekeeping flags.
+  A branch tree starts expanded if it contains a non-draft PR, and collapsed if all its
+  PRs are drafts; the page remembers toggles.
 
 ## Act now
 
@@ -105,6 +121,9 @@ conflicts (about an hour), and PRs ready to merge (quick, closing the PR).
 Subscribe to these kinds under Notifications on `/settings` (or `[notifications] subscribe`
 as `github.<kind>`); each is said once, when the state changes between two refreshes, and
 a PR the last refresh didn't hold says nothing of its state.
+GitHub can briefly report mergeability as `UNKNOWN` while recalculating it. Returning
+to a ready or conflicting result after that temporary state does not repeat the
+notification unless a review, check, or commit changed.
 
 | Kind | When |
 | --- | --- |

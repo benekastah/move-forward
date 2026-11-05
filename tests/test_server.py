@@ -287,7 +287,7 @@ def test_focus_pages(client: HTTPConnection) -> None:
     body = get(client, "/focus").read().decode()
     assert "What to focus on?" in body and "href='/focus?cat=all&amp;i=0'" in body
     body = get(client, "/focus?cat=all&i=0").read().decode()
-    assert "1 of 1" in body and pr(1).title in body
+    assert "class='focus-position'>1 of " in body and pr(1).title in body
     assert get(client, "/focus?cat=all&i=x").status == 200
     assert get(client, "/focus?cat=nope").status == 404
 
@@ -744,6 +744,23 @@ def test_notifications_are_told_once(app: server.App, client: HTTPConnection) ->
     [told] = json.loads(response.read())
     assert (told["title"], told["body"], told["url"]) == ("PR 1", "can be merged", "/#item-1")
     assert json.loads(post(client, "/notifications", {}).read()) == []
+
+
+def test_notification_stream_delivers_events_without_a_browser_timer(
+    app: server.App, client: HTTPConnection
+) -> None:
+    event = Event(kind="x", thing="pr:1", title="PR 1", text="can be merged")
+    NotificationRepository(app.db).add("github", [event], datetime.now(UTC))
+    client.request("GET", "/notifications/stream", headers=SIGNED_IN)
+    response = client.getresponse()
+    assert response.status == 200
+    assert response.getheader("Content-Type") == "text/event-stream; charset=utf-8"
+    assert response.fp is not None
+    assert response.fp.readline() == b": heartbeat\n"
+    assert response.fp.readline() == b"\n"
+    assert [n["title"] for n in json.loads(response.fp.readline()[len(b"data: ") :])] == ["PR 1"]
+    assert response.fp.readline() == b"\n"
+    client.close()
 
 
 def test_a_notice_the_server_did_not_sign_is_not_shown(client: HTTPConnection) -> None:

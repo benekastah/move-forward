@@ -66,6 +66,27 @@ def test_build_with_nothing_stored() -> None:
     assert dashboard.generated_at == datetime(2026, 10, 30, 12, tzinfo=UTC)
 
 
+def test_a_panel_can_sort_assigned_importance_before_its_own_rank() -> None:
+    ordinary = Item(title="ordinary", rank=100, subjects=[Ref(kind="x", id="ordinary")])
+    critical = Item(title="critical", rank=1, subjects=[Ref(kind="x", id="critical")])
+    low = Item(title="low", rank=200, subjects=[Ref(kind="x", id="low")])
+    stage = Panel(
+        key="stage",
+        title="Stage",
+        description="",
+        items=[ordinary, critical, low],
+        sort_by_importance=True,
+    )
+    assigned = {"critical": 2, "low": 0}
+    built = panels.build(
+        NOW,
+        [panels.PluginPanels("x", "X", [stage])],
+        {},
+        priority_of=lambda ref: assigned.get(ref.id),
+    )
+    assert [item.title for item in built.panel("x.stage").items] == ["critical", "ordinary", "low"]
+
+
 def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
     dashboard = build(local=local_snapshot(), stacks=stacks(StackBranch(name="main")))
     assert [(g.key, g.panel_keys) for g in dashboard.groups] == [
@@ -76,7 +97,10 @@ def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
             [
                 f"github.{k}"
                 for k in (
+                    "fix_before_review",
+                    "ready_for_review",
                     "reviews_for_me",
+                    "replies_for_me",
                     "conflicts",
                     "feedback",
                     "ci_failures",
@@ -171,8 +195,9 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     todo_id = part.actions[0].fields["todo"]
     assert part.actions[0].fields == {"todo": todo_id}  # addressed by id
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
-    # The entry on the page gets the Add todo field and Put on ice, not the todo's own actions.
+    # A single-todo entry can be completed on the dashboard as well as in Focus mode.
     assert [a.name for a in panel(dashboard, "notes.todos").items[0].actions] == [
+        "notes/todo_done",
         "notes/todo_add",
         "notes/ice_item",
     ]
@@ -434,7 +459,10 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
     by_priority = [p.key for p in sorted(plugins_panels, key=lambda p: p.priority)]
     assert by_priority == [
         "notes.todos",
+        "github.fix_before_review",
+        "github.ready_for_review",
         "github.reviews_for_me",
+        "github.replies_for_me",
         "github.conflicts",
         "github.feedback",
         "github.ci_failures",
@@ -456,6 +484,7 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
     ]
     assert {p.key for p in built.panels if p.act_now} == {
         "github.reviews_for_me",
+        "github.replies_for_me",
         "github.feedback",
         "github.ci_failures",
         "github.policy",

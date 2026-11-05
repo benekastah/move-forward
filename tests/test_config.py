@@ -21,6 +21,22 @@ from move_forward.registry import enabled
 MINIMAL = 'email = "me@acme.com"\n'
 
 
+def test_github_reviewer_assignment_defaults_and_team_overrides() -> None:
+    default = GitHubConfig(org="acme")
+    assert default.default_team_reviewer_assignment == "team"
+    assert default.team_reviewer_assignment == {}
+    configured = GitHubConfig.model_validate(
+        {
+            "org": "acme",
+            "default_team_reviewer_assignment": "team",
+            "team_reviewer_assignment": {"bacon": "individual"},
+        }
+    )
+    assert configured.team_reviewer_assignment == {"bacon": "individual"}
+    with pytest.raises(ValidationError):
+        GitHubConfig.model_validate({"org": "acme", "team_reviewer_assignment": {"bacon": "any"}})
+
+
 def _load(tmp_path: Path, text: str) -> config.Config:
     path = tmp_path / "config.toml"
     path.write_text(text)

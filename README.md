@@ -7,9 +7,8 @@ from my work notes, and my Jira tickets. No AI involved:
 everything is worked out from GitHub, git, Jira and the notes.
 
 It runs a small HTTP server on localhost, refreshes in the background, and
-renders plain HTML with two small bits of JavaScript: the ping page's copy
-button, and a snippet that keeps the open sections in the browser's local storage so
-the page's periodic reload and the buttons' redirects don't collapse them.
+renders HTML. Browser scripts replace dashboard content after refreshes and
+actions while keeping the scroll position, and remember open sections in local storage.
 All state lives in one SQLite database.
 
 ## Setup
@@ -168,9 +167,15 @@ their most urgent panel: notes (todos), github, git, git_stack, slack, jira.
 Drag a group's or a panel's title to move it (a panel within its group; Act
 now stays first); the order is kept in the database, and focus mode follows
 it. A group or panel new since then goes after the one it followed by default.
+Panels that order by importance use the priority set on an item's subject first, then
+their own rank for ties.
 Reset layout, in the footer, goes back to the default order.
-Only Act now starts expanded; each panel inside a group collapses too. Each
-plugin's page lists its panels.
+Only Act now starts expanded; each panel inside a group collapses too. Items
+can also nest under related items, with collapsible child lists. The page
+remembers which groups, panels and child lists you opened. Each plugin's page
+lists its panels.
+Dashboard action buttons update the page in place, keeping the scroll position. Without
+JavaScript, their normal form redirects still work.
 
 A group's title bar also says when its plugin last refreshed (in local time,
 with the date when it wasn't today), "refreshing…" while it does, or "refresh
@@ -203,11 +208,14 @@ question, or listing them in `[notifications] subscribe` (for example
 - Each plugin compares what it fetched with what it fetched last time (`Plugin.events`),
   so the first fetch never notifies, and only a change does. Events of kinds you haven't
   subscribed to are never stored.
-- Events wait on the server until a dashboard tab asks for them, every 15 seconds and on
-  load, so ones from while no tab was open are told when you open one. Events older than
-  `keep_hours` (24) are dropped.
+- Events wait on the server until a dashboard tab connects. The server streams them to open
+  tabs without a browser timer; older browsers ask every 15 seconds instead. Events from
+  while no tab was open are told when you open one. Events older than `keep_hours` (24)
+  are dropped.
 - Events about the same thing, say one PR's CI failing and a new push, come as one
-  notification. Clicking one opens the dashboard at the item, which is highlighted.
+  notification, even if many events have piled up. A request takes up to 20 different
+  things, so repeats about one PR cannot hold up other alerts. Clicking one opens the
+  dashboard at the item, which is highlighted.
 - `dashboard.source_failing`: a plugin has failed to fetch for `failing_minutes` (15), said
   once until it works again. `dashboard.certificate_ending`: with `https` on, the
   certificates have ended or are about to; said once for each problem.
@@ -271,6 +279,11 @@ one is refreshed whole. It answers `204 No Content`, or `400` for a body that is
 `POST /layout` (JSON, sent by the page's drag script) stores the page's order:
 `{"groups": [group keys], "panels": {group key: [panel keys]}}`. It answers
 `204 No Content`, or `400` for a body that isn't one.
+
+`GET /notifications/stream` keeps a signed-in connection open and sends notifications as
+server events (`data: <JSON list>`), with a heartbeat every five seconds. `POST
+/notifications` returns the same JSON once for clients that cannot use the stream. Both
+take the events they deliver from the queue.
 
 A plugin's pages are served at `/<plugin>/<page>` (slack's ping page is `/slack/ping`), and
 its own page at `/<plugin>`; core's paths' first segments (`focus`, `settings`, `login`,

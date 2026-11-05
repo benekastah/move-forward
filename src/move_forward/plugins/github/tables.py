@@ -331,5 +331,23 @@ MIGRATIONS = [
     );
     """,
     ),
+    Migration(
+        "0010_team_memberships",
+        """
+    CREATE TABLE github_team_memberships ( -- fetched: each team's members; logins can repeat
+        team TEXT NOT NULL,
+        login TEXT NOT NULL,
+        PRIMARY KEY (team, login)
+    );
+    """,
+    ),
+    Migration(
+        "0011_membership_teams",
+        """
+    CREATE TABLE github_membership_teams ( -- fetched: teams whose members were checked, including empty teams
+        team TEXT PRIMARY KEY
+    );
+    """,
+    ),
 ]
 """The github plugin's migrations."""

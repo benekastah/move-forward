@@ -117,14 +117,14 @@ def test_nudge_blockers_and_staleness() -> None:
     found = pings(**stored)
     assert found[fresh.url].blockers == [] and not found[fresh.url].stale
     assert found[stale.url].stale
-    assert found[policy_only.url].blockers == []
+    assert found[policy_only.url].blockers == ["failing policy checks"]
     assert found[broken.url].blockers == ["failing checks"]
     assert found[threads.url].blockers == ["unresolved threads"]
     assert found[approved.url].blockers == ["already approved"]
-    assert found[nobody.url].blockers == ["no reviewers requested"]
+    assert found[nobody.url].blockers == ["no reviewer requested"]
     assert draft.url not in found
     built = dashboard(slack=True, **stored)
-    assert sorted(titles(built, "slack.nudges")) == ["PR 2", "PR 3"]
+    assert titles(built, "slack.nudges") == ["PR 2"]
     nudged = [i.title for i in built.act_now() if "the reviewers" in i.title]
     # PR 3's failing policy check is for me to meet first, so Act now names that instead
     assert sorted(nudged) == ["Ping the reviewers: PR 2"]
@@ -244,7 +244,7 @@ def test_open_slack_is_only_a_link_for_an_http_url() -> None:
     assert "no Slack link known" in form("javascript:alert(1)")
 
 
-def test_a_nudge_says_which_policy_checks_are_failing() -> None:
+def test_failing_policy_checks_hold_a_nudge_and_appear_in_review_stage() -> None:
     policy = pr(
         1,
         requested_teams=["web"],
@@ -260,5 +260,6 @@ def test_a_nudge_says_which_policy_checks_are_failing() -> None:
         github=snapshot(mine=[policy]),
         policy_checks=["CODEOWNERS", "guidelines", "tests"],
     )
-    [item] = panel(built, "slack.nudges").items
-    assert "PR policy failing: CODEOWNERS, guidelines" in item.details
+    assert panel(built, "slack.nudges").items == []
+    [item] = panel(built, "github.fix_before_review").items
+    assert "policy failing: CODEOWNERS, guidelines" in item.details

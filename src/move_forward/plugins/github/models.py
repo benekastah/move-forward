@@ -112,6 +112,8 @@ class GitHubSnapshot(Model):
     mentioned: list[PullRequest] = Field(default_factory=list)
     """Open PRs by others that mention me, updated within `history_days`."""
     team_members: list[str]
+    team_memberships: dict[str, list[str]] = Field(default_factory=dict)
+    """`owner/slug` to member logins, for requested teams. A login may be in many lists."""
 
 
 class ReviewerSuggestion(Model):

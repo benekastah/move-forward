@@ -36,6 +36,79 @@ build = dashboard
 # Reviews for me
 
 
+def test_review_stages_hold_real_blockers_but_not_pending_ci() -> None:
+    pending = pr(
+        1,
+        requested_users=["alice"],
+        checks=[Check(name="tests", state="PENDING")],
+    )
+    failing_ci = pr(2, requested_users=["alice"], checks=[Check(name="tests", state="FAILURE")])
+    failing_policy = pr(3, requested_users=["alice"], checks=[Check(name="risk", state="FAILURE")])
+    conflict = pr(4, requested_users=["alice"], mergeable="CONFLICTING")
+    feedback = pr(5, requested_users=["alice"], threads=[thread()])
+    approved_but_changes = pr(
+        6,
+        requested_users=["alice"],
+        review_decision="APPROVED",
+        reviews=[
+            approved_review(),
+            approved_review("bob").model_copy(update={"state": "CHANGES_REQUESTED"}),
+        ],
+    )
+    draft = pr(7, is_draft=True, checks=[Check(name="tests", state="FAILURE")])
+    built = build(
+        github=snapshot(
+            mine=[
+                pending,
+                failing_ci,
+                failing_policy,
+                conflict,
+                feedback,
+                approved_but_changes,
+                draft,
+            ]
+        ),
+        policy_checks=["risk"],
+    )
+    assert titles(built, "github.ready_for_review") == ["PR 1"]
+    assert set(titles(built, "github.fix_before_review")) == {
+        "PR 2",
+        "PR 3",
+        "PR 4",
+        "PR 5",
+        "PR 6",
+    }
+    details = {item.title: item.details for item in panel(built, "github.fix_before_review").items}
+    assert "CI failing: tests" in details["PR 2"]
+    assert "policy failing: risk" in details["PR 3"]
+    assert "merge conflict" in details["PR 4"]
+    assert "1 unresolved review thread(s)" in details["PR 5"]
+    assert "changes requested" in details["PR 6"]
+
+
+def test_each_individual_policy_team_needs_one_of_its_members_requested() -> None:
+    teams = ["bacon", "eggs"]
+    memberships = {"acme/bacon": ["alex", "shared"], "acme/eggs": ["shared", "erin"]}
+    only_eggs = pr(1, requested_teams=teams, requested_users=["erin"])
+    shared = pr(2, requested_teams=teams, requested_users=["SHARED"])
+    team_only = pr(3, requested_teams=["eggs"])
+    built = build(
+        github=snapshot(mine=[only_eggs, shared, team_only], team_memberships=memberships),
+        default_team_reviewer_assignment="team",
+        team_reviewer_assignment={"bacon": "individual"},
+    )
+    assert titles(built, "github.fix_before_review") == ["PR 1"]
+    assert set(titles(built, "github.ready_for_review")) == {"PR 2", "PR 3"}
+    assert "request a member of bacon" in panel(built, "github.fix_before_review").items[0].details
+
+    both_individual = build(
+        github=snapshot(mine=[only_eggs, shared], team_memberships=memberships),
+        default_team_reviewer_assignment="individual",
+    )
+    assert titles(both_individual, "github.fix_before_review") == ["PR 1"]
+    assert titles(both_individual, "github.ready_for_review") == ["PR 2"]
+
+
 def test_reviews_for_me_includes_direct_requests_and_changed_prs() -> None:
     reviewed_at = NOW - timedelta(days=1)
     pushed_after = pr(
@@ -65,7 +138,7 @@ def test_act_now_does_not_suggest_reviewing_a_draft() -> None:
     ready = pr(2, author="bob")
     dashboard = build(github=snapshot(direct_requests=[draft, ready]))
     assert [i.title for i in dashboard.act_now()] == [f"Review: {ready.title}"]
-    assert len(panel(dashboard, "github.reviews_for_me").items) == 2
+    assert len(panel(dashboard, "github.reviews_for_me").items) == 1
 
 
 def test_review_effort_needs_both_the_lines_and_the_files_within_a_limit() -> None:
@@ -103,8 +176,8 @@ def test_drafts_sort_last_in_every_panel() -> None:
     newest_draft = pr(1, author="alice", is_draft=True, updated_at=NOW)
     older = pr(2, author="alice", updated_at=NOW - timedelta(days=3))
     dashboard = build(github=snapshot(direct_requests=[newest_draft, older]))
-    assert titles(dashboard, "github.reviews_for_me") == ["PR 2", "PR 1"]
-    assert [i.deferred for i in panel(dashboard, "github.reviews_for_me").items] == [False, True]
+    assert titles(dashboard, "github.reviews_for_me") == ["PR 2"]
+    assert [i.deferred for i in panel(dashboard, "github.reviews_for_me").items] == [False]
 
 
 # Needs a reviewer
@@ -120,17 +193,18 @@ def test_needs_reviewer_lists_team_only_and_unrequested_prs_with_suggestions() -
     draft = pr(5, is_draft=True)
     dashboard = build(
         github=snapshot(mine=[team_only, nobody, has_person, approved, draft]),
+        team_reviewer_assignment={"core": "individual"},
         derived=DerivedSnapshot(
             suggestions={team_only.url: [ReviewerSuggestion(login="carol", commits=4)]}
         ),
     )
     items = {i.title: i for i in panel(dashboard, "github.needs_reviewer").items}
-    assert set(items) == {"PR 1", "PR 2"}
+    assert set(items) == {"PR 1", "PR 2", "PR 4"}
     assert items["PR 1"].details == [
-        "requested from team: core",
+        "request a member of core",
         "recent committers here: carol (4)",
     ]
-    assert items["PR 2"].details == ["no reviewers requested"]
+    assert items["PR 2"].details == ["no reviewer requested"]
 
 
 # Feedback
@@ -319,7 +393,34 @@ def test_metadata_flags_labels_links_and_ready_looking_drafts() -> None:
         "PR 2": ["no Link line for APP-2"],
         "PR 3": ["empty description"],
         "PR 4": ["draft with green CI and no open todos: ready?"],
+        "PR 5": [],
     }
+
+
+def test_housekeeping_groups_drafts_by_the_prs_their_base_branches_belong_to() -> None:
+    root = pr(1, head="feature/root", is_draft=True)
+    child = pr(2, head="feature/child", base="feature/root", is_draft=True)
+    grandchild = pr(3, head="feature/grandchild", base="feature/child", is_draft=True)
+    sibling = pr(4, head="feature/sibling", base="feature/root", is_draft=True)
+    built = build(github=snapshot(mine=[grandchild, sibling, child, root]))
+    items = {item.title: item for item in panel(built, "github.metadata").items}
+    assert items["PR 2"].parent_anchor == items["PR 1"].anchor
+    assert items["PR 3"].parent_anchor == items["PR 2"].anchor
+    assert items["PR 4"].parent_anchor == items["PR 1"].anchor
+    assert not items["PR 1"].children_open
+    assert not items["PR 2"].children_open
+
+    open_root = root.model_copy(update={"is_draft": False})
+    built = build(github=snapshot(mine=[grandchild, sibling, child, open_root]))
+    items = {item.title: item for item in panel(built, "github.metadata").items}
+    assert items["PR 1"].children_open
+    assert not items["PR 2"].children_open
+
+    open_child = child.model_copy(update={"is_draft": False})
+    built = build(github=snapshot(mine=[grandchild, sibling, open_child, root]))
+    items = {item.title: item for item in panel(built, "github.metadata").items}
+    assert items["PR 1"].children_open
+    assert items["PR 2"].children_open
 
 
 # Team PRs
@@ -649,9 +750,9 @@ def test_housekeeping_flags_my_drafts_untouched_for_stale_draft_days() -> None:
     old_open = pr(3, body="x", updated_at=NOW - timedelta(days=40))  # not a draft
     snap = snapshot(mine=[stale, fresh, old_open])
     details = {i.title: i.details for i in panel(build(github=snap), "github.metadata").items}
-    assert details == {"PR 1": ["stale draft: untouched 15d"]}
+    assert details == {"PR 1": ["stale draft: untouched 15d"], "PR 2": []}
     off = build(github=snap, stale_draft_days=0)
-    assert titles(off, "github.metadata") == []
+    assert titles(off, "github.metadata") == ["PR 1", "PR 2"]
 
 
 def test_a_pr_that_mentions_me_is_a_reply_unless_already_asked_for_or_a_draft() -> None:
@@ -661,11 +762,11 @@ def test_a_pr_that_mentions_me_is_a_reply_unless_already_asked_for_or_a_draft() 
     built = build(
         github=snapshot(direct_requests=[asked], mentioned=[mention, asked, draft]),
     )
-    items = {i.title: i for i in panel(built, "github.reviews_for_me").items}
-    assert items["PR 1"].details == ["mentions you"]
-    assert items["PR 1"].signals and items["PR 1"].signals.verb == "Reply"
-    assert items["PR 2"].details == ["review requested"]  # once, as a review request
-    assert "PR 3" not in items
+    replies = {i.title: i for i in panel(built, "github.replies_for_me").items}
+    assert replies["PR 1"].details == ["mentions you"]
+    assert replies["PR 1"].signals and replies["PR 1"].signals.verb == "Reply"
+    assert titles(built, "github.reviews_for_me") == ["PR 2"]
+    assert "PR 3" not in replies
     assert "Reply: PR 1" in [i.title for i in built.act_now()]
 
 

@@ -18,7 +18,9 @@ names are related through it.
 ## Panels
 
 - **Todos**: open `Left to do` items from the work notes, easy close-outs first, blocked
-  last. While the notes are empty (just upgraded, say), it says how to import them.
+  last. An entry with one open todo has its Done checkbox on the dashboard; entries with
+  several are split into individual todos in Focus mode. While the notes are empty (just
+  upgraded, say), it says how to import them.
 - **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw); git adds
   Delete branches and git_stack Untrack for a stack. The stack stays on ice with the
   commits it was iced at until it's reopened; Reopen asks first when its branches are

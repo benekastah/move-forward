@@ -53,6 +53,11 @@ catch up.
   `Link.done` strikes out a link to what's over (was `Link.pr_state`; `PrState` is gone);
   `Item.deferred` (was `Item.draft`) sorts an item last, and Act now leaves it out unless
   the plugin's `act_now` nominates it. A graph view also gets an entity's `lifecycle`.
+- **Nested panel items**: `Item.parent_anchor` names another item in the same panel by
+  its stable `anchor`. The page nests it below that item. Parents with children get a
+  collapsible section; `children_open` sets its initial state and `children_title` names it.
+- **Importance order**: `Panel.sort_by_importance` sorts its items first by user-assigned
+  importance on their subjects (or `Signals.importance`), then by `Item.rank`.
 - **Fetching some entities again**: `Plugin.refresh_subjects(req)`
   (`SubjectsRequest(ctx, refs, snapshot)`) returns `Subjects(snapshot, updated)`, or None
   to be refreshed whole; `subjects_timeout_seconds`. An action's `touched` refs are

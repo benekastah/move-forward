@@ -41,6 +41,17 @@ def test_events_about_the_same_thing_are_told_as_one() -> None:
     assert second.tag == "github:pr:2"
 
 
+def test_repeated_events_about_one_thing_do_not_hold_up_other_notifications() -> None:
+    repo = NotificationRepository(Database(":memory:"))
+    repo.add("github", [_event()] * (notifications.MAX_DELIVERED_AT_ONCE + 1), NOW)
+    repo.add("github", [_event(thing="pr:2", text="new review")], NOW)
+    assert [(n.tag, n.body) for n in repo.take(NOW, KEEP)] == [
+        ("github:pr:1", "can be merged"),
+        ("github:pr:2", "new review"),
+    ]
+    assert repo.take(NOW, KEEP) == []
+
+
 def test_two_plugins_events_about_one_thing_are_told_apart() -> None:
     repo = NotificationRepository(Database(":memory:"))
     repo.add("github", [_event(thing="https://pr/1")], NOW)

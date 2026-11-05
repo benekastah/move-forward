@@ -3,6 +3,7 @@
 The `Raw*` models mirror the GraphQL response shape, dropping anything we didn't ask for.
 """
 
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -433,9 +434,11 @@ def collect(
     history_days: int,
     now: datetime,
     scope: str = "org",
+    require_member: Callable[[str], bool] | None = None,
 ) -> GitHubSnapshot:
     """Every PR search the panels need, on `host`: within `org` when `scope` is "org", else
-    across the host."""
+    across the host. Membership is fetched for my teams and for requested teams whose
+    assignment rule needs an individual; `require_member` selects the latter."""
     within = f" org:{org}" if scope == "org" else ""
     since = (now - timedelta(days=history_days)).date().isoformat()
     with ThreadPoolExecutor(max_workers=PARALLEL_REQUESTS) as pool:
@@ -459,19 +462,39 @@ def collect(
         )
         merged = search(f"is:pr is:merged author:@me merged:>={since}{within}")
         closed = search(f"is:pr is:closed is:unmerged author:@me closed:>={since}{within}")
-        member_futures = [pool.submit(team_members, host, org, team) for team in teams]
+        mine_prs = mine.result()
+        membership_keys = {(org, team) for team in teams}
+        membership_keys.update(
+            (pr.repo.partition("/")[0], team)
+            for pr in mine_prs
+            for team in pr.requested_teams
+            if require_member is None or require_member(team)
+        )
+        member_futures = {
+            (owner, team): pool.submit(team_members, host, owner, team)
+            for owner, team in membership_keys
+        }
     team_requests: dict[str, PullRequest] = {}
     for future in team_futures:
         for pr in future.result():
             team_requests.setdefault(pr.url, pr)
+    memberships: dict[str, list[str]] = {}
+    for (owner, team), future in member_futures.items():
+        try:
+            memberships[f"{owner}/{team}"] = sorted(set(future.result()))
+        except CommandError:
+            # A team in another org may be visible on the PR but not list its members.
+            # The panel treats missing membership as unverified, never as a match.
+            continue
     return GitHubSnapshot(
         login=login_future.result(),
-        mine=mine.result(),
+        mine=mine_prs,
         direct_requests=direct.result(),
         reviewed_by_me=reviewed.result(),
         team_requests=list(team_requests.values()),
         merged_recent=merged.result(),
         closed_recent=closed.result(),
         mentioned=mentioned.result(),
-        team_members=sorted({login for f in member_futures for login in f.result()}),
+        team_members=sorted({login for members in memberships.values() for login in members}),
+        team_memberships=memberships,
     )

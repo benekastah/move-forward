@@ -2,8 +2,10 @@ import json
 from datetime import UTC, datetime
 
 import pytest
+from conftest import pr
 
 from move_forward.plugins.github import client as github
+from move_forward.plugins.github.models import PullRequest
 
 RAW_PR: dict[str, object] = {
     "number": 7,
@@ -278,3 +280,39 @@ def test_searches_stay_in_the_org_unless_the_scope_is_everywhere(
     )
     assert sum("org:acme" in q for q in inside) == 6  # every search but the team's, which names it
     assert not any("org:" in q for q in run("everywhere"))
+
+
+def test_collect_keeps_membership_per_team_even_when_a_person_is_in_both(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mine = pr(1, requested_teams=["bacon", "eggs"])
+
+    def search(host: str, query: str, with_files: bool = False) -> list[PullRequest]:
+        return [mine] if "is:open author:@me" in query else []
+
+    def login(host: str) -> str:
+        return "me"
+
+    def members(host: str, org: str, team: str) -> list[str]:
+        return ["shared", "alex"] if team == "bacon" else ["shared"]
+
+    monkeypatch.setattr(github, "search_prs", search)
+    monkeypatch.setattr(github, "login", login)
+    monkeypatch.setattr(github, "team_members", members)
+    found = github.collect(
+        "github.com", "acme", ["bacon", "eggs"], 14, datetime(2026, 10, 30, tzinfo=UTC)
+    )
+    assert found.team_memberships == {
+        "acme/bacon": ["alex", "shared"],
+        "acme/eggs": ["shared"],
+    }
+    assert found.team_members == ["alex", "shared"]
+    selective = github.collect(
+        "github.com",
+        "acme",
+        [],
+        14,
+        datetime(2026, 10, 30, tzinfo=UTC),
+        require_member=lambda team: team == "bacon",
+    )
+    assert selective.team_memberships == {"acme/bacon": ["alex", "shared"]}

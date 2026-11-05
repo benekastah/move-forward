@@ -21,6 +21,7 @@ DEFAULT_HOUR_REVIEW_MAX_FILES = 12
 DEFAULT_SPLIT_PR_SUGGEST_LINES = 600
 DEFAULT_SPLIT_PR_LINES = 800
 DEFAULT_REVIEWER_HISTORY_DAYS = 180
+ReviewerAssignment = Literal["team", "individual"]
 
 
 class GitHubConfig(Strict):
@@ -60,6 +61,12 @@ class GitHubConfig(Strict):
     flags them."""
     teams: dict[str, str] = Field(default_factory=dict)
     """A team's slug, by its name in the top-level `teams`, where the slug isn't the name."""
+    default_team_reviewer_assignment: ReviewerAssignment = "team"
+    """Whether a requested team alone is enough (`team`), or each requested team also
+    needs a requested member (`individual`). A PR with no reviewer request still needs one."""
+    team_reviewer_assignment: dict[str, ReviewerAssignment] = Field(default_factory=dict)
+    """Overrides by GitHub team slug, e.g. `{bacon = "individual"}`. A person may satisfy
+    several teams when they belong to each of them."""
     email_domains: list[str] = Field(default_factory=list)
     """Domains of work emails, to pick a reviewer's email from their commits. Default: the
     domain of the top-level `email`; set this when the organisation uses several."""

@@ -78,8 +78,10 @@ RELOAD_SCRIPT = (
     # then: a failed fetch (or one that takes over FETCH_MS) is retried, after 1, 2, 4 and
     # 8 seconds, and when all fail, the next round tries again. One timer is pending at a
     # time, and each fetch has its own AbortController and timeout, cleared when it ends.
-    # The swap waits while something is being dragged or typed in. The old elements go with
-    # their listeners; the other scripts bind the new ones on `mfd:replaced`.
+    # The swap waits while something is being dragged or typed in. Dashboard action forms
+    # use the same swap after their POST redirect, restoring scroll instead of navigating
+    # to its anchor. The old elements go with their listeners; the other scripts bind the
+    # new ones on `mfd:replaced`.
     # The place an action was pressed (`at`, `pos`) only matters to the page that follows it,
     # so it leaves the address: later reloads don't ask for it.
     "(() => {"
@@ -88,6 +90,7 @@ RELOAD_SCRIPT = (
     "  here.searchParams.delete('at'); here.searchParams.delete('pos');"
     "  history.replaceState(null, '', here.pathname + here.search + here.hash); }"
     " const FETCH_MS = 15000, RETRIES = 4;"
+    " let revision = 0, acting = false;"
     " const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));"
     " const get = async () => {"
     "  const abort = new AbortController();"
@@ -110,16 +113,40 @@ RELOAD_SCRIPT = (
     "  document.body.replaceChildren(...[...next.body.childNodes].map((n) => document.adoptNode(n)));"
     "  document.dispatchEvent(new Event('mfd:replaced')); };"
     " const round = async () => {"
+    "  const started = revision;"
     "  const next = await fetchPage();"
-    "  if (next && next.body.dataset.reload && !busy()) swap(next);"
+    "  if (next && next.body.dataset.reload && !busy() && !acting && started === revision)"
+    "   swap(next);"
     "  schedule(); };"
     " const schedule = () => {"
     "  const seconds = Number(document.body.dataset.reload);"
     "  if (seconds) setTimeout(round, seconds * 1000); };"
+    " document.addEventListener('submit', async (event) => {"
+    "  const form = event.target;"
+    "  if (event.defaultPrevented || !form.matches('form.action')"
+    "   || !new URL(form.action).pathname.startsWith('/actions/')) return;"
+    "  event.preventDefault();"
+    "  if (acting) return;"
+    "  acting = true; revision++;"
+    "  const x = scrollX, y = scrollY;"
+    "  try {"
+    "   const response = await fetch(form.action, { method: 'POST',"
+    "    body: new URLSearchParams(new FormData(form)), cache: 'no-store',"
+    "    headers: { Accept: 'text/html' } });"
+    "   if (!response.ok || !response.redirected) throw new Error(response.status);"
+    "   const next = new DOMParser().parseFromString(await response.text(), 'text/html');"
+    "   if (!next.body.dataset.reload) throw new Error('not a dashboard');"
+    "   swap(next);"
+    "   const current = new URL(location.href); current.hash = '';"
+    "   history.replaceState(null, '', current.pathname + current.search);"
+    "   scrollTo(x, y);"
+    "  } catch (error) {"
+    "   alert('The action may have run, but the page could not update. Reload to check.'); }"
+    "  finally { acting = false; revision++; } });"
     " document.addEventListener('DOMContentLoaded', schedule);"
     "})();"
 )
-"""Reloads the page in the background and swaps it in, retrying; see inside."""
+"""Refreshes and applies dashboard actions in place, retrying background reloads."""
 OPENED_SCRIPT = (
     # Opening a link of an item (its PR, its ticket) means I'm about to act on it elsewhere.
     # Its subjects are remembered for this tab (sessionStorage, half an hour), and when I
@@ -200,25 +227,28 @@ SPIN_SCRIPT = (
 )
 """Spins the tab's icon while a refresh runs; see inside."""
 NOTIFY_SCRIPT = (
-    # Shows the notifications the server has waiting (see `notifications`) once the browser
-    # has said yes, on load and every NOTIFY_SECONDS after. Asking is what takes them (they're
-    # kept until a page does), so with no permission it doesn't ask. Several tabs ask the same
-    # server, and a notification's `tag` makes a repeat replace the first. A click opens the
-    # dashboard at the item: this tab if it's one, which scrolls to it.
+    # The server sends events over a live connection, avoiding browser timers throttled in
+    # hidden tabs. Older browsers fall back to polling. Without permission neither takes
+    # events. A notification's `tag` replaces one still showing for the same thing.
     "(() => {"
     " const NOTIFY_SECONDS = 15;"
+    " const show = (items) => { for (const n of items) {"
+    "  const note = new Notification(n.title, { body: n.body, tag: n.tag });"
+    "  note.onclick = () => { window.focus(); location.assign(n.url); note.close(); };"
+    " } };"
     " const poll = async () => {"
     "  if (!('Notification' in window) || Notification.permission !== 'granted') return;"
     "  try {"
     "   const r = await fetch('/notifications', { method: 'POST', redirect: 'manual' });"
     "   if (!r.ok) return;"
-    "   for (const n of await r.json()) {"
-    "    const note = new Notification(n.title, { body: n.body, tag: n.tag });"
-    "    note.onclick = () => { window.focus(); location.assign(n.url); note.close(); };"
-    "   }"
+    "   show(await r.json());"
     "  } catch (err) { /* the server may be restarting; the next poll tries again */ } };"
-    " document.addEventListener('DOMContentLoaded', poll);"
-    " setInterval(poll, NOTIFY_SECONDS * 1000);"
+    " document.addEventListener('DOMContentLoaded', () => {"
+    "  if ('Notification' in window && Notification.permission === 'granted'"
+    "   && 'EventSource' in window) {"
+    "   const source = new EventSource('/notifications/stream');"
+    "   source.onmessage = (event) => { try { show(JSON.parse(event.data)); } catch {} };"
+    "  } else { poll(); setInterval(poll, NOTIFY_SECONDS * 1000); } });"
     "})();"
 )
 """Tells me of the events waiting on the server, as browser notifications; see inside."""
@@ -374,7 +404,14 @@ def item_html(item: Item) -> str:
     return _item(item)
 
 
-def _item(item: Item, back: str = "", at: str = "", pos: int | None = None) -> str:
+def _item(
+    item: Item,
+    back: str = "",
+    at: str = "",
+    pos: int | None = None,
+    children: str = "",
+    child_count: int = 0,
+) -> str:
     title = (
         f"<a href='{_e(item.url)}' target='_blank' rel='noopener'>{_e(item.title)}</a>"
         if linkable(item.url)
@@ -410,6 +447,13 @@ def _item(item: Item, back: str = "", at: str = "", pos: int | None = None) -> s
         links = "".join(_link(link) for link in item.links)
         parts.append(f"<div class='links'>{links}</div>")
     parts.append(buttons(item.actions, back, at, pos))
+    if children:
+        key = f"children:{item.anchor}"
+        parts.append(
+            f"<details class='item-children' data-key='{_e(key)}'{_open(item.children_open)}>"
+            f"<summary>{_e(item.children_title)} ({child_count})</summary>"
+            f"<ul class='items'>{children}</ul></details>"
+        )
     parts.append("</li>")
     return "".join(parts)
 
@@ -428,11 +472,26 @@ SPOT_ID = "spot"
 
 def _panel(panel: Panel, spot: Spot | None = None) -> str:
     open_attr = _open(bool(panel.items))
-    cells = [_item(item, at=panel.key, pos=n) for n, item in enumerate(panel.items)]
-    if spot and spot[0] == panel.key:
-        anchor = f"<li id='{SPOT_ID}' aria-hidden='true'></li>"
-        cells.insert(min(spot[1], len(cells)), anchor)
-    items = "".join(cells)
+    indexed = list(enumerate(panel.items))
+    anchors = {item.anchor for item in panel.items if item.anchor}
+    children: dict[str | None, list[tuple[int, Item]]] = {}
+    for index, item in indexed:
+        parent = item.parent_anchor if item.parent_anchor in anchors else None
+        children.setdefault(parent, []).append((index, item))
+
+    def cell(index: int, item: Item) -> str:
+        descendants = children.get(item.anchor, []) if item.anchor else []
+        nested = "".join(cell(n, child) for n, child in descendants)
+        marker = (
+            f"<li id='{SPOT_ID}' aria-hidden='true'></li>" if spot == (panel.key, index) else ""
+        )
+        return marker + _item(
+            item, at=panel.key, pos=index, children=nested, child_count=len(descendants)
+        )
+
+    items = "".join(cell(index, item) for index, item in children.get(None, []))
+    if spot and spot[0] == panel.key and spot[1] >= len(indexed):
+        items += f"<li id='{SPOT_ID}' aria-hidden='true'></li>"
     return (
         f"<details class='panel{'' if panel.items else ' empty'}' id='{_e(panel.key)}'"
         f" data-key='{_e(panel.key)}'"

@@ -56,6 +56,7 @@ from .prs import (
     last_review_activity,
     progress,
     review_blockers,
+    reviewer_assignment_reasons,
 )
 from .setup import TEMPLATE, questions
 from .snapshots import DerivedRepository, PrRepository
@@ -138,7 +139,31 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             except CommandError as e:
                 ctx.log.warning("fetching the PRs that changed failed, so fetching all: %s", e)
             else:
-                return placing.place(previous, fetched, _team_slugs(ctx))
+                placed = placing.place(previous, fetched, _team_slugs(ctx))
+                memberships = dict(placed.team_memberships)
+                for pr in placed.mine:
+                    owner = pr.repo.partition("/")[0]
+                    for team in pr.requested_teams:
+                        key = f"{owner}/{team}"
+                        policy = config.team_reviewer_assignment.get(
+                            team, config.default_team_reviewer_assignment
+                        )
+                        if policy != "individual" or key in memberships:
+                            continue
+                        try:
+                            memberships[key] = sorted(
+                                set(client.team_members(config.host, owner, team))
+                            )
+                        except CommandError as e:
+                            ctx.log.warning("cannot verify members of %s: %s", key, e)
+                return placed.model_copy(
+                    update={
+                        "team_memberships": memberships,
+                        "team_members": sorted(
+                            {login for members in memberships.values() for login in members}
+                        ),
+                    }
+                )
         ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         return client.collect(
             config.host,
@@ -147,6 +172,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             config.history_days,
             ctx.now,
             config.search_scope,
+            lambda team: (
+                config.team_reviewer_assignment.get(team, config.default_team_reviewer_assignment)
+                == "individual"
+            ),
         )
 
     def _full_due(self, ctx: Context[GitHubConfig]) -> bool:
@@ -306,6 +335,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         state: str,
         mine: bool,
         team_names: dict[str, str],
+        memberships: dict[str, list[str]],
     ) -> Entity:
         fields: dict[str, object] = {
             "repo": pr.repo,
@@ -326,7 +356,15 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             ignored = ctx.config.ignored_reviewers
             last = last_review_activity(pr, ignored)
             stale_after = ctx.config.stale_review_hours * 3600
-            fields["review_blockers"] = review_blockers(pr, me, ctx.config.policy_checks, ignored)
+            assignment = reviewer_assignment_reasons(
+                pr,
+                ctx.config.default_team_reviewer_assignment,
+                ctx.config.team_reviewer_assignment,
+                memberships,
+            )
+            fields["review_blockers"] = review_blockers(
+                pr, me, ctx.config.policy_checks, ignored, assignment
+            )
             fields["last_review_activity"] = last.isoformat() if last else None
             fields["stale_review_hours"] = ctx.config.stale_review_hours
             fields["failing_policy_checks"] = [
@@ -366,7 +404,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             for pr in prs:
                 if pr.url not in entities:
                     entities[pr.url] = self._pr_entity(
-                        ctx, pr, snapshot.login, state, mine, team_names
+                        ctx, pr, snapshot.login, state, mine, team_names, snapshot.team_memberships
                     )
         emails = PeopleRepository(ctx.db).emails()
         people = [

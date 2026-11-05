@@ -5,6 +5,23 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### GitHub review stages and team reviewer rules
+
+GitHub now groups open, non-draft PRs into Fix before review and Ready for review before
+Ready for me to review. Mentions without a review request are in Replies for me. Pending
+CI does not hold a PR out of Ready for review. To require a
+requested member of one team alongside its team request, set
+`team_reviewer_assignment = { bacon = "individual" }` in `[github]`; the default
+`default_team_reviewer_assignment = "team"` accepts a team request on its own.
+
+### Notifications reach inactive tabs without a browser timer
+
+The dashboard now uses `GET /notifications/stream` to receive browser notifications as
+server events; `POST /notifications` still works for older clients. A batch contains up to
+20 distinct things, with repeated events about one PR combined. Scripts using
+`POST /notifications` should expect fewer duplicate alerts and may receive more than 20
+events combined into those notifications.
+
 ### Opened items are dimmed, not hidden
 
 Opening an Act now item's link dims it in its place until it changes, instead of hiding it

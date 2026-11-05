@@ -102,14 +102,27 @@ def _replies(pr: PullRequest, old: PullRequest) -> int:
 def _mine(pr: PullRequest, old: PullRequest, me: str, ignored: Collection[str]) -> list[Event]:
     """What changed on one of my PRs that's still open."""
     found: list[Event] = []
-    if ready(pr) and not ready(old):
+    # GitHub briefly reports UNKNOWN while recomputing mergeability. A return to its
+    # previous value is not a new event; a review or check changing still is.
+    if (
+        ready(pr)
+        and not ready(old)
+        and (
+            old.mergeable != "UNKNOWN"
+            or old.review_decision != pr.review_decision
+            or old.rollup_state != pr.rollup_state
+            or old.head_oid != pr.head_oid
+        )
+    ):
         found.append(_event(pr, "pr_mergeable", "can be merged"))
     if _failing(pr) and not _failing(old):
         names = ", ".join(c.name for c in pr.checks if c.state in FAILED)
         found.append(_event(pr, "ci_failed", f"CI failed: {names}" if names else "CI failed"))
     if pr.rollup_state == "SUCCESS" and _failing(old):
         found.append(_event(pr, "ci_recovered", "CI passes again"))
-    if pr.mergeable == "CONFLICTING" and old.mergeable != "CONFLICTING":
+    if pr.mergeable == "CONFLICTING" and (
+        old.mergeable not in {"CONFLICTING", "UNKNOWN"} or pr.head_oid != old.head_oid
+    ):
         found.append(_event(pr, "merge_conflict", "has a merge conflict"))
     for review in _new_reviews(pr, old, me, ignored):
         found.append(_event(pr, "review_received", f"{review.author} {REVIEW_TEXT[review.state]}"))

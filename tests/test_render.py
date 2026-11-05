@@ -101,6 +101,22 @@ def test_the_page_reloads_in_the_background_instead_of_navigating() -> None:
     assert "mfd:replaced" in render.OPEN_SECTIONS_SCRIPT + render.LAYOUT_SCRIPT
 
 
+def test_dashboard_actions_replace_content_and_keep_scroll() -> None:
+    script = render.RELOAD_SCRIPT
+    assert "document.addEventListener('submit'" in script
+    assert "new URL(form.action).pathname.startsWith('/actions/')" in script
+    assert "body: new URLSearchParams(new FormData(form))" in script
+    assert "scrollTo(x, y)" in script
+    assert "started === revision" in script
+
+
+def test_notifications_use_a_server_stream_with_a_polling_fallback() -> None:
+    html = render.dashboard_page(_dashboard(), refreshing=frozenset())
+    assert "new EventSource('/notifications/stream')" in html
+    assert "source.onmessage" in html
+    assert "else { poll(); setInterval(poll, NOTIFY_SECONDS * 1000); }" in html
+
+
 def test_sections_carry_keys_for_the_open_state_script() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert "<details class='group' data-key='act' open>" in html
@@ -115,6 +131,32 @@ def test_sections_carry_keys_for_the_open_state_script() -> None:
     assert "localStorage.getItem('mfd.open')" in html and "location.search" not in html
     # No [git_stack], so the Stacks panel is absent and git's group still renders.
     assert "data-key='stacks'" not in html and "data-key='git'" in html
+
+
+def test_panel_renders_nested_items_with_persistent_collapse_controls() -> None:
+    root = page.Item(
+        title="PR 1", subjects=[Ref(kind="pull_request", id="one")], children_open=False
+    )
+    child = page.Item(
+        title="PR 2", parent_anchor=root.anchor, subjects=[Ref(kind="pull_request", id="two")]
+    )
+    grandchild = page.Item(
+        title="PR 3", parent_anchor=child.anchor, subjects=[Ref(kind="pull_request", id="three")]
+    )
+    group = page.Panel(key="prs", title="PRs", description="", items=[grandchild, root, child])
+    built = panels.Dashboard(
+        generated_at=NOW,
+        identities=[],
+        panels=[group],
+        groups=[page.Group(key="test", title="Test", panel_keys=["prs"], open=True)],
+        sources={},
+    )
+    html = render.dashboard_page(built, refreshing=frozenset(), spot=("prs", 0))
+    assert "<span class='count'>3</span>" in html
+    assert f"data-key='children:{root.anchor}'><summary>Related items (1)</summary>" in html
+    assert f"data-key='children:{child.anchor}' open><summary>Related items (1)</summary>" in html
+    assert html.index("PR 1") < html.index("PR 2") < html.index("PR 3")
+    assert html.index("id='spot'") < html.index("PR 3")
 
 
 def test_actions_render_as_forms_with_hidden_fields() -> None:
@@ -160,7 +202,7 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
 def test_focus_categories_page_lists_counts_and_links_non_empty_ones() -> None:
     html = render.focus_categories_page(_dashboard())
     assert (
-        "<li class='category'><a href='/focus?cat=all&amp;i=0'>All</a><span class='count'>1" in html
+        "<li class='category'><a href='/focus?cat=all&amp;i=0'>All</a><span class='count'>2" in html
     )
     assert "<a href='/focus?cat=slack&amp;i=0'>Slack</a>" in html
     assert "<li class='category sub'><a href='/focus?cat=slack.nudges&amp;i=0'>" in html
@@ -175,17 +217,17 @@ def test_focus_page_steps_through_items() -> None:
     )
     first = render.focus_page(built, panels.FOCUS_ALL, 0)
     assert first is not None
-    assert "<h2>Merge conflicts</h2>" in first and pr(2).title in first
+    assert "<h2>Fix before review</h2>" in first and pr(2).title in first
     assert pr(1).title not in first
-    assert "<span class='focus-position'>1 of 3</span>" in first
+    assert "<span class='focus-position'>1 of 5</span>" in first
     assert "<span class='button secondary disabled prev'>" in first
     assert "<a class='button secondary next' href='/focus?cat=all&amp;i=1'>" in first
     assert "ArrowLeft" in first and "data-reload" not in first
 
     last = render.focus_page(built, panels.FOCUS_ALL, 99)  # clamps to the last item
     assert last is not None
-    assert "<h2>Nudge reviewers</h2>" in last and "3 of 3" in last
-    assert "<a class='button secondary prev' href='/focus?cat=all&amp;i=1'>" in last
+    assert "<h2>Nudge reviewers</h2>" in last and "5 of 5" in last
+    assert "<a class='button secondary prev' href='/focus?cat=all&amp;i=3'>" in last
     assert "disabled next" in last
     assert "/slack/ping?pr=" + quote(pr(1).url, safe="") in last
 

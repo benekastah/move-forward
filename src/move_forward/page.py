@@ -141,6 +141,12 @@ class Signals(Model):
 class Item(Model):
     title: str
     url: str | None = None
+    parent_anchor: str | None = None
+    """Another item in this panel whose children include this one. Its stable `anchor`."""
+    children_open: bool = True
+    """Whether this item's child group starts expanded; browser choices override it."""
+    children_title: str = "Related items"
+    """The child group's summary, followed by its item count."""
     subtitle: str = ""
     badges: list[str | Badge] = Field(default_factory=list[str | Badge])
     """Short tags, e.g. `+120`, or `Badge("conflicts", "warn")` for one that needs
@@ -194,6 +200,8 @@ class Panel(Model):
     """Where it goes by default, lowest first: the skill's step order, e.g. 0 for the todos
     the skill starts its check-in with, 10 for reviews asked of me, 130 for what to pick up
     next. The page's layout, once someone has dragged things about, overrides it."""
+    sort_by_importance: bool = False
+    """Sort items by their assigned or signaled importance before their `rank`."""
     act_now: bool = False
     """Its items are candidates for core's Act now (see `Plugin.act_now`): work that's often
     the next thing to do."""

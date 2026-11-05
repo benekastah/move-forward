@@ -2,6 +2,7 @@
 publishes."""
 
 import json
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -26,6 +27,7 @@ from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import (
     DerivedSnapshot,
     GitHubSnapshot,
+    PullRequest,
     Review,
     ReviewerSuggestion,
     TeamPrScore,
@@ -33,7 +35,7 @@ from move_forward.plugins.github.models import (
     TimelineEvent,
 )
 from move_forward.plugins.github.people import PeopleRepository
-from move_forward.plugins.github.plugin import CHANGED, EVERYTHING, GitHubPlugin
+from move_forward.plugins.github.plugin import CHANGED, EVERYTHING, LAST_FULL, GitHubPlugin
 from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository
 from move_forward.plugins.github.tables import MIGRATIONS
 from move_forward.repositories import KvRepository
@@ -99,6 +101,23 @@ def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
     }
 
 
+def test_pr_entity_review_blockers_check_the_requested_team_member() -> None:
+    ctx = _context(team_reviewer_assignment={"bacon": "individual"})
+    missing = pr(1, requested_teams=["bacon", "eggs"], requested_users=["erin"])
+    shared = pr(2, requested_teams=["bacon", "eggs"], requested_users=["shared"])
+    gh = snapshot(
+        mine=[missing, shared],
+        team_memberships={"acme/bacon": ["alex", "shared"], "acme/eggs": ["erin", "shared"]},
+    )
+    entities = {
+        e.ref.id: e
+        for e in GitHubPlugin().entities(EntitiesRequest(ctx, gh))
+        if e.ref.kind == "pull_request"
+    }
+    assert entities[missing.url].attrs["review_blockers"] == ["request a member of bacon"]
+    assert entities[shared.url].attrs["review_blockers"] == []
+
+
 def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     states = {
         "https://pr/1": ("merged", datetime(2026, 6, 1, tzinfo=UTC)),
@@ -156,8 +175,12 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
     )
     db = Database(":memory:")
     save_json_snapshot(db, "github", gh)
-    db.migrate("github", MIGRATIONS[:-1])  # the last one rebuilds the tables, emptied
+    db.migrate("github", MIGRATIONS[:-3])  # before the PR-table rebuild and team membership
+    assert db.query("SELECT login FROM github_account")[0]["login"] == gh.login
+    db.migrate("github", MIGRATIONS)
     store = PrRepository(db)
+    assert store.load() is None  # the rebuild requests a full collect
+    store.replace(gh)
     assert store.load() == gh
     smaller = snapshot(mine=[pr(4)], team_members=["x"])
     store.replace(smaller)
@@ -172,6 +195,36 @@ def test_a_threads_comment_count_is_kept() -> None:
     store = PrRepository(db)
     store.replace(snapshot(mine=[pr(1, threads=[thread])]))
     assert store.load() == snapshot(mine=[pr(1, threads=[thread])])
+
+
+def test_one_person_can_belong_to_multiple_stored_github_teams() -> None:
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    store = PrRepository(db)
+    found = snapshot(
+        team_memberships={
+            "acme/bacon": ["alex", "shared"],
+            "acme/eggs": ["shared"],
+            "acme/empty": [],
+        }
+    )
+    store.replace(found)
+    assert store.load() == found
+    assert [
+        tuple(row)
+        for row in db.query("SELECT team, login FROM github_team_memberships ORDER BY team, login")
+    ] == [
+        ("acme/bacon", "alex"),
+        ("acme/bacon", "shared"),
+        ("acme/eggs", "shared"),
+    ]
+    assert [
+        row["team"] for row in db.query("SELECT team FROM github_membership_teams ORDER BY team")
+    ] == [
+        "acme/bacon",
+        "acme/eggs",
+        "acme/empty",
+    ]
 
 
 def test_derived_data_moves_from_json_and_round_trips() -> None:
@@ -222,7 +275,13 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
     failing = False
 
     def collect(
-        host: str, org: str, teams: list[str], days: int, now: datetime, scope: str = "org"
+        host: str,
+        org: str,
+        teams: list[str],
+        days: int,
+        now: datetime,
+        scope: str = "org",
+        require_member: Callable[[str], bool] | None = None,
     ) -> object:
         searched.append(now)
         return snapshot(mine=[pr(1), pr(2)])
@@ -262,6 +321,27 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
     assert len(searched) == 5 and len(fetched) == 2
 
 
+def test_partial_collect_fetches_membership_for_a_new_individual_policy_team(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _context(team_reviewer_assignment={"bacon": "individual"})
+    PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
+    ctx.kv.set(LAST_FULL, NOW.isoformat())
+    ctx.kv.set(CHANGED, json.dumps(["acme/widgets#2"]))
+
+    def fetch_prs(host: str, ids: list[client.PrId]) -> list[PullRequest]:
+        return [pr(2, requested_teams=["bacon"], requested_users=["shared"])]
+
+    def team_members(host: str, org: str, team: str) -> list[str]:
+        assert (org, team) == ("acme", "bacon")
+        return ["shared"]
+
+    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
+    monkeypatch.setattr(client, "team_members", team_members)
+    found = GitHubPlugin().collect(CollectRequest(ctx))
+    assert found.team_memberships["acme/bacon"] == ["shared"]
+
+
 def test_the_daily_prune_looks_up_old_misses_again() -> None:
     ctx = _context()
     people = PeopleRepository(ctx.db)
@@ -295,9 +375,9 @@ def test_each_files_changed_lines_are_kept() -> None:
 
 def test_the_mentioned_list_round_trips_and_the_rebuild_asks_for_a_fresh_collect() -> None:
     db = Database(":memory:")
-    db.migrate("github", MIGRATIONS[:-1])
+    db.migrate("github", MIGRATIONS[:-3])
+    db.execute("INSERT INTO github_account VALUES (?)", ("me",))
     store = PrRepository(db)
-    store.replace(snapshot(mine=[pr(1)]))
     db.migrate("github", MIGRATIONS)
     assert store.load() is None  # no account: the next refresh collects everything
     store.replace(snapshot(mentioned=[pr(2, author="alice")]))

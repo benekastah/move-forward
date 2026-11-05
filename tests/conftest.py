@@ -121,6 +121,7 @@ def snapshot(**overrides: object) -> GitHubSnapshot:
         "team_requests": [],
         "merged_recent": [],
         "team_members": [ME, "alice"],
+        "team_memberships": {"acme/core": ["alice", ME]},
     }
     fields.update(overrides)
     return GitHubSnapshot.model_validate(fields)
@@ -168,6 +169,8 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     github: dict[str, object] = {"org": "acme"}
     for key in (
         "policy_checks",
+        "default_team_reviewer_assignment",
+        "team_reviewer_assignment",
         "ignored_reviewers",
         "placeholder_labels",
         "ticket_link_prefixes",
