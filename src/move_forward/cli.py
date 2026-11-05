@@ -1,6 +1,7 @@
 """The `mfd` command."""
 
 import argparse
+import errno
 import getpass
 import json
 import logging
@@ -439,14 +440,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         supervisor.serve_supervised()
         port = args.port or config.port
-        serve(
-            config,
-            db,
-            token,
-            port,
-            config_path,
-            on_listening=(lambda: _open_signed_in(config, token, port)) if args.open else None,
-        )
+        try:
+            serve(
+                config,
+                db,
+                token,
+                port,
+                config_path,
+                on_listening=(lambda: _open_signed_in(config, token, port)) if args.open else None,
+            )
+        except OSError as error:
+            if error.errno != errno.EADDRINUSE:
+                raise
+            print(
+                f"port {port} is already in use; run `mfd open` for the existing dashboard "
+                "or choose another port with `mfd serve --port N`",
+                file=sys.stderr,
+            )
+            return supervisor.PORT_IN_USE_EXIT_CODE
     return 0
 
 

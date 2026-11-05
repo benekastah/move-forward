@@ -852,8 +852,6 @@ def serve(
         config_path,
         auth.TokenFile(auth.token_path(config.db_path)),
     )
-    threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
-    threading.Thread(target=app.run_change_loop, name="changes", daemon=True).start()
     address = ("127.0.0.1", port or config.port)
     if served == "https":
         paths = tls.Paths.beside(config.db_path)
@@ -862,6 +860,8 @@ def serve(
         if config.https:
             log.warning("no certificate yet, so plain HTTP: `mfd cert` makes one")
         server = ThreadingHTTPServer(address, make_handler(app))
+    threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
+    threading.Thread(target=app.run_change_loop, name="changes", daemon=True).start()
     log.info("serving on %s://127.0.0.1:%d", served, server.server_port)
     if on_listening is not None:
         threading.Thread(target=on_listening, name="listening", daemon=True).start()

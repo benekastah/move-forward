@@ -1,3 +1,4 @@
+import errno
 import json
 import logging
 import socket
@@ -403,6 +404,22 @@ def test_being_stopped_shuts_down_quietly(
     assert server.shell.stopping()
     with pytest.raises(server.shell.CommandError, match="shutting down"):
         server.shell.run(["true"])
+
+
+def test_busy_port_does_not_start_refresh_threads(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with socket.socket() as occupied:
+        occupied.bind(("127.0.0.1", 0))
+        occupied.listen()
+
+        def unexpected_start(_self: threading.Thread) -> None:
+            pytest.fail("a refresh thread started before the server bound its port")
+
+        monkeypatch.setattr(server.threading.Thread, "start", unexpected_start)
+        with pytest.raises(OSError) as error:
+            server.serve(app.config, app.db, TOKEN, occupied.getsockname()[1])
+        assert error.value.errno == errno.EADDRINUSE
 
 
 def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: server.App) -> None:

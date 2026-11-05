@@ -120,7 +120,7 @@ before the command's name.
 
 | Command | Does |
 | --- | --- |
-| `mfd serve [--open] [--port N]` | Serve the page, refreshing each plugin on its own `refresh_seconds`, and when it says its tool changed; `--open` opens it signed in, like `mfd open`. The server runs in a child process: `mfd serve` starts a new one when the config file changes, once the new config passes `mfd check` (run in a separate process; if it fails, the error is logged, the running server carries on, and the next change tries again), and when the server fails, unless it keeps failing as it starts. Ctrl-c stops it. |
+| `mfd serve [--open] [--port N]` | Serve the page, refreshing each plugin on its own `refresh_seconds`, and when it says its tool changed; `--open` opens it signed in, like `mfd open`. The server runs in a child process: `mfd serve` starts a new one when the config file changes, once the new config passes `mfd check` (run in a separate process; if it fails, the error is logged, the running server carries on, and the next change tries again), and when the server fails, unless its port is in use or it keeps failing as it starts. Ctrl-c stops it. |
 | `mfd open [--port N]` | Open the running dashboard in a browser, signed in with a one-time code the server gives once it has proved it knows the token (see [API](#api)). |
 | `mfd logout` | End every browser session, signing every browser out. |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |

@@ -1,5 +1,6 @@
 """`mfd serve`'s parent process: replacing, restarting and stopping the server."""
 
+import errno
 import os
 import signal
 from collections.abc import Callable
@@ -7,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from move_forward import supervisor
+from move_forward import cli, supervisor
 
 
 class FakeServer:
@@ -79,6 +80,42 @@ def test_a_failed_server_is_started_again_until_it_keeps_failing_as_it_starts(
     monkeypatch.setattr(supervisor.time, "sleep", sleep)
     assert supervisor.supervise(["mfd", "serve"], tmp_path / "c.toml", code=False, popen=popen) == 1
     assert len(servers) == 1 + supervisor.MAX_QUICK_FAILURES
+
+
+def test_a_busy_port_is_reported_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text(
+        f'email = "me@example.com"\ndb_path = "{(tmp_path / "dashboard.db").as_posix()}"\n'
+    )
+    monkeypatch.setattr(supervisor, "supervised", lambda: True)
+    monkeypatch.setattr(supervisor, "serve_supervised", lambda: None)
+
+    def busy(*_: object, **__: object) -> None:
+        raise OSError(errno.EADDRINUSE, "Address already in use")
+
+    monkeypatch.setattr(cli, "serve", busy)
+    assert (
+        cli.main(["-c", str(config), "serve", "--port", "9876"]) == supervisor.PORT_IN_USE_EXIT_CODE
+    )
+    assert "port 9876 is already in use" in capsys.readouterr().err
+
+    servers: list[FakeServer] = []
+
+    def popen(command: list[str], env: dict[str, str]) -> FakeServer:
+        servers.append(FakeServer(command, env))
+        return servers[-1]
+
+    def watch(restart: Callable[[], None], *args: object, alive: Callable[[], bool]) -> None:
+        servers[-1].code = supervisor.PORT_IN_USE_EXIT_CODE
+
+    monkeypatch.setattr(supervisor, "watch", watch)
+    assert (
+        supervisor.supervise(["mfd", "serve"], config, code=False, popen=popen)
+        == supervisor.PORT_IN_USE_EXIT_CODE
+    )
+    assert len(servers) == 1
 
 
 def test_ctrl_c_stops_the_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

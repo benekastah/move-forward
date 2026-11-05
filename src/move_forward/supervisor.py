@@ -1,5 +1,5 @@
 """`mfd serve` runs the server in a child process, and replaces it when `reload` sees a
-change that passes `mfd check`. A server that fails is started again too.
+change that passes `mfd check`. A server that fails is started again unless its port is busy.
 
 Ctrl-c is the parent's: the server ignores it, and the parent stops the server as it does
 to replace it. The parent itself runs the code it started with, so a change to this module
@@ -23,6 +23,8 @@ log = logging.getLogger(__name__)
 
 STOP_SECONDS = 10
 """How long a server being replaced has to exit before it's killed."""
+PORT_IN_USE_EXIT_CODE = 2
+"""The child's exit code when another process already listens on its port."""
 QUICK_FAILURE_SECONDS = 30
 MAX_QUICK_FAILURES = 3
 """A server failing this many times in a row, each within `QUICK_FAILURE_SECONDS` of
@@ -74,9 +76,9 @@ def supervise(
     """Run `argv`'s `mfd serve` in a child process, in this console, and replace it (less
     the one-shot flags) when `config_path` changes, or with `code` the package's source.
 
-    A server that fails is started again, unless it fails within
-    `QUICK_FAILURE_SECONDS` of starting `MAX_QUICK_FAILURES` times in a row (the port taken,
-    say): then its exit code is returned, as it is when the server exits cleanly. Ctrl-c
+    A busy port is reported once. Other failures are started again, unless they fail within
+    `QUICK_FAILURE_SECONDS` of starting `MAX_QUICK_FAILURES` times in a row: then its exit
+    code is returned, as it is when the server exits cleanly. Ctrl-c
     stops the server and returns 0.
     """
     env = {**os.environ, SUPERVISED_ENV: "1"}
@@ -106,6 +108,8 @@ def supervise(
             exit_code = server.wait()
             if exit_code == 0:
                 return 0
+            if exit_code == PORT_IN_USE_EXIT_CODE:
+                return exit_code
             quick = time.monotonic() - started < QUICK_FAILURE_SECONDS
             quick_failures = quick_failures + 1 if quick else 0
             if quick_failures >= MAX_QUICK_FAILURES:
