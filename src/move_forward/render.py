@@ -385,7 +385,7 @@ def _item(item: Item, back: str = "", at: str = "", pos: int | None = None) -> s
     subjects = json.dumps([{"kind": s.kind, "id": s.id} for s in item.subjects])
     data += f" data-subjects='{_e(subjects)}'" if item.subjects else ""
     refetch = (
-        f"<button type='button' class='button link-action refetch' data-subjects='{_e(subjects)}'"
+        f"<button type='button' class='button link-action secondary refetch' data-subjects='{_e(subjects)}'"
         " title='Fetch it again now'>↻</button>"
         if item.subjects
         else ""

@@ -340,7 +340,7 @@ def test_an_item_carries_its_subjects_and_act_now_fields_for_the_link_script() -
     assert "<li class='item opened' id='item-pull_request-https-g-1'" in opened
     assert f" data-opened='{{&quot;kind&quot;: &quot;k&quot;}}' data-subjects='[{said}]'>" in opened
     assert (
-        f"<button type='button' class='button link-action refetch' data-subjects='[{said}]'"
+        f"<button type='button' class='button link-action secondary refetch' data-subjects='[{said}]'"
         in opened
     )
     plain = html_of(page.Item(title="x"))
