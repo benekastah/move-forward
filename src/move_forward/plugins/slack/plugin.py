@@ -163,14 +163,15 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     def prepare_item_actions(
         self, req: PrepareItemActionsRequest[SlackConfig]
     ) -> Callable[[ItemActionsRequest[SlackConfig]], ItemAdditions]:
-        """A Ping link on any item about one of my open PRs: Bump once a target was pinged,
-        muted while the PR isn't in order. The pings are worked out once for the page."""
+        """A Ping link on any item about one of my open PRs with someone to chase: Bump once a
+        target was pinged, muted while the PR isn't in order. The pings are worked out once for
+        the page."""
         pings = pinger(req.ctx, req.graph).pings()
 
         def ping_action(each: ItemActionsRequest[SlackConfig]) -> ItemAdditions:
             pr = each.item.subject(PR)
             ping = pings.get(pr.id) if pr else None
-            if ping is None:
+            if ping is None or not ping.has_someone_to_chase:
                 return ItemAdditions()
             blocked = bool(ping.blockers)
             follow_up = any(t.ping_kind == "follow-up" for t in ping.targets)

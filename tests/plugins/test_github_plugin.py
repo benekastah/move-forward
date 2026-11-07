@@ -122,6 +122,17 @@ def test_pr_entity_review_blockers_check_the_requested_team_member() -> None:
     assert entities[shared.url].attrs["review_blockers"] == []
 
 
+def test_an_approved_pr_says_so_in_its_review_blockers() -> None:
+    """slack reads this exact text to leave a PR's reviewers alone."""
+    approved = pr(1, review_decision="APPROVED")
+    [entity] = [
+        e
+        for e in GitHubPlugin().entities(EntitiesRequest(_context(), snapshot(mine=[approved])))
+        if e.ref.kind == "pull_request"
+    ]
+    assert entity.attrs["review_blockers"] == ["already approved"]
+
+
 def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     states = {
         "https://pr/1": ("merged", datetime(2026, 6, 1, tzinfo=UTC)),

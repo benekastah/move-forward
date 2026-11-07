@@ -158,8 +158,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
 
 ### slack
 
-31. **Ping where it can help.** The muted `Ping…` shows on Ready to merge and in the merge queue,
-    where it's already approved. Show it only with someone to chase.
 32. **Clear a team's channel.** `/slack/contacts` can't (`mfd slack team unset`).
 
 ## Follow-ups
@@ -204,6 +202,9 @@ Approving stays on GitHub: a review should come from having read the PR there.
   PR (one plugin per kind), and every consumer would read both; if that gets repetitive, a
   PR could become a contract several plugins publish to, with a shared base for code-host
   plugins. All of it waits for that second host.
+- **Approval as a field.** slack tells an approved PR by the text `already approved` in its
+  `review_blockers`, so a second code host has to say it the same way. A core `approved`
+  attribute on the `pull_request` family would make it part of the contract, not the wording.
 
 ### Notes and the skill
 

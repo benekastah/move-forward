@@ -15,6 +15,9 @@ from ...api.kinds import PULL_REQUEST as PR
 from .config import SlackConfig
 from .models import Contact, Ping, TeamChannel
 
+ALREADY_APPROVED = "already approved"
+"""The `review_blockers` entry of a PR with the approval it needs (see `docs/entities.md`)."""
+
 
 class PingTarget(Model):
     kind: Literal["user", "team"]
@@ -39,6 +42,11 @@ class PrPing(Model):
     """Why the skill wouldn't nudge yet; empty when the PR is in order."""
     stale: bool
     """No review activity for `[github] stale_review_hours`."""
+
+    @property
+    def has_someone_to_chase(self) -> bool:
+        """Whether it asks anyone to review, and still needs their approval."""
+        return bool(self.targets) and ALREADY_APPROVED not in self.blockers
 
 
 class PrView(Model):
@@ -188,7 +196,7 @@ class Pinger:
         items: list[Item] = []
         for pr in self.my_open_prs:
             ping = pings.get(pr.id)
-            if not ping or ping.blockers or not ping.stale:
+            if not ping or not ping.has_someone_to_chase or ping.blockers or not ping.stale:
                 continue
             details = [
                 f"{t.ping_kind} ping to {t.destination}"

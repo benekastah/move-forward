@@ -50,13 +50,13 @@ set by hand wins over a lookup.
 ## Panels
 
 - **Nudge reviewers**: PRs in order (green, no conflicts, no open threads) with no review
-  activity for `[github] stale_review_hours`. The Ping link on any of my PRs opens a page
+  activity for `[github] stale_review_hours`. The Ping link opens a page
   with one message per requested reviewer or team, a link to their Slack DM or channel,
   and "mark as sent", which makes the next ping a follow-up. Nudges the skill logged in
   `work-notes.md` count too, once imported.
 
 slack adds a Ping link (Bump once a target was pinged) to every item about one of my open
-PRs.
+PRs with a reviewer requested and without the approval it needs.
 
 ## Act now
 
