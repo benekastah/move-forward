@@ -823,7 +823,7 @@ def test_an_item_set_aside_leaves_its_panel_until_it_changes() -> None:
             signals=Signals(verb="Fix", task="fix"),
         )
 
-    key = ("pull_request", "pr", "fix")
+    key: act_now.FeedbackKey = ("pull_request", "pr", "fix")
     said = act_now.Nomination("x", item("before")).fingerprint
     until = NOW + timedelta(days=1)
     feedback = {key: act_now.Feedback(action="snooze", fingerprint=said, until=until)}
