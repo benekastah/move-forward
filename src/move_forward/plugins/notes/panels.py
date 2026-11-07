@@ -100,6 +100,10 @@ BLOCKED_BADGE_WIDTH = 80
 """Characters of what an entry is blocked on that its badge shows, cut at a word."""
 
 
+PROBABLY_DONE = "its PRs are done"
+"""What a todo says when every PR it mentions is merged or closed."""
+
+
 def _is_blocked(entry: Entry) -> bool:
     return bool(entry.blocked_on) and not NOT_BLOCKED_RE.match(entry.blocked_on or "")
 
@@ -154,7 +158,7 @@ def _todo_part(
         title=todo.text,
         url=mentioned[0].url if mentioned else None,
         subtitle=entry,
-        badges=[todo.size or "unsized", *(["its PRs are done"] if probably_done else []), *badges],
+        badges=[todo.size or "unsized", *([PROBABLY_DONE] if probably_done else []), *badges],
         links=links,
         actions=todo_actions(todo, entry, suggested=probably_done),
         subjects=[Ref(kind=TODO, id=str(todo.id))],
@@ -371,6 +375,16 @@ class Builder:
             url = urls[0] if urls else None
             links = [Link(text=f"PR {u.rsplit('/', 1)[1]}", url=u) for u in urls]
             ordered = sorted(open_todos, key=lambda t: t.size != "quick")
+            parts = [
+                _todo_part(
+                    entry.title, t, urls, states, badges[1 if close_out else 0 :], self.graph
+                )
+                for t in ordered
+            ]
+            # One todo isn't listed as a part, so the entry shows what its part would.
+            lone = parts[0] if len(parts) == 1 else None
+            if lone and PROBABLY_DONE in lone.badges:
+                badges.append(PROBABLY_DONE)
             items.append(
                 Item(
                     title=entry.title,
@@ -381,12 +395,9 @@ class Builder:
                     details=[f"[{t.size or '?'}] {t.text}" for t in ordered]
                     if len(ordered) == 1
                     else [],
-                    links=links,
+                    links=lone.links if lone else links,
                     rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
-                    actions=[
-                        *(todo_actions(ordered[0], entry.title)[:1] if len(ordered) == 1 else []),
-                        add_todo_action(entry.title),
-                    ],
+                    actions=lone.actions if lone else [add_todo_action(entry.title)],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
                     # Only a close-out has signals: what notes nominates for Act now.
                     signals=Signals(
@@ -403,17 +414,7 @@ class Builder:
                     )
                     if close_out
                     else None,
-                    parts=[
-                        _todo_part(
-                            entry.title,
-                            t,
-                            urls,
-                            states,
-                            badges[1 if close_out else 0 :],
-                            self.graph,
-                        )
-                        for t in ordered
-                    ],
+                    parts=parts,
                 )
             )
         return Panel(

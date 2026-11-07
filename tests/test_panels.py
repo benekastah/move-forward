@@ -239,6 +239,8 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         a.name for a in panel(dashboard, "notes.todos").items[0].actions if a.group != "Importance"
     ] == [
         "notes/todo_done",
+        "notes/todo_delete",
+        "notes/todo_link",
         "notes/todo_add",
         "notes/ice_item",
     ]
@@ -692,3 +694,17 @@ def test_what_only_core_sets_on_an_item_is_cleared_from_a_plugins() -> None:
     )
     [shown] = built.panel("notes.t").items
     assert shown.act_now_fields is None and shown.opened_at is None
+
+
+def test_what_a_lone_todo_links_shows_on_its_entry() -> None:
+    url = "https://github.com/acme/widgets/pull/7"
+    noted = entry("APP-1 one", [todo(f"check {url}", "quick")])
+    built = dashboard(
+        work_items=[noted],
+        github=snapshot(merged_recent=[pr(7, state="MERGED", merged_at=NOW)]),
+    )
+    [item] = panel(built, "notes.todos").items
+    assert any(link.url == url and link.strong for link in item.links)
+    assert "its PRs are done" in item.badges
+    done = next(a for a in item.actions if a.name == "notes/todo_done")
+    assert done.suggested
