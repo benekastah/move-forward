@@ -704,7 +704,7 @@ def test_what_a_lone_todo_links_shows_on_its_entry() -> None:
         github=snapshot(merged_recent=[pr(7, state="MERGED", merged_at=NOW)]),
     )
     [item] = panel(built, "notes.todos").items
-    assert url in render.item_html(item)
+    assert any(link.url == url and link.strong for link in item.links)
     assert "its PRs are done" in item.badges
     done = next(a for a in item.actions if a.name == "notes/todo_done")
     assert done.suggested

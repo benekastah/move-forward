@@ -152,6 +152,7 @@ Approving stays on GitHub: a review should come from having read the PR there.
     or ticket to start from on the page. A New entry button on the panel (`mfd notes add-entry`).
 28. **Undo a tick on the dashboard.** Focus mode keeps a ticked todo to untick; the dashboard loses
     it. Keep recently done todos, ticked, for a while.
+29. **The same todo buttons.** Each of an entry's several todos repeats its entry's Add todo.
 30. **Why it's on ice.** The button always records "iced from the dashboard"; `ice` already takes a
     `note`, so ask for one.
 
