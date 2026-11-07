@@ -64,6 +64,8 @@ catch up.
   `Action.selected` highlights a choice and `Action.icon`
   shows an emoji instead of visible text, with the unchanged label in `title` and
   `aria-label`.
+- **Due dates in Act now**: `ActNowRequest.due_horizon` says how far ahead a due date counts
+  (`[act_now] due_warning_days`). A plugin nominating by due date passes it to `due_pressure`.
 - **Choices for a text field**: `Action.suggestions` lists what an `input` offers to pick
   from; anything else can still be typed, so check the posted field as usual.
 - **Snoozing in a panel**: `Panel.snoozable`, on a panel whose items are `act_now` ones, gives

@@ -11,12 +11,14 @@ from conftest import ME, NOW, dashboard, issue, local_snapshot, pr, snapshot, st
 from pydantic import BaseModel
 
 from move_forward import cli, localtime, refresh, registry, render
+from move_forward.act_now import ActNowConfig
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
-from move_forward.page import Action, Identity, ItemAdditions
+from move_forward.page import Action, Identity, Item, ItemAdditions
 from move_forward.plugin import (
+    ActNowRequest,
     CliHandler,
     CliRequest,
     Context,
@@ -30,6 +32,9 @@ from move_forward.plugin import (
     PrepareItemActionsRequest,
     RelateRequest,
 )
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.models import GitHubSnapshot
+from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
@@ -64,6 +69,20 @@ class Hooked(JiraPlugin):
 def hooked(monkeypatch: pytest.MonkeyPatch) -> None:
     plugins = [Hooked() if p.name == "jira" else p for p in registry.PLUGINS]
     monkeypatch.setattr(registry, "PLUGINS", plugins)
+
+
+def test_act_now_tells_a_plugin_the_due_horizon(monkeypatch: pytest.MonkeyPatch) -> None:
+    told: list[timedelta] = []
+
+    def act_now(self: GitHubPlugin, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
+        told.append(req.due_horizon)
+        return []
+
+    monkeypatch.setattr(GitHubPlugin, "act_now", act_now)
+    config, db = stored(github=snapshot())
+    ranking = ActNowConfig(due_warning_days=14)
+    build_dashboard(config.model_copy(update={"act_now": ranking}), db, NOW)
+    assert told == [timedelta(days=14)]
 
 
 def test_a_plugin_adds_buttons_to_another_plugins_items() -> None:

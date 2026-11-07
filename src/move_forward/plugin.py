@@ -12,13 +12,14 @@ import logging
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
 from . import localtime, private, shell
+from .act_now import DUE_HORIZON
 from .asking import Asker, InitSetup
 from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
@@ -186,6 +187,9 @@ class ActNowRequest[C: BaseModel, S: BaseModel]:
     graph: Graph
     panels: list[Panel]
     """The plugin's own panels, as `panels` built them."""
+    due_horizon: timedelta = DUE_HORIZON
+    """How far ahead a due date starts to count, as `[act_now] due_warning_days` says; a plugin
+    nominating by its due dates passes it to `due_pressure`."""
 
 
 @dataclass(frozen=True)
