@@ -125,8 +125,6 @@ as `touched`, so it's fetched again at once.
     stacked on it) on a PR held as behind its base.
 16. **Run failed checks again.** `gh run rerun --failed` on CI failures, for checks whose URL
     names a run.
-17. **"Ready to ping" only with something to ping with.** Ready for review says it even
-    without slack: say who's being waited on instead.
 
 Approving stays on GitHub: a review should come from having read the PR there.
 

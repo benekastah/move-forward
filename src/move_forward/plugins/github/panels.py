@@ -373,7 +373,7 @@ class Builder:
                     pr_item(
                         self.now,
                         pr,
-                        details=["ready to ping " + ", ".join(who)],
+                        details=["waiting on " + ", ".join(who)],
                         rank=-pr.updated_at.timestamp(),
                     )
                 )
