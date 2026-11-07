@@ -72,3 +72,23 @@ def test_a_pr_held_otherwise_has_no_update_button() -> None:
     blocked = pr(1, merge_state="BLOCKED", review_decision="APPROVED")
     [item] = panel(dashboard(github=snapshot(mine=[blocked])), "github.held").items
     assert not [a for a in item.actions if a.name == UPDATE_BRANCH]
+
+
+def test_only_a_pr_of_mine_thats_behind_can_be_updated(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[pr(1)]))
+    with pytest.raises(ActionError, match="isn't behind"):
+        perform_action(config, db, UPDATE_BRANCH, {"pr": URL})
+    with pytest.raises(ActionError, match="isn't one of my open PRs"):
+        perform_action(config, db, UPDATE_BRANCH, {"pr": "https://github.com/o/r/pull/9"})
+    assert commands == []
+
+
+def test_github_refusing_to_update_is_shown(monkeypatch: pytest.MonkeyPatch) -> None:
+    def run(args: list[str]) -> str:
+        raise client.CommandError("merge conflict")
+
+    monkeypatch.setattr(client, "run", run)
+    config, db = stored(github=snapshot(mine=[pr(1, merge_state="BEHIND")]))
+    with pytest.raises(ActionError, match="merge conflict"):
+        perform_action(config, db, UPDATE_BRANCH, {"pr": URL})

@@ -75,8 +75,10 @@ def mark_ready(req: ActionRequest[GitHubConfig]) -> ActionResult:
 
 
 def update_branch(req: ActionRequest[GitHubConfig]) -> ActionResult:
-    """Bring the PR's branch up to date with its base, on GitHub."""
+    """Bring the PR's branch up to date with its base, on GitHub, if it's behind."""
     pr = _my_open_pr(req)
+    if pr.merge_state != "BEHIND":
+        raise ActionError(f"{pr.repo}#{pr.number} isn't behind {pr.base}")
     try:
         client.update_branch(pr.url)
     except CommandError as e:
