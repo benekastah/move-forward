@@ -158,8 +158,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
 
 ### slack
 
-31. **Ping where it can help.** The muted `Ping…` shows on Ready to merge and in the merge queue,
-    where it's already approved. Show it only with someone to chase.
 32. **Clear a team's channel.** `/slack/contacts` can't (`mfd slack team unset`).
 
 ## Follow-ups

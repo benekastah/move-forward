@@ -56,7 +56,7 @@ set by hand wins over a lookup.
   `work-notes.md` count too, once imported.
 
 slack adds a Ping link (Bump once a target was pinged) to every item about one of my open
-PRs.
+PRs with a reviewer requested and without the approval it needs.
 
 ## Act now
 

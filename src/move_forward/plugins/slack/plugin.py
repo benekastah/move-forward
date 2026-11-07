@@ -48,6 +48,8 @@ from .setup import EXAMPLE, TEMPLATE, questions
 PING = "ping"
 """The ping page for one of my PRs, `/slack/ping?pr=<PR URL>`."""
 PING_PATH = f"/slack/{PING}"
+ALREADY_APPROVED = "already approved"
+"""The review blocker of a PR with the approval it needs: github's word for it."""
 COPY_SCRIPT = (
     "function copyMessage(button) {"
     " const text = button.closest('form').querySelector('textarea').value;"
@@ -163,15 +165,16 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     def prepare_item_actions(
         self, req: PrepareItemActionsRequest[SlackConfig]
     ) -> Callable[[ItemActionsRequest[SlackConfig]], ItemAdditions]:
-        """A Ping link on any item about one of my open PRs: Bump once a target was pinged,
-        muted while the PR isn't in order. The pings are worked out once for the page."""
+        """A Ping link on any item about one of my open PRs with someone to chase: Bump once a
+        target was pinged, muted while the PR isn't in order. The pings are worked out once for
+        the page."""
         pings = pinger(req.ctx, req.graph).pings()
 
         def ping_action(each: ItemActionsRequest[SlackConfig]) -> ItemAdditions:
             pr = each.item.subject(PR)
             ping = pings.get(pr.id) if pr else None
-            if ping is None:
-                return ItemAdditions()
+            if ping is None or not ping.targets or ALREADY_APPROVED in ping.blockers:
+                return ItemAdditions()  # nobody to chase
             blocked = bool(ping.blockers)
             follow_up = any(t.ping_kind == "follow-up" for t in ping.targets)
             ping_link = [

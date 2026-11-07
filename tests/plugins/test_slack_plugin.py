@@ -263,3 +263,25 @@ def test_failing_policy_checks_hold_a_nudge_and_appear_in_review_stage() -> None
     assert panel(built, "slack.nudges").items == []
     [item] = panel(built, "github.fix_before_review").items
     assert "policy failing: CODEOWNERS, guidelines" in item.details
+
+
+def test_no_ping_link_with_nobody_to_chase() -> None:
+    approved = dashboard(
+        slack=True,
+        github=snapshot(
+            mine=[
+                pr(
+                    1,
+                    requested_users=["alice"],
+                    reviews=[approved_review("bob")],
+                    review_decision="APPROVED",
+                )
+            ]
+        ),
+    )
+    nobody = dashboard(slack=True, github=snapshot(mine=[pr(2)]))
+    for built in (approved, nobody):
+        items = [i for p in built.panels for i in p.items]
+        assert items and not any(
+            a.href and "/slack/ping" in a.href for i in items for a in i.actions
+        )
