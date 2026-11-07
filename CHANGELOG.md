@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Say why something is on ice
+
+On ice items have a field to say why, in place of "iced from the dashboard". Scripts can post `ice`
+and `input` to `/actions/notes/ice_note`. Nothing to change.
+
 ### Clear a team's channel on the contacts page
 
 The contacts page has a Clear button for a team with a channel, which asks first. Scripts can post

@@ -136,6 +136,21 @@ def _ice_id(req: ActionRequest[NotesConfig]) -> int:
         raise ActionError(f"no such stack on ice: {req.fields['ice']!r}") from e
 
 
+def ice_note(req: ActionRequest[NotesConfig]) -> str:
+    """Say why something is on ice: `input`, in place of what's said now."""
+    ctx = req.ctx
+    notes = NotesRepository(ctx.db)
+    ice_id = _ice_id(req)
+    found = next((i for i in notes.ices() if i.id == ice_id), None)
+    if found is None:
+        raise ActionError("that stack is not on ice")
+    note = req.field("input").strip()
+    if not note:
+        raise ActionError("the note is empty")
+    notes.set_ice_note(ice_id, note)
+    return f"noted why {found.title} is on ice"
+
+
 def thaw(req: ActionRequest[NotesConfig]) -> str:
     """Take a stack off ice."""
     ctx = req.ctx
@@ -265,5 +280,6 @@ ACTIONS: dict[str, ActionHandler] = {
     "todo_add": todo_add,
     "ice": ice,
     "ice_item": ice_item,
+    "ice_note": ice_note,
     "thaw": thaw,
 }

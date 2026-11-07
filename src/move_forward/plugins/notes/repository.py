@@ -569,6 +569,10 @@ class NotesRepository:
                 rows,
             )
 
+    def set_ice_note(self, ice_id: int, note: str) -> None:
+        """Say why it's on ice, in place of what was said."""
+        self._db.execute("UPDATE notes_ice SET note = ? WHERE id = ?", (note, ice_id))
+
     def delete_ice(self, ice_id: int) -> None:
         """Thaw: forget the act of icing and what it covered."""
         self._db.execute("DELETE FROM notes_ice WHERE id = ?", (ice_id,))
