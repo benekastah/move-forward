@@ -171,6 +171,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         "policy_checks",
         "default_team_reviewer_assignment",
         "team_reviewer_assignment",
+        "primary_reviewer_repos",
         "ignored_reviewers",
         "placeholder_labels",
         "ticket_link_prefixes",

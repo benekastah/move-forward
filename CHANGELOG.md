@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Pick a PR's primary reviewer
+
+For a repo whose PRs need a primary reviewer as an assignee, list it in `[github]
+primary_reviewer_repos`, e.g. `["acme/widgets"]`. Your open PRs there then show who it is and
+have a field to pick them. Scripts can post `pr` and `input` (a login) to
+`/actions/github/primary_reviewer`. Other repos are unaffected.
+
 ### Set an entity's priority over HTTP
 
 `POST /actions/act_now/priority` with `kind`, `id` and `level` (0, 1 or 2) sets how much an

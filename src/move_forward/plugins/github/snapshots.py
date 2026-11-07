@@ -38,6 +38,7 @@ LISTS: tuple[ListName, ...] = (
 """The searches, as `GitHubSnapshot` names them."""
 CHILD_TABLES = (
     "github_pr_labels",
+    "github_pr_assignees",
     "github_pr_requests",
     "github_pr_reviews",
     "github_pr_threads",
@@ -102,6 +103,7 @@ class PrRepository:
                     )
                 )
                 rows["github_pr_labels"] += [(*key, i, v) for i, v in enumerate(pr.labels)]
+                rows["github_pr_assignees"] += [(*key, i, v) for i, v in enumerate(pr.assignees)]
                 rows["github_pr_requests"] += [
                     (*key, i, "user", v) for i, v in enumerate(pr.requested_users)
                 ] + [(*key, i, "team", v) for i, v in enumerate(pr.requested_teams)]
@@ -194,6 +196,7 @@ class PrRepository:
         reviews, threads = self._children("github_pr_reviews"), self._children("github_pr_threads")
         checks, events = self._children("github_pr_checks"), self._children("github_pr_events")
         files = self._children("github_pr_files")
+        assignees = self._children("github_pr_assignees")
         lists: dict[str, list[PullRequest]] = {name: [] for name in LISTS}
         for row in self._db.query("SELECT * FROM github_prs ORDER BY list, position"):
             key: Key = (row["list"], row["url"])
@@ -217,6 +220,7 @@ class PrRepository:
                     size=row["size"],
                     changed_files=row["changed_files"],
                     labels=[cast(str, r["label"]) for r in labels[key]],
+                    assignees=[cast(str, r["login"]) for r in assignees[key]],
                     mergeable=row["mergeable"],
                     merge_state=row["merge_state"],
                     review_decision=row["review_decision"],

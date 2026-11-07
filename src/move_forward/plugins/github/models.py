@@ -77,6 +77,8 @@ class PullRequest(Model):
     """Lines added plus deleted."""
     changed_files: int
     labels: list[str] = Field(default_factory=list)
+    assignees: list[str] = Field(default_factory=list)
+    """The first 10; the author among them when a repo assigns its authors."""
     mergeable: str
     merge_state: str
     review_decision: str | None = None

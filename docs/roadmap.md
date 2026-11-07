@@ -123,17 +123,6 @@ that needs a core one says so, and lands on top of it.
 Each button runs `gh`, checks its fields (a PR on `host`, a login's form), and returns the PR
 as `touched`, so it's fetched again at once.
 
-11. **Primary reviewer.** A repo can require a primary reviewer: someone added as an assignee
-    alongside the author (who's added automatically), who must approve. GitHub enforces it, so
-    the dashboard only makes it quick to add.
-    - `primary_reviewer_repos`, a list in `[github]`, off by default, names those repos.
-    - github fetches PRs' `assignees`, in a new column of a fetched table. Whoever's assigned
-      but the author shows as a badge, "primary: alice".
-    - On my open PRs in those repos, a Primary reviewer field (`gh pr edit --add-assignee`)
-      suggests, first, the requested reviewers, then the requested teams' members github
-      already knows, then the recent committers it suggests for review. Any login can be typed.
-    - Open: whether it requests their review too (`--add-reviewer`), and whether a new one
-      replaces the old (`--remove-assignee`).
 12. **Merge.** On Ready to merge, with a confirm: `gh pr merge --match-head-commit <the head
     shown>`, so a push since then refuses it. A merge queue takes no method, and the button says
     Add to queue. Otherwise the method comes from a setting or the repo's default. Never

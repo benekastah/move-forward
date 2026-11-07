@@ -23,6 +23,7 @@ fragment PrFields on PullRequest {
   author { login }
   repository { nameWithOwner defaultBranchRef { name } }
   labels(first: 30) { nodes { name } }
+  assignees(first: 10) { nodes { login } }
   reviewRequests(first: 20) {
     nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug } } }
   }

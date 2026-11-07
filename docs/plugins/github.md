@@ -57,6 +57,9 @@ member of that team as a person too. A person in several requested teams can sat
 of them. Membership is fetched per team; if it cannot be verified, the PR stays in
 Fix before review with that reason. A PR requiring review with no reviewer requested
 still needs one.
+`primary_reviewer_repos` lists the repos (`owner/name`) where a PR has a primary reviewer: an
+assignee besides its author, who must approve. GitHub enforces that; it only adds the field
+described under [Buttons](#buttons).
 
 ## Publishes
 
@@ -108,6 +111,17 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   PR's head branch nest beneath that PR, including a parent with no housekeeping flags.
   A branch tree starts expanded if it contains a non-draft PR, and collapsed if all its
   PRs are drafts; the page remembers toggles.
+
+In a repo in `primary_reviewer_repos`, every item about one of my open PRs, unless it's in the
+merge queue, shows whoever's assigned besides the author ("primary: alice") and has a field to
+pick the primary reviewer. It suggests the requested reviewers, then the requested teams'
+members as far as they're known, then recent committers; any login can be typed.
+
+## Buttons
+
+| Path | Fields | Does |
+| --- | --- | --- |
+| `/actions/github/primary_reviewer` | `pr` (the URL of one of my open PRs, in a repo in `primary_reviewer_repos`), `input` (a login) | Assigns them in place of whoever else is assigned besides the author, and asks for their review unless they're already asked or have reviewed it. |
 
 ## Act now
 

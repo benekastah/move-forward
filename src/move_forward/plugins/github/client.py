@@ -150,6 +150,7 @@ class RawPullRequest(_Raw):
     author: _Named | None = None
     repository: _RawRepository
     labels: _Nodes[_Label] = _Nodes()
+    assignees: _Nodes[_Named] = _Nodes()
     review_requests: _Nodes[_ReviewRequest] = Field(default=_Nodes(), alias="reviewRequests")
     latest_reviews: _Nodes[_RawReview] = Field(default=_Nodes(), alias="latestReviews")
     review_threads: _Nodes[_RawThread] = Field(default=_Nodes(), alias="reviewThreads")
@@ -363,6 +364,7 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         size=raw.additions + raw.deletions,
         changed_files=raw.changed_files,
         labels=[label.name for label in raw.labels.nodes if label],
+        assignees=[a.login for a in raw.assignees.nodes if a and a.login],
         mergeable=raw.mergeable,
         merge_state=raw.merge_state_status,
         review_decision=raw.review_decision,
@@ -390,6 +392,15 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         files=[f.path for f in files],
         file_lines=[f.additions + f.deletions for f in files],
     )
+
+
+def set_primary_reviewer(url: str, login: str, replacing: list[str], request: bool) -> None:
+    """Assign `login` to the PR in place of `replacing`, asking for their review if `request`.
+    `gh` finds the host in `url`. Raises CommandError when GitHub refuses."""
+    args = ["gh", "pr", "edit", url, "--add-assignee", login]
+    args += ["--remove-assignee", ",".join(replacing)] if replacing else []
+    args += ["--add-reviewer", login] if request else []
+    run(args)
 
 
 def login(host: str) -> str:

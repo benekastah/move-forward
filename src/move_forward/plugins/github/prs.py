@@ -242,6 +242,11 @@ otherwise. The other states: CLEAN, HAS_HOOKS and UNSTABLE (only non-required ch
 failing) can merge, DIRTY is a conflict, DRAFT a draft, and UNKNOWN isn't computed yet."""
 
 
+def primary_reviewers(pr: PullRequest) -> list[str]:
+    """Who's assigned to the PR but its author: where the repo has primary reviewers, those."""
+    return [login for login in pr.assignees if login != pr.author]
+
+
 def merge_blockers(pr: PullRequest, ignored: Collection[str] = ()) -> list[str]:
     """Why a PR can't be merged yet; empty when it's ready (Ready to merge's rule, besides
     the work notes' merge conditions)."""
