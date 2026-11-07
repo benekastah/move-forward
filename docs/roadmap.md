@@ -115,10 +115,20 @@ that needs a core one says so, and lands on top of it.
 Each button runs `gh`, checks its fields (a PR on `host`, a login's form), and returns the PR
 as `touched`, so it's fetched again at once.
 
-12. **Merge.** On Ready to merge, with a confirm: `gh pr merge --match-head-commit <the head
-    shown>`, so a push since then refuses it. A merge queue takes no method, and the button says
-    Add to queue. Otherwise the method comes from a setting or the repo's default. Never
-    `--admin`, and the branch stays for Cleanup.
+12. **Merge.** On Ready to merge, with a confirm. What a repo allows comes from GitHub, not config:
+    `isMergeQueueEnabled`, `autoMergeAllowed`, the allowed methods, `viewerDefaultMergeMethod` and
+    `deleteBranchOnMerge`. github fetches those and offers:
+    - **Add to queue** with a queue on: `merge-async` with `merge_action=merge_queue`, no method.
+    - **Merge** when ready: `merge-async` with the method and the head commit shown, so a push since
+      then refuses it. A linked stack can't merge any other way; try it on an unstacked PR first.
+    - **Merge when ready**, while checks run and where auto-merge is allowed and wanted:
+      `gh pr merge --auto`. Then a "merges when ready" badge and **Cancel auto-merge**. This button
+      belongs on PRs not yet in Ready to merge.
+    - Nothing when it isn't ready and auto-merge can't help.
+
+    Only real preferences are settings, in `[github.merge]`, with `[github.merge.repos."owner/name"]`
+    overriding per repo: `method` (the repo's default unless set), `auto_merge`, and `delete_branch`
+    (the repo's default unless set, and never a branch with PRs based on it). Never `--admin`.
 15. **A base merge isn't an answer.** Comments count as answered once they're older than my last
     push, by the head commit's date, so merging the base into a branch (Update branch, or by hand)
     clears them with nothing said. Read past merge commits: it needs their parents fetched. Then
