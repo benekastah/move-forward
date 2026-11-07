@@ -5,6 +5,18 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Set an entity's priority over HTTP
+
+`POST /actions/act_now/priority` with `kind`, `id` and `level` (0, 1 or 2) sets how much an
+entity matters, as `mfd priority` does; leave out `level` to clear it. Scripts can use it
+instead of running the command; nothing needs changing.
+
+### Snoozed reviews leave their panels
+
+An item snoozed or dismissed in Act now, or snoozed from the panel, also leaves Ready for me
+to review and Replies for me until it changes or the snooze ends. A script reading those
+panels from `mfd dump` no longer sees it there: use `mfd snoozes` to list what's snoozed.
+
 ### Refresh progress in the tab icon
 
 The refresh icon now highlights the dots of an arrow in sequence instead of spinning.

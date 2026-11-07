@@ -129,7 +129,7 @@ before the command's name.
 | `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <PR URL>` ends it. |
-| `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. Act now's buttons do the same. |
+| `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Act now's Clear priority does `clear`. |
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, task, until, fingerprint), for the skill. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 | `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account. |
@@ -151,7 +151,7 @@ do and why it's there ("quick, closes APP-12, alice waiting"), and anything
 else due on the same subject ("also: Fix CI"). Finishing something counts
 most, then quick work, then someone waiting (more the longer they've waited);
 important work and a nearing due date add to that ("critical, alice waiting 3d,
-due in 2d"); blocked work is left out. An item about a unit of work (moving a
+due in 2d"); blocked work ranks lower. An item about a unit of work (moving a
 ticket, a work entry's todo) joins the best item about something in it, to do
 after it, with its buttons: "Reply: PR 330", then "Move to In Review: APP-12". Each
 plugin nominates its own items; its page says which. Each item has Snooze
@@ -161,6 +161,10 @@ item's link, or pressing a plugin's button on it, marks it opened: it's dimmed i
 with when you opened it, until it changes (or for a day at most). Coming back to the tab
 fetches again just what you opened in the last half hour, not its plugins whole; an item's
 ↻ button does the same for it at once.
+
+github's Ready for me to review and Replies for me have the same Snooze on their items. An
+item snoozed or dismissed in Act now leaves those two panels as well, and comes back to
+them when it does to Act now.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
@@ -172,7 +176,8 @@ Panels that order by importance use the priority set on an item's subject first,
 their own rank for ties.
 Every item with an entity subject, including a todo in the Notes panel or Focus mode, shows Not important,
 Important and Critical as one group of buttons (❕ / ❗️ / ‼️), highlighting the selected level. For an
-item about several entities, the choice applies to its first subject. Act now groups
+item about several entities, the choice applies to its first subject. Once one is set, Act
+now also offers Clear priority. Act now groups
 its Snooze, Dismiss, Pin and Put on ice choices too, with emoji icons. Emoji buttons show
 their text in a hover title and an accessible name.
 Reset layout, in the footer, goes back to the default order.
@@ -276,6 +281,7 @@ Pages (GET, HTML):
 | Path | Shows |
 | --- | --- |
 | `/` | The dashboard. |
+| `/settings` | The config's settings as a form (see [Settings](#settings)). |
 | `/focus` | Focus mode's category list. |
 | `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
 
@@ -305,7 +311,7 @@ to `/`, or to the `back` query parameter when it's a local path, with its outcom
 in a short-lived cookie the next page shows once (signed, so no other site or app
 on localhost can show a notice of its own); an action that fails says
 `failed: <reason>`, not an error status. A malformed request gets one: `400`, or `413` for a body
-over 64 KiB):
+over 64 KiB:
 
 | Path | Fields | Does |
 | --- | --- | --- |
@@ -313,6 +319,7 @@ over 64 KiB):
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
 | `/actions/act_now/<snooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: the items joined to it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and the items joined to it) until tomorrow, dismisses it, or pins or unpins it; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
+| `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 0 not important, 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
 
 For example, ticking off a todo ([notes](docs/plugins/notes.md#buttons)):
 

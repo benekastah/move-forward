@@ -26,7 +26,7 @@ from .strict import Strict
 KEY = "now"
 """The Act now panel's key within core's Act now group."""
 ACTIONS = "act_now"
-"""The prefix of Act now's own buttons, `act_now/<snooze|dismiss|pin|unpin|opened>`."""
+"""The prefix of Act now's own buttons, `act_now/<snooze|dismiss|pin|unpin|opened|priority>`."""
 OPENED_FIELD = "opened"
 """The field a plugin's button carries, in Act now, to mark its item opened once the button
 has run: the item's `act_now_fields`."""

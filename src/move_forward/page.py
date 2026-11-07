@@ -181,9 +181,10 @@ class Item(Model):
     """Set by core, in Act now: when I opened the item, if it hasn't changed since; it's
     shown dimmed."""
     parts: list["Item"] = Field(default_factory=list)
-    """Pieces focus mode shows one at a time instead of this item, e.g. a work item's todos.
+    """Pieces of this item, e.g. a work item's todos: the dashboard draws them beneath it when
+    there are several, and focus mode shows them one at a time instead of it.
 
-    The dashboard shows this item as is, so the parts should also appear in `details`."""
+    Act now shows the item without them, so the parts should also appear in `details`."""
 
     @property
     def anchor(self) -> str | None:

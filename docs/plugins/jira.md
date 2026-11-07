@@ -70,14 +70,16 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
 
 | Path | Fields | Does |
 | --- | --- | --- |
-| `/actions/jira/transition` | `key`, `to` (a status name) | Moves the ticket to that status, with the API token (needs write access to the project). |
+| `/actions/jira/transition` | `key`, `to` (a status name), optional `also` (other names for it, one per line) | Moves the ticket to the first of those statuses its workflow offers, with the API token (needs write access to the project). |
 
 ## Act now
 
 jira nominates the status changes its PRs suggest, quick, closing the ticket when it goes
-to Closed. From What next it nominates incidents (important, critical once escalated),
-escalated bugs (important) and tickets due within the week (the due date counting more as
-the end of its day nears); a ticket with open blockers is left out.
+to Closed, and its rollouts ("Advance the rollout", "Finish the rollout"). From What next
+it nominates incidents (important, critical once escalated), escalated bugs (important),
+tickets due within the week (the due date counting more as the end of its day nears) and
+blocked tickets, which Act now ranks down until they've gone `[act_now] blocked_stale_days`
+untouched.
 
 ## Notifications
 

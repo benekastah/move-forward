@@ -479,9 +479,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return [f"will look up {retried} reviewer email(s) again"] if retried else []
 
     def act_now(self, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
-        """The panels' items, my drafts' too (their CI, their conflicts), but not reviews of
-        drafts: they aren't ready for one, so the panel lists them last and Act now leaves
-        them out."""
+        """The panels' items, the feedback on my drafts too, though a draft's item is
+        deferred; but not a deferred review: a draft isn't ready for one."""
         return [
             item if item.signals else item.model_copy(update={"signals": panel.signals})
             for panel in req.panels

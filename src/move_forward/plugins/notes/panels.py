@@ -141,7 +141,7 @@ def _todo_part(
     badges: list[str | Badge],
     graph: Graph,
 ) -> Item:
-    """One todo as focus mode shows it, linked to the PR it mentions if any.
+    """One todo as the Todos panel and focus mode show it, linked to the PR it mentions if any.
 
     When every PR it mentions is merged or closed, the todo is probably done: it says so and
     its Done box is drawn bigger.

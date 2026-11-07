@@ -64,6 +64,9 @@ catch up.
   `Action.selected` highlights a choice and `Action.icon`
   shows an emoji instead of visible text, with the unchanged label in `title` and
   `aria-label`.
+- **Snoozing in a panel**: `Panel.snoozable`, on a panel whose items are `act_now` ones, gives
+  each a Snooze button and keeps those snoozed or dismissed off the panel, the same as in
+  Act now.
 - **Fetching some entities again**: `Plugin.refresh_subjects(req)`
   (`SubjectsRequest(ctx, refs, snapshot)`) returns `Subjects(snapshot, updated)`, or None
   to be refreshed whole; `subjects_timeout_seconds`. An action's `touched` refs are

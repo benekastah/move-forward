@@ -13,7 +13,6 @@ from ...api.kinds import PULL_REQUEST as PR
 from .config import GitConfig
 from .models import Branch, LocalRepo, LocalSnapshot
 
-"""Joins a repo dir and a branch in a bulk action's `targets` field, one per line."""
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
 """git_stack's kind for a branch git-stack tracks."""
