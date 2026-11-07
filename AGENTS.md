@@ -180,3 +180,35 @@ python3 dev.py coverage  # optional: what the tests don't run
 
 It must pass on every commit, not just the last one in a PR. Commit in small,
 logical steps with messages that say why, not just what.
+
+## Reviewing a PR
+
+Every PR is reviewed before it merges, drafts included, by a fresh agent with no context
+but the PR: not a fork of the session that wrote it, so it judges what the code says rather
+than what was meant.
+
+- **The reviewer** reads the diff against the PR's base, its commit messages and this file,
+  and changes nothing. It looks for, most important first: bugs (inputs or state that give a
+  wrong result or a crash); surprises, and what the change makes inconsistent outside
+  itself; tests that are missing, can't fail without the change, or enshrine a wrong
+  behaviour; docs, docstrings and comments that are missing or untrue (or only describe
+  what the code used to do); dead code; readability; security. It checks each finding
+  against the code before reporting it, and gives it a severity (bug, should-fix, minor),
+  a failure scenario and a fix.
+- **It posts one GitHub review of type COMMENT**, never approving or requesting changes,
+  saying who wrote it (an AI agent) in its first line. Each finding is an inline comment
+  on the line it's about, numbered and starting with its severity; one with no line in the
+  diff (something missing, unchanged code) goes in the review's body:
+
+  ```sh
+  gh api repos/{owner}/{repo}/pulls/N/reviews --method POST --input review.json
+  # {"commit_id": "<head sha>", "event": "COMMENT", "body": "...",
+  #  "comments": [{"path": "src/...", "line": 42, "side": "RIGHT", "body": "..."}]}
+  ```
+
+  GitHub rejects an inline comment on a line outside the diff.
+- **The PR's author** then fixes what's worth fixing, pushes, and answers every finding,
+  inline ones in their own thread (`gh api repos/{owner}/{repo}/pulls/N/comments/ID/replies
+  -f body=...`) and the body's in one PR comment: fixed or not, why, and the commits that
+  fix it.
+- A PR merges once its review is answered and CI passes, in stack order.
