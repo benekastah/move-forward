@@ -117,6 +117,7 @@ my-team = "#team-my-team"
 # mailbox = "INBOX"
 # since_days = 14                       # older mail is left out, flagged or not
 # max_messages = 200
+# auth_servers = ["mx.google.com"]      # who stamps Authentication-Results (known for Gmail); senders are verified by them
 # token_env = "MAIL_PASSWORD"           # else the system's secret store, for my email
 # keychain_service = "move-forward-mail"
 

@@ -257,7 +257,9 @@ def message(
     date = _received(meta) or _sent(header("Date")) or datetime(1970, 1, 1, tzinfo=UTC)
     # The receiving server puts its own results on top; any below came with the message, and
     # only a name I trust counts, as a server that adds none leaves the sender's on top.
-    results = [str(r) for r in headers.get_all("Authentication-Results") or []]
+    # Raw, not decoded: a sender's address in it could hold an encoded word that decodes to
+    # results of its own.
+    results = [v for k, v in headers.raw_items() if k.lower() == "authentication-results"]
     subject = _shown(header("Subject")) or "(no subject)"
     if len(subject) > MAX_SUBJECT:
         subject = subject[: MAX_SUBJECT - 1] + "…"

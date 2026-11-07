@@ -106,6 +106,17 @@ TRUSTED = frozenset({"mx.example.com"})
             False,
         ),
         (['mx.example.com; spf=pass smtp.mailfrom="x;dmarc=pass header.from=acme.com"'], False),
+        # An encoded word in the sender's address, which would decode to results of its own.
+        (
+            [
+                (
+                    "mx.example.com; spf=pass (domain of "
+                    "=?utf-8?q?=29=3Bdmarc=3Dpass_header.from=3Dacme.com=3B=28?=@evil.example) "
+                    "smtp.mailfrom=x@evil.example; dmarc=fail header.from=acme.com"
+                )
+            ],
+            False,
+        ),
         # A pass, but for another domain than From's.
         (["mx.example.com; dmarc=pass header.from=evil.example"], False),
         # Not my server's: a server that adds none leaves the sender's on top.

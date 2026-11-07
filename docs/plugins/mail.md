@@ -37,8 +37,8 @@ newest first. `token_env` and `keychain_service` say where its password is.
 `auth_servers` names the servers whose `Authentication-Results` count: their first word, the
 authserv-id (`mx.google.com` for Gmail, known without setting it; for another server, look in a
 message's source). A sender counts as who `From` says only when the topmost such header, stamped
-with one of those names, says DMARC passed for the `From` domain. Without it, no sender is
-verified, and their mail takes no contact type.
+with one of those names, says DMARC passed for the `From` domain. For a host it isn't known for,
+or with `auth_servers = []`, no sender is verified, and their mail takes no contact type.
 
 `refresh_seconds` (900) is how often it reads the mailbox in the background. Every two minutes it
 also asks the server for the mailbox's counts (one `STATUS`, without opening it), and reads it at
