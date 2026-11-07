@@ -96,6 +96,9 @@ class Action(Model):
     suggestions: list[str] = Field(default_factory=list[str])
     """What the text field offers to pick from, in order; anything else can still be typed.
     Check the posted `input` like any other field."""
+    choices: dict[str, str] = Field(default_factory=dict[str, str])
+    """A drop-down beside its text field, posted as `choice`: what's posted, by what it says, the
+    first chosen to begin with. Check the posted field like any other."""
     href: str | None = None
     """Makes the button a link to this page instead of a form (`name` and `fields` unused).
     Links sit at the top right of their item."""

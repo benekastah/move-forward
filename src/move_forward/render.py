@@ -357,6 +357,17 @@ def _text_field(action: Action, at: str, pos: int | None) -> str:
     )
 
 
+def _choices(action: Action) -> str:
+    """A button's drop-down, or nothing without one."""
+    if not action.choices:
+        return ""
+    options = "".join(
+        f"<option value='{_e(value)}'>{_e(label)}</option>"
+        for label, value in action.choices.items()
+    )
+    return f"<select name='choice'>{options}</select>"
+
+
 def _action(action: Action, back: str = "", at: str = "", pos: int | None = None) -> str:
     """A button's form. `back` is where the action redirects afterwards; default the page.
     `at` is the key of the panel it's in, and `pos` its item's place there: the redirect
@@ -394,7 +405,7 @@ def _action(action: Action, back: str = "", at: str = "", pos: int | None = None
             f"{label}</button>"
         )
         if action.input:
-            control = _text_field(action, at, pos) + control
+            control = _text_field(action, at, pos) + _choices(action) + control
     return (
         f"<form method='post' action='/actions/{_e(action.name)}{query}' class='action'{confirm}>"
         f"{fields}{control}</form>"

@@ -68,6 +68,7 @@ catch up.
   does, and an item's details show alongside them. Don't repeat parts in `details`.
 - **Due dates in Act now**: `ActNowRequest.due_horizon` says how far ahead a due date counts
   (`[act_now] due_warning_days`). A plugin nominating by due date passes it to `due_pressure`.
+- **A drop-down beside a text field**: `Action.choices` adds one, posted as `choice`.
 - **Choices for a text field**: `Action.suggestions` lists what an `input` offers to pick
   from; anything else can still be typed, so check the posted field as usual.
 - **Snoozing in a panel**: `Panel.snoozable`, on a panel whose items are `act_now` ones, gives
