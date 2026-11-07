@@ -88,6 +88,116 @@ Sending, off by default:
 8. **Focus sets my status**: entering focus mode sets "Focusing" and Do Not Disturb for a
    while, and leaving it clears them.
 
+## Buttons and consistency
+
+An item should offer the same wherever it's shown, and what the page tells me to do should
+come with a button where the dashboard can do it. Each step here stands alone; a plugin step
+that needs a core one says so, and lands on top of it.
+
+### Core
+
+1. **Snooze and Clear priority everywhere.** Every item with a task gets Snooze in its own
+   panel, drawn as in Act now (💤, grouped), which replaces `Panel.snoozable`; and every panel
+   gets Clear priority once one is set. Pin stays in Act now: it only concerns that ranking.
+2. **Undo what's set aside.** A place on the page listing what's snoozed and dismissed, each
+   with a button to bring it back. Then Dismiss joins Snooze in the panels, and not before:
+   it can't be undone until this exists.
+3. **Tick todos in Act now.** A close-out with several todos shows them as text, because Act
+   now drops an item's `parts`. Show them with their boxes, as the panel does.
+4. **Keep the buttons of `also`.** A second task on the same subject becomes words, losing its
+   button (a ticket's Move to In Review under its What next item), where `then` keeps them.
+5. **Set a subject aside whole.** Snoozing an item brings the subject straight back with its
+   next task. Snooze, Dismiss and Pin should act on `also` too, as they do on `then`.
+6. **Importance where it means something.** Leave it off items about what hides (On ice). Say
+   whether every panel sorts by it, since only two do now, not What next or Feedback.
+7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
+   nor do those of an item that focus mode splits into parts (an entry's Put on ice).
+8. **Choices for a text field.** `Action.suggestions`, drawn as a `<datalist>` on its `input`:
+   pick from a list or type anything. github's primary reviewer needs it (step 11).
+9. **Say the due horizon to plugins.** `ActNowRequest` gains the `[act_now] due_warning_days`
+   horizon: jira nominates with a fixed week, so a longer setting never reaches Act now.
+10. **Account on the settings page.** A Sign out everywhere button (`mfd logout`), and where
+    each plugin's token is found (`mfd token check`). Setting or rotating a token stays in
+    the terminal.
+
+### github
+
+Each button runs `gh`, checks its fields (a PR on `host`, a login's form), and returns the PR
+as `touched`, so it's fetched again at once.
+
+11. **Primary reviewer.** A repo can require a primary reviewer: someone added as an assignee
+    alongside the author (who's added automatically), who must approve. GitHub enforces it, so
+    the dashboard only makes it quick to add.
+    - `primary_reviewer_repos`, a list in `[github]`, off by default, names those repos.
+    - github fetches PRs' `assignees`, in a new column of a fetched table. Whoever's assigned
+      but the author shows as a badge, "primary: alice".
+    - On my open PRs in those repos, a Primary reviewer field (`gh pr edit --add-assignee`)
+      suggests, first, the requested reviewers, then the requested teams' members github
+      already knows, then the recent committers it suggests for review. Any login can be typed.
+    - Open: whether it requests their review too (`--add-reviewer`), and whether a new one
+      replaces the old (`--remove-assignee`).
+12. **Merge.** On Ready to merge, with a confirm: `gh pr merge --match-head-commit <the head
+    shown>`, so a push since then refuses it. A merge queue takes no method, and the button says
+    Add to queue. Otherwise the method comes from a setting or the repo's default. Never
+    `--admin`, and the branch stays for Cleanup.
+13. **Request a reviewer.** On Needs a reviewer and Fix before review, a field with the same
+    suggestions (`gh pr edit --add-reviewer`). Also nominate these for Act now: a PR missing only
+    a reviewer never gets there, as neither panel is `act_now`, so `Request a reviewer` and Fix
+    before review's other verbs are never shown; those that stay unused go.
+14. **Ready for review.** `gh pr ready`, with a confirm, on a draft housekeeping says may be
+    ready.
+15. **Update branch.** `gh pr update-branch` (merging, not rebasing, which would rewrite what's
+    stacked on it) on a PR held as behind its base.
+16. **Run failed checks again.** `gh run rerun --failed` on CI failures, for checks whose URL
+    names a run.
+17. **"Ready to ping" only with something to ping with.** Ready for review says it even
+    without slack: say who's being waited on instead.
+
+Approving stays on GitHub: a review should come from having read the PR there.
+
+### git and git_stack
+
+18. **Pull.** On a branch whose PR moved on GitHub ("pull it"), fast-forward only, and refused
+    with local changes in the way.
+19. **Merged stack branches in Act now.** A merged branch git-stack tracks has no Delete and no
+    Act now slot, unlike any other merged branch. Nominate them, with Clean.
+20. **Restack.** `git stack restack`, with a confirm, on a branch that needs it and on a conflict
+    that says to. It stays local: `sync` and `push` force-push (with lease), which the rule
+    against force-pushing from a button forbids unless that's changed.
+21. **Put on ice in Stacks.** The same branch ices its stack from Local work, but only its PR from
+    Stacks, or nothing without a PR: Stacks' items should name their `git.branch` too.
+
+### jira
+
+22. **A target for "still To Do".** A ticket with PRs that hasn't started says `Update the
+    status` with no button: offer `status_in_progress`. Also commit to one label: `Close`
+    in Rollouts, `Move to Done` in transitions.
+23. **`priorities` in `mfd init`.** It's the one key missing from jira's commented defaults.
+
+### notes
+
+24. **Size a todo.** Dashboard todos are all unsized, so never close-outs. `todo_add` already takes
+    `size`; give it a control, and a way to size an existing todo (there's none, in the CLI
+    either).
+25. **Edit an entry.** What the CLI can do to one: `blocked-on` (its badge can't be cleared from
+    the page), status and where (not shown at all), `link`, and `remove`.
+26. **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
+    and remove them on the PR's items.
+27. **Start a todo from nothing.** The docs call notes alone a todo list, but a todo needs a PR
+    or ticket to start from on the page. A New entry button on the panel (`mfd notes add-entry`).
+28. **Undo a tick on the dashboard.** Focus mode keeps a ticked todo to untick; the dashboard loses
+    it. Keep recently done todos, ticked, for a while.
+29. **The same todo buttons.** An entry with one todo lacks the Delete and Link that one of several
+    has, and each of several repeats its entry's Add todo.
+30. **Why it's on ice.** The button always records "iced from the dashboard"; `ice` already takes a
+    `note`, so ask for one.
+
+### slack
+
+31. **Ping where it can help.** The muted `Ping…` shows on Ready to merge and in the merge queue,
+    where it's already approved. Show it only with someone to chase.
+32. **Clear a team's channel.** `/slack/contacts` can't (`mfd slack team unset`).
+
 ## Follow-ups
 
 ### Refreshing
