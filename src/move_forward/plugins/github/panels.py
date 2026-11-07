@@ -19,6 +19,7 @@ from .prs import (
     STATE_REASONS,
     approved,
     awaiting_re_review,
+    can_be_requested,
     changes_requested,
     failing_checks,
     has_conflicts,
@@ -401,21 +402,28 @@ class Builder:
 
     def needs_reviewer(self) -> Panel:
         items: list[Item] = []
+        ask = Signals(verb="Request a reviewer", task="request_reviewer", effort="minutes")
         for pr in self.mine:
-            if pr.is_draft or not (details := self._assignment_reasons(pr)):
+            if pr.is_draft or pr.in_merge_queue:
                 continue
+            if not (details := self._assignment_reasons(pr)):
+                continue
+            # Listed either way, as the teams' rules still say; but an approved PR isn't waiting
+            # on anyone, and asking can't answer a team whose members can't be read.
+            signals = ask if can_be_requested(details) and not approved(pr) else None
             if self.derived and (suggestions := self.derived.suggestions.get(pr.url)):
                 details.append(
                     "recent committers here: "
                     + ", ".join(f"{s.login} ({s.commits})" for s in suggestions)
                 )
-            item = pr_item(self.now, pr, details=details, rank=-pr.created_at.timestamp())
+            item = pr_item(
+                self.now, pr, details=details, rank=-pr.created_at.timestamp(), signals=signals
+            )
             items.append(self._with_reviewer_field(item, pr))
         return Panel(
             key="needs_reviewer",
             priority=Band.REVIEWERS,
             act_now=True,
-            signals=Signals(verb="Request a reviewer", task="request_reviewer", effort="minutes"),
             title="Needs a reviewer",
             description="My open PRs missing a reviewer request under their teams' rules.",
             items=items,

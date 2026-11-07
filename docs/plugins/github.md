@@ -98,7 +98,8 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
 - **Ready for me to review** and **Requested from my teams** size a review by the files that
   CODEOWNERS gives me or my teams, when there are some: "my part: 12 lines in 2 of 119
   files". The PR's badges still show the whole PR. Without owned files, the whole PR sizes it.
-- **Needs a reviewer**: the assignment reasons from Fix before review, with recent
+- **Needs a reviewer**: the assignment reasons from Fix before review, on PRs not in the merge
+  queue, with recent
   committers suggested for PRs requesting a team. GitHub's `reviewDecision` is null where
   the base branch requires no review; Ready to merge asks for no approval there. These PRs,
   here and in Fix before review, have a field to request a reviewer, suggesting the requested
@@ -136,7 +137,8 @@ limits, with the author waiting since my review was last asked for), mentions to
 (quick), feedback to reply to (quick, the thread authors waiting since the oldest unresolved
 thread), CI failures (about an hour), PR policy failures (quick), merge conflicts (about an
 hour, or quick when restacking fixes them), PRs needing a reviewer (quick, once there's
-nothing else to do on them) and PRs ready to merge (quick, closing the PR). Fix before review, Ready for review, Held, the merge queue,
+nothing else to do on them, unless already approved or all that's missing is a team's members being
+readable) and PRs ready to merge (quick, closing the PR). Fix before review, Ready for review, Held, the merge queue,
 Requested from my teams and PR housekeeping aren't nominated. Ready for me to review and Replies for me
 have Snooze on their items, and leave out what's snoozed or dismissed.
 

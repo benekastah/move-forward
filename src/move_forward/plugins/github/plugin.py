@@ -490,7 +490,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             for panel in req.panels
             if panel.act_now
             for item in panel.items
-            if not (
+            if (item.signals or panel.signals)
+            and not (
                 item.deferred and (item.signals or panel.signals or Signals()).task == REVIEW_TASK
             )
         ]

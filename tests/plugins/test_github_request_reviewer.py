@@ -89,3 +89,23 @@ def test_a_bad_request_is_refused_without_running_anything(
     config, db = stored(github=snapshot(mine=[pr(1, requested_users=["alice"])]))
     with pytest.raises(ActionError, match=says):
         perform_action(config, db, REQUEST_REVIEWER, {"pr": url, "input": login})
+
+
+def test_a_queued_pr_is_not_listed_and_an_approved_one_is_not_nominated() -> None:
+    settled = [
+        pr(1, requested_teams=["core"], in_merge_queue=True),
+        pr(2, requested_teams=["core"], review_decision="APPROVED"),
+    ]
+    built = dashboard(github=snapshot(mine=settled), default_team_reviewer_assignment="individual")
+    assert [i.title for i in panel(built, "github.needs_reviewer").items] == ["PR 2"]
+    assert not any(i.title.startswith("Request a reviewer") for i in built.act_now())
+
+
+def test_a_team_whose_members_cannot_be_read_is_listed_but_not_nominated() -> None:
+    unknown = pr(1, requested_teams=["elsewhere"])
+    built = dashboard(
+        github=snapshot(mine=[unknown]), default_team_reviewer_assignment="individual"
+    )
+    [item] = panel(built, "github.needs_reviewer").items
+    assert item.details == ["cannot verify members of elsewhere"]
+    assert built.act_now() == []
