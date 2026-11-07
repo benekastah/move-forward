@@ -42,6 +42,8 @@ PRIMARY_REVIEWER = "github/primary_reviewer"
 REQUEST_REVIEWER = "github/request_reviewer"
 MARK_READY = "github/mark_ready"
 UPDATE_BRANCH = "github/update_branch"
+REQUEST_REVIEWER_TASK = "request_reviewer"
+"""The task of Needs a reviewer's items in Act now."""
 MAY_BE_READY = "draft with green CI and no open todos: ready?"
 
 
@@ -402,9 +404,7 @@ class Builder:
 
     def needs_reviewer(self) -> Panel:
         items: list[Item] = []
-        # Of no stated effort, so it ranks below anything else to do on the PR, which is worth
-        # doing before asking anyone to look at it, and shows as "also" with its field until then.
-        ask = Signals(verb="Request a reviewer", task="request_reviewer")
+        ask = Signals(verb="Request a reviewer", task=REQUEST_REVIEWER_TASK, effort="minutes")
         for pr in self.mine:
             if pr.is_draft or pr.in_merge_queue:
                 continue

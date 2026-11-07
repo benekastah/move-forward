@@ -22,6 +22,7 @@ def test_a_pr_missing_a_reviewer_has_the_field_and_reaches_act_now() -> None:
     assert _field(panel(built, "github.fix_before_review").items[0]) is not None
     [item] = built.act_now()
     assert item.title == "Request a reviewer: PR 1"
+    assert item.signals is not None and item.signals.effort == "minutes"  # quick, on its own
     assert _field(item) is not None
 
 
