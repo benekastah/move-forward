@@ -432,7 +432,7 @@ def panels(
         if per.get(nomination.plugin, 0) == per_plugin:
             continue
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1
-        is_pinned = any(pinned(n) for n in [nomination, *group.then])
+        is_pinned = any(pinned(n) for n in [nomination, *group.also, *group.then])
         shown = _shown(group, place, size, is_pinned, now, levels, stale_after, horizon)
         if now and (when := opened_at(nomination, said(nomination), now)):
             opened = Badge(text=f"opened {age(now, when)} ago")
@@ -454,13 +454,13 @@ def panels(
 
 
 def _member_fields(
-    nomination: Nomination, key: FeedbackKey, then: list[Nomination]
+    nomination: Nomination, key: FeedbackKey, members_of: list[Nomination]
 ) -> dict[str, str]:
-    """The fields that name an item (by its `key`), and the items joined to it (`also`), to
-    the buttons that set it aside."""
+    """The fields that name an item (by its `key`), and those shown with it (`members`, posted
+    as `also`), to the buttons that set it aside."""
     kind, id, task = key
     fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
-    members = [[*n.key, n.fingerprint] for n in then if n.key is not None]
+    members = [[*n.key, n.fingerprint] for n in members_of if n.key is not None]
     if members:
         fields["also"] = json.dumps(members)
     return fields
@@ -483,14 +483,14 @@ def importance_actions(subject: Ref, level: int | None) -> list[Action]:
 
 
 def _buttons(
-    nomination: Nomination, then: list[Nomination], pinned: bool, level: int | None
+    nomination: Nomination, members: list[Nomination], pinned: bool, level: int | None
 ) -> list[Action]:
     """Snooze, dismiss, pin or unpin, and set the priority of its subject (or clear it); none
-    for an item about nothing. Snooze, dismiss and pin act on the items joined to it (`then`)
-    too, posted as `also`."""
+    for an item about nothing. Snooze, dismiss and pin act on those shown with it (`members`:
+    what else is due on the subject, and the items joined to it) too, posted as `also`."""
     if nomination.key is None:
         return []
-    fields = _member_fields(nomination, nomination.key, then)
+    fields = _member_fields(nomination, nomination.key, members)
 
     def button(action: str, label: str, icon: str, selected: bool | None = None) -> Action:
         return Action(
@@ -533,6 +533,7 @@ def _shown(
     the parts of it and of those, to act on one by one, and the buttons to set it aside. Ranked by its place, since the panels keep their own
     order."""
     nomination, then = group.nomination, group.then
+    members = [*group.also, *then]
     item, signals = nomination.item, nomination.signals
     reason = ("pinned, " if pinned else "") + why(signals, now, stale_after, horizon)
     reason = reason.removesuffix(", ")
@@ -546,7 +547,7 @@ def _shown(
         Link(text=joined.item.title, url=joined.item.url) for joined in then if joined.item.url
     ]
     fields = (
-        json.dumps(_member_fields(nomination, nomination.key, then)) if nomination.key else None
+        json.dumps(_member_fields(nomination, nomination.key, members)) if nomination.key else None
     )
     return item.model_copy(
         update={
@@ -569,7 +570,7 @@ def _shown(
                         *(action for joined in then for action in joined.item.actions),
                     ]
                 ),
-                *_buttons(nomination, then, pinned, levels.get(id(nomination))),
+                *_buttons(nomination, members, pinned, levels.get(id(nomination))),
             ],
         }
     )
