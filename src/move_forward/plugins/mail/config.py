@@ -14,6 +14,8 @@ DEFAULT_MAX_MESSAGES = 200
 DEFAULT_MAIL_TOKEN_ENV = "MAIL_PASSWORD"
 DEFAULT_MAIL_KEYCHAIN_SERVICE = "move-forward-mail"
 GMAIL_MESSAGE_URL = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"
+KNOWN_AUTH_SERVERS = {"imap.gmail.com": ["mx.google.com"]}
+"""What servers whose names are known stamp their `Authentication-Results` with, by IMAP host."""
 APP_SCHEMES = ("message:", "mid:")
 """Schemes of links that open a mail app (Apple Mail's `message:`, `mid:`), which the page
 reaches through the plugin's `open` page, since it links only to http(s) itself."""
@@ -51,12 +53,27 @@ class MailConfig(Strict):
     `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}`; for Apple
     Mail, `message:%3C{message_id}%3E`; for Thunderbird, `mid:{message_id}`. An `https://`
     link, or one of those schemes. Empty means mail isn't linked."""
+    auth_servers: list[str] | None = None
+    """The names my mail server stamps its `Authentication-Results` with (their first word,
+    the authserv-id), e.g. `mx.google.com`: a sender counts as who `From` says only when that
+    server found it authentic (DMARC passed), since anyone can write any `From`. Unset, it's
+    known for Gmail; for another server, look for the name in a message's source. Empty, no
+    sender is verified."""
     token_env: str = DEFAULT_MAIL_TOKEN_ENV
     """The environment variable holding the password."""
     keychain_service: str = DEFAULT_MAIL_KEYCHAIN_SERVICE
     """The service the password is stored under in the system's secret store (the macOS
     keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;
     its account is the top-level `email`."""
+
+    def trusted_auth_servers(self) -> frozenset[str]:
+        """`auth_servers`, or those known for `host`, lower-case."""
+        names = (
+            self.auth_servers
+            if self.auth_servers is not None
+            else (KNOWN_AUTH_SERVERS.get(self.host.lower(), []))
+        )
+        return frozenset(name.lower() for name in names)
 
     @field_validator("host")
     @classmethod

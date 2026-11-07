@@ -10,6 +10,7 @@ TEMPLATE = """\
 # since_days = 14                       # older mail is left out, flagged or not
 # max_messages = 200                    # the most read, newest first
 # message_url = ""                      # a link to a message: {message_id}, {username}; e.g. Apple Mail's "message:%3C{message_id}%3E"
+# auth_servers = ["mx.google.com"]      # who stamps Authentication-Results; known for Gmail, else from a message's source
 # token_env = "MAIL_PASSWORD"           # else the system's secret store, for your email (`mfd token set mail`)
 # keychain_service = "move-forward-mail"
 """

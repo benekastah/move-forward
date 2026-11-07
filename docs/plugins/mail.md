@@ -34,6 +34,12 @@ mail sent to me from mail I'm copied on. `mailbox` (`INBOX`) is the mailbox read
 than `since_days` (14) is left out, flagged or not, and at most `max_messages` (200) are read,
 newest first. `token_env` and `keychain_service` say where its password is.
 
+`auth_servers` names the servers whose `Authentication-Results` count: their first word, the
+authserv-id (`mx.google.com` for Gmail, known without setting it; for another server, look in a
+message's source). A sender counts as who `From` says only when the topmost such header, stamped
+with one of those names, says DMARC passed for the `From` domain. Without it, no sender is
+verified, and their mail takes no contact type.
+
 `refresh_seconds` (900) is how often it reads the mailbox in the background. Every two minutes it
 also asks the server for the mailbox's counts (one `STATUS`, without opening it), and reads it at
 once when they've moved: mail came, went or was read.
@@ -60,7 +66,8 @@ ticket key in it relates the two). That `person` is `mail/<address>`, with the a
 `handle` and `email`, so core joins them with the same person in other tools, a CRM say, and
 ranks and badges their mail by their contact type. Only a sender the receiving server vouched
 for is published that way: one whose `From` passed DMARC, by the server's own
-`Authentication-Results` (the topmost; any below came with the message). Anyone can write any
+`Authentication-Results` (the topmost, stamped with a name in `auth_servers`; any below came with
+the message). Anyone can write any
 `From`, and a forged one mustn't borrow a customer's type. Others' mail is still listed, from
 whoever it says. See [entities.md](../entities.md).
 

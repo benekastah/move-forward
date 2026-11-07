@@ -79,27 +79,56 @@ def test_its_date_is_the_servers_not_what_the_sender_says() -> None:
     )
     found = client.message(received, forged, {ME})
     assert found is not None and found.date == datetime(2026, 11, 7, 18, 30, tzinfo=UTC)
+    far = b'1 (UID 7 INTERNALDATE "31-Dec-9999 23:59:59 -1200" FLAGS ())'
+    assert client.message(far, forged, {ME}) is not None  # nor a server date out of range
     # Without the server's word, an unreadable Date doesn't stop the refresh.
     found = client.message(b"1 (UID 7 FLAGS ())", forged, {ME})
     assert found is not None and found.date == datetime(1970, 1, 1, tzinfo=UTC)
+
+
+TRUSTED = frozenset({"mx.example.com"})
 
 
 @pytest.mark.parametrize(
     ("results", "verified"),
     [
         (["mx.example.com; dkim=pass; spf=pass; dmarc=pass header.from=acme.com"], True),
+        (["MX.example.com 1; dmarc=pass (p=reject) header.from=Acme.com"], True),
         (["mx.example.com; dmarc=fail header.from=acme.com"], False),
+        # The sender's own words: an envelope address, a comment, a quoted string.
+        (
+            [
+                (
+                    "mx.example.com; spf=pass (domain of dmarc=pass@evil.example) "
+                    "smtp.mailfrom=dmarc=pass@evil.example; dmarc=fail header.from=acme.com"
+                )
+            ],
+            False,
+        ),
+        (['mx.example.com; spf=pass smtp.mailfrom="x;dmarc=pass header.from=acme.com"'], False),
+        # A pass, but for another domain than From's.
+        (["mx.example.com; dmarc=pass header.from=evil.example"], False),
+        # Not my server's: a server that adds none leaves the sender's on top.
+        (["evil.example; dmarc=pass header.from=acme.com"], False),
         # One that came with the message, under the server's own, doesn't count.
-        (["mx.example.com; dmarc=fail", "evil.example; dmarc=pass"], False),
+        (["mx.example.com; dmarc=fail", "mx.example.com; dmarc=pass header.from=acme.com"], False),
         ([], False),
     ],
 )
-def test_a_sender_is_verified_only_by_the_receiving_servers_dmarc(
+def test_a_sender_is_verified_only_by_my_servers_dmarc_for_their_domain(
     results: list[str], verified: bool
 ) -> None:
     extra = "\r\n".join(f"Authentication-Results: {r}" for r in results)
-    found = client.message(b"1 (UID 7 FLAGS ())", headers(extra=extra), {ME})
+    found = client.message(b"1 (UID 7 FLAGS ())", headers(extra=extra), {ME}, TRUSTED)
     assert found is not None and found.verified is verified
+
+
+def test_gmails_server_is_known_and_others_are_set() -> None:
+    assert _config().trusted_auth_servers() == {"mx.google.com"}
+    assert _config(host="imap.example.com").trusted_auth_servers() == set()
+    assert _config(
+        host="imap.example.com", auth_servers=["MX.Example.com"]
+    ).trusted_auth_servers() == {"mx.example.com"}
 
 
 def test_control_and_bidi_characters_are_dropped_from_what_is_shown() -> None:
@@ -109,6 +138,12 @@ def test_control_and_bidi_characters_are_dropped_from_what_is_shown() -> None:
     )
     found = client.message(b"1 (UID 7 FLAGS ())", raw, {ME})
     assert found is not None and (found.subject, found.sender_name) == ("Invoice fdp.exe", "Bob")
+
+
+def test_what_emoji_and_scripts_need_is_kept() -> None:
+    raw = headers(subject="=?utf-8?q?Pair_=F0=9F=91=A9=E2=80=8D=F0=9F=92=BB?=")
+    found = client.message(b"1 (UID 7 FLAGS ())", raw, {ME})
+    assert found is not None and found.subject == "Pair 👩\u200d💻"
 
 
 @pytest.mark.parametrize(

@@ -30,7 +30,12 @@ _STATUS = re.compile(rb"\((.*)\)")
 _INTERNALDATE = re.compile(
     rb'\bINTERNALDATE "\s*(\d{1,2})-([A-Za-z]{3})-(\d{4}) (\d\d):(\d\d):(\d\d) ([+-])(\d\d)(\d\d)"'
 )
-_DMARC_PASS = re.compile(r"\bdmarc\s*=\s*pass\b", re.IGNORECASE)
+_QUOTED = re.compile(r'"(?:[^"\\]|\\.)*"')
+_HIDDEN = {
+    chr(c) for c in (0x061C, 0x200B, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A))
+}
+"""Characters that change how text reads without showing: bidi controls, and the zero-width
+space. Other format characters (ZWJ, ZWNJ) are kept: emoji and scripts need them."""
 
 
 def password(config: MailConfig, email: str) -> str:
@@ -123,7 +128,10 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
             "FETCH",
         )
     me = {a.lower() for a in (config.username, email) if "@" in a}
-    messages = [m for meta, headers in _fetched(fetched) if (m := message(meta, headers, me))]
+    trusted = config.trusted_auth_servers()
+    messages = [
+        m for meta, headers in _fetched(fetched) if (m := message(meta, headers, me, trusted))
+    ]
     return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
 
@@ -159,9 +167,9 @@ def _received(meta: bytes) -> datetime | None:
             int(year), _MONTHS.index(month.title()) + 1, int(day),
             int(hour), int(minute), int(second), tzinfo=UTC,
         )  # fmt: skip
-    except ValueError:
+        return local - offset
+    except (ValueError, OverflowError):
         return None
-    return local - offset
 
 
 def _sent(date: str) -> datetime | None:
@@ -174,16 +182,58 @@ def _sent(date: str) -> datetime | None:
 
 
 def _shown(text: str) -> str:
-    """`text` without control or format characters (bidi overrides, zero-width ones), which
-    could make a subject or name read as something else, and its whitespace collapsed."""
+    """`text` without control characters or those in `_HIDDEN`, which could make a subject or
+    name read as something else, and its whitespace collapsed."""
     return " ".join(
-        "".join(c if unicodedata.category(c) not in ("Cc", "Cf") else " " for c in text).split()
+        "".join(" " if unicodedata.category(c) == "Cc" or c in _HIDDEN else c for c in text).split()
     )
 
 
-def message(meta: bytes, raw: bytes, me: set[str]) -> Message | None:
+def _without_comments(text: str) -> str:
+    """`text` with its quoted strings and (possibly nested) comments blanked out: in
+    `Authentication-Results` they hold what the sender chose, e.g. their envelope address."""
+    text = _QUOTED.sub('""', text)
+    out: list[str] = []
+    depth = 0
+    escaped = False
+    for c in text:
+        if escaped:
+            escaped = False
+        elif c == "\\" and depth:
+            escaped = True
+        elif c == "(":
+            depth += 1
+        elif c == ")" and depth:
+            depth -= 1
+        elif not depth:
+            out.append(c)
+    return "".join(out)
+
+
+def dmarc_passed(results: str, trusted: frozenset[str], from_domain: str) -> bool:
+    """Whether an `Authentication-Results` header, stamped by one of the `trusted` servers,
+    says DMARC passed for `from_domain` (RFC 8601: the authserv-id, then `;`-separated
+    `method=result` with properties such as `header.from=`)."""
+    authserv, *found = _without_comments(results).split(";")
+    if not authserv.split() or authserv.split()[0].lower() not in trusted:
+        return False
+    for result in found:
+        method, _, rest = result.strip().partition("=")
+        words = rest.split()
+        if method.strip().lower() != "dmarc" or not words or words[0].lower() != "pass":
+            continue
+        properties = {key.lower(): value for key, _, value in (w.partition("=") for w in words[1:])}
+        if properties.get("header.from", "").lower() == from_domain:
+            return True
+    return False
+
+
+def message(
+    meta: bytes, raw: bytes, me: set[str], trusted: frozenset[str] = frozenset()
+) -> Message | None:
     """The message a FETCH response describes (its line and its headers), or None when the
-    server left out its UID. `me` are my addresses, lower-case."""
+    server left out its UID. `me` are my addresses, lower-case; `trusted` the servers whose
+    `Authentication-Results` count (`MailConfig.auth_servers`)."""
     uid = _UID.search(meta)
     if uid is None:
         return None
@@ -205,7 +255,8 @@ def message(meta: bytes, raw: bytes, me: set[str]) -> Message | None:
     )
     # The server's clock, not the sender's: `Date` says whatever the sender likes.
     date = _received(meta) or _sent(header("Date")) or datetime(1970, 1, 1, tzinfo=UTC)
-    # The receiving server puts its own results on top; any below came with the message.
+    # The receiving server puts its own results on top; any below came with the message, and
+    # only a name I trust counts, as a server that adds none leaves the sender's on top.
     results = [str(r) for r in headers.get_all("Authentication-Results") or []]
     subject = _shown(header("Subject")) or "(no subject)"
     if len(subject) > MAX_SUBJECT:
@@ -224,6 +275,8 @@ def message(meta: bytes, raw: bytes, me: set[str]) -> Message | None:
         or (bool(auto) and auto != "no"),
         flagged="\\Flagged" in flag_set,
         seen="\\Seen" in flag_set,
-        verified=bool(results) and bool(_DMARC_PASS.search(results[0])),
+        verified=bool(results)
+        and "@" in address
+        and dmarc_passed(results[0], trusted, address.rpartition("@")[2].lower()),
         date=date,
     )
