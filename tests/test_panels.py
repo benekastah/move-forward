@@ -696,12 +696,15 @@ def test_what_only_core_sets_on_an_item_is_cleared_from_a_plugins() -> None:
     assert shown.act_now_fields is None and shown.opened_at is None
 
 
-def test_an_entry_with_one_todo_has_the_buttons_one_of_several_has() -> None:
-    built = dashboard(work_items=[entry("APP-1 one", todos=[todo("only", "quick")])])
+def test_what_a_lone_todo_links_shows_on_its_entry() -> None:
+    url = "https://github.com/acme/widgets/pull/7"
+    noted = entry("APP-1 one", [todo(f"check {url}", "quick")])
+    built = dashboard(
+        work_items=[noted],
+        github=snapshot(merged_recent=[pr(7, state="MERGED", merged_at=NOW)]),
+    )
     [item] = panel(built, "notes.todos").items
-    assert [a.name for a in item.actions if a.name.startswith("notes/todo")] == [
-        "notes/todo_done",
-        "notes/todo_delete",
-        "notes/todo_link",
-        "notes/todo_add",
-    ]
+    assert url in render.item_html(item)
+    assert "its PRs are done" in item.badges
+    done = next(a for a in item.actions if a.name == "notes/todo_done")
+    assert done.suggested

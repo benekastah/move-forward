@@ -18,8 +18,9 @@ names are related through it.
 ## Panels
 
 - **Todos**: open `Left to do` items from the work notes, easy close-outs first, blocked
-  last. An entry with one open todo has its Done checkbox, Delete, Link and Add todo on the entry;
-  entries with several show each todo below the entry with its own.
+  last. An entry with one open todo has its Done checkbox, Delete and Link on the entry, with the PRs and
+  tickets it's linked to; entries with several show each todo below the entry with its own. Add
+  todo is on the entry either way.
   Focus mode also shows the todos one at a time. While the notes are empty (just
   upgraded, say), it says how to import them.
 - **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw); git adds
@@ -49,7 +50,7 @@ it without recording it.
 
 notes nominates entries whose open todos are all quick: close-outs, finishing the entry. A
 blocked one ranks lower until it's gone `[act_now] blocked_stale_days` untouched. An entry
-with one todo has its Done checkbox in Act now; one with several lists them, each with its own
+with one todo has its buttons in Act now, on whichever item it's joined to if any; one with several lists them, each with its own
 buttons, as the Todos panel does.
 
 ## Buttons
