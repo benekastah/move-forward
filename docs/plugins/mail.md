@@ -1,0 +1,79 @@
+# mail
+
+Unread and flagged mail, by subject and sender, from any mailbox that speaks IMAP, so the people
+who matter get answered first. Enabled by a `[mail]` section.
+
+It reads the mailbox without changing it: it opens it read-only (`EXAMINE`) and fetches only
+the headers it needs with `BODY.PEEK`, so nothing is marked read, and it never fetches a
+message's body.
+
+## Setup
+
+Add a `[mail]` section with `host` and `username` (`mfd init` asks, and guesses Gmail's from
+your email). It signs in over TLS with a password; for Gmail, make an app password at
+https://myaccount.google.com/apppasswords (it needs 2-Step Verification), then store it with
+
+```sh
+mfd token set mail
+```
+
+which asks for it without showing it and keeps it in your system's secret store (the macOS
+keychain, Windows' Credential Manager, or on Linux the desktop keyring through `secret-tool`)
+under `keychain_service`, with your top-level `email` as the account. Or export
+`MAIL_PASSWORD` (or the variable `token_env` names), which wins over the store.
+`mfd token check` says where it was found.
+
+A password is all it signs in with for now, so a mailbox that allows only OAuth (Microsoft 365)
+can't be read yet.
+
+## Config
+
+`host` is the IMAP server (`imap.gmail.com`), and `port` (993) its port for IMAP over TLS.
+`username` is who to sign in as, and also my address, with the top-level `email`, for telling
+mail sent to me from mail I'm copied on. `mailbox` (`INBOX`) is the mailbox read. Mail older
+than `since_days` (14) is left out, flagged or not, and at most `max_messages` (200) are read,
+newest first. `token_env` and `keychain_service` say where its password is.
+
+`refresh_seconds` (900) is how often it reads the mailbox in the background. Every two minutes it
+also asks the server for the mailbox's counts (one `STATUS`, without opening it), and reads it at
+once when they've moved: mail came, went or was read.
+
+`message_url` links each item to its message, with `{message_id}` (its Message-ID, without `<>`)
+and `{username}` filled in, percent-encoded. `mfd init` sets Gmail's:
+
+| Mail tool | `message_url` |
+| --- | --- |
+| Gmail | `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}` |
+| Apple Mail | `message:%3C{message_id}%3E` |
+| Thunderbird | `mid:{message_id}` (where the system hands `mid:` links to it) |
+| Outlook on the web | `https://outlook.office.com/mail/inbox` (the inbox: it has no link by Message-ID) |
+
+It must be an `https://` link or start with `message:` or `mid:`; empty, the default, leaves mail
+unlinked. The page links only to http(s), so an item with a `message:` or `mid:` link goes
+through the plugin's `/mail/open` page, which sends the browser on to the mail app.
+
+## Publishes
+
+`mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
+with, pointing at the `person` who wrote its latest message and mentioning its subject (so a
+ticket key in it relates the two). That `person` is `mail/<address>`, with the address as its
+`handle` and `email`, so core joins them with the same person in other tools, a CRM say, and
+ranks and badges their mail by their contact type. See [entities.md](../entities.md).
+
+## Panels
+
+- **Mail**: a conversation per item, newest first; those whose people matter more (flagged, or
+  by contact type) come first, and lists, newsletters and automated mail (`List-Id`,
+  `Precedence: bulk`, `Auto-Submitted`) last. Each says who it's from, how many messages are
+  unread, whether it's flagged, and `cc` when I'm only copied.
+
+## Act now
+
+Every conversation but those from lists and automated mail (unless flagged), as Read, in minutes.
+Mail sent to me has its sender waiting since it came; a flagged conversation is important; and
+the sender's contact type can raise it further.
+
+## Pages
+
+- `/mail/open?thread=<id>`: sends the browser to the conversation's latest message with
+  `message_url`, for a mail app's link; only for a conversation the mailbox has.
