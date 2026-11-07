@@ -153,7 +153,8 @@ most, then quick work, then someone waiting (more the longer they've waited);
 important work and a nearing due date add to that ("critical, alice waiting 3d,
 due in 2d"); blocked work ranks lower. An item about a unit of work (moving a
 ticket, a work entry's todo) joins the best item about something in it, to do
-after it, with its buttons: "Reply: PR 330", then "Move to In Review: APP-12". Each
+after it, with its buttons: "Reply: PR 330", then "Move to In Review: APP-12". An item made of
+several parts, like an entry's todos, lists them with their own buttons. Each
 plugin nominates its own items; its page says which. Each item has Snooze
 (until tomorrow), Dismiss and Pin (first until unpinned); a snoozed or
 dismissed item comes back once it changes (its title, badges or details). Opening an

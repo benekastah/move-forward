@@ -478,3 +478,12 @@ def test_the_footer_says_who_i_am_in_each_tool() -> None:
     )
     html = render.dashboard_page(dashboard, refreshing=frozenset())
     assert f"as GitHub: {ME} · Jira: me@x" in html
+
+
+def test_an_items_details_show_alongside_its_parts() -> None:
+    item = page.Item(
+        title="x", details=["why: quick"], parts=[page.Item(title="one"), page.Item(title="two")]
+    )
+    html = render.item_html(item)
+    assert "why: quick" in html
+    assert "<ul class='item-parts'>" in html

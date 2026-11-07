@@ -139,6 +139,12 @@ class ActNowConfig(Strict):
         )
 
 
+def _listed_parts(item: Item) -> list[Item]:
+    """The parts an item lists beneath it, with their own buttons: those of an item with
+    several. The buttons of one with a single part are on the item itself."""
+    return item.parts if len(item.parts) > 1 else []
+
+
 @dataclass(frozen=True)
 class Nomination:
     """An item a plugin put forward for Act now."""
@@ -163,7 +169,8 @@ class Nomination:
         if item.fingerprint is not None:
             return item.fingerprint
         badges = [b if isinstance(b, str) else b.text for b in item.badges]
-        seen = json.dumps([item.title, badges, item.details])
+        parts = [part.title for part in _listed_parts(item)]
+        seen = json.dumps([item.title, badges, item.details, *([parts] if parts else [])])
         return hashlib.sha256(seen.encode()).hexdigest()[:16]
 
 
@@ -522,7 +529,7 @@ def _shown(
 ) -> Item:
     """The item as Act now shows it: its verb first, its place overall as a badge, why it's
     here, what else is due on the same subject, the items joined to it with their buttons,
-    and the buttons to set it aside. Ranked by its place, since the panels keep their own
+    the parts of it and of those, to act on one by one, and the buttons to set it aside. Ranked by its place, since the panels keep their own
     order."""
     nomination, then = group.nomination, group.then
     item, signals = nomination.item, nomination.signals
@@ -548,7 +555,10 @@ def _shown(
             "links": links,
             "rank": size - place,
             "deferred": False,
-            "parts": [],
+            "parts": [
+                *_listed_parts(item),
+                *(part for joined in then for part in _listed_parts(joined.item)),
+            ],
             "actions": [
                 *item.actions,
                 *(action for joined in then for action in joined.item.actions),

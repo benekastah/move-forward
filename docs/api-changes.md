@@ -64,6 +64,8 @@ catch up.
   `Action.selected` highlights a choice and `Action.icon`
   shows an emoji instead of visible text, with the unchanged label in `title` and
   `aria-label`.
+- **Parts in Act now**: Act now lists an item's `parts` when there are several, as the dashboard
+  does, and an item's details show alongside them. Don't repeat parts in `details`.
 - **Due dates in Act now**: `ActNowRequest.due_horizon` says how far ahead a due date counts
   (`[act_now] due_warning_days`). A plugin nominating by due date passes it to `due_pressure`.
 - **Choices for a text field**: `Action.suggestions` lists what an `input` offers to pick
