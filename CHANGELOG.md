@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Clear a team's channel on the contacts page
+
+The contacts page has a Clear button for a team with a channel, which asks first. Scripts can post
+`team` to `/actions/slack/clear_team_channel`. `set_team_channel` with both fields blank still
+fails. Nothing to change.
+
 ### Merged stack branches reach Act now
 
 A merged branch git-stack tracks now reaches Act now as "Clean up", and has a Clean button on its

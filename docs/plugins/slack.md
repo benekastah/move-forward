@@ -67,7 +67,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | Path | Shows |
 | --- | --- |
 | `/slack/ping?pr=<PR URL>` | The ping page for one of my PRs. |
-| `/slack/contacts` | Where people's and teams' pings go, imported or set by hand, with a form to change each; the ping page links to it. |
+| `/slack/contacts` | Where people's and teams' pings go, imported or set by hand, with a form to change each and a Clear button for a team's channel; the ping page links to it. |
 | `/slack` | Setting up the Slack app, connecting to it, and what it's connected as, with the scopes each feature lacks. |
 | `/slack/connect` | Sends the browser to Slack for the sign-in the Connect button (a POST, which starts it) began; loading it starts nothing (not found without `client_id`). |
 | `/slack/callback` | Where Slack sends the browser back. Served without the dashboard's cookie, which browsers don't send on a redirect from Slack; it's refused unless it carries the single-use `state` of the sign-in started here, within 10 minutes. |
@@ -79,6 +79,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 | `/actions/slack/set_contact` | `login`, `slack_id` (blank for none) | Sets where a person's pings go, by hand; it wins over imports. |
 | `/actions/slack/set_team_channel` | `team`, `channel_name`, `channel_id` (one of them at least) | Sets where a team's pings go, by hand; `[slack.teams]` still wins. |
+| `/actions/slack/clear_team_channel` | `team` | Forgets a team's channel, asking first on the page; `[slack.teams]` still wins, and a later `mfd slack import` can bring an imported one back. |
 | `/actions/slack/connect` | | Starts signing in to the Slack app (needs `client_id`), replacing any sign-in started before; `/slack/connect` then sends the browser to Slack. |
 | `/actions/slack/disconnect` | | Revokes the app's token with Slack and forgets it. |
 

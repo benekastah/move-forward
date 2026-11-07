@@ -35,8 +35,6 @@ def test_setting_by_hand_checks_the_ids_and_wins_over_imports() -> None:
     assert notice == "bob's pings go to U222222"
     with pytest.raises(ActionError, match="isn't a Slack member id"):
         refresh.run_action(config, db, "slack/set_contact", {"login": "bob", "slack_id": "x"})
-    with pytest.raises(ActionError, match="a channel name or id is needed"):
-        refresh.run_action(config, db, "slack/set_team_channel", {"team": "web"})
     slack = SlackRepository(db)
     slack.replace_imported([Contact(login="bob", slack_id="U999999")], [], [])
     assert slack.contacts()["bob"].slack_id == "U222222"
@@ -61,3 +59,26 @@ def test_mfd_slack_contacts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     assert mfd("contact", "unset", "alice") == 0 and mfd("contact", "unset", "alice") == 1
     assert mfd("team", "unset", "web") == 0
     assert SlackRepository(Database(tmp_path / "d.db")).contacts() == {}
+
+
+def test_clear_forgets_a_teams_channel_but_a_blank_form_does_not() -> None:
+    config, db = stored(slack=True, github=snapshot())
+    slack = SlackRepository(db)
+    slack.set_team_channel("web", "#team-web", None)
+    with pytest.raises(ActionError, match="a channel name or id is needed"):
+        refresh.perform_action(config, db, "slack/set_team_channel", {"team": "web"})
+    assert "web" in slack.team_channels()
+    notice = refresh.run_action(config, db, "slack/clear_team_channel", {"team": "web"})
+    assert notice == "forgot web's channel"
+    assert "web" not in slack.team_channels()
+    with pytest.raises(ActionError, match="has no channel set"):
+        refresh.perform_action(config, db, "slack/clear_team_channel", {"team": "web"})
+
+
+def test_the_contacts_page_offers_clear_with_a_confirm_for_a_team_with_a_channel() -> None:
+    config, db = stored(slack=True, github=snapshot())
+    SlackRepository(db).set_team_channel("web", "#team-web", None)
+    page = str(refresh.plugin_page(config, db, "/slack/contacts", {}))
+    assert "/actions/slack/clear_team_channel" in page and "Forget web" in page
+    SlackRepository(db).unset_team_channel("web")
+    assert "clear_team_channel" not in str(refresh.plugin_page(config, db, "/slack/contacts", {}))

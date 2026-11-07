@@ -243,6 +243,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             "mark_sent": mark_sent,
             "set_contact": contacts.set_contact_action,
             "set_team_channel": contacts.set_team_channel_action,
+            "clear_team_channel": contacts.clear_team_channel_action,
             "connect": account.connect_action,
             "disconnect": account.disconnect_action,
         }
