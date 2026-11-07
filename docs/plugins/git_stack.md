@@ -27,6 +27,9 @@ have deleted), with its parent, status and, on a stack's bottom branch, its grou
   reopening the stack restores a deleted branch at its iced commit. With uncommitted changes in the repo's checkout, clean refuses
   only if the branch checked out there is a stack's root or one it would delete.
 
+Each item is also about the branch's `git.branch`, so notes' Put on ice ices its whole stack, as it
+does from Local work.
+
 On notes' On ice panel, git_stack adds Untrack to a stack while git-stack tracks its
 branches.
 

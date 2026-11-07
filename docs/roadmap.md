@@ -139,8 +139,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
 20. **Restack.** `git stack restack`, with a confirm, on a branch that needs it and on a conflict
     that says to. It stays local: `sync` and `push` force-push (with lease), which the rule
     against force-pushing from a button forbids unless that's changed.
-21. **Put on ice in Stacks.** The same branch ices its stack from Local work, but only its PR from
-    Stacks, or nothing without a PR: Stacks' items should name their `git.branch` too.
 
 ### jira
 

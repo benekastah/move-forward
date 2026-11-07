@@ -160,6 +160,7 @@ class Builder:
                         rank=1,
                         subjects=[
                             stack_branch_ref(repo.dir, b.name),
+                            branch_ref(repo.dir, b.name),
                             *([pr.subject] if pr else []),
                         ],
                     )
@@ -173,7 +174,10 @@ class Builder:
                             title=f"{b.name}: tracked, no PR",
                             subtitle=f"{repo.dir} · on {b.parent}",
                             rank=0.5,
-                            subjects=[stack_branch_ref(repo.dir, b.name)],
+                            subjects=[
+                                stack_branch_ref(repo.dir, b.name),
+                                branch_ref(repo.dir, b.name),
+                            ],
                         )
                     )
         return Panel(

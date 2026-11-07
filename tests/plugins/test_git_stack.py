@@ -361,3 +361,25 @@ def test_a_branchs_stack_is_its_own_then_its_groups_others_bottom_first() -> Non
     assert stack_of(tracked, "a1") == ["a1", "a2", "b1", "b2"]
     assert stack_of(tracked, "c1") == ["c1"]
     assert stack_of(tracked, "main") == ["main"]  # a root isn't tracked
+
+
+def test_put_on_ice_from_stacks_ices_the_stack_with_or_without_a_pr() -> None:
+    names = ["main", "me/APP-1-branch", "me/no-pr"]
+    built = dashboard(
+        github=snapshot(mine=[pr(1)]),
+        local=local_snapshot(branches=[local_branch(n) for n in names]),
+        stacks=stacks(
+            StackBranch(name="main"),
+            StackBranch(name="me/APP-1-branch", parent="main", status="needs-restack"),
+            StackBranch(name="me/no-pr", parent="main", status="up-to-date"),
+        ),
+    )
+    ice = {
+        item.title: next(a for a in item.actions if a.label == "Put on ice")
+        for item in panel(built, "git_stack.stacks").items
+    }
+    assert ice["me/APP-1-branch: needs-restack"].fields == {
+        "repo": "/src/widgets",
+        "branch": "me/APP-1-branch",
+    }
+    assert ice["me/no-pr: tracked, no PR"].name == "notes/ice"
