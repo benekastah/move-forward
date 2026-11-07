@@ -606,10 +606,11 @@ def _act_now_action(
             if action == "contact":
                 return _set_contact(db, fields, now)
             try:
-                who = people.contact_key(fields["who"])
+                contacts = ContactRepository(db)
+                who = people.label_to_clear(fields["who"], contacts.all())
             except ValueError as err:
                 raise ActionError(str(err)) from err
-            ContactRepository(db).clear(who)
+            contacts.clear(who)
             return ActionResult(f"{who}: type cleared")
         except KeyError as err:
             raise ActionError(f"missing field {err}") from err

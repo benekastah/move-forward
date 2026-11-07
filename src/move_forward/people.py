@@ -73,6 +73,14 @@ def contact_key(text: str) -> str:
     raise ValueError(f"{text!r} isn't one person's email address or an @domain")
 
 
+def label_to_clear(text: str, labels: dict[str, str]) -> str:
+    """`text` as the label to clear: one that's kept, as it's kept (even on what can't be
+    labelled any more, say a domain that's since become public), else as `contact_key` makes
+    it; raises ValueError as that does."""
+    found = text.strip().lower()
+    return found if found in labels else contact_key(text)
+
+
 class PeopleConfig(Strict):
     """`[people]`: what the types of people I deal with mean."""
 
@@ -131,7 +139,7 @@ class Contacts:
             found = self._labels[labelled]
         else:
             # Where tools disagree, the first in the graph's order: the plugins' order.
-            same = self._graph.view_same_person(person.id, _PersonView) or [person]
+            same = self._graph.view_same_person(person.id, _PersonView)
             found = next((t for p in same if (t := _tool_type(p.contact_type))), None)
         importance = self._types.get(found, 0) if found else 0
         return Contact(email, found, importance, labelled)

@@ -121,6 +121,20 @@ def test_a_crm_saying_who_someone_is_counts_for_their_mail() -> None:
     assert _contacts(SENDER, crm, _thread(SENDER)).importance(THREAD) == 1
 
 
+def test_where_tools_disagree_the_first_plugins_type_wins() -> None:
+    first = _person("crm.example.com/42", "alice@acme.com", "vendor")
+    second = _person("support.example.com/7", "alice@acme.com", "partner")
+    found = _contacts(SENDER, first, second, _thread(SENDER)).of(THREAD)
+    assert found is not None and found.contact_type == "vendor"
+
+
+def test_a_label_that_cant_be_set_any_more_can_still_be_cleared() -> None:
+    kept = {"@users.noreply.github.com": "customer"}
+    assert people.label_to_clear(" @Users.Noreply.GitHub.com", kept) == "@users.noreply.github.com"
+    with pytest.raises(ValueError, match="anyone can have"):
+        people.label_to_clear("@users.noreply.github.com", {})
+
+
 def test_a_tools_type_is_read_as_mine_would_be() -> None:
     crm = _person("crm.example.com/42", "alice@acme.com", "Customer")
     contact = _contacts(SENDER, crm, _thread(SENDER)).of(THREAD)

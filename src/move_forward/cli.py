@@ -447,11 +447,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "contact":
         contacts = ContactRepository(db)
         try:
-            who = people.contact_key(args.who)
             if args.type == "clear":
+                who = people.label_to_clear(args.who, contacts.all())
                 contacts.clear(who)
                 print(f"{who}: type cleared")
             else:
+                who = people.contact_key(args.who)
                 contact_type = people.contact_type(args.type)
                 contacts.set(who, contact_type, datetime.now(UTC))
                 print(f"{who}: {contact_type}")
