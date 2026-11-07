@@ -110,6 +110,7 @@ Each plugin's page has its config, setup, panels, commands and buttons:
 | [git_stack](docs/plugins/git_stack.md) | `[git_stack]`, needs `[git]` | stacks from git-stack, in git's repos |
 | [jira](docs/plugins/jira.md) | `[jira]` | my open tickets |
 | [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages; connects to the workspace's Slack app |
+| [mail](docs/plugins/mail.md) | `[mail]` | unread and flagged mail over IMAP, by subject and sender, the people who matter first |
 | [notes](docs/plugins/notes.md) | `[notes]`, optional: always on | the skill's work notes (entries and todos) and what's on ice, in the database |
 
 Plugins from other packages are found by their `move_forward.plugins` entry point: install

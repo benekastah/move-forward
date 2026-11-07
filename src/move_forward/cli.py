@@ -108,6 +108,18 @@ workspace_url = "https://example.slack.com"
 [slack.teams]                         # where review pings to a team go
 my-team = "#team-my-team"
 
+# [mail]                                # unread and flagged mail, over IMAP; the password: `mfd token set mail`
+# host = "imap.gmail.com"
+# username = "me@example.com"
+# message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"  # a link to a message
+# refresh_seconds = 900
+# port = 993
+# mailbox = "INBOX"
+# since_days = 14                       # older mail is left out, flagged or not
+# max_messages = 200
+# token_env = "MAIL_PASSWORD"           # else the system's secret store, for my email
+# keychain_service = "move-forward-mail"
+
 # [jira]
 # site = "https://example.atlassian.net"
 # refresh_seconds = 900

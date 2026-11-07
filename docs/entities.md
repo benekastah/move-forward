@@ -48,7 +48,7 @@ breaks its family's rule:
 | --- | --- | --- |
 | `pull_request` | its URL | `#7`, `!12` |
 | `ticket` | its URL | its key, `APP-12` |
-| `person` | `<host>/<login>`, e.g. `github.com/alice` | the login |
+| `person` | `<host>/<login>`, e.g. `github.com/alice`; mail's are `mail/<address>` | the login, or the address |
 
 What the dashboard kept by a handle before (a priority on `APP-12`, a todo linked to it)
 gets the entity's id at each refresh, once the graph can say it (`Graph.identify`); until
@@ -64,7 +64,8 @@ gone.
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket`s its branch, title and body mention by key |
-| `person` | github: me, and everyone it knows an email for | `<host>/<login>` | | |
+| `person` | github: me, and everyone it knows an email for; mail: whoever wrote a thread's latest message | `<host>/<login>`; mail's `mail/<address>` | | |
+| `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with | `unread` or `flagged` | the `person` who wrote its latest message; it mentions its subject |
 | `git.repo` | git | GitHub `owner/name` | | |
 | `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |
 | `git_stack.stack_branch` | git_stack | its `git.branch`'s id | | its `git.branch`, which git may have deleted |
@@ -134,10 +135,22 @@ points at a person is about them, so core ranks and badges its items by their co
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `handle` | string | their name in the tool, a login |
+| `handle` | string | their name in the tool, a login; mail's is their address |
 | `me` | bool | (github's) the person using the dashboard |
 | `email` | string or null | their address; github's is their commit email, imported or looked up from commits |
 | `contact_type` | string or null | what they are to me, when the tool knows, e.g. `customer`; one I set beats it |
+
+### `mail.thread`
+
+| Attribute | Type | Meaning |
+| --- | --- | --- |
+| `subject` | string | its latest message's |
+| `sender_email` | string or null | who wrote its latest message, lower-case |
+| `unread` | int | how many of its messages are unread |
+| `flagged` | bool | one of its messages is flagged |
+| `bulk` | bool | its latest message is a list's, a newsletter's or automated |
+| `to_me` | bool | its latest message has me among its `To`, not just copied |
+| `latest` | ISO datetime | when its latest message was sent |
 
 ### `git.repo`
 

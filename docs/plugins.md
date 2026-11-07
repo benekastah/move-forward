@@ -4,8 +4,8 @@ Plugins never import or call each other. Each one publishes entities to the grap
 reads what the others publish; [graph.md](graph.md) explains the graph, and
 [entities.md](entities.md) lists every kind and attribute. Each plugin has a page of
 its own: [github](plugins/github.md), [git](plugins/git.md),
-[git_stack](plugins/git_stack.md), [jira](plugins/jira.md), [slack](plugins/slack.md)
-and [notes](plugins/notes.md).
+[git_stack](plugins/git_stack.md), [jira](plugins/jira.md), [slack](plugins/slack.md),
+[mail](plugins/mail.md) and [notes](plugins/notes.md).
 These diagrams show who publishes and who reads what. Keep them in step with the code: a
 change to what a plugin publishes or reads, to its item actions or to its `requires`
 updates this file in the same commit.
@@ -32,6 +32,7 @@ flowchart LR
         ticket[ticket]
         entry[notes.entry]
         ice[notes.iced]
+        thread[mail.thread]
     end
 
     github([github]) -- publishes --> pr
@@ -40,6 +41,8 @@ flowchart LR
     git -- "publishes (repo_dir, ahead, ...)" --> branch
     git_stack([git_stack]) -- "publishes, pointing at branch" --> stack_branch[git_stack.stack_branch]
     jira([jira]) -- publishes --> ticket
+    mail([mail]) -- "publishes, pointing at its sender" --> thread
+    mail -- "publishes (senders, by email)" --> person
     notes([notes]) -- publishes --> entry
     notes -- "publishes, pointing at what it hides" --> ice
     ice -. "hides what it covers" .-> core([core])

@@ -44,10 +44,13 @@ flowchart LR
     stack_branch["git_stack.stack_branch"] -->|tracks| branch
     ice["notes.iced"] -->|hides| branch
     ice -->|hides| pr
-    person["person<br/>(github)"]
+    thread["mail.thread"] -->|from| person["person<br/>(github, mail)"]
+    thread -->|mentions| ticket
 ```
 
-`notes.iced` hides what it points at; see [hidden entities](#hidden-entities). `person` stands alone: slack reads their emails.
+`notes.iced` hides what it points at; see [hidden entities](#hidden-entities). Slack reads
+people's emails, and core joins the people with the same email (`same_person`) and ranks what
+points at them by their contact type.
 
 ## How it's built
 
