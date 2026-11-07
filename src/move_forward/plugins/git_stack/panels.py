@@ -6,7 +6,7 @@ the graph relates to its `git.branch` (github relates them).
 
 from pathlib import Path
 
-from ...api import Action, Band, Entity, Graph, Item, Model, Panel, Ref, attrs
+from ...api import Action, Band, Entity, Graph, Item, Model, Panel, Ref, Signals, attrs
 from ...api.ids import branch_id
 from ...api.kinds import PULL_REQUEST as PR
 from .kinds import StackBranchAttrs
@@ -132,32 +132,37 @@ class Builder:
         actions: list[Action] = []
         for repo in self.snapshot.repos if self.snapshot else []:
             merged = [b.name for b in repo.branches if b.status == "merged"]
+            clean = Action(
+                name="git_stack/stack_clean",
+                label="Clean",
+                fields={"repo": repo.dir},
+                confirm=f"Run `git stack clean -d local` in {repo.dir}? It fetches,"
+                " fast-forwards each stack's root (e.g. main), untracks the branches"
+                " that merged (iced stacks' too) and deletes them locally. With"
+                " uncommitted changes there, it"
+                " refuses if the checked-out branch is a stack's root or one it would"
+                " delete.",
+            )
             if merged:
-                actions.append(
-                    Action(
-                        name="git_stack/stack_clean",
-                        label=f"Clean about {len(merged)} merged in {Path(repo.dir).name}",
-                        fields={"repo": repo.dir},
-                        # The count is from the last `info --offline`; clean fetches and asks
-                        # GitHub, so it may find more or fewer.
-                        confirm=f"Run `git stack clean -d local` in {repo.dir}? It fetches,"
-                        " fast-forwards each stack's root (e.g. main), untracks the branches"
-                        " that merged (iced stacks' too) and deletes them locally. With"
-                        " uncommitted changes there, it"
-                        " refuses if the checked-out branch is a stack's root or one it would"
-                        " delete.",
-                    )
-                )
+                # The count is from the last `info --offline`; clean fetches and asks GitHub, so
+                # it may find more or fewer.
+                label = f"Clean about {len(merged)} merged in {Path(repo.dir).name}"
+                actions.append(clean.model_copy(update={"label": label}))
             for b in repo.branches:
                 if b.status in (None, "up-to-date"):
                     continue
                 pr = self._pr(repo.dir, b.name, "open")
+                is_merged = b.status == "merged"
                 items.append(
                     Item(
                         title=f"{b.name}: {b.status}",
                         url=pr.url if pr else None,
                         subtitle=f"{repo.dir} · on {b.parent}",
                         rank=1,
+                        actions=[clean] if is_merged else [],
+                        signals=Signals(verb="Clean up", task="stack_clean", effort="minutes")
+                        if is_merged
+                        else None,
                         subjects=[
                             stack_branch_ref(repo.dir, b.name),
                             branch_ref(repo.dir, b.name),
