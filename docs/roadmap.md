@@ -202,6 +202,9 @@ Approving stays on GitHub: a review should come from having read the PR there.
   PR (one plugin per kind), and every consumer would read both; if that gets repetitive, a
   PR could become a contract several plugins publish to, with a shared base for code-host
   plugins. All of it waits for that second host.
+- **Approval as a field.** slack tells an approved PR by the text `already approved` in its
+  `review_blockers`, so a second code host has to say it the same way. A core `approved`
+  attribute on the `pull_request` family would make it part of the contract, not the wording.
 
 ### Notes and the skill
 
