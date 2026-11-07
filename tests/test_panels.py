@@ -823,10 +823,12 @@ def test_an_item_set_aside_leaves_its_panel_until_it_changes() -> None:
             signals=Signals(verb="Fix", task="fix"),
         )
 
-    key: act_now.FeedbackKey = ("pull_request", "pr", "fix")
+    key = ("pull_request", "pr", "fix")
     said = act_now.Nomination("x", item("before")).fingerprint
     until = NOW + timedelta(days=1)
-    feedback = {key: act_now.Feedback(action="snooze", fingerprint=said, until=until)}
+    feedback: dict[act_now.FeedbackKey, act_now.Feedback] = {
+        key: act_now.Feedback(action="snooze", fingerprint=said, until=until)
+    }
 
     def shown(title: str) -> list[Item]:
         panel_ = Panel(key="p", title="P", description="", items=[item(title)])
