@@ -20,6 +20,7 @@ TEMPLATE = """\
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
 # default_team_reviewer_assignment = "team" # team requests count without an individual
 # team_reviewer_assignment = {}          # by slug, e.g. { bacon = "individual" }
+# primary_reviewer_repos = []            # repos whose PRs have a primary reviewer as an assignee, e.g. ["acme/widgets"]
 # email_domains = []                     # reviewers' email domains, if not just your email's
 # stale_review_hours = 24                # a review request this old can be nudged
 # merge_queue_eviction_days = 2        # how long a merge-queue removal stays in CI failures

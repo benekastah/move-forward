@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 from ...api import (
     API_VERSION,
+    ActionHandler,
     ActNowRequest,
     AfterCollectRequest,
     Asker,
@@ -44,7 +45,7 @@ from ...api import (
 )
 from ...api.kinds import PERSON
 from ...api.shell import CommandError
-from . import changes, cli, client, derive, notifications, placing, pushes, relations
+from . import actions, changes, cli, client, derive, notifications, placing, pushes, relations
 from .config import GitHubConfig
 from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
@@ -490,6 +491,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 item.deferred and (item.signals or panel.signals or Signals()).task == REVIEW_TASK
             )
         ]
+
+    def actions(self) -> dict[str, ActionHandler]:
+        return actions.ACTIONS
 
     def panels(self, req: PanelsRequest[GitHubConfig, GitHubSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph

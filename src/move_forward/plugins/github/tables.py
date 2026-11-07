@@ -355,5 +355,16 @@ MIGRATIONS = [
     ALTER TABLE github_pr_checks ADD COLUMN description TEXT;
     """,
     ),
+    Migration(
+        "0013_assignees",
+        """
+    CREATE TABLE github_pr_assignees ( -- fetched
+        list TEXT NOT NULL, url TEXT NOT NULL, position INTEGER NOT NULL,
+        login TEXT NOT NULL,
+        PRIMARY KEY (list, url, position),
+        FOREIGN KEY (list, url) REFERENCES github_prs ON DELETE CASCADE
+    );
+    """,
+    ),
 ]
 """The github plugin's migrations."""

@@ -67,6 +67,10 @@ class GitHubConfig(Strict):
     team_reviewer_assignment: dict[str, ReviewerAssignment] = Field(default_factory=dict)
     """Overrides by GitHub team slug, e.g. `{bacon = "individual"}`. A person may satisfy
     several teams when they belong to each of them."""
+    primary_reviewer_repos: list[str] = Field(default_factory=list)
+    """Repos (`owner/name`) where a PR has a primary reviewer: an assignee besides its author,
+    who must approve, e.g. `["acme/widgets"]`. My PRs there get a field to pick one. GitHub
+    enforces the approval; the dashboard doesn't check it."""
     email_domains: list[str] = Field(default_factory=list)
     """Domains of work emails, to pick a reviewer's email from their commits. Default: the
     domain of the top-level `email`; set this when the organisation uses several."""
@@ -102,3 +106,7 @@ class GitHubConfig(Strict):
 
     def slug(self, team: str) -> str:
         return self.teams.get(team, team)
+
+    def has_primary_reviewer(self, repo: str) -> bool:
+        """Whether PRs in `repo` (`owner/name`) have a primary reviewer."""
+        return repo.casefold() in {r.casefold() for r in self.primary_reviewer_repos}

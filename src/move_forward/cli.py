@@ -45,6 +45,7 @@ org = "example-org"
 # history_days = 14
 # policy_checks = []                     # checks that enforce PR policy, not CI
 # ignored_reviewers = []                 # logins whose comments aren't review feedback
+# primary_reviewer_repos = []            # repos whose PRs have a primary reviewer as an assignee
 # required_owner_marker = ""             # CODEOWNERS comment marking required owners
 # ticket_link_prefixes = []             # PR body lines that link the ticket start with one, e.g. ["Link", "Closes"]
 # placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]

@@ -42,6 +42,9 @@ from move_forward.plugins.github.tables import MIGRATIONS
 from move_forward.repositories import KvRepository
 from move_forward.shell import CommandError
 
+_BEFORE_REBUILD = MIGRATIONS[: [m.name for m in MIGRATIONS].index("0009_account_again")]
+"""The migrations before the one that rebuilt the PR tables."""
+
 
 def _context(**config: object) -> Context[GitHubConfig]:
     db = Database(":memory:")
@@ -183,7 +186,7 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
     )
     db = Database(":memory:")
     save_json_snapshot(db, "github", gh)
-    db.migrate("github", MIGRATIONS[:-4])  # before the PR-table rebuild and team membership
+    db.migrate("github", _BEFORE_REBUILD)
     assert db.query("SELECT login FROM github_account")[0]["login"] == gh.login
     db.migrate("github", MIGRATIONS)
     store = PrRepository(db)
@@ -383,7 +386,7 @@ def test_each_files_changed_lines_are_kept() -> None:
 
 def test_the_mentioned_list_round_trips_and_the_rebuild_asks_for_a_fresh_collect() -> None:
     db = Database(":memory:")
-    db.migrate("github", MIGRATIONS[:-4])
+    db.migrate("github", _BEFORE_REBUILD)
     db.execute("INSERT INTO github_account VALUES (?)", ("me",))
     store = PrRepository(db)
     db.migrate("github", MIGRATIONS)

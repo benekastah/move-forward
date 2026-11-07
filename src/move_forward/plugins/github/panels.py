@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from pydantic import Field
 
-from ...api import Badge, Band, Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
+from ...api import Action, Badge, Band, Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import REVIEW as REVIEW_TASK
 from ...api.kinds import TICKET
@@ -26,6 +26,7 @@ from .prs import (
     last_push_at,
     merge_blockers,
     needs_re_review,
+    primary_reviewers,
     review_only_policy_failure,
     review_required,
     reviewer_assignment_reasons,
@@ -35,6 +36,7 @@ from .prs import (
 )
 
 ENTRY = "notes.entry"
+PRIMARY_REVIEWER = "github/primary_reviewer"
 
 
 class _EntryView(Model):
@@ -722,10 +724,59 @@ class Builder:
             items=items,
         )
 
+    # Primary reviewers
+
+    def _reviewers_to_suggest(self, pr: PullRequest) -> list[str]:
+        """Whom to offer as the PR's primary reviewer, likeliest first: those asked to review
+        it, the members of the teams asked (as far as they're known), then recent committers
+        to what it changes."""
+        owner = pr.repo.partition("/")[0]
+        memberships = self.gh.team_memberships if self.gh else {}
+        suggested = self.derived.suggestions.get(pr.url, []) if self.derived else []
+        logins = [
+            *pr.requested_users,
+            *(m for team in pr.requested_teams for m in memberships.get(f"{owner}/{team}", [])),
+            *(s.login for s in suggested),
+        ]
+        chosen = {pr.author, *primary_reviewers(pr)}
+        return [login for login in dict.fromkeys(logins) if login not in chosen]
+
+    def _primary_reviewer(self, item: Item, pr: PullRequest) -> Item:
+        """The PR's item with who its primary reviewer is, and a field to pick another."""
+        current = primary_reviewers(pr)
+        field = Action(
+            name=PRIMARY_REVIEWER,
+            label="Change primary" if current else "Set primary",
+            fields={"pr": pr.url},
+            input="Primary reviewer",
+            suggestions=self._reviewers_to_suggest(pr),
+        )
+        badges = [f"primary: {', '.join(current)}"] if current else []
+        return item.model_copy(
+            update={"badges": [*item.badges, *badges], "actions": [*item.actions, field]}
+        )
+
+    def _with_primary_reviewers(self, panel: Panel) -> Panel:
+        """The panel with `_primary_reviewer` on the items about my PRs in repos that have
+        primary reviewers, unless they're in the merge queue, past needing one."""
+        prs = {
+            pr.url: pr
+            for pr in self.mine
+            if self.config.has_primary_reviewer(pr.repo) and not pr.in_merge_queue
+        }
+        return panel.model_copy(
+            update={
+                "items": [
+                    self._primary_reviewer(item, prs[item.url]) if item.url in prs else item
+                    for item in panel.items
+                ]
+            }
+        )
+
     def panels(self) -> list[Panel]:
         fixing, awaiting = self.review_stages()
         ready, held = self.ready_to_merge()
-        return [
+        panels = [
             fixing,
             awaiting,
             self.reviews_for_me(),
@@ -741,3 +792,4 @@ class Builder:
             self.team_prs(),
             self.metadata(),
         ]
+        return [self._with_primary_reviewers(panel) for panel in panels]
