@@ -5,6 +5,21 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Finish work-note todos from the Notes panel
+
+Entries with several open todos now show each todo and its Done checkbox on the dashboard.
+Use that checkbox to complete a todo without opening Focus mode; the other todo actions
+are available there too.
+
+### Importance choices on entity items
+
+Every item with an entity subject now has the same Not important, Important and Critical
+buttons as Act now, including GitHub reviews for me and todos in Focus mode. The choices
+appear together with ❕ / ❗️ / ‼️ and the selected level highlighted. Act now's Snooze, Dismiss and Pin
+buttons, Put on ice, and local branches' Delete and Put on ice buttons are grouped with emoji icons;
+their labels appear in the button titles and accessible names.
+No config change is needed.
+
 ### Restart a supervised server on demand
 
 Run `mfd restart` to ask a running `mfd serve` supervisor to check and replace its server

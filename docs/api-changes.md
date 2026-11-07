@@ -58,6 +58,12 @@ catch up.
   collapsible section; `children_open` sets its initial state and `children_title` names it.
 - **Importance order**: `Panel.sort_by_importance` sorts its items first by user-assigned
   importance on their subjects (or `Signals.importance`), then by `Item.rank`.
+- **Importance choices**: core adds its three priority buttons to every item with a subject,
+  including focus-mode parts, targeting the first subject. `Action`s with the same
+  `group` render as one button group, even when other actions separate them;
+  `Action.selected` highlights a choice and `Action.icon`
+  shows an emoji instead of visible text, with the unchanged label in `title` and
+  `aria-label`.
 - **Fetching some entities again**: `Plugin.refresh_subjects(req)`
   (`SubjectsRequest(ctx, refs, snapshot)`) returns `Subjects(snapshot, updated)`, or None
   to be refreshed whole; `subjects_timeout_seconds`. An action's `touched` refs are

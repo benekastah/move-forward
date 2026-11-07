@@ -319,6 +319,22 @@ def _as_given(item: Item) -> Item:
     )
 
 
+def _with_importance_actions(panel: Panel, priority_of: act_now.PriorityOf) -> Panel:
+    """Add core's importance choices to every shown entity, including focus parts. An
+    item's first subject is its primary entity, as for its anchor and Act now."""
+
+    def add(item: Item) -> Item:
+        actions = list(item.actions)
+        if item.subjects:
+            subject = item.subjects[0]
+            actions.extend(act_now.importance_actions(subject, priority_of(subject)))
+        return item.model_copy(
+            update={"actions": actions, "parts": [add(part) for part in item.parts]}
+        )
+
+    return panel.model_copy(update={"items": [add(item) for item in panel.items]})
+
+
 def _opened_on_buttons(panel: Panel) -> Panel:
     """Act now's items with their plugins' buttons (not Act now's own) carrying the item's
     `act_now_fields`, so that running one marks the item opened, dimmed until it changes."""
@@ -399,12 +415,15 @@ def build(
             *(_opened_on_buttons(panel) for panel in ranked),
             *(
                 _sorted(
-                    _with_item_actions(
-                        _without_hidden(shown, hidden),
-                        plugin.key,
-                        surface,
-                        item_actions,
-                        known_action,
+                    _with_importance_actions(
+                        _with_item_actions(
+                            _without_hidden(shown, hidden),
+                            plugin.key,
+                            surface,
+                            item_actions,
+                            known_action,
+                        ),
+                        priority_of,
                     ),
                     priority_of,
                 )

@@ -20,7 +20,7 @@ from conftest import (
     todo,
 )
 
-from move_forward import panels
+from move_forward import panels, render
 from move_forward.graph import Ref
 from move_forward.page import Action, Badge, Group, Item, Panel, Signals
 from move_forward.plugins.git_stack.models import StackBranch
@@ -85,6 +85,42 @@ def test_a_panel_can_sort_assigned_importance_before_its_own_rank() -> None:
         priority_of=lambda ref: assigned.get(ref.id),
     )
     assert [item.title for item in built.panel("x.stage").items] == ["critical", "ordinary", "low"]
+
+
+def test_every_entity_item_and_focus_part_gets_importance_choices() -> None:
+    primary = Ref(kind="git.branch", id="branch")
+    secondary = Ref(kind="pull_request", id="pr")
+    part = Ref(kind="notes.todo", id="7")
+    stage = Panel(
+        key="stage",
+        title="Stage",
+        description="",
+        items=[
+            Item(
+                title="Branch",
+                subjects=[primary, secondary],
+                parts=[Item(title="Todo", subjects=[part])],
+            ),
+            Item(title="No entity"),
+        ],
+    )
+    built = panels.build(
+        NOW,
+        [panels.PluginPanels("x", "X", [stage])],
+        {},
+        priority_of=lambda ref: 2 if ref == part else None,
+    )
+    branch, no_entity = built.panel("x.stage").items
+    assert [a.fields for a in branch.actions] == [
+        {"kind": primary.kind, "id": primary.id, "level": level} for level in ("0", "1", "2")
+    ]
+    assert no_entity.actions == []
+    focused = built.focus_items("x.stage")
+    assert focused is not None
+    [(_, todo_part), (_, empty)] = focused
+    assert [a.fields["kind"] for a in todo_part.actions] == [part.kind] * 3
+    assert [a.label for a in todo_part.actions if a.selected] == ["Critical"]
+    assert empty.actions == []
 
 
 def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
@@ -186,7 +222,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     focused = dashboard.focus_items("notes.todos")
     assert focused is not None
     [(_, part)] = focused
-    assert [(a.name, a.checkbox, a.checked) for a in part.actions] == [
+    assert [(a.name, a.checkbox, a.checked) for a in part.actions if a.group != "Importance"] == [
         ("notes/todo_done", True, False),
         ("notes/todo_delete", False, False),
         ("notes/todo_link", False, False),
@@ -195,12 +231,23 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     todo_id = part.actions[0].fields["todo"]
     assert part.actions[0].fields == {"todo": todo_id}  # addressed by id
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
+    assert [a.fields for a in part.actions if a.group == "Importance"] == [
+        {"kind": "notes.todo", "id": todo_id, "level": level} for level in ("0", "1", "2")
+    ]
     # A single-todo entry can be completed on the dashboard as well as in Focus mode.
-    assert [a.name for a in panel(dashboard, "notes.todos").items[0].actions] == [
+    assert [
+        a.name for a in panel(dashboard, "notes.todos").items[0].actions if a.group != "Importance"
+    ] == [
         "notes/todo_done",
         "notes/todo_add",
         "notes/ice_item",
     ]
+    assert (
+        render.item_html(panel(dashboard, "notes.todos").items[0]).count(
+            "action='/actions/notes/todo_done'"
+        )
+        == 1
+    )
 
     config, db = stored(work_items=[noted])
     kept = kept_item(config, db, f"notes:{todo_id}")
@@ -214,6 +261,17 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     ]  # still open: only a ticked todo offers undo
     assert kept_item(config, db, "notes:999") is None
     assert kept_item(config, db, "notes:x") is None
+
+
+def test_notes_panel_shows_each_todo_with_its_done_checkbox() -> None:
+    noted = entry("APP-2 mixed", [todo("small", "quick"), todo("big one", "big")])
+    dashboard = build(work_items=[noted])
+    [item] = panel(dashboard, "notes.todos").items
+    html = render.item_html(item)
+    assert "<ul class='item-parts'>" in html
+    assert html.count("action='/actions/notes/todo_done'") == 2
+    assert "small" in html and "big one" in html
+    assert "[quick] small" not in html  # the summary is replaced by actionable rows
 
 
 def test_todo_parts_put_the_prs_they_mention_first_in_bold() -> None:
@@ -278,7 +336,7 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
     assert part.url == "https://github.com/acme/other/pull/4"
     # An unknown-state PR is not evidence the todo is done.
     assert part.actions[0].suggested is False
-    assert [a.name for a in part.actions] == [
+    assert [a.name for a in part.actions if a.group != "Importance"] == [
         "notes/todo_done",
         "notes/todo_delete",
         "notes/todo_link",
@@ -333,9 +391,9 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
         "where": "https://jira/browse/APP-8",
     }
     assert add("notes.todos", "APP-1 Fix") == {"entry": "APP-1 Fix"}
-    # Other people's PRs only get the snooze.
+    # Other people's PRs get the snooze and the shared importance choices.
     review = next(i for i in panel(dashboard, "github.reviews_for_me").items)
-    assert [a.name for a in review.actions] == ["act_now/snooze"]
+    assert [a.name for a in review.actions if a.group != "Importance"] == ["act_now/snooze"]
 
 
 def test_naming_settings_drive_pings_labels_and_jira() -> None:

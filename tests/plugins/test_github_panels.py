@@ -460,7 +460,10 @@ def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
     # Reopen is notes'; git adds Delete branches for branches it still has, and Restore
     # branches for the ones it doesn't.
     actions = panel(dashboard, "notes.iced").items[0].actions
-    assert [a.label for a in actions] == ["Reopen", "Restore branches"]
+    assert [a.label for a in actions if a.group != "Importance"] == [
+        "Reopen",
+        "Restore branches",
+    ]
 
 
 def test_a_pr_is_hidden_only_by_icing_in_its_own_repos_checkout() -> None:

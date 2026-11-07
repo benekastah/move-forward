@@ -20,8 +20,17 @@ STACK_BRANCH = "git_stack.stack_branch"
 ICED = "notes.iced"
 
 
-def action(name: str, label: str, fields: dict[str, str], confirm: str | None = None) -> Action:
-    return Action(name=f"git/{name}", label=label, fields=fields, confirm=confirm)
+def action(
+    name: str,
+    label: str,
+    fields: dict[str, str],
+    confirm: str | None = None,
+    group: str | None = None,
+    icon: str | None = None,
+) -> Action:
+    return Action(
+        name=f"git/{name}", label=label, fields=fields, confirm=confirm, group=group, icon=icon
+    )
 
 
 class _PrView(Model):
@@ -238,6 +247,8 @@ class Builder:
                                 "Delete",
                                 {"repo": repo.dir, "branch": b.name},
                                 confirm=f"Delete local branch {b.name}?",
+                                group="Disposition",
+                                icon="🗑️",
                             )
                         ],
                         # The PR first: it keys Act now's feedback and anchors the item. The branch is

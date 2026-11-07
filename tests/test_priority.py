@@ -1,14 +1,14 @@
 from datetime import timedelta
 
 import pytest
-from conftest import NOW, pr, snapshot, stored
+from conftest import NOW, entry, pr, snapshot, stored, todo
 
-from move_forward import act_now, priority, refresh
+from move_forward import act_now, priority, refresh, render
 from move_forward.act_now import Nomination
 from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
-from move_forward.page import Item, Signals
+from move_forward.page import Action, Item, Signals
 from move_forward.repositories import PriorityRepository
 
 PR = Ref(kind="pull_request", id="https://github.com/o/r/pull/1")
@@ -67,14 +67,83 @@ def test_a_priority_counts_for_the_units_and_todos_around_an_entity() -> None:
     assert priority.level_of({TICKET: 1}, graph)(Ref(kind="pull_request", id="other")) is None
 
 
-def test_items_get_buttons_to_set_the_other_priorities_and_to_clear_one() -> None:
+def test_items_keep_all_three_importance_choices_and_highlight_the_selected_one() -> None:
     ref = Ref(kind="pull_request", id="p")
     unmarked = _items([_nomination("x", ref)], priority.level_of({}, _graph()))[0]
     labels = [a.label for a in unmarked.actions]
     assert labels[-3:] == ["Not important", "Important", "Critical"]
     marked = _items([_nomination("x", ref)], priority.level_of({ref: 1}, _graph()))[0]
-    assert [a.label for a in marked.actions][-3:] == ["Not important", "Critical", "Clear priority"]
+    assert [a.label for a in marked.actions][-4:] == [
+        "Not important",
+        "Important",
+        "Critical",
+        "Clear priority",
+    ]
+    assert [a.label for a in marked.actions if a.selected] == ["Important"]
+    assert [a.icon for a in marked.actions if a.group == "Importance"] == ["❕", "❗️", "‼️"]
+    html = render.item_html(marked)
+    assert "<div class='button-group' role='group' aria-label='Act now'>" in html
+    assert [a.icon for a in marked.actions[:3]] == ["💤", "👋", "📌"]
+    assert "title='Snooze' aria-label='Snooze'><span aria-hidden='true'>💤</span></button>" in html
+    assert (
+        "title='Dismiss' aria-label='Dismiss'><span aria-hidden='true'>👋</span></button>" in html
+    )
+    assert "title='Pin' aria-label='Pin'><span aria-hidden='true'>📌</span></button>" in html
+    assert "<div class='button-group' role='group' aria-label='Importance'>" in html
+    assert (
+        "class='secondary small selected' aria-pressed='true' title='Important' aria-label='Important'><span aria-hidden='true'>❗️</span></button>"
+        in html
+    )
+    assert (
+        "title='Not important' aria-label='Not important'><span aria-hidden='true'>❕</span></button>"
+        in html
+    )
+    assert (
+        "title='Critical' aria-label='Critical'><span aria-hidden='true'>‼️</span></button>" in html
+    )
     assert marked.actions[-1].fields == {"kind": "pull_request", "id": "p"}
+
+
+def test_named_buttons_join_even_with_other_actions_between_them() -> None:
+    actions = [
+        Action(name="snooze", label="Snooze", fields={}, group="Act now", icon="💤"),
+        Action(name="priority", label="Important", fields={}),
+        Action(name="ice", label="Put on ice", fields={}, group="Act now", icon="🧊"),
+    ]
+    html = render.buttons(actions)
+    group = html.split("aria-label='Act now'>", 1)[1].split("</div>", 1)[0]
+    assert "title='Snooze'" in group and "title='Put on ice'" in group
+    assert group.index("title='Snooze'") < group.index("title='Put on ice'")
+    assert html.index("aria-label='Act now'") < html.index(">Important</button>")
+
+
+def test_act_now_groups_ice_with_snooze_dismiss_and_pin() -> None:
+    config, db = stored(work_items=[entry("APP-1 finish", [todo("reply", "quick")])])
+    dashboard = refresh.build_dashboard(config, db, NOW)
+    shown = next(item for item in dashboard.act_now() if "APP-1 finish" in item.title)
+    group = [a for a in shown.actions if a.group == "Act now"]
+    assert [a.label for a in group] == ["Snooze", "Dismiss", "Pin", "Put on ice"]
+    html = render.item_html(shown)
+    joined = html.split("aria-label='Act now'>", 1)[1].split("</div>", 1)[0]
+    assert "title='Put on ice' aria-label='Put on ice'" in joined
+
+
+def test_a_review_for_me_can_be_marked_important() -> None:
+    review = pr(1, author="alice")
+    config, db = stored(github=snapshot(direct_requests=[review]))
+    panel = refresh.build_dashboard(config, db, NOW).find_panel("github.reviews_for_me")
+    assert panel is not None
+    item = panel.items[0]
+    assert [a.label for a in item.actions if a.group == "Importance"] == [
+        "Not important",
+        "Important",
+        "Critical",
+    ]
+    important = next(a for a in item.actions if a.label == "Important")
+    assert refresh.run_action(config, db, important.name, important.fields) == "priority: important"
+    shown = refresh.build_dashboard(config, db, NOW).find_panel("github.reviews_for_me")
+    assert shown is not None
+    assert [a.label for a in shown.items[0].actions if a.selected] == ["Important"]
 
 
 def test_the_priority_buttons_set_and_clear_it() -> None:

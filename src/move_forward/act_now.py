@@ -256,6 +256,8 @@ def score(
 IMPORTANCE_WORDS = {-1: "not important", 1: "important", 2: "critical"}
 PRIORITIES = {0: "Not important", 1: "Important", 2: "Critical"}
 """The priorities I can set, by level, as the buttons say them."""
+PRIORITY_ICONS = {0: "❕", 1: "❗️", 2: "‼️"}
+"""The visual icon beside each priority's unchanged label."""
 PRIORITY_IMPORTANCE = {0: -1, 1: 1, 2: 2}
 """The `Signals.importance` each priority stands for."""
 
@@ -456,6 +458,22 @@ def _member_fields(
     return fields
 
 
+def importance_actions(subject: Ref, level: int | None) -> list[Action]:
+    """The three importance choices for a subject, with its current choice highlighted."""
+    fields = {"kind": subject.kind, "id": subject.id}
+    return [
+        Action(
+            name=f"{ACTIONS}/priority",
+            label=label,
+            fields={**fields, "level": str(choice)},
+            group="Importance",
+            selected=choice == level,
+            icon=PRIORITY_ICONS[choice],
+        )
+        for choice, label in PRIORITIES.items()
+    ]
+
+
 def _buttons(
     nomination: Nomination, then: list[Nomination], pinned: bool, level: int | None
 ) -> list[Action]:
@@ -466,24 +484,24 @@ def _buttons(
         return []
     fields = _member_fields(nomination, nomination.key, then)
 
-    def button(action: str, label: str) -> Action:
-        return Action(name=f"{ACTIONS}/{action}", label=label, fields=fields)
+    def button(action: str, label: str, icon: str, selected: bool | None = None) -> Action:
+        return Action(
+            name=f"{ACTIONS}/{action}",
+            label=label,
+            fields=fields,
+            group="Act now",
+            icon=icon,
+            selected=selected,
+        )
 
     subject = nomination.item.subjects[0]
     priority = {"kind": subject.kind, "id": subject.id}
 
-    def set_priority(new: int) -> Action:
-        return Action(
-            name=f"{ACTIONS}/priority",
-            label=PRIORITIES[new],
-            fields={**priority, "level": str(new)},
-        )
-
     return [
-        button("snooze", "Snooze"),
-        button("dismiss", "Dismiss"),
-        button("unpin", "Unpin") if pinned else button("pin", "Pin"),
-        *(set_priority(new) for new in PRIORITIES if new != level),
+        button("snooze", "Snooze", "💤"),
+        button("dismiss", "Dismiss", "👋"),
+        button("unpin", "Unpin", "📌", True) if pinned else button("pin", "Pin", "📌", False),
+        *importance_actions(subject, level),
         *(
             [Action(name=f"{ACTIONS}/priority", label="Clear priority", fields=priority)]
             if level is not None

@@ -100,6 +100,12 @@ class Action(Model):
     """A tooltip, e.g. why a link is muted."""
     muted: bool = False
     """Drawn faintly: it can be done, but the data says not yet."""
+    group: str | None = None
+    """Buttons with the same group are drawn together at that group's first position."""
+    selected: bool | None = None
+    """Highlight a selected choice and expose its pressed state; None for ordinary actions."""
+    icon: str | None = None
+    """An emoji shown instead of the text label, which stays in `title` and `aria-label`."""
 
 
 Effort = Literal["minutes", "hour", "day", "unknown"]

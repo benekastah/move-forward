@@ -18,8 +18,9 @@ names are related through it.
 ## Panels
 
 - **Todos**: open `Left to do` items from the work notes, easy close-outs first, blocked
-  last. An entry with one open todo has its Done checkbox on the dashboard; entries with
-  several are split into individual todos in Focus mode. While the notes are empty (just
+  last. An entry with one open todo has its Done checkbox on the entry; entries with
+  several show each todo below the entry with its own Done checkbox and actions.
+  Focus mode also shows the todos one at a time. While the notes are empty (just
   upgraded, say), it says how to import them.
 - **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw); git adds
   Delete branches and git_stack Untrack for a stack. The stack stays on ice with the
@@ -32,6 +33,8 @@ names are related through it.
 notes adds an Add todo field to every item about one of my open PRs or a ticket (the todo
 goes to the entry covering it, or creates one), and Put on ice to every item about a local
 branch (with its git-stack stack and group), one of my open PRs, a ticket or a work entry.
+Put on ice has an ice icon with its label in the title. It joins git's Delete button
+in a group when both are offered, and joins Snooze, Dismiss and Pin on Act now items.
 
 In focus mode, work entries are split into their todos, one per page, quick ones first.
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number)

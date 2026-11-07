@@ -370,7 +370,22 @@ def _action(action: Action, back: str = "", at: str = "", pos: int | None = None
             f" onchange='this.form.requestSubmit()'> {_e(action.label)}</label>"
         )
     else:
-        control = f"<button type='submit' class='secondary small'>{_e(action.label)}</button>"
+        selected = " selected" if action.selected else ""
+        pressed = (
+            f" aria-pressed='{str(action.selected).lower()}'" if action.selected is not None else ""
+        )
+        title = (
+            f" title='{_e(action.label)}' aria-label='{_e(action.label)}'" if action.icon else ""
+        )
+        label = (
+            f"<span aria-hidden='true'>{_e(action.icon)}</span>"
+            if action.icon
+            else _e(action.label)
+        )
+        control = (
+            f"<button type='submit' class='secondary small{selected}'{pressed}{title}>"
+            f"{label}</button>"
+        )
         if action.input:
             control = (
                 f"<input type='text' name='input' placeholder='{_e(action.input)}' required>"
@@ -386,7 +401,29 @@ def buttons(actions: list[Action], back: str = "", at: str = "", pos: int | None
     """Buttons for `actions` (those that post, not links), each asking first if it has a
     `confirm`, for plugins' pages as for the dashboard. `back` is where each redirects
     afterwards; default the page they're on."""
-    forms = "".join(_action(a, back, at, pos) for a in actions if a.href is None)
+    # A plugin may add an action after core's own groups. Keep the first position of
+    # each named group and collect its later actions there as well.
+    sequence: list[str | Action] = []
+    groups: dict[str, list[Action]] = {}
+    for action in actions:
+        if action.href is not None:
+            continue
+        if action.group is None:
+            sequence.append(action)
+        else:
+            if action.group not in groups:
+                sequence.append(action.group)
+                groups[action.group] = []
+            groups[action.group].append(action)
+    forms = ""
+    for choice in sequence:
+        if isinstance(choice, Action):
+            forms += _action(choice, back, at, pos)
+        else:
+            rendered = "".join(_action(action, back, at, pos) for action in groups[choice])
+            forms += (
+                f"<div class='button-group' role='group' aria-label='{_e(choice)}'>{rendered}</div>"
+            )
     return f"<div class='actions'>{forms}</div>" if actions else ""
 
 
@@ -439,9 +476,16 @@ def _item(
         parts.append(f"<div class='item-subtitle'>{_e(item.subtitle)}</div>")
     if item.badges:
         parts.append("<div class='badges'>" + "".join(_badge(b) for b in item.badges) + "</div>")
-    if item.details:
+    show_parts = len(item.parts) > 1
+    if item.details and not show_parts:
         parts.append(
             "<ul class='details'>" + "".join(f"<li>{_e(d)}</li>" for d in item.details) + "</ul>"
+        )
+    if show_parts:
+        parts.append(
+            "<ul class='item-parts'>"
+            + "".join(_item(part, back, at, pos) for part in item.parts)
+            + "</ul>"
         )
     if item.links:
         links = "".join(_link(link) for link in item.links)

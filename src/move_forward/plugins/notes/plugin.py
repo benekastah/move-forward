@@ -104,7 +104,12 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         builder = _builder(req.ctx, req.graph)
 
         def additions(each: ItemActionsRequest[NotesConfig]) -> ItemAdditions:
-            found = (builder.put_on_ice(each.item), builder.add_todo(each.item))
+            found = (
+                builder.put_on_ice(
+                    each.item, group="Act now" if each.surface == "act_now" else "Disposition"
+                ),
+                builder.add_todo(each.item),
+            )
             return ItemAdditions(actions=[a for a in found if a])
 
         return additions

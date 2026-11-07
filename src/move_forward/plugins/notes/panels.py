@@ -157,6 +157,7 @@ def _todo_part(
         badges=[todo.size or "unsized", *(["its PRs are done"] if probably_done else []), *badges],
         links=links,
         actions=todo_actions(todo, entry, suggested=probably_done),
+        subjects=[Ref(kind=TODO, id=str(todo.id))],
     )
 
 
@@ -293,7 +294,7 @@ class Builder:
         title = f"{ticket.handle} {ticket.summary}" if ticket.summary else ticket.handle
         return add_todo_action(entry, title, ticket.url or "")
 
-    def put_on_ice(self, item: Item) -> Action | None:
+    def put_on_ice(self, item: Item, group: str = "Disposition") -> Action | None:
         """A Put on ice button for an item about one of git's branches (with its stack), else
         about one of my open PRs, a ticket or a work entry, unless it's on ice already."""
         if any(self.graph.hides(s.kind) for s in item.subjects):
@@ -307,6 +308,8 @@ class Builder:
                 name="notes/ice",
                 label="Put on ice",
                 fields={"repo": branch.repo_dir, "branch": branch.name},
+                group=group,
+                icon="🧊",
             )
         ref = item.subject(PR) or item.subject(TICKET) or item.subject(ENTRY)
         if ref is None or self.graph.get(ref.kind, ref.id) is None or self.graph.hidden(ref):
@@ -316,7 +319,11 @@ class Builder:
             if pr is None or not (pr.mine and pr.state == "open"):
                 return None
         return Action(
-            name="notes/ice_item", label="Put on ice", fields={"kind": ref.kind, "id": ref.id}
+            name="notes/ice_item",
+            label="Put on ice",
+            fields={"kind": ref.kind, "id": ref.id},
+            group=group,
+            icon="🧊",
         )
 
     def _pr_done(self) -> dict[str, bool]:

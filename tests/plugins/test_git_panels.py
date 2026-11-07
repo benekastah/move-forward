@@ -17,7 +17,7 @@ from conftest import (
 )
 from legacy import save_json_snapshot
 
-from move_forward import refresh
+from move_forward import refresh, render
 from move_forward.db import Database
 from move_forward.page import Badge
 from move_forward.plugins.git.models import Worktree
@@ -66,12 +66,18 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
     assert set(items) == {both, "me/new: 2 commits, never pushed"}  # me/iced is on ice: hidden
     assert items[both].url == pr(1).url
     assert items[both].badges == [Badge(text="uncommitted", tone="warn"), "has PR"]
-    assert [(a.name, a.fields) for a in items[both].actions if a.name != "notes/todo_add"] == [
+    assert [
+        (a.name, a.fields)
+        for a in items[both].actions
+        if a.name != "notes/todo_add" and a.group != "Importance"
+    ] == [
         ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
         ("git/push_branch", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
         ("notes/ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
     ]
-    assert [a.name for a in items["me/new: 2 commits, never pushed"].actions] == [
+    assert [
+        a.name for a in items["me/new: 2 commits, never pushed"].actions if a.group != "Importance"
+    ] == [
         "git/push_branch",
         "notes/ice",
     ]
@@ -145,6 +151,15 @@ def test_cleanup_of_a_merged_branch_can_be_put_on_ice_but_is_still_about_its_pr(
         "git.branch",
     ]  # the PR keys and anchors it
     assert "notes/ice" in [a.name for a in item.actions]
+    delete, ice = (a for a in item.actions if a.name in {"git/delete_branch", "notes/ice"})
+    assert (delete.group, ice.group) == ("Disposition", "Disposition")
+    assert (delete.icon, ice.icon) == ("🗑️", "🧊")
+    html = render.item_html(item)
+    assert "title='Delete' aria-label='Delete'><span aria-hidden='true'>🗑️</span></button>" in html
+    assert (
+        "title='Put on ice' aria-label='Put on ice'><span aria-hidden='true'>🧊</span></button>"
+        in html
+    )
 
 
 def test_branch_prefixes_limit_cleanup_and_local_work_to_my_branches() -> None:
@@ -183,7 +198,10 @@ def test_git_offers_to_delete_iced_branches_on_the_on_ice_item_only() -> None:
     [delete] = [a for a in on_ice["me/x"].actions if a.name == "git/delete_together"]
     assert delete.fields == {"targets": "/src/widgets\tme/x"} and delete.confirm
     # A branch git no longer has can't be deleted again, but can be restored.
-    assert [a.name for a in on_ice["me/gone"].actions] == ["notes/thaw", "git/restore_together"]
+    assert [a.name for a in on_ice["me/gone"].actions if a.group != "Importance"] == [
+        "notes/thaw",
+        "git/restore_together",
+    ]
     assert panel(built, "git.local_work").items == []  # me/x is on ice: hidden
 
 
