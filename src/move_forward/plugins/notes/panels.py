@@ -383,10 +383,10 @@ class Builder:
                     else [],
                     links=links,
                     rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
-                    actions=[
-                        *(todo_actions(ordered[0], entry.title)[:1] if len(ordered) == 1 else []),
-                        add_todo_action(entry.title),
-                    ],
+                    # One todo isn't listed as a part, so its buttons are the entry's.
+                    actions=todo_actions(ordered[0], entry.title)
+                    if len(ordered) == 1
+                    else [add_todo_action(entry.title)],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
                     # Only a close-out has signals: what notes nominates for Act now.
                     signals=Signals(

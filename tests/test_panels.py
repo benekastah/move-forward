@@ -239,6 +239,8 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         a.name for a in panel(dashboard, "notes.todos").items[0].actions if a.group != "Importance"
     ] == [
         "notes/todo_done",
+        "notes/todo_delete",
+        "notes/todo_link",
         "notes/todo_add",
         "notes/ice_item",
     ]
@@ -692,3 +694,14 @@ def test_what_only_core_sets_on_an_item_is_cleared_from_a_plugins() -> None:
     )
     [shown] = built.panel("notes.t").items
     assert shown.act_now_fields is None and shown.opened_at is None
+
+
+def test_an_entry_with_one_todo_has_the_buttons_one_of_several_has() -> None:
+    built = dashboard(work_items=[entry("APP-1 one", todos=[todo("only", "quick")])])
+    [item] = panel(built, "notes.todos").items
+    assert [a.name for a in item.actions if a.name.startswith("notes/todo")] == [
+        "notes/todo_done",
+        "notes/todo_delete",
+        "notes/todo_link",
+        "notes/todo_add",
+    ]

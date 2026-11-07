@@ -18,8 +18,8 @@ names are related through it.
 ## Panels
 
 - **Todos**: open `Left to do` items from the work notes, easy close-outs first, blocked
-  last. An entry with one open todo has its Done checkbox on the entry; entries with
-  several show each todo below the entry with its own Done checkbox and actions.
+  last. An entry with one open todo has its Done checkbox, Delete, Link and Add todo on the entry;
+  entries with several show each todo below the entry with its own.
   Focus mode also shows the todos one at a time. While the notes are empty (just
   upgraded, say), it says how to import them.
 - **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw); git adds
