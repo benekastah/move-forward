@@ -37,6 +37,7 @@ from .prs import (
 
 ENTRY = "notes.entry"
 PRIMARY_REVIEWER = "github/primary_reviewer"
+REQUEST_REVIEWER = "github/request_reviewer"
 
 
 class _EntryView(Model):
@@ -362,31 +363,8 @@ class Builder:
                 *assignment,
             ]
             if reasons:
-                if threads or unanswered or requested_changes_open:
-                    signals = Signals(verb="Address feedback", task="feedback", effort="hour")
-                elif ci:
-                    signals = Signals(verb="Fix CI", task="fix_ci", effort="hour")
-                elif policy:
-                    signals = Signals(
-                        verb="Meet PR policy", task="meet_pr_policy", effort="minutes"
-                    )
-                elif has_conflicts(pr):
-                    signals = Signals(
-                        verb="Resolve conflicts", task="resolve_conflicts", effort="hour"
-                    )
-                else:
-                    signals = Signals(
-                        verb="Request a reviewer", task="request_reviewer", effort="minutes"
-                    )
-                fixing.append(
-                    pr_item(
-                        self.now,
-                        pr,
-                        details=reasons,
-                        rank=-pr.updated_at.timestamp(),
-                        signals=signals,
-                    )
-                )
+                item = pr_item(self.now, pr, details=reasons, rank=-pr.updated_at.timestamp())
+                fixing.append(self._with_reviewer_field(item, pr) if assignment else item)
             elif not approved(pr) and (
                 review_required(pr) or pr.requested_users or pr.requested_teams
             ):
@@ -427,10 +405,13 @@ class Builder:
                     "recent committers here: "
                     + ", ".join(f"{s.login} ({s.commits})" for s in suggestions)
                 )
-            items.append(pr_item(self.now, pr, details=details, rank=-pr.created_at.timestamp()))
+            item = pr_item(self.now, pr, details=details, rank=-pr.created_at.timestamp())
+            items.append(self._with_reviewer_field(item, pr))
         return Panel(
             key="needs_reviewer",
             priority=Band.REVIEWERS,
+            act_now=True,
+            signals=Signals(verb="Request a reviewer", task="request_reviewer", effort="minutes"),
             title="Needs a reviewer",
             description="My open PRs missing a reviewer request under their teams' rules.",
             items=items,
@@ -724,12 +705,12 @@ class Builder:
             items=items,
         )
 
-    # Primary reviewers
+    # Picking reviewers
 
-    def _reviewers_to_suggest(self, pr: PullRequest) -> list[str]:
-        """Whom to offer as the PR's primary reviewer, likeliest first: those asked to review
-        it, the members of the teams asked (as far as they're known), then recent committers
-        to what it changes."""
+    def _reviewers_to_suggest(self, pr: PullRequest, leaving_out: Collection[str]) -> list[str]:
+        """Whom to offer as the PR's reviewer, likeliest first: those asked to review it, the
+        members of the teams asked (as far as they're known), then recent committers to what
+        it changes; never its author, or anyone in `leaving_out`."""
         owner = pr.repo.partition("/")[0]
         memberships = self.gh.team_memberships if self.gh else {}
         suggested = self.derived.suggestions.get(pr.url, []) if self.derived else []
@@ -738,8 +719,19 @@ class Builder:
             *(m for team in pr.requested_teams for m in memberships.get(f"{owner}/{team}", [])),
             *(s.login for s in suggested),
         ]
-        chosen = {pr.author, *primary_reviewers(pr)}
+        chosen = {pr.author, *leaving_out}
         return [login for login in dict.fromkeys(logins) if login not in chosen]
+
+    def _with_reviewer_field(self, item: Item, pr: PullRequest) -> Item:
+        """The PR's item with a field to ask someone to review it."""
+        field = Action(
+            name=REQUEST_REVIEWER,
+            label="Request",
+            fields={"pr": pr.url},
+            input="Reviewer",
+            suggestions=self._reviewers_to_suggest(pr, pr.requested_users),
+        )
+        return item.model_copy(update={"actions": [*item.actions, field]})
 
     def _primary_reviewer(self, item: Item, pr: PullRequest) -> Item:
         """The PR's item with who its primary reviewer is, and a field to pick another."""
@@ -749,7 +741,7 @@ class Builder:
             label="Change primary" if current else "Set primary",
             fields={"pr": pr.url},
             input="Primary reviewer",
-            suggestions=self._reviewers_to_suggest(pr),
+            suggestions=self._reviewers_to_suggest(pr, current),
         )
         badges = [f"primary: {', '.join(current)}"] if current else []
         return item.model_copy(

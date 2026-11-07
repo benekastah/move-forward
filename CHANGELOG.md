@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Request a reviewer from the page
+
+A PR missing a reviewer, with nothing else to do on it, now reaches Act now as "Request a
+reviewer". It has a field for one in Needs a reviewer and Fix before review. Scripts can post `pr` and `input` (a login) to
+`/actions/github/request_reviewer`. Nothing to change.
+
 ### `due_warning_days` also decides which Jira tickets reach Act now
 
 Jira nominated tickets due within a fixed week, whatever `[act_now] due_warning_days` said.

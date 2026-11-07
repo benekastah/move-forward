@@ -403,6 +403,11 @@ def set_primary_reviewer(url: str, login: str, replacing: list[str], request: bo
     run(args)
 
 
+def request_reviewer(url: str, login: str) -> None:
+    """Ask `login` to review the PR. Raises CommandError when GitHub refuses."""
+    run(["gh", "pr", "edit", url, "--add-reviewer", login])
+
+
 def login(host: str) -> str:
     return run(api(host, "user", "--jq", ".login")).strip()
 

@@ -35,18 +35,39 @@ def _same(one: str, other: str | None) -> bool:
     return other is not None and one.casefold() == other.casefold()
 
 
+def _login(req: ActionRequest[GitHubConfig], pr: PullRequest) -> str:
+    """The `input` field, if it could be asked about the PR: a login, and not its author's."""
+    login = req.field("input").strip()
+    if not LOGIN_RE.fullmatch(login):
+        raise ActionError(f"{login!r} isn't a GitHub login")
+    if _same(login, pr.author):
+        raise ActionError("a PR's author can't review it")
+    return login
+
+
+def request_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
+    """Ask `input`, a login, to review the PR, unless they've been asked already."""
+    pr = _my_open_pr(req)
+    login = _login(req, pr)
+    if any(_same(login, other) for other in pr.requested_users):
+        raise ActionError(f"{login} is already asked to review it")
+    try:
+        client.request_reviewer(pr.url, login)
+    except CommandError as e:
+        raise ActionError(str(e)) from e
+    return ActionResult(
+        f"asked {login} to review {pr.repo}#{pr.number}", touched=[Ref(kind=PR, id=pr.url)]
+    )
+
+
 def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     """Make `input`, a login, the PR's primary reviewer, in place of any other. They're asked
     to review too, as they must approve, unless they've been asked or have reviewed it:
     asking again would ask for a review already given."""
     pr = _my_open_pr(req)
-    login = req.field("input").strip()
-    if not LOGIN_RE.fullmatch(login):
-        raise ActionError(f"{login!r} isn't a GitHub login")
+    login = _login(req, pr)
     if not req.ctx.config.has_primary_reviewer(pr.repo):
         raise ActionError(f"{pr.repo} isn't in primary_reviewer_repos")
-    if _same(login, pr.author):
-        raise ActionError("a PR's author can't be its primary reviewer")
     current = primary_reviewers(pr)
     if any(_same(login, reviewer) for reviewer in current):
         raise ActionError(f"{login} is already the primary reviewer")
@@ -62,4 +83,7 @@ def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
-ACTIONS: dict[str, ActionHandler] = {"primary_reviewer": primary_reviewer}
+ACTIONS: dict[str, ActionHandler] = {
+    "primary_reviewer": primary_reviewer,
+    "request_reviewer": request_reviewer,
+}

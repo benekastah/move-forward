@@ -845,7 +845,7 @@ def test_ticket_keys_come_from_jiras_projects_else_a_guess_that_skips_utf_8_and_
 
 
 def test_conflicts_skip_drafts_and_a_stacked_pr_is_told_to_restack() -> None:
-    base = pr(1, head="me/base")
+    base = pr(1, head="me/base", requested_users=["alice"])
     stacked = pr(2, head="me/top", base="me/base", mergeable="CONFLICTING")
     draft = pr(3, mergeable="CONFLICTING", is_draft=True)
     plain = pr(4, mergeable="CONFLICTING")

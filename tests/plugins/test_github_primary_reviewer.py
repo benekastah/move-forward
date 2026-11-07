@@ -165,7 +165,7 @@ def test_someone_asked_or_who_reviewed_is_not_asked_again(
     [
         ("--repo=evil/x", [], "isn't a GitHub login"),
         ("a b", [], "isn't a GitHub login"),
-        (ME.upper(), [], "author"),
+        (ME.upper(), [], "author can't review"),
         ("Alice", [ME, "alice"], "already"),
     ],
 )

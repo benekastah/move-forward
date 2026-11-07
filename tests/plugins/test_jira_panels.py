@@ -209,7 +209,7 @@ def test_a_ticket_in_rollout_is_closed_by_hand_once_its_prs_merged() -> None:
 def test_a_rollout_with_open_prs_lists_them_and_rises_when_one_is_ready_to_merge() -> None:
     merged = pr(1, state="MERGED", merged_at=NOW)
     ready = pr(2, reviews=[approved_review()], review_decision="APPROVED")
-    waiting = pr(3, review_decision="REVIEW_REQUIRED")
+    waiting = pr(3, review_decision="REVIEW_REQUIRED", requested_users=["alice"])
     draft = pr(4, is_draft=True)
     dashboard = build(
         github=snapshot(mine=[ready, waiting, draft], merged_recent=[merged]),
