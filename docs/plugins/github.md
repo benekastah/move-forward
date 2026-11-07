@@ -103,7 +103,7 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   the base branch requires no review; Ready to merge asks for no approval there. These PRs,
   here and in Fix before review, have a field to request a reviewer, suggesting the requested
   teams' members as far as they're known, then recent committers; any login can be typed.
-- **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs). A PR that GitHub's merge state calls BEHIND ("behind base: update the branch") or BLOCKED with nothing else we can see ("blocked by branch protection") isn't ready either: it's held, with that reason.
+- **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs). A PR that GitHub's merge state calls BEHIND ("behind base: update the branch", with an Update branch button that asks first) or BLOCKED with nothing else we can see ("blocked by branch protection") isn't ready either: it's held, with that reason.
 - **In the merge queue**: my PRs waiting in it. Nothing to act on, so Act now ignores it.
 - **Requested from my teams**: PRs waiting on any of my `teams`, ranked by how many files
   CODEOWNERS gives those teams (required first) and how many are in directories I commit
@@ -124,6 +124,7 @@ members as far as they're known, then recent committers; any login can be typed.
 
 | Path | Fields | Does |
 | --- | --- | --- |
+| `/actions/github/update_branch` | `pr` (the URL of one of my open PRs) | Merges its base into its branch on GitHub (`gh pr update-branch`), not rebasing, so what's stacked on it isn't rewritten. |
 | `/actions/github/mark_ready` | `pr` (the URL of one of my draft PRs) | Takes it out of draft. |
 | `/actions/github/request_reviewer` | `pr` (the URL of one of my open PRs), `input` (a login) | Asks them to review it. |
 | `/actions/github/primary_reviewer` | `pr` (the URL of one of my open PRs, in a repo in `primary_reviewer_repos`), `input` (a login) | Assigns them in place of whoever else is assigned besides the author, and asks for their review unless they're already asked or have reviewed it. |

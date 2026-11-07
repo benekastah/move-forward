@@ -74,6 +74,18 @@ def mark_ready(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
+def update_branch(req: ActionRequest[GitHubConfig]) -> ActionResult:
+    """Bring the PR's branch up to date with its base, on GitHub."""
+    pr = _my_open_pr(req)
+    try:
+        client.update_branch(pr.url)
+    except CommandError as e:
+        raise ActionError(str(e)) from e
+    return ActionResult(
+        f"updated {pr.repo}#{pr.number} with {pr.base}", touched=[Ref(kind=PR, id=pr.url)]
+    )
+
+
 def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     """Make `input`, a login, the PR's primary reviewer, in place of any other. They're asked
     to review too, as they must approve, unless they've been asked or have reviewed it:
@@ -101,4 +113,5 @@ ACTIONS: dict[str, ActionHandler] = {
     "mark_ready": mark_ready,
     "primary_reviewer": primary_reviewer,
     "request_reviewer": request_reviewer,
+    "update_branch": update_branch,
 }
