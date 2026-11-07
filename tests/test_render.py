@@ -328,6 +328,37 @@ def test_strong_links_get_a_class() -> None:
     assert "<label class='check suggested'>" in html
 
 
+def test_a_text_fields_suggestions_are_offered_in_order_and_escaped() -> None:
+    action = page.Action(
+        name="github/assign",
+        label="Assign",
+        fields={"pr": "1"},
+        input="Login",
+        suggestions=["zed", "al<ice"],
+    )
+    html = render.buttons([action])
+    list_id = re.search(r"list='(suggestions-[0-9a-f]+)'", html)
+    assert list_id is not None
+    assert f"<datalist id='{list_id[1]}'>" in html
+    assert "<option value='zed'></option><option value='al&lt;ice'></option>" in html
+
+
+def test_the_same_button_in_two_places_has_a_suggestion_list_each() -> None:
+    action = page.Action(
+        name="github/assign", label="Assign", fields={}, input="Login", suggestions=["zed"]
+    )
+    ids = [
+        re.findall(r"<datalist id='([^']+)'", render.buttons([action], at=panel, pos=0))[0]
+        for panel in ("act.github", "github.fix_before_review")
+    ]
+    assert ids[0] != ids[1]
+
+
+def test_a_text_field_without_suggestions_has_no_list() -> None:
+    action = page.Action(name="notes/todo_link", label="Link", fields={}, input="Jira key")
+    assert "datalist" not in render.buttons([action])
+
+
 def test_actions_with_an_input_render_a_text_field() -> None:
     item = page.Item(
         title="x",
