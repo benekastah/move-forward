@@ -482,7 +482,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return [f"will look up {retried} reviewer email(s) again"] if retried else []
 
     def act_now(self, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
-        """The panels' items, the feedback on my drafts too, though a draft's item is
+        """The panels' items with signals, their own or their panel's (one with neither is
+        listed only), the feedback on my drafts too, though a draft's item is
         deferred; but not a deferred review: a draft isn't ready for one. A PR missing a
         reviewer only once there's nothing else to do on it: it isn't ready to ask anyone."""
         nominated = [

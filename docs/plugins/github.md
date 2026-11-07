@@ -99,8 +99,7 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   CODEOWNERS gives me or my teams, when there are some: "my part: 12 lines in 2 of 119
   files". The PR's badges still show the whole PR. Without owned files, the whole PR sizes it.
 - **Needs a reviewer**: the assignment reasons from Fix before review, on PRs not in the merge
-  queue, with recent
-  committers suggested for PRs requesting a team. GitHub's `reviewDecision` is null where
+  queue, with recent committers suggested for PRs requesting a team. GitHub's `reviewDecision` is null where
   the base branch requires no review; Ready to merge asks for no approval there. These PRs,
   here and in Fix before review, have a field to request a reviewer, suggesting the requested
   teams' members as far as they're known, then recent committers; any login can be typed.

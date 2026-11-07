@@ -91,14 +91,20 @@ def test_a_bad_request_is_refused_without_running_anything(
         perform_action(config, db, REQUEST_REVIEWER, {"pr": url, "input": login})
 
 
-def test_a_queued_pr_is_not_listed_and_an_approved_one_is_not_nominated() -> None:
-    settled = [
-        pr(1, requested_teams=["core"], in_merge_queue=True),
-        pr(2, requested_teams=["core"], review_decision="APPROVED"),
-    ]
-    built = dashboard(github=snapshot(mine=settled), default_team_reviewer_assignment="individual")
-    assert [i.title for i in panel(built, "github.needs_reviewer").items] == ["PR 2"]
-    assert not any(i.title.startswith("Request a reviewer") for i in built.act_now())
+def test_a_queued_pr_is_not_listed() -> None:
+    queued = pr(1, requested_teams=["core"], in_merge_queue=True)
+    built = dashboard(github=snapshot(mine=[queued]), default_team_reviewer_assignment="individual")
+    assert panel(built, "github.needs_reviewer").items == []
+
+
+def test_an_approved_pr_is_listed_but_not_nominated() -> None:
+    # Stacked, so it's not Ready to merge either: nothing else nominates it.
+    approved = pr(1, requested_teams=["core"], review_decision="APPROVED", base="me/other")
+    built = dashboard(
+        github=snapshot(mine=[approved]), default_team_reviewer_assignment="individual"
+    )
+    assert [i.title for i in panel(built, "github.needs_reviewer").items] == ["PR 1"]
+    assert built.act_now() == []
 
 
 def test_a_team_whose_members_cannot_be_read_is_listed_but_not_nominated() -> None:
