@@ -44,9 +44,10 @@ def test_marking_ready_tells_github_and_fetches_the_pr_again(
 
 
 def test_only_a_draft_of_mine_can_be_marked_ready(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert _commands(monkeypatch) == []
+    commands = _commands(monkeypatch)
     config, db = stored(github=snapshot(mine=[pr(1)]))
     with pytest.raises(ActionError, match="isn't a draft"):
         perform_action(config, db, MARK_READY, {"pr": URL})
     with pytest.raises(ActionError, match="isn't one of my open PRs"):
         perform_action(config, db, MARK_READY, {"pr": "https://github.com/o/r/pull/9"})
+    assert commands == []
