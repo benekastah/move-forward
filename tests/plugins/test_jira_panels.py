@@ -285,3 +285,14 @@ def test_a_ticket_not_started_that_has_prs_can_be_moved_to_in_progress() -> None
         ("Move to In Progress", "In Progress")
     ]
     assert item.signals and item.signals.verb == "Move to In Progress"
+
+
+def test_a_ticket_not_started_is_only_moved_on_for_an_open_pr() -> None:
+    built = build(
+        github=snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)]),
+        jira=JiraSnapshot(issues=[issue("APP-1", status="To Do", status_category="new")]),
+    )
+    [item] = panel(built, "jira.jira_transitions").items
+    assert item.subtitle == "still To Do but has PRs"
+    assert not [a for a in item.actions if a.name == "jira/transition"]
+    assert item.signals and item.signals.verb == "Update the status"

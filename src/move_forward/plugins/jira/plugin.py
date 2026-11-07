@@ -222,7 +222,8 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
             if in_status(issue, config.status_in_review):
                 targets = config.status_in_progress
         elif issue.status_category == "new" and prs:
-            targets = config.status_in_progress
+            # Merged or abandoned PRs don't mean it's in progress.
+            targets = config.status_in_progress if open_prs else []
             proposal = f"still {issue.status} but has PRs"
         to = targets[0] if targets else None
         if proposal:
