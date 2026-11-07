@@ -77,7 +77,7 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   need an approval are waiting too; other policy failures remain here.
   The reasons appear together on one item; assigned importance sorts before age.
 - **Ready for review**: my open, non-draft PRs without those blockers, waiting for approval.
-  Pending CI is allowed. Each item says whom to ping.
+  Pending CI is allowed. Each item says who it's waiting on.
 - **Ready for me to review**: non-draft PRs requesting me as an individual, plus PRs
   pushed after my approval when GitHub says `REVIEW_REQUIRED`. Team-only requests stay in
   Requested from my teams; a new push alone does not bring an approved PR back. Like

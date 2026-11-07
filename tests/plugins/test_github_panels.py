@@ -953,3 +953,9 @@ def test_a_review_whose_author_has_open_threads_is_not_listed_twice() -> None:
         "reviewed by bob",  # bob left no thread: the review is the feedback
     ]
     assert items["PR 2"] == ["reviewed by bob"]  # nothing open: the review stands
+
+
+def test_ready_for_review_says_who_it_is_waiting_on() -> None:
+    built = build(github=snapshot(mine=[pr(1, requested_users=["alice"], requested_teams=["web"])]))
+    [item] = panel(built, "github.ready_for_review").items
+    assert item.details == ["waiting on alice, team web"]
