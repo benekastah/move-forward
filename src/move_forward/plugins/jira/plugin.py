@@ -221,9 +221,9 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
             proposal = f"PR {numbers} closed unmerged: reopen it or move the ticket back"
             if in_status(issue, config.status_in_review):
                 targets = config.status_in_progress
-        elif issue.status_category == "new" and prs:
-            # Merged or abandoned PRs don't mean it's in progress.
-            targets = config.status_in_progress if open_prs else []
+        elif issue.status_category == "new" and open_prs:
+            # Only an open PR: as in progress, merged ones don't say the ticket is done.
+            targets = config.status_in_progress
             proposal = f"still {issue.status} but has PRs"
         to = targets[0] if targets else None
         if proposal:
