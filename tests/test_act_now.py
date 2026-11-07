@@ -358,3 +358,28 @@ def test_an_item_without_parts_keeps_its_fingerprint() -> None:
     item = Item(title="t", badges=["b"], details=["d"])
     seen = json.dumps(["t", ["b"], ["d"]])
     assert Nomination("x", item).fingerprint == hashlib.sha256(seen.encode()).hexdigest()[:16]
+
+
+def _task(task: str, *labels: str, **signals: object) -> Nomination:
+    return Nomination(
+        "jira",
+        Item(
+            title="T-1",
+            subjects=[Ref(kind="ticket", id="T-1")],
+            actions=[Action(name=f"jira/{label}", label=label, fields={}) for label in labels],
+            signals=Signals.model_validate({"verb": task, "task": task, **signals}),
+        ),
+    )
+
+
+def test_what_else_is_due_on_a_subject_keeps_its_buttons() -> None:
+    [panel] = act_now.panels([_task("look", importance=2), _task("move", "Move to Review")])
+    [item] = panel.items
+    assert item.title == "look: T-1"
+    assert "also: move" in item.details
+    assert "Move to Review" in [a.label for a in item.actions]
+
+
+def test_a_button_two_tasks_offer_shows_once() -> None:
+    [panel] = act_now.panels([_task("look", "Open", importance=2), _task("move", "Open")])
+    assert [a.label for a in panel.items[0].actions].count("Open") == 1

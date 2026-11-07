@@ -312,7 +312,7 @@ class _Group:
     position: int
     """Its best member's place in the ranking."""
     nomination: Nomination
-    also: list[str]
+    also: list[Nomination]
     then: list[Nomination] = field(default_factory=list[Nomination])
 
 
@@ -321,7 +321,7 @@ def no_units(ref: Ref) -> list[Ref]:
     return []
 
 
-def _merged(kept: list[tuple[Nomination, list[str]]], units: Units) -> list[_Group]:
+def _merged(kept: list[tuple[Nomination, list[Nomination]]], units: Units) -> list[_Group]:
     """`kept` (best first) with each item about a unit of work (its main subject a ticket
     or an entry) joined to the best item about something in that unit, which isn't one
     itself (a PR the ticket links): "Ping the reviewers, then move APP-12 to In Review". An
@@ -354,6 +354,7 @@ def _merged(kept: list[tuple[Nomination, list[str]]], units: Units) -> list[_Gro
         else:
             host.position = min(host.position, position)
             host.then.append(nomination)
+            host.also += also
     return sorted(groups, key=lambda group: group.position)
 
 
@@ -414,11 +415,11 @@ def panels(
             c[0],
         )
     )
-    kept: dict[tuple[str, str] | Ref, tuple[Nomination, list[str]]] = {}
+    kept: dict[tuple[str, str] | Ref, tuple[Nomination, list[Nomination]]] = {}
     for n, nomination in candidates:
         subject = _subject(nomination, n)
         if subject in kept:
-            kept[subject][1].append(nomination.signals.verb or nomination.item.title)
+            kept[subject][1].append(nomination)
         else:
             kept[subject] = (nomination, [])
     per: dict[str, int] = {}
@@ -528,7 +529,7 @@ def _shown(
     horizon: timedelta,
 ) -> Item:
     """The item as Act now shows it: its verb first, its place overall as a badge, why it's
-    here, what else is due on the same subject, the items joined to it with their buttons,
+    here, what else is due on the same subject and the items joined to it, with their buttons,
     the parts of it and of those, to act on one by one, and the buttons to set it aside. Ranked by its place, since the panels keep their own
     order."""
     nomination, then = group.nomination, group.then
@@ -537,7 +538,8 @@ def _shown(
     reason = reason.removesuffix(", ")
     details = [f"why: {reason}"] if reason else []
     details += item.details
-    details += [f"also: {', '.join(group.also)}"] if group.also else []
+    also = [n.signals.verb or n.item.title for n in group.also]
+    details += [f"also: {', '.join(also)}"] if also else []
     details += [f"then: {_titled(joined)}" for joined in then]
     links = [*item.links]
     links += [
@@ -560,12 +562,26 @@ def _shown(
                 *(part for joined in then for part in _listed_parts(joined.item)),
             ],
             "actions": [
-                *item.actions,
-                *(action for joined in then for action in joined.item.actions),
+                *_without_repeats(
+                    [
+                        *item.actions,
+                        *(action for other in group.also for action in other.item.actions),
+                        *(action for joined in then for action in joined.item.actions),
+                    ]
+                ),
                 *_buttons(nomination, then, pinned, levels.get(id(nomination))),
             ],
         }
     )
+
+
+def _without_repeats(actions: list[Action]) -> list[Action]:
+    """`actions` with each button once: two tasks on a subject can offer the same one."""
+    seen: list[Action] = []
+    for action in actions:
+        if action not in seen:
+            seen.append(action)
+    return seen
 
 
 def _titled(nomination: Nomination) -> str:

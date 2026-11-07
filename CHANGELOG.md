@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Act now keeps the buttons of what's also due
+
+An item's `also:` tasks now bring their buttons, so a ticket's Move to In Review stays usable under
+its What next item. In `mfd dump`, such an item has more `actions`. Nothing to change.
+
 ### Tick off an entry's several todos in Act now
 
 A close-out with several todos now lists them in Act now, each with its Done box. In `mfd dump`,
