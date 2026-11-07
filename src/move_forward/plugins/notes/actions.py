@@ -261,6 +261,8 @@ def todo_size(req: ActionRequest[NotesConfig]) -> str:
     size = _size(req.field("size"))
     if size is None:
         raise ActionError("size must be quick or big")
+    if todo.size == size:
+        return f"{todo.text} is already {size}"
     notes.set_todo_size(todo.id, size)
     notes.touch(entry.id, ctx.today)
     return f"{todo.text} is {size}"

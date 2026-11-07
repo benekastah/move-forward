@@ -42,8 +42,8 @@ In focus mode, work entries are split into their todos, one per page, quick ones
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number)
 first and in bold; merged PRs are purple and struck through, closed ones gray and struck
 through. When every PR a todo mentions is merged or closed, it's flagged "its PRs are
-done" and its Done box is drawn bigger. Each todo has a Done checkbox, a Delete button, Quick and Big buttons,
-and a Link field that links it to a Jira ticket (by key) or a PR (by URL). Add todo's drop-down
+done" and its Done box is drawn bigger. Each todo has a Done checkbox, a Delete
+button, Quick and Big buttons (its size highlighted), and a Link field that links it to a Jira ticket (by key) or a PR (by URL). Add todo's drop-down
 sizes a new one. An entry whose open todos are all quick is what reaches Act now. Done records
 the todo as done today and keeps it on the page, so unticking it reopens it; Delete drops
 it without recording it.

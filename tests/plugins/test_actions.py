@@ -599,6 +599,9 @@ def test_a_todo_is_sized_as_its_added_and_afterwards(config: Config, tmp_path: P
     assert (small.size, unsized.size) == ("quick", None)
     refresh.perform_action(config, db, "notes/todo_size", {"todo": str(unsized.id), "size": "big"})
     assert notes.entries()[0].todos[1].size == "big"
+    db.execute("UPDATE notes_entries SET updated_on = '2026-01-01'")
+    refresh.perform_action(config, db, "notes/todo_size", {"todo": str(small.id), "size": "quick"})
+    assert notes.entries()[0].updated_on == date(2026, 1, 1)  # nothing changed
     for bad in ("", "huge"):
         with pytest.raises(ActionError, match="size must be"):
             refresh.perform_action(
