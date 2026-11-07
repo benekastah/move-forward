@@ -158,7 +158,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
 
 ### slack
 
-32. **Clear a team's channel.** `/slack/contacts` can't (`mfd slack team unset`).
 
 ## Follow-ups
 

@@ -35,8 +35,6 @@ def test_setting_by_hand_checks_the_ids_and_wins_over_imports() -> None:
     assert notice == "bob's pings go to U222222"
     with pytest.raises(ActionError, match="isn't a Slack member id"):
         refresh.run_action(config, db, "slack/set_contact", {"login": "bob", "slack_id": "x"})
-    with pytest.raises(ActionError, match="a channel name or id is needed"):
-        refresh.run_action(config, db, "slack/set_team_channel", {"team": "web"})
     slack = SlackRepository(db)
     slack.replace_imported([Contact(login="bob", slack_id="U999999")], [], [])
     assert slack.contacts()["bob"].slack_id == "U222222"
@@ -61,3 +59,13 @@ def test_mfd_slack_contacts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     assert mfd("contact", "unset", "alice") == 0 and mfd("contact", "unset", "alice") == 1
     assert mfd("team", "unset", "web") == 0
     assert SlackRepository(Database(tmp_path / "d.db")).contacts() == {}
+
+
+def test_a_blank_form_forgets_a_teams_channel() -> None:
+    config, db = stored(slack=True, github=snapshot())
+    SlackRepository(db).set_team_channel("web", "#team-web", None)
+    notice = refresh.run_action(
+        config, db, "slack/set_team_channel", {"team": "web", "channel_name": " ", "channel_id": ""}
+    )
+    assert notice == "forgot web's channel"
+    assert "web" not in SlackRepository(db).team_channels()

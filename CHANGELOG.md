@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Clear a team's channel on the contacts page
+
+Posting `/actions/slack/set_team_channel` with both `channel_name` and `channel_id` blank now
+forgets the team's channel, as `mfd slack team unset` does, rather than failing. A script relying
+on that failure should check its fields first.
+
 ### Merged stack branches reach Act now
 
 A merged branch git-stack tracks now reaches Act now as "Clean up", and has a Clean button on its

@@ -50,7 +50,8 @@ def set_team_channel(slack: SlackRepository, team: str, name: str, channel_id: s
     channel_name = _optional(name, CHANNEL_NAME_RE, "channel name, e.g. #team-web")
     channel = _optional(channel_id, CHANNEL_ID_RE, "channel id, e.g. C0123456")
     if channel_name is None and channel is None:
-        raise ActionError("a channel name or id is needed")
+        slack.unset_team_channel(team)
+        return f"forgot {team}'s channel"
     slack.set_team_channel(team, channel_name, channel)
     return f"{team}'s pings go to {channel_name or channel}"
 
