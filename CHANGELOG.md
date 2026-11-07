@@ -5,11 +5,36 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Recognize review requests after addressed feedback
+
+After pushing changes and requesting the same reviewer again, a PR whose older review
+still says changes requested moves to Ready for review when its failing policy statuses
+only say approvals are pending. Fetch the PR again to pick up the status descriptions;
+other policy failures still appear in Fix before review.
+
+### Show only direct review requests in Ready for me to review
+
+Ready for me to review now excludes team-only requests. A PR I approved reappears after a
+push only when GitHub's review decision still requires review. Find team requests in
+Requested from my teams.
+
+### Sort reviews for me by importance
+
+Ready for me to review now shows important and critical PRs before ordinary ones, and
+not-important PRs last; recent updates decide the order within each level.
+
 ### Finish work-note todos from the Notes panel
 
 Entries with several open todos now show each todo and its Done checkbox on the dashboard.
 Use that checkbox to complete a todo without opening Focus mode; the other todo actions
 are available there too.
+
+### Restart a supervised server on demand
+
+Run `mfd restart` to ask a running `mfd serve` supervisor to check and replace its server
+process without editing the config. On macOS and Linux, sending `SIGUSR1` to the
+supervisor process has the same effect. Restart an existing `mfd serve` once to load
+this new supervisor behavior.
 
 ### Importance choices on entity items
 
@@ -19,13 +44,6 @@ appear together with ❕ / ❗️ / ‼️ and the selected level highlighted. A
 buttons, Put on ice, and local branches' Delete and Put on ice buttons are grouped with emoji icons;
 their labels appear in the button titles and accessible names.
 No config change is needed.
-
-### Restart a supervised server on demand
-
-Run `mfd restart` to ask a running `mfd serve` supervisor to check and replace its server
-process without editing the config. On macOS and Linux, sending `SIGUSR1` to the
-supervisor process has the same effect. Restart an existing `mfd serve` once to load
-this new supervisor behavior.
 
 ### GitHub review stages and team reviewer rules
 

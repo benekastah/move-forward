@@ -69,6 +69,42 @@ def changes_requested(pr: PullRequest) -> bool:
     )
 
 
+def awaiting_re_review(pr: PullRequest) -> bool:
+    """A requested changes review was followed by a push and a fresh request to that
+    reviewer. GitHub can still report CHANGES_REQUESTED until they review again."""
+    if not changes_requested(pr):
+        return False
+    requests: dict[str, datetime] = {}
+    for review in pr.reviews:
+        if review.author and review.state == "CHANGES_REQUESTED" and review.submitted_at:
+            requests[review.author] = review.submitted_at
+    for event in pr.events:
+        if event.type == "PullRequestReview" and event.state == "CHANGES_REQUESTED" and event.actor:
+            requests[event.actor] = max(requests.get(event.actor, event.at), event.at)
+    pushed = last_push_at(pr)
+    if not requests or pushed is None:
+        return False
+    for reviewer, requested_at in requests.items():
+        if pushed <= requested_at or reviewer not in pr.requested_users:
+            return False
+        if not any(
+            event.type == "ReviewRequestedEvent"
+            and event.reviewer_kind == "user"
+            and event.reviewer == reviewer
+            and event.at > pushed
+            for event in pr.events
+        ):
+            return False
+    return True
+
+
+def review_only_policy_failure(check: Check) -> bool:
+    """A failing status whose explanation says it is waiting for reviews, not a policy
+    correction the author can make."""
+    description = (check.description or "").casefold().strip()
+    return description.startswith(("review required.", "pending required reviews:"))
+
+
 def unresolved_threads(pr: PullRequest, ignored: Collection[str] = ()) -> list[Thread]:
     """The open threads, except those started by an `ignored` login."""
     return [t for t in pr.threads if not t.resolved and t.author not in ignored]

@@ -125,7 +125,8 @@ class PrRepository:
                     for i, t in enumerate(pr.threads)
                 ]
                 rows["github_pr_checks"] += [
-                    (*key, i, c.name, c.state, c.url) for i, c in enumerate(pr.checks)
+                    (*key, i, c.name, c.state, c.url, c.description)
+                    for i, c in enumerate(pr.checks)
                 ]
                 rows["github_pr_events"] += [
                     (
@@ -253,6 +254,7 @@ class PrRepository:
                             name=cast(str, r["name"]),
                             state=cast(str, r["state"]),
                             url=cast(str | None, r["check_url"]),
+                            description=cast(str | None, r["description"]),
                         )
                         for r in checks[key]
                     ],

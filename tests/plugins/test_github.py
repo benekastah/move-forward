@@ -91,6 +91,7 @@ RAW_PR: dict[str, object] = {
                                     "context": "policy",
                                     "state": "SUCCESS",
                                     "targetUrl": "https://policy",
+                                    "description": "Check has passed.",
                                 },
                             ]
                         },
@@ -144,6 +145,7 @@ def test_to_pull_request_flattens_everything() -> None:
         ("lint", "PENDING"),
         ("policy", "SUCCESS"),
     ]
+    assert pr.checks[2].description == "Check has passed."
     assert pr.last_commit_at == datetime(2026, 10, 28, 9, tzinfo=UTC)
     assert [e.type for e in pr.events] == [
         "ReviewRequestedEvent",

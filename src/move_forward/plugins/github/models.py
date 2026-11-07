@@ -13,6 +13,8 @@ class Check(Model):
     state: str
     """A CheckRun conclusion (PENDING while running) or a StatusContext state."""
     url: str | None = None
+    description: str | None = None
+    """A status context's explanation, used to distinguish pending reviews from other policy failures."""
 
 
 class Thread(Model):

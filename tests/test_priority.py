@@ -146,6 +146,19 @@ def test_a_review_for_me_can_be_marked_important() -> None:
     assert [a.label for a in shown.items[0].actions if a.selected] == ["Important"]
 
 
+def test_reviews_for_me_sort_importance_before_recency() -> None:
+    old = pr(1, author="alice", updated_at=NOW - timedelta(days=3))
+    recent = pr(2, author="alice", updated_at=NOW - timedelta(days=1))
+    newest = pr(3, author="alice", updated_at=NOW)
+    config, db = stored(github=snapshot(direct_requests=[recent, old, newest]))
+    priorities = PriorityRepository(db)
+    priorities.set(Ref(kind="pull_request", id=old.url), 2, NOW)
+    priorities.set(Ref(kind="pull_request", id=newest.url), 0, NOW)
+    shown = refresh.build_dashboard(config, db, NOW).find_panel("github.reviews_for_me")
+    assert shown is not None
+    assert [item.url for item in shown.items] == [old.url, recent.url, newest.url]
+
+
 def test_the_priority_buttons_set_and_clear_it() -> None:
     config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
     priorities = PriorityRepository(db)

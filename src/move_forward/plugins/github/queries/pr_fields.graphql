@@ -45,7 +45,7 @@ fragment PrFields on PullRequest {
             nodes {
               __typename
               ... on CheckRun { name conclusion status detailsUrl }
-              ... on StatusContext { context state targetUrl }
+              ... on StatusContext { context state targetUrl description }
             }
           }
         }

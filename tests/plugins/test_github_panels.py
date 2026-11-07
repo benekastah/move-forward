@@ -86,6 +86,63 @@ def test_review_stages_hold_real_blockers_but_not_pending_ci() -> None:
     assert "changes requested" in details["PR 6"]
 
 
+def test_changes_requested_moves_to_waiting_after_push_and_re_request() -> None:
+    requested_at = NOW - timedelta(days=1)
+    pushed_at = NOW - timedelta(hours=2)
+    asked_again = NOW - timedelta(hours=1)
+    events = [
+        event("PullRequestReview", requested_at, actor="bob", state="CHANGES_REQUESTED"),
+        event("HeadRefForcePushedEvent", pushed_at),
+        event("ReviewRequestedEvent", asked_again, reviewer_kind="user", reviewer="bob"),
+    ]
+    review_policy = [
+        Check(
+            name="PR policy: guidelines",
+            state="FAILURE",
+            description="Review required. PR must have approval from primary reviewer.",
+        ),
+        Check(
+            name="PR policy: CODEOWNERS",
+            state="FAILURE",
+            description="Pending required reviews: team-a.",
+        ),
+    ]
+    waiting = pr(
+        1,
+        requested_users=["bob"],
+        review_decision="CHANGES_REQUESTED",
+        last_commit_at=pushed_at,
+        events=events,
+        checks=review_policy,
+    )
+    unrelated_failure = pr(
+        2,
+        requested_users=["bob"],
+        review_decision="CHANGES_REQUESTED",
+        last_commit_at=pushed_at,
+        events=events,
+        checks=[*review_policy, Check(name="risk", state="FAILURE", description="Add risk label")],
+    )
+    not_requested_again = pr(
+        3,
+        requested_users=["bob"],
+        review_decision="CHANGES_REQUESTED",
+        last_commit_at=pushed_at,
+        events=events[:-1],
+        checks=review_policy,
+    )
+    built = build(
+        github=snapshot(mine=[waiting, unrelated_failure, not_requested_again]),
+        policy_checks=["PR policy: guidelines", "PR policy: CODEOWNERS", "risk"],
+    )
+    assert titles(built, "github.ready_for_review") == ["PR 1"]
+    assert set(titles(built, "github.fix_before_review")) == {"PR 2", "PR 3"}
+    assert titles(built, "github.feedback") == ["PR 3"]
+    details = {item.title: item.details for item in panel(built, "github.fix_before_review").items}
+    assert details["PR 2"] == ["policy failing: risk"]
+    assert "changes requested" in details["PR 3"]
+
+
 def test_each_individual_policy_team_needs_one_of_its_members_requested() -> None:
     teams = ["bacon", "eggs"]
     memberships = {"acme/bacon": ["alex", "shared"], "acme/eggs": ["shared", "erin"]}
@@ -109,7 +166,7 @@ def test_each_individual_policy_team_needs_one_of_its_members_requested() -> Non
     assert titles(both_individual, "github.ready_for_review") == ["PR 2"]
 
 
-def test_reviews_for_me_includes_direct_requests_and_changed_prs() -> None:
+def test_reviews_for_me_contains_direct_requests_and_stale_approvals_not_team_requests() -> None:
     reviewed_at = NOW - timedelta(days=1)
     pushed_after = pr(
         2,
@@ -121,16 +178,77 @@ def test_reviews_for_me_includes_direct_requests_and_changed_prs() -> None:
     re_requested = pr(
         4, author="alice", reviews=[approved_review(ME, reviewed_at)], requested_users=[ME]
     )
+    team_only = pr(5, author="alice", requested_teams=["core"])
     dashboard = build(
         github=snapshot(
-            direct_requests=[pr(1, author="bob")],
+            direct_requests=[pr(1, author="bob"), re_requested],
             reviewed_by_me=[pushed_after, unchanged, re_requested],
+            team_requests=[team_only],
         )
     )
     assert sorted(titles(dashboard, "github.reviews_for_me")) == ["PR 1", "PR 2", "PR 4"]
     details = {i.title: i.details for i in panel(dashboard, "github.reviews_for_me").items}
-    assert details["PR 4"] == ["review re-requested"]
+    assert details["PR 1"] == ["review requested"]
     assert details["PR 2"][0].startswith("pushed")
+    assert details["PR 4"] == ["review requested"]
+    assert titles(dashboard, "github.team_prs") == ["PR 5"]
+
+
+def test_a_direct_request_i_approved_only_returns_when_review_is_required() -> None:
+    review = approved_review(ME, NOW - timedelta(days=1))
+    still_approved = pr(
+        1,
+        author="alice",
+        reviews=[review],
+        last_commit_at=NOW,
+        review_decision="APPROVED",
+    )
+    needs_review = pr(
+        2,
+        author="alice",
+        reviews=[review],
+        last_commit_at=NOW,
+        review_decision="REVIEW_REQUIRED",
+    )
+    other_changes_requested = pr(
+        3,
+        author="alice",
+        reviews=[review],
+        last_commit_at=NOW,
+        review_decision="CHANGES_REQUESTED",
+    )
+    built = build(
+        github=snapshot(direct_requests=[still_approved, needs_review, other_changes_requested])
+    )
+    assert titles(built, "github.reviews_for_me") == ["PR 2"]
+
+
+def test_a_new_push_after_my_approval_needs_github_to_require_review() -> None:
+    approved_at = NOW - timedelta(days=1)
+    old_approval = [approved_review(ME, approved_at)]
+    stale = pr(
+        1,
+        author="alice",
+        reviews=old_approval,
+        last_commit_at=NOW,
+        review_decision="REVIEW_REQUIRED",
+    )
+    still_valid = pr(
+        2,
+        author="alice",
+        reviews=old_approval,
+        last_commit_at=NOW,
+        review_decision="APPROVED",
+    )
+    no_new_push = pr(
+        3,
+        author="alice",
+        reviews=old_approval,
+        last_commit_at=approved_at - timedelta(hours=1),
+        review_decision="REVIEW_REQUIRED",
+    )
+    built = build(github=snapshot(reviewed_by_me=[stale, still_valid, no_new_push]))
+    assert titles(built, "github.reviews_for_me") == ["PR 1"]
 
 
 def test_act_now_does_not_suggest_reviewing_a_draft() -> None:
@@ -686,7 +804,7 @@ def test_feedback_is_judged_from_the_latest_push_and_a_thread_reply_clears_nothi
     assert items == {"PR 1": ["comments by bob"], "PR 2": ["comments by alice"]}
 
 
-def test_a_review_waits_since_the_push_or_the_request_of_me_or_my_team() -> None:
+def test_a_direct_review_waits_since_the_request_and_a_stale_approval_since_the_push() -> None:
     reviewed_at = NOW - timedelta(days=3)
     pushed_at = NOW - timedelta(hours=2)
     requested_at = NOW - timedelta(hours=7)
@@ -697,12 +815,12 @@ def test_a_review_waits_since_the_push_or_the_request_of_me_or_my_team() -> None
         last_commit_at=NOW - timedelta(days=4),  # an old commit, force-pushed two hours ago
         events=[event("HeadRefForcePushedEvent", pushed_at)],
     )
-    by_team = pr(
+    direct = pr(
         2,
         author="bob",
-        events=[event("ReviewRequestedEvent", requested_at, reviewer_kind="team", reviewer="core")],
+        events=[event("ReviewRequestedEvent", requested_at, reviewer_kind="user", reviewer=ME)],
     )
-    built = build(github=snapshot(direct_requests=[by_team], reviewed_by_me=[repushed]))
+    built = build(github=snapshot(direct_requests=[direct], reviewed_by_me=[repushed]))
     waiting = {
         i.title: i.signals.waiting_since
         for i in panel(built, "github.reviews_for_me").items

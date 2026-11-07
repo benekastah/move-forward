@@ -349,5 +349,11 @@ MIGRATIONS = [
     );
     """,
     ),
+    Migration(
+        "0012_check_descriptions",
+        """
+    ALTER TABLE github_pr_checks ADD COLUMN description TEXT;
+    """,
+    ),
 ]
 """The github plugin's migrations."""

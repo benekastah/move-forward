@@ -82,6 +82,7 @@ class _RawContext(_Raw):
     context: str | None = None
     state: str | None = None
     target_url: str | None = Field(default=None, alias="targetUrl")
+    description: str | None = None
 
 
 class _RawRollup(_Raw):
@@ -286,7 +287,10 @@ def _check(context: _RawContext) -> Check:
         state = context.conclusion if context.status == "COMPLETED" else None
         return Check(name=context.name or "", state=state or "PENDING", url=context.details_url)
     return Check(
-        name=context.context or "", state=context.state or "PENDING", url=context.target_url
+        name=context.context or "",
+        state=context.state or "PENDING",
+        url=context.target_url,
+        description=context.description,
     )
 
 

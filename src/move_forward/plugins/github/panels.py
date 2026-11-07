@@ -17,6 +17,7 @@ from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
 from .prs import (
     STATE_REASONS,
     approved,
+    awaiting_re_review,
     changes_requested,
     failing_checks,
     has_conflicts,
@@ -25,6 +26,7 @@ from .prs import (
     last_push_at,
     merge_blockers,
     needs_re_review,
+    review_only_policy_failure,
     review_required,
     reviewer_assignment_reasons,
     ticket_keys,
@@ -222,7 +224,10 @@ class Builder:
         items: list[Item] = []
         if self.gh:
             for pr in self.gh.direct_requests:
-                if pr.is_draft:
+                approved_by_me = any(
+                    review.author == self.me and review.state == "APPROVED" for review in pr.reviews
+                )
+                if pr.is_draft or (approved_by_me and pr.review_decision != "REVIEW_REQUIRED"):
                     continue
                 items.append(
                     pr_item(
@@ -238,42 +243,32 @@ class Builder:
                 )
             seen = {item.url for item in items}
             for pr in self.gh.reviewed_by_me:
+                approved_by_me = any(
+                    review.author == self.me and review.state == "APPROVED" for review in pr.reviews
+                )
                 reason = needs_re_review(pr, self.me)
-                if reason and pr.url not in seen and not pr.is_draft:
-                    items.append(
-                        pr_item(
-                            self.now,
-                            pr,
-                            details=[reason, *self._my_part(pr)],
-                            rank=pr.updated_at.timestamp(),
-                            signals=_review(
-                                pr,
-                                self.me,
-                                self.config,
-                                self._part(pr),
-                                waiting_since=last_push_at(pr)
-                                if reason.startswith("pushed")
-                                else None,
-                                team_slugs=self._slugs(),
-                            ),
-                            fingerprint=pr.head_oid,
-                        )
-                    )
-                    seen.add(pr.url)
-            for pr in self.gh.team_requests:
-                if pr.is_draft or approved(pr) or pr.url in seen:
+                if (
+                    pr.is_draft
+                    or pr.url in seen
+                    or not approved_by_me
+                    or pr.review_decision != "REVIEW_REQUIRED"
+                    or reason is None
+                    or not reason.startswith("pushed")
+                ):
                     continue
                 items.append(
                     pr_item(
                         self.now,
                         pr,
-                        details=[
-                            "team review requested: " + ", ".join(pr.requested_teams),
-                            *self._my_part(pr),
-                        ],
+                        details=[reason, *self._my_part(pr)],
                         rank=pr.updated_at.timestamp(),
                         signals=_review(
-                            pr, self.me, self.config, self._part(pr), team_slugs=self._slugs()
+                            pr,
+                            self.me,
+                            self.config,
+                            self._part(pr),
+                            waiting_since=last_push_at(pr),
+                            team_slugs=self._slugs(),
                         ),
                         fingerprint=pr.head_oid,
                     )
@@ -285,8 +280,9 @@ class Builder:
             act_now=True,
             snoozable=True,
             title="Ready for me to review",
-            description="Direct and team requests, and PRs changed since my review.",
+            description="Direct requests and my approvals needing a fresh review.",
             items=items,
+            sort_by_importance=True,
         )
 
     def replies_for_me(self) -> Panel:
@@ -342,8 +338,15 @@ class Builder:
         for pr in self.mine:
             if pr.is_draft or pr.in_merge_queue:
                 continue
+            waiting_for_review = awaiting_re_review(pr)
+            requested_changes_open = changes_requested(pr) and not waiting_for_review
             ci = [c for c in failing_checks(pr) if c.name not in self.config.policy_checks]
-            policy = [c for c in failing_checks(pr) if c.name in self.config.policy_checks]
+            policy = [
+                c
+                for c in failing_checks(pr)
+                if c.name in self.config.policy_checks
+                and not (waiting_for_review and review_only_policy_failure(c))
+            ]
             threads = unresolved_threads(pr, self.config.ignored_reviewers)
             unanswered = unanswered_feedback(pr, self.me, self.config.ignored_reviewers)
             assignment = self._assignment_reasons(pr)
@@ -352,12 +355,12 @@ class Builder:
                 *(["policy failing: " + ", ".join(c.name for c in policy)] if policy else []),
                 *(["merge conflict"] if has_conflicts(pr) else []),
                 *([f"{len(threads)} unresolved review thread(s)"] if threads else []),
-                *(["changes requested"] if changes_requested(pr) else []),
+                *(["changes requested"] if requested_changes_open else []),
                 *unanswered,
                 *assignment,
             ]
             if reasons:
-                if threads or unanswered or changes_requested(pr):
+                if threads or unanswered or requested_changes_open:
                     signals = Signals(verb="Address feedback", task="feedback", effort="hour")
                 elif ci:
                     signals = Signals(verb="Fix CI", task="fix_ci", effort="hour")
@@ -441,7 +444,7 @@ class Builder:
                 for t in threads
             ]
             links = [Link(text=f"thread {n}", url=t.url) for n, t in enumerate(threads, 1) if t.url]
-            if changes_requested(pr):
+            if changes_requested(pr) and not awaiting_re_review(pr):
                 details.insert(0, "changes requested")
             details += unanswered_feedback(pr, self.me, self.config.ignored_reviewers)
             if details:

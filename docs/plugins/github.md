@@ -69,11 +69,17 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
 - **Fix before review**: my open, non-draft PRs with failing CI or policy checks, conflicts,
   unresolved or unanswered feedback, changes requested, or reviewer assignments missing
   under the teams' rules. A changes request counts even when another reviewer approved.
+  After a push and a renewed request to the same reviewer, the old changes request is
+  treated as waiting for review. Failing policy checks whose status descriptions say they
+  need an approval are waiting too; other policy failures remain here.
   The reasons appear together on one item; assigned importance sorts before age.
 - **Ready for review**: my open, non-draft PRs without those blockers, waiting for approval.
   Pending CI is allowed. Each item says whom to ping.
-- **Ready for me to review**: non-draft PRs requesting me or one of my teams, and PRs pushed
-  or re-requested since I reviewed them.
+- **Ready for me to review**: non-draft PRs requesting me as an individual, plus PRs
+  pushed after my approval when GitHub says `REVIEW_REQUIRED`. Team-only requests stay in
+  Requested from my teams; a new push alone does not bring an approved PR back. Like
+  other entity items, each has the core
+  importance choices. Assigned importance sorts before recent updates.
 - **Replies for me**: open non-draft PRs of others that mention me (updated within
   `history_days`) without asking for a review, with Act now's "Reply".
 - **Feedback to address**: unresolved threads, changes requested, comments since my last
@@ -105,7 +111,7 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
 
 ## Act now
 
-github nominates reviews (quick when up to 100 lines, about an hour up to 500, with the
+github nominates direct reviews (quick when up to 100 lines, about an hour up to 500, with the
 author waiting since my review was last asked for by name), feedback to reply to (quick,
 the thread authors waiting since the oldest unresolved thread), CI failures and merge
 conflicts (about an hour), and PRs ready to merge (quick, closing the PR).

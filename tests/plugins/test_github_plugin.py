@@ -25,6 +25,7 @@ from move_forward.plugin import (
 from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import (
+    Check,
     DerivedSnapshot,
     GitHubSnapshot,
     PullRequest,
@@ -167,6 +168,13 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
         file_lines=[0, 0],  # the JSON import predates the lines column
         merged_at=NOW,
         in_merge_queue=True,
+        checks=[
+            Check(
+                name="PR policy: guidelines",
+                state="FAILURE",
+                description="Review required. PR must have approval from primary reviewer.",
+            )
+        ],
     )
     gh = snapshot(
         mine=[full, pr(2)],
@@ -175,7 +183,7 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
     )
     db = Database(":memory:")
     save_json_snapshot(db, "github", gh)
-    db.migrate("github", MIGRATIONS[:-3])  # before the PR-table rebuild and team membership
+    db.migrate("github", MIGRATIONS[:-4])  # before the PR-table rebuild and team membership
     assert db.query("SELECT login FROM github_account")[0]["login"] == gh.login
     db.migrate("github", MIGRATIONS)
     store = PrRepository(db)
@@ -375,7 +383,7 @@ def test_each_files_changed_lines_are_kept() -> None:
 
 def test_the_mentioned_list_round_trips_and_the_rebuild_asks_for_a_fresh_collect() -> None:
     db = Database(":memory:")
-    db.migrate("github", MIGRATIONS[:-3])
+    db.migrate("github", MIGRATIONS[:-4])
     db.execute("INSERT INTO github_account VALUES (?)", ("me",))
     store = PrRepository(db)
     db.migrate("github", MIGRATIONS)
