@@ -23,7 +23,8 @@ names are related through it.
   with its own, and Add todo on the entry and each todo.
   Focus mode also shows the todos one at a time. While the notes are empty (just
   upgraded, say), it says how to import them.
-- **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw); git adds
+- **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw) and a field to
+  say why (Replace note, offering what it says now, once it says something); git adds
   Delete branches and git_stack Untrack for a stack. The stack stays on ice with the
   commits it was iced at until it's reopened; Reopen asks first when its branches are
   gone, since the commits are forgotten with it. Everything on ice is left out of the other
@@ -69,6 +70,7 @@ are done it's badged as probably done, which brings it back if it was snoozed or
 | `/actions/notes/todo_link` | `todo`, `input` (Jira key or PR URL) | Links the todo to the ticket or PR; a key in a project jira hasn't seen yet is looked up in Jira. |
 | `/actions/notes/ice` | `repo`, `branch`, optional `note` | Puts the branch on ice, with the rest of its stack and the other stacks in its git-stack group when git_stack knows them (git-stack's `restack`, `sync` and `push` act on the whole group), recording each branch's commit. |
 | `/actions/notes/ice_item` | `kind` (`pull_request`, `ticket` or `notes.entry`), `id`, optional `note` | Puts the PR, ticket or work entry on ice, with what it links. |
+| `/actions/notes/ice_note` | `ice` (its id), `input` | Says why it's on ice, in place of what's said now. |
 | `/actions/notes/thaw` | `ice` (its id, as the On ice panel's buttons have it) | Takes what's on ice off it. |
 
 ## Commands

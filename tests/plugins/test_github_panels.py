@@ -580,6 +580,7 @@ def test_iced_prs_are_left_out_of_my_pr_panels() -> None:
     actions = panel(dashboard, "notes.iced").items[0].actions
     assert [a.label for a in actions if a.group != "Importance"] == [
         "Reopen",
+        "Note",
         "Restore branches",
     ]
 

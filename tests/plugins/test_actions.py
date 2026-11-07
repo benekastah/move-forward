@@ -236,7 +236,7 @@ def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     assert _notes(config).ices() == []
     with pytest.raises(ActionError, match="not on ice"):
         run("notes/thaw", config, {"ice": str(ice.id)})
-    with pytest.raises(ActionError, match="no such stack"):
+    with pytest.raises(ActionError, match="nothing on ice has the id"):
         run("notes/thaw", config, {"ice": "wip"})
 
 
@@ -570,3 +570,16 @@ def test_the_jira_transition_button_moves_the_ticket_and_reports_what_jira_refus
         run("jira/transition", config, {"key": "APP-1", "to": "Nowhere"})
     with pytest.raises(ActionError, match="not a ticket key"):
         run("jira/transition", config, {"key": "APP-1; drop", "to": "Done"})
+
+
+def test_a_note_says_why_something_is_on_ice(config: Config, tmp_path: Path) -> None:
+    db = Database(tmp_path / "db")
+    migrate(config, db)
+    notes = NotesRepository(db)
+    ice_id = notes.add_ice("parked", date(2026, 1, 1), ICED_FROM_DASHBOARD_NOTE, [])
+    refresh.perform_action(config, db, "notes/ice_note", {"ice": str(ice_id), "input": " waiting "})
+    assert notes.ices()[0].note == "waiting"
+    with pytest.raises(ActionError, match="empty"):
+        refresh.perform_action(config, db, "notes/ice_note", {"ice": str(ice_id), "input": " "})
+    with pytest.raises(ActionError, match="not on ice"):
+        refresh.perform_action(config, db, "notes/ice_note", {"ice": "999", "input": "x"})

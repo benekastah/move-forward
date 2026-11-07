@@ -450,7 +450,17 @@ class Builder:
                     subtitle=f"{where} · iced {ice.iced_on.isoformat()}",
                     details=[ice.note] if ice.note else [],
                     badges=[f"{len(branches)} branches"] if branches else [],
-                    actions=[reopen],
+                    actions=[
+                        reopen,
+                        Action(
+                            name="notes/ice_note",
+                            label="Replace note" if ice.note else "Note",
+                            fields={"ice": str(ice.id)},
+                            input="Why it's on ice",
+                            # To pick and edit, rather than retype.
+                            suggestions=[ice.note] if ice.note else [],
+                        ),
+                    ],
                     # The `iced` keeps the item on the page; git and git_stack add deleting
                     # and untracking the branches. Not the PRs, tickets or entries iced: the
                     # item isn't about them for other plugins' buttons.
