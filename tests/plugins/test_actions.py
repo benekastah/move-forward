@@ -236,7 +236,7 @@ def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     assert _notes(config).ices() == []
     with pytest.raises(ActionError, match="not on ice"):
         run("notes/thaw", config, {"ice": str(ice.id)})
-    with pytest.raises(ActionError, match="no such stack"):
+    with pytest.raises(ActionError, match="nothing on ice has the id"):
         run("notes/thaw", config, {"ice": "wip"})
 
 

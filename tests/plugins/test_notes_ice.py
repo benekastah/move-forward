@@ -160,6 +160,17 @@ def test_icing_a_ticket_hides_the_prs_mentioning_it_and_the_entry_about_it() -> 
     assert (on_ice.title, on_ice.url) == ("APP-1 Do the thing", "https://jira/browse/APP-1")
 
 
+def test_on_ice_items_offer_to_replace_their_note() -> None:
+    config, db = _work()
+    _ice_item(config, db, "ticket", "APP-1")
+    [on_ice] = panel(build_dashboard(config, db, NOW), "notes.iced").items
+    [note] = [a for a in on_ice.actions if a.name == "notes/ice_note"]
+    assert (note.label, note.suggestions) == ("Replace note", ["iced from the dashboard"])
+    refresh.run_action(config, db, note.name, note.fields | {"input": "waiting on design"})
+    [on_ice] = panel(build_dashboard(config, db, NOW), "notes.iced").items
+    assert on_ice.details == ["waiting on design"]
+
+
 def test_icing_an_entry_hides_it_and_what_its_tickets_link() -> None:
     config, db = _work()
     _ice_item(config, db, "notes.entry", "APP-1 Fix")

@@ -133,7 +133,7 @@ def _ice_id(req: ActionRequest[NotesConfig]) -> int:
     try:
         return int(req.field("ice"))
     except ValueError as e:
-        raise ActionError(f"no such stack on ice: {req.fields['ice']!r}") from e
+        raise ActionError(f"nothing on ice has the id {req.fields['ice']!r}") from e
 
 
 def ice_note(req: ActionRequest[NotesConfig]) -> str:
@@ -143,7 +143,7 @@ def ice_note(req: ActionRequest[NotesConfig]) -> str:
     ice_id = _ice_id(req)
     found = next((i for i in notes.ices() if i.id == ice_id), None)
     if found is None:
-        raise ActionError("that stack is not on ice")
+        raise ActionError("that is not on ice")
     note = req.field("input").strip()
     if not note:
         raise ActionError("the note is empty")
@@ -158,7 +158,7 @@ def thaw(req: ActionRequest[NotesConfig]) -> str:
     ice_id = _ice_id(req)
     found = next((i for i in notes.ices() if i.id == ice_id), None)
     if found is None:
-        raise ActionError("that stack is not on ice")
+        raise ActionError("that is not on ice")
     notes.delete_ice(ice_id)
     return f"thawed {found.title}"
 

@@ -24,7 +24,7 @@ names are related through it.
   Focus mode also shows the todos one at a time. While the notes are empty (just
   upgraded, say), it says how to import them.
 - **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw) and a field to
-  say why; git adds
+  say why (Replace note, offering what it says now, once it says something); git adds
   Delete branches and git_stack Untrack for a stack. The stack stays on ice with the
   commits it was iced at until it's reopened; Reopen asks first when its branches are
   gone, since the commits are forgotten with it. Everything on ice is left out of the other

@@ -454,9 +454,11 @@ class Builder:
                         reopen,
                         Action(
                             name="notes/ice_note",
-                            label="Note",
+                            label="Replace note" if ice.note else "Note",
                             fields={"ice": str(ice.id)},
                             input="Why it's on ice",
+                            # To pick and edit, rather than retype.
+                            suggestions=[ice.note] if ice.note else [],
                         ),
                     ],
                     # The `iced` keeps the item on the page; git and git_stack add deleting
