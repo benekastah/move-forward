@@ -148,7 +148,7 @@ panel per plugin, so they flow across the page, the panel with the best item
 first, and each is badged with its place overall (`#1`, `#2`, ...); focus mode's
 Act now goes through them in that order. Each says what to
 do and why it's there ("quick, closes APP-12, alice waiting"), and anything
-else due on the same subject ("also: Fix CI"). Finishing something counts
+else due on the same subject ("also: Fix CI"), with its buttons. Finishing something counts
 most, then quick work, then someone waiting (more the longer they've waited);
 important work and a nearing due date add to that ("critical, alice waiting 3d,
 due in 2d"); blocked work ranks lower. An item about a unit of work (moving a
