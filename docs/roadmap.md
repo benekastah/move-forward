@@ -127,8 +127,11 @@ as `touched`, so it's fetched again at once.
     - Nothing when it isn't ready and auto-merge can't help.
 
     Only real preferences are settings, in `[github.merge]`, with `[github.merge.repos."owner/name"]`
-    overriding per repo: `method` (the repo's default unless set), `auto_merge`, and `delete_branch`
-    (the repo's default unless set, and never a branch with PRs based on it). Never `--admin`.
+    overriding per repo: `method`, `auto_merge`, and `delete_branch` (the repo's default unless set,
+    and never a branch with PRs based on it). Never `--admin`. `method`, e.g. `"squash"`, is a
+    preference for when several are allowed: a repo allowing just one uses that, and one that
+    doesn't allow the preferred method uses its default, `viewerDefaultMergeMethod`, so one
+    setting can serve every repo. The confirm says which method it will use.
 15. **A base merge isn't an answer.** Comments count as answered once they're older than my last
     push, by the head commit's date, so merging the base into a branch (Update branch, or by hand)
     clears them with nothing said. Read past merge commits: it needs their parents fetched. Then
