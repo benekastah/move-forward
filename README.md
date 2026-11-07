@@ -176,7 +176,7 @@ now stays first); the order is kept in the database, and focus mode follows
 it. A group or panel new since then goes after the one it followed by default.
 Panels that order by importance use the priority set on an item's subject first, then
 their own rank for ties.
-Every item with an entity subject, including a todo in the Notes panel or Focus mode, shows Not important,
+Every item with an entity subject but what's on ice, including a todo in the Notes panel or Focus mode, shows Not important,
 Important and Critical as one group of buttons (❕ / ❗️ / ‼️), highlighting the selected level. For an
 item about several entities, the choice applies to its first subject. Once one is set, Act
 now also offers Clear priority. Act now groups
