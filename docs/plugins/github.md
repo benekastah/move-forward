@@ -127,7 +127,7 @@ members as far as they're known, then recent committers; any login can be typed.
 | `/actions/github/update_branch` | `pr` (the URL of one of my open PRs that's behind its base) | Merges its base into its branch on GitHub (`gh pr update-branch`), not rebasing, so what's stacked on it isn't rewritten. |
 | `/actions/github/mark_ready` | `pr` (the URL of one of my draft PRs) | Takes it out of draft. |
 | `/actions/github/request_reviewer` | `pr` (the URL of one of my open PRs), `input` (a login) | Asks them to review it. |
-| `/actions/github/primary_reviewer` | `pr` (the URL of one of my open PRs, in a repo in `primary_reviewer_repos`), `input` (a login) | Assigns them in place of whoever else is assigned besides the author, and asks for their review unless they're already asked or have reviewed it. |
+| `/actions/github/primary_reviewer` | `pr` (the URL of one of my open PRs, in a repo in `primary_reviewer_repos`), `input` (a login) | Assigns them in place of whoever else is assigned besides the author, and asks for their review unless they're already asked or have approved it. |
 
 ## Act now
 
