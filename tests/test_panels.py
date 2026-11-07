@@ -44,7 +44,7 @@ def test_todos_put_close_outs_first_and_blocked_last() -> None:
     items = panel(dashboard, "notes.todos").items
     assert [i.title for i in items] == ["APP-1 almost", "APP-4 fine", "APP-2 mixed", "APP-3 stuck"]
     assert items[0].badges == ["close-out: 1 quick todo(s)"]
-    assert items[2].details == ["[quick] small", "[big] big one"]
+    assert [part.title for part in items[2].parts] == ["small", "big one"]
     assert items[3].badges == ["close-out: 1 quick todo(s)", BLOCKED_ON_REVIEWS]
 
 
