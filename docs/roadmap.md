@@ -121,7 +121,8 @@ as `touched`, so it's fetched again at once.
     `--admin`, and the branch stays for Cleanup.
 15. **A base merge isn't an answer.** Comments count as answered once they're older than my last
     push, by the head commit's date, so merging the base into a branch (Update branch, or by hand)
-    clears them with nothing said. Read past merge commits: it needs their parents fetched.
+    clears them with nothing said. Read past merge commits: it needs their parents fetched. Then
+    Update branch's confirm no longer needs to warn of it.
 16. **Run failed checks again.** `gh run rerun --failed` on CI failures, for checks whose URL
     names a run.
 
