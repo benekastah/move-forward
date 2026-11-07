@@ -13,9 +13,8 @@ updates this file in the same commit.
 git and git_stack both nominate merged branches for Act now, each those it can clean up: git leaves
 the ones git-stack tracks to git_stack's Clean.
 
-Core adds importance choices to entity items, but those about what hides things, and to their
-individual todo parts, and a
-Snooze to the items of a `snoozable` panel. Plugins can group their buttons with those of other plugins: notes' Put on ice joins git's
+Core adds importance choices to entity items and their individual todo parts (but not to
+items about what hides things), and a Snooze to the items of a `snoozable` panel. Plugins can group their buttons with those of other plugins: notes' Put on ice joins git's
 Delete under Disposition, and joins core's Snooze, Dismiss and Pin on Act now items.
 Emoji buttons retain their text labels in titles and accessible names.
 
