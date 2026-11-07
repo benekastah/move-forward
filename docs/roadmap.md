@@ -102,8 +102,6 @@ that needs a core one says so, and lands on top of it.
 2. **Undo what's set aside.** A place on the page listing what's snoozed and dismissed, each
    with a button to bring it back. Then Dismiss joins Snooze in the panels, and not before:
    it can't be undone until this exists.
-3. **Tick todos in Act now.** A close-out with several todos shows them as text, because Act
-   now drops an item's `parts`. Show them with their boxes, as the panel does.
 4. **Keep the buttons of `also`.** A second task on the same subject becomes words, losing its
    button (a ticket's Move to In Review under its What next item), where `then` keeps them.
 5. **Set a subject aside whole.** Snoozing an item brings the subject straight back with its

@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Tick off an entry's several todos in Act now
+
+A close-out with several todos now lists them in Act now, each with its Done box. In `mfd dump`,
+such an Act now item has them under `parts`, as the todos panel's does. A close-out with several
+todos that's snoozed or dismissed comes back once, as what's kept for it changed.
+
 ### An entry's several todos are only in its `parts`
 
 In `mfd dump`, the todos panel's item for an entry with several open todos no longer repeats them

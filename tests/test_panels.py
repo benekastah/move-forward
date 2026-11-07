@@ -271,7 +271,7 @@ def test_notes_panel_shows_each_todo_with_its_done_checkbox() -> None:
     assert "<ul class='item-parts'>" in html
     assert html.count("action='/actions/notes/todo_done'") == 2
     assert "small" in html and "big one" in html
-    assert "[quick] small" not in html  # the summary is replaced by actionable rows
+    assert "[quick] small" not in html  # the rows say it, with their buttons
 
 
 def test_todo_parts_put_the_prs_they_mention_first_in_bold() -> None:

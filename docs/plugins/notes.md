@@ -49,8 +49,8 @@ it without recording it.
 
 notes nominates entries whose open todos are all quick: close-outs, finishing the entry. A
 blocked one ranks lower until it's gone `[act_now] blocked_stale_days` untouched. An entry
-with one todo has its Done checkbox in Act now; one with several lists them as text, to tick
-off in the Todos panel.
+with one todo has its Done checkbox in Act now; one with several lists them, each with its own
+buttons, as the Todos panel does.
 
 ## Buttons
 

@@ -1,5 +1,6 @@
 """Core's Act now: ranking the plugins' nominations into a short list, and saying why."""
 
+import hashlib
 import json
 from datetime import datetime, timedelta
 
@@ -311,3 +312,49 @@ def test_equal_scores_keep_the_order_they_were_nominated_in_whatever_their_rank(
         "first",
         "second",
     ]
+
+
+def _close_out(*todos: str) -> Item:
+    return Item(
+        title="entry",
+        subjects=[Ref(kind="notes.entry", id="entry")],
+        signals=Signals(verb="Finish them", task="close_out", effort="minutes"),
+        parts=[Item(title=todo, subjects=[Ref(kind="notes.todo", id=todo)]) for todo in todos],
+    )
+
+
+def test_an_item_with_several_parts_keeps_them() -> None:
+    [panel] = act_now.panels([Nomination("notes", _close_out("one", "two"))])
+    assert [part.title for part in panel.items[0].parts] == ["one", "two"]
+
+
+def test_an_item_with_one_part_has_its_buttons_itself_so_lists_none() -> None:
+    [panel] = act_now.panels([Nomination("notes", _close_out("one"))])
+    assert panel.items[0].parts == []
+
+
+def test_a_joined_items_parts_are_listed_with_its_host() -> None:
+    entry = Ref(kind="notes.entry", id="entry")
+    pr = Ref(kind="pull_request", id="u")
+    host = Item(
+        title="PR", subjects=[pr], signals=Signals(verb="Reply", task="reply", waiting=["a"])
+    )
+
+    def units(ref: Ref) -> list[Ref]:
+        return [entry]
+
+    [panel] = act_now.panels(
+        [Nomination("github", host), Nomination("notes", _close_out("one", "two"))], units=units
+    )
+    assert [part.title for part in panel.items[0].parts] == ["one", "two"]
+
+
+def test_a_change_in_an_items_parts_makes_it_worth_another_look() -> None:
+    before = Nomination("notes", _close_out("one", "two")).fingerprint
+    assert Nomination("notes", _close_out("one", "three")).fingerprint != before
+
+
+def test_an_item_without_parts_keeps_its_fingerprint() -> None:
+    item = Item(title="t", badges=["b"], details=["d"])
+    seen = json.dumps(["t", ["b"], ["d"]])
+    assert Nomination("x", item).fingerprint == hashlib.sha256(seen.encode()).hexdigest()[:16]

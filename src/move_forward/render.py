@@ -480,7 +480,7 @@ def _item(
     if item.badges:
         parts.append("<div class='badges'>" + "".join(_badge(b) for b in item.badges) + "</div>")
     show_parts = len(item.parts) > 1
-    if item.details and not show_parts:
+    if item.details:
         parts.append(
             "<ul class='details'>" + "".join(f"<li>{_e(d)}</li>" for d in item.details) + "</ul>"
         )
