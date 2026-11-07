@@ -1,4 +1,4 @@
 #!/bin/sh
-# Run every check before pushing (skip with `git push --no-verify`); see dev.py's pre_push.
+# Run every check before pushing to main (skip with `git push --no-verify`); see dev.py's pre_push.
 if command -v py > /dev/null 2>&1; then exec py -3 dev.py pre-push; fi
 exec python3 dev.py pre-push
