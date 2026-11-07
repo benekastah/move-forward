@@ -7,9 +7,9 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ### Clear a team's channel on the contacts page
 
-Posting `/actions/slack/set_team_channel` with both `channel_name` and `channel_id` blank now
-forgets the team's channel, as `mfd slack team unset` does, rather than failing. A script relying
-on that failure should check its fields first.
+The contacts page has a Clear button for a team with a channel, which asks first. Scripts can post
+`team` to `/actions/slack/clear_team_channel`. `set_team_channel` with both fields blank still
+fails. Nothing to change.
 
 ### Merged stack branches reach Act now
 

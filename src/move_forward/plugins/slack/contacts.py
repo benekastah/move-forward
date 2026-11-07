@@ -3,7 +3,7 @@ what `mfd slack` shares with them."""
 
 import re
 
-from ...api import ActionError, ActionRequest, Context, Graph, Model, html
+from ...api import Action, ActionError, ActionRequest, Context, Graph, Model, html
 from ...api.kinds import PERSON
 from . import client, oauth, scopes
 from .config import SlackConfig
@@ -50,10 +50,17 @@ def set_team_channel(slack: SlackRepository, team: str, name: str, channel_id: s
     channel_name = _optional(name, CHANNEL_NAME_RE, "channel name, e.g. #team-web")
     channel = _optional(channel_id, CHANNEL_ID_RE, "channel id, e.g. C0123456")
     if channel_name is None and channel is None:
-        slack.unset_team_channel(team)
-        return f"forgot {team}'s channel"
+        raise ActionError("a channel name or id is needed")
     slack.set_team_channel(team, channel_name, channel)
     return f"{team}'s pings go to {channel_name or channel}"
+
+
+def clear_team_channel_action(req: ActionRequest[SlackConfig]) -> str:
+    """Forget a team's channel, as `mfd slack team unset` does."""
+    team = req.field("team")
+    if not SlackRepository(req.ctx.db).unset_team_channel(team):
+        raise ActionError(f"{team} has no channel set")
+    return f"forgot {team}'s channel"
 
 
 def set_contact_action(req: ActionRequest[SlackConfig]) -> str:
@@ -137,6 +144,21 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
                     ("channel_name", channel.channel_name or "" if channel else "", "#team-web"),
                     ("channel_id", channel.channel_id or "" if channel else "", "C0123456"),
                 ],
+            )
+            + (
+                html.buttons(
+                    [
+                        Action(
+                            name="slack/clear_team_channel",
+                            label="Clear",
+                            fields={"team": team},
+                            confirm=f"Forget {team}'s channel?",
+                        )
+                    ],
+                    back=CONTACTS_PATH,
+                )
+                if channel
+                else ""
             )
             + "</td></tr>"
         )
