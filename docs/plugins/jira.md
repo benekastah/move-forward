@@ -77,7 +77,7 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
 jira nominates the status changes its PRs suggest, quick, closing the ticket when it goes
 to Closed, and its rollouts ("Advance the rollout", "Finish the rollout"). From What next
 it nominates incidents (important, critical once escalated), escalated bugs (important),
-tickets due within the week (the due date counting more as the end of its day nears) and
+tickets due within `[act_now] due_warning_days` (the due date counting more as the end of its day nears) and
 blocked tickets, which Act now ranks down until they've gone `[act_now] blocked_stale_days`
 untouched.
 
