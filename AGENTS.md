@@ -76,7 +76,9 @@ is what's left to build.
 - **One kind of change per PR.** Don't change core in the PR that adds or
   changes a plugin. If a plugin needs something new from core (a hook, a
   `Context` field, a graph method), land that first, on its own, with its own
-  tests, and stack the plugin PR on it (`git stack branch`).
+  tests, and stack the plugin PR on it (`git stack branch`, from
+  [git-stack](https://github.com/benekastah/git-stack/), which keeps stacked branches and
+  their PRs in order).
 - **Keep the docs up to date as you code**, in the same commit as the change,
   not in a docs pass afterwards:
   - the README for core: its config keys, commands, command-line options,
