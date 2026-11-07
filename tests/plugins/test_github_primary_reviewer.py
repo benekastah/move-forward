@@ -216,3 +216,16 @@ def test_github_refusing_is_shown(monkeypatch: pytest.MonkeyPatch) -> None:
     config, db = stored(github=snapshot(mine=[pr(1)]), primary_reviewer_repos=[REPO])
     with pytest.raises(ActionError, match="no such user"):
         perform_action(config, db, PRIMARY_REVIEWER, {"pr": URL, "input": "alice"})
+
+
+def test_one_of_my_open_prs_is_read_as_the_whole_snapshot_has_it() -> None:
+    mine = pr(
+        1, assignees=[ME, "alice"], labels=["x"], requested_users=["bob"], requested_teams=["t"]
+    )
+    other = pr(2, assignees=["carol"])
+    _, db = stored(github=snapshot(mine=[mine, other], direct_requests=[pr(3, author="bob")]))
+    repository = PrRepository(db)
+    loaded = repository.load()
+    assert loaded is not None
+    assert repository.my_open_pr(URL) == loaded.mine[0]
+    assert repository.my_open_pr(f"https://github.com/{REPO}/pull/3") is None

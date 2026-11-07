@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from datetime import datetime
+from sqlite3 import Row
 from typing import Literal, cast
 
 from ...api import Database, Params
@@ -180,108 +181,124 @@ class PrRepository:
                     marks = ", ".join("?" * len(rows[table][0]))
                     conn.executemany(f"INSERT INTO {table} VALUES ({marks})", rows[table])
 
-    def _children(self, table: str) -> defaultdict[Key, list[dict[str, object]]]:
+    def _children(
+        self, table: str, key: Key | None = None
+    ) -> defaultdict[Key, list[dict[str, object]]]:
+        """A child table's rows by PR; just `key`'s, given one."""
         found: defaultdict[Key, list[dict[str, object]]] = defaultdict(list)
-        query = f"SELECT * FROM {table} ORDER BY list, url, position"
-        for row in self._db.query(query):
+        where = "WHERE list = ? AND url = ? " if key else ""
+        query = f"SELECT * FROM {table} {where}ORDER BY list, url, position"
+        for row in self._db.query(query, key or ()):
             found[(row["list"], row["url"])].append(dict(row))
         return found
+
+    def _pull_request(
+        self, row: Row, found: dict[str, defaultdict[Key, list[dict[str, object]]]]
+    ) -> PullRequest:
+        """A `github_prs` row with its children, by table."""
+        key: Key = (row["list"], row["url"])
+        return PullRequest(
+            url=row["url"],
+            number=row["number"],
+            title=row["title"],
+            repo=row["repo"],
+            default_branch=row["default_branch"],
+            is_draft=bool(row["is_draft"]),
+            state=row["state"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+            merged_at=_when(row["merged_at"]),
+            body=row["body"],
+            head=row["head"],
+            head_oid=row["head_oid"],
+            base=row["base"],
+            author=row["author"],
+            size=row["size"],
+            changed_files=row["changed_files"],
+            labels=[cast(str, r["label"]) for r in found["github_pr_labels"][key]],
+            assignees=[cast(str, r["login"]) for r in found["github_pr_assignees"][key]],
+            mergeable=row["mergeable"],
+            merge_state=row["merge_state"],
+            review_decision=row["review_decision"],
+            in_merge_queue=bool(row["in_merge_queue"]),
+            requested_users=[
+                cast(str, r["name"])
+                for r in found["github_pr_requests"][key]
+                if r["kind"] == "user"
+            ],
+            requested_teams=[
+                cast(str, r["name"])
+                for r in found["github_pr_requests"][key]
+                if r["kind"] == "team"
+            ],
+            reviews=[
+                Review(
+                    author=cast(str | None, r["author"]),
+                    state=cast(str, r["state"]),
+                    submitted_at=_when(cast(str | None, r["submitted_at"])),
+                )
+                for r in found["github_pr_reviews"][key]
+            ],
+            threads=[
+                Thread(
+                    resolved=bool(r["resolved"]),
+                    outdated=bool(r["outdated"]),
+                    path=cast(str | None, r["path"]),
+                    author=cast(str | None, r["author"]),
+                    body=cast(str, r["body"]),
+                    url=cast(str | None, r["comment_url"]),
+                    created_at=_when(cast(str | None, r["created_at"])),
+                    comment_count=cast(int, r["comment_count"]),
+                )
+                for r in found["github_pr_threads"][key]
+            ],
+            rollup_state=row["rollup_state"],
+            checks=[
+                Check(
+                    name=cast(str, r["name"]),
+                    state=cast(str, r["state"]),
+                    url=cast(str | None, r["check_url"]),
+                    description=cast(str | None, r["description"]),
+                )
+                for r in found["github_pr_checks"][key]
+            ],
+            last_commit_at=_when(row["last_commit_at"]),
+            events=[
+                TimelineEvent.model_validate(
+                    {
+                        "type": r["type"],
+                        "at": r["at"],
+                        "actor": r["actor"],
+                        "reviewer_kind": r["reviewer_kind"],
+                        "reviewer": r["reviewer"],
+                        "reason": r["reason"],
+                        "state": r["state"],
+                        "has_body": r["has_body"],
+                    }
+                )
+                for r in found["github_pr_events"][key]
+            ],
+            files=[cast(str, r["path"]) for r in found["github_pr_files"][key]],
+            file_lines=[cast(int, r["lines"]) for r in found["github_pr_files"][key]],
+        )
+
+    def my_open_pr(self, url: str) -> PullRequest | None:
+        """One of my open PRs as the last refresh found it; None if it isn't one."""
+        key: Key = ("mine", url)
+        rows = self._db.query("SELECT * FROM github_prs WHERE list = ? AND url = ?", key)
+        if not rows:
+            return None
+        return self._pull_request(rows[0], {t: self._children(t, key) for t in CHILD_TABLES})
 
     def load(self) -> GitHubSnapshot | None:
         """What the last refresh found; None before one."""
         account = self._db.query("SELECT login FROM github_account")
         if not account:
             return None
-        labels, requests = self._children("github_pr_labels"), self._children("github_pr_requests")
-        reviews, threads = self._children("github_pr_reviews"), self._children("github_pr_threads")
-        checks, events = self._children("github_pr_checks"), self._children("github_pr_events")
-        files = self._children("github_pr_files")
-        assignees = self._children("github_pr_assignees")
+        found = {table: self._children(table) for table in CHILD_TABLES}
         lists: dict[str, list[PullRequest]] = {name: [] for name in LISTS}
         for row in self._db.query("SELECT * FROM github_prs ORDER BY list, position"):
-            key: Key = (row["list"], row["url"])
-            lists[row["list"]].append(
-                PullRequest(
-                    url=row["url"],
-                    number=row["number"],
-                    title=row["title"],
-                    repo=row["repo"],
-                    default_branch=row["default_branch"],
-                    is_draft=bool(row["is_draft"]),
-                    state=row["state"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    updated_at=datetime.fromisoformat(row["updated_at"]),
-                    merged_at=_when(row["merged_at"]),
-                    body=row["body"],
-                    head=row["head"],
-                    head_oid=row["head_oid"],
-                    base=row["base"],
-                    author=row["author"],
-                    size=row["size"],
-                    changed_files=row["changed_files"],
-                    labels=[cast(str, r["label"]) for r in labels[key]],
-                    assignees=[cast(str, r["login"]) for r in assignees[key]],
-                    mergeable=row["mergeable"],
-                    merge_state=row["merge_state"],
-                    review_decision=row["review_decision"],
-                    in_merge_queue=bool(row["in_merge_queue"]),
-                    requested_users=[
-                        cast(str, r["name"]) for r in requests[key] if r["kind"] == "user"
-                    ],
-                    requested_teams=[
-                        cast(str, r["name"]) for r in requests[key] if r["kind"] == "team"
-                    ],
-                    reviews=[
-                        Review(
-                            author=cast(str | None, r["author"]),
-                            state=cast(str, r["state"]),
-                            submitted_at=_when(cast(str | None, r["submitted_at"])),
-                        )
-                        for r in reviews[key]
-                    ],
-                    threads=[
-                        Thread(
-                            resolved=bool(r["resolved"]),
-                            outdated=bool(r["outdated"]),
-                            path=cast(str | None, r["path"]),
-                            author=cast(str | None, r["author"]),
-                            body=cast(str, r["body"]),
-                            url=cast(str | None, r["comment_url"]),
-                            created_at=_when(cast(str | None, r["created_at"])),
-                            comment_count=cast(int, r["comment_count"]),
-                        )
-                        for r in threads[key]
-                    ],
-                    rollup_state=row["rollup_state"],
-                    checks=[
-                        Check(
-                            name=cast(str, r["name"]),
-                            state=cast(str, r["state"]),
-                            url=cast(str | None, r["check_url"]),
-                            description=cast(str | None, r["description"]),
-                        )
-                        for r in checks[key]
-                    ],
-                    last_commit_at=_when(row["last_commit_at"]),
-                    events=[
-                        TimelineEvent.model_validate(
-                            {
-                                "type": r["type"],
-                                "at": r["at"],
-                                "actor": r["actor"],
-                                "reviewer_kind": r["reviewer_kind"],
-                                "reviewer": r["reviewer"],
-                                "reason": r["reason"],
-                                "state": r["state"],
-                                "has_body": r["has_body"],
-                            }
-                        )
-                        for r in events[key]
-                    ],
-                    files=[cast(str, r["path"]) for r in files[key]],
-                    file_lines=[cast(int, r["lines"]) for r in files[key]],
-                )
-            )
+            lists[row["list"]].append(self._pull_request(row, found))
         members = [r["login"] for r in self._db.query("SELECT login FROM github_team_members")]
         memberships: dict[str, list[str]] = {
             row["team"]: []

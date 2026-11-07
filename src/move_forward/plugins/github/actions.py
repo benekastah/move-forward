@@ -23,8 +23,7 @@ LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?")
 def _my_open_pr(req: ActionRequest[GitHubConfig]) -> PullRequest:
     """The PR the `pr` field names by URL, if it's one of my open ones."""
     url = req.field("pr")
-    snapshot = PrRepository(req.ctx.db).load()
-    found = next((pr for pr in snapshot.mine if pr.url == url), None) if snapshot else None
+    found = PrRepository(req.ctx.db).my_open_pr(url)
     if found is None:
         raise ActionError(f"{url} isn't one of my open PRs")
     return found
