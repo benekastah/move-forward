@@ -41,10 +41,12 @@ PUBLIC_DOMAINS = frozenset(
         "pm.me",
         "proton.me",
         "protonmail.com",
+        "users.noreply.github.com",
         "yahoo.com",
     }
 )
-"""Domains anyone can have an address at, so all of one is no one's type."""
+"""Domains anyone can have an address at, so all of one is no one's type. GitHub's private commit
+addresses are one person each, but everyone with one shares the domain."""
 
 
 def contact_type(text: str) -> str:
@@ -86,6 +88,14 @@ class PeopleConfig(Strict):
         return {contact_type(name): importance for name, importance in value.items()}
 
 
+def _tool_type(text: str | None) -> str | None:
+    """A tool's contact type as one of mine would be kept; None when it can't be one."""
+    try:
+        return contact_type(text) if text else None
+    except ValueError:
+        return None
+
+
 class _PersonView(Model):
     """What core reads of a `person`."""
 
@@ -120,8 +130,9 @@ class Contacts:
         if labelled is not None:
             found = self._labels[labelled]
         else:
-            same = self._graph.view_same_person(person.id, _PersonView)
-            found = next((p.contact_type for p in [person, *same] if p.contact_type), None)
+            # Where tools disagree, the first in the graph's order: the plugins' order.
+            same = self._graph.view_same_person(person.id, _PersonView) or [person]
+            found = next((t for p in same if (t := _tool_type(p.contact_type))), None)
         importance = self._types.get(found, 0) if found else 0
         return Contact(email, found, importance, labelled)
 
@@ -163,7 +174,7 @@ class Contacts:
                 name=CONTACT_ACTION,
                 label="Set type",
                 fields={},
-                input="customer",
+                input=next(iter(self._types), "customer"),
                 suggestions=list(self._types),
                 choices=scopes,
                 group="Contact",
@@ -171,6 +182,14 @@ class Contacts:
             *(
                 [
                     Action(
+                        name=CLEAR_CONTACT_ACTION,
+                        label=f"Clear type for everyone at {contact.labelled[1:]}",
+                        fields={"who": contact.labelled},
+                        group="Contact",
+                        confirm=f"Clear the type of everyone at {contact.labelled[1:]}?",
+                    )
+                    if contact.labelled.startswith("@")
+                    else Action(
                         name=CLEAR_CONTACT_ACTION,
                         label="Clear type",
                         fields={"who": contact.labelled},

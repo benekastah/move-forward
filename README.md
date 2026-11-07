@@ -214,7 +214,8 @@ address many people share (`noreply@...`) joins no one.
 
 An item about a person shows their contact type as a badge, and a Set type button that sets it
 for that address or for everyone at its domain (not for a domain anyone can have an address at,
-like gmail.com). Once one is set, a Clear type button goes with it. A type I set beats one a tool
+like gmail.com). Once one is set, a Clear type button goes with it; one set on a domain says so, and
+asks first, as it clears everyone there. A type I set beats one a tool
 gives, and one on an address beats one on its domain. The type's importance raises the item in Act
 now and in panels ordered by importance. It never lowers what a plugin said, and a priority I set
 on the item replaces it.

@@ -80,7 +80,10 @@ def test_a_type_is_kept_on_an_address_or_a_domain(text: str, key: str) -> None:
     assert people.contact_key(text) == key
 
 
-@pytest.mark.parametrize("text", ["@gmail.com", "noreply@acme.com", "acme.com", "@acme", ""])
+@pytest.mark.parametrize(
+    "text",
+    ["@gmail.com", "@users.noreply.github.com", "noreply@acme.com", "acme.com", "@acme", ""],
+)
 def test_what_says_nothing_about_who_someone_is_takes_no_type(text: str) -> None:
     with pytest.raises(ValueError, match=r"anyone can have|isn't one person"):
         people.contact_key(text)
@@ -118,6 +121,19 @@ def test_a_crm_saying_who_someone_is_counts_for_their_mail() -> None:
     assert _contacts(SENDER, crm, _thread(SENDER)).importance(THREAD) == 1
 
 
+def test_a_tools_type_is_read_as_mine_would_be() -> None:
+    crm = _person("crm.example.com/42", "alice@acme.com", "Customer")
+    contact = _contacts(SENDER, crm, _thread(SENDER)).of(THREAD)
+    assert contact is not None and (contact.contact_type, contact.importance) == ("customer", 1)
+    odd = _person("crm.example.com/42", "alice@acme.com", "<b>")
+    assert (
+        _contacts(SENDER, odd, _thread(SENDER))
+        .additions(Item(title="Hello", subjects=[THREAD]))
+        .badges
+        == []
+    )
+
+
 def test_a_type_not_in_the_config_gives_no_importance() -> None:
     assert (
         _contacts(SENDER, _thread(SENDER), labels={"@acme.com": "friend"}).importance(THREAD) == 0
@@ -144,6 +160,18 @@ def test_an_item_shows_its_type_and_offers_to_set_it_for_the_person_or_their_dom
     assert set_type.suggestions == ["customer", "partner", "vendor"]
     assert clear.name == people.CLEAR_CONTACT_ACTION
     assert clear.fields == {"who": "@acme.com"}
+    # It clears everyone there, so it says so and asks.
+    assert clear.label == "Clear type for everyone at acme.com" and clear.confirm
+
+
+def test_clearing_one_address_asks_nothing() -> None:
+    contacts = _contacts(SENDER, _thread(SENDER), labels={"alice@acme.com": "customer"})
+    _, clear = contacts.additions(Item(title="Hello", subjects=[THREAD])).actions
+    assert (clear.label, clear.fields, clear.confirm) == (
+        "Clear type",
+        {"who": "alice@acme.com"},
+        None,
+    )
 
 
 def test_a_public_domain_is_not_offered_and_nothing_is_cleared_without_a_label() -> None:
@@ -280,10 +308,13 @@ def test_the_page_badges_ranks_and_offers_to_set_the_type_of_who_an_item_is_abou
     [ranked] = inbox.act_now()
     for item in (shown, ranked):
         assert "customer" in item.badges
-        assert {a.label for a in item.actions} >= {"Set type", "Clear type"}
+        assert {a.label for a in item.actions} >= {
+            "Set type",
+            "Clear type for everyone at acme.com",
+        }
     assert "why: important" in ranked.details
     html = inbox.render_item(shown)
-    assert "<select name='choice'>" in html and "everyone at acme.com" in html
+    assert "<select name='choice'" in html and "everyone at acme.com" in html
 
 
 def test_nothing_is_added_while_no_one_is_set() -> None:
@@ -305,7 +336,8 @@ def test_the_buttons_set_and_clear_a_type() -> None:
         "@acme.com: customer"
     )
     assert ContactRepository(db).all() == {"@acme.com": "customer"}
-    refresh.perform_action(config, db, people.CLEAR_CONTACT_ACTION, {"who": "@acme.com"})
+    cleared = refresh.perform_action(config, db, people.CLEAR_CONTACT_ACTION, {"who": "@Acme.com"})
+    assert cleared.notice == "@acme.com: type cleared"
     assert ContactRepository(db).all() == {}
 
 

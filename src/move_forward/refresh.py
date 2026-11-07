@@ -605,8 +605,12 @@ def _act_now_action(
                 return _set_priority(db, fields, now)
             if action == "contact":
                 return _set_contact(db, fields, now)
-            ContactRepository(db).clear(fields["who"])
-            return ActionResult("type cleared")
+            try:
+                who = people.contact_key(fields["who"])
+            except ValueError as err:
+                raise ActionError(str(err)) from err
+            ContactRepository(db).clear(who)
+            return ActionResult(f"{who}: type cleared")
         except KeyError as err:
             raise ActionError(f"missing field {err}") from err
     try:
