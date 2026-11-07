@@ -383,3 +383,20 @@ def test_put_on_ice_from_stacks_ices_the_stack_with_or_without_a_pr() -> None:
         "branch": "me/APP-1-branch",
     }
     assert ice["me/no-pr: tracked, no PR"].name == "notes/ice"
+
+
+def test_a_merged_stack_branch_reaches_act_now_with_clean() -> None:
+    built = dashboard(
+        github=snapshot(),
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/old")]),
+        stacks=stacks(
+            StackBranch(name="main"),
+            StackBranch(name="me/old", parent="main", status="merged"),
+            StackBranch(name="me/behind", parent="main", status="needs-restack"),
+        ),
+    )
+    [item] = built.act_now()
+    assert item.title == "Clean up: me/old: merged"
+    clean = next(a for a in item.actions if a.name == "git_stack/stack_clean")
+    assert clean.confirm is not None
+    assert clean.fields["repo"] == "/src/widgets"

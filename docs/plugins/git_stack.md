@@ -30,6 +30,14 @@ have deleted), with its parent, status and, on a stack's bottom branch, its grou
 Each item is also about the branch's `git.branch`, so notes' Put on ice ices its whole stack, as it
 does from Local work.
 
+A merged branch has a Clean button of its own too, the same as its repo's.
+
+## Act now
+
+git_stack nominates the branches git-stack sees merged, quick to clean up.
+
+## Other plugins' items
+
 On notes' On ice panel, git_stack adds Untrack to a stack while git-stack tracks its
 branches.
 

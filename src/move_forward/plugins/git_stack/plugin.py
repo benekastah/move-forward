@@ -7,12 +7,14 @@ from typing import ClassVar
 from ...api import (
     API_VERSION,
     ActionHandler,
+    ActNowRequest,
     ChangedRequest,
     CollectAfterRequest,
     EntitiesRequest,
     Entity,
     Event,
     EventsRequest,
+    Item,
     ItemActionsRequest,
     ItemAdditions,
     KindSpec,
@@ -86,6 +88,11 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     def panels(self, req: PanelsRequest[GitStackConfig, GitStackSnapshot]) -> list[Panel]:
         snapshot, graph = req.snapshot, req.graph
         return [Builder(snapshot, graph).stacks()]
+
+    def act_now(self, req: ActNowRequest[GitStackConfig, GitStackSnapshot]) -> list[Item]:
+        """Merged branches, quick to clean up, as git nominates the merged branches it can
+        delete; the rest of Stacks is news rather than something to do."""
+        return [item for panel in req.panels for item in panel.items if item.signals]
 
     def events(self, req: EventsRequest[GitStackConfig, GitStackSnapshot]) -> list[Event]:
         before, after = req.before, req.after

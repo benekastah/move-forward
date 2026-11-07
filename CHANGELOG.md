@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Merged stack branches reach Act now
+
+A merged branch git-stack tracks now reaches Act now as "Clean up", and has a Clean button on its
+Stacks item, as other merged branches have Delete. Nothing to change.
+
 ### Put on ice from Stacks ices the stack
 
 Put on ice on a Stacks item now ices the branch's whole stack, as it does from Local work. It used

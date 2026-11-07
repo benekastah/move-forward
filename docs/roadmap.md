@@ -134,8 +134,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
 
 18. **Pull.** On a branch whose PR moved on GitHub ("pull it"), fast-forward only, and refused
     with local changes in the way.
-19. **Merged stack branches in Act now.** A merged branch git-stack tracks has no Delete and no
-    Act now slot, unlike any other merged branch. Nominate them, with Clean.
 20. **Restack.** `git stack restack`, with a confirm, on a branch that needs it and on a conflict
     that says to. It stays local: `sync` and `push` force-push (with lease), which the rule
     against force-pushing from a button forbids unless that's changed.
