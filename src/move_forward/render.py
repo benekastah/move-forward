@@ -80,7 +80,7 @@ RELOAD_SCRIPT = (
     # then: a failed fetch (or one that takes over FETCH_MS) is retried, after 1, 2, 4 and
     # 8 seconds, and when all fail, the next round tries again. One timer is pending at a
     # time, and each fetch has its own AbortController and timeout, cleared when it ends.
-    # The swap waits while something is being dragged or typed in. Dashboard action forms
+    # The swap waits while something is being dragged or a field has the focus. Dashboard action forms
     # use the same swap after their POST redirect, restoring scroll instead of navigating
     # to its anchor. The old elements go with their listeners; the other scripts bind the
     # new ones on `mfd:replaced`.
