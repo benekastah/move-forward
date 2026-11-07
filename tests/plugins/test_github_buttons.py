@@ -53,8 +53,6 @@ def test_only_a_draft_of_mine_can_be_marked_ready(monkeypatch: pytest.MonkeyPatc
     assert commands == []
 
 
-
-
 def test_a_pr_held_as_behind_its_base_can_be_updated(monkeypatch: pytest.MonkeyPatch) -> None:
     behind = pr(1, merge_state="BEHIND", review_decision="APPROVED")
     built = dashboard(github=snapshot(mine=[behind]))
