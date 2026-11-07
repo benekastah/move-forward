@@ -624,23 +624,25 @@ class Builder:
                 problems.append(f"worth splitting: {pr.size} lines")
             elif pr.size >= self.config.split_pr_suggest_lines:
                 problems.append(f"may need splitting: {pr.size} lines")
-            if (
+            may_be_ready = (
                 pr.is_draft
                 and pr.rollup_state == "SUCCESS"
                 and not unresolved_threads(pr, self.config.ignored_reviewers)
                 and not any(e.open_todos for e in self._entries(pr))
-            ):
+            )
+            if may_be_ready:
                 problems.append(MAY_BE_READY)
             if problems or pr.is_draft:
                 item = _housekeeping_item(self.now, pr, problems)
-                if MAY_BE_READY in problems:
+                if may_be_ready:
                     ready = Action(
                         name=MARK_READY,
                         label="Ready for review",
                         fields={"pr": pr.url},
-                        confirm=f"Mark {pr.title} ready for review? Its reviewers are told.",
+                        confirm=f"Mark {pr.title} ready for review? Requested reviewers and"
+                        " code owners are notified.",
                     )
-                    item = item.model_copy(update={"actions": [ready]})
+                    item = item.model_copy(update={"actions": [*item.actions, ready]})
                 items[pr.url] = item
 
         # Include parents even when they have no housekeeping flags, so a draft's
