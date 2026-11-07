@@ -91,8 +91,8 @@ def update_branch(req: ActionRequest[GitHubConfig]) -> ActionResult:
 def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     """Make `input`, a login, the PR's primary reviewer, in place of any other. They're asked
     to review too, as they must approve, unless they've been asked or have approved it:
-    asking again would ask for a review already given. A comment or a dismissed approval
-    isn't that, so they're asked."""
+    asking again would ask for an approval already given. Any other latest review (a
+    comment, changes requested, a dismissed approval) gets them asked."""
     pr = _my_open_pr(req)
     login = _login(req, pr)
     if not req.ctx.config.has_primary_reviewer(pr.repo):
