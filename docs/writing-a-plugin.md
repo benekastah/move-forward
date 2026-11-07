@@ -342,7 +342,7 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
   unless the plugin's `act_now` nominates it.
 - An item's `parts` (a work entry's todos) are listed beneath it when there are several, on the
   dashboard and in Act now, and shown one at a time in focus mode, each with its own buttons.
-  Their titles count towards what brings back a snoozed item, so `details` needn't repeat them.
+  A part listed beneath its item doesn't repeat a button the item has. Their titles count towards what brings back a snoozed item, so `details` needn't repeat them.
 
 ### Act now
 

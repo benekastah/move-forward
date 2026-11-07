@@ -487,3 +487,17 @@ def test_an_items_details_show_alongside_its_parts() -> None:
     html = render.item_html(item)
     assert "why: quick" in html
     assert "<ul class='item-parts'>" in html
+
+
+def test_a_listed_part_does_not_repeat_its_items_button() -> None:
+    add = page.Action(name="notes/todo_add", label="Add todo", fields={"entry": "e"}, input="New")
+    done = page.Action(name="notes/todo_done", label="Done", fields={"todo": "1"}, checkbox=True)
+    opened = add.model_copy(update={"fields": {**add.fields, "opened": "{}"}})
+    item = page.Item(
+        title="e",
+        actions=[opened],
+        parts=[page.Item(title="one", actions=[done, add]), page.Item(title="two", actions=[add])],
+    )
+    html = render.item_html(item)
+    assert html.count("/actions/notes/todo_add") == 1
+    assert html.count("/actions/notes/todo_done") == 1
