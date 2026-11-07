@@ -227,6 +227,8 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("notes/todo_done", True, False),
         ("notes/todo_delete", False, False),
         ("notes/todo_link", False, False),
+        ("notes/todo_size", False, False),
+        ("notes/todo_size", False, False),
         ("notes/todo_add", False, False),
     ]
     todo_id = part.actions[0].fields["todo"]
@@ -242,6 +244,8 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         "notes/todo_done",
         "notes/todo_delete",
         "notes/todo_link",
+        "notes/todo_size",
+        "notes/todo_size",
         "notes/todo_add",
         "notes/ice_item",
     ]
@@ -343,6 +347,8 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
         "notes/todo_done",
         "notes/todo_delete",
         "notes/todo_link",
+        "notes/todo_size",
+        "notes/todo_size",
         "notes/todo_add",
     ]
     assert part.actions[2].input == "Jira key or PR URL"

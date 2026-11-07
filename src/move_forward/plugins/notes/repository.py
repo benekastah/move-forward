@@ -495,6 +495,9 @@ class NotesRepository:
             (on.isoformat() if on else None, todo_id),
         )
 
+    def set_todo_size(self, todo_id: int, size: Size) -> None:
+        self._db.execute("UPDATE notes_todos SET size = ? WHERE id = ?", (size, todo_id))
+
     def delete_todo(self, todo_id: int) -> None:
         self._db.execute("DELETE FROM notes_todos WHERE id = ?", (todo_id,))
 

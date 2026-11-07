@@ -583,3 +583,24 @@ def test_a_note_says_why_something_is_on_ice(config: Config, tmp_path: Path) -> 
         refresh.perform_action(config, db, "notes/ice_note", {"ice": str(ice_id), "input": " "})
     with pytest.raises(ActionError, match="not on ice"):
         refresh.perform_action(config, db, "notes/ice_note", {"ice": "999", "input": "x"})
+
+
+def test_a_todo_is_sized_as_its_added_and_afterwards(config: Config, tmp_path: Path) -> None:
+    db = Database(tmp_path / "db")
+    migrate(config, db)
+    notes = NotesRepository(db)
+    notes.add_entry("work", date(2026, 1, 1), "inferred", None, [])
+    add = {"entry": "work", "input": "small", "choice": "quick"}
+    refresh.perform_action(config, db, "notes/todo_add", add)
+    refresh.perform_action(
+        config, db, "notes/todo_add", {"entry": "work", "input": "none", "choice": ""}
+    )
+    small, unsized = notes.entries()[0].todos
+    assert (small.size, unsized.size) == ("quick", None)
+    refresh.perform_action(config, db, "notes/todo_size", {"todo": str(unsized.id), "size": "big"})
+    assert notes.entries()[0].todos[1].size == "big"
+    for bad in ("", "huge"):
+        with pytest.raises(ActionError, match="size must be"):
+            refresh.perform_action(
+                config, db, "notes/todo_size", {"todo": str(small.id), "size": bad}
+            )

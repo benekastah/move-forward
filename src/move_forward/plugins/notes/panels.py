@@ -36,8 +36,8 @@ def _by_pr(conditions: list[Condition]) -> dict[str, list[str]]:
 
 
 def todo_actions(todo: Todo, entry: str, suggested: bool = False) -> list[Action]:
-    """A todo's checkbox (Done, or undone once it's done) and, while open, its Delete, Link and
-    Add todo buttons. The todo is addressed by id.
+    """A todo's checkbox (Done, or undone once it's done) and, while open, its Delete, Link, size
+    and Add todo buttons. The todo is addressed by id.
 
     `suggested` draws the Done box bigger, when every PR the todo is about is merged or closed.
     """
@@ -59,24 +59,42 @@ def todo_actions(todo: Todo, entry: str, suggested: bool = False) -> list[Action
             confirm=f"Drop the todo “{todo.text}” from {entry}? It isn't recorded as done.",
         ),
         Action(name="notes/todo_link", label="Link", fields=fields, input="Jira key or PR URL"),
+        *(
+            Action(
+                name="notes/todo_size",
+                label=label,
+                fields={**fields, "size": size},
+                group="Size",
+                selected=todo.size == size,
+            )
+            for label, size in TODO_SIZES.items()
+            if size
+        ),
         add_todo_action(entry),
     ]
 
 
 ADD_TODO_INPUT = "New todo"
+TODO_SIZES = {"Unsized": "", "Quick": "quick", "Big": "big"}
+"""What the Add todo field's drop-down says, and posts as a todo's size."""
 
 
 def add_todo_action(entry: str | None, new_title: str = "", where: str = "") -> Action:
     """An Add todo field for a work-notes entry, or for one to create titled `new_title`."""
     if entry is not None:
         return Action(
-            name=TODO_ADD, label="Add todo", fields={"entry": entry}, input=ADD_TODO_INPUT
+            name=TODO_ADD,
+            label="Add todo",
+            fields={"entry": entry},
+            input=ADD_TODO_INPUT,
+            choices=TODO_SIZES,
         )
     return Action(
         name=TODO_ADD,
         label="Add todo",
         fields={"entry": new_title, "create": "1", "where": where},
         input=ADD_TODO_INPUT,
+        choices=TODO_SIZES,
     )
 
 
