@@ -207,8 +207,11 @@ than what was meant.
   ```
 
   GitHub rejects an inline comment on a line outside the diff.
-- **The PR's author** then fixes what's worth fixing, pushes, and answers every finding,
-  inline ones in their own thread (`gh api repos/{owner}/{repo}/pulls/N/comments/ID/replies
-  -f body=...`) and the body's in one PR comment: fixed or not, why, and the commits that
-  fix it.
+- **The PR's author** (the agent that wrote it and started the reviewer) then decides what
+  to fix, fixes it, and pushes. Then it answers every finding, none skipped: inline ones in
+  their own thread (`gh api repos/{owner}/{repo}/pulls/N/comments/ID/replies -f body=...`),
+  the body's in one PR comment, numbered as the review numbered them. Each answer says
+  whether it was fixed and why, or why not (a finding that's wrong, out of scope, or not
+  worth its cost says which), and for a fix, the commit that made it, as GitHub links it
+  (its short hash). Push before answering, so the commits are there to link.
 - A PR merges once its review is answered and CI passes, in stack order.
