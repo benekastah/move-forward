@@ -36,13 +36,14 @@ def watched_files(root: Path | None = PACKAGE_DIR) -> list[Path]:
     return sorted(p for p in root.rglob("*") if p.suffix in WATCHED_SUFFIXES and p.is_file())
 
 
-def snapshot(files: list[Path]) -> dict[Path, float]:
-    """Each file's modification time; -1 for one that went missing."""
-    return {p: p.stat().st_mtime if p.exists() else -1 for p in files}
+def snapshot(files: list[Path]) -> dict[Path, int]:
+    """Each file's nanosecond modification time; -1 for one that went missing. Nanoseconds
+    distinguish restart requests written close together."""
+    return {p: p.stat().st_mtime_ns if p.exists() else -1 for p in files}
 
 
 def changed(
-    before: dict[Path, float], root: Path | None = PACKAGE_DIR, extra: list[Path] | None = None
+    before: dict[Path, int], root: Path | None = PACKAGE_DIR, extra: list[Path] | None = None
 ) -> list[Path]:
     """Files added, removed or modified since `before`; `extra` are watched besides `root`'s."""
     now = snapshot(watched_files(root) + (extra or []))

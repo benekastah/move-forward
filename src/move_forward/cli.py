@@ -156,6 +156,7 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     commands.add_parser(
         "logout", help="sign every browser out: end all sessions (`mfd open` signs one in again)"
     )
+    commands.add_parser("restart", help="ask a running mfd serve to restart its server process")
     refresh_parser = commands.add_parser("refresh", help="refresh every source once and exit")
     refresh_parser.add_argument(
         "--subject",
@@ -352,6 +353,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"warning: {problem}")
         return 0
     config = config_module.load(config_path)
+    if args.command == "restart":
+        supervisor.request_restart(config_path)
+        print("server restart requested")
+        return 0
     if args.command == "token":
         return _token(config, config_path, args)
     if args.command == "serve" and not supervisor.supervised():

@@ -93,6 +93,7 @@ RESERVED_NAMES = frozenset(
         "open",
         "priority",
         "refresh",
+        "restart",
         "serve",
         "snooze",
         "snoozes",

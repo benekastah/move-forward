@@ -44,6 +44,10 @@ def test_serve_replaces_its_server_on_a_change_and_ends_with_it(
 
     def watch(restart: Callable[[], None], *args: object, alive: Callable[[], bool]) -> None:
         assert alive()
+        assert args[1] == [
+            tmp_path / "c.toml",
+            supervisor.restart_request_path(tmp_path / "c.toml"),
+        ]
         restart()  # the config changed and passes the check
         servers[-1].code = 0  # then it exits cleanly
 
@@ -54,6 +58,44 @@ def test_serve_replaces_its_server_on_a_change_and_ends_with_it(
     assert first.terminated and not second.terminated
     assert first.command[-2:] == ["serve", "--open"] and second.command[-1] == "serve"
     assert first.env[supervisor.SUPERVISED_ENV] == second.env[supervisor.SUPERVISED_ENV] == "1"
+
+
+def test_restart_command_sends_a_portable_request(tmp_path: Path) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text('email = "me@example.com"\n')
+    assert cli.main(["-c", str(config), "restart"]) == 0
+    request = supervisor.restart_request_path(config)
+    first = request.read_text()
+    assert first.strip().isdigit()
+    assert cli.main(["-c", str(config), "restart"]) == 0
+    assert request.read_text() != first
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGUSR1"), reason="Windows uses mfd restart")
+def test_usr1_to_the_supervisor_requests_the_same_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "config.toml"
+    handlers: list[Callable[..., object]] = []
+
+    def register(signum: int, handler: Callable[..., object]) -> None:
+        if signum == signal.SIGUSR1:
+            handlers.append(handler)
+
+    monkeypatch.setattr(supervisor.signal, "signal", register)
+    server = FakeServer([], {})
+
+    def popen(command: list[str], env: dict[str, str]) -> FakeServer:
+        return server
+
+    def watch(restart: Callable[[], None], *args: object, alive: Callable[[], bool]) -> None:
+        assert alive() and handlers
+        handlers[0](signal.SIGUSR1, None)
+        assert supervisor.restart_request_path(config).exists()
+        server.code = 0
+
+    monkeypatch.setattr(supervisor, "watch", watch)
+    assert supervisor.supervise(["mfd", "serve"], config, code=False, popen=popen) == 0
 
 
 def test_a_failed_server_is_started_again_until_it_keeps_failing_as_it_starts(

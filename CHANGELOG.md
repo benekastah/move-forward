@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Restart a supervised server on demand
+
+Run `mfd restart` to ask a running `mfd serve` supervisor to check and replace its server
+process without editing the config. On macOS and Linux, sending `SIGUSR1` to the
+supervisor process has the same effect. Restart an existing `mfd serve` once to load
+this new supervisor behavior.
+
 ### GitHub review stages and team reviewer rules
 
 GitHub now groups open, non-draft PRs into Fix before review and Ready for review before

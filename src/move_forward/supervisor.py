@@ -1,5 +1,6 @@
 """`mfd serve` runs the server in a child process, and replaces it when `reload` sees a
-change that passes `mfd check`. A server that fails is started again unless its port is busy.
+change or a restart request that passes `mfd check`. A server that fails is started again
+unless its port is busy.
 
 Ctrl-c is the parent's: the server ignores it, and the parent stops the server as it does
 to replace it. The parent itself runs the code it started with, so a change to this module
@@ -31,6 +32,16 @@ MAX_QUICK_FAILURES = 3
 starting, isn't started again."""
 SUPERVISED_ENV = "MOVE_FORWARD_SUPERVISED"
 """Set in the server `supervise` runs, so it serves rather than supervising again."""
+
+
+def restart_request_path(config_path: Path) -> Path:
+    """The file whose modification asks the supervisor for a checked server restart."""
+    return config_path.with_name(config_path.name + ".restart")
+
+
+def request_restart(config_path: Path) -> None:
+    """Ask the supervisor using a file so `mfd restart` works on every platform."""
+    restart_request_path(config_path).write_text(f"{time.time_ns()}\n", encoding="ascii")
 
 
 class Process(Protocol):
@@ -78,8 +89,9 @@ def supervise(
 
     A busy port is reported once. Other failures are started again, unless they fail within
     `QUICK_FAILURE_SECONDS` of starting `MAX_QUICK_FAILURES` times in a row: then its exit
-    code is returned, as it is when the server exits cleanly. Ctrl-c
-    stops the server and returns 0.
+    code is returned, as it is when the server exits cleanly. Ctrl-c stops the server
+    and returns 0. On macOS and Linux, SIGUSR1 makes the same restart request as
+    `mfd restart`.
     """
     env = {**os.environ, SUPERVISED_ENV: "1"}
     server = popen([sys.executable, "-m", "move_forward.cli", *argv[1:]], env=env)
@@ -96,12 +108,17 @@ def supervise(
         _stop(server)
         start_again()
 
+    restart_path = restart_request_path(config_path)
+    restart_signal = getattr(signal, "SIGUSR1", None) if sys.platform != "win32" else None
+    previous_handler = signal.getsignal(restart_signal) if restart_signal is not None else None
+    if restart_signal is not None:
+        signal.signal(restart_signal, lambda _signum, _frame: request_restart(config_path))
     try:
         while True:
             watch(
                 replace,
                 PACKAGE_DIR if code else None,
-                [config_path],
+                [config_path, restart_path],
                 lambda: passes_check(argv),
                 alive=lambda: server.poll() is None,
             )
@@ -125,6 +142,9 @@ def supervise(
         except KeyboardInterrupt:  # a second ctrl-c: don't wait for it
             server.kill()
         return 0
+    finally:
+        if restart_signal is not None and previous_handler is not None:
+            signal.signal(restart_signal, previous_handler)
 
 
 def _stop(server: Process) -> None:

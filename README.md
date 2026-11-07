@@ -123,6 +123,7 @@ before the command's name.
 | `mfd open [--port N]` | Open the running dashboard in a browser, signed in with a one-time code the server gives once it has proved it knows the token (see [API](#api)). |
 | `mfd logout` | End every browser session, signing every browser out. |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
+| `mfd restart` | Ask a running `mfd serve` supervisor to check the code and config, then replace its server process. This works on macOS, Linux and Windows; on macOS and Linux, `SIGUSR1` to the supervisor process does the same. An already running supervisor must be started once with this version to accept restart requests. |
 | `mfd cert [--trust] [--force]` | Make the certificates `mfd serve` uses for HTTPS, unless they're there (`--force` replaces them); `--trust` adds their authority to the system's and browsers' stores. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
