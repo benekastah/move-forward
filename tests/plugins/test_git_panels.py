@@ -200,6 +200,7 @@ def test_git_offers_to_delete_iced_branches_on_the_on_ice_item_only() -> None:
     # A branch git no longer has can't be deleted again, but can be restored.
     assert [a.name for a in on_ice["me/gone"].actions if a.group != "Importance"] == [
         "notes/thaw",
+        "notes/ice_note",
         "git/restore_together",
     ]
     assert panel(built, "git.local_work").items == []  # me/x is on ice: hidden
