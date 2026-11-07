@@ -409,7 +409,7 @@ def test_being_stopped_shuts_down_quietly(
             nonlocal closed
             closed = True
 
-    monkeypatch.setattr(server, "ThreadingHTTPServer", FakeServer)
+    monkeypatch.setattr(server, "_HTTPServer", FakeServer)
     monkeypatch.setattr(server.shell, "_stopping", threading.Event())  # don't stop other tests
 
     def no_start(_self: object) -> None:
@@ -438,6 +438,16 @@ def test_busy_port_does_not_start_refresh_threads(
         with pytest.raises(OSError) as error:
             server.serve(app.config, app.db, TOKEN, occupied.getsockname()[1])
         assert error.value.errno == errno.EADDRINUSE
+
+
+def test_two_dashboards_cannot_share_a_port(app: server.App) -> None:
+    first = server._HTTPServer(("127.0.0.1", 0), server.make_handler(app))  # pyright: ignore[reportPrivateUsage]
+    try:
+        with pytest.raises(OSError) as error:
+            server._HTTPServer(("127.0.0.1", first.server_port), server.make_handler(app))  # pyright: ignore[reportPrivateUsage]
+        assert error.value.errno == errno.EADDRINUSE
+    finally:
+        first.server_close()
 
 
 def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: server.App) -> None:
