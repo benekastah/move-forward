@@ -280,7 +280,8 @@ def test_no_ping_link_with_nobody_to_chase() -> None:
         ),
     )
     nobody = dashboard(slack=True, github=snapshot(mine=[pr(2)]))
-    for built in (approved, nobody):
+    not_required = dashboard(slack=True, github=snapshot(mine=[pr(3, review_decision=None)]))
+    for built in (approved, nobody, not_required):
         items = [i for p in built.panels for i in p.items]
         assert items and not any(
             a.href and "/slack/ping" in a.href for i in items for a in i.actions
