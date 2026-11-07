@@ -38,6 +38,8 @@ from .prs import (
 ENTRY = "notes.entry"
 PRIMARY_REVIEWER = "github/primary_reviewer"
 REQUEST_REVIEWER = "github/request_reviewer"
+MARK_READY = "github/mark_ready"
+MAY_BE_READY = "draft with green CI and no open todos: ready?"
 
 
 class _EntryView(Model):
@@ -628,9 +630,18 @@ class Builder:
                 and not unresolved_threads(pr, self.config.ignored_reviewers)
                 and not any(e.open_todos for e in self._entries(pr))
             ):
-                problems.append("draft with green CI and no open todos: ready?")
+                problems.append(MAY_BE_READY)
             if problems or pr.is_draft:
-                items[pr.url] = _housekeeping_item(self.now, pr, problems)
+                item = _housekeeping_item(self.now, pr, problems)
+                if MAY_BE_READY in problems:
+                    ready = Action(
+                        name=MARK_READY,
+                        label="Ready for review",
+                        fields={"pr": pr.url},
+                        confirm=f"Mark {pr.title} ready for review? Its reviewers are told.",
+                    )
+                    item = item.model_copy(update={"actions": [ready]})
+                items[pr.url] = item
 
         # Include parents even when they have no housekeeping flags, so a draft's
         # target branch has a visible place in the tree.

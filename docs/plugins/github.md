@@ -112,7 +112,8 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   or other housekeeping flags. Each PR says which branch it targets. PRs based on another
   PR's head branch nest beneath that PR, including a parent with no housekeeping flags.
   A branch tree starts expanded if it contains a non-draft PR, and collapsed if all its
-  PRs are drafts; the page remembers toggles.
+  PRs are drafts; the page remembers toggles. A draft with green CI, no open threads and no open
+  todos has a Ready for review button, which asks first.
 
 In a repo in `primary_reviewer_repos`, every item about one of my open PRs, unless it's in the
 merge queue, shows whoever's assigned besides the author ("primary: alice") and has a field to
@@ -123,6 +124,7 @@ members as far as they're known, then recent committers; any login can be typed.
 
 | Path | Fields | Does |
 | --- | --- | --- |
+| `/actions/github/mark_ready` | `pr` (the URL of one of my draft PRs) | Takes it out of draft. |
 | `/actions/github/request_reviewer` | `pr` (the URL of one of my open PRs), `input` (a login) | Asks them to review it. |
 | `/actions/github/primary_reviewer` | `pr` (the URL of one of my open PRs, in a repo in `primary_reviewer_repos`), `input` (a login) | Assigns them in place of whoever else is assigned besides the author, and asks for their review unless they're already asked or have reviewed it. |
 
