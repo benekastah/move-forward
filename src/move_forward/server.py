@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import ssl
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -811,7 +812,16 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-class _TLSServer(ThreadingHTTPServer):
+class _HTTPServer(ThreadingHTTPServer):
+    """Serves HTTP, and is refused a port something else is listening on. `HTTPServer` sets
+    `SO_REUSEADDR`, which elsewhere only lets a restart rebind past `TIME_WAIT`. On Windows,
+    which has no need of it for that, it lets sockets share a port: two dashboards setting it
+    would both bind, and binding over any other listener fails as `WSAEACCES`, not as in use."""
+
+    allow_reuse_address = sys.platform != "win32"
+
+
+class _TLSServer(_HTTPServer):
     """Serves HTTPS: each connection's handshake happens in its own thread, so a client that
     stalls in it holds up only itself. It serves with the chain's current certificate,
     looking again every `TLS_RECHECK_SECONDS`, so it moves to the next by itself."""
@@ -881,11 +891,11 @@ def serve(
     address = ("127.0.0.1", port or config.port)
     if served == "https":
         paths = tls.Paths.beside(config.db_path)
-        server: ThreadingHTTPServer = _TLSServer(address, make_handler(app), paths)
+        server: _HTTPServer = _TLSServer(address, make_handler(app), paths)
     else:
         if config.https:
             log.warning("no certificate yet, so plain HTTP: `mfd cert` makes one")
-        server = ThreadingHTTPServer(address, make_handler(app))
+        server = _HTTPServer(address, make_handler(app))
     threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
     threading.Thread(target=app.run_change_loop, name="changes", daemon=True).start()
     log.info("serving on %s://127.0.0.1:%d", served, server.server_port)
