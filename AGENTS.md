@@ -178,8 +178,8 @@ python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict
 python3 dev.py coverage  # optional: what the tests don't run
 ```
 
-It must pass on every commit, not just the last one in a PR. Commit in small,
-logical steps with messages that say why, not just what.
+It must pass on a PR's last commit: PRs are squash-merged, so that's what reaches `main`.
+Commit in small, logical steps with messages that say why, not just what.
 
 ## Reviewing a PR
 
@@ -225,4 +225,5 @@ than what was meant.
 - **Fixes are reviewed too**, unless all they change is wording (docs, comments, messages):
   a fresh reviewer, the same way, on what changed since the reviewed head
   (`<reviewed sha>..HEAD`), so a fix can't bring in a bug no one looked at.
-- A PR merges once its reviews are answered and CI passes, in stack order.
+- A PR merges once its reviews are answered and CI passes, in stack order, squashed into
+  one commit; `git stack sync` then drops its commits from the branches above.
