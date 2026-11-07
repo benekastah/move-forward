@@ -102,8 +102,8 @@ that needs a core one says so, and lands on top of it.
 2. **Undo what's set aside.** A place on the page listing what's snoozed and dismissed, each
    with a button to bring it back. Then Dismiss joins Snooze in the panels, and not before:
    it can't be undone until this exists.
-6. **Importance where it means something.** Leave it off items about what hides (On ice). Say
-   whether every panel sorts by it, since only two do now, not What next or Feedback.
+6. **Importance where it means something.** Say whether every panel sorts by it, since only two
+   do now, not What next or Feedback.
 7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
    nor do those of an item that focus mode splits into parts (an entry's Put on ice).
 10. **Account on the settings page.** A Sign out everywhere button (`mfd logout`), and where

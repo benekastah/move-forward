@@ -25,6 +25,7 @@ from move_forward.graph import Ref
 from move_forward.page import Action, Badge, Group, Item, Panel, Signals
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
+from move_forward.plugins.notes.models import Ice, IcedItem
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT
 from move_forward.refresh import kept_item
 
@@ -708,3 +709,14 @@ def test_what_a_lone_todo_links_shows_on_its_entry() -> None:
     assert "its PRs are done" in item.badges
     done = next(a for a in item.actions if a.name == "notes/todo_done")
     assert done.suggested
+
+
+def test_what_is_on_ice_has_no_importance_choices() -> None:
+    iced = Ice(
+        id=1,
+        title="parked",
+        iced_on=NOW.date(),
+        items=[IcedItem(kind="pull_request", ref_id="https://x/1", name="x")],
+    )
+    [item] = panel(dashboard(iced_stacks=[iced]), "notes.iced").items
+    assert not [a for a in item.actions if a.group == "Importance"]

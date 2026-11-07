@@ -110,7 +110,7 @@ this new supervisor behavior.
 
 ### Importance choices on entity items
 
-Every item with an entity subject now has the same Not important, Important and Critical
+Every item with an entity subject, but what's on ice, now has the same Not important, Important and Critical
 buttons as Act now, including GitHub reviews for me and todos in Focus mode. The choices
 appear together with ❕ / ❗️ / ‼️ and the selected level highlighted. Act now's Snooze, Dismiss and Pin
 buttons, Put on ice, and local branches' Delete and Put on ice buttons are grouped with emoji icons;

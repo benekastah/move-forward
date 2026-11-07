@@ -319,13 +319,24 @@ def _as_given(item: Item) -> Item:
     )
 
 
-def _with_importance_actions(panel: Panel, priority_of: act_now.PriorityOf) -> Panel:
+HidesKind = Callable[[str], bool]
+"""Whether a kind's entities hide what they point at (see `Graph.hides`)."""
+
+
+def _hides_nothing(kind: str) -> bool:
+    return False
+
+
+def _with_importance_actions(
+    panel: Panel, priority_of: act_now.PriorityOf, hides: HidesKind
+) -> Panel:
     """Add core's importance choices to every shown entity, including focus parts. An
-    item's first subject is its primary entity, as for its anchor and Act now."""
+    item's first subject is its primary entity, as for its anchor and Act now. An item about
+    what hides things (ice) has none: it's parked, so nothing ranks it."""
 
     def add(item: Item) -> Item:
         actions = list(item.actions)
-        if item.subjects:
+        if item.subjects and not hides(item.subjects[0].kind):
             subject = item.subjects[0]
             actions.extend(act_now.importance_actions(subject, priority_of(subject)))
         return item.model_copy(
@@ -369,13 +380,15 @@ def build(
     priority_of: act_now.PriorityOf = act_now.no_priority,
     surface: Surface = "dashboard",
     known_action: KnownAction = _any_action,
+    hides: HidesKind = _hides_nothing,
 ) -> Dashboard:
     """The dashboard: Act now, ranked from the plugins' nominations, then the plugins' panels in
     their groups, without hidden items, each item with the plugins' buttons, sorted, in the
     `layout`'s order. `ranking` is `[act_now]`, `feedback` what I said of its items, and
     `units` the graph's, for Act now to join items about the same unit of work, and
     `priority_of` what I set as the priority of what an item is about; `known_action` says
-    which buttons post to an action that's there. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
+    which buttons post to an action that's there, and `hides` which kinds hide what they point
+    at. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
     so two plugins' panels never clash."""
     plugins = [
         PluginPanels(
@@ -424,6 +437,7 @@ def build(
                             known_action,
                         ),
                         priority_of,
+                        hides,
                     ),
                     priority_of,
                 )

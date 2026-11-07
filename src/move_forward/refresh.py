@@ -487,6 +487,7 @@ def build_dashboard(
         priority.level_of(PriorityRepository(db).all(), graph),
         surface,
         _known_action(plugins),
+        graph.hides,
     )
     return built.model_copy(update={"problems": list(registry.DISCOVERY_ERRORS)})
 

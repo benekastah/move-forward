@@ -59,7 +59,7 @@ is what's left to build.
   come from `item_actions`, called per item with whose item it is and where it's
   shown; a plugin that reads its tables for them does so once per page in
   `prepare_item_actions`. Core adds its own to items: the importance choices on
-  every item about an entity, a Snooze on the items of a `snoozable` panel, and
+  every item about an entity (but what `hides`), a Snooze on the items of a `snoozable` panel, and
   Snooze, Dismiss, Pin and Clear priority in Act now. A plugin nominates items for
   core's Act now with `act_now`, each with `Signals` (effort, what it closes,
   who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
