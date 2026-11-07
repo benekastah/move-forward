@@ -1,10 +1,12 @@
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import section
 
-from move_forward import asking, config, init
+from move_forward import asking, config, init, registry
+from move_forward.plugin import Plugin
 from move_forward.plugins.git import setup as git_setup
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
@@ -355,3 +357,14 @@ def test_an_unknown_notification_is_asked_again(tmp_path: Path, no_machine_guess
     }
     init.init(path, scripted(answers), cwd=tmp_path)
     assert config.load(path).notifications.subscribe == ["dashboard.certificate_ending"]
+
+
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
+def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[Any, Any]) -> None:
+    written = plugin.init_template + plugin.init_example
+    missing = [
+        key
+        for key, field in plugin.config_model.model_fields.items()
+        if not field.is_required() and key != "teams" and f"# {key} =" not in written
+    ]
+    assert missing == []

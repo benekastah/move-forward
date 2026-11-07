@@ -14,6 +14,7 @@ TEMPLATE = """\
 # blocked_by_links = []                  # more link names meaning "blocked by", e.g. ["depends on"]
 # escalation_label_prefix = ""            # labels that rank incidents, e.g. "escalated-to-"
 # escalation_levels = []                  # what follows it, lowest first, e.g. ["manager", "director", "vp"]
+# priorities = ["Lowest", "Low", "Medium", "High", "Highest"]  # Jira's priority names, lowest first
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
 # [jira.teams]                            # a team's id in Jira's team field (unused yet)

@@ -141,7 +141,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
 22. **A target for "still To Do".** A ticket with PRs that hasn't started says `Update the
     status` with no button: offer `status_in_progress`. Also commit to one label: `Close`
     in Rollouts, `Move to Done` in transitions.
-23. **`priorities` in `mfd init`.** It's the one key missing from jira's commented defaults.
 
 ### notes
 
