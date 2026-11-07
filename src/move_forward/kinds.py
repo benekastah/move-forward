@@ -54,7 +54,8 @@ class PullRequest(KindModel):
     requested_teams: list[str] = Field(default_factory=list[str])
     """A team's top-level name where the plugin maps it, else the tool's own name for it."""
     review_blockers: list[str] | None = None
-    """On my open PRs only: why reviewers shouldn't be nudged yet; empty when it's in order."""
+    """On my open PRs only: why reviewers shouldn't be nudged yet; empty when it's in order.
+    `already approved` says it has the approval it needs, so there's nobody to chase."""
     last_review_activity: str | None = None
     """On my open PRs only: the latest review request, review or human comment."""
     failing_policy_checks: list[str] | None = None

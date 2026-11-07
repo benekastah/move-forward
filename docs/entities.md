@@ -119,7 +119,7 @@ On my open PRs only:
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `review_blockers` | list of strings | why reviewers shouldn't be nudged yet, including failing policy checks, changes requested and missing requested members of an individual-policy team; empty when the PR is in order |
+| `review_blockers` | list of strings | why reviewers shouldn't be nudged yet; `already approved` says it has the approval it needs, so there's nobody to chase; including failing policy checks, changes requested and missing requested members of an individual-policy team; empty when the PR is in order |
 | `last_review_activity` | ISO datetime or null | the latest review request, review or human comment |
 | `review_stale` | bool | no review activity for `[github] stale_review_hours` |
 | `stale_review_hours` | integer | `[github] stale_review_hours`, for what says how long a review request must be quiet |

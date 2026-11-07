@@ -285,3 +285,11 @@ def test_no_ping_link_with_nobody_to_chase() -> None:
         assert items and not any(
             a.href and "/slack/ping" in a.href for i in items for a in i.actions
         )
+
+
+def test_a_quiet_pr_with_nobody_requested_is_not_nudged() -> None:
+    built = dashboard(slack=True, github=snapshot(mine=[pr(1, review_decision=None)]))
+    assert built.panel("slack.nudges").items == []
+    assert not any(
+        "the reviewers" in i.title or "the reviewers" in str(i.details) for i in built.act_now()
+    )
