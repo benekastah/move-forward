@@ -7,6 +7,7 @@ TEMPLATE = """\
 # status_seconds = 30                  # how often edits are polled where watching fails (0: off)
 # ignored_worktree_globs = ["*/.claude/worktrees/*"]
 # commit_history_days = 180              # commit history for "directories I work in"
+# my_branch_prefixes = []               # besides branches with my commits or PRs, e.g. ["me/"]
 # github_hosts = ["github.com"]          # remote hosts that are GitHub: an Enterprise server, ~/.ssh/config aliases
 """
 
