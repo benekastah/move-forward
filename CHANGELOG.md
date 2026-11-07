@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Put on ice from Stacks ices the stack
+
+Put on ice on a Stacks item now ices the branch's whole stack, as it does from Local work. It used
+to ice only the PR, or offer nothing for a branch without one. Nothing to change.
+
 ### Setting an Act now item aside covers all it shows
 
 Snooze, Dismiss and Pin now also act on the item's `also:` tasks, so snoozing a ticket no longer
