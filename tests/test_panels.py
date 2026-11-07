@@ -1,7 +1,7 @@
 """Core's panels and the Dashboard: todos, on ice, nudges, groups and focus mode."""
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from conftest import (
@@ -20,7 +20,7 @@ from conftest import (
     todo,
 )
 
-from move_forward import panels, render
+from move_forward import act_now, panels, render
 from move_forward.graph import Ref
 from move_forward.page import Action, Badge, Group, Item, Panel, Signals
 from move_forward.plugins.git_stack.models import StackBranch
@@ -119,7 +119,8 @@ def test_every_entity_item_and_focus_part_gets_importance_choices() -> None:
     focused = built.focus_items("x.stage")
     assert focused is not None
     [(_, todo_part), (_, empty)] = focused
-    assert [a.fields["kind"] for a in todo_part.actions] == [part.kind] * 3
+    assert [a.fields["kind"] for a in todo_part.actions] == [part.kind] * 4
+    assert todo_part.actions[-1].label == "Clear priority"
     assert [a.label for a in todo_part.actions if a.selected] == ["Critical"]
     assert empty.actions == []
 
@@ -258,6 +259,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         "notes/todo_size",
         "notes/todo_size",
         "notes/todo_add",
+        "act_now/snooze",
         "notes/ice_item",
     ]
     assert (
@@ -782,3 +784,68 @@ def test_what_is_on_ice_has_no_importance_choices() -> None:
     )
     [item] = panel(dashboard(iced_stacks=[iced]), "notes.iced").items
     assert not [a for a in item.actions if a.group == "Importance"]
+
+
+def test_an_item_with_a_task_has_snooze_in_its_panel_as_in_act_now() -> None:
+    subject = Ref(kind="pull_request", id="pr")
+    tasked = Item(title="PR", subjects=[subject], signals=Signals(verb="Fix", task="fix"))
+    built = panels.build(
+        NOW,
+        [
+            panels.PluginPanels(
+                "x", "X", [Panel(key="p", title="P", description="", items=[tasked])], [tasked]
+            )
+        ],
+        {},
+    )
+
+    def snooze(key: str) -> list[tuple[str | None, str | None]]:
+        return [(a.icon, a.group) for a in built.panel(key).items[0].actions if a.label == "Snooze"]
+
+    assert snooze("x.p") == snooze("act.x") == [("💤", "Act now")]
+
+
+def test_an_item_without_a_task_has_no_snooze() -> None:
+    plain = Item(title="PR", subjects=[Ref(kind="pull_request", id="pr")])
+    built = panels.build(
+        NOW,
+        [panels.PluginPanels("x", "X", [Panel(key="p", title="P", description="", items=[plain])])],
+        {},
+    )
+    assert "Snooze" not in [a.label for a in built.panel("x.p").items[0].actions]
+
+
+def test_an_item_set_aside_leaves_its_panel_until_it_changes() -> None:
+    def item(title: str) -> Item:
+        return Item(
+            title=title,
+            subjects=[Ref(kind="pull_request", id="pr")],
+            signals=Signals(verb="Fix", task="fix"),
+        )
+
+    key = ("pull_request", "pr", "fix")
+    said = act_now.Nomination("x", item("before")).fingerprint
+    until = NOW + timedelta(days=1)
+    feedback = {key: act_now.Feedback(action="snooze", fingerprint=said, until=until)}
+
+    def shown(title: str) -> list[Item]:
+        panel_ = Panel(key="p", title="P", description="", items=[item(title)])
+        built = panels.build(NOW, [panels.PluginPanels("x", "X", [panel_])], {}, feedback=feedback)
+        return built.panel("x.p").items
+
+    assert shown("before") == []
+    assert [i.title for i in shown("after")] == ["after"]
+
+
+def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:
+    subject = Ref(kind="pull_request", id="pr")
+    panel_ = Panel(key="p", title="P", description="", items=[Item(title="PR", subjects=[subject])])
+
+    def labels(level: int | None) -> list[str]:
+        built = panels.build(
+            NOW, [panels.PluginPanels("x", "X", [panel_])], {}, priority_of=lambda ref: level
+        )
+        return [a.label for a in built.panel("x.p").items[0].actions]
+
+    assert "Clear priority" not in labels(None)
+    assert "Clear priority" in labels(1)

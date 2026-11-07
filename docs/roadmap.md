@@ -97,9 +97,6 @@ that needs a core one says so, and lands on top of it.
 
 ### Core
 
-1. **Snooze and Clear priority everywhere.** Every item with a task gets Snooze in its own
-   panel, drawn as in Act now (💤, grouped), which replaces `Panel.snoozable`; and every panel
-   gets Clear priority once one is set. Pin stays in Act now: it only concerns that ranking.
 2. **Undo what's set aside.** A place on the page listing what's snoozed and dismissed, each
    with a button to bring it back. Then Dismiss joins Snooze in the panels, and not before:
    it can't be undone until this exists.

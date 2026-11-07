@@ -135,7 +135,7 @@ before the command's name.
 | `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <PR URL>` ends it. |
-| `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Act now's Clear priority does `clear`. |
+| `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
 | `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one I put there off; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, task, until, fingerprint), for the skill. |
@@ -172,9 +172,8 @@ with when you opened it, until it changes (or for a day at most). Coming back to
 fetches again just what you opened in the last half hour, not its plugins whole; an item's
 ↻ button does the same for it at once.
 
-github's Ready for me to review and Replies for me have the same Snooze on their items. An
-item snoozed or dismissed in Act now leaves those two panels as well, and comes back to
-them when it does to Act now.
+Items with something to do have the same Snooze in their own panels, and an item set aside
+leaves its panel too, coming back when it does to Act now. Pin and Dismiss are Act now's.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
@@ -186,8 +185,7 @@ Panels that order by importance use the priority set on an item's subject first,
 their own rank for ties.
 Every item with an entity subject but what's on ice, including a todo in the Notes panel or Focus mode, shows Not important,
 Important and Critical as one group of buttons (❕ / ❗️ / ‼️), highlighting the selected level. For an
-item about several entities, the choice applies to its first subject. Once one is set, Act
-now also offers Clear priority. Act now groups
+item about several entities, the choice applies to its first subject. Once one is set, a Clear priority button goes with them. Act now groups
 its Snooze, Dismiss, Pin and Put on ice choices too, with emoji icons. Emoji buttons show
 their text in a hover title and an accessible name.
 Reset layout, in the footer, goes back to the default order.

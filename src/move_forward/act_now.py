@@ -498,19 +498,34 @@ def _member_fields(
 
 
 def importance_actions(subject: Ref, level: int | None) -> list[Action]:
-    """The three importance choices for a subject, with its current choice highlighted."""
+    """The three importance choices for a subject, with its current choice highlighted, and
+    a way to clear it once there is one."""
     fields = {"kind": subject.kind, "id": subject.id}
     return [
-        Action(
-            name=f"{ACTIONS}/priority",
-            label=label,
-            fields={**fields, "level": str(choice)},
-            group="Importance",
-            selected=choice == level,
-            icon=PRIORITY_ICONS[choice],
-        )
-        for choice, label in PRIORITIES.items()
+        *(
+            Action(
+                name=f"{ACTIONS}/priority",
+                label=label,
+                fields={**fields, "level": str(choice)},
+                group="Importance",
+                selected=choice == level,
+                icon=PRIORITY_ICONS[choice],
+            )
+            for choice, label in PRIORITIES.items()
+        ),
+        *(
+            [Action(name=f"{ACTIONS}/priority", label="Clear priority", fields=fields)]
+            if level is not None
+            else []
+        ),
     ]
+
+
+def snooze_action(fields: dict[str, str]) -> Action:
+    """The Snooze button of an item named by `fields`, wherever it's shown."""
+    return Action(
+        name=f"{ACTIONS}/snooze", label="Snooze", fields=fields, group="Act now", icon="💤"
+    )
 
 
 def _buttons(
@@ -533,19 +548,11 @@ def _buttons(
             selected=selected,
         )
 
-    subject = nomination.item.subjects[0]
-    priority = {"kind": subject.kind, "id": subject.id}
-
     return [
-        button("snooze", "Snooze", "💤"),
+        snooze_action(fields),
         button("dismiss", "Dismiss", "👋"),
         button("unpin", "Unpin", "📌", True) if pinned else button("pin", "Pin", "📌", False),
-        *importance_actions(subject, level),
-        *(
-            [Action(name=f"{ACTIONS}/priority", label="Clear priority", fields=priority)]
-            if level is not None
-            else []
-        ),
+        *importance_actions(nomination.item.subjects[0], level),
     ]
 
 

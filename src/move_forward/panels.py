@@ -239,8 +239,8 @@ def _snoozable(
     feedback: dict[act_now.FeedbackKey, act_now.Feedback],
     now: datetime,
 ) -> Panel:
-    """A snoozable panel's items without those set aside there (snoozed, or dismissed, and
-    not changed since), and each of the rest with a Snooze button, as in Act now itself."""
+    """A panel's items without those set aside (snoozed, or dismissed, and not changed since),
+    and each of the rest that has a task with a Snooze button, as in Act now itself."""
     items: list[Item] = []
     for item in panel.items:
         nomination = act_now.Nomination(
@@ -252,7 +252,7 @@ def _snoozable(
         elif not act_now.set_aside(nomination, feedback.get(key), now):
             kind, id, task = key
             fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
-            snooze = Action(name=f"{act_now.ACTIONS}/snooze", label="Snooze", fields=fields)
+            snooze = act_now.snooze_action(fields)
             items.append(item.model_copy(update={"actions": [*item.actions, snooze]}))
     return panel.model_copy(update={"items": items})
 
@@ -462,9 +462,7 @@ def build(
                 )
                 for plugin in plugins
                 for panel in plugin.panels
-                for shown in [
-                    _snoozable(panel, plugin.key, feedback or {}, now) if panel.snoozable else panel
-                ]
+                for shown in [_snoozable(panel, plugin.key, feedback or {}, now)]
             ),
         ],
         groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),
