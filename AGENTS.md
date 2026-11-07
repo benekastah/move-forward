@@ -4,7 +4,7 @@ Notes for agents (and people) changing this repo. The README says what the
 dashboard does; `docs/entities.md` is the contract between plugins,
 `docs/graph.md` explains the graph they go through, `docs/plugins.md`
 draws how the plugins use each other's entities, and `docs/writing-a-plugin.md`
-walks through making one; `plan.md`
+walks through making one; `docs/roadmap.md`
 is what's left to build.
 
 ## Shape of the code
@@ -99,7 +99,7 @@ is what's left to build.
   - this file, when the shape of the code or a rule here changes, e.g. a new
     plugin hook.
   - docstrings and comments on the code you touch.
-  - `plan.md`: remove what the change finishes, whether a step, a bullet or a
+  - `docs/roadmap.md`: remove what the change finishes, whether a step, a bullet or a
     design section, and delete the file once nothing is left.
 
   Before committing, look for docs the change made untrue: search the docs
@@ -156,7 +156,7 @@ is what's left to build.
   it also has in its panel and in focus mode, but for what only concerns Act now's
   ranking (Pin); what can be ticked off is tickable wherever it's listed; and a line
   telling me to do something comes with the button, where the dashboard can do it.
-  What doesn't yet is in `plan.md`. When adding a button, look at every surface
+  What doesn't yet is in `docs/roadmap.md`. When adding a button, look at every surface
   the item appears on.
 - **A class's variables come first.** Its class variables (a plugin's `name`,
   `kinds`, `change_check_seconds` and the like) go at the top, then `__init__`, which
