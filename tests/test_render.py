@@ -518,3 +518,8 @@ def test_a_buttons_choices_are_a_drop_down_beside_its_field() -> None:
     ) in html
     plain = action.model_copy(update={"choices": {}})
     assert "<select" not in render.buttons([plain])
+
+
+def test_a_drop_down_counts_as_being_typed_in() -> None:
+    assert "closest('input, textarea, select')" in render.RELOAD_SCRIPT
+    assert "closest('input, textarea, select')" in render.FOCUS_KEYS_SCRIPT
