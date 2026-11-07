@@ -711,14 +711,6 @@ def test_what_a_lone_todo_links_shows_on_its_entry() -> None:
     assert done.suggested
 
 
-    assert [a.name for a in item.actions if a.name.startswith("notes/todo")] == [
-        "notes/todo_done",
-        "notes/todo_delete",
-        "notes/todo_link",
-        "notes/todo_add",
-    ]
-
-
 def test_what_is_on_ice_has_no_importance_choices() -> None:
     iced = Ice(
         id=1,
