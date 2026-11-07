@@ -178,6 +178,48 @@ Approving stays on GitHub: a review should come from having read the PR there.
 ### slack
 
 
+## Plugins without core changes
+
+Adding a plugin should never mean changing core. It already doesn't for a tool that fits what
+core models (Linear or Shortcut publish tickets, GitLab pull requests); what forces a core
+change today is anything new in shape. The tools in view: CRMs (Salesforce, HubSpot), support
+(Zendesk, Intercom, Front), on-call and incidents (PagerDuty, incident.io), errors (Sentry), a
+calendar (meetings to prepare for), and comments in documents (Google Docs, Confluence, Notion,
+Figma). In order:
+
+1. **Families a plugin can declare.** `kinds.FAMILIES` is a closed list (pull request,
+   ticket, person), so every shared concept is a core edit. Let a plugin, or a small package
+   several share, declare a family (its model, id rule and label), with core only enforcing
+   it, and move the three there are onto the same path so it stays tested. Two publishers
+   that declare one family differently is an error at load, naming both.
+2. **The families most of those tools need.** An *organisation* (a CRM account, a support
+   tool's organisation, an email domain: `[people]`'s `@domain` labels are one already), a
+   *conversation* (mail, support tickets, chats; `mail.thread` would become one), and an
+   *incident*. Each with the attributes a consumer ranks by, and a person pointing at their
+   organisation.
+3. **Who someone is, across tools.** A person with several identifiers (addresses, each
+   tool's handle), not one email; `me` on core's `Person`, not just github's; and how far an
+   identity can be trusted. mail publishes a sender only when the receiving server verified
+   them, since core gives people their contact type; a family-level `verified` would let any
+   plugin say so, and core give a contact type only to who it's sure of.
+4. **Urgency any plugin can state.** A due time with a breach (a support SLA, an incident's
+   acknowledgement), "waiting since" from a clock the plugin trusts, and stakes (a customer's
+   tier, a deal's size, a severity), each in `Signals`, rather than only through a contact
+   type.
+5. **An HTTP toolkit in `api`.** Most of those tools have no CLI, and there are no new
+   dependencies, so each plugin would write its own JSON requests, paging, retries with
+   backoff, rate-limit waits and timeouts over `api.http.opener`. Do it once, with OAuth's
+   token refresh beside `sign_in_pages`, and API tokens through `api.keychain` as now.
+6. **Richer buttons.** Several fields on one form (today one text field and one drop-down),
+   a text area (replying to a ticket), and a date (snooze until, follow up on).
+7. **Customer data.** A kind can say it's sensitive, and `mfd dump`, logs, notifications and
+   exports leave out or redact its entities' text; `prune` drops them once they're done.
+8. **Table-shaped settings on `/settings`.** It skips dict keys (`[people] contact_types`,
+   `[slack.teams]`); a support plugin's views or a CRM's tiers would hit the same gap.
+9. **A test that keeps it true.** An example plugin outside the package, built against
+   `move_forward.api` alone and found through its entry point, run in CI with the test
+   harness plugin authors get; a core change that would break a plugin fails it.
+
 ## Follow-ups
 
 ### Refreshing
