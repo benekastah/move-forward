@@ -8,6 +8,7 @@ from html import escape
 from urllib.parse import urlencode
 
 from . import localtime
+from .act_now import OPENED_FIELD
 from .page import Action, Badge, Group, Item, Link, Panel, SourceStatus, age
 from .panels import ACT_NOW, FOCUS_ALL, Dashboard
 
@@ -444,6 +445,17 @@ def item_html(item: Item) -> str:
     return _item(item)
 
 
+def _without_shared(part: Item, item: Item) -> Item:
+    """A part as listed beneath its item, without the buttons the item has anyway. Act now's
+    mark of opening an item doesn't make a button another."""
+
+    def key(action: Action) -> tuple[str, dict[str, str]]:
+        return action.name, {k: v for k, v in action.fields.items() if k != OPENED_FIELD}
+
+    shared = [key(action) for action in item.actions]
+    return part.model_copy(update={"actions": [a for a in part.actions if key(a) not in shared]})
+
+
 def _item(
     item: Item,
     back: str = "",
@@ -487,7 +499,7 @@ def _item(
     if show_parts:
         parts.append(
             "<ul class='item-parts'>"
-            + "".join(_item(part, back, at, pos) for part in item.parts)
+            + "".join(_item(_without_shared(part, item), back, at, pos) for part in item.parts)
             + "</ul>"
         )
     if item.links:
