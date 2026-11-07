@@ -140,7 +140,8 @@ is what's left to build.
   Panel tests build the page as core does (`conftest.dashboard(...)`) and
   assert on panel contents; plugin contract tests assert on the entities a
   plugin publishes. Tests touching git make real repos in `tmp_path`; tests
-  never touch the network.
+  never touch the network, nor the real database (`conftest` fails one that
+  opens it: use `:memory:` or `tmp_path`).
 - **No new runtime dependencies.** pydantic, cryptography (for the HTTPS
   certificate) and watchfiles (git watching its repos) are the only ones; tools are
   reached through their CLIs (`gh`, `git`) or the standard library.

@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from move_forward import registry
+from move_forward.config import DEFAULT_DB_PATH
 from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database, Migration
 from move_forward.private import is_private
 from move_forward.repositories import KvRepository
@@ -350,3 +351,8 @@ def test_a_plugins_migration_may_not_remove_what_isnt_its_own() -> None:
     with pytest.raises(ValueError, match="p's migration 0001_tidy removed kv"):
         db.migrate("p", [dropping])
     assert db.query("SELECT name FROM sqlite_master WHERE name = 'kv'")  # rolled back
+
+
+def test_no_test_opens_the_real_database() -> None:
+    with pytest.raises(AssertionError, match="opened the real database"):
+        Database(DEFAULT_DB_PATH)

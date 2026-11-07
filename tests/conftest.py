@@ -1,14 +1,15 @@
 """Shared factories: small, fully populated domain objects that tests tweak."""
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import cast
 
 import pytest
 from pydantic import BaseModel
 
 from move_forward import localtime
-from move_forward.config import Config
-from move_forward.db import Database
+from move_forward.config import DEFAULT_DB_PATH, Config
+from move_forward.db import DEFAULT_KEEP_BACKUPS, Database
 from move_forward.domain import Model
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
@@ -49,6 +50,28 @@ REPO = "acme/widgets"
 def in_utc(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test runs in UTC, so what the app takes in local time is the same anywhere."""
     monkeypatch.setattr(localtime, "zone", UTC)
+
+
+REAL_DATA_DIR = DEFAULT_DB_PATH.expanduser().parent
+"""Where the dashboard I use keeps its database, which no test may open."""
+
+
+@pytest.fixture(autouse=True)
+def no_real_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test's database is its own, in memory or in `tmp_path`: one that would open the
+    real one (a config left at its default, say) fails instead of touching my data."""
+    opening = Database.__init__
+
+    def guarded(self: Database, path: Path | str, keep_backups: int = DEFAULT_KEEP_BACKUPS) -> None:
+        if path != ":memory:" and Path(path).expanduser().resolve().is_relative_to(
+            REAL_DATA_DIR.resolve()
+        ):
+            raise AssertionError(
+                f"a test opened the real database, {path}: use :memory: or tmp_path"
+            )
+        opening(self, path, keep_backups)
+
+    monkeypatch.setattr(Database, "__init__", guarded)
 
 
 @pytest.fixture(autouse=True)
