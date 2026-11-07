@@ -359,6 +359,8 @@ An item can carry its own `signals` (`effort`, `closes`, `waiting` and `waiting_
 importance (a priority, an escalation) onto `importance`, in the plugin. An item whose main
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
+A plugin that nominates by due date passes `req.due_horizon` to `due_pressure`, so it agrees
+with `[act_now] due_warning_days`.
 Set `Item.fingerprint` to what would make a snoozed or dismissed item worth another look.
 Set `snoozable=True` on such a panel to give its items a Snooze there too; what's snoozed or
 dismissed then stays off the panel as well.

@@ -413,7 +413,9 @@ def build_dashboard(
         nominated = call(
             e.name,
             "act_now",
-            lambda e=e, s=snapshot, own=own: e.plugin.act_now(ActNowRequest(e.ctx, s, graph, own)),
+            lambda e=e, s=snapshot, own=own: e.plugin.act_now(
+                ActNowRequest(e.ctx, s, graph, own, timedelta(days=config.act_now.due_warning_days))
+            ),
             [],
         )
         plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
