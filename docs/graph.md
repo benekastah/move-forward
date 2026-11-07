@@ -101,6 +101,7 @@ graph.hidden(ref)  # whether something on ice covers it, see below
 graph.url_for("ticket", "APP-1")  # jira makes it from the key
 graph.handle("ticket", url)  # what to call it: "APP-1"
 graph.identify("ticket", "APP-1")  # the id for a key kept before ids were URLs
+graph.same_person("github.com/alice")  # the `person`s with their email, whoever publishes them
 ```
 
 ### Through a view

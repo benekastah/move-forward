@@ -15,6 +15,7 @@ from . import registry
 from .act_now import ActNowConfig
 from .db import DEFAULT_KEEP_BACKUPS
 from .notifications import NotificationsConfig
+from .people import PeopleConfig
 from .plugins.notes.config import IMPORT_ONCE
 from .strict import Strict
 
@@ -65,6 +66,8 @@ class Config(Strict):
     the notes, and old pings from the database, by a daily job."""
     act_now: ActNowConfig = Field(default_factory=ActNowConfig)
     """`[act_now]`: how core ranks what the plugins nominate for Act now."""
+    people: PeopleConfig = Field(default_factory=PeopleConfig)
+    """`[people]`: the contact types offered, and the importance each gives what's about them."""
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
     """`[notifications]`: which events to be told of in the browser; none until subscribed."""
     sections: dict[str, BaseModel] = Field(default_factory=dict[str, BaseModel])

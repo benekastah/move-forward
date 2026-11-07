@@ -59,8 +59,9 @@ is what's left to build.
   come from `item_actions`, called per item with whose item it is and where it's
   shown; a plugin that reads its tables for them does so once per page in
   `prepare_item_actions`. Core adds its own to items: the importance choices on
-  every item about an entity (but what `hides`), a Snooze on the items of a `snoozable` panel, and
-  Snooze, Dismiss, Pin and Clear priority in Act now. A plugin nominates items for
+  every item about an entity (but what `hides`), a Snooze on the items of a `snoozable` panel,
+  Snooze, Dismiss, Pin and Clear priority in Act now, and on an item about a person
+  (`people.py`) their contact type and Set type. A plugin nominates items for
   core's Act now with `act_now`, each with `Signals` (effort, what it closes,
   who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
   default, the items of its panels marked `act_now`.

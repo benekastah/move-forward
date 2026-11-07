@@ -11,7 +11,19 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import auth, init, keychain, localtime, priority, registry, signin, snooze, supervisor, tls
+from . import (
+    auth,
+    init,
+    keychain,
+    localtime,
+    people,
+    priority,
+    registry,
+    signin,
+    snooze,
+    supervisor,
+    tls,
+)
 from . import config as config_module
 from .act_now import PRIORITIES
 from .db import Database
@@ -20,7 +32,12 @@ from .kinds import label
 from .plugin import CliHandler, CliRequest
 from .refresh import build_dashboard, refresh, refresh_subjects, stored_graph
 from .registry import enabled, enabled_names, migrate
-from .repositories import FeedbackRepository, PriorityRepository, SessionRepository
+from .repositories import (
+    ContactRepository,
+    FeedbackRepository,
+    PriorityRepository,
+    SessionRepository,
+)
 from .server import scheme, serve
 from .shell import CommandError
 
@@ -107,6 +124,9 @@ my-team = "#team-my-team"
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
 
+# [people]                              # what people are to me
+# contact_types = { customer = 1, partner = 1, vendor = 0 }  # the types offered, each with the importance it gives (0 to 2)
+
 # [act_now]                             # how Act now ranks what the plugins nominate
 # size = 7                               # items shown
 # per_plugin = 3                         # so one busy tool can't fill the list
@@ -186,6 +206,12 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     priority_parser.add_argument("level", choices=["0", "1", "2", "clear"])
     priority_parser.add_argument("--kind", help="the entity's kind, e.g. notes.todo")
+    contact_parser = commands.add_parser(
+        "contact", help="set what someone is to me, e.g. a customer, or clear it"
+    )
+    contact_parser.add_argument("who", help="an email address, or @domain for everyone there")
+    contact_parser.add_argument("type", help="e.g. customer, or clear")
+    commands.add_parser("contacts", help="print the contact types I set as JSON: who, contact_type")
     unsnooze_parser = commands.add_parser("unsnooze", help="end a PR's review snooze")
     unsnooze_parser.add_argument("url", help="the PR's URL")
     commands.add_parser(
@@ -417,6 +443,28 @@ def main(argv: list[str] | None = None) -> int:
         else:
             priorities.set(ref, int(args.level), datetime.now(UTC))
             print(f"{label(ref.kind)} {ref.id}: {PRIORITIES[int(args.level)].lower()}")
+        return 0
+    if args.command == "contact":
+        contacts = ContactRepository(db)
+        try:
+            who = people.contact_key(args.who)
+            if args.type == "clear":
+                contacts.clear(who)
+                print(f"{who}: type cleared")
+            else:
+                contact_type = people.contact_type(args.type)
+                contacts.set(who, contact_type, datetime.now(UTC))
+                print(f"{who}: {contact_type}")
+        except ValueError as err:
+            print(err, file=sys.stderr)
+            return 1
+        return 0
+    if args.command == "contacts":
+        rows = [
+            {"who": who, "contact_type": contact_type}
+            for who, contact_type in ContactRepository(db).all().items()
+        ]
+        print(json.dumps(rows, indent=2))
         return 0
     if args.command == "unsnooze":
         snooze.wake_review(FeedbackRepository(db), args.url)

@@ -62,7 +62,7 @@ flowchart LR
     stack_branch -. "what tracks an iced branch" .-> notes
     ticket -. "Add todo titles" .-> notes
     stack_branch -. "the stack to ice, with its group (its stack)" .-> notes
-    person -. "who I am" .-> core([core])
+    person -. "who I am; who an item is about, for contact types" .-> core([core])
 ```
 
 ## Refresh, requirements and item actions

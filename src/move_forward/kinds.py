@@ -82,6 +82,23 @@ class Person(KindModel):
     handle: str
     """Their name in the tool, e.g. a login."""
     email: str | None = None
+    """What joins them to the same person in other tools (`Graph.same_person`)."""
+    contact_type: str | None = None
+    """What they are to me, when the tool knows: "customer", say, from a CRM. See `people`."""
+
+
+_EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+_SHARED_MAILBOX = re.compile(r"(no-?reply|do-?not-?reply|notifications?)(\+.*)?")
+"""The local parts of addresses many people's mail or commits come from, e.g.
+`noreply@github.com`: sharing one says nothing about who someone is."""
+
+
+def personal_email(text: str | None) -> str | None:
+    """`text` lower-cased, if it's an address that identifies one person; None otherwise."""
+    email = (text or "").strip().lower()
+    if not _EMAIL.fullmatch(email) or _SHARED_MAILBOX.fullmatch(email.split("@")[0]):
+        return None
+    return email
 
 
 def is_url(id: str) -> bool:
