@@ -3,6 +3,7 @@
 import imaplib
 import re
 import ssl
+import unicodedata
 from collections.abc import Generator, Iterator, Sequence
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
@@ -17,13 +18,19 @@ from .models import MAX_SUBJECT, MailSnapshot, Message
 TIMEOUT_SECONDS = 30
 HEADERS = (
     "FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES LIST-ID PRECEDENCE AUTO-SUBMITTED"
+    " AUTHENTICATION-RESULTS"
 )
-"""The headers fetched: who, what, when, the conversation, and whether a person wrote it."""
+"""The headers fetched: who, what, when, the conversation, whether a person wrote it, and
+whether the receiving server found `From` authentic."""
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 _UID = re.compile(rb"\bUID (\d+)")
 _FLAGS = re.compile(rb"\bFLAGS \(([^)]*)\)")
 _MESSAGE_ID = re.compile(r"<([^<>\s]+)>")
 _STATUS = re.compile(rb"\((.*)\)")
+_INTERNALDATE = re.compile(
+    rb'\bINTERNALDATE "\s*(\d{1,2})-([A-Za-z]{3})-(\d{4}) (\d\d):(\d\d):(\d\d) ([+-])(\d\d)(\d\d)"'
+)
+_DMARC_PASS = re.compile(r"\bdmarc\s*=\s*pass\b", re.IGNORECASE)
 
 
 def password(config: MailConfig, email: str) -> str:
@@ -48,6 +55,10 @@ def _signed_in(config: MailConfig, secret: str) -> Generator[imaplib.IMAP4]:
     try:
         try:
             imap.login(config.username, secret)
+        except UnicodeEncodeError as err:
+            raise SourceError(
+                "IMAP signs in in ASCII: the username and password can't have other characters"
+            ) from err
         except imaplib.IMAP4.error as err:
             raise SourceError(
                 f"{config.host} refused to sign in {config.username} ({err}); for Gmail, the "
@@ -94,7 +105,10 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
     marked read."""
     secret = password(config, email)
     with _signed_in(config, secret) as imap:
-        _ok(imap.select(_quoted(config.mailbox), readonly=True), "EXAMINE")
+        try:
+            _ok(imap.select(_quoted(config.mailbox), readonly=True), "EXAMINE")
+        except UnicodeEncodeError as err:
+            raise SourceError(f"mailbox {config.mailbox!r}: only ASCII names work") from err
         since = imap_date(now - timedelta(days=config.since_days))
         [found] = _ok(imap.uid("SEARCH", "SINCE", since, "OR", "UNSEEN", "FLAGGED"), "SEARCH")
         uids = (found if isinstance(found, bytes) else b"").split()[-config.max_messages :]
@@ -104,7 +118,7 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
             imap.uid(
                 "FETCH",
                 b",".join(uids).decode(),
-                f"(UID FLAGS BODY.PEEK[HEADER.FIELDS ({HEADERS})])",
+                f"(UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS ({HEADERS})])",
             ),
             "FETCH",
         )
@@ -129,6 +143,44 @@ def _message_ids(text: str) -> list[str]:
     return _MESSAGE_ID.findall(text)
 
 
+def _received(meta: bytes) -> datetime | None:
+    """When the server got the message (`INTERNALDATE`), in UTC; None when it didn't say."""
+    found = _INTERNALDATE.search(meta)
+    if found is None:
+        return None
+    day, month, year, hour, minute, second, sign, off_h, off_m = (
+        g.decode() for g in found.groups()
+    )
+    if month.title() not in _MONTHS:
+        return None
+    offset = timedelta(hours=int(off_h), minutes=int(off_m)) * (-1 if sign == "-" else 1)
+    try:
+        local = datetime(
+            int(year), _MONTHS.index(month.title()) + 1, int(day),
+            int(hour), int(minute), int(second), tzinfo=UTC,
+        )  # fmt: skip
+    except ValueError:
+        return None
+    return local - offset
+
+
+def _sent(date: str) -> datetime | None:
+    """The `Date` header in UTC; None when it can't be read."""
+    try:
+        sent = parsedate_to_datetime(date)
+        return sent.astimezone(UTC) if sent.tzinfo else sent.replace(tzinfo=UTC)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _shown(text: str) -> str:
+    """`text` without control or format characters (bidi overrides, zero-width ones), which
+    could make a subject or name read as something else, and its whitespace collapsed."""
+    return " ".join(
+        "".join(c if unicodedata.category(c) not in ("Cc", "Cf") else " " for c in text).split()
+    )
+
+
 def message(meta: bytes, raw: bytes, me: set[str]) -> Message | None:
     """The message a FETCH response describes (its line and its headers), or None when the
     server left out its UID. `me` are my addresses, lower-case."""
@@ -151,12 +203,11 @@ def message(meta: bytes, raw: bytes, me: set[str]) -> Message | None:
     thread = next(
         iter(_message_ids(header("References")) + _message_ids(header("In-Reply-To"))), own
     )
-    try:
-        sent = parsedate_to_datetime(header("Date"))
-        sent = sent.astimezone(UTC) if sent.tzinfo else sent.replace(tzinfo=UTC)
-    except (TypeError, ValueError):
-        sent = datetime(1970, 1, 1, tzinfo=UTC)
-    subject = " ".join(header("Subject").split()) or "(no subject)"
+    # The server's clock, not the sender's: `Date` says whatever the sender likes.
+    date = _received(meta) or _sent(header("Date")) or datetime(1970, 1, 1, tzinfo=UTC)
+    # The receiving server puts its own results on top; any below came with the message.
+    results = [str(r) for r in headers.get_all("Authentication-Results") or []]
+    subject = _shown(header("Subject")) or "(no subject)"
     if len(subject) > MAX_SUBJECT:
         subject = subject[: MAX_SUBJECT - 1] + "…"
     auto = header("Auto-Submitted").strip().lower()
@@ -165,7 +216,7 @@ def message(meta: bytes, raw: bytes, me: set[str]) -> Message | None:
         message_id=own,
         thread=thread or f"uid:{uid.group(1).decode()}",
         subject=subject,
-        sender_name=name or address or "someone",
+        sender_name=_shown(name) or address or "someone",
         sender_email=address.lower() if "@" in address else None,
         to_me=bool(to & me),
         bulk=bool(header("List-Id"))
@@ -173,5 +224,6 @@ def message(meta: bytes, raw: bytes, me: set[str]) -> Message | None:
         or (bool(auto) and auto != "no"),
         flagged="\\Flagged" in flag_set,
         seen="\\Seen" in flag_set,
-        date=sent,
+        verified=bool(results) and bool(_DMARC_PASS.search(results[0])),
+        date=date,
     )

@@ -31,7 +31,7 @@ from . import client
 from .config import MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot
-from .panels import OPEN_PAGE, message_url, panels, threads
+from .panels import OPEN_PAGE, link, message_url, panels, threads
 from .repository import MIGRATIONS, MessageRepository
 from .setup import EXAMPLE, TEMPLATE, questions
 
@@ -97,7 +97,9 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
             latest = thread.latest
             email = latest.sender_email
             refs: list[Ref] = []
-            if email:
+            # Only a sender the server vouched for is a person: core gives people their
+            # contact type, which a forged `From` mustn't borrow.
+            if email and latest.verified:
                 person = people.setdefault(
                     email,
                     Entity(
@@ -111,7 +113,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
                 Entity(
                     ref=Ref(kind=THREAD, id=thread.id),
                     title=latest.subject,
-                    url=message_url(req.ctx.config, latest),
+                    url=link(req.ctx.config, self.name, thread),
                     state="flagged" if thread.flagged else "unread",
                     refs=refs,
                     mentions=[latest.subject],
@@ -141,9 +143,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         the page won't link to itself (`message:`, `mid:`). Only a thread the mailbox has, so
         the link is always one the config made."""
         [wanted] = req.query.get("thread") or [""]
-        snapshot = MessageRepository(req.ctx.db).load()
-        thread = next((t for t in threads(snapshot) if t.id == wanted), None)
-        url = message_url(req.ctx.config, thread.latest) if thread else None
+        latest = MessageRepository(req.ctx.db).latest(wanted)
+        url = message_url(req.ctx.config, latest) if latest else None
         if url is None:
             return Response(body="No such message: it may have been read since.", status=404)
         return Response.redirect(url)

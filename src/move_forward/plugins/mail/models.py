@@ -30,8 +30,12 @@ class Message(Model):
     `Auto-Submitted`): not a person writing to me."""
     flagged: bool
     seen: bool
+    verified: bool
+    """The receiving server found its `From` authentic (DMARC passed), so its sender is who it
+    says. `From` is otherwise whatever the sender wrote."""
     date: datetime
-    """When it was sent, in UTC."""
+    """When the server received it (`INTERNALDATE`), in UTC; the sender's `Date` only when the
+    server doesn't say."""
 
 
 class MailSnapshot(Model):

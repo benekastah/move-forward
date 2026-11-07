@@ -67,8 +67,48 @@ def test_a_message_is_read_from_its_headers() -> None:
         bulk=False,
         flagged=True,
         seen=False,
+        verified=False,
         date=datetime(2026, 11, 7, 18, tzinfo=UTC),
     )
+
+
+def test_its_date_is_the_servers_not_what_the_sender_says() -> None:
+    received = b'1 (UID 7 INTERNALDATE "07-Nov-2026 10:30:00 -0800" FLAGS ())'
+    forged = headers(extra="Date: Fri, 31 Dec 9999 23:59:59 -1200").replace(
+        b"Date: Sat, 07 Nov 2026 10:00:00 -0800\r\n", b""
+    )
+    found = client.message(received, forged, {ME})
+    assert found is not None and found.date == datetime(2026, 11, 7, 18, 30, tzinfo=UTC)
+    # Without the server's word, an unreadable Date doesn't stop the refresh.
+    found = client.message(b"1 (UID 7 FLAGS ())", forged, {ME})
+    assert found is not None and found.date == datetime(1970, 1, 1, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("results", "verified"),
+    [
+        (["mx.example.com; dkim=pass; spf=pass; dmarc=pass header.from=acme.com"], True),
+        (["mx.example.com; dmarc=fail header.from=acme.com"], False),
+        # One that came with the message, under the server's own, doesn't count.
+        (["mx.example.com; dmarc=fail", "evil.example; dmarc=pass"], False),
+        ([], False),
+    ],
+)
+def test_a_sender_is_verified_only_by_the_receiving_servers_dmarc(
+    results: list[str], verified: bool
+) -> None:
+    extra = "\r\n".join(f"Authentication-Results: {r}" for r in results)
+    found = client.message(b"1 (UID 7 FLAGS ())", headers(extra=extra), {ME})
+    assert found is not None and found.verified is verified
+
+
+def test_control_and_bidi_characters_are_dropped_from_what_is_shown() -> None:
+    raw = headers(
+        subject="=?utf-8?q?Invoice_=E2=80=AEfdp.exe=1B?=",
+        sender="=?utf-8?q?Bob=E2=80=AE?= <b@x.com>",
+    )
+    found = client.message(b"1 (UID 7 FLAGS ())", raw, {ME})
+    assert found is not None and (found.subject, found.sender_name) == ("Invoice fdp.exe", "Bob")
 
 
 @pytest.mark.parametrize(
@@ -114,6 +154,7 @@ class FakeImap:
 
     def login(self, user: str, password: str) -> tuple[str, list[bytes]]:
         self.calls.append(("login", user, password))
+        password.encode("ascii")  # as imaplib sends it
         if self.refuse:
             raise imaplib.IMAP4.error("[AUTHENTICATIONFAILED] Invalid credentials")
         return "OK", [b""]
@@ -184,6 +225,15 @@ def test_a_refused_sign_in_says_what_to_do(imap: Callable[..., FakeImap]) -> Non
         client.collect(_config(), "me@work.com", NOW)
 
 
+def test_a_password_imap_cant_send_says_so(
+    imap: Callable[..., FakeImap], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imap([])
+    monkeypatch.setenv("MAIL_PASSWORD", "pässword")
+    with pytest.raises(SourceError, match="ASCII"):
+        client.collect(_config(), ME, NOW)
+
+
 def test_no_password_says_how_to_set_one(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MAIL_PASSWORD", raising=False)
 
@@ -226,6 +276,7 @@ def message(
         "bulk": False,
         "flagged": False,
         "seen": False,
+        "verified": True,
         "date": datetime(2026, 11, 7, uid, tzinfo=UTC),
         **fields,
     }
@@ -255,6 +306,15 @@ def test_it_publishes_a_thread_per_conversation_pointing_at_whoever_wrote_last()
     bob = entities[Ref(kind=PERSON, id="mail/bob@acme.com")]
     assert (bob.attrs["email"], bob.title) == ("bob@acme.com", "Bob")
     assert Ref(kind=PERSON, id="mail/alice@acme.com") not in entities  # wrote earlier
+
+
+def test_a_sender_the_server_didnt_vouch_for_is_no_one() -> None:
+    harness = mailbox(message(1, sender="ceo@acme.com", verified=False))
+    ContactRepository(harness.db).set("@acme.com", "customer", NOW)
+    [thread] = harness.entities()
+    assert thread.refs == []
+    [item] = _items(harness)
+    assert "customer" not in item.badges
 
 
 def _items(harness: Harness) -> list[Any]:
@@ -313,6 +373,8 @@ def test_an_app_link_goes_through_the_open_page_which_sends_the_browser_on() -> 
     harness = mailbox(message(1), message_url="message:%3C{message_id}%3E")
     [item] = _items(harness)
     assert item.url == "/mail/open?thread=root%40acme.com"
+    [thread, _] = harness.entities()
+    assert thread.url == item.url
     found = harness.page("open", {"thread": ["root@acme.com"]})
     assert isinstance(found, Response)
     assert (found.status, found.headers["Location"]) == (303, "message:%3Cm1@acme.com%3E")

@@ -58,7 +58,14 @@ through the plugin's `/mail/open` page, which sends the browser on to the mail a
 with, pointing at the `person` who wrote its latest message and mentioning its subject (so a
 ticket key in it relates the two). That `person` is `mail/<address>`, with the address as its
 `handle` and `email`, so core joins them with the same person in other tools, a CRM say, and
-ranks and badges their mail by their contact type. See [entities.md](../entities.md).
+ranks and badges their mail by their contact type. Only a sender the receiving server vouched
+for is published that way: one whose `From` passed DMARC, by the server's own
+`Authentication-Results` (the topmost; any below came with the message). Anyone can write any
+`From`, and a forged one mustn't borrow a customer's type. Others' mail is still listed, from
+whoever it says. See [entities.md](../entities.md).
+
+When a message came is when the server received it (`INTERNALDATE`), not its `Date` header,
+which says whatever the sender likes.
 
 ## Panels
 
@@ -70,7 +77,7 @@ ranks and badges their mail by their contact type. See [entities.md](../entities
 ## Act now
 
 Every conversation but those from lists and automated mail (unless flagged), as Read, in minutes.
-Mail sent to me has its sender waiting since it came; a flagged conversation is important; and
+Mail sent to me has its sender waiting since the server received it; a flagged conversation is important; and
 the sender's contact type can raise it further.
 
 ## Pages

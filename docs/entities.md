@@ -64,8 +64,8 @@ gone.
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket`s its branch, title and body mention by key |
-| `person` | github: me, and everyone it knows an email for; mail: whoever wrote a thread's latest message | `<host>/<login>`; mail's `mail/<address>` | | |
-| `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with | `unread` or `flagged` | the `person` who wrote its latest message; it mentions its subject |
+| `person` | github: me, and everyone it knows an email for; mail: whoever wrote a thread's latest message, when the server verified them (DMARC) | `<host>/<login>`; mail's `mail/<address>` | | |
+| `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with | `unread` or `flagged` | the `person` who wrote its latest message, if verified; it mentions its subject |
 | `git.repo` | git | GitHub `owner/name` | | |
 | `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |
 | `git_stack.stack_branch` | git_stack | its `git.branch`'s id | | its `git.branch`, which git may have deleted |
@@ -150,7 +150,7 @@ points at a person is about them, so core ranks and badges its items by their co
 | `flagged` | bool | one of its messages is flagged |
 | `bulk` | bool | its latest message is a list's, a newsletter's or automated |
 | `to_me` | bool | its latest message has me among its `To`, not just copied |
-| `latest` | ISO datetime | when its latest message was sent |
+| `latest` | ISO datetime | when the server received its latest message |
 
 ### `git.repo`
 
