@@ -328,7 +328,7 @@ def _hides_nothing(kind: str) -> bool:
 
 
 def _with_importance_actions(
-    panel: Panel, priority_of: act_now.PriorityOf, hides: HidesKind = _hides_nothing
+    panel: Panel, priority_of: act_now.PriorityOf, hides: HidesKind
 ) -> Panel:
     """Add core's importance choices to every shown entity, including focus parts. An
     item's first subject is its primary entity, as for its anchor and Act now. An item about
