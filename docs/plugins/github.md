@@ -111,10 +111,14 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
 
 ## Act now
 
-github nominates direct reviews (quick when up to 100 lines, about an hour up to 500, with the
-author waiting since my review was last asked for by name), feedback to reply to (quick,
-the thread authors waiting since the oldest unresolved thread), CI failures and merge
-conflicts (about an hour), and PRs ready to merge (quick, closing the PR).
+github nominates direct reviews (sized by the `quick_review_max_*` and `hour_review_max_*`
+limits, with the author waiting since my review was last asked for), mentions to reply to
+(quick), feedback to reply to (quick, the thread authors waiting since the oldest unresolved
+thread), CI failures (about an hour), PR policy failures (quick), merge conflicts (about an
+hour, or quick when restacking fixes them) and PRs ready to merge (quick, closing the PR).
+Fix before review, Ready for review, Needs a reviewer, Held, the merge queue, Requested from
+my teams and PR housekeeping aren't nominated. Ready for me to review and Replies for me
+have Snooze on their items, and leave out what's snoozed or dismissed.
 
 ## Commands
 

@@ -14,7 +14,6 @@ from .models import GitStackSnapshot, StackBranch
 
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
-"""Joins a repo dir and a branch name in a `git.branch` entity's id."""
 
 
 def branch_ref(repo_dir: str, branch: str) -> Ref:

@@ -10,8 +10,8 @@ These diagrams show who publishes and who reads what. Keep them in step with the
 change to what a plugin publishes or reads, to its item actions or to its `requires`
 updates this file in the same commit.
 
-Core adds importance choices to entity items and their individual todo parts. Plugins
-can group their buttons with those of other plugins: notes' Put on ice joins git's
+Core adds importance choices to entity items and their individual todo parts, and a
+Snooze to the items of a `snoozable` panel. Plugins can group their buttons with those of other plugins: notes' Put on ice joins git's
 Delete under Disposition, and joins core's Snooze, Dismiss and Pin on Act now items.
 Emoji buttons retain their text labels in titles and accessible names.
 

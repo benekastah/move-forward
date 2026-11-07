@@ -79,6 +79,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | `/actions/slack/mark_sent` | `pr_url`, `target` (`user:<login>` or `team:<name>`), `kind` (`first` or `follow-up`), `message` | Records a ping as sent, so the next one to that target is a follow-up. |
 | `/actions/slack/set_contact` | `login`, `slack_id` (blank for none) | Sets where a person's pings go, by hand; it wins over imports. |
 | `/actions/slack/set_team_channel` | `team`, `channel_name`, `channel_id` (one of them at least) | Sets where a team's pings go, by hand; `[slack.teams]` still wins. |
+| `/actions/slack/connect` | | Starts signing in to the Slack app (needs `client_id`), replacing any sign-in started before; `/slack/connect` then sends the browser to Slack. |
 | `/actions/slack/disconnect` | | Revokes the app's token with Slack and forgets it. |
 
 ## Commands

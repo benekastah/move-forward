@@ -340,6 +340,9 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
   for one going well). A link to what's over sets `done`, and is struck through. An item
   that's not for now (a draft) is `deferred`: it sorts last, and Act now leaves it out
   unless the plugin's `act_now` nominates it.
+- An item's `parts` (a work entry's todos) are drawn beneath it when there are several, and
+  shown one at a time in focus mode, each with its own buttons. Act now shows the item
+  alone, without them, so its `details` should still name them.
 
 ### Act now
 
@@ -357,6 +360,8 @@ importance (a priority, an escalation) onto `importance`, in the plugin. An item
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
 Set `Item.fingerprint` to what would make a snoozed or dismissed item worth another look.
+Set `snoozable=True` on such a panel to give its items a Snooze there too; what's snoozed or
+dismissed then stays off the panel as well.
 
 Every nominated item needs a `task`: a stable id for what doing it is (`triage`,
 `transition`), lower-case letters, digits and `_`. Act now keeps a snooze, dismissal or pin

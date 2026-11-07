@@ -47,8 +47,10 @@ it without recording it.
 
 ## Act now
 
-notes nominates entries whose open todos are all quick: close-outs, finishing the entry,
-unless it's blocked.
+notes nominates entries whose open todos are all quick: close-outs, finishing the entry. A
+blocked one ranks lower until it's gone `[act_now] blocked_stale_days` untouched. An entry
+with one todo has its Done checkbox in Act now; one with several lists them as text, to tick
+off in the Todos panel.
 
 ## Buttons
 
@@ -63,7 +65,7 @@ unless it's blocked.
 | `/actions/notes/todo_undone` | `todo` | Reopens a done todo. |
 | `/actions/notes/todo_delete` | `todo` | Drops the todo without recording it. |
 | `/actions/notes/todo_link` | `todo`, `input` (Jira key or PR URL) | Links the todo to the ticket or PR; a key in a project jira hasn't seen yet is looked up in Jira. |
-| `/actions/notes/ice` | `repo`, `branch` | Puts the branch on ice, with the rest of its stack and the other stacks in its git-stack group when git_stack knows them (git-stack's `restack`, `sync` and `push` act on the whole group), recording each branch's commit. |
+| `/actions/notes/ice` | `repo`, `branch`, optional `note` | Puts the branch on ice, with the rest of its stack and the other stacks in its git-stack group when git_stack knows them (git-stack's `restack`, `sync` and `push` act on the whole group), recording each branch's commit. |
 | `/actions/notes/ice_item` | `kind` (`pull_request`, `ticket` or `notes.entry`), `id`, optional `note` | Puts the PR, ticket or work entry on ice, with what it links. |
 | `/actions/notes/thaw` | `ice` (its id, as the On ice panel's buttons have it) | Takes what's on ice off it. |
 
