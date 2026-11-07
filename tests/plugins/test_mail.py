@@ -250,7 +250,7 @@ def test_it_publishes_a_thread_per_conversation_pointing_at_whoever_wrote_last()
     assert thread.mentions == ["Re: APP-12 renewal"]
     assert thread.attrs["unread"] == 2
     assert thread.url == (
-        "https://mail.google.com/mail/u/me%40gmail.com/#search/rfc822msgid:m3%40acme.com"
+        "https://mail.google.com/mail/u/me@gmail.com/#search/rfc822msgid:m3@acme.com"
     )
     bob = entities[Ref(kind=PERSON, id="mail/bob@acme.com")]
     assert (bob.attrs["email"], bob.title) == ("bob@acme.com", "Bob")
@@ -315,9 +315,16 @@ def test_an_app_link_goes_through_the_open_page_which_sends_the_browser_on() -> 
     assert item.url == "/mail/open?thread=root%40acme.com"
     found = harness.page("open", {"thread": ["root@acme.com"]})
     assert isinstance(found, Response)
-    assert (found.status, found.headers["Location"]) == (303, "message:%3Cm1%40acme.com%3E")
+    assert (found.status, found.headers["Location"]) == (303, "message:%3Cm1@acme.com%3E")
     missing = harness.page("open", {"thread": ["gone@acme.com"]})
     assert isinstance(missing, Response) and missing.status == 404
+
+
+def test_a_message_id_cant_break_out_of_its_place_in_the_link() -> None:
+    [item] = _items(mailbox(message(1, message_id="a/b#c?d&e=f@x")))
+    assert item.url == (
+        "https://mail.google.com/mail/u/me@gmail.com/#search/rfc822msgid:a%2Fb%23c%3Fd%26e%3Df@x"
+    )
 
 
 def test_without_a_message_url_mail_is_not_linked() -> None:

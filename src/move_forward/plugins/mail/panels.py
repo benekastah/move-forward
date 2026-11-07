@@ -42,12 +42,13 @@ def threads(snapshot: MailSnapshot | None) -> list[Thread]:
 def message_url(config: MailConfig, message: Message) -> str | None:
     """The configured link to `message`, its Message-ID and the username percent-encoded;
     None without a template, or for a message with no Message-ID when the template needs
-    one."""
+    one. `@` stays as it is: it's safe in a path and a fragment, and mail apps' links expect
+    it so."""
     template = config.message_url
     if not template or (message.message_id is None and "{message_id}" in template):
         return None
-    return template.replace("{message_id}", quote(message.message_id or "", safe="")).replace(
-        "{username}", quote(config.username, safe="")
+    return template.replace("{message_id}", quote(message.message_id or "", safe="@")).replace(
+        "{username}", quote(config.username, safe="@")
     )
 
 
