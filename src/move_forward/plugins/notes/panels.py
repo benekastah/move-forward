@@ -377,7 +377,10 @@ class Builder:
                     url=url,
                     subtitle=", ".join(keys),
                     badges=badges,
-                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered],
+                    # Several todos are listed as its parts.
+                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered]
+                    if len(ordered) == 1
+                    else [],
                     links=links,
                     rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
                     actions=[

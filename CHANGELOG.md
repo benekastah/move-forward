@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### An entry's several todos are only in its `parts`
+
+In `mfd dump`, the todos panel's item for an entry with several open todos no longer repeats them
+in `details`: read its `parts`, which have each todo's id and buttons. An entry with one open todo
+still has it in `details`.
+
 ### Request a reviewer from the page
 
 A PR missing a reviewer, with nothing else to do on it, now reaches Act now as "Request a
