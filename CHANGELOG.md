@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Setting an Act now item aside covers all it shows
+
+Snooze, Dismiss and Pin now also act on the item's `also:` tasks, so snoozing a ticket no longer
+brings it straight back with its next task. A task that changes still comes back by itself.
+Scripts posting these buttons' fields as given by `mfd dump` need no change.
+
 ### Act now keeps the buttons of what's also due
 
 An item's `also:` tasks now bring their buttons, so a ticket's Move to In Review stays usable under

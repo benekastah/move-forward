@@ -383,3 +383,17 @@ def test_what_else_is_due_on_a_subject_keeps_its_buttons() -> None:
 def test_a_button_two_tasks_offer_shows_once() -> None:
     [panel] = act_now.panels([_task("look", "Open", importance=2), _task("move", "Open")])
     assert [a.label for a in panel.items[0].actions].count("Open") == 1
+
+
+def test_setting_an_item_aside_covers_what_else_is_due_on_its_subject() -> None:
+    top, other = _task("look", importance=2), _task("move")
+    [panel] = act_now.panels([top, other])
+    snooze = next(a for a in panel.items[0].actions if a.label == "Snooze")
+    assert json.loads(snooze.fields["also"]) == [[*(other.key or ()), other.fingerprint]]
+    until = NOW + timedelta(days=1)
+    feedback = {
+        n.key: Feedback(action="snooze", fingerprint=n.fingerprint, until=until)
+        for n in (top, other)
+        if n.key
+    }
+    assert act_now.panels([top, other], feedback=feedback, now=NOW)[0].items == []

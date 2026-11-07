@@ -156,8 +156,9 @@ ticket, a work entry's todo) joins the best item about something in it, to do
 after it, with its buttons: "Reply: PR 330", then "Move to In Review: APP-12". An item made of
 several parts, like an entry's todos, lists them with their own buttons. Each
 plugin nominates its own items; its page says which. Each item has Snooze
-(until tomorrow), Dismiss and Pin (first until unpinned); a snoozed or
-dismissed item comes back once it changes (its title, badges or details). Opening an
+(until tomorrow), Dismiss and Pin (first until unpinned), which act on all it shows: what else
+is due on its subject and what's joined to it. A snoozed or dismissed item comes back once it
+changes (its title, badges or details). Opening an
 item's link, or pressing a plugin's button on it, marks it opened: it's dimmed in its place,
 with when you opened it, until it changes (or for a day at most). Coming back to the tab
 fetches again just what you opened in the last half hour, not its plugins whole; an item's
@@ -319,7 +320,7 @@ over 64 KiB:
 | `/settings` | `<section>:<key>` per setting (`:prune_days`, `github:history_days`, `act_now:weights.closes`); a list one per line; a true-or-false one `on` or `off` | Saves the settings the form changed into the config file (see [Settings](#settings)), and redirects back to `/settings` saying what was saved, or why nothing was. Settings left out of the form are left as they are. |
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
-| `/actions/act_now/<snooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: the items joined to it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and the items joined to it) until tomorrow, dismisses it, or pins or unpins it; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
+| `/actions/act_now/<snooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and what's shown with it) until tomorrow, dismisses it, or pins or unpins it; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
 | `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 0 not important, 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
 
 For example, ticking off a todo ([notes](docs/plugins/notes.md#buttons)):
@@ -373,5 +374,5 @@ python3 dev.py coverage  # the tests under coverage.py: what they miss, and html
 
 On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points the repo at
 `git_hooks/`: `pre-commit` formats and lint-fixes staged Python, `pre-push` runs
-`dev.py check`. GitHub Actions runs `dev.py check` on Linux, macOS and Windows once per
+`dev.py check` on a push to `main`, as a branch has CI. GitHub Actions runs `dev.py check` on Linux, macOS and Windows once per
 pull request, and on every push to `main` (`.github/workflows/check.yml`).

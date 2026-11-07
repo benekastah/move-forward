@@ -102,8 +102,6 @@ that needs a core one says so, and lands on top of it.
 2. **Undo what's set aside.** A place on the page listing what's snoozed and dismissed, each
    with a button to bring it back. Then Dismiss joins Snooze in the panels, and not before:
    it can't be undone until this exists.
-5. **Set a subject aside whole.** Snoozing an item brings the subject straight back with its
-   next task. Snooze, Dismiss and Pin should act on `also` too, as they do on `then`.
 6. **Importance where it means something.** Leave it off items about what hides (On ice). Say
    whether every panel sorts by it, since only two do now, not What next or Feedback.
 7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
