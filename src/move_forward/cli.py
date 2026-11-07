@@ -448,9 +448,8 @@ def main(argv: list[str] | None = None) -> int:
         contacts = ContactRepository(db)
         try:
             if args.type == "clear":
-                who = people.label_to_clear(args.who, contacts.all())
-                contacts.clear(who)
-                print(f"{who}: type cleared")
+                who, kept = people.clear_label(args.who, contacts.clear)
+                print(f"{who}: type cleared" if kept else f"{who} had no type")
             else:
                 who = people.contact_key(args.who)
                 contact_type = people.contact_type(args.type)

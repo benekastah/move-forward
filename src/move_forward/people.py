@@ -7,6 +7,7 @@ those and badges them, so a plugin needs only to publish the person and point at
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -73,12 +74,16 @@ def contact_key(text: str) -> str:
     raise ValueError(f"{text!r} isn't one person's email address or an @domain")
 
 
-def label_to_clear(text: str, labels: dict[str, str]) -> str:
-    """`text` as the label to clear: one that's kept, as it's kept (even on what can't be
-    labelled any more, say a domain that's since become public), else as `contact_key` makes
-    it; raises ValueError as that does."""
+def clear_label(text: str, clear: Callable[[str], bool]) -> tuple[str, bool]:
+    """Clear the label `text` names with `clear` (which says whether one was kept): as given,
+    lower-cased, so one kept on what can't be labelled any more (a domain that's since become
+    public) still goes; else as `contact_key` makes it. The label, and whether one was kept;
+    raises ValueError as `contact_key` does, for text that's neither."""
     found = text.strip().lower()
-    return found if found in labels else contact_key(text)
+    if clear(found):
+        return found, True
+    key = contact_key(text)
+    return key, key != found and clear(key)
 
 
 class PeopleConfig(Strict):

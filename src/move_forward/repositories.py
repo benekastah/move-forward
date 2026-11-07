@@ -213,8 +213,12 @@ class ContactRepository:
             (who, contact_type, now.isoformat()),
         )
 
-    def clear(self, who: str) -> None:
+    def clear(self, who: str) -> bool:
+        """Forget the type kept on `who`; whether there was one."""
+        if not self._db.query("SELECT 1 FROM contacts WHERE who = ?", (who,)):
+            return False
         self._db.execute("DELETE FROM contacts WHERE who = ?", (who,))
+        return True
 
 
 class FeedbackRepository:

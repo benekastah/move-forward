@@ -130,9 +130,14 @@ def test_where_tools_disagree_the_first_plugins_type_wins() -> None:
 
 def test_a_label_that_cant_be_set_any_more_can_still_be_cleared() -> None:
     kept = {"@users.noreply.github.com": "customer"}
-    assert people.label_to_clear(" @Users.Noreply.GitHub.com", kept) == "@users.noreply.github.com"
+    assert people.clear_label(" @Users.Noreply.GitHub.com", lambda k: bool(kept.pop(k, None))) == (
+        "@users.noreply.github.com",
+        True,
+    )
+    assert kept == {}
     with pytest.raises(ValueError, match="anyone can have"):
-        people.label_to_clear("@users.noreply.github.com", {})
+        people.clear_label("@users.noreply.github.com", lambda k: False)
+    assert people.clear_label("Bob@Acme.com", lambda k: False) == ("bob@acme.com", False)
 
 
 def test_a_tools_type_is_read_as_mine_would_be() -> None:
@@ -277,6 +282,12 @@ def test_the_commands_set_list_and_clear_a_type(
     assert json.loads(capsys.readouterr().out) == []
     assert cli.main(["-c", str(config), "contact", "@gmail.com", "customer"]) == 1
     assert "anyone can have" in capsys.readouterr().err
+    assert cli.main(["-c", str(config), "contact", "@acme.com", "clear"]) == 0
+    assert capsys.readouterr().out == "@acme.com had no type\n"
+    # One kept on what can't be labelled any more still clears.
+    ContactRepository(Database(db)).set("@users.noreply.github.com", "customer", NOW)
+    assert cli.main(["-c", str(config), "contact", "@users.noreply.github.com", "clear"]) == 0
+    assert capsys.readouterr().out == "@users.noreply.github.com: type cleared\n"
 
 
 class _NoSettings(Strict):
