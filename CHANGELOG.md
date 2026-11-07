@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### `due_warning_days` also decides which Jira tickets reach Act now
+
+Jira nominated tickets due within a fixed week, whatever `[act_now] due_warning_days` said.
+It now follows the setting, so a longer one brings earlier tickets into Act now and a shorter
+one leaves them out until nearer their date. Nothing to change unless you set it and relied on
+the week.
+
 ### Pick a PR's primary reviewer
 
 For a repo whose PRs need a primary reviewer as an assignee, list it in `[github]

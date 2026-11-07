@@ -500,8 +500,8 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
 
     def act_now(self, req: ActNowRequest[JiraConfig, JiraSnapshot]) -> list[Item]:
         """Its transitions, and the tickets in What next that matter now: important ones
-        (incidents, escalated bugs), those due within the week, and blocked ones, which Act
-        now ranks down until they've sat untouched for a while."""
+        (incidents, escalated bugs), those due within `req.due_horizon`, and blocked ones, which
+        Act now ranks down until they've sat untouched for a while."""
         ctx, panels = req.ctx, req.panels
         nominated = super().act_now(req)
         for panel in panels:
@@ -509,7 +509,10 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 continue
             for item in panel.items:
                 signals = item.signals or Signals()
-                due_soon = signals.due is not None and due_pressure(signals.due, ctx.now) > 0
+                due_soon = (
+                    signals.due is not None
+                    and due_pressure(signals.due, ctx.now, req.due_horizon) > 0
+                )
                 if signals.importance or due_soon or signals.blocked:
                     nominated.append(item)
         return nominated

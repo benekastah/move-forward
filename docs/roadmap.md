@@ -112,8 +112,6 @@ that needs a core one says so, and lands on top of it.
    whether every panel sorts by it, since only two do now, not What next or Feedback.
 7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
    nor do those of an item that focus mode splits into parts (an entry's Put on ice).
-9. **Say the due horizon to plugins.** `ActNowRequest` gains the `[act_now] due_warning_days`
-   horizon: jira nominates with a fixed week, so a longer setting never reaches Act now.
 10. **Account on the settings page.** A Sign out everywhere button (`mfd logout`), and where
     each plugin's token is found (`mfd token check`). Setting or rotating a token stays in
     the terminal.

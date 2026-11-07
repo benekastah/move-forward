@@ -17,6 +17,7 @@ from conftest import (
 )
 
 from move_forward import refresh
+from move_forward.act_now import ActNowConfig
 from move_forward.page import Badge
 from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
@@ -110,6 +111,13 @@ def test_a_ticket_whose_prs_merged_is_nominated_to_close() -> None:
     [closing] = [i for i in dashboard.act_now() if "APP-1" in i.title]
     assert closing.title == "Move to Closed: APP-1 Do the thing"
     assert closing.details[0] == "why: quick, closes APP-1"
+
+
+def test_how_far_ahead_a_ticket_is_nominated_follows_due_warning_days() -> None:
+    jira = _jira([issue("APP-2", type="Task", due=(NOW + timedelta(days=10)).date())])
+    assert jira.dashboard().act_now() == []
+    jira.config = jira.config.model_copy(update={"act_now": ActNowConfig(due_warning_days=14)})
+    assert [i.title for i in jira.dashboard().act_now()] == ["Work on it: APP-2 Do the thing"]
 
 
 def test_incidents_escalated_bugs_and_tickets_due_this_week_are_nominated() -> None:
