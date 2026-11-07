@@ -146,7 +146,7 @@ def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) ->
         actions=[
             Action(
                 name="jira/transition",
-                label="Close",
+                label=f"Move to {closed[0]}",
                 fields={"key": issue.key, "to": closed[0]}
                 | ({"also": "\n".join(closed[1:])} if closed[1:] else {}),
             )
@@ -222,6 +222,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
             if in_status(issue, config.status_in_review):
                 targets = config.status_in_progress
         elif issue.status_category == "new" and prs:
+            targets = config.status_in_progress
             proposal = f"still {issue.status} but has PRs"
         to = targets[0] if targets else None
         if proposal:

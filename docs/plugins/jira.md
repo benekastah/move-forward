@@ -58,11 +58,12 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
   button that makes it in Jira (by the workflow's transition into that status, so it fails,
   naming the statuses the ticket can go to, when there is none). A ticket in progress or
   in review whose only PRs were closed without merging is flagged too ("reopen it or move
-  the ticket back"; in review, with a button back to in progress).
+  the ticket back"; in review, with a button back to in progress). So is a ticket not started
+  that has PRs, with a button to in progress.
 - **Rollouts**: tickets in a `status_rollout` status, each with its PRs as links saying where
   each is ("ready to merge #123", "draft #124", "merged #120"): "Advance the rollout" while some are
-  open (low urgency, raised when one is ready to merge), "Finish the rollout" with a Close button
-  once all have merged.
+  open (low urgency, raised when one is ready to merge), "Finish the rollout" with a Move to Closed
+  button once all have merged.
 - **What next**: my tickets (with their due dates), incidents (by escalation label, if configured), then bugs,
   then unblocked work.
 

@@ -199,7 +199,7 @@ def test_a_ticket_in_rollout_is_closed_by_hand_once_its_prs_merged() -> None:
     assert item.title.startswith("APP-1")
     assert item.details == ["all PRs merged; close once monitoring is done"]
     assert [(a.label, a.fields["to"]) for a in item.actions if a.name == "jira/transition"] == [
-        ("Close", "Closed")
+        ("Move to Closed", "Closed")
     ]
     assert item.signals and item.signals.verb == "Finish the rollout"
     assert item.signals.importance == -1 and item.signals.closes is None
@@ -272,3 +272,16 @@ def test_a_ticket_whose_only_pr_was_closed_unmerged_is_flagged() -> None:
     assert items["APP-2"].subtitle.startswith("PR #2 closed unmerged")
     assert not [a for a in items["APP-2"].actions if a.name == "jira/transition"]
     assert "APP-3" not in items  # its PR merged: nothing to reopen
+
+
+def test_a_ticket_not_started_that_has_prs_can_be_moved_to_in_progress() -> None:
+    built = build(
+        github=snapshot(mine=[pr(1)]),
+        jira=JiraSnapshot(issues=[issue("APP-1", status="To Do", status_category="new")]),
+    )
+    [item] = panel(built, "jira.jira_transitions").items
+    assert item.subtitle == "still To Do but has PRs"
+    assert [(a.label, a.fields["to"]) for a in item.actions if a.name == "jira/transition"] == [
+        ("Move to In Progress", "In Progress")
+    ]
+    assert item.signals and item.signals.verb == "Move to In Progress"
