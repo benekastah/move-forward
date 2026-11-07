@@ -402,7 +402,9 @@ class Builder:
 
     def needs_reviewer(self) -> Panel:
         items: list[Item] = []
-        ask = Signals(verb="Request a reviewer", task="request_reviewer", effort="minutes")
+        # Of no stated effort, so it ranks below anything else to do on the PR, which is worth
+        # doing before asking anyone to look at it, and shows as "also" with its field until then.
+        ask = Signals(verb="Request a reviewer", task="request_reviewer")
         for pr in self.mine:
             if pr.is_draft or pr.in_merge_queue:
                 continue

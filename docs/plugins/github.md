@@ -135,9 +135,8 @@ github nominates direct reviews (sized by the `quick_review_max_*` and `hour_rev
 limits, with the author waiting since my review was last asked for), mentions to reply to
 (quick), feedback to reply to (quick, the thread authors waiting since the oldest unresolved
 thread), CI failures (about an hour), PR policy failures (quick), merge conflicts (about an
-hour, or quick when restacking fixes them), PRs needing a reviewer (quick, once there's
-nothing else to do on them, unless already approved or all that's missing is a team's members being
-readable) and PRs ready to merge (quick, closing the PR). Fix before review, Ready for review, Held, the merge queue,
+hour, or quick when restacking fixes them), PRs needing a reviewer (below anything else to do on them, which shows it as "also", and not when
+already approved or all that's missing is a team's members being readable) and PRs ready to merge (quick, closing the PR). Fix before review, Ready for review, Held, the merge queue,
 Requested from my teams and PR housekeeping aren't nominated. Ready for me to review and Replies for me
 have Snooze on their items, and leave out what's snoozed or dismissed.
 

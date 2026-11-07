@@ -79,8 +79,6 @@ CHANGED = "prs_changed"
 EVERYTHING = "*"
 LAST_FULL = "last_full_collect"
 """The kv key of when every search last ran."""
-REQUEST_REVIEWER_TASK = "request_reviewer"
-"""The task of Needs a reviewer's items in Act now."""
 
 
 def _pr_id(changed: str) -> client.PrId:
@@ -484,9 +482,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def act_now(self, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
         """The panels' items with signals, their own or their panel's (one with neither is
         listed only), the feedback on my drafts too, though a draft's item is
-        deferred; but not a deferred review: a draft isn't ready for one. A PR missing a
-        reviewer only once there's nothing else to do on it: it isn't ready to ask anyone."""
-        nominated = [
+        deferred; but not a deferred review: a draft isn't ready for one."""
+        return [
             item if item.signals else item.model_copy(update={"signals": panel.signals})
             for panel in req.panels
             if panel.act_now
@@ -496,9 +493,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 item.deferred and (item.signals or panel.signals or Signals()).task == REVIEW_TASK
             )
         ]
-        asks = [i for i in nominated if i.signals and i.signals.task == REQUEST_REVIEWER_TASK]
-        busy = {i.url for i in nominated if i not in asks}
-        return [i for i in nominated if i not in asks or i.url not in busy]
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS
