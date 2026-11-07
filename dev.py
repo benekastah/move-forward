@@ -193,14 +193,17 @@ def pre_commit() -> None:
             run(tool("ruff"), "format", "--quiet", "--", path)
 
 
+def pushes_to_main(refs: str) -> bool:
+    """Whether a push brings commits to `main`. git passes each ref being pushed on stdin as
+    "<local ref> <local sha> <remote ref> <remote sha>"; a deletion's local sha is all zeros."""
+    pushed = [line.split() for line in refs.splitlines() if line.split()]
+    return any(sha.strip("0") and remote == "refs/heads/main" for _, sha, remote, _ in pushed)
+
+
 def pre_push() -> None:
-    """Run every check before pushing, unless the push only deletes remote branches. git
-    passes each ref being pushed on stdin as "<local ref> <local sha> <remote ref> <remote
-    sha>"; a deletion's local sha is all zeros. Skip it with `git push --no-verify`."""
-    pushes_commits = any(
-        set(line.split()[1]) != {"0"} for line in sys.stdin.read().splitlines() if line.split()
-    )
-    if pushes_commits:
+    """Run every check before pushing to `main`, which nothing else stands in front of. A
+    branch has CI, on every system. Skip it with `git push --no-verify`."""
+    if pushes_to_main(sys.stdin.read()):
         check(["-q"])
 
 
