@@ -1,5 +1,6 @@
 """Server-side HTML for the dashboard and focus mode, and the frame of plugins' pages."""
 
+import hashlib
 import json
 from collections.abc import Set as AbstractSet
 from datetime import datetime
@@ -340,6 +341,21 @@ def _link_action(action: Action) -> str:
     )
 
 
+def _text_field(action: Action, at: str, pos: int | None) -> str:
+    """A button's text field, with its suggestions in a `<datalist>`. The list's id comes from
+    the button and its place, so the same item shown in two panels has one each."""
+    placeholder = _e(action.input or "")
+    if not action.suggestions:
+        return f"<input type='text' name='input' placeholder='{placeholder}' required>"
+    seen = json.dumps([action.name, action.fields, action.suggestions, at, pos], sort_keys=True)
+    list_id = f"suggestions-{hashlib.sha256(seen.encode()).hexdigest()[:16]}"
+    options = "".join(f"<option value='{_e(s)}'></option>" for s in action.suggestions)
+    return (
+        f"<input type='text' name='input' placeholder='{placeholder}' list='{list_id}'"
+        f" autocomplete='off' required><datalist id='{list_id}'>{options}</datalist>"
+    )
+
+
 def _action(action: Action, back: str = "", at: str = "", pos: int | None = None) -> str:
     """A button's form. `back` is where the action redirects afterwards; default the page.
     `at` is the key of the panel it's in, and `pos` its item's place there: the redirect
@@ -377,10 +393,7 @@ def _action(action: Action, back: str = "", at: str = "", pos: int | None = None
             f"{label}</button>"
         )
         if action.input:
-            control = (
-                f"<input type='text' name='input' placeholder='{_e(action.input)}' required>"
-                + control
-            )
+            control = _text_field(action, at, pos) + control
     return (
         f"<form method='post' action='/actions/{_e(action.name)}{query}' class='action'{confirm}>"
         f"{fields}{control}</form>"

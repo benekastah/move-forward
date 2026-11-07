@@ -376,7 +376,9 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   typo can't post to a 404. An action that keeps its item on the focus page returns
   `ActionResult(notice, req.ctx.kept(key))`, and `kept_item` gets `key` back.
   `req.fields` are its form
-  fields, `req.surface` where the button was (`dashboard` or `focus`). Check every field: they
+  fields, `req.surface` where the button was (`dashboard` or `focus`). A button with an
+  `input` has a text field, posted as `input`; `suggestions` lists what it offers to pick
+  from. Check every field: they
   come from a form, so treat them as untrusted (a repo must be configured, a worktree must
   be the repo's, an id must exist). Anything that deletes or rewrites sets `confirm`, and
   nothing force-pushes, resets or stashes. Read a required field with

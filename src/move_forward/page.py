@@ -93,6 +93,9 @@ class Action(Model):
     """Drawn bigger: the data says this is probably the thing to do."""
     input: str | None = None
     """Placeholder of a text field, posted as `input`, that the button submits along."""
+    suggestions: list[str] = Field(default_factory=list[str])
+    """What the text field offers to pick from, in order; anything else can still be typed.
+    Check the posted `input` like any other field."""
     href: str | None = None
     """Makes the button a link to this page instead of a form (`name` and `fields` unused).
     Links sit at the top right of their item."""
