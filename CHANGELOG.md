@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Refresh progress in the tab icon
+
+The refresh icon now highlights the dots of an arrow in sequence instead of spinning.
+If a background tab pauses animation, the arrow still indicates a refresh. The header
+logo and normal favicon share the wider arrow. Reload the dashboard to load the new
+animation code; no config change is needed.
+
 ### Recognize review requests after addressed feedback
 
 After pushing changes and requesting the same reviewer again, a PR whose older review

@@ -188,6 +188,10 @@ with the date when it wasn't today), "refreshing…" while it does, or "refresh
 failed" with the reason on hover. Its Refresh button refreshes just that plugin,
 and the plugins that collect after it (git_stack after git); the header's
 Refresh refreshes them all. The footer lists only plugins without a group.
+While any plugin refreshes, the tab icon shows a dotted version of the
+dashboard arrow, highlighting one dot at a time. If the browser pauses the
+animation in a background tab, it still shows a complete refresh icon. The
+normal mark returns when the refresh ends.
 
 ## Settings
 

@@ -10,6 +10,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, ClassVar
 from urllib.parse import quote, urlencode
+from xml.etree import ElementTree
 
 import pytest
 from conftest import ME, pr, snapshot
@@ -154,6 +155,23 @@ def test_stylesheet_and_404(client: HTTPConnection) -> None:
     favicon = get(client, "/favicon.svg")
     assert favicon.status == 200 and favicon.getheader("Content-Type") == "image/svg+xml"
     assert favicon.read().startswith(b"<svg")
+    refresh_icon = get(client, "/favicon-refresh.svg")
+    assert refresh_icon.status == 200
+    assert refresh_icon.getheader("Content-Type") == "image/svg+xml"
+    first = refresh_icon.read()
+    assert b"M1.3 5.1h1.1v1.3H1.3z' fill='#a78bfa'" in first
+    assert first.count(b"<svg") == 1
+    ElementTree.fromstring(first)
+    for path, dot in (
+        ("/favicon-refresh-1.svg", b"M3.3 5.1h1.1v1.3H3.3z' fill='#a78bfa'"),
+        ("/favicon-refresh-2.svg", b"M5.3 5.1h1.1v1.3H5.3z' fill='#a78bfa'"),
+    ):
+        frame = get(client, path)
+        assert frame.status == 200 and frame.getheader("Content-Type") == "image/svg+xml"
+        body = frame.read()
+        assert dot in body
+        assert body.count(b"<svg") == 1
+        ElementTree.fromstring(body)
     assert b"<circle" not in get(client, "/logo.svg").read()
     assert get(client, "/nope").status == 404
 

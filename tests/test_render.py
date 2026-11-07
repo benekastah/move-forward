@@ -86,12 +86,18 @@ def test_refreshing_disables_the_buttons_and_reloads_sooner() -> None:
     )
 
 
-def test_the_icon_spins_only_while_refreshing() -> None:
+def test_refreshing_cycles_complete_favicon_frames() -> None:
     busy = render.dashboard_page(_dashboard(), refreshing=frozenset({"github"}))
     idle = render.dashboard_page(_dashboard(), refreshing=frozenset())
     assert "<span data-refreshing>refreshing…</span>" in busy
     assert "<span data-refreshing" not in idle
-    assert render.SPIN_SCRIPT in busy and render.SPIN_SCRIPT in idle
+    assert "<link rel='icon' href='/favicon-refresh.svg' type='image/svg+xml'>" in busy
+    assert "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>" in idle
+    assert render.REFRESH_ICON_SCRIPT in busy and render.REFRESH_ICON_SCRIPT in idle
+    assert "mfd:replaced" in render.REFRESH_ICON_SCRIPT
+    assert "setInterval" in render.REFRESH_ICON_SCRIPT
+    assert "clearInterval" in render.REFRESH_ICON_SCRIPT
+    assert "'/favicon-refresh-2.svg'" in render.REFRESH_ICON_SCRIPT
 
 
 def test_the_page_reloads_in_the_background_instead_of_navigating() -> None:

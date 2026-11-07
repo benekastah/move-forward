@@ -44,6 +44,9 @@ STATIC_DIR = Path(__file__).parent / "static"
 STATIC_FILES = {
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
+    "/favicon-refresh.svg": ("favicon-refresh.svg", "image/svg+xml"),
+    "/favicon-refresh-1.svg": ("favicon-refresh-1.svg", "image/svg+xml"),
+    "/favicon-refresh-2.svg": ("favicon-refresh-2.svg", "image/svg+xml"),
     "/logo.svg": ("logo.svg", "image/svg+xml"),
 }
 """Served paths to the file in `STATIC_DIR` and its content type."""

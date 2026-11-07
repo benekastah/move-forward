@@ -101,6 +101,9 @@ RESERVED_NAMES = frozenset(
         "unsnooze",
         # Core's paths' first segments (`server.RESERVED_PATHS`).
         "actions",
+        "favicon-refresh.svg",
+        "favicon-refresh-1.svg",
+        "favicon-refresh-2.svg",
         "favicon.svg",
         "focus",
         "layout",
