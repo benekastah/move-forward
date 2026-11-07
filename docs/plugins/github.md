@@ -100,7 +100,9 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   files". The PR's badges still show the whole PR. Without owned files, the whole PR sizes it.
 - **Needs a reviewer**: the assignment reasons from Fix before review, with recent
   committers suggested for PRs requesting a team. GitHub's `reviewDecision` is null where
-  the base branch requires no review; Ready to merge asks for no approval there.
+  the base branch requires no review; Ready to merge asks for no approval there. These PRs,
+  here and in Fix before review, have a field to request a reviewer, suggesting the requested
+  teams' members as far as they're known, then recent committers; any login can be typed.
 - **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs). A PR that GitHub's merge state calls BEHIND ("behind base: update the branch") or BLOCKED with nothing else we can see ("blocked by branch protection") isn't ready either: it's held, with that reason.
 - **In the merge queue**: my PRs waiting in it. Nothing to act on, so Act now ignores it.
 - **Requested from my teams**: PRs waiting on any of my `teams`, ranked by how many files
@@ -121,6 +123,7 @@ members as far as they're known, then recent committers; any login can be typed.
 
 | Path | Fields | Does |
 | --- | --- | --- |
+| `/actions/github/request_reviewer` | `pr` (the URL of one of my open PRs), `input` (a login) | Asks them to review it. |
 | `/actions/github/primary_reviewer` | `pr` (the URL of one of my open PRs, in a repo in `primary_reviewer_repos`), `input` (a login) | Assigns them in place of whoever else is assigned besides the author, and asks for their review unless they're already asked or have reviewed it. |
 
 ## Act now
@@ -129,9 +132,9 @@ github nominates direct reviews (sized by the `quick_review_max_*` and `hour_rev
 limits, with the author waiting since my review was last asked for), mentions to reply to
 (quick), feedback to reply to (quick, the thread authors waiting since the oldest unresolved
 thread), CI failures (about an hour), PR policy failures (quick), merge conflicts (about an
-hour, or quick when restacking fixes them) and PRs ready to merge (quick, closing the PR).
-Fix before review, Ready for review, Needs a reviewer, Held, the merge queue, Requested from
-my teams and PR housekeeping aren't nominated. Ready for me to review and Replies for me
+hour, or quick when restacking fixes them), PRs needing a reviewer (quick, once there's
+nothing else to do on them) and PRs ready to merge (quick, closing the PR). Fix before review, Ready for review, Held, the merge queue,
+Requested from my teams and PR housekeeping aren't nominated. Ready for me to review and Replies for me
 have Snooze on their items, and leave out what's snoozed or dismissed.
 
 ## Commands

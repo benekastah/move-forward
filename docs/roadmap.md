@@ -125,10 +125,6 @@ as `touched`, so it's fetched again at once.
     shown>`, so a push since then refuses it. A merge queue takes no method, and the button says
     Add to queue. Otherwise the method comes from a setting or the repo's default. Never
     `--admin`, and the branch stays for Cleanup.
-13. **Request a reviewer.** On Needs a reviewer and Fix before review, a field with the same
-    suggestions (`gh pr edit --add-reviewer`). Also nominate these for Act now: a PR missing only
-    a reviewer never gets there, as neither panel is `act_now`, so `Request a reviewer` and Fix
-    before review's other verbs are never shown; those that stay unused go.
 14. **Ready for review.** `gh pr ready`, with a confirm, on a draft housekeeping says may be
     ready.
 15. **Update branch.** `gh pr update-branch` (merging, not rebasing, which would rewrite what's
