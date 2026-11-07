@@ -365,7 +365,7 @@ def _choices(action: Action) -> str:
         f"<option value='{_e(value)}'>{_e(label)}</option>"
         for label, value in action.choices.items()
     )
-    return f"<select name='choice'>{options}</select>"
+    return f"<select name='choice' aria-label='{_e(action.label)}'>{options}</select>"
 
 
 def _action(action: Action, back: str = "", at: str = "", pos: int | None = None) -> str:

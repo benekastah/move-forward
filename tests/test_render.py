@@ -513,7 +513,7 @@ def test_a_buttons_choices_are_a_drop_down_beside_its_field() -> None:
     )
     html = render.buttons([action])
     assert (
-        "<select name='choice'><option value=''>Unsized</option>"
+        "<select name='choice' aria-label='Add'><option value=''>Unsized</option>"
         "<option value='quick'>Q&lt;uick</option></select>"
     ) in html
     plain = action.model_copy(update={"choices": {}})
