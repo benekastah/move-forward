@@ -474,3 +474,27 @@ def test_only_the_organisation_a_person_points_at_is_theirs() -> None:
 def test_an_organisations_id_is_its_hosts() -> None:
     assert fits(ORGANISATION, "crm.example.com/acme")
     assert not fits(ORGANISATION, "Acme")
+
+
+def test_a_key_account_raises_its_people_above_a_domain_type_but_not_an_address_one() -> None:
+    key = _organisation("crm.example.com/acme", importance=2)
+    crm = _at(_person("crm.example.com/42", "alice@acme.com"), key)
+    domain = _contacts(SENDER, crm, key, _thread(SENDER), labels={"@acme.com": "customer"})
+    assert domain.importance(THREAD) == 2
+    assert domain.additions(Item(title="x", subjects=[THREAD])).badges == [
+        "customer",
+        "key account",
+    ]
+    address = _contacts(SENDER, crm, key, _thread(SENDER), labels={"alice@acme.com": "vendor"})
+    assert address.importance(THREAD) == 0
+
+
+def test_an_item_about_an_organisation_is_about_it_not_its_people() -> None:
+    acme = _organisation("crm.example.com/acme", "customer", importance=2)
+    vendor = _at(_person("crm.example.com/42", "alice@acme.com", "vendor"), acme)
+    contacts = _contacts(acme, vendor)
+    contact = contacts.of(acme.ref)
+    assert contact is not None
+    assert (contact.contact_type, contact.importance, contact.email) == ("customer", 2, None)
+    added = contacts.additions(Item(title="Acme", subjects=[acme.ref]))
+    assert (added.badges, added.actions) == (["customer", "key account"], [])

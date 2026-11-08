@@ -140,6 +140,9 @@ class Contact:
     """What my label on them is kept on, an address or `@domain`; None without one of mine."""
     stated: bool = False
     """Their importance is what a tool said outright, above what their type gives."""
+    key_account: bool = False
+    """Their importance is what a tool said outright of their organisation (or of it, for an
+    organisation), above what their type and what a tool said of them give."""
 
 
 class Contacts:
@@ -168,10 +171,26 @@ class Contacts:
             # a tool says of them beats what it says of where they work.
             found = next((t for p in [*same, *orgs] if (t := _tool_type(p.contact_type))), None)
         by_type = self._types.get(found, 0) if found else 0
-        # A tool can also state it outright (a CRM's VIP, a starred contact, a key account): the
-        # highest counts, above a type on their domain too (a VIP at a customer).
-        stated = max((p.importance or 0 for p in [*same, *orgs]), default=0)
-        return Contact(email, found, max(by_type, stated), labelled, stated > by_type)
+        # A tool can also state it outright (a CRM's VIP, a starred contact), of them or of their
+        # organisation (a key account): the highest counts, above a type on their domain too (a
+        # VIP at a customer).
+        stated = max((p.importance or 0 for p in same), default=0)
+        account = max((o.importance or 0 for o in orgs), default=0)
+        return Contact(
+            email,
+            found,
+            max(by_type, stated, account),
+            labelled,
+            stated > by_type,
+            account > max(by_type, stated),
+        )
+
+    def _of_organisation(self, org: _OrganisationView) -> Contact:
+        """An organisation, as what a tool says of it: no address to keep a type of mine on."""
+        found = _tool_type(org.contact_type)
+        by_type = self._types.get(found, 0) if found else 0
+        account = org.importance or 0
+        return Contact(None, found, max(by_type, account), None, key_account=account > by_type)
 
     def _organisations(self, people: list[str]) -> list[_OrganisationView]:
         """The organisations the `person` entities point at, in their order, once each."""
@@ -189,8 +208,11 @@ class Contacts:
         ]
 
     def of(self, ref: Ref) -> Contact | None:
-        """Who `ref` is about, itself when it's a person: the one who matters most, the first of
-        those alike; None when it's about no one."""
+        """Who `ref` is about, itself when it's a person or an organisation: the one who matters
+        most, the first of those alike; None when it's about no one."""
+        if ref.kind == ORGANISATION:
+            org = self._graph.view_one(ORGANISATION, ref.id, _OrganisationView)
+            return self._of_organisation(org) if org else None
         people = (
             [person]
             if ref.kind == PERSON and (person := self._graph.view_one(PERSON, ref.id, _PersonView))
@@ -206,7 +228,8 @@ class Contacts:
 
     def additions(self, item: Item) -> ItemAdditions:
         """A badge with the type of who `item` is mainly about (and "VIP" when a tool says they
-        matter more than that), and a button to set it."""
+        matter more than that, "key account" when it says so of their organisation), and a
+        button to set it, for a person with an address."""
         contact = self.of(item.subjects[0]) if item.subjects else None
         if contact is None:
             return ItemAdditions()
@@ -214,6 +237,7 @@ class Contacts:
             badges=[
                 *([contact.contact_type] if contact.contact_type else []),
                 *(["VIP"] if contact.stated else []),
+                *(["key account"] if contact.key_account else []),
             ],
             actions=self._actions(contact),
         )

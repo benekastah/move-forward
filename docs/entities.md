@@ -151,14 +151,15 @@ A person points at the `organisation`s they're at.
 
 The organisation family, modeled in core (`api.kinds.Organisation`): a CRM's account, a support
 tool's organisation, a company in an address book. No built-in plugin publishes one yet. What it
-is to me counts for the people pointing at it, as their own would: a tool's type on the person,
-or one I set on their address or domain, beats it.
+is to me counts for the people pointing at it: its type when neither a tool nor I give the
+person one (a type I set on their address or domain, or a tool's on them, beats it), and its
+importance as a tool's on the person would, which only a type I set on their address beats.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `handle` | string | its name in the tool |
 | `contact_type` | string or null | what it is to me, when the tool knows, e.g. `customer` |
-| `importance` | 0, 1, 2 or null | how much it matters to me, when the tool knows (a key account); its people's items rank by the highest of it, their type's and what a tool says of them |
+| `importance` | 0, 1, 2 or null | how much it matters to me, when the tool knows (a key account); its people's items rank by the highest of it, their type's and what a tool says of them, unless I set a type on their address. Badged "key account" when it's the highest |
 
 ### `mail.thread`
 
