@@ -607,6 +607,19 @@ def test_a_close_out_entry_is_nominated_to_finish() -> None:
     ]
 
 
+def test_act_nows_listed_parts_offer_the_importance_their_panel_does() -> None:
+    built = dashboard(work_items=[entry("APP-1 Almost", [todo("a", "quick"), todo("b", "quick")])])
+    [item] = built.act_now()
+
+    def levels(part: Item) -> list[str]:
+        return [a.fields["level"] for a in part.actions if a.group == "Importance"]
+
+    assert [levels(part) for part in item.parts] == [["0", "1", "2"], ["0", "1", "2"]]
+    assert len([a for a in item.actions if a.group == "Importance"]) == 3  # Act now's own, once
+    [panel_item] = panel(built, "notes.todos").items
+    assert [levels(part) for part in panel_item.parts] == [levels(part) for part in item.parts]
+
+
 def test_empty_notes_say_how_to_fill_them() -> None:
     empty = dashboard().panel("notes.todos")
     assert "mfd notes import <dir>" in empty.description
