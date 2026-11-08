@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Mail
+
+A `[mail]` section reads a mailbox's unread and flagged mail over IMAP, headers only and
+read-only: `host` and `username` are required; the password comes from `mfd token set mail` or
+`$MAIL_PASSWORD`. `/mail/open?thread=` sends the browser to a message in a mail app. See
+docs/plugins/mail.md. Nothing to change unless you add the section.
+
 ### Size a todo on the page
 
 Add todo has a size drop-down, and open todos have Quick and Big buttons, posting `todo` and `size`

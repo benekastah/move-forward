@@ -183,13 +183,13 @@ def test_an_item_shows_its_type_and_offers_to_set_it_for_the_person_or_their_dom
     assert clear.label == "Clear type for everyone at acme.com" and clear.confirm
 
 
-def test_clearing_one_address_asks_nothing() -> None:
+def test_clearing_one_address_asks_first_too() -> None:
     contacts = _contacts(SENDER, _thread(SENDER), labels={"alice@acme.com": "customer"})
     _, clear = contacts.additions(Item(title="Hello", subjects=[THREAD])).actions
     assert (clear.label, clear.fields, clear.confirm) == (
         "Clear type",
         {"who": "alice@acme.com"},
-        None,
+        "Clear the type of alice@acme.com?",
     )
 
 

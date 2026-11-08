@@ -207,6 +207,7 @@ class Contacts:
                         label="Clear type",
                         fields={"who": contact.labelled},
                         group="Contact",
+                        confirm=f"Clear the type of {contact.labelled}?",
                     )
                 ]
                 if contact.labelled

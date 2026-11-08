@@ -241,7 +241,7 @@ class Graph:
             return []
         email = person.attrs.get("email")
         address = personal_email(email) if isinstance(email, str) else None
-        return self._people_by_email[address] if address else [person]
+        return list(self._people_by_email[address]) if address else [person]
 
     def spec(self, kind: str) -> KindSpec | None:
         """What the publisher of `kind` says of it; None for a kind no plugin publishes."""

@@ -79,7 +79,8 @@ class Weights(Strict):
     importance: float = 3
     """Per level of importance (1 high, 2 critical)."""
     due: float = 1
-    """Times the due date's pressure: 0 a week or more ahead, rising to 4 once it's past."""
+    """Times the due date's pressure: 0 `due_warning_days` or more ahead, rising to 4 once it's
+    past."""
     blocked: float = -4
     """A blocked item, until it's been untouched for `blocked_stale_days`."""
 

@@ -1,3 +1,4 @@
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -5,7 +6,7 @@ from typing import Any
 import pytest
 from conftest import section
 
-from move_forward import asking, config, init, registry
+from move_forward import asking, cli, config, init, registry
 from move_forward.plugin import Plugin
 from move_forward.plugins.git import setup as git_setup
 from move_forward.plugins.git.config import GitConfig
@@ -366,5 +367,26 @@ def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[An
         key
         for key, field in plugin.config_model.model_fields.items()
         if not field.is_required() and key != "teams" and f"# {key} =" not in written
+    ]
+    assert missing == []
+
+
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
+def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> None:
+    """`mfd init --example` shows each plugin's keys too, in its section."""
+    lines = cli.EXAMPLE_CONFIG.splitlines()
+    header = re.compile(r"^(# )?\[([a-z_]+)\]")
+    start = next(
+        (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),
+        None,
+    )
+    if start is None:
+        pytest.skip(f"the example has no [{plugin.name}]")
+    end = next((n for n in range(start + 1, len(lines)) if header.match(lines[n])), len(lines))
+    section = "\n".join(lines[start:end])
+    missing = [
+        key
+        for key in plugin.config_model.model_fields
+        if key != "teams" and f"{key} =" not in section
     ]
     assert missing == []
