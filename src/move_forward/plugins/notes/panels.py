@@ -399,6 +399,15 @@ class Builder:
                 )
                 for t in ordered
             ]
+            # The entry's Add todo once, as the page shows it: on its last todo, in focus mode.
+            parts = [
+                part
+                if part is parts[-1]
+                else part.model_copy(
+                    update={"actions": [a for a in part.actions if a.name != TODO_ADD]}
+                )
+                for part in parts
+            ]
             # One todo isn't listed as a part, so the entry shows what its part would. Where it
             # stands in for the entry (focus mode), it's about the entry, so its importance and
             # Put on ice are the entry's, as on the page.
