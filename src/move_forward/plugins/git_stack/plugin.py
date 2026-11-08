@@ -29,7 +29,7 @@ from . import actions, changes, client, events
 from .config import GitStackConfig
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
-from .panels import STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
+from .panels import CLEAN, STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
 from .repository import MIGRATIONS, StackRepository
 
 FINGERPRINT = "stacks_fingerprint"
@@ -91,8 +91,21 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
 
     def act_now(self, req: ActNowRequest[GitStackConfig, GitStackSnapshot]) -> list[Item]:
         """Merged branches, quick to clean up, as git nominates the merged branches it can
-        delete; the rest of Stacks is news rather than something to do."""
-        return [item for panel in req.panels for item in panel.items if item.signals]
+        delete; the rest of Stacks is news rather than something to do. One per repo: its
+        Clean cleans them all, so more would only take Act now's places with the same button."""
+        merged = [item for panel in req.panels for item in panel.items if item.signals]
+        by_repo: dict[str, list[Item]] = {}
+        for item in merged:
+            repo = next((a.fields["repo"] for a in item.actions if a.name == CLEAN), "")
+            by_repo.setdefault(repo, []).append(item)
+        return [
+            items[0].model_copy(
+                update={"details": [*items[0].details, f"and {len(items) - 1} more merged here"]}
+            )
+            if len(items) > 1
+            else items[0]
+            for items in by_repo.values()
+        ]
 
     def events(self, req: EventsRequest[GitStackConfig, GitStackSnapshot]) -> list[Event]:
         before, after = req.before, req.after

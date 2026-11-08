@@ -12,6 +12,9 @@ from ...api.kinds import PULL_REQUEST as PR
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot, StackBranch
 
+CLEAN = "git_stack/stack_clean"
+"""The button that runs `git stack clean -d local` in a repo."""
+
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
 
@@ -133,7 +136,7 @@ class Builder:
         for repo in self.snapshot.repos if self.snapshot else []:
             merged = [b.name for b in repo.branches if b.status == "merged"]
             clean = Action(
-                name="git_stack/stack_clean",
+                name=CLEAN,
                 label="Clean",
                 fields={"repo": repo.dir},
                 confirm=f"Run `git stack clean -d local` in {repo.dir}? It fetches,"

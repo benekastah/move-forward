@@ -400,3 +400,19 @@ def test_a_merged_stack_branch_reaches_act_now_with_clean() -> None:
     clean = next(a for a in item.actions if a.name == "git_stack/stack_clean")
     assert clean.confirm is not None
     assert clean.fields["repo"] == "/src/widgets"
+
+
+def test_act_now_cleans_a_repos_merged_branches_with_one_item() -> None:
+    built = dashboard(
+        github=snapshot(),
+        local=local_snapshot(branches=[local_branch("main")]),
+        stacks=stacks(
+            StackBranch(name="main"),
+            StackBranch(name="me/a", parent="main", status="merged"),
+            StackBranch(name="me/b", parent="main", status="merged"),
+            StackBranch(name="me/c", parent="main", status="merged"),
+        ),
+    )
+    [item] = built.act_now()  # one Clean cleans them all
+    assert "and 2 more merged here" in item.details
+    assert len(titles(built, "git_stack.stacks")) == 3  # the panel lists each
