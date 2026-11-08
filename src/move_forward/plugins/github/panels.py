@@ -578,9 +578,9 @@ class Builder:
                 )
             if reasons:
                 continue
-            conditions = [c for e in self._entries(pr) for c in e.merge_conditions.get(pr.url, [])]
-            if conditions:
-                held.append(pr_item(self.now, pr, details=[f"held: {c}" for c in conditions]))
+            # The rule Merge goes by: listed here only when nothing holds it.
+            if holds := merge_holds(self.graph, pr, self.config.ignored_reviewers):
+                held.append(pr_item(self.now, pr, details=[f"held: {h}" for h in holds]))
             else:
                 merge = Signals(
                     verb="Merge", task="merge", effort="minutes", closes=f"{pr.repo}#{pr.number}"
