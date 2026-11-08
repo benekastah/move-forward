@@ -111,10 +111,13 @@ def test_only_snoozes_still_running_come_back_or_stay_whatever_their_offset() ->
         feedback.say(
             ("x.a", "1", task), Feedback(action="snooze", fingerprint="f", until=until), now
         )
+    assert feedback.bring_back("x.a", "1", None, now) == 1  # not the snooze that's over
+    assert set(feedback.all()) == {("x.a", "1", "over")}
+    feedback.say(
+        ("x.a", "1", "running"), Feedback(action="snooze", fingerprint="f", until=running), now
+    )
     feedback.prune(now, now - timedelta(days=30))
     assert set(feedback.all()) == {("x.a", "1", "running")}  # the prune ends only what's over
-    assert feedback.bring_back("x.a", "1", None, now) == 1
-    assert feedback.all() == {}
 
 
 def test_unsnooze_from_a_stale_page_leaves_a_pin_made_since() -> None:
