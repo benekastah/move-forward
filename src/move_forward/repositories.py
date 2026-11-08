@@ -194,6 +194,36 @@ class PriorityRepository:
         return _rekey(self._db, "priorities", "kind", "id", kinds, identify)
 
 
+class TagRepository:
+    """The `#tags` I put on entities (`tags`), by handle: kept until I take them off."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def all(self) -> dict[Ref, list[str]]:
+        found: dict[Ref, list[str]] = {}
+        for row in self._db.query("SELECT * FROM tags ORDER BY created_at, tag"):
+            found.setdefault(Ref(kind=row["kind"], id=row["id"]), []).append(row["tag"])
+        return found
+
+    def add(self, ref: Ref, tag: str, now: datetime) -> bool:
+        """Whether it's new: one already on the entity stays as it was."""
+        with self._db.transaction() as conn:
+            cursor = conn.execute(
+                "INSERT OR IGNORE INTO tags VALUES (?, ?, ?, ?)",
+                (ref.kind, ref.id, tag, now.isoformat()),
+            )
+            return cursor.rowcount == 1
+
+    def remove(self, ref: Ref, tag: str) -> bool:
+        """Whether it was on the entity."""
+        with self._db.transaction() as conn:
+            cursor = conn.execute(
+                "DELETE FROM tags WHERE kind = ? AND id = ? AND tag = ?", (ref.kind, ref.id, tag)
+            )
+            return cursor.rowcount == 1
+
+
 class ContactRepository:
     """What I said people are to me (`contacts`), by address or `@domain`: kept until I clear
     it."""

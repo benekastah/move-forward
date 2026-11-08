@@ -223,7 +223,11 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     focused = dashboard.focus_items("notes.todos")
     assert focused is not None
     [(_, part)] = focused
-    assert [(a.name, a.checkbox, a.checked) for a in part.actions if a.group != "Importance"] == [
+    assert [
+        (a.name, a.checkbox, a.checked)
+        for a in part.actions
+        if a.group not in ("Importance", "Tags")
+    ] == [
         ("notes/todo_done", True, False),
         ("notes/todo_delete", False, False),
         ("notes/todo_link", False, False),
@@ -244,7 +248,9 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     ]
     # A single-todo entry can be completed on the dashboard as well as in Focus mode.
     assert [
-        a.name for a in panel(dashboard, "notes.todos").items[0].actions if a.group != "Importance"
+        a.name
+        for a in panel(dashboard, "notes.todos").items[0].actions
+        if a.group not in ("Importance", "Tags")
     ] == [
         "notes/todo_done",
         "notes/todo_delete",
@@ -348,7 +354,7 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
     assert part.url == "https://github.com/acme/other/pull/4"
     # An unknown-state PR is not evidence the todo is done.
     assert part.actions[0].suggested is False
-    assert [a.name for a in part.actions if a.group != "Importance"] == [
+    assert [a.name for a in part.actions if a.group not in ("Importance", "Tags")] == [
         "notes/todo_done",
         "notes/todo_delete",
         "notes/todo_link",
@@ -409,7 +415,9 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
     assert add("notes.todos", "APP-1 Fix") == {"entry": "APP-1 Fix"}
     # Other people's PRs get the snooze and the shared importance choices.
     review = next(i for i in panel(dashboard, "github.reviews_for_me").items)
-    assert [a.name for a in review.actions if a.group != "Importance"] == ["act_now/snooze"]
+    assert [a.name for a in review.actions if a.group not in ("Importance", "Tags")] == [
+        "act_now/snooze"
+    ]
 
 
 def test_naming_settings_drive_pings_labels_and_jira() -> None:

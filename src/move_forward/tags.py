@@ -1,4 +1,5 @@
-"""`#tags`: put on an entity by a `#tag` in its title, or by hand (`TagRepository`), they relate
+"""`#tags`: put on an entity by a `#tag` in its title, or by hand (`TagRepository`, and the
+Tag field core adds to items: `Tags`), they relate
 everything carrying them. Core publishes a `tag` entity for each (`kinds.TAG`), pointing at what
 carries it, and points at it every entity whose text (title or `mentions`) names it, as
 "Garbage day" names `#garbage-day`. A tag's words are separated by `-` or `_`, and text names it
@@ -10,9 +11,14 @@ import unicodedata
 from collections.abc import Iterable, Mapping
 from itertools import pairwise
 
+from . import act_now
 from .domain import KindModel
-from .graph import Entity, KindSpec, Ref
+from .graph import Entity, Graph, KindSpec, Ref
 from .kinds import TAG
+from .page import Action, Item, ItemAdditions
+
+TAG_ACTION = f"{act_now.ACTIONS}/tag"
+UNTAG_ACTION = f"{act_now.ACTIONS}/untag"
 
 _SEPARATORS = re.compile(r"[\s_-]+")
 _SHORTEST_NAMED = 3
@@ -56,6 +62,15 @@ def handle(text: str) -> str:
     """The tag `text` names: its words, case-folded and NFC, joined by `-`; `Garbage_Day` is
     `garbage-day`."""
     return "-".join(word for word, _, _ in _words(_fold(text)))
+
+
+def tag_key(text: str) -> str:
+    """The tag I typed (`garbage day`, `#Garbage-Day`), by handle; ValueError when it has no
+    letter, as `#7` doesn't."""
+    found = handle(text.strip().lstrip("#"))
+    if not any(c.isalpha() for c in found) or "#" in found:
+        raise ValueError(f"{text!r} isn't a tag: give it a word, e.g. #garbage-day")
+    return found
 
 
 def tags(text: str) -> list[str]:
@@ -159,3 +174,47 @@ def tagged(
         )
         for tag, found in carrying.items()
     ]
+
+
+class Tags:
+    """The tags on what items are about: shown on them, with buttons to add and take off mine."""
+
+    def __init__(self, graph: Graph, added: Mapping[Ref, list[str]]):
+        self._graph = graph
+        self._added = added
+        self._carried: dict[Ref, list[str]] = {}
+        for tag in graph.of_kind(TAG):
+            for ref in tag.refs:
+                self._carried.setdefault(ref, []).append(tag.ref.id)
+        self._known = sorted(t.ref.id for t in graph.of_kind(TAG))
+
+    def additions(self, item: Item) -> ItemAdditions:
+        """A `#tag` badge per tag on what `item` is mainly about, a Tag field to add one, and an
+        Untag button per tag I added; nothing for an item about nothing, or about what hides
+        things (ice)."""
+        if not item.subjects or self._graph.hides(item.subjects[0].kind):
+            return ItemAdditions()
+        subject = item.subjects[0]
+        fields = {"kind": subject.kind, "id": subject.id}
+        return ItemAdditions(
+            badges=[f"#{tag}" for tag in self._carried.get(subject, [])],
+            actions=[
+                Action(
+                    name=TAG_ACTION,
+                    label="Tag",
+                    fields=fields,
+                    input="#tag",
+                    suggestions=self._known,
+                    group="Tags",
+                ),
+                *(
+                    Action(
+                        name=UNTAG_ACTION,
+                        label=f"Untag #{tag}",
+                        fields={**fields, "tag": tag},
+                        group="Tags",
+                    )
+                    for tag in self._added.get(subject, [])
+                ),
+            ],
+        )

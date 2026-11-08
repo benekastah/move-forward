@@ -69,14 +69,16 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
     assert [
         (a.name, a.fields)
         for a in items[both].actions
-        if a.name != "notes/todo_add" and a.group != "Importance"
+        if a.name != "notes/todo_add" and a.group not in ("Importance", "Tags")
     ] == [
         ("git/wip_commit", {"repo": "/src/widgets", "worktree": "/src/widgets"}),
         ("git/push_branch", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
         ("notes/ice", {"repo": "/src/widgets", "branch": "me/APP-1-branch"}),
     ]
     assert [
-        a.name for a in items["me/new: 2 commits, never pushed"].actions if a.group != "Importance"
+        a.name
+        for a in items["me/new: 2 commits, never pushed"].actions
+        if a.group not in ("Importance", "Tags")
     ] == [
         "git/push_branch",
         "notes/ice",

@@ -1,12 +1,17 @@
 """`#tags`: what carries one is related to it, and what names it points at it."""
 
+from pathlib import Path
+
 import pytest
 from conftest import NOW, pr, snapshot, stored
 
-from move_forward import refresh, tags
+from move_forward import cli, refresh, tags
+from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
+from move_forward.plugin import ActionError
 from move_forward.registry import enabled
+from move_forward.repositories import TagRepository
 
 
 @pytest.mark.parametrize(
@@ -134,3 +139,52 @@ def test_a_title_that_cant_carry_a_tag_still_names_one_by_its_hash() -> None:
     mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#QA sign-off")
     found = tags.tagged([carrier, mail], {"y.mail": KindSpec(tags.TagAttrs, tags_from_title=False)})
     assert found[1].refs == [Ref(kind=TAG, id="qa")]
+
+
+def test_a_tag_put_on_by_hand_shows_on_its_items_and_comes_off() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1, title="Fix it")]))
+    fields = {"kind": "pull_request", "id": pr(1).url}
+    assert refresh.run_action(config, db, "act_now/tag", {**fields, "input": "#Garbage Day"}) == (
+        "tagged #garbage-day"
+    )
+    assert refresh.run_action(config, db, "act_now/tag", {**fields, "input": "garbage-day"}) == (
+        "already #garbage-day"
+    )
+    with pytest.raises(ActionError, match="isn't a tag"):
+        refresh.run_action(config, db, "act_now/tag", {**fields, "input": "#7"})
+    items = [
+        i
+        for p in refresh.build_dashboard(config, db, NOW).panels
+        for i in p.items
+        if i.subjects and i.subjects[0].id == pr(1).url
+    ]
+    assert items
+    for item in items:  # the same wherever it's shown
+        assert "#garbage-day" in item.badges
+        assert [a.label for a in item.actions if a.group == "Tags"] == [
+            "Tag",
+            "Untag #garbage-day",
+        ]
+    graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
+    assert [t.refs for t in graph.of_kind(TAG)] == [[Ref(kind="pull_request", id=pr(1).url)]]
+    untag = {**fields, "tag": "garbage-day"}
+    assert refresh.run_action(config, db, "act_now/untag", untag) == "#garbage-day taken off"
+    assert refresh.run_action(config, db, "act_now/untag", untag) == "#garbage-day wasn't on it"
+    assert TagRepository(db).all() == {}
+
+
+def test_the_tag_command_puts_a_tag_on_and_takes_it_off(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "config.toml"
+    db_path = tmp_path / "dashboard.db"
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n')
+    assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
+    assert cli.main(["-c", str(config), "tag", "Chores", "#Garbage_Day"]) == 0
+    assert cli.main(["-c", str(config), "tag", "Chores", "#7"]) == 1
+    assert cli.main(["-c", str(config), "tag", "Nothing", "x"]) == 1
+    entry = Ref(kind="notes.entry", id="Chores")
+    assert TagRepository(Database(db_path)).all() == {entry: ["garbage-day"]}
+    assert cli.main(["-c", str(config), "tag", "Chores", "garbage-day", "--remove"]) == 0
+    assert TagRepository(Database(db_path)).all() == {}
+    assert "Chores: #garbage-day" in capsys.readouterr().out

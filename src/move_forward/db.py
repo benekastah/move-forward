@@ -272,6 +272,17 @@ CREATE TABLE contacts (                -- kept: what I said people are to me
 """
 """Contact types I set: customer, partner and so on (see `people`)."""
 
+_V15_TAGS = """
+CREATE TABLE tags (                    -- kept: the #tags I put on entities, until I take them off
+    kind TEXT NOT NULL,
+    id TEXT NOT NULL,
+    tag TEXT NOT NULL,                 -- its handle, e.g. garbage-day
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (kind, id, tag)
+);
+"""
+"""Tags I set on entities, besides those in their text (see `tags`)."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -287,6 +298,7 @@ CORE_MIGRATIONS = [
     Migration("0012_feedback_by_task", _V12_FEEDBACK_BY_TASK),
     Migration("0013_opened", _V13_OPENED),
     Migration("0014_contacts", _V14_CONTACTS),
+    Migration("0015_tags", _V15_TAGS),
 ]
 
 _SCHEMA_VERSIONS = """

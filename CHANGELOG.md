@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Tags
+
+`#tags` in titles relate items, and any item can be tagged by hand: `mfd tag <entity> <tag>
+[--kind K] [--remove]`, or `POST /actions/act_now/tag` (`kind`, `id`, `input`) and
+`/actions/act_now/untag` (`kind`, `id`, `tag`). Items show their tags as badges. Nothing to
+change; scripts reading items' badges or buttons will see `#tag` badges and a Tags group.
+
 ### Mail
 
 A `[mail]` section reads a mailbox's unread and flagged mail over IMAP, headers only and
