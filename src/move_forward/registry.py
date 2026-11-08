@@ -25,6 +25,7 @@ from .plugin import (
     HandleRequest,
     LinkingRequest,
     LoadRequest,
+    NamedRequest,
     Plugin,
     RelateRequest,
     SourceError,
@@ -333,7 +334,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     stands when two plugins publish one entity of a family), with an id its family takes
     (`kinds.Family.id_rule`). One that isn't is a plugin bug:
     it's logged and left out, and the page goes on without it. So is a plugin whose
-    `entities`, `url_for` or `linking_patterns` raises: the graph is built without its
+    `entities`, `url_for`, `linking_patterns` or `handle_named` raises: the graph is built without its
     answer."""
     entities: list[Entity] = []
     seen: set[Ref] = set()
@@ -388,6 +389,20 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
                 return handle
         return None
 
+    def handle_named(kind: str, text: str) -> str | None:
+        for e in plugins:
+            if kind not in e.plugin.kinds:
+                continue
+            handle: str | None = call(
+                e.name,
+                "handle_named",
+                lambda e=e: e.plugin.handle_named(NamedRequest(e.ctx, kind, text)),
+                None,
+            )
+            if handle:
+                return handle
+        return None
+
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
         """Each plugin's answer; one that fails is logged and left out, so its entities just
         aren't known (the prune keeps what it can't check). So is an entity that doesn't fit
@@ -425,7 +440,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         for kind, spec in e.plugin.kinds.items():
             specs.setdefault(kind, spec)  # a family's first publisher's
     hiding = [kind for kind, spec in specs.items() if spec.hides]
-    graph = Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
+    graph = Graph(entities, url_for, fetch, linking, hiding, specs, handle_for, handle_named)
     related = _relations(plugins, graph)
     if not related:
         return graph
@@ -435,7 +450,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         else e
         for e in entities
     ]
-    return Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
+    return Graph(entities, url_for, fetch, linking, hiding, specs, handle_for, handle_named)
 
 
 def _relations(plugins: list[Enabled], graph: Graph) -> dict[Ref, list[Ref]]:

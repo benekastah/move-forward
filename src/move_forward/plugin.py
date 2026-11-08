@@ -140,6 +140,14 @@ class HandleRequest[C: BaseModel]:
 
 
 @dataclass(frozen=True)
+class NamedRequest[C: BaseModel]:
+    ctx: Context[C]
+    kind: str
+    text: str
+    """What the kind's pattern (`linking_patterns`) matched."""
+
+
+@dataclass(frozen=True)
 class LinkingRequest[C: BaseModel]:
     ctx: Context[C]
 
@@ -595,6 +603,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def handle_for(self, req: HandleRequest[C]) -> str | None:
         """The `handle` of an entity of a kind the plugin knows, by id, even one not in the
         graph, e.g. a ticket's key from its URL."""
+        return None
+
+    def handle_named(self, req: NamedRequest[C]) -> str | None:
+        """The `handle` of the entity of one of its linking kinds that text its pattern matched
+        names, when that isn't the text itself: e.g. a tag's `garbage-day`, for `Garbage Day`
+        matched case-insensitively. None: the text is the handle, as a ticket's key is."""
         return None
 
     # Page

@@ -20,6 +20,9 @@ UrlFor = Callable[[str, str], str | None]
 HandleFor = Callable[[str, str], str | None]
 """Asks the plugins for an entity's `handle` by kind and id, whether or not it's in the
 graph."""
+HandleNamed = Callable[[str, str], str | None]
+"""Asks the plugins for the `handle` the text a linking kind's pattern matched stands for, by
+kind and text; None when it's the text itself."""
 Fetch = Callable[[str, list[str]], list["Entity"]]
 """Asks the plugins to fetch entities of a kind by id, now; see `Graph.fetch`."""
 
@@ -108,28 +111,38 @@ Unknown = Callable[[str, str], Ref]
 
 
 def _named(
-    texts: Iterable[str], patterns: dict[str, re.Pattern[str]], handles: Handles, unknown: Unknown
+    texts: Iterable[str],
+    patterns: dict[str, re.Pattern[str]],
+    handles: Handles,
+    unknown: Unknown,
+    handle_named: HandleNamed,
 ) -> list[Ref]:
-    """The linking entities `texts` name, in order, once each: those whose `handle` it is,
-    or, for text no entity in the graph has as its handle, `unknown`'s ref for it."""
+    """The linking entities `texts` name, in order, once each: those whose `handle` a match
+    stands for (`handle_named`, else the match itself), or, for a handle no entity in the graph
+    has, `unknown`'s ref for it."""
     return list(
         dict.fromkeys(
             ref
             for text in texts
             for kind, pattern in patterns.items()
             for match in pattern.finditer(text)
-            for ref in handles.get((kind, match[0])) or [unknown(kind, match[0])]
+            for handle in [handle_named(kind, match[0]) or match[0]]
+            for ref in handles.get((kind, handle)) or [unknown(kind, handle)]
         )
     )
 
 
 def _with_mentions(
-    entity: Entity, patterns: dict[str, re.Pattern[str]], handles: Handles, unknown: Unknown
+    entity: Entity,
+    patterns: dict[str, re.Pattern[str]],
+    handles: Handles,
+    unknown: Unknown,
+    handle_named: HandleNamed,
 ) -> Entity:
     """The entity pointing, too, at each linking entity its mentions name."""
     if not entity.mentions or not patterns:
         return entity
-    named = _named(entity.mentions, patterns, handles, unknown)
+    named = _named(entity.mentions, patterns, handles, unknown, handle_named)
     refs = list(dict.fromkeys([*entity.refs, *named]))
     return entity.model_copy(update={"refs": refs}) if len(refs) != len(entity.refs) else entity
 
@@ -146,13 +159,14 @@ class Graph:
         hiding: Iterable[str] = (),
         kinds: Mapping[str, KindSpec] | None = None,
         handle_for: HandleFor = _no_url,
+        handle_named: HandleNamed = _no_url,
     ):
         """`linking` names the kinds that link what they're about (see `related`), each with
         the pattern of its ids, for finding them in entities' `mentions`; None for a kind
         whose entities point at what they link themselves. `hiding` names the kinds whose
         entities hide what they point at (see `hidden`). `kinds` are the publishers' specs
         of their kinds (see `spec`). `url_for` and `handle_for` ask the plugins about an
-        entity that may not be in the graph."""
+        entity that may not be in the graph, and `handle_named` what handle text names."""
         self._kinds = dict(kinds or {})
         self._linking = dict(linking or {})
         self._hiding = set(hiding)
@@ -164,9 +178,11 @@ class Graph:
                 self._handles[(entity.ref.kind, handle)].append(entity.ref)
         self._url_for = url_for
         self._handle_for = handle_for
+        self._handle_named = handle_named
         self._fetch = fetch
         entities = [
-            _with_mentions(e, self._patterns, self._handles, self._unknown) for e in entities
+            _with_mentions(e, self._patterns, self._handles, self._unknown, handle_named)
+            for e in entities
         ]
         self._by_ref: dict[Ref, Entity] = {}
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
@@ -271,7 +287,7 @@ class Graph:
         """The linking entities `text` names (by handle), as an entity's `mentions` would find them,
         whether or not they're in the graph: e.g. the tickets a todo names by key. For a
         plugin to find another's ids in text without knowing their pattern."""
-        return _named([text], self._patterns, self._handles, self._unknown)
+        return _named([text], self._patterns, self._handles, self._unknown, self._handle_named)
 
     def _unknown(self, kind: str, handle: str) -> Ref:
         """A ref to the entity of `kind` with `handle` that the graph doesn't have: by the id

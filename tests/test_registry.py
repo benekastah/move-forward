@@ -10,10 +10,11 @@ from conftest import dashboard
 
 from move_forward import cli, config, kinds, registry, render, server
 from move_forward.domain import KindModel
-from move_forward.graph import KindSpec
+from move_forward.graph import Entity, KindSpec, Ref
 from move_forward.kinds import FAMILIES, Family, Person, declaring, is_url
-from move_forward.plugin import API_VERSION, Plugin
+from move_forward.plugin import API_VERSION, EntitiesRequest, NamedRequest, Plugin
 from move_forward.strict import Strict
+from move_forward.testing import Harness
 
 
 class LinearConfig(Strict):
@@ -225,3 +226,40 @@ def test_a_plugin_whose_families_cant_be_declared_is_left_out_and_declares_none(
     builtins = {p.name for p in registry.BUILTINS}
     assert {p.name for p in plugins} == (builtins | {"hub"} if first else builtins)
     assert dict(FAMILIES) == (before | {"deal": DEALS} if first else before)
+
+
+class Tag(KindModel):
+    handle: str
+
+
+class TaggerPlugin(LinearPlugin):
+    """Tags, written `garbage-day`, that text names however it spaces and cases them."""
+
+    name: ClassVar[str] = "tagger"
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        "tagger.tag": KindSpec(attrs=Tag, linking=r"(?i)\bgarbage[\s_-]+day\b"),
+        "tagger.note": KindSpec(attrs=Tag),
+    }
+
+    def entities(self, req: EntitiesRequest[Any, Any]) -> list[Entity]:
+        return [
+            Entity(
+                ref=Ref(kind="tagger.tag", id="1"),
+                title="#garbage-day",
+                attrs={"handle": "garbage-day"},
+            ),
+            Entity(
+                ref=Ref(kind="tagger.note", id="n"),
+                title="n",
+                attrs={"handle": "n"},
+                mentions=["GARBAGE  DAY"],
+            ),
+        ]
+
+    def handle_named(self, req: NamedRequest[Any]) -> str | None:
+        return "-".join(req.text.lower().replace("_", " ").replace("-", " ").split())
+
+
+def test_a_plugins_handle_named_links_text_to_its_entities() -> None:
+    graph = Harness(TaggerPlugin(), {"team": "ENG"}).graph()
+    assert graph.units(Ref(kind="tagger.note", id="n")) == [Ref(kind="tagger.tag", id="1")]

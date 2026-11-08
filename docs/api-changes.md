@@ -15,6 +15,11 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **The handle a match stands for**: `Plugin.handle_named(NamedRequest(ctx, kind, text))`
+  gives the `handle` of the entity of one of its linking kinds that a pattern's match names,
+  when it isn't the text itself (a case-insensitive pattern, a tag written with spaces); the
+  graph's `named` and entities' `mentions` look the match up by it. `Graph` takes it as
+  `handle_named`.
 - **Families a plugin declares**: `Plugin.families` declares a family core doesn't model
   (`api.kinds.Family`), whose kinds the plugin, and others declaring the same family,
   publish as they would core's; a plugin publishes kinds only of core's families and its

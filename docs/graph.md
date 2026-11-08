@@ -137,8 +137,9 @@ A view lists only what its consumer reads, so publishers can add attributes free
 
 ### Related entities
 
-Text names a family's entities by their `handle` (a ticket's key): a pattern's match is
-looked up among the entities with that handle (`graph.by_handle(kind, handle)`), all of
+Text names a family's entities by their `handle` (a ticket's key): a pattern's match, or the
+handle its plugin says it stands for (`Plugin.handle_named`: a tag `garbage-day` for "Garbage
+Day"), is looked up among the entities with that handle (`graph.by_handle(kind, handle)`), all of
 them when two trackers share a key; a match no entity has yet becomes a ref with the id its
 plugin's `url_for` gives it (a ticket's URL, from its key), else with that text as its id.
 

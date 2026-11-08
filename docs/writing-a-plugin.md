@@ -284,6 +284,10 @@ class LinearPlugin(...):
       return {ISSUE: rf"\b{re.escape(req.ctx.config.team)}-\d+\b"}
   ```
 
+  A match is looked up by `handle`. When the text naming an entity isn't its handle as
+  written (a case-insensitive pattern, a tag `garbage-day` written "Garbage Day"), say which
+  handle a match stands for in `handle_named(req)` (`req.kind`, `req.text`).
+
   A publisher puts text that might name a unit of work in `Entity.mentions` (github does
   with a PR's branch, title and body), never refs to another plugin's kind.
 - **Hiding kinds**, declared `KindSpec(..., hides=True)`, hide what their entities point at
