@@ -71,7 +71,7 @@ the items shown), `per_plugin` (3, the most one plugin may fill) and `weights`
 (what each signal adds to an item's score: `closes = 3`, `minutes = 2`,
 `hour = 1`, `waiting = 2` (plus 1 for each doubling of the days they've waited),
 `importance = 3` per level (high, critical), and `due = 1` times the due date's
-pressure, 0 a week or more ahead and rising to 4 once it's past, and
+pressure, 0 `due_warning_days` or more ahead and rising to 4 once it's past, and
 `blocked = -4` for a blocked item). A blocked item (a ticket with open
 blockers, an entry blocked on something) is ranked down, until it has gone
 `blocked_stale_days` (3; 0 means never) without a touch: a ticket's last
@@ -139,7 +139,7 @@ before the command's name.
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, task, until, fingerprint), for the skill. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
-| `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account. |
+| `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) or password (mail) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account. |
 | `mfd token rotate` | Make a new dashboard token (the one in `token` next to the database) and end every session; a running server picks it up by itself, and scripts need the new one. |
 | `mfd token check` | Say where each enabled plugin's token is found: its environment variable, the secret store, or nowhere. Never prints a token. |
 
@@ -177,7 +177,7 @@ them when it does to Act now.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
-their most urgent panel: notes (todos), github, git, git_stack, slack, jira.
+their most urgent panel: notes (todos), github, mail, git, git_stack, slack, jira.
 Drag a group's or a panel's title to move it (a panel within its group; Act
 now stays first); the order is kept in the database, and focus mode follows
 it. A group or panel new since then goes after the one it followed by default.
@@ -215,8 +215,8 @@ address many people share (`noreply@...`) joins no one.
 
 An item about a person shows their contact type as a badge, and a Set type button that sets it
 for that address or for everyone at its domain (not for a domain anyone can have an address at,
-like gmail.com). Once one is set, a Clear type button goes with it; one set on a domain says so, and
-asks first, as it clears everyone there. A type I set beats one a tool
+like gmail.com). Once one is set, a Clear type button goes with it, asking first; one set on a
+domain says so, as it clears everyone there. A type I set beats one a tool
 gives, and one on an address beats one on its domain. The type's importance raises the item in Act
 now and in panels ordered by importance. It never lowers what a plugin said, and a priority I set
 on the item replaces it.
