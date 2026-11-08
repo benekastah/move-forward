@@ -213,19 +213,20 @@ def _without_comments(text: str) -> str:
 def dmarc_passed(results: str, trusted: frozenset[str], from_domain: str) -> bool:
     """Whether an `Authentication-Results` header, stamped by one of the `trusted` servers,
     says DMARC passed for `from_domain` (RFC 8601: the authserv-id, then `;`-separated
-    `method=result` with properties such as `header.from=`)."""
+    `method=result` with properties such as `header.from=`). Its one `dmarc` result must be
+    that pass: a second means someone else's text got in, so neither counts."""
     authserv, *found = _without_comments(results).split(";")
     if not authserv.split() or authserv.split()[0].lower() not in trusted:
         return False
+    dmarc: list[list[str]] = []
     for result in found:
         method, _, rest = result.strip().partition("=")
-        words = rest.split()
-        if method.strip().lower() != "dmarc" or not words or words[0].lower() != "pass":
-            continue
-        properties = {key.lower(): value for key, _, value in (w.partition("=") for w in words[1:])}
-        if properties.get("header.from", "").lower() == from_domain:
-            return True
-    return False
+        if method.strip().lower() == "dmarc":
+            dmarc.append(rest.split())
+    if len(dmarc) != 1 or not dmarc[0] or dmarc[0][0].lower() != "pass":
+        return False
+    properties = {key.lower(): value for key, _, value in (w.partition("=") for w in dmarc[0][1:])}
+    return properties.get("header.from", "").lower() == from_domain
 
 
 def message(
@@ -277,8 +278,9 @@ def message(
         or (bool(auto) and auto != "no"),
         flagged="\\Flagged" in flag_set,
         seen="\\Seen" in flag_set,
+        # One `@` only, so the domain checked is the one core reads as theirs.
         verified=bool(results)
-        and "@" in address
-        and dmarc_passed(results[0], trusted, address.rpartition("@")[2].lower()),
+        and address.count("@") == 1
+        and dmarc_passed(results[0], trusted, address.partition("@")[2].lower()),
         date=date,
     )

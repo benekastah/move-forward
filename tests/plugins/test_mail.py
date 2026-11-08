@@ -94,6 +94,18 @@ TRUSTED = frozenset({"mx.example.com"})
     [
         (["mx.example.com; dkim=pass; spf=pass; dmarc=pass header.from=acme.com"], True),
         (["MX.example.com 1; dmarc=pass (p=reject) header.from=Acme.com"], True),
+        # Folded, as real ones are.
+        (
+            [
+                "mx.example.com;\r\n\tspf=pass smtp.mailfrom=acme.com;\r\n\tdmarc=pass header.from=acme.com"
+            ],
+            True,
+        ),
+        # A second dmarc result means someone else's text got in: neither counts.
+        (
+            ["mx.example.com; dmarc=fail header.from=acme.com; dmarc=pass header.from=acme.com"],
+            False,
+        ),
         (["mx.example.com; dmarc=fail header.from=acme.com"], False),
         # The sender's own words: an envelope address, a comment, a quoted string.
         (
@@ -132,6 +144,13 @@ def test_a_sender_is_verified_only_by_my_servers_dmarc_for_their_domain(
     extra = "\r\n".join(f"Authentication-Results: {r}" for r in results)
     found = client.message(b"1 (UID 7 FLAGS ())", headers(extra=extra), {ME}, TRUSTED)
     assert found is not None and found.verified is verified
+
+
+def test_an_address_with_two_ats_is_never_verified() -> None:
+    passed = "Authentication-Results: mx.example.com; dmarc=pass header.from=evil.example"
+    raw = headers(sender='<"ceo@acme.com@x"@evil.example>', extra=passed)
+    found = client.message(b"1 (UID 7 FLAGS ())", raw, {ME}, TRUSTED)
+    assert found is not None and not found.verified
 
 
 def test_gmails_server_is_known_and_others_are_set() -> None:
