@@ -132,7 +132,28 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
     messages = [
         m for meta, headers in _fetched(fetched) if (m := message(meta, headers, me, trusted))
     ]
-    return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
+    newest_first = sorted(messages, key=lambda m: (m.date, m.uid), reverse=True)
+    return MailSnapshot(messages=own_threads(newest_first))
+
+
+def _domain(message: Message) -> str:
+    return (message.sender_email or "").partition("@")[2]
+
+
+def own_threads(messages: list[Message]) -> list[Message]:
+    """`messages` (newest first), each in the conversation it may join: the one its
+    `References` names only if it's verified or from a domain already writing in it. Anyone can
+    name any Message-ID, and joining a thread would take on its flag, and the priority, pin or
+    snooze I set on it."""
+    writers: dict[str, set[str]] = {}
+    joined: dict[int, str] = {}
+    for message in reversed(messages):
+        thread = message.thread
+        if thread in writers and not message.verified and _domain(message) not in writers[thread]:
+            thread = message.message_id or f"uid:{message.uid}"
+        writers.setdefault(thread, set()).add(_domain(message))
+        joined[message.uid] = thread
+    return [m.model_copy(update={"thread": joined[m.uid]}) for m in messages]
 
 
 def status(config: MailConfig, email: str) -> str:

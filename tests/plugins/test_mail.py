@@ -195,6 +195,20 @@ def test_mail_i_am_copied_on_is_not_to_me_and_flags_may_follow_the_headers() -> 
     assert found is not None and (found.to_me, found.seen) == (False, True)
 
 
+def test_a_stranger_naming_a_thread_starts_their_own() -> None:
+    root = message(1, sender="cust@acme.com", flagged=True)
+    colleague = message(2, sender="bob@acme.com", verified=False)  # a domain already in it
+    vouched = message(3, sender="partner@other.com")  # verified
+    stranger = message(4, sender="ceo@acme.com.evil", verified=False)
+    kept = client.own_threads([stranger, vouched, colleague, root])
+    assert [m.thread for m in kept] == [
+        "m4@acme.com",
+        "root@acme.com",
+        "root@acme.com",
+        "root@acme.com",
+    ]
+
+
 def test_a_thread_without_a_message_id_is_its_uid() -> None:
     raw = b"From: a@b.com\r\nSubject: hi\r\n\r\n"
     found = client.message(b"1 (UID 9 FLAGS ())", raw, {ME})

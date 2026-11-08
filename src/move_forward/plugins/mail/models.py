@@ -17,7 +17,8 @@ class Message(Model):
     """Its Message-ID, without `<>`; None when it has none."""
     thread: str
     """The Message-ID its conversation started with (the first of `References`, else
-    `In-Reply-To`, else its own), or `uid:<uid>` for one with none."""
+    `In-Reply-To`, else its own), or `uid:<uid>` for one with none; its own when it names a
+    conversation it may not join (`client.own_threads`)."""
     subject: str
     sender_name: str
     """Who it's from, by name, else by address."""

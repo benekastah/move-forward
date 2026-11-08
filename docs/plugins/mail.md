@@ -73,6 +73,11 @@ the message). Anyone can write any
 `From`, and a forged one mustn't borrow a customer's type. Others' mail is still listed, from
 whoever it says. See [entities.md](../entities.md).
 
+A message joins the conversation its `References` name only if its sender is verified or
+from a domain already writing in it; otherwise it's a conversation of its own, since anyone
+can name any Message-ID, and joining would take on the conversation's flag and the priority,
+pin or snooze set on it.
+
 When a message came is when the server received it (`INTERNALDATE`), not its `Date` header,
 which says whatever the sender likes.
 
