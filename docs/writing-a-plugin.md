@@ -266,7 +266,8 @@ class LinearPlugin(...):
   core's families and those it declares itself, so every plugin publishing one declares it:
   put it in a package they import, so they declare the same one. A plugin declaring a family
   differently from core or another plugin is left out, and `mfd check` says so. The test
-  harness declares your plugin's families while it runs it. Task ids the family's consumers
+  harness declares your plugin's families while it runs it, and those of other plugins
+  you read or seed when you pass them (`Harness(..., families=...)`). Task ids the family's consumers
   share (as `REVIEW` is for PRs) can live in that package too.
 - **People.** A tool that knows who something is about publishes them as `person`s, with an
   `email` if it has one, and points the entity at them. Core then joins them with the same
@@ -443,8 +444,8 @@ plugin and hook). The rest of the page, and the other plugins' refreshes, go on.
 ## Tests
 
 `move_forward.testing.Harness` runs a plugin as core runs it: enabled alone, over an
-in-memory database, with core's graph, page, actions and pages. It doesn't import pytest;
-wrap it in a fixture of your own.
+in-memory database, with core's graph, page, actions and pages. It refuses a plugin core's
+checks would leave out. It doesn't import pytest; wrap it in a fixture of your own.
 
 ```python
 def test_triage_lists_my_open_issues() -> None:

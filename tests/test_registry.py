@@ -11,7 +11,7 @@ from conftest import dashboard
 from move_forward import cli, config, kinds, registry, render, server
 from move_forward.domain import KindModel
 from move_forward.graph import KindSpec
-from move_forward.kinds import FAMILIES, Family, Person, is_url
+from move_forward.kinds import FAMILIES, Family, Person, declaring, is_url
 from move_forward.plugin import API_VERSION, Plugin
 from move_forward.strict import Strict
 
@@ -102,10 +102,8 @@ class HandlelessPlugin(LinearPlugin):
 @pytest.fixture(autouse=True)
 def families() -> Iterator[None]:
     """Discovering plugins declares their families, for the process; keep each test's to it."""
-    before = dict(FAMILIES)
-    yield
-    FAMILIES.clear()
-    FAMILIES.update(before)
+    with declaring("test", (), keep=False):
+        yield
 
 
 def _installed(monkeypatch: pytest.MonkeyPatch, *points: tuple[str, str]) -> None:

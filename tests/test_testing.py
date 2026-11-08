@@ -212,3 +212,32 @@ def test_a_plugin_publishes_a_family_it_declares_as_core_would() -> None:
     [deal] = crm.entities()
     assert (deal.ref.id, deal.kind, deal.family) == ("https://crm/deals/1", "crm.deal", "deal")
     assert "deal" not in FAMILIES  # declared only while the harness runs a call
+
+
+class DealReader(LinearPlugin):
+    """Reads deals, a family another plugin declares."""
+
+    name: ClassVar[str] = "reader"
+    kinds: ClassVar[dict[str, KindSpec]] = {}
+
+
+def test_a_plugin_reading_another_plugins_family_is_given_it() -> None:
+    reader = Harness(DealReader(), {"team": "ENG"}, families=CrmPlugin.families)
+    reader.with_entities(
+        [
+            Entity(ref=Ref(kind="deal", id=id), title="Big", attrs=attrs(Deal(handle="D-1")))
+            for id in ("https://crm/deals/1", "D-1")
+        ]
+    )
+    [deal] = reader.graph().of_kind("deal")
+    assert (deal.ref.id, deal.family) == ("https://crm/deals/1", "deal")
+
+
+class BorrowingCrm(CrmPlugin):
+    name: ClassVar[str] = "borrowing"
+    families = ()
+
+
+def test_the_harness_refuses_a_plugin_core_would_leave_out() -> None:
+    with pytest.raises(RuntimeError, match="a family it doesn't declare"):
+        Harness(BorrowingCrm(), {"team": "ENG"}, families=CrmPlugin.families)

@@ -25,7 +25,7 @@ from .config import Config
 from .db import Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec
-from .kinds import FAMILIES, declaring
+from .kinds import FAMILIES, Family, declaring
 from .notifications import Event
 from .page import Item, Panel, Surface
 from .panels import Dashboard
@@ -80,15 +80,16 @@ def _seed(name: str, entities: Sequence[Entity]) -> _Seed:
         e.ref.kind: KindSpec(FAMILIES[e.ref.kind].model if e.ref.kind in FAMILIES else _AnyAttrs)
         for e in entities
     }
-    families = tuple(FAMILIES[kind] for kind in kinds if kind in FAMILIES)
-    cls = type(f"Seed_{name}", (_Seed,), {"name": name, "kinds": kinds, "families": families})
+    cls = type(f"Seed_{name}", (_Seed,), {"name": name, "kinds": kinds})
     return cls(name, entities)
 
 
 class Harness:
     """A plugin enabled alone (with what `with_entities` seeds) over an in-memory database,
     run as core runs it: the graph core builds, the page it renders, its actions and pages.
-    `section` is the plugin's config section, as the TOML would have it."""
+    `section` is the plugin's config section, as the TOML would have it; `families`, those
+    other plugins declare whose entities it seeds or reads. The plugin must pass core's
+    checks (`registry.check_plugins`)."""
 
     def __init__(
         self,
@@ -98,6 +99,7 @@ class Harness:
         now: datetime = NOW,
         email: str = "me@x",
         teams: Sequence[str] = (),
+        families: Sequence[Family] = (),
     ):
         self.plugin = plugin
         self.now = now
@@ -107,9 +109,11 @@ class Harness:
         self._section = dict(section or {})
         self._email = email
         self._teams = list(teams)
+        self._families = (*plugin.families, *families)
         self._seeds: list[_Seed] = []
         self._previous: tuple[Graph, BaseModel | None] | None = None
         with self._installed():
+            registry.check_plugins([plugin])
             self.config = self._config()
             registry.migrate(self.config, self.db)
 
@@ -243,12 +247,12 @@ class Harness:
 
     @contextmanager
     def _installed(self) -> Generator[None]:
-        """Core sees only the plugin and the seeds, and the families the plugin declares, while
-        a call runs."""
+        """Core sees only the plugin and the seeds, and the plugin's and the given families,
+        while a call runs."""
         saved = registry.PLUGINS
         registry.PLUGINS = [self.plugin, *self._seeds]
         try:
-            with declaring(self.name, self.plugin.families, keep=False):
+            with declaring(self.name, self._families, keep=False):
                 yield
         finally:
             registry.PLUGINS = saved

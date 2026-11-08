@@ -150,10 +150,11 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():
             family = FAMILIES.get(kind)
+            usable = _CORE_FAMILY_NAMES | {f.name for f in plugin.families}
             if family is None and not named_for(plugin.name, kind):
                 raise RuntimeError(
                     f"{plugin.name}'s kind {kind!r} must be named {plugin.name}.<name>,"
-                    f" or for a family: {', '.join(FAMILIES)}"
+                    f" or for a family: {', '.join(sorted(usable))}"
                 )
             # The type says so, but a plugin needn't be type-checked.
             if not issubclass(cast(type[BaseModel], spec.attrs), KindModel):
@@ -161,9 +162,7 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                     f"{plugin.name}'s {kind} attributes must be a KindModel, not"
                     f" {spec.attrs.__name__}"
                 )
-            if family is not None and kind not in _CORE_FAMILY_NAMES | {
-                f.name for f in plugin.families
-            }:
+            if family is not None and kind not in usable:
                 raise RuntimeError(
                     f"{plugin.name}'s kind {kind} is a family it doesn't declare in its families"
                 )

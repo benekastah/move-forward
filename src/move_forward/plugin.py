@@ -409,9 +409,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
     families: ClassVar[tuple[Family, ...]] = ()
     """Families of kinds the plugin declares (`kinds.Family`): what more than one tool may
     represent, like core's pull request, ticket and person, with the model its kinds extend and
-    the rule its ids follow. Declared by the plugin, or by a package several share, it needs
-    no change to core. A plugin declaring a family differently from core or another plugin is
-    left out, and said why."""
+    the rule its ids follow; its model needs a `handle`. Declared by the plugin, or by a
+    package several share, it needs no change to core. A plugin publishes kinds only of core's
+    families and those it declares, and one declaring a family differently from core or
+    another plugin is left out, and said why."""
     kinds: ClassVar[dict[str, KindSpec]] = {}
     """The entity kinds the plugin publishes, each with its spec: the model of its
     attributes, which the graph checks its entities against, and whether it links what it's
