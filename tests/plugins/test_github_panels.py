@@ -174,6 +174,38 @@ def test_a_reviewer_who_since_approved_isnt_waited_on_for_a_re_review() -> None:
     assert "changes requested" not in review_blockers(waiting, ME, [])
 
 
+def test_a_comment_after_a_changes_request_doesnt_end_it() -> None:
+    asked, pushed_at, asked_again = (
+        NOW - timedelta(days=1),
+        NOW - timedelta(hours=2),
+        NOW - timedelta(hours=1),
+    )
+    events = [
+        event("PullRequestReview", asked, actor="alice", state="CHANGES_REQUESTED"),
+        event("PullRequestReview", asked, actor="bob", state="CHANGES_REQUESTED"),
+        event("HeadRefForcePushedEvent", pushed_at),
+        event(
+            "PullRequestReview", pushed_at + timedelta(minutes=5), actor="alice", state="COMMENTED"
+        ),
+        event("ReviewRequestedEvent", asked_again, reviewer_kind="user", reviewer="bob"),
+    ]
+    reviews = [
+        Review(author="alice", state="COMMENTED", submitted_at=pushed_at),  # GitHub's latest
+        Review(author="bob", state="CHANGES_REQUESTED", submitted_at=asked),
+    ]
+    still = pr(
+        1,
+        requested_users=["bob"],
+        review_decision="CHANGES_REQUESTED",
+        last_commit_at=pushed_at,
+        events=events,
+        reviews=reviews,
+    )
+    built = build(github=snapshot(mine=[still]))
+    assert titles(built, "github.ready_for_review") == []  # alice still asks for changes
+    assert "changes requested" in review_blockers(still, ME, [])
+
+
 def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None:
     waiting = Check(
         name="PR policy: guidelines",

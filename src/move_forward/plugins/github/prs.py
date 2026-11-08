@@ -79,26 +79,34 @@ def changes_requested(pr: PullRequest) -> bool:
     )
 
 
+DECISIONS = ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")
+"""The review states that say where a reviewer stands; a comment doesn't."""
+
+
 def awaiting_re_review(pr: PullRequest) -> bool:
     """A requested changes review was followed by a push and a fresh request to that
     reviewer. GitHub can still report CHANGES_REQUESTED until they review again. Only
-    reviewers whose latest review still requests changes count: one who has since approved
-    isn't waited on."""
-    if not changes_requested(pr):
-        return False
-    latest = {review.author: review.state for review in pr.reviews if review.author}
-    requests: dict[str, datetime] = {}
-    for review in pr.reviews:
-        if review.author and review.state == "CHANGES_REQUESTED" and review.submitted_at:
-            requests[review.author] = review.submitted_at
-    for event in pr.events:
+    reviewers whose last say still requests changes count: one who has since approved, or
+    whose request was dismissed, isn't waited on. A comment says nothing either way, though
+    GitHub's latest review can be one."""
+    decided = {
+        review.author: (review.submitted_at, review.state)
+        for review in pr.reviews
+        if review.author and review.submitted_at and review.state in DECISIONS
+    }
+    for event in sorted(pr.events, key=lambda e: e.at):
         if (
             event.type == "PullRequestReview"
-            and event.state == "CHANGES_REQUESTED"
             and event.actor
-            and latest.get(event.actor, "CHANGES_REQUESTED") == "CHANGES_REQUESTED"
+            and event.state in DECISIONS
+            and (event.actor not in decided or decided[event.actor][0] <= event.at)
         ):
-            requests[event.actor] = max(requests.get(event.actor, event.at), event.at)
+            decided[event.actor] = (event.at, event.state)
+    requests = {
+        reviewer: at for reviewer, (at, state) in decided.items() if state == "CHANGES_REQUESTED"
+    }
+    if not changes_requested(pr):
+        return False
     pushed = last_push_at(pr)
     if not requests or pushed is None:
         return False
