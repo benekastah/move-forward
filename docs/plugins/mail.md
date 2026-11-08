@@ -92,8 +92,8 @@ which says whatever the sender likes.
 - **Mail**: a conversation per item, newest first; those whose people matter more (flagged, or
   by contact type) come first, and lists, newsletters and automated mail (`List-Id`,
   `Precedence: bulk`, `Auto-Submitted`, and on Gmail its Promotions and Social, found with its
-  `X-GM-RAW` search) last. Each says who it's from, how many messages are
-  unread, whether it's flagged (or Gmail finds it important), and `cc` when I'm only copied.
+  `X-GM-RAW` search) last. Each says who it's from, how many messages are unread, whether
+  it's flagged (or Gmail finds it important), and `cc` when I'm only copied.
 
 ## Act now
 
