@@ -1,9 +1,11 @@
 import sqlite3
 from pathlib import Path
 
+import conftest
 import pytest
 
-from move_forward import registry
+from move_forward import auth, registry, tls
+from move_forward.config import DEFAULT_DB_PATH
 from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database, Migration
 from move_forward.private import is_private
 from move_forward.repositories import KvRepository
@@ -350,3 +352,20 @@ def test_a_plugins_migration_may_not_remove_what_isnt_its_own() -> None:
     with pytest.raises(ValueError, match="p's migration 0001_tidy removed kv"):
         db.migrate("p", [dropping])
     assert db.query("SELECT name FROM sqlite_master WHERE name = 'kv'")  # rolled back
+
+
+def test_no_test_touches_the_real_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert DEFAULT_DB_PATH.expanduser().parent == conftest.REAL_DATA_DIR
+    # Pointed elsewhere, so a broken guard can't reach my real data.
+    real = tmp_path / "real"
+    monkeypatch.setattr(conftest, "REAL_DATA_DIR", real)
+    for touch in (
+        lambda: Database(real / "dashboard.db"),
+        lambda: auth.load_or_create(real / "token"),
+        lambda: auth.rotate(real / "token"),
+        lambda: tls.Paths.beside(real / "dashboard.db"),
+    ):
+        with pytest.raises(AssertionError, match="opened the real database's dir"):
+            touch()
+    assert not real.exists()
+    Database(tmp_path / "mine.db")  # anywhere else is fine

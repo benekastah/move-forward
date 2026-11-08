@@ -1,13 +1,15 @@
 """Shared factories: small, fully populated domain objects that tests tweak."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from pydantic import BaseModel
 
-from move_forward import localtime
-from move_forward.config import Config
+from move_forward import auth, localtime, tls
+from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
 from move_forward.page import Panel
@@ -49,6 +51,40 @@ REPO = "acme/widgets"
 def in_utc(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test runs in UTC, so what the app takes in local time is the same anywhere."""
     monkeypatch.setattr(localtime, "zone", UTC)
+
+
+REAL_DATA_DIR = DEFAULT_DB_PATH.expanduser().parent
+"""Where the dashboard I use keeps its database, sign-in token and certificates, which no test
+may touch. Read when a guard runs, so a test of the guard can point it elsewhere."""
+
+
+def _refuse_real(path: Path | str) -> None:
+    if path != ":memory:" and Path(path).expanduser().resolve().is_relative_to(
+        REAL_DATA_DIR.resolve()
+    ):
+        raise AssertionError(f"a test opened the real database's dir, {path}: use tmp_path")
+
+
+def _guarded[**A, R](call: Callable[A, R], at: int) -> Callable[A, R]:
+    """`call`, refusing a path in the real data dir as its `at`th argument."""
+
+    def guarded(*args: A.args, **kwargs: A.kwargs) -> R:
+        _refuse_real(cast(Path | str, args[at]))
+        return call(*args, **kwargs)
+
+    return guarded
+
+
+@pytest.fixture(autouse=True)
+def no_real_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test's database is its own, in memory or in `tmp_path`: one that would open the
+    real one (a config left at its default, say) fails instead of touching my data. So does
+    one reading or writing the token or certificates beside it, which come first."""
+    monkeypatch.setattr(Database, "__init__", _guarded(Database.__init__, 1))
+    monkeypatch.setattr(auth, "load_or_create", _guarded(auth.load_or_create, 0))
+    monkeypatch.setattr(auth, "rotate", _guarded(auth.rotate, 0))
+    beside: Any = tls.Paths.beside.__func__
+    monkeypatch.setattr(tls.Paths, "beside", classmethod(_guarded(beside, 1)))
 
 
 @pytest.fixture(autouse=True)
