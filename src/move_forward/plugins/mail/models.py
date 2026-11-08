@@ -32,9 +32,11 @@ class Message(Model):
     flagged: bool
     important: bool = False
     """Gmail labels it Important; never from another server."""
+    known: bool = False
+    """I've written to its sender at least twice in the last `known_days`."""
     replies_to_me: bool = False
     """It answers mail I sent (its `In-Reply-To`, else the last of its `References`, names one):
-    the newest `max_messages` I sent within `since_days`."""
+    the newest 1000 I sent within `known_days`."""
     seen: bool
     verified: bool
     """The receiving server found its `From` authentic (DMARC passed), so its sender is who it

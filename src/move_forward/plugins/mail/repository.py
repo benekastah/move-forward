@@ -35,6 +35,9 @@ MIGRATIONS = [
         "0003_replies_to_me",
         "ALTER TABLE mail_messages ADD COLUMN replies_to_me INTEGER NOT NULL DEFAULT 0;",
     ),
+    Migration(
+        "0004_known", "ALTER TABLE mail_messages ADD COLUMN known INTEGER NOT NULL DEFAULT 0;"
+    ),
 ]
 
 
@@ -64,13 +67,14 @@ class MessageRepository:
                 m.date.isoformat(),
                 m.important,
                 m.replies_to_me,
+                m.known,
             )
             for position, m in enumerate(snapshot.messages)
         ]
         with self._db.transaction() as conn:
             conn.execute("DELETE FROM mail_messages")
             conn.executemany(
-                "INSERT INTO mail_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO mail_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
 
@@ -105,5 +109,6 @@ def _message(row: sqlite3.Row) -> Message:
         verified=bool(row["verified"]),
         important=bool(row["important"]),
         replies_to_me=bool(row["replies_to_me"]),
+        known=bool(row["known"]),
         date=datetime.fromisoformat(row["date"]),
     )

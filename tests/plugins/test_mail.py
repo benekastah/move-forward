@@ -273,6 +273,8 @@ class FakeImap:
         self.capabilities: tuple[str, ...] = ("IMAP4REV1",)
         self.sent: dict[int, str] = {}
         """My sent mail by UID: its Message-IDs."""
+        self.sent_to: dict[int, str] = {}
+        """Whom each of my sent messages went to."""
         self.open = ""
         self.listed: list[bytes] | None = [
             b'(\\HasNoChildren) "/" "INBOX"',
@@ -310,7 +312,10 @@ class FakeImap:
                 return "OK", [b" ".join(str(u).encode() for u in self.sent)]
             wanted = {int(u) for u in args[0].split(",")}
             return "OK", [
-                (f"1 (UID {u} BODY[] {{1}}".encode(), f"Message-ID: <{mid}>\r\n\r\n".encode())
+                (
+                    f"1 (UID {u} BODY[] {{1}}".encode(),
+                    f"Message-ID: <{mid}>\r\nTo: {self.sent_to.get(u, '')}\r\n\r\n".encode(),
+                )
                 for u, mid in self.sent.items()
                 if u in wanted
             ]
@@ -746,3 +751,28 @@ def test_only_a_verified_senders_subject_says_what_its_about() -> None:
     forged = mailbox(message(1, subject="Re: APP-12 urgent", verified=False))
     [thread] = [e for e in forged.entities() if e.ref.kind == THREAD]
     assert thread.mentions == []  # typing a key doesn't make it about my ticket
+
+
+def test_someone_i_wrote_to_twice_is_known(imap: Callable[..., FakeImap]) -> None:
+    server = imap(
+        [
+            (1, "", headers(sender="Alice <alice@acme.com>")),
+            (2, "", headers(sender="bob@x.com", message_id="b@x")),
+        ]
+    )
+    server.sent = {10: "s1@me", 11: "s2@me", 12: "s3@me"}
+    server.sent_to = {
+        10: "Alice <ALICE@acme.com>",
+        11: "alice@acme.com, bob@x.com",
+        12: "carol@y.com",
+    }
+    found = {m.sender_email: m.known for m in client.collect(_config(), ME, NOW).messages}
+    assert found == {"alice@acme.com": True, "bob@x.com": False}  # bob only once
+
+
+def test_a_known_sender_is_important_only_when_verified() -> None:
+    harness = mailbox(message(2, thread="f", known=True, verified=False), message(1, known=True))
+    items = {i.fingerprint: i for i in _items(harness)}
+    assert "known" in items["m1@acme.com"].badges
+    assert items["m1@acme.com"].signals is not None and items["m1@acme.com"].signals.importance == 1
+    assert "known" not in items["m2@acme.com"].badges  # a forged From mustn't borrow it

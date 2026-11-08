@@ -86,6 +86,8 @@ def about(graph: Graph, thread: Thread) -> list[str]:
 def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item:
     latest = thread.latest
     work = about(graph, thread)
+    # Someone I write to, but only one the server vouched for: a forged From mustn't borrow it.
+    known = latest.known and latest.verified
     who = latest.sender_name
     if latest.sender_email and latest.sender_email != who.lower():
         who = f"{who} <{latest.sender_email}>"
@@ -96,6 +98,8 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
         badges.append(Badge(text="flagged", tone="warn"))
     if latest.replies_to_me and not latest.bulk:
         badges.append("replies to me")
+    if known and not latest.bulk:
+        badges.append("known")
     elif latest.important and not thread.flagged and not latest.bulk:
         badges.append("important")
     if not latest.to_me and not latest.bulk:
@@ -116,7 +120,7 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
             effort="minutes",
             importance=1
             if thread.flagged
-            or ((latest.important or latest.replies_to_me or work) and not latest.bulk)
+            or ((latest.important or latest.replies_to_me or work or known) and not latest.bulk)
             else 0,
             waiting=[who] if person and latest.to_me else [],
             waiting_since=latest.date if person and latest.to_me else None,

@@ -10,6 +10,7 @@ DEFAULT_REFRESH_SECONDS = 900
 DEFAULT_PORT = 993
 DEFAULT_MAILBOX = "INBOX"
 DEFAULT_SINCE_DAYS = 14
+DEFAULT_KNOWN_DAYS = 90
 DEFAULT_MAX_MESSAGES = 200
 DEFAULT_MAIL_TOKEN_ENV = "MAIL_PASSWORD"
 DEFAULT_MAIL_KEYCHAIN_SERVICE = "move-forward-mail"
@@ -46,6 +47,9 @@ class MailConfig(Strict):
     sent_mailbox: str = ""
     """Where my sent mail is, to know which mail answers me; empty, the mailbox the server
     marks as sent (`[Gmail]/Sent Mail`, `Sent`). Only its Message-IDs are read."""
+    known_days: int = Field(default=DEFAULT_KNOWN_DAYS, ge=1)
+    """How far back my sent mail is read: someone I wrote to at least twice in it is someone I
+    know, whose mail counts as important; mail answering any of it replies to me."""
     since_days: int = Field(default=DEFAULT_SINCE_DAYS, ge=1)
     """Mail older than this is left out, flagged or not."""
     max_messages: int = Field(default=DEFAULT_MAX_MESSAGES, ge=1, le=2000)
