@@ -203,6 +203,12 @@ def test_a_reply_from_someone_else_doesnt_wear_a_conversations_flag() -> None:
     [item] = _items(harness)
     assert "flagged" not in [getattr(b, "text", b) for b in item.badges]
     assert item.signals is not None and item.signals.importance == 0
+    forged = mailbox(
+        message(2, sender="cust@acme.com", verified=False, subject="Re: urgent wire"),
+        message(1, sender="cust@acme.com", flagged=True),  # the real one, verified
+    )
+    [item] = _items(forged)
+    assert "flagged" not in [getattr(b, "text", b) for b in item.badges]
     flagged_by_writer = mailbox(
         message(2, sender="cust@acme.com"), message(1, flagged=True, sender="cust@acme.com")
     )

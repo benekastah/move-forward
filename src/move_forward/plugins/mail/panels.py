@@ -30,8 +30,16 @@ class Thread:
     def flagged(self) -> bool:
         """One of its messages from whoever wrote the latest is flagged: anyone can reply into
         a conversation by naming it, and mustn't wear a flag I put on someone else's mail."""
-        writer = self.latest.sender_email
-        return any(m.flagged for m in self.messages if m.sender_email == writer)
+        latest = self.latest
+        if latest.sender_email is None:
+            return latest.flagged
+        # A verified message's flag counts only for a verified latest one: `From` is the
+        # sender's to write, so it alone proves nothing.
+        return any(
+            m.flagged
+            for m in self.messages
+            if m.sender_email == latest.sender_email and (latest.verified or not m.verified)
+        )
 
 
 def threads(snapshot: MailSnapshot | None) -> list[Thread]:

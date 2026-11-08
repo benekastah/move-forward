@@ -75,7 +75,9 @@ whoever it says. See [entities.md](../entities.md).
 
 A conversation is the Message-ID its first message named, which anyone replying can name.
 So its flag (and the importance it gives) counts only flagged mail from whoever wrote its latest
-message; but a priority, pin or snooze I set on a conversation stays with it, whoever replies.
+message, and a verified one's flag only when the latest is verified too (where no sender can be
+verified, an unchecked `From` still can claim it); and a priority, pin or snooze I set on a
+conversation stays with it, whoever replies.
 
 When a message came is when the server received it (`INTERNALDATE`), not its `Date` header,
 which says whatever the sender likes.

@@ -147,7 +147,7 @@ points at a person is about them, so core ranks and badges its items by their co
 | `subject` | string | its latest message's |
 | `sender_email` | string or null | who wrote its latest message, lower-case |
 | `unread` | int | how many of its messages are unread |
-| `flagged` | bool | one of its messages is flagged |
+| `flagged` | bool | flagged by whoever wrote its latest message (see docs/plugins/mail.md) |
 | `bulk` | bool | its latest message is a list's, a newsletter's or automated |
 | `to_me` | bool | its latest message has me among its `To`, not just copied |
 | `latest` | ISO datetime | when the server received its latest message |
