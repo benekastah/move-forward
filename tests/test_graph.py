@@ -127,26 +127,6 @@ def test_related_entities_through_a_view() -> None:
     ]
 
 
-def test_a_plugin_says_which_handle_a_match_stands_for() -> None:
-    tag = Entity(
-        ref=Ref(kind="notes.tag", id="garbage-day"),
-        title="#garbage-day",
-        attrs={"handle": "garbage-day"},
-    )
-    mail = Entity(ref=Ref(kind="mail.thread", id="t"), title="x", mentions=["Garbage  Day moved"])
-
-    def handle_named(kind: str, text: str) -> str | None:
-        return "-".join(text.lower().split()) if kind == "notes.tag" else None
-
-    linking: dict[str, str | None] = {**LINKING, "notes.tag": r"(?i)\bgarbage\s+day\b"}
-    graph = Graph([tag, mail], linking=linking, handle_named=handle_named)
-    assert graph.units(mail.ref) == [tag.ref]
-    assert graph.named("APP-1, GARBAGE DAY") == [TICKET, tag.ref]  # a ticket's key is as it is
-    assert Graph([tag, mail], linking=linking).units(mail.ref) == [
-        Ref(kind="notes.tag", id="Garbage  Day")
-    ]
-
-
 def test_named_finds_linking_ids_in_any_text() -> None:
     graph = Graph(linking=LINKING)
     assert graph.named("APP-2: see APP-1, and APP-2 again") == [

@@ -225,12 +225,13 @@ said, and a priority I set on the item replaces it.
 
 ## Tags
 
-A `#tag` in any item's text (a PR's title or body, a mail's subject: whatever a plugin publishes
-as its entity's `mentions`) relates everything carrying it, and text naming it links too, as a
-ticket's key does: "Garbage day moved" is about whatever has `#garbage-day`. A tag's words are
-separated by `-` or `_`, and it's named however they're spaced, hyphenated or cased. Mail
-about a tag says so ("about #garbage-day"). Core publishes each as a `tag` entity (see
-[entities.md](docs/entities.md)).
+A `#tag` in an item's title (a PR's, a ticket's, a todo's) puts the tag on it. Text that names
+it, in a title or a description, however its words are spaced, hyphenated or cased ("Garbage day
+moved" names `#garbage-day`), points at it. A tag's words are separated by `-` or `_`; it needs
+a letter (`#7` is a PR's number). Tags relate items without making them one piece of work: icing
+one, or setting its priority, doesn't touch the others. Core publishes each as a `tag` entity
+(see [entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
+shows.
 
 ## Settings
 

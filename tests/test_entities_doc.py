@@ -26,7 +26,7 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
         kind: (publisher, marker or None)
         for kind, _, marker, publisher in _ROW_RE.findall(_section(DOC.read_text(), "## Kinds"))
     }
-    declared: dict[str, tuple[str, str | None]] = {TAG: ("core", "linking")}
+    declared: dict[str, tuple[str, str | None]] = {TAG: ("core", None)}
     for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():
             marker = "linking" if spec.linking is not False else "hiding" if spec.hides else None

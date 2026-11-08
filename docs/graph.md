@@ -137,15 +137,10 @@ A view lists only what its consumer reads, so publishers can add attributes free
 
 ### Related entities
 
-Text names a family's entities by their `handle` (a ticket's key): a pattern's match, or the
-handle it stands for (the graph's `handle_named`: a tag `garbage-day` for "Garbage Day"), is
+Text names a family's entities by their `handle` (a ticket's key): a pattern's match is
 looked up among the entities with that handle (`graph.by_handle(kind, handle)`), all of
-them when two trackers share a key; a handle no entity has yet becomes a ref with the id its
-plugin's `url_for` gives it (a ticket's URL, from its key), else with the handle as its id.
-
-Core adds a linking kind of its own, `tag`: one per `#tag` in any entity's `mentions`,
-pointing at what carries it, so everything carrying a tag is related, and text naming it
-links to it (see `move_forward.tags`).
+them when two trackers share a key; a match no entity has yet becomes a ref with the id its
+plugin's `url_for` gives it (a ticket's URL, from its key), else with that text as its id.
 
 Some kinds stand for a unit of work and link what's about it. A plugin declares them with
 `KindSpec(..., linking=...)`, giving the pattern of its ids, or None (its `linking_patterns` hook can narrow
@@ -162,6 +157,11 @@ class JiraPlugin(Plugin[JiraConfig]):
 class NotesPlugin(Plugin[NotesConfig]):
     kinds = {"notes.entry": KindSpec(EntryAttrs, linking=None)}  # it points at what it links
 ```
+
+Core adds a kind of its own, `tag` (see `move_forward.tags`): one per `#tag` in an entity's
+title, pointing at what carries it, while each entity whose title or mentions name a tag points
+at it. It isn't linking, so it relates nothing through it: `related(ref, "tag")` gives the tags
+on or named by `ref`, and a tag's `refs` what carries it.
 
 `related(ref, kind)` finds entities of `kind` one hop from `ref`, in either direction, or
 linked with it by a linking entity that's one hop from both:
