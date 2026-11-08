@@ -4,10 +4,18 @@ import pytest
 from conftest import REPO, dashboard, entry, panel, pr, snapshot, stored
 
 from move_forward.api.shell import CommandError
+from move_forward.page import Badge
 from move_forward.plugin import ActionError
 from move_forward.plugins.github import client
 from move_forward.plugins.github.models import Check, PullRequest, Thread
-from move_forward.plugins.github.panels import MARK_READY, MERGE, RERUN_FAILED, UPDATE_BRANCH
+from move_forward.plugins.github.panels import (
+    AUTO_MERGE,
+    CANCEL_AUTO_MERGE,
+    MARK_READY,
+    MERGE,
+    RERUN_FAILED,
+    UPDATE_BRANCH,
+)
 from move_forward.refresh import perform_action
 
 URL = f"https://github.com/{REPO}/pull/1"
@@ -245,3 +253,52 @@ def test_merge_refuses_what_ready_to_merge_holds_and_takes_what_it_offers(
     config, db = stored(github=snapshot(mine=[unreviewed]))
     perform_action(config, db, MERGE, button.fields)
     assert commands and commands[-1][-1] == "merge_action=direct_merge"
+
+
+def _awaiting(**overrides: object) -> PullRequest:
+    return pr(1, head_oid="abc1234def", requested_users=["alice"], **overrides)
+
+
+def test_a_pr_awaiting_review_can_merge_when_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    waiting = _awaiting(auto_merge_allowed=True, merge_methods=["SQUASH"])
+    [item] = panel(dashboard(github=snapshot(mine=[waiting])), "github.ready_for_review").items
+    [button] = [a for a in item.actions if a.name == AUTO_MERGE]
+    assert button.confirm is not None and "(squash)" in button.confirm
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[waiting]))
+    perform_action(config, db, AUTO_MERGE, button.fields)
+    queued = _awaiting(auto_merge_allowed=True, merge_queue=True)
+    config, db = stored(github=snapshot(mine=[queued]))
+    perform_action(config, db, AUTO_MERGE, {"pr": URL, "head": "abc1234def"})
+    assert commands == [
+        ["gh", "pr", "merge", URL, "--auto", "--squash", "--match-head-commit", "abc1234def"],
+        ["gh", "pr", "merge", URL, "--auto", "--match-head-commit", "abc1234def"],  # queue picks
+    ]
+
+
+def test_auto_merge_on_is_badged_and_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
+    on = _awaiting(auto_merge_allowed=True, merge_methods=["SQUASH"], auto_merge=True)
+    [item] = panel(dashboard(github=snapshot(mine=[on])), "github.ready_for_review").items
+    assert Badge(text="merges when ready", tone="good") in item.badges
+    assert not [a for a in item.actions if a.name == AUTO_MERGE]
+    [cancel] = [a for a in item.actions if a.name == CANCEL_AUTO_MERGE]
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[on]))
+    perform_action(config, db, CANCEL_AUTO_MERGE, cancel.fields)
+    assert commands == [["gh", "pr", "merge", URL, "--disable-auto"]]
+
+
+def test_no_merge_when_ready_where_not_allowed_or_held(monkeypatch: pytest.MonkeyPatch) -> None:
+    not_allowed = _awaiting(merge_methods=["SQUASH"])
+    [item] = panel(dashboard(github=snapshot(mine=[not_allowed])), "github.ready_for_review").items
+    assert not [a for a in item.actions if a.name == AUTO_MERGE]
+    held = _awaiting(auto_merge_allowed=True, merge_methods=["SQUASH"])
+    noted = entry("APP-1 Fix", [], **{"Merge conditions": ["after the migration"], "Where": [URL]})
+    built = dashboard(github=snapshot(mine=[held]), work_items=[noted])
+    [item] = panel(built, "github.ready_for_review").items
+    assert not [a for a in item.actions if a.name == AUTO_MERGE]
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[held]), work_items=[noted])
+    with pytest.raises(ActionError, match="after the migration"):
+        perform_action(config, db, AUTO_MERGE, {"pr": URL, "head": "abc1234def"})
+    assert commands == []

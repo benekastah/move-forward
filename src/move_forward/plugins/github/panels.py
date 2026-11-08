@@ -47,6 +47,9 @@ MARK_READY = "github/mark_ready"
 UPDATE_BRANCH = "github/update_branch"
 RERUN_FAILED = "github/rerun_failed"
 MERGE = "github/merge"
+AUTO_MERGE = "github/auto_merge"
+CANCEL_AUTO_MERGE = "github/cancel_auto_merge"
+MERGES_WHEN_READY = "merges when ready"
 REQUEST_REVIEWER_TASK = "request_reviewer"
 """The task of Needs a reviewer's items in Act now."""
 MAY_BE_READY = "draft with green CI and no open todos: ready?"
@@ -169,11 +172,16 @@ def _review(
     )
 
 
+def merge_conditions(graph: Graph, pr: PullRequest) -> list[str]:
+    """The work notes' merge conditions on the PR: what must happen before it merges."""
+    entries = graph.view_related(pr_ref(pr), ENTRY, _EntryView)
+    return [c for e in entries for c in e.merge_conditions.get(pr.url, [])]
+
+
 def merge_holds(graph: Graph, pr: PullRequest, ignored: Collection[str]) -> list[str]:
     """Why the PR isn't ready to merge, as Ready to merge decides: GitHub's blockers
     (`merge_blockers`) and the work notes' merge conditions on it. Empty when it's ready."""
-    entries = graph.view_related(pr_ref(pr), ENTRY, _EntryView)
-    conditions = [c for e in entries for c in e.merge_conditions.get(pr.url, [])]
+    conditions = merge_conditions(graph, pr)
     drafted = ["a draft"] if pr.is_draft else []
     queued = ["in the merge queue"] if pr.in_merge_queue else []
     return [*drafted, *queued, *merge_blockers(pr, ignored), *conditions]
@@ -380,14 +388,13 @@ class Builder:
                 review_required(pr) or pr.requested_users or pr.requested_teams
             ):
                 who = [*pr.requested_users, *(f"team {team}" for team in pr.requested_teams)]
-                awaiting.append(
-                    pr_item(
-                        self.now,
-                        pr,
-                        details=["waiting on " + ", ".join(who)],
-                        rank=-pr.updated_at.timestamp(),
-                    )
+                item = pr_item(
+                    self.now,
+                    pr,
+                    details=["waiting on " + ", ".join(who)],
+                    rank=-pr.updated_at.timestamp(),
                 )
+                awaiting.append(self._with_auto_merge(item, pr))
         return (
             Panel(
                 key="fix_before_review",
@@ -739,6 +746,37 @@ class Builder:
             " CODEOWNERS and the paths I work in.",
             items=items,
         )
+
+    def _with_auto_merge(self, item: Item, pr: PullRequest) -> Item:
+        """The PR's item with Merge when ready where its repo allows auto-merge (and how it'd
+        merge is known), or, once that's on, a badge saying so and Cancel auto-merge. Nothing
+        while the work notes hold it: GitHub would merge it regardless."""
+        if pr.auto_merge:
+            cancel = Action(
+                name=CANCEL_AUTO_MERGE, label="Cancel auto-merge", fields={"pr": pr.url}
+            )
+            return item.model_copy(
+                update={
+                    "badges": [*item.badges, Badge(text=MERGES_WHEN_READY, tone="good")],
+                    "actions": [*item.actions, cancel],
+                }
+            )
+        method = merge_method(pr, self.config.merge.method)
+        if (
+            not pr.auto_merge_allowed
+            or (method is None and not pr.merge_queue)
+            or merge_conditions(self.graph, pr)
+        ):
+            return item
+        how = "its merge queue" if pr.merge_queue else f"merging ({(method or '').lower()})"
+        button = Action(
+            name=AUTO_MERGE,
+            label="Merge when ready",
+            fields={"pr": pr.url, "head": pr.head_oid},
+            confirm=f"Let {pr.repo}#{pr.number} merge by itself once approved and green, by {how},"
+            f" at {pr.head_oid[:7]}? A push after this isn't merged unseen.",
+        )
+        return item.model_copy(update={"actions": [*item.actions, button]})
 
     def _with_merge_button(self, item: Item, pr: PullRequest) -> Item:
         """The PR's item with Add to queue where its base has a merge queue, else Merge with the

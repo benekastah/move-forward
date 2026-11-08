@@ -115,13 +115,9 @@ that needs a core one says so, and lands on top of it.
 Each button runs `gh`, checks its fields (a PR on `host`, a login's form), and returns the PR
 as `touched`, so it's fetched again at once.
 
-12. **Merge when ready.** Ready to merge has Merge and Add to queue (`[github.merge] method`).
-    Still to do:
-    - On **Ready for review**, and Fix before review's PRs waiting only on checks: **Merge when
-      ready**, where auto-merge is allowed (`auto_merge_allowed`) and wanted: `gh pr merge
-      --auto` with the method and `--match-head-commit`. Then a "merges when ready" badge and
-      **Cancel auto-merge** (`auto_merge`). Not on a PR in a linked stack, which `gh pr merge`
-      refuses.
+12. **The rest of Merge.** Ready to merge has Merge and Add to queue, and Ready for review has
+    Merge when ready and Cancel auto-merge. Still to do:
+    - Merge when ready on Fix before review's PRs waiting only on checks.
     - Per-repo settings, `[github.merge.repos."owner/name"]`: `method`, `auto_merge`, and
       `delete_branch` (the repo's `deleteBranchOnMerge` unless set). A branch with PRs based on
       it is never deleted: with `deleteBranchOnMerge` on, Merge retargets those PRs first.
