@@ -281,8 +281,10 @@ class FakeImap:
             b'(\\HasNoChildren \\Sent) "/" "Sent Items"',
         ]
         self.closed: set[str] = set()
-        self.sent_fails = False
         """Mailboxes that won't open."""
+        self.sent_fails = False
+        self.aside: set[int] | None = set()
+        """What Gmail files under Promotions or Social; None, a search that fails."""
         self.calls: list[tuple[object, ...]] = []
 
     def __call__(self, host: str, port: int, ssl_context: object, timeout: int) -> "FakeImap":
@@ -319,6 +321,10 @@ class FakeImap:
                 for u, mid in self.sent.items()
                 if u in wanted
             ]
+        if command == "SEARCH" and "X-GM-RAW" in args:
+            if self.aside is None:
+                raise imaplib.IMAP4.error("X-GM-RAW refused")
+            return "OK", [b" ".join(str(u).encode() for u in sorted(self.aside))]
         if command == "SEARCH":
             wanted_flag, seen = ("\\Flagged", True) if "FLAGGED" in args else ("\\Seen", False)
             return "OK", [
@@ -785,3 +791,39 @@ def test_an_item_shows_one_of_replies_to_me_known_and_important() -> None:
     [item] = _items(harness)
     shown = [b for b in item.badges if b in ("replies to me", "known", "important")]
     assert shown == ["replies to me"]
+
+
+def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeImap]) -> None:
+    server = imap(
+        [(1, "", headers(message_id="sale@shop")), (2, "", headers(message_id="hi@friend"))]
+    )
+    server.capabilities = ("IMAP4REV1", client.GMAIL)
+    server.aside = {1}
+    found = {m.message_id: m.bulk for m in client.collect(_config(), ME, NOW).messages}
+    assert found == {"sale@shop": True, "hi@friend": False}
+    # A reply to me filed under Promotions is still a person writing to me.
+    misfiled = imap([(1, "", headers(message_id="r@contractor", extra="In-Reply-To: <mine@me>"))])
+    misfiled.capabilities = ("IMAP4REV1", client.GMAIL)
+    misfiled.aside, misfiled.sent = {1}, {10: "mine@me"}
+    [reply] = client.collect(_config(), ME, NOW).messages
+    assert reply.replies_to_me and not reply.bulk
+    # Nor is someone I know, verified; one who isn't verified is put aside.
+    for verified, aside in ((True, False), (False, True)):
+        results = "Authentication-Results: mx.google.com; dmarc=pass header.from=friend.com"
+        raw = headers(sender="pal@friend.com", message_id="f@x", extra=results if verified else "")
+        known = imap([(1, "", raw)])
+        known.capabilities = ("IMAP4REV1", client.GMAIL)
+        known.aside, known.sent, known.sent_to = (
+            {1},
+            {10: "a@me", 11: "b@me"},
+            {10: "pal@friend.com", 11: "pal@friend.com"},
+        )
+        [found] = client.collect(_config(), ME, NOW).messages
+        assert (found.known, found.bulk) == (True, aside)
+    failing = imap([(1, "", headers(message_id="sale@shop"))])
+    failing.capabilities, failing.aside = ("IMAP4REV1", client.GMAIL), None
+    assert not client.collect(_config(), ME, NOW).messages[0].bulk  # nothing put aside
+    plain = imap([(1, "", headers(message_id="sale@shop"))])
+    plain.aside = {1}  # not Gmail: not asked
+    assert not client.collect(_config(), ME, NOW).messages[0].bulk
+    assert not any("X-GM-RAW" in c for c in plain.calls)

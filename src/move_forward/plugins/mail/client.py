@@ -141,8 +141,11 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
         uids = sorted(set(newest) | set(marked), key=int)
         if not uids:
             return MailSnapshot(messages=[])
-        # Gmail says which mail it thinks matters (its Important label), which is worth having.
-        labels = " X-GM-LABELS" if GMAIL in imap.capabilities else ""
+        # Gmail says which mail it thinks matters (its Important label), which is worth having,
+        # and which is Promotions or Social, which reads like a list's.
+        gmail = GMAIL in imap.capabilities
+        labels = " X-GM-LABELS" if gmail else ""
+        aside = _gmail_aside(imap, since) if gmail else set[int]()
         # In chunks: flagged mail has no cap, and a server limits a command's length.
         fetched: list[object] = []
         for start in range(0, len(uids), FETCH_CHUNK):
@@ -157,16 +160,19 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
         # Last: it opens another mailbox.
         sent, written = _my_sent(imap, config, now, me)
     trusted = config.trusted_auth_servers()
-    messages = [
-        m.model_copy(
-            update={
-                "replies_to_me": bool(_referenced(headers) & sent),
-                "known": written[m.sender_email or ""] >= KNOWN_AFTER,
-            }
+    messages: list[Message] = []
+    for meta, headers in _fetched(fetched):
+        if (m := message(meta, headers, me, trusted)) is None:
+            continue
+        replies = bool(_referenced(headers) & sent)
+        known = written[m.sender_email or ""] >= KNOWN_AFTER
+        # Gmail's category is a guess, which a reply to me or someone I know outweighs.
+        filed_aside = m.uid in aside and not (replies or (known and m.verified))
+        messages.append(
+            m.model_copy(
+                update={"replies_to_me": replies, "known": known, "bulk": m.bulk or filed_aside}
+            )
         )
-        for meta, headers in _fetched(fetched)
-        if (m := message(meta, headers, me, trusted))
-    ]
     return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
 
@@ -236,6 +242,22 @@ def _my_sent(
     except (RuntimeError, UnicodeEncodeError, OSError, imaplib.IMAP4.error, ValueError) as e:
         log.warning("can't read my sent mail, so nothing counts as replying to me: %s", e)
         return set(), Counter()
+
+
+def _gmail_aside(imap: imaplib.IMAP4, since: str) -> set[int]:
+    """The UIDs Gmail files under Promotions or Social since `since` (its `X-GM-RAW` search):
+    mail that reads like a list's. Empty when the search fails."""
+    try:
+        [found] = _ok(
+            imap.uid(
+                "SEARCH", "SINCE", since, "X-GM-RAW", '"category:promotions OR category:social"'
+            ),
+            "SEARCH",
+        )
+    except (RuntimeError, OSError, imaplib.IMAP4.error) as e:
+        log.warning("can't ask Gmail for its Promotions and Social mail: %s", e)
+        return set()
+    return {int(uid) for uid in (found if isinstance(found, bytes) else b"").split()}
 
 
 def _referenced(raw: bytes) -> set[str]:

@@ -28,7 +28,7 @@ class Message(Model):
     """I'm among its `To`, not just copied."""
     bulk: bool
     """A list's, a newsletter's or an automated message (`List-Id`, `Precedence: bulk`,
-    `Auto-Submitted`): not a person writing to me."""
+    `Auto-Submitted`, or Gmail's Promotions or Social): not a person writing to me."""
     flagged: bool
     important: bool = False
     """Gmail labels it Important; never from another server."""
