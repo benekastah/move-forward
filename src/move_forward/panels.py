@@ -313,7 +313,8 @@ def _with_item_actions(
 
 
 def _as_given(item: Item) -> Item:
-    """A plugin's item without what only core sets (`act_now_fields`, `opened_at`)."""
+    """A plugin's item without what only core sets (`act_now_fields`, `opened_at`,
+    `parts_listed`)."""
     if item.act_now_fields is None and item.opened_at is None and not item.parts:
         return item
     return item.model_copy(
