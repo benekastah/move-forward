@@ -448,6 +448,20 @@ def mark_ready(url: str) -> None:
     run(["gh", "pr", "ready", url])
 
 
+def merge(host: str, repo: str, number: int, method: MergeMethod, head: str) -> None:
+    """Merge the PR with `method`, if its head is still `head` (so a push since isn't merged
+    unseen), through the endpoint that also merges a PR in a linked stack, with those below it.
+    Never as an admin. Raises CommandError when GitHub refuses."""
+    path = f"repos/{repo}/pulls/{number}/merge-async"
+    run(api(host, "-X", "PUT", path, "-f", f"merge_method={method.lower()}", "-f", f"sha={head}"))
+
+
+def add_to_queue(url: str, head: str) -> None:
+    """Add the PR to its base's merge queue, if its head is still `head`; the queue picks how it
+    merges. Raises CommandError when GitHub refuses."""
+    run(["gh", "pr", "merge", url, "--match-head-commit", head])
+
+
 def update_branch(url: str) -> None:
     """Merge the PR's base into its branch on GitHub, without rewriting what's stacked on it.
     Raises CommandError when GitHub refuses, as when that conflicts."""

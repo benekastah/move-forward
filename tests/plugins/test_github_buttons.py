@@ -6,8 +6,8 @@ from conftest import REPO, dashboard, panel, pr, snapshot, stored
 from move_forward.api.shell import CommandError
 from move_forward.plugin import ActionError
 from move_forward.plugins.github import client
-from move_forward.plugins.github.models import Check
-from move_forward.plugins.github.panels import MARK_READY, RERUN_FAILED, UPDATE_BRANCH
+from move_forward.plugins.github.models import Check, PullRequest
+from move_forward.plugins.github.panels import MARK_READY, MERGE, RERUN_FAILED, UPDATE_BRANCH
 from move_forward.refresh import perform_action
 
 URL = f"https://github.com/{REPO}/pull/1"
@@ -157,3 +157,63 @@ def test_rerun_leaves_out_a_run_still_going_or_another_repos_and_tries_each(
     result = perform_action(config, db, RERUN_FAILED, {"pr": URL})
     assert [c[3] for c in commands] == ["23", "24"]  # each tried, though 23 was refused
     assert "(1 run(s))" in result.notice and "run 23: already running" in result.notice
+
+
+def _ready(**overrides: object) -> PullRequest:
+    return pr(1, review_decision="APPROVED", head_oid="abc1234def", **overrides)
+
+
+def test_a_pr_ready_to_merge_merges_with_the_method_i_like(monkeypatch: pytest.MonkeyPatch) -> None:
+    ready = _ready(merge_methods=["MERGE", "SQUASH"], default_merge_method="MERGE")
+    built = dashboard(github=snapshot(mine=[ready]), merge={"method": "squash"})
+    [item] = panel(built, "github.ready_to_merge").items
+    [button] = [a for a in item.actions if a.name == MERGE]
+    assert button.label == "Merge" and button.confirm is not None and "(squash)" in button.confirm
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[ready]), merge={"method": "squash"})
+    result = perform_action(config, db, MERGE, button.fields)
+    assert commands == [
+        [
+            "gh",
+            "api",
+            "--hostname",
+            "github.com",
+            "-X",
+            "PUT",
+            f"repos/{REPO}/pulls/1/merge-async",
+            "-f",
+            "merge_method=squash",
+            "-f",
+            "sha=abc1234def",
+        ]
+    ]
+    assert result.notice.endswith("merged (squash)") and [r.id for r in result.touched] == [URL]
+
+
+def test_with_a_merge_queue_it_adds_to_the_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+    queued = _ready(merge_queue=True, merge_methods=["SQUASH"])
+    [item] = panel(dashboard(github=snapshot(mine=[queued])), "github.ready_to_merge").items
+    [button] = [a for a in item.actions if a.name == MERGE]
+    assert button.label == "Add to queue"
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[queued]))
+    perform_action(config, db, MERGE, button.fields)
+    assert commands == [["gh", "pr", "merge", URL, "--match-head-commit", "abc1234def"]]
+
+
+def test_no_merge_while_how_the_repo_merges_isnt_known_or_the_pr_moved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    unknown = _ready()  # no merge methods fetched yet
+    [item] = panel(dashboard(github=snapshot(mine=[unknown])), "github.ready_to_merge").items
+    assert not [a for a in item.actions if a.name == MERGE]
+    commands = _commands(monkeypatch)
+    known = _ready(merge_methods=["SQUASH"])
+    config, db = stored(github=snapshot(mine=[known]))
+    with pytest.raises(ActionError, match="new commits"):
+        perform_action(config, db, MERGE, {"pr": URL, "head": "0000000"})
+    unapproved = pr(1, head_oid="abc1234def", merge_methods=["SQUASH"])
+    config, db = stored(github=snapshot(mine=[unapproved]))
+    with pytest.raises(ActionError, match="isn't ready"):
+        perform_action(config, db, MERGE, {"pr": URL, "head": "abc1234def"})
+    assert commands == []

@@ -5,7 +5,7 @@ from collections.abc import Collection, Mapping
 from datetime import datetime
 
 from ...api import localtime
-from .models import Check, PullRequest, Thread, TimelineEvent
+from .models import Check, MergeMethod, PullRequest, Thread, TimelineEvent
 
 JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 BOT_LOGIN_RE = re.compile(r"bot\b|\[bot\]$|^copilot", re.IGNORECASE)
@@ -378,3 +378,20 @@ def review_blockers(
     if unanswered_feedback(pr, me, ignored):
         blockers.append("unanswered feedback")
     return blockers
+
+
+def merge_method(pr: PullRequest, preferred: str | None) -> MergeMethod | None:
+    """How Merge merges the PR: the only method its repo allows, else `preferred` if allowed,
+    else the one GitHub picks for me. None with a merge queue (it picks), or while its repo's
+    methods aren't known yet: no button rather than a wrong one."""
+    allowed = pr.merge_methods
+    if pr.merge_queue or not allowed:
+        return None
+    if len(allowed) == 1:
+        return allowed[0]
+    wanted = (preferred or "").upper()
+    if wanted in allowed:
+        return wanted
+    if pr.default_merge_method in allowed:
+        return pr.default_merge_method
+    return allowed[0]

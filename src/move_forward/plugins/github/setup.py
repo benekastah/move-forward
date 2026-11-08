@@ -33,6 +33,8 @@ TEMPLATE = """\
 # split_pr_lines = 800                   # ...and this big are "worth splitting"
 # split_pr_labels = []                   # labels that mean worth splitting, e.g. ["size/XL"]
 # reviewer_history_days = 180            # commit history for reviewer suggestions
+# [github.merge]
+# method = "squash"                      # where a repo allows several; else GitHub's pick for me
 # [github.teams]                         # a team's slug, where it isn't the team's name
 # web = "web-reviewers"
 """

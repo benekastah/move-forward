@@ -29,6 +29,7 @@ from .prs import (
     is_bot,
     last_push_at,
     merge_blockers,
+    merge_method,
     needs_re_review,
     policy_failures,
     primary_reviewers,
@@ -45,6 +46,7 @@ REQUEST_REVIEWER = "github/request_reviewer"
 MARK_READY = "github/mark_ready"
 UPDATE_BRANCH = "github/update_branch"
 RERUN_FAILED = "github/rerun_failed"
+MERGE = "github/merge"
 REQUEST_REVIEWER_TASK = "request_reviewer"
 """The task of Needs a reviewer's items in Act now."""
 MAY_BE_READY = "draft with green CI and no open todos: ready?"
@@ -573,11 +575,10 @@ class Builder:
                 merge = Signals(
                     verb="Merge", task="merge", effort="minutes", closes=f"{pr.repo}#{pr.number}"
                 )
-                ready.append(
-                    pr_item(
-                        self.now, pr, details=["approved, green, base is default"], signals=merge
-                    )
+                item = pr_item(
+                    self.now, pr, details=["approved, green, base is default"], signals=merge
                 )
+                ready.append(self._with_merge_button(item, pr))
         return (
             Panel(
                 key="ready_to_merge",
@@ -728,6 +729,31 @@ class Builder:
             " CODEOWNERS and the paths I work in.",
             items=items,
         )
+
+    def _with_merge_button(self, item: Item, pr: PullRequest) -> Item:
+        """The PR's item with Add to queue where its base has a merge queue, else Merge with the
+        method it'd use; neither while how its repo merges isn't known yet."""
+        method = merge_method(pr, self.config.merge.method)
+        fields = {"pr": pr.url, "head": pr.head_oid}
+        if pr.merge_queue:
+            button = Action(
+                name=MERGE,
+                label="Add to queue",
+                fields=fields,
+                confirm=f"Add {pr.repo}#{pr.number} to {pr.base}'s merge queue at"
+                f" {pr.head_oid[:7]}? The queue merges it once its checks pass.",
+            )
+        elif method is not None:
+            button = Action(
+                name=MERGE,
+                label="Merge",
+                fields=fields,
+                confirm=f"Merge {pr.repo}#{pr.number} into {pr.base} ({method.lower()}) at"
+                f" {pr.head_oid[:7]}? In a linked stack, the PRs below it merge with it.",
+            )
+        else:
+            return item
+        return item.model_copy(update={"actions": [*item.actions, button]})
 
     def _with_update_button(self, item: Item, pr: PullRequest) -> Item:
         """The PR's item with a button to bring its branch up to date with its base."""
