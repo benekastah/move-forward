@@ -221,8 +221,8 @@ NOTIFY_SCRIPT = (
     # The server sends events over a live connection, avoiding browser timers throttled in
     # hidden tabs. Only one tab holds it: each holds a connection for good, and over HTTP/1
     # a browser has about six per host, so a few tabs would leave none for pages and
-    # buttons. The tabs queue for a lock; the one holding it listens, and when it closes the
-    # next takes over. Older browsers fall back to polling. Without permission neither takes
+    # buttons. The tabs queue for a lock; the one holding it listens, and when it closes (or
+    # its stream does for good) the next takes over. Older browsers fall back to polling. Without permission neither takes
     # events. A notification's `tag` replaces one still showing for the same thing.
     "(() => {"
     " const NOTIFY_SECONDS = 15;"
