@@ -297,7 +297,8 @@ class LinearPlugin(...):
 - **Tags.** A `#tag` in an entity's title or `mentions` (out of Markdown code and HTML
   comments) puts the tag on it, and text there naming one points it at the tag (see the
   README's Tags). Put the tool's labels in `Entity.tags`, as written ("Garbage Day"): core
-  makes them tags. Put labels as trusted as the kind's text, and decide whether the tool's own
+  makes them tags. Put only labels no outsider can set (people with a say in the tool, or the
+  tool itself), even on a kind whose text anyone can write, and decide whether the tool's own
   (Gmail's `\Inbox`) are tags too: mail's are. A tag only labels give is named only with its
   `#`, as a label is often a common word. A kind whose text anyone can write (mail's subjects) is `KindSpec(..., tags_from_text=False)`. Read the tags on
   or named by an entity with `graph.related(ref, TAG)` (`api.kinds.TAG`).
