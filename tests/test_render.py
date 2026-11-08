@@ -139,6 +139,28 @@ def test_sections_carry_keys_for_the_open_state_script() -> None:
     assert "data-key='stacks'" not in html and "data-key='git'" in html
 
 
+def test_items_whose_parents_lead_back_to_them_or_share_an_anchor_show_once() -> None:
+    a_ref, b_ref = Ref(kind="pull_request", id="a"), Ref(kind="pull_request", id="b")
+    a = page.Item(title="PR A", subjects=[a_ref])
+    b = page.Item(title="PR B", subjects=[b_ref])
+    looped = [
+        a.model_copy(update={"parent_anchor": b.anchor}),
+        b.model_copy(update={"parent_anchor": a.anchor}),
+        page.Item(title="PR Self", subjects=[Ref(kind="pull_request", id="s")]),
+    ]
+    looped[2] = looped[2].model_copy(update={"parent_anchor": looped[2].anchor})
+    shared = [
+        page.Item(title="Task 1", subjects=[a_ref]),
+        page.Item(title="Task 2", subjects=[a_ref]),
+        page.Item(title="Child", subjects=[b_ref], parent_anchor=a.anchor),
+    ]
+    for items, titles in ((looped, ["PR A", "PR B", "PR Self"]), (shared, ["Child"])):
+        html = render._panel(  # pyright: ignore[reportPrivateUsage]
+            page.Panel(key="p", title="P", description="", items=items)
+        )
+        assert all(html.count(f">{title}<") == 1 for title in titles), html
+
+
 def test_panel_renders_nested_items_with_persistent_collapse_controls() -> None:
     root = page.Item(
         title="PR 1", subjects=[Ref(kind="pull_request", id="one")], children_open=False
