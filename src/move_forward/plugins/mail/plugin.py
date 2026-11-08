@@ -122,6 +122,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
                     # makes mail important, says "about" it and takes its priority, which a
                     # forged From mustn't get by typing a key.
                     mentions=[latest.subject] if latest.verified else [],
+                    # Its labels are its tags, whoever sent it: mine, and Gmail's own (#inbox).
+                    tags=list(dict.fromkeys(label for m in thread.messages for label in m.labels)),
                     attrs=attrs(
                         ThreadAttrs(
                             subject=latest.subject,

@@ -1,5 +1,6 @@
 """Reading a mailbox over IMAP (the standard library's `imaplib`), headers only, read-only."""
 
+import base64
 import imaplib
 import logging
 import re
@@ -289,12 +290,38 @@ def _message_ids(text: str) -> list[str]:
     return _MESSAGE_ID.findall(text)
 
 
+def _gm_labels(meta: bytes) -> list[str]:
+    """The message's Gmail labels (`X-GM-LABELS`), unquoted and decoded from IMAP's modified
+    UTF-7 (`&AOk-` is `é`); none from other servers. Gmail's own start with `\\`. One sent as
+    an IMAP literal (`{n}`) isn't read: Gmail quotes them."""
+    found = _GM_LABELS.search(meta)
+    labels: list[str] = []
+    for raw in _LABEL.findall(found.group(1)) if found else []:
+        if raw.startswith(b'"'):
+            raw = re.sub(rb"\\(.)", rb"\1", raw[1:-1])
+        labels.append(_utf7(raw.decode("ascii", "replace")))
+    return labels
+
+
+def _utf7(name: str) -> str:
+    """An IMAP name in modified UTF-7 (RFC 3501 5.1.3) as text; one that isn't valid stays as
+    it is."""
+
+    def shifted(match: re.Match[str]) -> str:
+        if not match[1]:
+            return "&"
+        encoded = match[1].replace(",", "/")
+        try:
+            return base64.b64decode(encoded + "=" * (-len(encoded) % 4)).decode("utf-16-be")
+        except (ValueError, UnicodeDecodeError):
+            return match[0]
+
+    return re.sub(r"&([A-Za-z0-9+,]*)-", shifted, name)
+
+
 def _important(meta: bytes) -> bool:
     """Whether Gmail labels the message Important (`X-GM-LABELS`); False from other servers."""
-    found = _GM_LABELS.search(meta)
-    labels = _LABEL.findall(found.group(1)) if found else []
-    # Only good for this comparison: a quoted label equal to \Important has no `\"` in it.
-    return any(label.strip(b'"').replace(b"\\\\", b"\\") == b"\\Important" for label in labels)
+    return "\\Important" in _gm_labels(meta)
 
 
 def _received(meta: bytes) -> datetime | None:
@@ -456,6 +483,7 @@ def message(
         or (bool(auto) and auto != "no"),
         flagged="\\Flagged" in flag_set,
         important=_important(meta),
+        labels=_gm_labels(meta),
         seen="\\Seen" in flag_set,
         # One `@` only, so the domain checked is the one core reads as theirs.
         verified=bool(results)

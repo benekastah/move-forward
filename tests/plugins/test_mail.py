@@ -632,6 +632,38 @@ def test_gmails_important_label_is_read() -> None:
     assert found is not None and found.important
 
 
+def test_gmail_labels_are_read_its_own_and_mine() -> None:
+    meta = (
+        b'1 (UID 7 X-GM-LABELS (\\Inbox "\\\\Starred" Garbage "Work/Garbage Day"'
+        b' "say \\"hi\\"" &AOk-t&AOk- R&-D &Zm- &2D3-) FLAGS ())'
+    )
+    found = client.message(meta, headers(), {ME})
+    assert found is not None
+    assert found.labels == [
+        "\\Inbox",
+        "\\Starred",
+        "Garbage",
+        "Work/Garbage Day",
+        'say "hi"',
+        "\u00e9t\u00e9",
+        "R&D",
+        "&Zm-",  # not modified UTF-7: kept as it came
+        "&2D3-",
+    ]
+
+
+def test_a_threads_labels_are_its_tags_and_kept_between_refreshes() -> None:
+    harness = mailbox(
+        message(2, labels=["Garbage", "Bills", "\\Inbox"]),
+        message(1, labels=["Garbage"], sender="x@spam.com", verified=False),
+    )
+    [thread] = [e for e in harness.entities() if e.ref.kind == THREAD]
+    assert thread.tags == ["Garbage", "Bills", "\\Inbox"]  # whoever sent the mail
+    kept = MessageRepository(harness.db).load().messages
+    assert [m.labels for m in kept] == [["Garbage", "Bills", "\\Inbox"], ["Garbage"]]
+    assert MessageRepository(harness.db).latest("root@acme.com") == kept[0]
+
+
 def test_labels_are_asked_for_only_from_gmail(imap: Callable[..., FakeImap]) -> None:
     server = imap([(1, "", headers())])
     client.collect(_config(), ME, NOW)

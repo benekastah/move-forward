@@ -1,4 +1,5 @@
-"""The mail plugin's table: the unread and flagged messages the last refresh found."""
+"""The mail plugin's tables: the unread and flagged messages the last refresh found, and their
+labels."""
 
 import sqlite3
 from datetime import datetime
@@ -38,11 +39,21 @@ MIGRATIONS = [
     Migration(
         "0004_known", "ALTER TABLE mail_messages ADD COLUMN known INTEGER NOT NULL DEFAULT 0;"
     ),
+    Migration(
+        "0005_labels",
+        """
+    CREATE TABLE mail_message_labels ( -- fetched: their Gmail labels, Gmail's own and mine
+        uid INTEGER NOT NULL,
+        label TEXT NOT NULL,
+        PRIMARY KEY (uid, label)
+    );
+    """,
+    ),
 ]
 
 
 class MessageRepository:
-    """`mail_messages`: replaced wholesale by each refresh."""
+    """`mail_messages` and their `mail_message_labels`: replaced wholesale by each refresh."""
 
     def __init__(self, db: Database):
         self._db = db
@@ -71,17 +82,21 @@ class MessageRepository:
             )
             for position, m in enumerate(snapshot.messages)
         ]
+        labels = [(m.uid, label) for m in snapshot.messages for label in dict.fromkeys(m.labels)]
         with self._db.transaction() as conn:
             conn.execute("DELETE FROM mail_messages")
+            conn.execute("DELETE FROM mail_message_labels")
             conn.executemany(
                 "INSERT INTO mail_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
+            conn.executemany("INSERT INTO mail_message_labels VALUES (?, ?)", labels)
 
     def load(self) -> MailSnapshot:
+        labels = self._labels()
         return MailSnapshot(
             messages=[
-                _message(row)
+                _message(row, labels.get(row["uid"], []))
                 for row in self._db.query("SELECT * FROM mail_messages ORDER BY position")
             ]
         )
@@ -91,10 +106,22 @@ class MessageRepository:
         rows = self._db.query(
             "SELECT * FROM mail_messages WHERE thread = ? ORDER BY position LIMIT 1", (thread,)
         )
-        return _message(rows[0]) if rows else None
+        if not rows:
+            return None
+        labels = self._db.query(
+            "SELECT label FROM mail_message_labels WHERE uid = ? ORDER BY rowid", (rows[0]["uid"],)
+        )
+        return _message(rows[0], [row["label"] for row in labels])
+
+    def _labels(self) -> dict[int, list[str]]:
+        """Every message's labels by uid, as they came."""
+        found: dict[int, list[str]] = {}
+        for row in self._db.query("SELECT uid, label FROM mail_message_labels ORDER BY rowid"):
+            found.setdefault(row["uid"], []).append(row["label"])
+        return found
 
 
-def _message(row: sqlite3.Row) -> Message:
+def _message(row: sqlite3.Row, labels: list[str]) -> Message:
     return Message(
         uid=row["uid"],
         message_id=row["message_id"],
@@ -110,5 +137,6 @@ def _message(row: sqlite3.Row) -> Message:
         important=bool(row["important"]),
         replies_to_me=bool(row["replies_to_me"]),
         known=bool(row["known"]),
+        labels=labels,
         date=datetime.fromisoformat(row["date"]),
     )

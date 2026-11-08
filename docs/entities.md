@@ -221,7 +221,8 @@ The ticket family, modeled in core (`api.kinds.Ticket`); jira adds `status`,
 Published by core, not a plugin: a `#tag` in some entity's title or mentions, out of code
 (unless its kind says
 `KindSpec(tags_from_text=False)`), stated by its tool (`Entity.tags`: labels; jira's, but escalation labels,
-and github's, but `placeholder_labels` and `split_pr_labels`), or put on one by hand (`mfd tag`), titled `#garbage-day`, open while something carrying it
+github's, but `placeholder_labels` and `split_pr_labels`, and mail's, a conversation's Gmail
+labels, Gmail's own included), or put on one by hand (`mfd tag`), titled `#garbage-day`, open while something carrying it
 is. A tag needs a letter (`#7` is a PR's number). It isn't a linking kind: what it relates
 isn't one piece of work.
 
