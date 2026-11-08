@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from ...api.shell import CommandError, run, stopping
-from .models import Check, GitHubSnapshot, PullRequest, Review, Thread, TimelineEvent
+from .models import Check, GitHubSnapshot, MergeMethod, PullRequest, Review, Thread, TimelineEvent
 
 log = logging.getLogger(__name__)
 COMMIT_EMAIL_LOOKUP_COUNT = 10
@@ -125,6 +125,16 @@ class _RawRef(_Raw):
 class _RawRepository(_Raw):
     name_with_owner: str = Field(alias="nameWithOwner")
     default_branch_ref: _RawRef | None = Field(default=None, alias="defaultBranchRef")
+    merge_commit_allowed: bool = Field(default=False, alias="mergeCommitAllowed")
+    squash_merge_allowed: bool = Field(default=False, alias="squashMergeAllowed")
+    rebase_merge_allowed: bool = Field(default=False, alias="rebaseMergeAllowed")
+    auto_merge_allowed: bool = Field(default=False, alias="autoMergeAllowed")
+    delete_branch_on_merge: bool = Field(default=False, alias="deleteBranchOnMerge")
+    viewer_default_merge_method: str | None = Field(default=None, alias="viewerDefaultMergeMethod")
+
+
+class _RawAutoMerge(_Raw):
+    merge_method: str = Field(alias="mergeMethod")
 
 
 class RawPullRequest(_Raw):
@@ -151,6 +161,8 @@ class RawPullRequest(_Raw):
     review_decision: str | None = Field(default=None, alias="reviewDecision")
     author: _Named | None = None
     repository: _RawRepository
+    is_merge_queue_enabled: bool = Field(default=False, alias="isMergeQueueEnabled")
+    auto_merge_request: _RawAutoMerge | None = Field(default=None, alias="autoMergeRequest")
     labels: _Nodes[_Label] = _Nodes()
     assignees: _Nodes[_Named] = _Nodes()
     review_requests: _Nodes[_ReviewRequest] = Field(default=_Nodes(), alias="reviewRequests")
@@ -339,12 +351,24 @@ def _thread(raw: _RawThread) -> Thread:
     )
 
 
+def _method(name: str | None) -> MergeMethod | None:
+    """A merge method GitHub named, if it's one we know; None for one it adds later, so a new
+    method costs what's known of merging, not the whole refresh."""
+    known: dict[str, MergeMethod] = {"MERGE": "MERGE", "SQUASH": "SQUASH", "REBASE": "REBASE"}
+    return known.get(name or "")
+
+
 def to_pull_request(raw: RawPullRequest) -> PullRequest:
     """Flatten a GraphQL PullRequest node into the domain model."""
     requested = [_reviewer(r.requested_reviewer) for r in raw.review_requests.nodes if r]
     commit = next((c.commit for c in raw.commits.nodes if c), None)
     rollup = commit.status_check_rollup if commit else None
     files = [f for f in raw.files.nodes if f] if raw.files else []
+    allowed: tuple[tuple[MergeMethod, bool], ...] = (
+        ("MERGE", raw.repository.merge_commit_allowed),
+        ("SQUASH", raw.repository.squash_merge_allowed),
+        ("REBASE", raw.repository.rebase_merge_allowed),
+    )
     return PullRequest(
         url=raw.url,
         number=raw.number,
@@ -371,6 +395,15 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         merge_state=raw.merge_state_status,
         review_decision=raw.review_decision,
         in_merge_queue=raw.is_in_merge_queue,
+        merge_queue=raw.is_merge_queue_enabled,
+        merge_methods=[method for method, yes in allowed if yes],
+        default_merge_method=_method(raw.repository.viewer_default_merge_method),
+        auto_merge_allowed=raw.repository.auto_merge_allowed,
+        delete_branch_on_merge=raw.repository.delete_branch_on_merge,
+        auto_merge=raw.auto_merge_request is not None,
+        auto_merge_method=_method(raw.auto_merge_request.merge_method)
+        if raw.auto_merge_request
+        else None,
         requested_users=[name for kind, name in filter(None, requested) if kind == "user"],
         requested_teams=[name for kind, name in filter(None, requested) if kind == "team"],
         reviews=[

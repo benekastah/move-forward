@@ -10,6 +10,7 @@ from .models import (
     Check,
     DerivedSnapshot,
     GitHubSnapshot,
+    MergeMethod,
     PullRequest,
     Review,
     ReviewerSuggestion,
@@ -61,6 +62,14 @@ Key = tuple[str, str]
 """A PR as one search found it: (list, url)."""
 
 
+_METHOD_COLUMNS: tuple[tuple[MergeMethod, str], ...] = (
+    ("MERGE", "merge_commit_allowed"),
+    ("SQUASH", "squash_merge_allowed"),
+    ("REBASE", "rebase_merge_allowed"),
+)
+"""Each merge method, by the column of `github_prs` saying the PR's repo allows it."""
+
+
 class PrRepository:
     def __init__(self, db: Database):
         self._db = db
@@ -101,6 +110,15 @@ class PrRepository:
                         pr.in_merge_queue,
                         pr.rollup_state,
                         _iso(pr.last_commit_at),
+                        pr.merge_queue,
+                        "MERGE" in pr.merge_methods,
+                        "SQUASH" in pr.merge_methods,
+                        "REBASE" in pr.merge_methods,
+                        pr.default_merge_method,
+                        pr.auto_merge_allowed,
+                        pr.delete_branch_on_merge,
+                        pr.auto_merge,
+                        pr.auto_merge_method,
                     )
                 )
                 rows["github_pr_labels"] += [(*key, i, v) for i, v in enumerate(pr.labels)]
@@ -221,6 +239,13 @@ class PrRepository:
             merge_state=row["merge_state"],
             review_decision=row["review_decision"],
             in_merge_queue=bool(row["in_merge_queue"]),
+            merge_queue=bool(row["merge_queue"]),
+            merge_methods=[method for method, column in _METHOD_COLUMNS if row[column]],
+            default_merge_method=row["default_merge_method"],
+            auto_merge_allowed=bool(row["auto_merge_allowed"]),
+            delete_branch_on_merge=bool(row["delete_branch_on_merge"]),
+            auto_merge=bool(row["auto_merge"]),
+            auto_merge_method=row["auto_merge_method"],
             requested_users=[
                 cast(str, r["name"])
                 for r in found["github_pr_requests"][key]

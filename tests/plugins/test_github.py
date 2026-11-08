@@ -342,3 +342,46 @@ def test_a_team_whose_members_cant_be_read_is_left_out(
     assert found.team_memberships == {} and found.team_members == []
     assert "cannot read the members of my team acme/bacon" in caplog.text  # mine: said
     assert "elsewhere" not in caplog.text  # another's on a PR: may be private
+
+
+def test_a_prs_merge_settings_come_from_its_repo() -> None:
+    raw = {
+        **RAW_PR,
+        "isMergeQueueEnabled": True,
+        "autoMergeRequest": {"mergeMethod": "SQUASH"},
+        "repository": {
+            "nameWithOwner": "acme/widgets",
+            "defaultBranchRef": {"name": "main"},
+            "mergeCommitAllowed": False,
+            "squashMergeAllowed": True,
+            "rebaseMergeAllowed": True,
+            "autoMergeAllowed": True,
+            "deleteBranchOnMerge": True,
+            "viewerDefaultMergeMethod": "SQUASH",
+        },
+    }
+    pr = github.to_pull_request(github.RawPullRequest.model_validate(raw))
+    assert (pr.merge_queue, pr.merge_methods, pr.default_merge_method) == (
+        True,
+        ["SQUASH", "REBASE"],
+        "SQUASH",
+    )
+    assert (pr.auto_merge_allowed, pr.delete_branch_on_merge) == (True, True)
+    assert (pr.auto_merge, pr.auto_merge_method) == (True, "SQUASH")
+    plain = github.to_pull_request(github.RawPullRequest.model_validate(RAW_PR))
+    assert (plain.merge_queue, plain.merge_methods, plain.auto_merge) == (False, [], False)
+
+
+def test_a_merge_method_github_adds_later_is_unknown_not_a_failure() -> None:
+    raw = {
+        **RAW_PR,
+        "autoMergeRequest": {"mergeMethod": "FASTFORWARD"},
+        "repository": {
+            "nameWithOwner": "acme/widgets",
+            "squashMergeAllowed": True,
+            "viewerDefaultMergeMethod": "FASTFORWARD",
+        },
+    }
+    pr = github.to_pull_request(github.RawPullRequest.model_validate(raw))
+    assert (pr.merge_methods, pr.default_merge_method) == (["SQUASH"], None)
+    assert (pr.auto_merge, pr.auto_merge_method) == (True, None)  # on, with a method unknown

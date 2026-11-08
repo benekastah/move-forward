@@ -17,11 +17,22 @@ fragment PrFields on PullRequest {
   deletions
   changedFiles
   isInMergeQueue
+  isMergeQueueEnabled
+  autoMergeRequest { mergeMethod }
   mergeable
   mergeStateStatus
   reviewDecision
   author { login }
-  repository { nameWithOwner defaultBranchRef { name } }
+  repository {
+    nameWithOwner
+    defaultBranchRef { name }
+    mergeCommitAllowed
+    squashMergeAllowed
+    rebaseMergeAllowed
+    autoMergeAllowed
+    deleteBranchOnMerge
+    viewerDefaultMergeMethod
+  }
   labels(first: 30) { nodes { name } }
   assignees(first: 10) { nodes { login } }
   reviewRequests(first: 20) {

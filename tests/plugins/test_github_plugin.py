@@ -435,3 +435,21 @@ def test_a_prs_labels_are_its_tags_but_its_shapes() -> None:
     )
     [entity] = [e for e in entities if e.ref.kind == "pull_request"]
     assert entity.tags == ["Garbage Day"]
+
+
+def test_merge_settings_are_kept_between_refreshes() -> None:
+    settings = pr(
+        1,
+        merge_queue=True,
+        merge_methods=["SQUASH", "REBASE"],
+        default_merge_method="SQUASH",
+        auto_merge_allowed=True,
+        delete_branch_on_merge=True,
+        auto_merge=True,
+        auto_merge_method="SQUASH",
+    )
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    PrRepository(db).replace(snapshot(mine=[settings]))
+    kept = PrRepository(db).load()
+    assert kept is not None and kept.mine == [settings]
