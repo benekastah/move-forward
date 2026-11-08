@@ -16,6 +16,7 @@ from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
 from .kinds import TAG
 from .page import Action, Item, ItemAdditions
+from .repositories import TagRepository
 
 TAG_ACTION = f"{act_now.ACTIONS}/tag"
 UNTAG_ACTION = f"{act_now.ACTIONS}/untag"
@@ -174,6 +175,23 @@ def tagged(
         )
         for tag, found in carrying.items()
     ]
+
+
+def forget_gone(repo: TagRepository, graph: Graph) -> int:
+    """Take my tags off entities that are gone where gone means done (`KindSpec.gone_means_done`:
+    a deleted entry, a ticked-off todo), so a new one with the same id starts clean. A tag stays
+    on finished work (a merged PR, a done ticket): it's a label, not a ranking. How many
+    entities lost their tags."""
+    gone = [
+        ref
+        for ref in repo.all()
+        if graph.get(ref.kind, ref.id) is None
+        and (spec := graph.spec(ref.kind)) is not None
+        and spec.gone_means_done
+    ]
+    for ref in gone:
+        repo.clear(ref)
+    return len(gone)
 
 
 class Tags:

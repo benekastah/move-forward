@@ -274,7 +274,7 @@ CREATE TABLE contacts (                -- kept: what I said people are to me
 
 _V15_TAGS = """
 CREATE TABLE tags (                    -- kept: the #tags I put on entities, until I take them off
-                                       -- or it's done (see `priority.forget_finished`)
+                                       -- or it's gone, as a deleted entry is (see `tags.forget_gone`)
     kind TEXT NOT NULL,
     id TEXT NOT NULL,
     tag TEXT NOT NULL,                 -- its handle, e.g. garbage-day

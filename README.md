@@ -229,7 +229,8 @@ said, and a priority I set on the item replaces it.
 A `#tag` in an item's title (a PR's, a ticket's, a todo's) puts the tag on it, and so does
 its Tag field, on any item about something (a mail, a ticket, a branch), or `mfd tag`. Items
 show their tags as badges, with an Untag button for each one put on by hand; one put on by hand
-is kept until I take it off or the item's work is done. Text that names
+is kept until I take it off, or the item is gone (a deleted entry, a ticked-off todo); it stays
+on finished work, a merged PR or a done ticket. Text that names
 it, in a title or a description, however its words are spaced, hyphenated or cased ("Garbage day
 moved" names `#garbage-day`), points at it. A tag's words are separated by `-` or `_`; it needs
 a letter (`#7` is a PR's number), and one word shorter than three letters is named only with

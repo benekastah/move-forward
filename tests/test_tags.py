@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from conftest import NOW, pr, snapshot, stored
 
-from move_forward import cli, panels, priority, refresh, tags
+from move_forward import cli, panels, refresh, tags
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
@@ -191,22 +191,20 @@ def test_the_tag_command_puts_a_tag_on_and_takes_it_off(
     assert "Chores: #garbage-day" in capsys.readouterr().out
 
 
-def test_tags_on_finished_work_are_forgotten() -> None:
-    merged = Ref(kind="pull_request", id="merged")
-    open_pr = Ref(kind="pull_request", id="open")
-    gone_entry = Ref(kind="notes.entry", id="Chores")  # deleted: a new "Chores" starts clean
-    graph = Graph(
-        [Entity(ref=merged, title="m", lifecycle="done"), Entity(ref=open_pr, title="o")],
-        kinds={
-            "pull_request": KindSpec(tags.TagAttrs),
-            "notes.entry": KindSpec(tags.TagAttrs, gone_means_done=True),
-        },
+def test_tags_on_gone_entities_are_forgotten_and_finished_work_keeps_them() -> None:
+    config, db = stored(
+        github=snapshot(mine=[pr(1)], merged=[pr(2, merged_at="2026-10-29T00:00:00Z")]),
     )
-    repo = TagRepository(Database(":memory:"))
-    for ref in (merged, open_pr, gone_entry):
+    gone_entry = Ref(kind="notes.entry", id="Chores")  # deleted: a new "Chores" starts clean
+    merged = Ref(kind="pull_request", id=pr(2).url)
+    repo = TagRepository(db)
+    for ref in (gone_entry, merged):
         repo.add(ref, "chores", NOW)
-    assert priority.forget_finished(repo, graph) == 2
-    assert repo.all() == {open_pr: ["chores"]}
+    plugins = enabled(config, db, NOW)
+    graph, _ = refresh.stored_graph(db, plugins)
+    notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
+    assert "tags: took my tags off 1 entity(ies) that are gone" in notices
+    assert repo.all() == {merged: ["chores"]}
 
 
 def test_untag_takes_the_tag_however_its_written() -> None:

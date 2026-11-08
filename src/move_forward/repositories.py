@@ -196,7 +196,7 @@ class PriorityRepository:
 
 class TagRepository:
     """The `#tags` I put on entities (`tags`), by handle: kept until I take them off, or the
-    entity is done (`priority.forget_finished`)."""
+    entity is gone where gone means done (`tags.forget_gone`)."""
 
     def __init__(self, db: Database):
         self._db = db

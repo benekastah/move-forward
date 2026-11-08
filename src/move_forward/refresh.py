@@ -395,8 +395,8 @@ def _prune_plugins(
         notices.append(f"act_now: forgot {dropped} snooze(s), dismissal(s) or pin(s)")
     if cleared := priority.forget_finished(PriorityRepository(db), graph):
         notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")
-    if cleared := priority.forget_finished(TagRepository(db), graph):
-        notices.append(f"tags: took the tags off {cleared} finished entity(ies)")
+    if cleared := tags.forget_gone(TagRepository(db), graph):
+        notices.append(f"tags: took my tags off {cleared} entity(ies) that are gone")
     for e in plugins:
         try:
             notices += [f"{e.name}: {n}" for n in e.plugin.prune(PruneRequest(e.ctx, graph))]
