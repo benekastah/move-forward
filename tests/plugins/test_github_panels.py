@@ -23,6 +23,7 @@ from conftest import (
 from move_forward.plugins.github.models import (
     Check,
     DerivedSnapshot,
+    Review,
     ReviewerSuggestion,
     TeamPrScore,
 )
@@ -141,6 +142,36 @@ def test_changes_requested_moves_to_waiting_after_push_and_re_request() -> None:
     details = {item.title: item.details for item in panel(built, "github.fix_before_review").items}
     assert details["PR 2"] == ["policy failing: risk"]
     assert "changes requested" in details["PR 3"]
+
+
+def test_a_reviewer_who_since_approved_isnt_waited_on_for_a_re_review() -> None:
+    asked, pushed_at, asked_again = (
+        NOW - timedelta(days=1),
+        NOW - timedelta(hours=2),
+        NOW - timedelta(hours=1),
+    )
+    events = [
+        event("PullRequestReview", asked, actor="alice", state="CHANGES_REQUESTED"),
+        event("PullRequestReview", asked, actor="bob", state="CHANGES_REQUESTED"),
+        event("HeadRefForcePushedEvent", pushed_at),
+        event("ReviewRequestedEvent", asked_again, reviewer_kind="user", reviewer="bob"),
+    ]
+    reviews = [
+        approved_review("alice", NOW - timedelta(hours=20)),  # her latest review
+        Review(author="bob", state="CHANGES_REQUESTED", submitted_at=asked),
+    ]
+    waiting = pr(
+        1,
+        requested_users=["bob"],
+        review_decision="CHANGES_REQUESTED",
+        last_commit_at=pushed_at,
+        events=events,
+        reviews=reviews,
+    )
+    built = build(github=snapshot(mine=[waiting]))
+    assert titles(built, "github.ready_for_review") == ["PR 1"]
+    assert titles(built, "github.feedback") == []
+    assert "changes requested" not in review_blockers(waiting, ME, [])
 
 
 def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None:

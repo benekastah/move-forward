@@ -81,15 +81,23 @@ def changes_requested(pr: PullRequest) -> bool:
 
 def awaiting_re_review(pr: PullRequest) -> bool:
     """A requested changes review was followed by a push and a fresh request to that
-    reviewer. GitHub can still report CHANGES_REQUESTED until they review again."""
+    reviewer. GitHub can still report CHANGES_REQUESTED until they review again. Only
+    reviewers whose latest review still requests changes count: one who has since approved
+    isn't waited on."""
     if not changes_requested(pr):
         return False
+    latest = {review.author: review.state for review in pr.reviews if review.author}
     requests: dict[str, datetime] = {}
     for review in pr.reviews:
         if review.author and review.state == "CHANGES_REQUESTED" and review.submitted_at:
             requests[review.author] = review.submitted_at
     for event in pr.events:
-        if event.type == "PullRequestReview" and event.state == "CHANGES_REQUESTED" and event.actor:
+        if (
+            event.type == "PullRequestReview"
+            and event.state == "CHANGES_REQUESTED"
+            and event.actor
+            and latest.get(event.actor, "CHANGES_REQUESTED") == "CHANGES_REQUESTED"
+        ):
             requests[event.actor] = max(requests.get(event.actor, event.at), event.at)
     pushed = last_push_at(pr)
     if not requests or pushed is None:
@@ -325,7 +333,7 @@ def review_blockers(
         blockers.append("failing policy checks")
     if unresolved_threads(pr, ignored):
         blockers.append("unresolved threads")
-    if changes_requested(pr):
+    if changes_requested(pr) and not awaiting_re_review(pr):
         blockers.append("changes requested")
     if unanswered_feedback(pr, me, ignored):
         blockers.append("unanswered feedback")
