@@ -227,6 +227,6 @@ class Pinger:
             act_now=True,
             title="Nudge reviewers",
             description="In order (green, no conflicts, no open threads), with a reviewer asked"
-            f" and not yet approving, and quiet for {_quiet(self.my_open_prs)}.",
+            f" and the PR not yet approved, and quiet for {_quiet(self.my_open_prs)}.",
             items=items,
         )
