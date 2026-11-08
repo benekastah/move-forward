@@ -37,25 +37,30 @@ class MessageRepository:
         self._db = db
 
     def replace(self, snapshot: MailSnapshot) -> None:
-        self._db.execute("DELETE FROM mail_messages")
-        for position, m in enumerate(snapshot.messages):
-            self._db.execute(
-                "INSERT INTO mail_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    m.uid,
-                    position,
-                    m.message_id,
-                    m.thread,
-                    m.subject,
-                    m.sender_name,
-                    m.sender_email,
-                    m.to_me,
-                    m.bulk,
-                    m.flagged,
-                    m.seen,
-                    m.verified,
-                    m.date.isoformat(),
-                ),
+        """Keep `snapshot` in place of what was there, all at once: no one reads half of it, and
+        a failure leaves the old one."""
+        rows = [
+            (
+                m.uid,
+                position,
+                m.message_id,
+                m.thread,
+                m.subject,
+                m.sender_name,
+                m.sender_email,
+                m.to_me,
+                m.bulk,
+                m.flagged,
+                m.seen,
+                m.verified,
+                m.date.isoformat(),
+            )
+            for position, m in enumerate(snapshot.messages)
+        ]
+        with self._db.transaction() as conn:
+            conn.execute("DELETE FROM mail_messages")
+            conn.executemany(
+                "INSERT INTO mail_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
             )
 
     def load(self) -> MailSnapshot:
