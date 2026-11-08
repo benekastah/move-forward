@@ -35,7 +35,7 @@ flowchart LR
         thread[mail.thread]
     end
 
-    github([github]) -- publishes --> pr
+    github([github]) -- "publishes, its labels as tags" --> pr
     github -- "publishes (me, emails)" --> person
     git([git]) -- publishes --> repo
     git -- "publishes (repo_dir, ahead, ...)" --> branch
