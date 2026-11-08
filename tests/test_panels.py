@@ -916,3 +916,15 @@ def test_an_entrys_several_todos_offer_its_add_todo_once_in_focus_mode() -> None
     assert focused is not None
     adds = [[a.name for a in part.actions].count("notes/todo_add") for _, part in focused]
     assert adds == [0, 0, 1]
+
+
+def test_whats_done_is_dimmed_uncounted_and_not_stepped_through() -> None:
+    ticked = Item(title="ticked", done=True)
+    entry_ = Item(title="entry", parts=[Item(title="open"), ticked])
+    all_done = Item(title="all done", done=True, parts=[ticked])
+    stage = Panel(key="p", title="P", description="", items=[entry_, all_done])
+    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage])], {})
+    assert [part.title for _, part in board.focus_items("x.p") or []] == ["open"]
+    page = render._panel(board.panel("x.p"))  # pyright: ignore[reportPrivateUsage]
+    assert "<span class='count'>1</span>" in page
+    assert "class='item opened'" in render.item_html(ticked)

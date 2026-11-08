@@ -163,7 +163,8 @@ class Dashboard(Model):
 
         Panels come as the page shows them (All leaves out Act now, whose items are in the
         plugins' panels too), items in their panel's order, and an item with `parts`
-        contributes those instead of itself; None for an unknown category.
+        contributes those instead of itself; what's set aside or done isn't a step. None for an
+        unknown category.
         """
         if category == ACT_NOW:  # in its own order across the tools, not panel by panel
             return [(panel, item) for panel, item in self._act_now()]
@@ -180,8 +181,9 @@ class Dashboard(Model):
             (panel, part)
             for panel in panels
             for item in panel.items
-            if item.set_aside is None  # set aside: nothing to do now
+            if item.set_aside is None and not item.done  # nothing to do now
             for part in item.parts or [item]
+            if not part.done
         ]
 
 
