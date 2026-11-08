@@ -16,6 +16,8 @@ from .config import MailConfig
 from .models import MAX_SUBJECT, MailSnapshot, Message
 
 TIMEOUT_SECONDS = 30
+FETCH_CHUNK = 500
+"""The most messages fetched by one command."""
 HEADERS = (
     "FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES LIST-ID PRECEDENCE AUTO-SUBMITTED"
     " AUTHENTICATION-RESULTS"
@@ -105,9 +107,9 @@ def _fetched(data: Sequence[object]) -> Iterator[tuple[bytes, bytes]]:
 
 
 def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
-    """The mailbox's unread and flagged messages since `since_days` ago, newest first, at most
-    `max_messages`. Opened read-only, and the headers fetched with `BODY.PEEK`, so nothing is
-    marked read."""
+    """The mailbox's unread and flagged messages since `since_days` ago, newest first: at most
+    `max_messages` unread, and every flagged one. Opened read-only, and the headers fetched
+    with `BODY.PEEK`, so nothing is marked read."""
     secret = password(config, email)
     with _signed_in(config, secret) as imap:
         try:
@@ -115,18 +117,26 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
         except UnicodeEncodeError as err:
             raise SourceError(f"mailbox {config.mailbox!r}: only ASCII names work") from err
         since = imap_date(now - timedelta(days=config.since_days))
-        [found] = _ok(imap.uid("SEARCH", "SINCE", since, "OR", "UNSEEN", "FLAGGED"), "SEARCH")
-        uids = (found if isinstance(found, bytes) else b"").split()[-config.max_messages :]
+        # Unread mail up to the cap, newest first, and flagged mail however much there is:
+        # flagged is what I marked, which a busy week of newsletters mustn't push out.
+        [unread] = _ok(imap.uid("SEARCH", "SINCE", since, "UNSEEN"), "SEARCH")
+        [flagged] = _ok(imap.uid("SEARCH", "SINCE", since, "FLAGGED"), "SEARCH")
+        newest = (unread if isinstance(unread, bytes) else b"").split()[-config.max_messages :]
+        marked = (flagged if isinstance(flagged, bytes) else b"").split()
+        uids = sorted(set(newest) | set(marked), key=int)
         if not uids:
             return MailSnapshot(messages=[])
-        fetched = _ok(
-            imap.uid(
+        # In chunks: flagged mail has no cap, and a server limits a command's length.
+        fetched: list[object] = []
+        for start in range(0, len(uids), FETCH_CHUNK):
+            fetched += _ok(
+                imap.uid(
+                    "FETCH",
+                    b",".join(uids[start : start + FETCH_CHUNK]).decode(),
+                    f"(UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS ({HEADERS})])",
+                ),
                 "FETCH",
-                b",".join(uids).decode(),
-                f"(UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS ({HEADERS})])",
-            ),
-            "FETCH",
-        )
+            )
     me = {a.lower() for a in (config.username, email) if "@" in a}
     trusted = config.trusted_auth_servers()
     messages = [

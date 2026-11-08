@@ -46,7 +46,7 @@ class MailConfig(Strict):
     since_days: int = Field(default=DEFAULT_SINCE_DAYS, ge=1)
     """Mail older than this is left out, flagged or not."""
     max_messages: int = Field(default=DEFAULT_MAX_MESSAGES, ge=1, le=2000)
-    """The most messages read, newest first."""
+    """The most unread messages read, newest first; flagged ones are read however many."""
     message_url: str = ""
     """A link to open a message, with `{message_id}` (its Message-ID, without `<>`) and
     `{username}` filled in: for Gmail,
