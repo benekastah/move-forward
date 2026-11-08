@@ -82,7 +82,7 @@ def _item(config: MailConfig, plugin: str, thread: Thread) -> Item:
         badges.append(f"{thread.unread} unread")
     if thread.flagged:
         badges.append(Badge(text="flagged", tone="warn"))
-    if latest.important and not thread.flagged:
+    if latest.important and not thread.flagged and not latest.bulk:
         badges.append("important")
     if not latest.to_me and not latest.bulk:
         badges.append("cc")

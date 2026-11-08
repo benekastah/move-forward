@@ -29,7 +29,8 @@ _UID = re.compile(rb"\bUID (\d+)")
 _FLAGS = re.compile(rb"\bFLAGS \(([^)]*)\)")
 _MESSAGE_ID = re.compile(r"<([^<>\s]+)>")
 _STATUS = re.compile(rb"\((.*)\)")
-_GM_LABELS = re.compile(rb"\bX-GM-LABELS \(([^)]*)\)")
+_GM_LABELS = re.compile(rb'\bX-GM-LABELS \(((?:"(?:[^"\\]|\\.)*"|[^()"])*)\)')
+"""A message's Gmail labels; quoted ones may hold parentheses (`"Receipts (2024)"`)."""
 GMAIL = "X-GM-EXT-1"
 """The capability of a server with Gmail's extensions: labels, its Important among them."""
 _INTERNALDATE = re.compile(
@@ -130,7 +131,7 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
         if not uids:
             return MailSnapshot(messages=[])
         # Gmail says which mail it thinks matters (its Important label), which is worth having.
-        labels = " X-GM-LABELS" if GMAIL in getattr(imap, "capabilities", ()) else ""
+        labels = " X-GM-LABELS" if GMAIL in imap.capabilities else ""
         # In chunks: flagged mail has no cap, and a server limits a command's length.
         fetched: list[object] = []
         for start in range(0, len(uids), FETCH_CHUNK):

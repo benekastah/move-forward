@@ -576,6 +576,10 @@ def test_gmails_important_label_is_read() -> None:
     assert found is not None and found.important
     plain = client.message(b'1 (UID 7 X-GM-LABELS ("\\\\Inbox") FLAGS ())', headers(), {ME})
     assert plain is not None and not plain.important
+    # A label with parentheses before it doesn't hide it.
+    meta = b'1 (UID 7 X-GM-LABELS ("Receipts (2024)" "\\\\Important") FLAGS ())'
+    found = client.message(meta, headers(), {ME})
+    assert found is not None and found.important
 
 
 def test_labels_are_asked_for_only_from_gmail(imap: Callable[..., FakeImap]) -> None:
@@ -598,4 +602,5 @@ def test_mail_gmail_finds_important_ranks_higher_but_not_a_lists() -> None:
     assert items["Contract"].signals is not None and items["Contract"].signals.importance == 1
     assert "important" in items["Contract"].badges
     assert items["Digest"].signals is not None and items["Digest"].signals.importance == 0
+    assert "important" not in items["Digest"].badges
     assert next(i.title for i in _items(harness)) == "Contract"
