@@ -307,3 +307,52 @@ def test_forget_gone_keeps_tags_on_done_work_in_the_graph() -> None:
         repo.add(ref, "chores", NOW)
     assert tags.forget_gone(repo, graph) == 1
     assert repo.all() == {merged: ["chores"]}
+
+
+def test_a_tools_labels_are_tags_whatever_its_kind_says_of_its_text() -> None:
+    mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#sale", tags=["Garbage Day", "7"])
+    other = _entity("2", "garbage day moved")
+    found = {
+        e.ref.id: e
+        for e in tags.tagged(
+            [mail, other], {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)}
+        )
+    }
+    assert found["garbage-day"].refs == [mail.ref]  # a label, not the sender's #sale
+    assert "sale" not in found and "7" not in found
+    assert found["2"].refs == []  # a tag only labels give is named only with its #
+
+
+@pytest.mark.parametrize(
+    ("label", "handle"),
+    [
+        ("team:infra", "team-infra"),
+        ("area/ui", "area-ui"),
+        ("\U0001f41b bug", "bug"),
+        ("C++", "c"),  # as C# and C: one tag
+        ("\U0001f41b", None),  # no letter: no tag
+    ],
+)
+def test_labels_are_handled_as_tags_are(label: str, handle: str | None) -> None:
+    entity = Entity(ref=Ref(kind="x.a", id="1"), title="t", tags=[label])
+    found = [e.ref.id for e in tags.tagged([entity], {}) if e.ref.kind == TAG]
+    assert found == ([handle] if handle else [])
+
+
+def test_a_labels_tag_written_by_someone_is_named_by_its_words() -> None:
+    labelled = Entity(ref=Ref(kind="x.a", id="1"), title="t", tags=["Garbage Day"])
+    found = _tagged(labelled, _entity("2", "#garbage-day prep"), _entity("3", "garbage day moved"))
+    assert found["3"].refs == [Ref(kind=TAG, id="garbage-day")]
+
+
+def test_a_labels_tag_i_put_on_by_hand_is_named_by_its_words() -> None:
+    labelled = Entity(ref=Ref(kind="x.a", id="1"), title="t", tags=["Garbage Day"])
+    found = {
+        e.ref.id: e
+        for e in tags.tagged(
+            [labelled, _entity("h", "tagged"), _entity("3", "garbage day moved")],
+            {},
+            {Ref(kind="x.a", id="h"): ["garbage-day"]},
+        )
+    }
+    assert found["3"].refs == [Ref(kind=TAG, id="garbage-day")]

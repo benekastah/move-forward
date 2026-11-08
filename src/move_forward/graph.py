@@ -48,6 +48,11 @@ class Entity(Model):
     """Text that may name linking entities by id, e.g. a PR's branch, title and body; the graph
     adds a ref to each linking entity whose id it finds in it."""
     attrs: dict[str, JsonValue] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    """Tags its tool puts on it, e.g. a ticket's or PR's labels, as written there ("Garbage
+    Day"): core counts them as `#tags` (see `tags`), whatever its kind's `tags_from_text`, but
+    names one only labels give only by its `#`. Put only labels people set, trusted as much as
+    the kind's text, never the tool's own (Gmail's INBOX, UNREAD, CATEGORY_*)."""
     family: str | None = None
     """The family of kinds it's in (a pull request, a ticket), set by core; None for a kind
     that's a plugin's own."""

@@ -1,6 +1,6 @@
-"""`#tags`: put on an entity by a `#tag` in its title or `mentions` (out of code), or by hand (`TagRepository`, and the
-Tag field core adds to items: `Tags`), they relate
-everything carrying them. Core publishes a `tag` entity for each (`kinds.TAG`), pointing at what
+"""`#tags`: put on an entity by a `#tag` in its title or `mentions` (out of code), by its tool
+(`Entity.tags`: a ticket's labels), or by hand (`TagRepository`, and the Tag field core adds to
+items: `Tags`), they relate everything carrying them. Core publishes a `tag` entity for each (`kinds.TAG`), pointing at what
 carries it, and points at it every entity whose text (title or `mentions`) names it, as
 "Garbage day" names `#garbage-day`. A tag's words are separated by `-` or `_`, and text names it
 however it spaces, hyphenates or cases them. Tags aren't units of work: ice, priorities and Act
@@ -165,20 +165,27 @@ def tagged(
 ) -> list[Entity]:
     """The entities, each pointing too at the tags its text names (but one it carries), then a
     `tag` per tag on any of them, in its title or mentions out of their code (where its kind's
-    `tags_from_text`), or `added` by hand, pointing at what carries it: open while one of those
-    is."""
+    `tags_from_text`), stated by its tool (`Entity.tags`: labels), or `added` by hand, pointing
+    at what carries it: open while one of those is. A tag only labels give is named only with
+    its `#`."""
     carrying: dict[str, list[Entity]] = {}
+    chosen: set[str] = set()
+    """The tags someone wrote or put on by hand, not only a tool's labels."""
     for entity in entities:
         spec = specs.get(entity.ref.kind)
         texts = [prose(text) for text in [entity.title, *entity.mentions]]
         own = (
             [t for text in texts for t in tags(text)] if spec is None or spec.tags_from_text else []
         )
-        for tag in dict.fromkeys([*own, *(added or {}).get(entity.ref, [])]):
+        own += (added or {}).get(entity.ref, [])
+        chosen.update(own)
+        labels = [h for h in map(handle, entity.tags) if any(c.isalpha() for c in h)]
+        for tag in dict.fromkeys([*own, *labels]):
             carrying.setdefault(tag, []).append(entity)
     if not carrying:
         return entities
-    by_words = _by_words(carrying)
+    # A label is often a common word ("bug"): one only a tool gave is named by its `#` alone.
+    by_words = _by_words(chosen)
     carriers = {tag: {c.ref for c in found} for tag, found in carrying.items()}
     result: list[Entity] = []
     for entity in entities:
