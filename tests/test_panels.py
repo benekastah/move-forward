@@ -815,7 +815,7 @@ def test_an_item_without_a_task_has_no_snooze() -> None:
     assert "Snooze" not in [a.label for a in built.panel("x.p").items[0].actions]
 
 
-def test_an_item_set_aside_leaves_its_panel_until_it_changes() -> None:
+def test_an_item_set_aside_waits_last_in_its_panel_until_it_changes() -> None:
     def item(title: str) -> Item:
         return Item(
             title=title,
@@ -830,13 +830,19 @@ def test_an_item_set_aside_leaves_its_panel_until_it_changes() -> None:
         key: act_now.Feedback(action="snooze", fingerprint=said, until=until)
     }
 
+    other = Item(title="other", subjects=[Ref(kind="pull_request", id="other")], rank=-1)
+
     def shown(title: str) -> list[Item]:
-        panel_ = Panel(key="p", title="P", description="", items=[item(title)])
+        panel_ = Panel(key="p", title="P", description="", items=[item(title), other])
         built = panels.build(NOW, [panels.PluginPanels("x", "X", [panel_])], {}, feedback=feedback)
         return built.panel("x.p").items
 
-    assert shown("before") == []
-    assert [i.title for i in shown("after")] == ["after"]
+    waiting = shown("before")
+    assert [(i.title, i.set_aside) for i in waiting] == [("other", None), ("before", "snooze")]
+    assert [a.label for a in waiting[1].actions if a.group == "Act now"] == ["Unsnooze"]
+    changed = shown("after")
+    assert [(i.title, i.set_aside) for i in changed] == [("after", None), ("other", None)]
+    assert [a.label for a in changed[0].actions if a.group == "Act now"] == ["Snooze"]
 
 
 def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:

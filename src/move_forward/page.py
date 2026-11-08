@@ -187,6 +187,9 @@ class Item(Model):
     opened_at: datetime | None = None
     """Set by core, in Act now: when I opened the item, if it hasn't changed since; it's
     shown dimmed."""
+    set_aside: Literal["snooze", "dismiss"] | None = None
+    """Set by core, in a panel: how I set the item aside (`act_now.set_aside`), if it hasn't
+    changed since; it's shown dimmed and last, with Unsnooze."""
     parts: list["Item"] = Field(default_factory=list)
     """Pieces of this item, e.g. a work item's todos: the dashboard and Act now list them beneath
     it when there are several, with their own buttons, and focus mode shows them one at a time

@@ -285,6 +285,17 @@ class FeedbackRepository:
             key,
         )
 
+    def set_aside_on(self, ref: Ref) -> list[FeedbackKey]:
+        """What's snoozed or dismissed about the entity, by its tasks' keys."""
+        return [
+            (row["subject_kind"], row["subject_id"], row["task"])
+            for row in self._db.query(
+                "SELECT subject_kind, subject_id, task FROM act_now_feedback"
+                " WHERE subject_kind = ? AND subject_id = ? AND action IN ('snooze', 'dismiss')",
+                (ref.kind, ref.id),
+            )
+        ]
+
     def rekey(self, kinds: Collection[str], identify: Identify) -> int:
         """`PriorityRepository.rekey`, for what was said of items about `kinds`."""
         return _rekey(self._db, "act_now_feedback", "subject_kind", "subject_id", kinds, identify)

@@ -114,9 +114,12 @@ instead of running the command; nothing needs changing.
 ### Snooze and Clear priority wherever an item is
 
 Every item with something to do now has Snooze in its own panel, and Clear priority once one is
-set. An item snoozed or dismissed also leaves its panel until it changes or the snooze ends, which
-used to hold only for Ready for me to review and Replies for me. A script reading panels from `mfd
-dump` no longer sees such an item there: use `mfd snoozes` to list what's snoozed.
+set. An item snoozed or dismissed, there or in Act now, stays in its panel, last and dimmed, with
+Unsnooze (or Undismiss), until it changes or the snooze ends; it used to leave Ready for me to
+review and Replies for me. In `mfd dump`, such an item has `set_aside` (`snooze` or `dismiss`).
+`POST /actions/act_now/unsnooze` (the Snooze button's fields) brings it back, and `mfd unsnooze
+<entity> [--kind K] [--task T]` now takes any entity, as `mfd priority` does, not only a PR's
+URL, and brings back what's dismissed too.
 
 ### Refresh progress in the tab icon
 

@@ -220,13 +220,21 @@ def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomina
     ), level
 
 
-def set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> bool:
-    """Snoozed until later, or dismissed, and not changed since."""
+SetAside = Literal["snooze", "dismiss"]
+"""How an item is set aside: snoozed, or dismissed. Act now leaves it out; its panel shows it
+dimmed and last, with Unsnooze."""
+
+
+def set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> SetAside | None:
+    """How the item is set aside, snoozed until later or dismissed, if it hasn't changed since;
+    None while it isn't. What Act now and every panel go by."""
     if feedback is None or feedback.fingerprint != nomination.fingerprint:
-        return False
+        return None
     if feedback.action == "dismiss":
-        return True
-    return feedback.action == "snooze" and feedback.until is not None and feedback.until > now
+        return "dismiss"
+    if feedback.action == "snooze" and feedback.until is not None and feedback.until > now:
+        return "snooze"
+    return None
 
 
 def opened_at(nomination: Nomination, feedback: Feedback | None, now: datetime) -> datetime | None:
@@ -437,7 +445,7 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not (now and set_aside(nom, said(nom), now))
+        if not (now and set_aside(nom, said(nom), now) is not None)
     ]
     candidates.sort(
         key=lambda c: (
@@ -521,10 +529,19 @@ def importance_actions(subject: Ref, level: int | None) -> list[Action]:
     ]
 
 
-def snooze_action(fields: dict[str, str]) -> Action:
-    """The Snooze button of an item named by `fields`, wherever it's shown."""
+def snooze_action(fields: dict[str, str], aside: SetAside | None = None) -> Action:
+    """The Snooze button of an item named by `fields`, wherever it's shown; for one set aside
+    (`aside`), Unsnooze or Undismiss in its place."""
+    if aside is None:
+        return Action(
+            name=f"{ACTIONS}/snooze", label="Snooze", fields=fields, group="Act now", icon="💤"
+        )
     return Action(
-        name=f"{ACTIONS}/snooze", label="Snooze", fields=fields, group="Act now", icon="💤"
+        name=f"{ACTIONS}/unsnooze",
+        label="Unsnooze" if aside == "snooze" else "Undismiss",
+        fields=fields,
+        group="Act now",
+        icon="⏰",
     )
 
 

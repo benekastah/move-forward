@@ -500,7 +500,7 @@ def _item(
         if item.subjects
         else ""
     )
-    cls = "item opened" if item.opened_at else "item"
+    cls = "item opened" if item.opened_at or item.set_aside else "item"
     parts = [
         f"<li class='{cls}'{anchor}{data}><div class='item-head'>",
         f"<div class='item-title'>{title}</div>"

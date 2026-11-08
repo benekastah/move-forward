@@ -134,7 +134,7 @@ before the command's name.
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
-| `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <PR URL>` ends it. |
+| `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <entity> [--kind K] [--task T]` brings back anything snoozed or dismissed (named as for `mfd priority`; all its tasks, or `--task`'s). |
 | `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
 | `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one I put there off; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
@@ -172,8 +172,9 @@ with when you opened it, until it changes (or for a day at most). Coming back to
 fetches again just what you opened in the last half hour, not its plugins whole; an item's
 ↻ button does the same for it at once.
 
-Items with something to do have the same Snooze in their own panels, and an item set aside
-leaves its panel too, coming back when it does to Act now. Pin and Dismiss are Act now's.
+Items with something to do have the same Snooze in their own panels. An item snoozed or
+dismissed, in Act now or its panel, leaves Act now and waits in its panel, last and dimmed, with
+Unsnooze (or Undismiss), until it changes or the snooze ends. Pin and Dismiss are Act now's.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
@@ -359,7 +360,7 @@ over 64 KiB:
 | `/settings` | `<section>:<key>` per setting (`:prune_days`, `github:history_days`, `act_now:weights.closes`); a list one per line; a true-or-false one `on` or `off` | Saves the settings the form changed into the config file (see [Settings](#settings)), and redirects back to `/settings` saying what was saved, or why nothing was. Settings left out of the form are left as they are. |
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
-| `/actions/act_now/<snooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and what's shown with it) until tomorrow, dismisses it, or pins or unpins it; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
+| `/actions/act_now/<snooze\|unsnooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and what's shown with it) until tomorrow, dismisses it, or pins or unpins it; `unsnooze` brings back what's snoozed or dismissed; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
 | `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 0 not important, 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
 | `/actions/act_now/tag` | `kind`, `id` (the entity), `input` (the tag: `garbage-day`, `#Garbage Day`) | Puts the tag on the entity, as `mfd tag` does. |
 | `/actions/act_now/untag` | `kind`, `id`, `tag` (its handle) | Takes off a tag I put on it. |

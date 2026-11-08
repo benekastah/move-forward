@@ -669,10 +669,10 @@ def _act_now_action(
                     (kind, id, task), Feedback(action="opened", fingerprint=f, until=until), now
                 )
         return ActionResult("opened")
-    if action == "unpin":
+    if action in ("unpin", "unsnooze"):
         for kind, id, task, _ in members:
             feedback.forget((kind, id, task))
-        return ActionResult("unpinned")
+        return ActionResult("unpinned" if action == "unpin" else "back")
     if action == "snooze":
         said = [
             Feedback(action="snooze", fingerprint=f, until=config.snooze_until(kind, now))

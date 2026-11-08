@@ -189,7 +189,8 @@ def _sorted(
     priority_of: act_now.PriorityOf = act_now.no_priority,
     contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
 ) -> Panel:
-    """Highest rank first, deferred items last; optionally importance before rank."""
+    """Highest rank first, deferred items after, and what's set aside last; optionally importance
+    before rank."""
 
     def importance(item: Item) -> int:
         assigned = [priority_of(ref) for ref in item.subjects]
@@ -203,6 +204,7 @@ def _sorted(
             "items": sorted(
                 panel.items,
                 key=lambda i: (
+                    i.set_aside is not None,
                     i.deferred,
                     -(importance(i) if panel.sort_by_importance else 0),
                     -i.rank,
@@ -233,14 +235,14 @@ def _without_hidden(panel: Panel, hidden: Hidden) -> Panel:
     return panel.model_copy(update={"items": [i for i in panel.items if not hidden(i)]})
 
 
-def _snoozable(
+def _with_snooze(
     panel: Panel,
     plugin: str,
     feedback: dict[act_now.FeedbackKey, act_now.Feedback],
     now: datetime,
 ) -> Panel:
-    """A panel's items without those set aside (snoozed, or dismissed, and not changed since),
-    and each of the rest that has a task with a Snooze button, as in Act now itself."""
+    """Each of a panel's items that has a task with Snooze, as in Act now; one set aside there
+    or here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze."""
     items: list[Item] = []
     for item in panel.items:
         nomination = act_now.Nomination(
@@ -249,11 +251,14 @@ def _snoozable(
         key = nomination.key
         if key is None:
             items.append(item)
-        elif not act_now.set_aside(nomination, feedback.get(key), now):
-            kind, id, task = key
-            fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
-            snooze = act_now.snooze_action(fields)
-            items.append(item.model_copy(update={"actions": [*item.actions, snooze]}))
+            continue
+        aside = act_now.set_aside(nomination, feedback.get(key), now)
+        kind, id, task = key
+        fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
+        button = act_now.snooze_action(fields, aside)
+        items.append(
+            item.model_copy(update={"actions": [*item.actions, button], "set_aside": aside})
+        )
     return panel.model_copy(update={"items": items})
 
 
@@ -462,7 +467,7 @@ def build(
                 )
                 for plugin in plugins
                 for panel in plugin.panels
-                for shown in [_snoozable(panel, plugin.key, feedback or {}, now)]
+                for shown in [_with_snooze(panel, plugin.key, feedback or {}, now)]
             ),
         ],
         groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),
