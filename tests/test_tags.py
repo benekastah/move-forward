@@ -246,3 +246,19 @@ def test_ice_gets_no_tags_and_focus_parts_do() -> None:
     assert [a.fields for a in todo.actions if a.label == "Tag"] == [
         {"kind": part.kind, "id": part.id}
     ]
+
+
+def test_forget_gone_keeps_tags_on_done_work_in_the_graph() -> None:
+    merged, gone = Ref(kind="pull_request", id="merged"), Ref(kind="notes.todo", id="9")
+    graph = Graph(
+        [Entity(ref=merged, title="m", lifecycle="done")],
+        kinds={
+            "pull_request": KindSpec(tags.TagAttrs),
+            "notes.todo": KindSpec(tags.TagAttrs, gone_means_done=True),
+        },
+    )
+    repo = TagRepository(Database(":memory:"))
+    for ref in (merged, gone):
+        repo.add(ref, "chores", NOW)
+    assert tags.forget_gone(repo, graph) == 1
+    assert repo.all() == {merged: ["chores"]}

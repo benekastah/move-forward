@@ -179,7 +179,8 @@ def tagged(
 
 def forget_gone(repo: TagRepository, graph: Graph) -> int:
     """Take my tags off entities that are gone where gone means done (`KindSpec.gone_means_done`:
-    a deleted entry, a ticked-off todo), so a new one with the same id starts clean. A tag stays
+    a deleted entry, a ticked-off todo, a mail thread once read), so a new one with the same id
+    starts clean. A tag stays
     on finished work (a merged PR, a done ticket): it's a label, not a ranking. How many
     entities lost their tags."""
     gone = [
