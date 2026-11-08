@@ -66,9 +66,9 @@ def builtin(package: str) -> Plugin[Any, Any]:
     ]
     if len(found) != 1:
         raise TypeError(f"{module.__name__} defines {len(found)} Plugin subclasses, not one")
-    plugin = found[0]()
-    if plugin.name != package.rpartition(".")[2]:
-        raise TypeError(f"{module.__name__}'s plugin is named {plugin.name!r}, not as its package")
+    plugin, expected = found[0](), package.rpartition(".")[2]
+    if plugin.name != expected:
+        raise TypeError(f"{module.__name__}'s plugin is named {plugin.name!r}, not {expected!r}")
     return plugin
 
 
@@ -78,7 +78,8 @@ BUILTINS: list[Plugin[Any, Any]] = [
     if found.ispkg
 ]
 """The plugins that come with the dashboard: each package in `move_forward/plugins/`, by the
-`Plugin` subclass its `plugin.py` defines, so adding one needs no change here. Found in the
+`Plugin` subclass its `plugin.py` defines, named as the package is, so adding one needs no
+change here. Found in the
 package rather than by entry points, so a checkout run without installing it (or a venv whose
 metadata is stale) still has them."""
 ENTRY_POINTS = "move_forward.plugins"

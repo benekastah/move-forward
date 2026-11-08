@@ -247,7 +247,7 @@ def test_every_package_in_plugins_is_a_built_in_named_for_it() -> None:
             "class A(Plugin):\n    name = 'a'\nclass B(Plugin):\n    name = 'b'\n",
             "defines 2 Plugin subclasses, not one",
         ),
-        ("class A(Plugin):\n    name = 'other'\n", "named 'other', not as its package"),
+        ("class A(Plugin):\n    name = 'other'\n", "named 'other', not 'fake_builtin'"),
     ],
 )
 def test_a_built_in_package_defines_one_plugin_named_for_it(
@@ -264,4 +264,20 @@ def test_a_built_in_package_defines_one_plugin_named_for_it(
             registry.builtin(package.name)
     finally:  # each case imports its own
         for name in ("fake_builtin", "fake_builtin.plugin"):
+            sys.modules.pop(name, None)
+
+
+def test_what_a_built_in_imports_failing_is_said_as_it_is(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "fake_broken"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "plugin.py").write_text("import fake_missing_dependency\n")
+    monkeypatch.syspath_prepend(str(tmp_path))  # pyright: ignore[reportUnknownMemberType]
+    try:
+        with pytest.raises(ModuleNotFoundError, match="fake_missing_dependency"):
+            registry.builtin(package.name)
+    finally:
+        for name in ("fake_broken", "fake_broken.plugin"):
             sys.modules.pop(name, None)
