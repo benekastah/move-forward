@@ -212,14 +212,12 @@ vCard or CardDAV first, then Google Contacts. Mail's senders join them by email.
 
 ### mail
 
-- **A stranger's reply takes on its conversation's settings.** A conversation is the
-  Message-ID its first message named, which anyone replying can name, so their reply takes on
-  the priority, pin, snooze or tags set on it (its flag no longer: that counts only the latest
-  writer's mail). Left as it is, a known limitation: it takes a Message-ID from the
-  conversation, so mostly someone already in it, and gains only a place on my own page, while
-  telling a newcomer from a member splits real conversations. If it's ever abused, the cheap
-  step is giving a message whose sender the server didn't verify a conversation of its own:
-  that stops forged `From`s, not a stranger with a verified domain.
+- **A forged reply on its own, if it's ever abused.** A stranger's reply takes on the priority,
+  pin and tags set on its conversation, a known limitation (see
+  [plugins/mail.md](plugins/mail.md)). If that's ever abused, give a message whose sender the
+  server didn't verify a conversation of its own, but only where senders can be verified at
+  all (Gmail, or `auth_servers` set): elsewhere no sender is, and every conversation would
+  split. That stops forged `From`s, not a stranger with a verified domain.
 
 ## Follow-ups
 
