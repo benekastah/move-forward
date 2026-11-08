@@ -259,6 +259,12 @@ class LinearPlugin(...):
   it, and give each entity an id by the family's rule (`api.kinds.FAMILIES[...].id_rule`:
   a URL for a ticket or a PR, `<host>/<login>` for a person), so it's unique across tools. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
   through the family's model, whoever publishes it.
+- **Your own families.** For something several tools share that core doesn't model (a CRM
+  deal, say), declare the family in `families`: a `Family` with its name (lower-case, no
+  dot), label, model, id rule and, if it's fetched on demand, its fetched model. Put it in a
+  package the plugins that share it import, so they declare the same one; a plugin declaring
+  a family differently from core or another plugin is left out, and `mfd check` says so.
+  Task ids its consumers share (as `REVIEW` is for PRs) can live in that package too.
 - **People.** A tool that knows who something is about publishes them as `person`s, with an
   `email` if it has one, and points the entity at them. Core then joins them with the same
   person in other tools (`graph.same_person`), and ranks and badges their items by contact type,

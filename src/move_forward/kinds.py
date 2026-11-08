@@ -5,7 +5,7 @@ family's model says and other plugins read them through it. A plugin's other kin
 own, named for it (`git.branch`). See `docs/entities.md`."""
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -146,15 +146,41 @@ class Family:
     be."""
 
 
-FAMILIES = {
-    family.name: family
-    for family in (
-        Family(PULL_REQUEST, "PR", PullRequest, is_url, PullRequestFetched),
-        Family(TICKET, "ticket", Ticket, is_url, TicketFetched),
-        Family(PERSON, "person", Person, is_host_login),
-    )
-}
-"""Every family, by name."""
+CORE_FAMILIES = (
+    Family(PULL_REQUEST, "PR", PullRequest, is_url, PullRequestFetched),
+    Family(TICKET, "ticket", Ticket, is_url, TicketFetched),
+    Family(PERSON, "person", Person, is_host_login),
+)
+"""The families core declares itself, as a plugin declares its own (`Plugin.families`)."""
+FAMILIES: dict[str, Family] = {}
+"""Every family, by name: core's and the plugins' (`declare`, as plugins are found)."""
+_DECLARED_BY: dict[str, str] = {}
+_FAMILY_NAME = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def declare(plugin: str, families: Iterable[Family]) -> None:
+    """Add a plugin's families to `FAMILIES`, or raise ValueError, adding none, for one whose
+    name isn't a family's (lower-case, no dot: a dotted kind is a plugin's own) or that core or
+    another plugin declares differently. The same declaration from two plugins (a family
+    package they share) is one family."""
+    found: dict[str, Family] = {}
+    for family in families:
+        if not _FAMILY_NAME.fullmatch(family.name):
+            raise ValueError(
+                f"{plugin}'s family {family.name!r} isn't named like one: {_FAMILY_NAME.pattern}"
+            )
+        known = found.get(family.name) or FAMILIES.get(family.name)
+        if known is not None and known != family:
+            owner = plugin if family.name in found else _DECLARED_BY[family.name]
+            raise ValueError(f"{plugin}'s family {family.name} is declared differently by {owner}")
+        found[family.name] = family
+    for name, family in found.items():
+        if name not in FAMILIES:
+            _DECLARED_BY[name] = plugin
+        FAMILIES[name] = family
+
+
+declare("core", CORE_FAMILIES)
 
 
 def fits(kind: str, id: str) -> bool:

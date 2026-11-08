@@ -16,7 +16,7 @@ from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
-from .kinds import FAMILIES, fits, named_for
+from .kinds import FAMILIES, declare, fits, named_for
 from .plugin import (
     API_VERSION,
     Context,
@@ -168,21 +168,30 @@ def discover() -> tuple[list[Plugin[Any, Any]], list[str]]:
     """Every plugin, by name: the built-ins and the other packages' (`ENTRY_POINTS`), with
     what went wrong loading one. A plugin that won't import, isn't a `Plugin` or fails
     `check_plugins` (a built-in's name, a reserved one) is left out, and said why; a
-    built-in failing it is a bug, and raises."""
+    built-in failing it is a bug, and raises. Each plugin's families (`Plugin.families`) are
+    declared before it's checked, so its kinds can be of them; a plugin left out declares
+    none."""
     plugins = list(BUILTINS)
+    for builtin in plugins:
+        declare(builtin.name, builtin.families)
     check_plugins(plugins)
     errors: list[str] = []
     for point in entry_points(group=ENTRY_POINTS):
+        families = dict(FAMILIES)
         try:
             loaded: object = point.load()
             plugin: object = loaded() if isinstance(loaded, type) else loaded
             if not isinstance(plugin, Plugin):
                 raise TypeError(f"{point.value} isn't a Plugin")
-            check_plugins([*plugins, cast(Plugin[Any, Any], plugin)])
+            installed = cast(Plugin[Any, Any], plugin)
+            declare(installed.name, installed.families)
+            check_plugins([*plugins, installed])
         except Exception as e:  # noqa: BLE001 (any failure leaves just this plugin out)
+            FAMILIES.clear()
+            FAMILIES.update(families)
             errors.append(f"plugin {point.name} ({point.value}) is left out: {e}")
             continue
-        plugins.append(cast(Plugin[Any, Any], plugin))
+        plugins.append(installed)
     return sorted(plugins, key=lambda p: p.name), errors
 
 

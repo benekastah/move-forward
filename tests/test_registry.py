@@ -1,13 +1,17 @@
 """Finding the plugins: the built-ins, and other packages' by entry point; and the names no
 plugin may take."""
 
+from collections.abc import Iterator
 from importlib.metadata import EntryPoint
 from typing import Any, ClassVar
 
 import pytest
 from conftest import dashboard
 
-from move_forward import cli, config, registry, render, server
+from move_forward import cli, config, kinds, registry, render, server
+from move_forward.domain import KindModel
+from move_forward.graph import KindSpec
+from move_forward.kinds import FAMILIES, Family, Person, is_url
 from move_forward.plugin import API_VERSION, Plugin
 from move_forward.strict import Strict
 
@@ -30,6 +34,61 @@ class SettingsPlugin(Plugin[LinearConfig, Any]):
 
 class OldLinearPlugin(LinearPlugin):
     api_version = 0
+
+
+class Deal(KindModel):
+    """A deal in some CRM: a family no built-in declares."""
+
+    value: int
+
+
+DEALS = Family("deal", "deal", Deal, is_url)
+
+
+class HubDeal(Deal):
+    stage: str
+
+
+class HubPlugin(LinearPlugin):
+    name: ClassVar[str] = "hub"
+    families = (DEALS,)
+    kinds: ClassVar[dict[str, KindSpec]] = {"deal": KindSpec(attrs=HubDeal)}
+
+
+class PipePlugin(LinearPlugin):
+    """Another CRM, sharing hub's declaration of the family (as a package both use would)."""
+
+    name: ClassVar[str] = "pipe"
+    families = (DEALS,)
+    kinds: ClassVar[dict[str, KindSpec]] = {"deal": KindSpec(attrs=Deal)}
+
+
+class RivalPlugin(LinearPlugin):
+    name: ClassVar[str] = "rival"
+    families = (Family("deal", "deal", Person, is_url),)
+
+
+class PersonPlugin(LinearPlugin):
+    name: ClassVar[str] = "persons"
+    families = (Family("person", "person", Person, is_url),)
+
+
+class DottedPlugin(LinearPlugin):
+    name: ClassVar[str] = "dotted"
+    families = (Family("crm.deal", "deal", Deal, is_url),)
+
+
+class OldHubPlugin(HubPlugin):
+    api_version = 0
+
+
+@pytest.fixture(autouse=True)
+def families() -> Iterator[None]:
+    """Discovering plugins declares their families, for the process; keep each test's to it."""
+    before = dict(FAMILIES)
+    yield
+    FAMILIES.clear()
+    FAMILIES.update(before)
 
 
 def _installed(monkeypatch: pytest.MonkeyPatch, *points: tuple[str, str]) -> None:
@@ -112,3 +171,38 @@ def test_the_page_says_which_installed_plugins_are_left_out(
     built = dashboard()
     assert built.problems == ["plugin linear (x:Y) is left out: boom"]
     assert "plugin linear (x:Y) is left out: boom" in render.dashboard_page(built, set())
+
+
+def test_installed_plugins_declare_a_family_core_doesnt_know(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _installed(monkeypatch, ("hub", f"{__name__}:HubPlugin"), ("pipe", f"{__name__}:PipePlugin"))
+    plugins, errors = registry.discover()
+    assert errors == []
+    assert {"hub", "pipe"} <= {p.name for p in plugins}
+    assert FAMILIES["deal"] is DEALS
+    assert kinds.fits("deal", "https://crm.example/deals/1")
+    assert not kinds.fits("deal", "1")
+
+
+@pytest.mark.parametrize(
+    ("plugin", "said"),
+    [
+        ("RivalPlugin", "rival's family deal is declared differently by hub"),
+        ("PersonPlugin", "persons's family person is declared differently by core"),
+        ("DottedPlugin", "dotted's family 'crm.deal' isn't named like one"),
+        ("OldHubPlugin", "hub is built against API version 0"),
+    ],
+)
+def test_a_plugin_whose_families_cant_be_declared_is_left_out_and_declares_none(
+    monkeypatch: pytest.MonkeyPatch, plugin: str, said: str
+) -> None:
+    first = [("hub", f"{__name__}:HubPlugin")] if plugin == "RivalPlugin" else []
+    _installed(monkeypatch, *first, ("x", f"{__name__}:{plugin}"))
+    before = dict(FAMILIES)
+    plugins, errors = registry.discover()
+    [error] = errors
+    assert said in error
+    builtins = {p.name for p in registry.BUILTINS}
+    assert {p.name for p in plugins} == (builtins | {"hub"} if first else builtins)
+    assert dict(FAMILIES) == (before | {"deal": DEALS} if first else before)
