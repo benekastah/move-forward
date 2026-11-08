@@ -68,8 +68,8 @@ def clear_contact_action(req: ActionRequest[SlackConfig]) -> str:
     or looked up again."""
     login = req.field("login")
     if not SlackRepository(req.ctx.db).unset_contact(login):
-        raise ActionError(f"{login} has no Slack id kept")
-    return f"forgot {login}'s Slack id"
+        raise ActionError(f"nothing is kept for {login}")
+    return f"forgot what was kept for {login}; they're looked up again"
 
 
 def set_contact_action(req: ActionRequest[SlackConfig]) -> str:
@@ -141,7 +141,8 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
                         name="slack/clear_contact",
                         label="Clear",
                         fields={"login": login},
-                        confirm=f"Forget {login}'s Slack id? It's imported or looked up again.",
+                        confirm=f"Forget what's kept for {login}? They're imported or looked up"
+                        " again.",
                     )
                 ],
                 back=CONTACTS_PATH,

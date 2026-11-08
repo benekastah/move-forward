@@ -89,10 +89,10 @@ def test_clear_forgets_a_persons_slack_id_so_its_looked_up_again() -> None:
     slack = SlackRepository(db)
     slack.set_contact("bob", None)  # a blank form: kept unlinked
     page = str(refresh.plugin_page(config, db, "/slack/contacts", {}))
-    assert "/actions/slack/clear_contact" in page and "Forget bob" in page
+    assert "/actions/slack/clear_contact" in page and "Forget what" in page
     assert refresh.run_action(config, db, "slack/clear_contact", {"login": "bob"}) == (
-        "forgot bob's Slack id"
+        "forgot what was kept for bob; they're looked up again"
     )
     assert "bob" not in slack.contacts()
-    with pytest.raises(ActionError, match="has no Slack id kept"):
+    with pytest.raises(ActionError, match="nothing is kept for bob"):
         refresh.perform_action(config, db, "slack/clear_contact", {"login": "bob"})
