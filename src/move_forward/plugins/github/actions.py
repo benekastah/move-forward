@@ -13,7 +13,7 @@ from ...api.shell import CommandError
 from . import client
 from .config import GitHubConfig
 from .models import PullRequest
-from .panels import merge_holds
+from .panels import merge_conditions, merge_holds
 from .prs import decisions, failed_runs, merge_method, primary_reviewers
 from .snapshots import PrRepository
 
@@ -161,7 +161,50 @@ def merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
     return ActionResult(f"{pr.repo}#{pr.number} {done}", touched=[Ref(kind=PR, id=pr.url)])
 
 
+def auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
+    """Let the PR merge by itself once it has what its base requires (auto-merge), as Merge when
+    ready offers: where its repo allows it and its base requires a review it hasn't had (else
+    it wouldn't wait for one), at the `head` the button showed, and not while the work notes
+    hold it."""
+    pr = _my_open_pr(req)
+    if req.field("head") != pr.head_oid:
+        raise ActionError(f"{pr.repo}#{pr.number} has new commits since: look again")
+    if not pr.auto_merge_allowed:
+        raise ActionError(f"{pr.repo} doesn't allow auto-merge")
+    if pr.review_decision != "REVIEW_REQUIRED":
+        raise ActionError(
+            f"{pr.repo}#{pr.number} isn't waiting on a required review: auto-merge wouldn't wait"
+            " for one"
+        )
+    if conditions := merge_conditions(req.graph, pr):
+        raise ActionError(f"the work notes hold {pr.repo}#{pr.number}: {'; '.join(conditions)}")
+    method = merge_method(pr, req.ctx.config.merge.method)
+    if method is None and not pr.merge_queue:
+        raise ActionError(f"how {pr.repo} merges isn't known yet: refresh, then try again")
+    try:
+        client.auto_merge(pr.url, method, pr.head_oid)
+    except CommandError as e:
+        raise ActionError(str(e)) from e
+    return ActionResult(
+        f"{pr.repo}#{pr.number} merges by itself once approved", touched=[Ref(kind=PR, id=pr.url)]
+    )
+
+
+def cancel_auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
+    """Turn the PR's auto-merge off."""
+    pr = _my_open_pr(req)
+    try:
+        client.cancel_auto_merge(pr.url)
+    except CommandError as e:
+        raise ActionError(str(e)) from e
+    return ActionResult(
+        f"{pr.repo}#{pr.number} no longer merges by itself", touched=[Ref(kind=PR, id=pr.url)]
+    )
+
+
 ACTIONS: dict[str, ActionHandler] = {
+    "auto_merge": auto_merge,
+    "cancel_auto_merge": cancel_auto_merge,
     "merge": merge,
     "mark_ready": mark_ready,
     "primary_reviewer": primary_reviewer,

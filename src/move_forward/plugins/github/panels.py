@@ -47,6 +47,9 @@ MARK_READY = "github/mark_ready"
 UPDATE_BRANCH = "github/update_branch"
 RERUN_FAILED = "github/rerun_failed"
 MERGE = "github/merge"
+AUTO_MERGE = "github/auto_merge"
+CANCEL_AUTO_MERGE = "github/cancel_auto_merge"
+MERGES_WHEN_READY = "merges when ready"
 REQUEST_REVIEWER_TASK = "request_reviewer"
 """The task of Needs a reviewer's items in Act now."""
 MAY_BE_READY = "draft with green CI and no open todos: ready?"
@@ -169,11 +172,16 @@ def _review(
     )
 
 
+def merge_conditions(graph: Graph, pr: PullRequest) -> list[str]:
+    """The work notes' merge conditions on the PR: what must happen before it merges."""
+    entries = graph.view_related(pr_ref(pr), ENTRY, _EntryView)
+    return [c for e in entries for c in e.merge_conditions.get(pr.url, [])]
+
+
 def merge_holds(graph: Graph, pr: PullRequest, ignored: Collection[str]) -> list[str]:
     """Why the PR isn't ready to merge, as Ready to merge decides: GitHub's blockers
     (`merge_blockers`) and the work notes' merge conditions on it. Empty when it's ready."""
-    entries = graph.view_related(pr_ref(pr), ENTRY, _EntryView)
-    conditions = [c for e in entries for c in e.merge_conditions.get(pr.url, [])]
+    conditions = merge_conditions(graph, pr)
     drafted = ["a draft"] if pr.is_draft else []
     queued = ["in the merge queue"] if pr.in_merge_queue else []
     return [*drafted, *queued, *merge_blockers(pr, ignored), *conditions]
@@ -380,14 +388,13 @@ class Builder:
                 review_required(pr) or pr.requested_users or pr.requested_teams
             ):
                 who = [*pr.requested_users, *(f"team {team}" for team in pr.requested_teams)]
-                awaiting.append(
-                    pr_item(
-                        self.now,
-                        pr,
-                        details=["waiting on " + ", ".join(who)],
-                        rank=-pr.updated_at.timestamp(),
-                    )
+                item = pr_item(
+                    self.now,
+                    pr,
+                    details=["waiting on " + ", ".join(who)],
+                    rank=-pr.updated_at.timestamp(),
                 )
+                awaiting.append(self._with_auto_merge(item, pr))
         return (
             Panel(
                 key="fix_before_review",
@@ -740,6 +747,56 @@ class Builder:
             items=items,
         )
 
+    def _with_auto_merge(self, item: Item, pr: PullRequest) -> Item:
+        """The PR's item with Merge when ready where its repo allows auto-merge, how it'd merge
+        is known, and its base requires a review it hasn't had: auto-merge waits only for what
+        GitHub requires, so without that it wouldn't wait for anyone to look. Not
+        while the work notes hold it, nor once auto-merge is on (see `_auto_merging`)."""
+        method = merge_method(pr, self.config.merge.method)
+        if (
+            pr.auto_merge
+            or not pr.auto_merge_allowed
+            or pr.review_decision != "REVIEW_REQUIRED"
+            or (method is None and not pr.merge_queue)
+            or merge_conditions(self.graph, pr)
+        ):
+            return item
+        how = "its merge queue" if pr.merge_queue else f"merging ({(method or '').lower()})"
+        button = Action(
+            name=AUTO_MERGE,
+            label="Merge when ready",
+            fields={"pr": pr.url, "head": pr.head_oid},
+            confirm=f"Let {pr.repo}#{pr.number} merge by itself, by {how}, once it has what"
+            f" {pr.base} requires (an approval, green checks), at {pr.head_oid[:7]}? A push"
+            " after this isn't merged unseen.",
+        )
+        return item.model_copy(update={"actions": [*item.actions, button]})
+
+    def _auto_merging(self, panel: Panel) -> Panel:
+        """The panel with, on every item about one of my PRs with auto-merge on, a badge saying
+        so and Cancel auto-merge, wherever it's shown; a warning one while the work notes hold
+        it, as GitHub merges it regardless."""
+        prs = {pr.url: pr for pr in self.mine if pr.auto_merge}
+
+        def marked(item: Item) -> Item:
+            pr = prs.get(item.url or "")
+            if pr is None:
+                return item
+            held = merge_conditions(self.graph, pr)
+            badge = (
+                Badge(text=f"{MERGES_WHEN_READY}, though held", tone="warn")
+                if held
+                else Badge(text=MERGES_WHEN_READY, tone="good")
+            )
+            cancel = Action(
+                name=CANCEL_AUTO_MERGE, label="Cancel auto-merge", fields={"pr": pr.url}
+            )
+            return item.model_copy(
+                update={"badges": [*item.badges, badge], "actions": [*item.actions, cancel]}
+            )
+
+        return panel.model_copy(update={"items": [marked(item) for item in panel.items]})
+
     def _with_merge_button(self, item: Item, pr: PullRequest) -> Item:
         """The PR's item with Add to queue where its base has a merge queue, else Merge with the
         method it'd use; neither while how its repo merges isn't known yet."""
@@ -855,4 +912,4 @@ class Builder:
             self.team_prs(),
             self.metadata(),
         ]
-        return [self._with_primary_reviewers(panel) for panel in panels]
+        return [self._auto_merging(self._with_primary_reviewers(panel)) for panel in panels]

@@ -458,6 +458,19 @@ def merge(host: str, repo: str, number: int, method: MergeMethod, head: str) -> 
     run(api(host, "-X", "PUT", path, *(arg for field in fields for arg in ("-f", field))))
 
 
+def auto_merge(url: str, method: MergeMethod | None, head: str) -> None:
+    """Let the PR merge by itself once it has what its base requires (auto-merge), with `method`
+    (None: its merge queue picks), if its head is still `head`. `gh` merges a PR that's
+    already mergeable at once. Raises CommandError when GitHub refuses, as for a PR in a linked stack."""
+    how = [f"--{method.lower()}"] if method else []
+    run(["gh", "pr", "merge", url, "--auto", *how, "--match-head-commit", head])
+
+
+def cancel_auto_merge(url: str) -> None:
+    """Turn the PR's auto-merge off. Raises CommandError when GitHub refuses."""
+    run(["gh", "pr", "merge", url, "--disable-auto"])
+
+
 def add_to_queue(url: str, head: str) -> None:
     """Add the PR to its base's merge queue, if its head is still `head`; the queue picks how it
     merges. Raises CommandError when GitHub refuses."""

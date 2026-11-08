@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Merge when ready
+
+`POST /actions/github/auto_merge` with `pr` and `head` turns a PR's auto-merge on, and
+`/actions/github/cancel_auto_merge` with `pr` turns it off, as Ready for review's Merge when ready
+and Cancel auto-merge buttons do; the first only while its base requires a review it hasn't
+had. Nothing to change.
+
 ### Merge
 
 `POST /actions/github/merge` with `pr` and `head` merges a PR ready to merge, or adds it to its

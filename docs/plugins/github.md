@@ -82,7 +82,12 @@ labels as its tags but `placeholder_labels` and `split_pr_labels`, which are abo
   failures remain here.
   The reasons appear together on one item; assigned importance sorts before age.
 - **Ready for review**: my open, non-draft PRs without those blockers, waiting for approval.
-  Pending CI is allowed. Each item says who it's waiting on.
+  Pending CI is allowed. Each item says who it's waiting on. Where its repo allows auto-merge
+  and its base requires a review it hasn't had, Merge when ready lets it merge by itself once it
+  has what the base requires (an approval, green checks), with the method below or its merge
+  queue; not while the work notes hold it. Once on, every item about it is badged "merges when
+  ready" ("…, though held" as a warning, if the work notes hold it since), with Cancel
+  auto-merge.
 - **Ready for me to review**: non-draft PRs requesting me as an individual, plus PRs
   pushed after my approval when GitHub says `REVIEW_REQUIRED`. Team-only requests stay in
   Requested from my teams; a new push alone does not bring an approved PR back. Like
@@ -132,6 +137,8 @@ members as far as they're known, then recent committers; any login can be typed.
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/actions/github/merge` | `pr` (the URL of one of my PRs ready to merge), `head` (the commit the button showed) | With a confirm: adds it to its base's merge queue (`gh pr merge --match-head-commit`), or starts merging it with the method above through GitHub's async merge (GitHub finishes it in a moment). Refused once it has new commits, or Ready to merge wouldn't list it (a blocker, a work-notes merge condition); never as an admin. Offered once how its repo merges is known (after a full refresh). |
+| `/actions/github/auto_merge` | `pr` (the URL of one of my open PRs, in a repo allowing auto-merge), `head` (the commit the button showed) | With a confirm: `gh pr merge --auto` with the method above (none for a merge queue) and `--match-head-commit`, so a push after it isn't merged unseen. Refused unless its base requires a review it hasn't had (`REVIEW_REQUIRED`: auto-merge would otherwise not wait for one), and while the work notes hold it. GitHub refuses a PR in a linked stack. |
+| `/actions/github/cancel_auto_merge` | `pr` (the URL of one of my open PRs) | Turns its auto-merge off (`gh pr merge --disable-auto`). |
 | `/actions/github/update_branch` | `pr` (the URL of one of my open PRs that's behind its base) | Merges its base into its branch on GitHub (`gh pr update-branch`), not rebasing, so what's stacked on it isn't rewritten. |
 | `/actions/github/mark_ready` | `pr` (the URL of one of my draft PRs) | Takes it out of draft. |
 | `/actions/github/rerun_failed` | `pr` (the URL of one of my open PRs, on CI failures when a failing check's URL names an Actions run of its repo that's over) | Runs the failed jobs of those runs again (`gh run rerun --failed`), policy checks left out; a run GitHub refuses doesn't stop the rest. |
