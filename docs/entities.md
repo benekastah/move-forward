@@ -139,7 +139,7 @@ points at a person is about them, so core ranks and badges its items by their co
 | `me` | bool | (github's) the person using the dashboard |
 | `email` | string or null | their address; github's is their commit email, imported or looked up from commits |
 | `contact_type` | string or null | what they are to me, when the tool knows, e.g. `customer`; one I set beats it |
-| `importance` | 0, 1, 2 or null | how much they matter to me, when the tool knows (a CRM's VIP, a starred contact); the highest of it and their type's counts, but a type I set wins |
+| `importance` | 0, 1, 2 or null | how much they matter to me, when the tool knows (a CRM's VIP, a starred contact); the highest of it and their type's counts, but a type I set on their address wins |
 
 ### `mail.thread`
 

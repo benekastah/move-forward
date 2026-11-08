@@ -145,15 +145,20 @@ class Contacts:
         email = personal_email(person.email)
         keys = [email, f"@{email.split('@')[1]}"] if email else []
         labelled = next((key for key in keys if key in self._labels), None)
-        if labelled is not None:
-            # Mine wins: a type I set is how much they matter, whatever a tool says.
+        if labelled is not None and not labelled.startswith("@"):
+            # Mine wins: a type I set on their address is how much they matter, whatever a tool
+            # says.
             found = self._labels[labelled]
             return Contact(email, found, self._types.get(found, 0), labelled)
         same = self._graph.view_same_person(person.id, _PersonView)
-        # Where tools disagree, the first in the graph's order: the plugins' order.
-        found = next((t for p in same if (t := _tool_type(p.contact_type))), None)
+        if labelled is not None:
+            found: str | None = self._labels[labelled]  # on their whole domain
+        else:
+            # Where tools disagree, the first in the graph's order: the plugins' order.
+            found = next((t for p in same if (t := _tool_type(p.contact_type))), None)
         by_type = self._types.get(found, 0) if found else 0
-        # A tool can also state it outright (a CRM's VIP, a starred contact): the highest counts.
+        # A tool can also state it outright (a CRM's VIP, a starred contact): the highest counts,
+        # above a type on their domain too (a VIP at a customer).
         stated = max((p.importance or 0 for p in same), default=0)
         return Contact(email, found, max(by_type, stated), labelled, stated > by_type)
 
@@ -174,15 +179,15 @@ class Contacts:
         return contact.importance if contact else 0
 
     def additions(self, item: Item) -> ItemAdditions:
-        """A badge with the type of who `item` is mainly about (and "important" when a tool says
-        they matter more than that), and a button to set it."""
+        """A badge with the type of who `item` is mainly about (and "VIP" when a tool says they
+        matter more than that), and a button to set it."""
         contact = self.of(item.subjects[0]) if item.subjects else None
         if contact is None:
             return ItemAdditions()
         return ItemAdditions(
             badges=[
                 *([contact.contact_type] if contact.contact_type else []),
-                *(["important"] if contact.stated else []),
+                *(["VIP"] if contact.stated else []),
             ],
             actions=self._actions(contact),
         )

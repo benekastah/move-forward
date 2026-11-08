@@ -182,10 +182,16 @@ def test_a_type_i_set_wins_over_what_a_tool_says() -> None:
     assert _contacts(SENDER, vip, _thread(SENDER), labels=labels).importance(THREAD) == 0
 
 
+def test_a_type_on_their_domain_doesnt_lower_what_a_tool_says() -> None:
+    vip = _person("crm/ceo", "alice@acme.com", importance=2)
+    labels = {"@acme.com": "customer"}  # 1, for everyone there
+    assert _contacts(SENDER, vip, _thread(SENDER), labels=labels).importance(THREAD) == 2
+
+
 def test_a_stated_importance_above_the_type_is_badged() -> None:
     vip = _person("crm/alice", "alice@acme.com", importance=2)
     added = _contacts(SENDER, vip, _thread(SENDER)).additions(Item(title="x", subjects=[THREAD]))
-    assert added.badges == ["important"]
+    assert added.badges == ["VIP"]
 
 
 def test_a_stated_importance_must_be_one_of_the_three() -> None:
