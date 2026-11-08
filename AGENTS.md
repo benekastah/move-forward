@@ -63,7 +63,8 @@ is what's left to build.
   `prepare_item_actions`. Core adds its own to items: the importance choices on
   every item about an entity (but what `hides`), with Clear priority once one's set; Snooze
   and Dismiss on every item with a task, wherever it's shown, and Pin in Act now; on an item
-  about a person (`people.py`) their contact type and Set type; and on every item about an
+  about a person or an organisation (`people.py`) their contact type, and Set type for a
+  person with an address; and on every item about an
   entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag I put on it
   (`tags.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,
   who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by

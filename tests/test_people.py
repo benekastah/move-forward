@@ -498,3 +498,18 @@ def test_an_item_about_an_organisation_is_about_it_not_its_people() -> None:
     assert (contact.contact_type, contact.importance, contact.email) == ("customer", 2, None)
     added = contacts.additions(Item(title="Acme", subjects=[acme.ref]))
     assert (added.badges, added.actions) == (["customer", "key account"], [])
+
+
+@pytest.mark.parametrize(
+    ("said", "account", "badges"),
+    [(2, 1, ["customer", "VIP"]), (0, 2, ["customer", "key account"]), (None, 1, ["customer"])],
+)
+def test_the_highest_of_what_a_tool_says_of_someone_and_their_organisation_is_badged(
+    said: int | None, account: int, badges: list[str]
+) -> None:
+    org = _organisation("crm.example.com/acme", "customer", importance=account)  # customer: 1
+    crm = _at(_person("crm.example.com/42", "alice@acme.com", importance=said), org)
+    added = _contacts(SENDER, crm, org, _thread(SENDER)).additions(
+        Item(title="x", subjects=[THREAD])
+    )
+    assert added.badges == badges

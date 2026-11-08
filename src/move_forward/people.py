@@ -7,7 +7,8 @@ points at (`Organisation`), for its people. A type I set on an address wins over
 one on a domain counts as a type does, and a tool's on the person over one on their
 organisation. It counts for all of a person's entities, since
 `Graph.same_person` joins them by email, and for the items about any of them: core ranks those
-and badges them, so a plugin needs only to publish the person and point at them.
+and badges them, so a plugin needs only to publish the person and point at them. An item about
+an organisation is ranked and badged by what a tool says of it.
 """
 
 import re
@@ -131,7 +132,8 @@ class _PersonView(Model):
 
 @dataclass(frozen=True)
 class Contact:
-    """A person, as far as I've said or a tool knows."""
+    """A person or an organisation, as far as I've said or a tool knows; an organisation has no
+    email, so nothing of mine is kept on it."""
 
     email: str | None
     contact_type: str | None
