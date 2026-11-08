@@ -281,10 +281,10 @@ class FakeImap:
             b'(\\HasNoChildren \\Sent) "/" "Sent Items"',
         ]
         self.closed: set[str] = set()
-        self.sent_fails = False
-        self.aside: set[int] = set()
-        """What Gmail files under Promotions or Social."""
         """Mailboxes that won't open."""
+        self.sent_fails = False
+        self.aside: set[int] | None = set()
+        """What Gmail files under Promotions or Social; None, a search that fails."""
         self.calls: list[tuple[object, ...]] = []
 
     def __call__(self, host: str, port: int, ssl_context: object, timeout: int) -> "FakeImap":
@@ -322,6 +322,8 @@ class FakeImap:
                 if u in wanted
             ]
         if command == "SEARCH" and "X-GM-RAW" in args:
+            if self.aside is None:
+                raise imaplib.IMAP4.error("X-GM-RAW refused")
             return "OK", [b" ".join(str(u).encode() for u in sorted(self.aside))]
         if command == "SEARCH":
             wanted_flag, seen = ("\\Flagged", True) if "FLAGGED" in args else ("\\Seen", False)
@@ -799,6 +801,15 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
     server.aside = {1}
     found = {m.message_id: m.bulk for m in client.collect(_config(), ME, NOW).messages}
     assert found == {"sale@shop": True, "hi@friend": False}
+    # A reply to me filed under Promotions is still a person writing to me.
+    misfiled = imap([(1, "", headers(message_id="r@contractor", extra="In-Reply-To: <mine@me>"))])
+    misfiled.capabilities = ("IMAP4REV1", client.GMAIL)
+    misfiled.aside, misfiled.sent = {1}, {10: "mine@me"}
+    [reply] = client.collect(_config(), ME, NOW).messages
+    assert reply.replies_to_me and not reply.bulk
+    failing = imap([(1, "", headers(message_id="sale@shop"))])
+    failing.capabilities, failing.aside = ("IMAP4REV1", client.GMAIL), None
+    assert not client.collect(_config(), ME, NOW).messages[0].bulk  # nothing put aside
     plain = imap([(1, "", headers(message_id="sale@shop"))])
     plain.aside = {1}  # not Gmail: not asked
     assert not client.collect(_config(), ME, NOW).messages[0].bulk

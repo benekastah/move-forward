@@ -160,17 +160,19 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
         # Last: it opens another mailbox.
         sent, written = _my_sent(imap, config, now, me)
     trusted = config.trusted_auth_servers()
-    messages = [
-        m.model_copy(
-            update={
-                "replies_to_me": bool(_referenced(headers) & sent),
-                "known": written[m.sender_email or ""] >= KNOWN_AFTER,
-                "bulk": m.bulk or m.uid in aside,
-            }
+    messages: list[Message] = []
+    for meta, headers in _fetched(fetched):
+        if (m := message(meta, headers, me, trusted)) is None:
+            continue
+        replies = bool(_referenced(headers) & sent)
+        known = written[m.sender_email or ""] >= KNOWN_AFTER
+        # Gmail's category is a guess, which a reply to me or someone I know outweighs.
+        filed_aside = m.uid in aside and not (replies or (known and m.verified))
+        messages.append(
+            m.model_copy(
+                update={"replies_to_me": replies, "known": known, "bulk": m.bulk or filed_aside}
+            )
         )
-        for meta, headers in _fetched(fetched)
-        if (m := message(meta, headers, me, trusted))
-    ]
     return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
 
