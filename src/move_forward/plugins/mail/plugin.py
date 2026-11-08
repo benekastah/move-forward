@@ -56,7 +56,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         # Its title is a subject anyone can write: a #tag in it puts no tag on it.
-        THREAD: KindSpec(ThreadAttrs, gone_means_done=True, tags_from_title=False),
+        THREAD: KindSpec(ThreadAttrs, gone_means_done=True, tags_from_text=False),
         PERSON: KindSpec(MailPerson),
     }
     """Threads are published while they have unread or flagged mail: one that's gone is done."""

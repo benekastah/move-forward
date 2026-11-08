@@ -22,7 +22,7 @@ TICKET = "ticket"
 PERSON = "person"
 """The family of people."""
 TAG = "tag"
-"""Core's own kind: a `#tag`, carried by the entities whose title has it, or that I put it on
+"""Core's own kind: a `#tag`, carried by the entities whose title or mentions have it, or that I put it on
 (see `tags`); text naming it only points at it. No plugin publishes it, nor declares a
 family by its name."""
 

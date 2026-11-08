@@ -1,4 +1,4 @@
-"""`#tags`: put on an entity by a `#tag` in its title, or by hand (`TagRepository`, and the
+"""`#tags`: put on an entity by a `#tag` in its title or `mentions` (out of code), or by hand (`TagRepository`, and the
 Tag field core adds to items: `Tags`), they relate
 everything carrying them. Core publishes a `tag` entity for each (`kinds.TAG`), pointing at what
 carries it, and points at it every entity whose text (title or `mentions`) names it, as
@@ -56,7 +56,7 @@ class TagAttrs(KindModel):
     handle: str
 
 
-SPEC = KindSpec(TagAttrs, tags_from_title=False)
+SPEC = KindSpec(TagAttrs, tags_from_text=False)
 
 
 def handle(text: str) -> str:
@@ -74,15 +74,39 @@ def tag_key(text: str) -> str:
     return found
 
 
+_CODE = re.compile(
+    r"^[ \t]*(?P<fence>`{3,}(?=[^`\n]*$)|~{3,}).*?(?:^[ \t]*(?P=fence)[`~]*[ \t]*$|\Z)"
+    r"|<!--.*?(?:-->|\Z)"
+    r"|(?<!`)(?P<ticks>`+)(?!`)(?:(?!\n[ \t]*\n).){0,500}?(?<!`)(?P=ticks)(?!`)",
+    re.DOTALL | re.MULTILINE,
+)
+"""Code in Markdown (a fenced block, closed by a fence as long at a line's start; a code span,
+closed by a run of as many backticks, across lines but not a blank one, within 500
+characters: past that the opener is taken for a lone backtick)
+and HTML comments (a PR template's notes): `#include` or `#fff` there is no tag."""
+
+
+_LINE_ENDS = re.compile(r"\r\n?")
+_TARGETS = ("](", '="', "='")
+"""What comes before a `#` that starts a link's target, not a tag."""
+
+
+def prose(text: str) -> str:
+    """`text` without its code (`_CODE`), where a `#` means something else. Line endings are
+    made `\n` first: GitHub sends PR bodies edited on the web with `\r\n`."""
+    return _CODE.sub(" ", _LINE_ENDS.sub("\n", text))
+
+
 def tags(text: str) -> list[str]:
     """The tags in `text`, by handle, in order, once each: `#` and words joined by `-` or `_`,
-    not inside a word (`a#b`) nor an HTML entity (`&#39;`). A tag needs a letter: `#7` is a
+    not inside a word (`a#b`), an HTML entity (`&#39;`), a URL or a link's target (`/#guide`,
+    `[x](#testing)`, `href="#top"`). A tag needs a letter: `#7` is a
     PR's number."""
     text = unicodedata.normalize("NFC", text)
     found: list[str] = []
     for i, c in enumerate(text):
         before = text[i - 1] if i else " "
-        if c != "#" or _in_word(before) or before in "#&_":
+        if c != "#" or _in_word(before) or before in "#&_/" or text[max(i - 2, 0) : i] in _TARGETS:
             continue
         end = i + 1
         while end < len(text) and (_in_word(text[end]) or text[end] in "-_"):
@@ -140,12 +164,16 @@ def tagged(
     added: Mapping[Ref, list[str]] | None = None,
 ) -> list[Entity]:
     """The entities, each pointing too at the tags its text names (but one it carries), then a
-    `tag` per tag on any of them, in its title (where its kind's `tags_from_title`) or `added`
-    by hand, pointing at what carries it: open while one of those is."""
+    `tag` per tag on any of them, in its title or mentions out of their code (where its kind's
+    `tags_from_text`), or `added` by hand, pointing at what carries it: open while one of those
+    is."""
     carrying: dict[str, list[Entity]] = {}
     for entity in entities:
         spec = specs.get(entity.ref.kind)
-        own = tags(entity.title) if spec is None or spec.tags_from_title else []
+        texts = [prose(text) for text in [entity.title, *entity.mentions]]
+        own = (
+            [t for text in texts for t in tags(text)] if spec is None or spec.tags_from_text else []
+        )
         for tag in dict.fromkeys([*own, *(added or {}).get(entity.ref, [])]):
             carrying.setdefault(tag, []).append(entity)
     if not carrying:
@@ -158,7 +186,7 @@ def tagged(
             Ref(kind=TAG, id=tag)
             for tag in dict.fromkeys(
                 t
-                for text in [entity.title, *entity.mentions]
+                for text in [prose(text) for text in [entity.title, *entity.mentions]]
                 for t in [*(h for h in tags(text) if h in carriers), *named(text, by_words)]
             )
             if entity.ref not in carriers[tag]
