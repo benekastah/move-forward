@@ -1,9 +1,11 @@
-"""Who people are to me: a contact type (customer, partner, ...), and what it does.
+"""Who people are to me: a contact type (customer, partner, ...), and how much they matter.
 
 A type comes from me, on an address or a whole domain (`contacts`), or from a tool that knows
-(`Person.contact_type`, say a CRM's). Mine wins. It counts for all of a person's entities,
-since `Graph.same_person` joins them by email, and for the items about any of them: core ranks
-those and badges them, so a plugin needs only to publish the person and point at them.
+(`Person.contact_type`, say a CRM's); a tool can also say how much they matter outright
+(`Person.importance`: a CRM's VIP, a starred contact). A type I set on an address wins over
+both; one on a domain counts as a type does. It counts for all of a person's entities, since
+`Graph.same_person` joins them by email, and for the items about any of them: core ranks those
+and badges them, so a plugin needs only to publish the person and point at them.
 """
 
 import re
@@ -115,6 +117,7 @@ class _PersonView(Model):
     id: str
     email: str | None = None
     contact_type: str | None = None
+    importance: int | None = None
 
 
 @dataclass(frozen=True)
@@ -126,6 +129,8 @@ class Contact:
     importance: int
     labelled: str | None
     """What my label on them is kept on, an address or `@domain`; None without one of mine."""
+    stated: bool = False
+    """Their importance is what a tool said outright, above what their type gives."""
 
 
 class Contacts:
@@ -140,14 +145,22 @@ class Contacts:
         email = personal_email(person.email)
         keys = [email, f"@{email.split('@')[1]}"] if email else []
         labelled = next((key for key in keys if key in self._labels), None)
-        if labelled is not None:
+        if labelled is not None and not labelled.startswith("@"):
+            # Mine wins: a type I set on their address is how much they matter, whatever a tool
+            # says.
             found = self._labels[labelled]
+            return Contact(email, found, self._types.get(found, 0), labelled)
+        same = self._graph.view_same_person(person.id, _PersonView)
+        if labelled is not None:
+            found: str | None = self._labels[labelled]  # on their whole domain
         else:
             # Where tools disagree, the first in the graph's order: the plugins' order.
-            same = self._graph.view_same_person(person.id, _PersonView)
             found = next((t for p in same if (t := _tool_type(p.contact_type))), None)
-        importance = self._types.get(found, 0) if found else 0
-        return Contact(email, found, importance, labelled)
+        by_type = self._types.get(found, 0) if found else 0
+        # A tool can also state it outright (a CRM's VIP, a starred contact): the highest counts,
+        # above a type on their domain too (a VIP at a customer).
+        stated = max((p.importance or 0 for p in same), default=0)
+        return Contact(email, found, max(by_type, stated), labelled, stated > by_type)
 
     def of(self, ref: Ref) -> Contact | None:
         """Who `ref` is about, itself when it's a person: the one who matters most, the first of
@@ -161,17 +174,21 @@ class Contacts:
         return max(contacts, key=lambda c: c.importance, default=None)
 
     def importance(self, ref: Ref) -> int:
-        """The importance the type of who `ref` is about gives it."""
+        """The importance who `ref` is about gives it: by their type, or as a tool says."""
         contact = self.of(ref)
         return contact.importance if contact else 0
 
     def additions(self, item: Item) -> ItemAdditions:
-        """A badge with the type of who `item` is mainly about, and a button to set it."""
+        """A badge with the type of who `item` is mainly about (and "VIP" when a tool says they
+        matter more than that), and a button to set it."""
         contact = self.of(item.subjects[0]) if item.subjects else None
         if contact is None:
             return ItemAdditions()
         return ItemAdditions(
-            badges=[contact.contact_type] if contact.contact_type else [],
+            badges=[
+                *([contact.contact_type] if contact.contact_type else []),
+                *(["VIP"] if contact.stated else []),
+            ],
             actions=self._actions(contact),
         )
 

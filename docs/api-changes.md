@@ -15,6 +15,9 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **How much a person matters**: `Person.importance` (0 to 2) lets a tool say it outright, a
+  CRM's VIP or a starred contact, rather than through a type and `[people] contact_types`. Core
+  raises the items about them by the highest of it and their type's.
 - **A single part listed**: `Item.parts_listed` lists an item's `parts` even when there's
   one. Core sets it in Act now, on an item showing the parts of one joined to it.
 - **One person across tools**: `Graph.same_person(id)` and `view_same_person(id, model)` give the

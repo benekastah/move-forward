@@ -32,11 +32,18 @@ NOW = datetime(2026, 11, 7, tzinfo=UTC)
 THREAD = Ref(kind="mail.thread", id="t1")
 
 
-def _person(id: str, email: str | None = None, contact_type: str | None = None) -> Entity:
+def _person(
+    id: str,
+    email: str | None = None,
+    contact_type: str | None = None,
+    importance: int | None = None,
+) -> Entity:
     return Entity(
         ref=Ref(kind=PERSON, id=id),
         title=id,
-        attrs=attrs(Person(handle=id, email=email, contact_type=contact_type)),
+        attrs=attrs(
+            Person(handle=id, email=email, contact_type=contact_type, importance=importance)
+        ),
     )
 
 
@@ -153,6 +160,43 @@ def test_a_tools_type_is_read_as_mine_would_be() -> None:
         .badges
         == []
     )
+
+
+def test_a_tool_can_say_how_much_someone_matters_for_all_their_mail() -> None:
+    crm = _person("crm.example.com/42", "alice@acme.com", importance=2)  # a VIP deal's contact
+    assert _contacts(SENDER, crm, _thread(SENDER)).importance(THREAD) == 2
+
+
+def test_the_highest_of_a_tools_type_and_what_a_tool_says_counts() -> None:
+    starred = _person("contacts/alice", "alice@acme.com", "vendor", importance=1)  # vendor: 0
+    contact = _contacts(SENDER, starred, _thread(SENDER)).of(THREAD)
+    assert contact is not None and (contact.importance, contact.stated) == (1, True)
+    customer = _person("crm/alice", "alice@acme.com", "customer", importance=0)  # customer: 1
+    contact = _contacts(SENDER, customer, _thread(SENDER)).of(THREAD)
+    assert contact is not None and (contact.importance, contact.stated) == (1, False)
+
+
+def test_a_type_i_set_wins_over_what_a_tool_says() -> None:
+    vip = _person("crm/bob", "alice@acme.com", importance=2)
+    labels = {"alice@acme.com": "vendor"}  # I say: 0
+    assert _contacts(SENDER, vip, _thread(SENDER), labels=labels).importance(THREAD) == 0
+
+
+def test_a_type_on_their_domain_doesnt_lower_what_a_tool_says() -> None:
+    vip = _person("crm/ceo", "alice@acme.com", importance=2)
+    labels = {"@acme.com": "customer"}  # 1, for everyone there
+    assert _contacts(SENDER, vip, _thread(SENDER), labels=labels).importance(THREAD) == 2
+
+
+def test_a_stated_importance_above_the_type_is_badged() -> None:
+    vip = _person("crm/alice", "alice@acme.com", importance=2)
+    added = _contacts(SENDER, vip, _thread(SENDER)).additions(Item(title="x", subjects=[THREAD]))
+    assert added.badges == ["VIP"]
+
+
+def test_a_stated_importance_must_be_one_of_the_three() -> None:
+    with pytest.raises(ValidationError):
+        Person(handle="x", importance=3)
 
 
 def test_a_type_not_in_the_config_gives_no_importance() -> None:
