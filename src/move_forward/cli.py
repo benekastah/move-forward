@@ -291,17 +291,6 @@ def _token_settings(config: config_module.Config) -> dict[str, keychain.TokenSet
         if section is not None:
             for name, settings in plugin.tokens(section).items():
                 found[f"{plugin.name}.{name}" if name else plugin.name] = settings
-    for where, values in (
-        ("token_env", {name: s.token_env for name, s in found.items()}),
-        ("keychain_service", {name: s.keychain_service for name, s in found.items()}),
-    ):
-        seen: dict[str, str] = {}
-        for name, value in values.items():
-            if value in seen:  # one would overwrite, or stand in for, the other
-                raise SystemExit(
-                    f"{seen[value]} and {name} share {where} {value!r}: give each its own"
-                )
-            seen[value] = name
     return found
 
 
@@ -330,6 +319,17 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
     if section is None:
         print(
             f"{args.plugin} isn't a token {config_path} keeps: {', '.join(sections) or 'none'}",
+            file=sys.stderr,
+        )
+        return 1
+    if sharing := [
+        name
+        for name, other in sections.items()
+        if name != args.plugin and other.keychain_service == section.keychain_service
+    ]:
+        print(
+            f"{args.plugin} and {', '.join(sharing)} share keychain_service"
+            f" {section.keychain_service!r}: storing one would replace the other's; give each its own",
             file=sys.stderr,
         )
         return 1

@@ -17,7 +17,7 @@ catch up.
 
 - **Several tokens**: `Plugin.tokens(config)` names every token a plugin keeps, `""` for its
   own (by default `token_settings`'s) and one per account for a plugin reading several, each
-  with its own `token_env` and `keychain_service`; `mfd token set <plugin>.<account>` stores
+  with its own `keychain_service` (and usually `token_env`); `mfd token set <plugin>.<account>` stores
   one. `api.keychain.TokenSettings` is what each is: anything with those two, read-only.
 - **Organisations**: core declares the `organisation` family (`api.kinds.ORGANISATION`,
   `Organisation`: `handle`, `contact_type`, `importance`), with ids `<host>/<its id there>`.

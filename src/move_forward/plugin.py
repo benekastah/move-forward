@@ -494,8 +494,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def tokens(self, config: C) -> dict[str, TokenSettings]:
         """Every token the plugin keeps, for `mfd token`, by name: `""` for its own (by default
         `token_settings`'s), and one per account for a plugin reading several (mail's
-        mailboxes), stored as `<plugin>.<name>`. Each must have a `token_env` and a
-        `keychain_service` of its own: `mfd token` refuses two tokens sharing one."""
+        mailboxes), stored as `<plugin>.<name>`. Each needs a `keychain_service` of its own,
+        and usually a `token_env`: `mfd token set` refuses to store one whose service another
+        shares."""
         own = self.token_settings(config)
         return {"": own} if own is not None else {}
 

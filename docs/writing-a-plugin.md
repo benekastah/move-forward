@@ -102,7 +102,7 @@ class LinearConfig(Strict):
   `mfd token set <plugin>` stores it and `mfd token check` finds it (a section that keeps
   them under other names overrides `token_settings(config)`; one reading several accounts,
   each with its own token, names them all in `tokens(config)` (each an
-  `api.keychain.TokenSettings`, with a `token_env` and a `keychain_service` of its own), and `mfd token set
+  `api.keychain.TokenSettings`, with a `keychain_service` of its own, and usually a `token_env`), and `mfd token set
   <plugin>.<account>` stores one). Anything sent with a token must go over HTTPS
   (`api.http`).
 - A section mapping the top-level teams to the tool's names for them (github's

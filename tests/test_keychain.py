@@ -264,12 +264,21 @@ class _GitHubSharingAToken(GitHubPlugin):
         return {"": _ElsewhereToken(), "work": _SharedToken()}
 
 
-def test_mfd_token_refuses_two_tokens_kept_in_one_place(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_mfd_token_set_refuses_a_token_whose_service_another_shares(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     swap = {"github": _GitHubSharingAToken()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    stored: list[str] = []
+
+    def write(service: str, account: str, secret: str) -> None:
+        stored.append(service)
+
+    monkeypatch.setattr(keychain, "write", write)
     config = _config(tmp_path)
     config.write_text(config.read_text() + '[github]\norg = "acme"\n')
-    with pytest.raises(SystemExit, match="github and github.work share keychain_service"):
-        cli.main(["-c", str(config), "token", "set", "github.work"])
+    assert cli.main(["-c", str(config), "token", "set", "github.work"]) == 1
+    assert "github.work and github share keychain_service" in capsys.readouterr().err
+    assert stored == []
+    assert cli.main(["-c", str(config), "token", "check"]) == 0  # the rest still works
+    assert cli.main(["-c", str(config), "token", "rotate"]) == 0
