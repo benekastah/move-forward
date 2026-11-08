@@ -33,7 +33,11 @@ can't be read yet.
 mail sent to me from mail I'm copied on. `mailbox` (`INBOX`) is the mailbox read, and
 `sent_mailbox` where my sent mail is (empty: the one the server marks as sent), whose
 Message-IDs and recipients alone are read, to know which mail answers me and whom I know:
-someone I wrote to at least twice in the last `known_days` (90). Mail older
+someone I wrote to at least twice in the last `known_days` (90). `urgent_words` are words or
+phrases in a subject that make a conversation from someone I know (verified) critical,
+above other important mail, badged "urgent", and `low_words` ones that rank a conversation
+with lists' mail, unless it replies to me or is from someone I know (flagged mail still
+counts): whole words, ignoring case and how a phrase is spaced; both empty by default. Mail older
 than `since_days` (14) is left out, flagged or not; at most `max_messages` (200) unread are
 read, newest first, and every flagged one. `token_env` and `keychain_service` say where its
 password is.
@@ -107,8 +111,10 @@ its latest message answers mail I sent (the newest 1000 within `known_days`; its
 "replies to me"; if my sent mail can't be read, nothing counts as replying), when it's from
 someone I know (badged "known"; only a verified sender), or when Gmail labels it Important
 (Gmail's `X-GM-LABELS`, read only from a server offering them); not for lists and automated
-mail, but flagged. The sender's contact type, or how much a tool says they matter, can raise
-it further.
+mail, but flagged. One from someone I know whose subject has one of `urgent_words` is
+critical (badged "urgent"); one whose subject has one of `low_words` counts as lists' mail,
+unless it replies to me or is from someone I know. The sender's contact type, or how much a
+tool says they matter, can raise it further.
 
 ## Pages
 

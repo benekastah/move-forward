@@ -1,5 +1,7 @@
 """The mail panel: pure functions from the snapshot to panels."""
 
+import re
+import unicodedata
 from dataclasses import dataclass
 from urllib.parse import quote
 
@@ -83,11 +85,27 @@ def about(graph: Graph, thread: Thread) -> list[str]:
     ]
 
 
+def says(words: list[str], subject: str) -> bool:
+    """Whether `subject` has one of `words` (or phrases) as whole words, ignoring case, however
+    the words of a phrase are spaced, and however its accents are encoded (NFC or NFD)."""
+    subject = unicodedata.normalize("NFC", subject)
+    return any(
+        re.search(rf"(?<!\w){r'\s+'.join(map(re.escape, parts))}(?!\w)", subject, re.IGNORECASE)
+        for word in words
+        if (parts := unicodedata.normalize("NFC", word).split())
+    )
+
+
 def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item:
     latest = thread.latest
     work = about(graph, thread)
     # Someone I write to, but only one the server vouched for: a forged From mustn't borrow it.
     known = latest.known and latest.verified
+    # Low words push mail down, but not a reply to me or mail from someone I know, as Gmail's
+    # categories don't; urgent words lift only someone I know: anyone can write "urgent".
+    low = says(config.low_words, latest.subject) and not (latest.replies_to_me or known)
+    bulk = latest.bulk or low
+    urgent = known and not bulk and says(config.urgent_words, latest.subject)
     who = latest.sender_name
     if latest.sender_email and latest.sender_email != who.lower():
         who = f"{who} <{latest.sender_email}>"
@@ -96,15 +114,17 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
         badges.append(f"{thread.unread} unread")
     if thread.flagged:
         badges.append(Badge(text="flagged", tone="warn"))
-    if latest.replies_to_me and not latest.bulk:
+    if urgent:
+        badges.append(Badge(text="urgent", tone="warn"))
+    if latest.replies_to_me and not bulk:
         badges.append("replies to me")
-    elif known and not latest.bulk:
+    elif known and not bulk:
         badges.append("known")
-    elif latest.important and not thread.flagged and not latest.bulk:
+    elif latest.important and not thread.flagged and not bulk:
         badges.append("important")
-    if not latest.to_me and not latest.bulk:
+    if not latest.to_me and not bulk:
         badges.append("cc")
-    person = not latest.bulk
+    person = not bulk
     return Item(
         title=latest.subject,
         url=link(config, plugin, thread),
@@ -112,15 +132,17 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
         badges=badges,
         details=[f"from {who}", *(f"about {title}" for title in work)],
         rank=int(latest.date.timestamp()),
-        deferred=latest.bulk and not thread.flagged,
+        deferred=bulk and not thread.flagged,
         fingerprint=latest.message_id or str(latest.uid),
         signals=Signals(
             verb="Read",
             task="read",
             effort="minutes",
-            importance=1
+            importance=2
+            if urgent
+            else 1
             if thread.flagged
-            or ((latest.important or latest.replies_to_me or work or known) and not latest.bulk)
+            or ((latest.important or latest.replies_to_me or work or known) and not bulk)
             else 0,
             waiting=[who] if person and latest.to_me else [],
             waiting_since=latest.date if person and latest.to_me else None,
