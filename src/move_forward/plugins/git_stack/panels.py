@@ -13,8 +13,9 @@ from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot, StackBranch
 
 CLEAN = "git_stack/stack_clean"
-RESTACK = "git_stack/stack_restack"
 """The button that runs `git stack clean -d local` in a repo."""
+RESTACK = "git_stack/stack_restack"
+"""The button that runs `git stack restack` on a branch's stack."""
 
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
@@ -137,8 +138,8 @@ class Builder:
             label="Restack",
             fields={"repo": repo_dir, "branch": branch},
             confirm=f"Run `git stack restack {branch}` in {repo_dir}? It rebases the branches of"
-            " its stack onto their parents here, pushing nothing; on a conflict it stops for you"
-            " to resolve there.",
+            f" its stack onto their parents there, pushing nothing. On a conflict it stops with"
+            f" the branch checked out in {repo_dir} and a rebase in progress, for you to resolve.",
         )
 
     def stacks(self) -> Panel:
