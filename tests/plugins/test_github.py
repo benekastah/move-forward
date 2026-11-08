@@ -373,3 +373,17 @@ def test_a_prs_merge_settings_come_from_its_repo() -> None:
     )
     plain = github.to_pull_request(github.RawPullRequest.model_validate(RAW_PR))
     assert (plain.merge_queue, plain.merge_methods, plain.auto_merge) == (False, [], None)
+
+
+def test_a_merge_method_github_adds_later_is_unknown_not_a_failure() -> None:
+    raw = {
+        **RAW_PR,
+        "autoMergeRequest": {"mergeMethod": "FASTFORWARD"},
+        "repository": {
+            "nameWithOwner": "acme/widgets",
+            "squashMergeAllowed": True,
+            "viewerDefaultMergeMethod": "FASTFORWARD",
+        },
+    }
+    pr = github.to_pull_request(github.RawPullRequest.model_validate(raw))
+    assert (pr.merge_methods, pr.default_merge_method, pr.auto_merge) == (["SQUASH"], None, None)

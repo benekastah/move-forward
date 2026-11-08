@@ -99,7 +99,8 @@ class PullRequest(Model):
     delete_branch_on_merge: bool = False
     """Its repo deletes a PR's branch once it merges."""
     auto_merge: MergeMethod | None = None
-    """The method it'll merge by itself with, once ready; None without auto-merge on."""
+    """The method it'll merge by itself with, once ready; None without auto-merge on, or with a
+    method GitHub added since (see `client._method`)."""
     requested_users: list[str] = Field(default_factory=list)
     requested_teams: list[str] = Field(default_factory=list)
     reviews: list[Review] = Field(default_factory=list)

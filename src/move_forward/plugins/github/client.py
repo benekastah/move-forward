@@ -130,13 +130,11 @@ class _RawRepository(_Raw):
     rebase_merge_allowed: bool = Field(default=False, alias="rebaseMergeAllowed")
     auto_merge_allowed: bool = Field(default=False, alias="autoMergeAllowed")
     delete_branch_on_merge: bool = Field(default=False, alias="deleteBranchOnMerge")
-    viewer_default_merge_method: MergeMethod | None = Field(
-        default=None, alias="viewerDefaultMergeMethod"
-    )
+    viewer_default_merge_method: str | None = Field(default=None, alias="viewerDefaultMergeMethod")
 
 
 class _RawAutoMerge(_Raw):
-    merge_method: MergeMethod = Field(alias="mergeMethod")
+    merge_method: str = Field(alias="mergeMethod")
 
 
 class RawPullRequest(_Raw):
@@ -353,6 +351,13 @@ def _thread(raw: _RawThread) -> Thread:
     )
 
 
+def _method(name: str | None) -> MergeMethod | None:
+    """A merge method GitHub named, if it's one we know; None for one it adds later, so a new
+    method costs what's known of merging, not the whole refresh."""
+    known: dict[str, MergeMethod] = {"MERGE": "MERGE", "SQUASH": "SQUASH", "REBASE": "REBASE"}
+    return known.get(name or "")
+
+
 def to_pull_request(raw: RawPullRequest) -> PullRequest:
     """Flatten a GraphQL PullRequest node into the domain model."""
     requested = [_reviewer(r.requested_reviewer) for r in raw.review_requests.nodes if r]
@@ -392,10 +397,10 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         in_merge_queue=raw.is_in_merge_queue,
         merge_queue=raw.is_merge_queue_enabled,
         merge_methods=[method for method, yes in allowed if yes],
-        default_merge_method=raw.repository.viewer_default_merge_method,
+        default_merge_method=_method(raw.repository.viewer_default_merge_method),
         auto_merge_allowed=raw.repository.auto_merge_allowed,
         delete_branch_on_merge=raw.repository.delete_branch_on_merge,
-        auto_merge=raw.auto_merge_request.merge_method if raw.auto_merge_request else None,
+        auto_merge=_method(raw.auto_merge_request.merge_method) if raw.auto_merge_request else None,
         requested_users=[name for kind, name in filter(None, requested) if kind == "user"],
         requested_teams=[name for kind, name in filter(None, requested) if kind == "team"],
         reviews=[
