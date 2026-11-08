@@ -31,6 +31,8 @@ _MESSAGE_ID = re.compile(r"<([^<>\s]+)>")
 _STATUS = re.compile(rb"\((.*)\)")
 _GM_LABELS = re.compile(rb'\bX-GM-LABELS \(((?:"(?:[^"\\]|\\.)*"|[^()"])*)\)')
 """A message's Gmail labels; quoted ones may hold parentheses (`"Receipts (2024)"`)."""
+_LABEL = re.compile(rb'"(?:[^"\\]|\\.)*"|[^\s()"]+')
+"""One label in a list of them: quoted, or an atom."""
 GMAIL = "X-GM-EXT-1"
 """The capability of a server with Gmail's extensions: labels, its Important among them."""
 _INTERNALDATE = re.compile(
@@ -170,7 +172,8 @@ def _message_ids(text: str) -> list[str]:
 def _important(meta: bytes) -> bool:
     """Whether Gmail labels the message Important (`X-GM-LABELS`); False from other servers."""
     found = _GM_LABELS.search(meta)
-    return found is not None and b"\\Important" in found.group(1)
+    labels = _LABEL.findall(found.group(1)) if found else []
+    return any(label.strip(b'"').replace(b"\\\\", b"\\") == b"\\Important" for label in labels)
 
 
 def _received(meta: bytes) -> datetime | None:

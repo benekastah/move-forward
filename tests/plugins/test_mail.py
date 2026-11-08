@@ -580,6 +580,12 @@ def test_gmails_important_label_is_read() -> None:
     meta = b'1 (UID 7 X-GM-LABELS ("Receipts (2024)" "\\\\Important") FLAGS ())'
     found = client.message(meta, headers(), {ME})
     assert found is not None and found.important
+    # A label merely containing it isn't it; a bare one is.
+    meta = b'1 (UID 7 X-GM-LABELS ("Not \\\\Important") FLAGS ())'
+    found = client.message(meta, headers(), {ME})
+    assert found is not None and not found.important
+    found = client.message(b"1 (UID 7 X-GM-LABELS (\\Important) FLAGS ())", headers(), {ME})
+    assert found is not None and found.important
 
 
 def test_labels_are_asked_for_only_from_gmail(imap: Callable[..., FakeImap]) -> None:
