@@ -30,6 +30,8 @@ class Message(Model):
     """A list's, a newsletter's or an automated message (`List-Id`, `Precedence: bulk`,
     `Auto-Submitted`): not a person writing to me."""
     flagged: bool
+    important: bool = False
+    """Gmail labels it Important; never from another server."""
     seen: bool
     verified: bool
     """The receiving server found its `From` authentic (DMARC passed), so its sender is who it

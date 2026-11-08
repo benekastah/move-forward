@@ -29,6 +29,9 @@ _UID = re.compile(rb"\bUID (\d+)")
 _FLAGS = re.compile(rb"\bFLAGS \(([^)]*)\)")
 _MESSAGE_ID = re.compile(r"<([^<>\s]+)>")
 _STATUS = re.compile(rb"\((.*)\)")
+_GM_LABELS = re.compile(rb"\bX-GM-LABELS \(([^)]*)\)")
+GMAIL = "X-GM-EXT-1"
+"""The capability of a server with Gmail's extensions: labels, its Important among them."""
 _INTERNALDATE = re.compile(
     rb'\bINTERNALDATE "\s*(\d{1,2})-([A-Za-z]{3})-(\d{4}) (\d\d):(\d\d):(\d\d) ([+-])(\d\d)(\d\d)"'
 )
@@ -126,6 +129,8 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
         uids = sorted(set(newest) | set(marked), key=int)
         if not uids:
             return MailSnapshot(messages=[])
+        # Gmail says which mail it thinks matters (its Important label), which is worth having.
+        labels = " X-GM-LABELS" if GMAIL in getattr(imap, "capabilities", ()) else ""
         # In chunks: flagged mail has no cap, and a server limits a command's length.
         fetched: list[object] = []
         for start in range(0, len(uids), FETCH_CHUNK):
@@ -133,7 +138,7 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
                 imap.uid(
                     "FETCH",
                     b",".join(uids[start : start + FETCH_CHUNK]).decode(),
-                    f"(UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS ({HEADERS})])",
+                    f"(UID FLAGS INTERNALDATE{labels} BODY.PEEK[HEADER.FIELDS ({HEADERS})])",
                 ),
                 "FETCH",
             )
@@ -159,6 +164,12 @@ def status(config: MailConfig, email: str) -> str:
 
 def _message_ids(text: str) -> list[str]:
     return _MESSAGE_ID.findall(text)
+
+
+def _important(meta: bytes) -> bool:
+    """Whether Gmail labels the message Important (`X-GM-LABELS`); False from other servers."""
+    found = _GM_LABELS.search(meta)
+    return found is not None and b"\\Important" in found.group(1)
 
 
 def _received(meta: bytes) -> datetime | None:
@@ -319,6 +330,7 @@ def message(
         or header("Precedence").strip().lower() in ("bulk", "list", "junk")
         or (bool(auto) and auto != "no"),
         flagged="\\Flagged" in flag_set,
+        important=_important(meta),
         seen="\\Seen" in flag_set,
         # One `@` only, so the domain checked is the one core reads as theirs.
         verified=bool(results)

@@ -269,6 +269,7 @@ class FakeImap:
     def __init__(self, messages: list[tuple[int, str, bytes]], refuse: bool = False):
         self.messages = messages
         self.refuse = refuse
+        self.capabilities: tuple[str, ...] = ("IMAP4REV1",)
         self.calls: list[tuple[object, ...]] = []
 
     def __call__(self, host: str, port: int, ssl_context: object, timeout: int) -> "FakeImap":
@@ -567,3 +568,34 @@ def test_many_messages_are_fetched_in_chunks(
     snapshot = client.collect(_config(), ME, NOW)
     fetches = [c[2] for c in server.calls if c[:2] == ("uid", "FETCH")]
     assert fetches == ["1,2", "3,4", "5"] and len(snapshot.messages) == 5
+
+
+def test_gmails_important_label_is_read() -> None:
+    meta = b'1 (UID 7 X-GM-LABELS ("\\\\Important" "\\\\Inbox") FLAGS ())'
+    found = client.message(meta, headers(), {ME})
+    assert found is not None and found.important
+    plain = client.message(b'1 (UID 7 X-GM-LABELS ("\\\\Inbox") FLAGS ())', headers(), {ME})
+    assert plain is not None and not plain.important
+
+
+def test_labels_are_asked_for_only_from_gmail(imap: Callable[..., FakeImap]) -> None:
+    server = imap([(1, "", headers())])
+    client.collect(_config(), ME, NOW)
+    assert "X-GM-LABELS" not in str([c for c in server.calls if c[:2] == ("uid", "FETCH")])
+    server = imap([(1, "", headers())])
+    server.capabilities = ("IMAP4REV1", client.GMAIL)
+    client.collect(_config(), ME, NOW)
+    assert "X-GM-LABELS" in str([c for c in server.calls if c[:2] == ("uid", "FETCH")])
+
+
+def test_mail_gmail_finds_important_ranks_higher_but_not_a_lists() -> None:
+    harness = mailbox(
+        message(3, subject="Plain", sender="carol@x.com", thread="p"),
+        message(2, subject="Digest", sender="news@x.com", thread="d", bulk=True, important=True),
+        message(1, subject="Contract", important=True),
+    )
+    items = {i.title: i for i in _items(harness)}
+    assert items["Contract"].signals is not None and items["Contract"].signals.importance == 1
+    assert "important" in items["Contract"].badges
+    assert items["Digest"].signals is not None and items["Digest"].signals.importance == 0
+    assert next(i.title for i in _items(harness)) == "Contract"
