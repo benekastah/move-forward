@@ -883,3 +883,21 @@ def test_low_words_rank_mail_with_lists_but_not_from_someone_i_know() -> None:
     }
     titles = [i.title for i in harness.act_now()]
     assert not any("Weekly digest" in t for t in titles)
+
+
+def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt() -> None:
+    harness = mailbox(
+        message(4, subject="Garbage day moved", thread="g"),
+        message(3, subject="garbage day!!", thread="u", sender="x@spam.com", verified=False),
+        message(2, subject="#sale ends Friday", thread="s"),
+        message(1, subject="Sale on now", thread="t"),
+    )
+    harness.with_entities(
+        [Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out")]
+    )
+    items = {i.fingerprint: i for i in _items(harness)}
+    assert "about #garbage-day" in items["m4@acme.com"].details
+    assert items["m4@acme.com"].signals.importance == 1
+    assert not any(d.startswith("about") for d in items["m3@acme.com"].details)  # unverified
+    for sale in ("m2@acme.com", "m1@acme.com"):  # a sender's #tag puts no tag on their mail
+        assert not any(d.startswith("about") for d in items[sale].details)

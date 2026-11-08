@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from urllib.parse import quote
 
 from ...api import Badge, Band, Graph, Item, Panel, Ref, Signals
+from ...api.kinds import TAG
 from .config import APP_SCHEMES, MailConfig
 from .kinds import THREAD
 from .models import MailSnapshot, Message
@@ -76,13 +77,27 @@ def link(config: MailConfig, plugin: str, thread: Thread) -> str | None:
 
 def about(graph: Graph, thread: Thread) -> list[str]:
     """The open units of work a conversation is about (one of my tickets its subject names, for
-    a verified sender: see `MailPlugin.entities`), by title: mail about my work is worth
+    a verified sender: see `MailPlugin.entities`), by title, then, for a verified sender, the
+    `#tags` its subject names that something else open carries: mail about my work is worth
     reading before the rest."""
-    return [
+    ref = Ref(kind=THREAD, id=thread.id)
+    units = [
         entity.title
-        for unit in graph.units(Ref(kind=THREAD, id=thread.id))
+        for unit in graph.units(ref)
         if (entity := graph.get(unit.kind, unit.id)) is not None and entity.lifecycle == "open"
     ]
+    if not thread.latest.verified:
+        return units  # anyone can write a subject: it names a tag only for one vouched for
+    tagged = [
+        tag.title
+        for tag in graph.related(ref, TAG)
+        if any(
+            (carrier := graph.get(r.kind, r.id)) is not None and carrier.lifecycle == "open"
+            for r in tag.refs
+            if r != ref
+        )
+    ]
+    return [*units, *tagged]
 
 
 def says(words: list[str], subject: str) -> bool:

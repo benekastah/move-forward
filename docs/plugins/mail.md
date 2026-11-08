@@ -72,7 +72,8 @@ through the plugin's `/mail/open` page, which sends the browser on to the mail a
 
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
 with, pointing at the `person` who wrote its latest message and, when its sender is verified,
-mentioning its subject (so a ticket key in it relates the two). That `person` is `mail/<address>`, with the address as its
+mentioning its subject (so a ticket key in it relates the two). A `#tag` in a subject puts no
+tag on the thread (`tags_from_title=False`): anyone can write one. That `person` is `mail/<address>`, with the address as its
 `handle` and `email`, so core joins them with the same person in other tools, a CRM say, and
 ranks and badges their mail by their contact type. Only a sender the receiving server vouched
 for is published that way: one whose `From` passed DMARC (its one `dmarc` result), by the server's own
@@ -104,8 +105,9 @@ which says whatever the sender likes.
 
 Every conversation but those from lists and automated mail (unless flagged), as Read, in minutes.
 Mail sent to me has its sender waiting since the server received it. A conversation is
-important when it's flagged, when its subject names one of my open tickets and its sender is
-verified (shown as "about APP-12 …"; a priority I set on that ticket counts for it too), when
+important when it's flagged, when its subject names one of my open tickets, or a `#tag` something
+else open carries (see the README's Tags), and its sender is verified (shown as "about APP-12 …"
+or "about #garbage-day"; a priority I set on that ticket counts for it too), when
 its latest message answers mail I sent (the newest 1000 within `known_days`; its
 `In-Reply-To`, else the last of its `References`, names one of my sent Message-IDs; badged
 "replies to me"; if my sent mail can't be read, nothing counts as replying), when it's from
