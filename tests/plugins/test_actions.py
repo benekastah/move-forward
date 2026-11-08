@@ -39,6 +39,18 @@ def _init(path: Path, bare: bool = False) -> None:
             git(path, "config", key, value)
 
 
+def _clone(origin: Path, path: Path, branch: str) -> Path:
+    """A clone of `origin` on `branch`, with an identity to commit as (CI has none)."""
+    git(path.parent, "clone", "-q", "-b", branch, str(origin), str(path))
+    for key, value in (
+        ("user.email", "other@x"),
+        ("user.name", "Other"),
+        ("commit.gpgsign", "false"),
+    ):
+        git(path, "config", key, value)
+    return path
+
+
 def _commit(repo: Path, name: str) -> None:
     (repo / name).write_text(name)
     git(repo, "add", name)
@@ -617,7 +629,7 @@ def test_pull_fast_forwards_a_branch_checked_out_or_not_and_refuses_otherwise(
     fields = {"repo": str(repo), "branch": "wip"}
     run("git/push_branch", config, fields)
     other = tmp_path / "other"
-    git(tmp_path, "clone", "-q", "-b", "wip", str(tmp_path / "origin.git"), str(other))
+    _clone(tmp_path / "origin.git", other, "wip")
 
     def pushed_elsewhere(name: str) -> str:
         _commit(other, name)
@@ -648,7 +660,7 @@ def test_pull_moves_a_branch_in_a_linked_worktree_and_never_one_being_rebased(
     fields = {"repo": str(repo), "branch": "wip"}
     run("git/push_branch", config, fields)
     other = tmp_path / "other"
-    git(tmp_path, "clone", "-q", "-b", "wip", str(tmp_path / "origin.git"), str(other))
+    _clone(tmp_path / "origin.git", other, "wip")
     _commit(other, "c.txt")
     git(other, "push", "-q")
     linked = tmp_path / "linked"
