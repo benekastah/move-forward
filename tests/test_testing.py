@@ -241,3 +241,10 @@ class BorrowingCrm(CrmPlugin):
 def test_the_harness_refuses_a_plugin_core_would_leave_out() -> None:
     with pytest.raises(RuntimeError, match="a family it doesn't declare"):
         Harness(BorrowingCrm(), {"team": "ENG"}, families=CrmPlugin.families)
+
+
+def test_seeding_a_family_the_harness_wasnt_given_says_so() -> None:
+    reader = Harness(DealReader(), {"team": "ENG"})
+    deal = Entity(ref=Ref(kind="deal", id="https://crm/deals/1"), title="Big", attrs={})
+    with pytest.raises(ValueError, match="families="):
+        reader.with_entities([deal])

@@ -127,6 +127,11 @@ class Harness:
         with self._installed():
             for entity in entities:
                 kind = entity.ref.kind
+                if kind not in FAMILIES and "." not in kind:
+                    raise ValueError(
+                        f"{kind} is neither a family nor a plugin's kind: pass the family that"
+                        " another plugin declares as Harness(..., families=...)"
+                    )
                 owner = "seed" if kind in FAMILIES else kind.split(".", 1)[0]
                 by_owner.setdefault(owner, []).append(entity)
             self._seeds += [_seed(owner, found) for owner, found in by_owner.items()]
