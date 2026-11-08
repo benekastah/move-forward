@@ -11,9 +11,9 @@ from ...api import ActionError, ActionHandler, ActionRequest, ActionResult, Ref
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.shell import CommandError
 from . import client
-from .changes import ready
 from .config import GitHubConfig
 from .models import PullRequest
+from .panels import merge_holds
 from .prs import decisions, failed_runs, merge_method, primary_reviewers
 from .snapshots import PrRepository
 
@@ -137,14 +137,15 @@ def rerun_failed(req: ActionRequest[GitHubConfig]) -> ActionResult:
 
 
 def merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
-    """Merge the PR, or add it to its merge queue, as Ready to merge offers: only while it's
-    ready (approved, green, mergeable), and only at the `head` the button showed."""
+    """Merge the PR, or add it to its merge queue, as Ready to merge offers: only while Ready to
+    merge would list it (`panels.merge_holds`: GitHub's blockers and the work notes' merge
+    conditions), and only at the `head` the button showed."""
     pr = _my_open_pr(req)
     head = req.field("head")
     if head != pr.head_oid:
         raise ActionError(f"{pr.repo}#{pr.number} has new commits since: look again")
-    if not ready(pr):
-        raise ActionError(f"{pr.repo}#{pr.number} isn't ready to merge")
+    if holds := merge_holds(req.graph, pr, req.ctx.config.ignored_reviewers):
+        raise ActionError(f"{pr.repo}#{pr.number} isn't ready to merge: {'; '.join(holds)}")
     method = merge_method(pr, req.ctx.config.merge.method)
     try:
         if pr.merge_queue:
@@ -154,7 +155,7 @@ def merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
             raise ActionError(f"how {pr.repo} merges isn't known yet: refresh, then try again")
         else:
             client.merge(req.ctx.config.host, pr.repo, pr.number, method, head)
-            done = f"merged ({method.lower()})"
+            done = f"merging ({method.lower()}): GitHub merges it in a moment"
     except CommandError as e:
         raise ActionError(str(e)) from e
     return ActionResult(f"{pr.repo}#{pr.number} {done}", touched=[Ref(kind=PR, id=pr.url)])

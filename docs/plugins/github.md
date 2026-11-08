@@ -131,7 +131,7 @@ members as far as they're known, then recent committers; any login can be typed.
 
 | Path | Fields | Does |
 | --- | --- | --- |
-| `/actions/github/merge` | `pr` (the URL of one of my PRs ready to merge), `head` (the commit the button showed) | With a confirm: adds it to its base's merge queue (`gh pr merge --match-head-commit`), or merges it with the method above through GitHub's async merge, which merges a PR in a linked stack with those below it. Refused once it has new commits, or isn't ready; never as an admin. Offered once how its repo merges is known (after a full refresh). |
+| `/actions/github/merge` | `pr` (the URL of one of my PRs ready to merge), `head` (the commit the button showed) | With a confirm: adds it to its base's merge queue (`gh pr merge --match-head-commit`), or starts merging it with the method above through GitHub's async merge (GitHub finishes it in a moment). Refused once it has new commits, or Ready to merge wouldn't list it (a blocker, a work-notes merge condition); never as an admin. Offered once how its repo merges is known (after a full refresh). |
 | `/actions/github/update_branch` | `pr` (the URL of one of my open PRs that's behind its base) | Merges its base into its branch on GitHub (`gh pr update-branch`), not rebasing, so what's stacked on it isn't rewritten. |
 | `/actions/github/mark_ready` | `pr` (the URL of one of my draft PRs) | Takes it out of draft. |
 | `/actions/github/rerun_failed` | `pr` (the URL of one of my open PRs, on CI failures when a failing check's URL names an Actions run of its repo that's over) | Runs the failed jobs of those runs again (`gh run rerun --failed`), policy checks left out; a run GitHub refuses doesn't stop the rest. |

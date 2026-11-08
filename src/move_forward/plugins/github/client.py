@@ -449,11 +449,13 @@ def mark_ready(url: str) -> None:
 
 
 def merge(host: str, repo: str, number: int, method: MergeMethod, head: str) -> None:
-    """Merge the PR with `method`, if its head is still `head` (so a push since isn't merged
-    unseen), through the endpoint that also merges a PR in a linked stack, with those below it.
-    Never as an admin. Raises CommandError when GitHub refuses."""
+    """Start merging the PR with `method`, straight rather than through a queue, if its head is
+    still `head` (so a push since isn't merged unseen), through the endpoint that also merges a
+    PR in a linked stack. GitHub merges it in the background. Never as an admin. Raises
+    CommandError when GitHub refuses."""
     path = f"repos/{repo}/pulls/{number}/merge-async"
-    run(api(host, "-X", "PUT", path, "-f", f"merge_method={method.lower()}", "-f", f"sha={head}"))
+    fields = [f"merge_method={method.lower()}", f"sha={head}", "merge_action=direct_merge"]
+    run(api(host, "-X", "PUT", path, *(arg for field in fields for arg in ("-f", field))))
 
 
 def add_to_queue(url: str, head: str) -> None:

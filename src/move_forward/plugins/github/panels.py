@@ -169,6 +169,16 @@ def _review(
     )
 
 
+def merge_holds(graph: Graph, pr: PullRequest, ignored: Collection[str]) -> list[str]:
+    """Why the PR isn't ready to merge, as Ready to merge decides: GitHub's blockers
+    (`merge_blockers`) and the work notes' merge conditions on it. Empty when it's ready."""
+    entries = graph.view_related(pr_ref(pr), ENTRY, _EntryView)
+    conditions = [c for e in entries for c in e.merge_conditions.get(pr.url, [])]
+    drafted = ["a draft"] if pr.is_draft else []
+    queued = ["in the merge queue"] if pr.in_merge_queue else []
+    return [*drafted, *queued, *merge_blockers(pr, ignored), *conditions]
+
+
 class Builder:
     def __init__(
         self,
@@ -749,7 +759,7 @@ class Builder:
                 label="Merge",
                 fields=fields,
                 confirm=f"Merge {pr.repo}#{pr.number} into {pr.base} ({method.lower()}) at"
-                f" {pr.head_oid[:7]}? In a linked stack, the PRs below it merge with it.",
+                f" {pr.head_oid[:7]}?",
             )
         else:
             return item
