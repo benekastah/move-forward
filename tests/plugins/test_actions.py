@@ -662,7 +662,7 @@ def test_pull_moves_a_branch_in_a_linked_worktree_and_never_one_being_rebased(
     with pytest.raises(CommandError):  # stops mid-rebase, wip behind its upstream
         git(repo, "rebase", "-q", "--exec", "false", "HEAD~1")
     before = git(repo, "rev-parse", "refs/heads/wip")
-    with pytest.raises(ActionError):
+    with pytest.raises(ActionError, match="couldn't pull wip"):  # git refuses: it's rebasing
         run("git/pull_branch", config, fields)
     assert git(repo, "rev-parse", "refs/heads/wip") == before
 
