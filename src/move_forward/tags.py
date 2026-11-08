@@ -81,18 +81,20 @@ _CODE = re.compile(
     re.DOTALL | re.MULTILINE,
 )
 """Code in Markdown (a fenced block, closed by a fence as long at a line's start; a code span,
-closed by a run of as many backticks, across lines but not a blank one, and not too long to
-look for)
+closed by a run of as many backticks, across lines but not a blank one, within 500
+characters: past that the opener is taken for a lone backtick)
 and HTML comments (a PR template's notes): `#include` or `#fff` there is no tag."""
 
 
+_LINE_ENDS = re.compile(r"\r\n?")
 _TARGETS = ("](", '="', "='")
 """What comes before a `#` that starts a link's target, not a tag."""
 
 
 def prose(text: str) -> str:
-    """`text` without its code (`_CODE`), where a `#` means something else."""
-    return _CODE.sub(" ", text)
+    """`text` without its code (`_CODE`), where a `#` means something else. Line endings are
+    made `\n` first: GitHub sends PR bodies edited on the web with `\r\n`."""
+    return _CODE.sub(" ", _LINE_ENDS.sub("\n", text))
 
 
 def tags(text: str) -> list[str]:

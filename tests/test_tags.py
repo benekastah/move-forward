@@ -153,6 +153,8 @@ Use `#fff` or ``#a`b`` here, not https://docs.x.io/guide/#installation or href="
         ("see `foo\n#bar` ok", []),  # a span across a line break
         ("``a` #in`` #out", ["out"]),  # closed by as many backticks
         ("it`s #qa", ["qa"]),  # a lone backtick opens nothing
+        ("```\r\ncode #a\r\n```\r\nafter #qa", ["qa"]),  # Windows line endings
+        ("it`s fine\r\n\r\nWaiting on #qa\r\n\r\nsee `x`", ["qa"]),
     ],
 )
 def test_prose_keeps_what_isnt_code(text: str, found: list[str]) -> None:
