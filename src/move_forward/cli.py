@@ -116,6 +116,7 @@ my-team = "#team-my-team"
 # port = 993
 # mailbox = "INBOX"
 # sent_mailbox = ""                     # where my sent mail is; empty: the one the server marks sent
+# known_days = 90                       # my sent mail read this far back: whom I know
 # since_days = 14                       # older mail is left out, flagged or not
 # max_messages = 200                    # the most unread read; flagged: all
 # auth_servers = ["mx.google.com"]      # who stamps Authentication-Results (known for Gmail); senders are verified by them
