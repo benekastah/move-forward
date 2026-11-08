@@ -189,6 +189,37 @@ def _shown(text: str) -> str:
     )
 
 
+_IGNORABLE = (
+    (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C), (0x115F, 0x1160), (0x17B4, 0x17B5),
+    (0x180B, 0x180F), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164),
+    (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF),
+)  # fmt: skip
+"""Unicode's default-ignorable code points: drawn as nothing, whatever their category."""
+
+
+def _invisible(c: str) -> bool:
+    return unicodedata.category(c) in ("Cc", "Cf", "Zs", "Zl", "Zp") or any(
+        low <= ord(c) <= high for low, high in _IGNORABLE
+    )
+
+
+def _address(text: str) -> str | None:
+    """`text`, lower-cased, if it can be shown as one address: one `@`, and nothing hidden or
+    spaced in it (control, format, space or default-ignorable characters: a soft hyphen, a
+    word joiner or a variation selector would make it read as another). None otherwise."""
+    if text.count("@") != 1 or any(_invisible(c) for c in text):
+        return None
+    return text.lower()
+
+
+def _name(text: str) -> str:
+    """A sender's name as shown: not one with an `@` in it, which could pass for an address
+    (`Boss <boss@acme.com>`) while the real one is elsewhere."""
+    shown = _shown(text)
+    return "" if "@" in shown else shown
+
+
 def _without_comments(text: str) -> str:
     """`text` with its quoted strings and (possibly nested) comments blanked out: in
     `Authentication-Results` they hold what the sender chose, e.g. their envelope address."""
@@ -249,6 +280,7 @@ def message(
             return ""
 
     [(name, address), *_] = getaddresses([header("From")]) or [("", "")]
+    email = _address(address)
     to = {a.lower() for _, a in getaddresses([header("To")])}
     own = next(iter(_message_ids(header("Message-ID"))), None)
     thread = next(
@@ -270,8 +302,8 @@ def message(
         message_id=own,
         thread=thread or f"uid:{uid.group(1).decode()}",
         subject=subject,
-        sender_name=_shown(name) or address or "someone",
-        sender_email=address.lower() if "@" in address else None,
+        sender_name=_name(name) or email or "someone",
+        sender_email=email,
         to_me=bool(to & me),
         bulk=bool(header("List-Id"))
         or header("Precedence").strip().lower() in ("bulk", "list", "junk")
@@ -280,7 +312,7 @@ def message(
         seen="\\Seen" in flag_set,
         # One `@` only, so the domain checked is the one core reads as theirs.
         verified=bool(results)
-        and address.count("@") == 1
-        and dmarc_passed(results[0], trusted, address.partition("@")[2].lower()),
+        and email is not None
+        and dmarc_passed(results[0], trusted, email.partition("@")[2]),
         date=date,
     )

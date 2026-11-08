@@ -99,7 +99,7 @@ def _item(config: MailConfig, plugin: str, thread: Thread) -> Item:
             task="read",
             effort="minutes",
             importance=1 if thread.flagged else 0,
-            waiting=[latest.sender_name] if person and latest.to_me else [],
+            waiting=[who] if person and latest.to_me else [],
             waiting_since=latest.date if person and latest.to_me else None,
         ),
     )
