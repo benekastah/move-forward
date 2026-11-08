@@ -212,12 +212,14 @@ vCard or CardDAV first, then Google Contacts. Mail's senders join them by email.
 
 ### mail
 
-- **A conversation's own writers.** A conversation is the Message-ID its first message named,
-  which anyone replying can name, so a stranger's reply takes on the priority, pin or snooze
-  set on it (its flag no longer: that counts only the latest writer's mail). Keeping who has
-  written in each conversation (a kept table, as only unread and flagged mail is fetched)
-  would let a newcomer's reply start its own, without splitting a real conversation whenever
-  a sender can't be verified.
+- **A stranger's reply takes on its conversation's settings.** A conversation is the
+  Message-ID its first message named, which anyone replying can name, so their reply takes on
+  the priority, pin, snooze or tags set on it (its flag no longer: that counts only the latest
+  writer's mail). Left as it is, a known limitation: it takes a Message-ID from the
+  conversation, so mostly someone already in it, and gains only a place on my own page, while
+  telling a newcomer from a member splits real conversations. If it's ever abused, the cheap
+  step is giving a message whose sender the server didn't verify a conversation of its own:
+  that stops forged `From`s, not a stranger with a verified domain.
 
 ## Follow-ups
 
