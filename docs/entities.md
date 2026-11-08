@@ -120,11 +120,11 @@ On my open PRs only:
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `review_blockers` | list of strings | why reviewers shouldn't be nudged yet, including failing policy checks (but those only waiting for reviews), changes requested and missing requested members of an individual-policy team; empty when the PR is in order. `already approved` means it has the approval it needs, so there's nobody to chase |
+| `review_blockers` | list of strings | why reviewers shouldn't be nudged yet, including failing policy checks (other than those only waiting for a review), changes requested and missing requested members of an individual-policy team; empty when the PR is in order. `already approved` means it has the approval it needs, so there's nobody to chase |
 | `last_review_activity` | ISO datetime or null | the latest review request, review or human comment |
 | `review_stale` | bool | no review activity for `[github] stale_review_hours` |
 | `stale_review_hours` | integer | `[github] stale_review_hours`, for what says how long a review request must be quiet |
-| `failing_policy_checks` | list of strings | the failing checks named in `[github] policy_checks` |
+| `failing_policy_checks` | list of strings | the failing checks named in `[github] policy_checks`, other than those only waiting for a review on a PR not yet approved |
 | `progress` | string | where it is: `draft`, `ready to merge`, `CI failing` or `in review` |
 
 ### `person`

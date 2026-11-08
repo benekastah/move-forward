@@ -117,11 +117,13 @@ def review_only_policy_failure(check: Check) -> bool:
 
 def policy_failures(pr: PullRequest, policy_checks: Collection[str]) -> list[Check]:
     """The failing policy checks I can do something about: not those only waiting for
-    reviews (`review_only_policy_failure`), which pass once the PR is reviewed."""
+    reviews (`review_only_policy_failure`) while the PR has no approval yet; approved and still
+    failing, the approval wasn't the one the check wants, which is for me to sort out."""
+    waiting = not approved(pr)
     return [
         c
         for c in failing_checks(pr)
-        if c.name in policy_checks and not review_only_policy_failure(c)
+        if c.name in policy_checks and not (waiting and review_only_policy_failure(c))
     ]
 
 

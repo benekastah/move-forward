@@ -155,6 +155,10 @@ def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None
     assert titles(built, "github.fix_before_review") == []
     assert titles(built, "github.policy") == []  # nothing for me to do: no Meet PR policy
     assert "failing policy checks" not in review_blockers(first, ME, ["PR policy: guidelines"])
+    # Approved and still failing, the approval wasn't the one it wants: that's for me again.
+    wrong = pr(2, review_decision="APPROVED", reviews=[approved_review("bob")], checks=[waiting])
+    built = build(github=snapshot(mine=[wrong]), policy_checks=["PR policy: guidelines"])
+    assert titles(built, "github.policy") == ["PR 2"]
 
 
 def test_each_individual_policy_team_needs_one_of_its_members_requested() -> None:

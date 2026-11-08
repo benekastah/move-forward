@@ -53,8 +53,8 @@ from .panels import PR, REQUEST_REVIEWER_TASK, REVIEW_TASK, Builder
 from .people import PeopleRepository
 from .prs import (
     changes_requested,
-    failing_checks,
     last_review_activity,
+    policy_failures,
     progress,
     review_blockers,
     reviewer_assignment_reasons,
@@ -369,7 +369,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             fields["last_review_activity"] = last.isoformat() if last else None
             fields["stale_review_hours"] = ctx.config.stale_review_hours
             fields["failing_policy_checks"] = [
-                c.name for c in failing_checks(pr) if c.name in ctx.config.policy_checks
+                c.name for c in policy_failures(pr, ctx.config.policy_checks)
             ]
             fields["progress"] = progress(pr, ignored)
             fields["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
