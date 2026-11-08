@@ -758,16 +758,18 @@ def test_someone_i_wrote_to_twice_is_known(imap: Callable[..., FakeImap]) -> Non
         [
             (1, "", headers(sender="Alice <alice@acme.com>")),
             (2, "", headers(sender="bob@x.com", message_id="b@x")),
+            (3, "", headers(sender=ME, message_id="me@x")),
         ]
     )
     server.sent = {10: "s1@me", 11: "s2@me", 12: "s3@me"}
     server.sent_to = {
-        10: "Alice <ALICE@acme.com>",
-        11: "alice@acme.com, bob@x.com",
+        10: f"Alice <ALICE@acme.com>\r\nCc: {ME}",  # copying myself
+        11: f"carol@y.com, {ME}\r\nCc: alice@acme.com, bob@x.com",
         12: "carol@y.com",
     }
     found = {m.sender_email: m.known for m in client.collect(_config(), ME, NOW).messages}
-    assert found == {"alice@acme.com": True, "bob@x.com": False}  # bob only once
+    # Alice twice (To and Cc), bob once, and me never, however often I'm copied.
+    assert found == {"alice@acme.com": True, "bob@x.com": False, ME: False}
 
 
 def test_a_known_sender_is_important_only_when_verified() -> None:

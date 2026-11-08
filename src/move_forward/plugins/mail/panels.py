@@ -98,7 +98,7 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
         badges.append(Badge(text="flagged", tone="warn"))
     if latest.replies_to_me and not latest.bulk:
         badges.append("replies to me")
-    if known and not latest.bulk:
+    elif known and not latest.bulk:
         badges.append("known")
     elif latest.important and not thread.flagged and not latest.bulk:
         badges.append("important")

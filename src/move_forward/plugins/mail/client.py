@@ -9,6 +9,7 @@ from collections import Counter
 from collections.abc import Generator, Iterator, Sequence
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
+from email.message import EmailMessage
 from email.parser import BytesHeaderParser
 from email.policy import default
 from email.utils import getaddresses, parsedate_to_datetime
@@ -20,11 +21,11 @@ from .models import MAX_SUBJECT, MailSnapshot, Message
 log = logging.getLogger(__name__)
 TIMEOUT_SECONDS = 30
 FETCH_CHUNK = 500
+"""The most messages fetched by one command."""
 SENT_CAP = 1000
 """The most of my sent mail read: its newest."""
 KNOWN_AFTER = 2
 """How many times I must have written to someone, within `known_days`, to know them."""
-"""The most messages fetched by one command."""
 HEADERS = (
     "FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES LIST-ID PRECEDENCE AUTO-SUBMITTED"
     " AUTHENTICATION-RESULTS"
@@ -124,6 +125,7 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
     `max_messages` unread, and every flagged one. Opened read-only, and the headers fetched
     with `BODY.PEEK`, so nothing is marked read."""
     secret = password(config, email)
+    me = {a.lower() for a in (config.username, email) if "@" in a}
     with _signed_in(config, secret) as imap:
         try:
             _ok(imap.select(_quoted(config.mailbox), readonly=True), "EXAMINE")
@@ -153,8 +155,7 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
                 "FETCH",
             )
         # Last: it opens another mailbox.
-        sent, written = _my_sent(imap, config, now)
-    me = {a.lower() for a in (config.username, email) if "@" in a}
+        sent, written = _my_sent(imap, config, now, me)
     trusted = config.trusted_auth_servers()
     messages = [
         m.model_copy(
@@ -189,12 +190,24 @@ def sent_mailbox(imap: imaplib.IMAP4, config: MailConfig) -> str | None:
     return None
 
 
+def _recipients(headers: EmailMessage) -> set[str]:
+    """Whom a message went to (`To` and `Cc`), lower-case; a malformed header gives none."""
+    found: set[str] = set()
+    for name in ("To", "Cc"):
+        try:
+            raw = getaddresses([str(headers.get(name) or "")])
+        except (ValueError, IndexError, TypeError):
+            continue
+        found.update(a for _, text in raw if (a := _address(text)))
+    return found
+
+
 def _my_sent(
-    imap: imaplib.IMAP4, config: MailConfig, now: datetime
+    imap: imaplib.IMAP4, config: MailConfig, now: datetime, me: set[str]
 ) -> tuple[set[str], Counter[str]]:
     """What I sent in the last `known_days`, its newest `SENT_CAP`: their Message-IDs (a
     message naming one is answering me) and how often I wrote to each address (`To` and `Cc`,
-    lower-case). Nothing without a sent mailbox, or when reading it fails in any way: the
+    lower-case, but `me`, so copying myself doesn't make me someone I know). Nothing without a sent mailbox, or when reading it fails in any way: the
     inbox, already read, matters more."""
     try:
         mailbox = sent_mailbox(imap, config)
@@ -218,9 +231,7 @@ def _my_sent(
             for _, raw in _fetched(fetched):
                 headers = BytesHeaderParser(policy=default).parsebytes(raw)
                 ids.update(_message_ids(str(headers.get("Message-ID") or "")))
-                to = [str(headers.get(name) or "") for name in ("To", "Cc")]
-                addresses = {_address(raw) for _, raw in getaddresses(to)}
-                written.update(a for a in addresses if a)
+                written.update(_recipients(headers) - me)
         return ids, written
     except (RuntimeError, UnicodeEncodeError, OSError, imaplib.IMAP4.error, ValueError) as e:
         log.warning("can't read my sent mail, so nothing counts as replying to me: %s", e)

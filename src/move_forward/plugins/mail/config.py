@@ -46,7 +46,7 @@ class MailConfig(Strict):
     """The mailbox to read."""
     sent_mailbox: str = ""
     """Where my sent mail is, to know which mail answers me; empty, the mailbox the server
-    marks as sent (`[Gmail]/Sent Mail`, `Sent`). Only its Message-IDs are read."""
+    marks as sent (`[Gmail]/Sent Mail`, `Sent`). Only its Message-IDs and recipients are read."""
     known_days: int = Field(default=DEFAULT_KNOWN_DAYS, ge=1)
     """How far back my sent mail is read: someone I wrote to at least twice in it is someone I
     know, whose mail counts as important; mail answering any of it replies to me."""
