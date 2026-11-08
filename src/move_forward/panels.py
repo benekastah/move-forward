@@ -236,19 +236,20 @@ def _without_hidden(panel: Panel, hidden: Hidden) -> Panel:
     return panel.model_copy(update={"items": [i for i in panel.items if not hidden(i)]})
 
 
-def _with_snooze(
+def _with_set_aside(
     panel: Panel,
     plugin: str,
     feedback: dict[act_now.FeedbackKey, act_now.Feedback],
     now: datetime,
     nominated: dict[act_now.FeedbackKey, str],
 ) -> Panel:
-    """Each of a panel's items that has a task with Snooze, as in Act now; one set aside there
-    or here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze. An item is
-    known by the fingerprint Act now has for it (`nominated`, by key), so both agree, else its
-    own; its parts without a task of their own carry its button, as focus mode shows them."""
+    """Each of a panel's items that has a task with Snooze and Dismiss, as in Act now; one set
+    aside there or here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze
+    or Undismiss. An item is known by the fingerprint Act now has for it (`nominated`, by key),
+    so both agree, else its own; its parts without a task of their own carry its buttons, as
+    focus mode shows them, and they set it aside, as a part's Put on ice does its entry."""
 
-    def snoozable(item: Item) -> Item:
+    def with_buttons(item: Item) -> Item:
         nomination = act_now.Nomination(
             plugin, item if item.signals else item.model_copy(update={"signals": panel.signals})
         )
@@ -268,7 +269,7 @@ def _with_snooze(
             update={"actions": [*item.actions, *buttons], "set_aside": aside, "parts": parts}
         )
 
-    return panel.model_copy(update={"items": [snoozable(item) for item in panel.items]})
+    return panel.model_copy(update={"items": [with_buttons(item) for item in panel.items]})
 
 
 KnownAction = Callable[[str], bool]
@@ -483,7 +484,7 @@ def build(
                 )
                 for plugin in plugins
                 for panel in plugin.panels
-                for shown in [_with_snooze(panel, plugin.key, feedback or {}, now, nominated)]
+                for shown in [_with_set_aside(panel, plugin.key, feedback or {}, now, nominated)]
             ),
         ],
         groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),

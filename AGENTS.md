@@ -61,11 +61,11 @@ is what's left to build.
   come from `item_actions`, called per item with whose item it is and where it's
   shown; a plugin that reads its tables for them does so once per page in
   `prepare_item_actions`. Core adds its own to items: the importance choices on
-  every item about an entity (but what `hides`), with Clear priority once one's set, a Snooze on
-  every item with a task, with Dismiss, Pin in Act now, and on an item about a person
-  (`people.py`) their contact type and Set type; and on every item about an entity (but what
-  `hides`) its `#tag` badges, a Tag field and an Untag per tag I put on it (`tags.py`). A plugin nominates items for
-  core's Act now with `act_now`, each with `Signals` (effort, what it closes,
+  every item about an entity (but what `hides`), with Clear priority once one's set; Snooze
+  and Dismiss on every item with a task, wherever it's shown, and Pin in Act now; on an item
+  about a person (`people.py`) their contact type and Set type; and on every item about an
+  entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag I put on it
+  (`tags.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,
   who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
   default, the items of its panels marked `act_now`.
 - Every request needs the dashboard's token, except signing in (`/login` and its
