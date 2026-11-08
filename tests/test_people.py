@@ -32,11 +32,18 @@ NOW = datetime(2026, 11, 7, tzinfo=UTC)
 THREAD = Ref(kind="mail.thread", id="t1")
 
 
-def _person(id: str, email: str | None = None, contact_type: str | None = None) -> Entity:
+def _person(
+    id: str,
+    email: str | None = None,
+    contact_type: str | None = None,
+    importance: int | None = None,
+) -> Entity:
     return Entity(
         ref=Ref(kind=PERSON, id=id),
         title=id,
-        attrs=attrs(Person(handle=id, email=email, contact_type=contact_type)),
+        attrs=attrs(
+            Person(handle=id, email=email, contact_type=contact_type, importance=importance)
+        ),
     )
 
 
@@ -153,6 +160,24 @@ def test_a_tools_type_is_read_as_mine_would_be() -> None:
         .badges
         == []
     )
+
+
+def test_a_tool_can_say_how_much_someone_matters_for_all_their_mail() -> None:
+    crm = _person("crm.example.com/42", "alice@acme.com", importance=2)  # a VIP deal's contact
+    assert _contacts(SENDER, crm, _thread(SENDER)).importance(THREAD) == 2
+
+
+def test_the_highest_of_a_type_and_what_a_tool_says_counts() -> None:
+    starred = _person("contacts/alice", "alice@acme.com", importance=1)
+    labels = {"@acme.com": "vendor"}  # importance 0 by default
+    assert _contacts(SENDER, starred, _thread(SENDER), labels=labels).importance(THREAD) == 1
+    customer = {"alice@acme.com": "customer"}  # 1, as the tool says
+    assert _contacts(SENDER, _thread(SENDER), labels=customer).importance(THREAD) == 1
+
+
+def test_a_stated_importance_must_be_one_of_the_three() -> None:
+    with pytest.raises(ValidationError):
+        Person(handle="x", importance=3)
 
 
 def test_a_type_not_in_the_config_gives_no_importance() -> None:

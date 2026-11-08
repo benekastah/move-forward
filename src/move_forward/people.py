@@ -115,6 +115,7 @@ class _PersonView(Model):
     id: str
     email: str | None = None
     contact_type: str | None = None
+    importance: int | None = None
 
 
 @dataclass(frozen=True)
@@ -140,13 +141,16 @@ class Contacts:
         email = personal_email(person.email)
         keys = [email, f"@{email.split('@')[1]}"] if email else []
         labelled = next((key for key in keys if key in self._labels), None)
+        same = self._graph.view_same_person(person.id, _PersonView)
         if labelled is not None:
             found = self._labels[labelled]
         else:
             # Where tools disagree, the first in the graph's order: the plugins' order.
-            same = self._graph.view_same_person(person.id, _PersonView)
             found = next((t for p in same if (t := _tool_type(p.contact_type))), None)
-        importance = self._types.get(found, 0) if found else 0
+        # A type gives an importance, and a tool can state one outright (a CRM's VIP, a
+        # starred contact): the highest counts, whoever says it.
+        stated = max((p.importance or 0 for p in same), default=0)
+        importance = max(self._types.get(found, 0) if found else 0, stated)
         return Contact(email, found, importance, labelled)
 
     def of(self, ref: Ref) -> Contact | None:

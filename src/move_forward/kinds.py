@@ -85,6 +85,9 @@ class Person(KindModel):
     """What joins them to the same person in other tools (`Graph.same_person`)."""
     contact_type: str | None = None
     """What they are to me, when the tool knows: "customer", say, from a CRM. See `people`."""
+    importance: int | None = Field(default=None, ge=0, le=2)
+    """How much they matter to me, when the tool knows (0 normal, 1 high, 2 critical): a CRM's
+    VIP, a contact I starred. It raises the items about them as a contact type's does."""
 
 
 _EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
