@@ -115,10 +115,32 @@ that needs a core one says so, and lands on top of it.
 Each button runs `gh`, checks its fields (a PR on `host`, a login's form), and returns the PR
 as `touched`, so it's fetched again at once.
 
-12. **Merge.** On Ready to merge, with a confirm: `gh pr merge --match-head-commit <the head
-    shown>`, so a push since then refuses it. A merge queue takes no method, and the button says
-    Add to queue. Otherwise the method comes from a setting or the repo's default. Never
-    `--admin`, and the branch stays for Cleanup.
+12. **Merge.** With a confirm, wherever the PR is listed (and in focus mode). What a repo allows
+    comes from GitHub, not config: `isMergeQueueEnabled`, `autoMergeAllowed`, the allowed methods,
+    `viewerDefaultMergeMethod` and `deleteBranchOnMerge`. github fetches those and offers:
+    - On **Ready to merge**:
+      - **Add to queue** with a queue on: `PUT repos/{o}/{r}/pulls/{n}/merge-async` with
+        `merge_action=merge_queue` and no method (that parameter is unverified; check it first).
+      - **Merge** otherwise: the same endpoint with the method and the head commit shown, so a
+        push since the confirm refuses it. A PR in a linked stack can't merge any other way (and
+        merging it merges the PRs below it, which the confirm says); try it on an unstacked PR
+        first.
+    - On **Ready for review**, and Fix before review's PRs waiting only on checks: **Merge when
+      ready**, where auto-merge is allowed and wanted: `gh pr merge --auto` with the method and
+      `--match-head-commit`, so a push after the confirm isn't merged unseen. Then a "merges when
+      ready" badge and **Cancel auto-merge**. Not on a PR in a linked stack, which `gh pr merge`
+      refuses.
+    - Nothing anywhere else.
+
+    Only real preferences are settings, in `[github.merge]`, with `[github.merge.repos."owner/name"]`
+    overriding per repo (a table, as `[slack.teams]` is, since each repo sets several keys):
+    `method`, `auto_merge`, and `delete_branch`, the repo's `deleteBranchOnMerge` unless set.
+    A branch with PRs based on it is never deleted, by the dashboard or by GitHub: with
+    `deleteBranchOnMerge` on, Merge retargets those PRs to the base first. Never `--admin`.
+    `method`, e.g. `"squash"`, is a preference for when several are allowed: a repo allowing just
+    one uses that, and one that doesn't allow the preferred method uses the one GitHub picks for
+    me (`viewerDefaultMergeMethod`: my last used, else the repo's default), so one setting can
+    serve every repo. The confirm says which method it will use.
 15. **A base merge isn't an answer.** Comments count as answered once they're older than my last
     push, by the head commit's date, so merging the base into a branch (Update branch, or by hand)
     clears them with nothing said. Read past merge commits: it needs their parents fetched. Then
