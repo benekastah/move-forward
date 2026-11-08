@@ -34,6 +34,7 @@ from .plugins.git.plugin import GitPlugin
 from .plugins.git_stack.plugin import GitStackPlugin
 from .plugins.github.plugin import GitHubPlugin
 from .plugins.jira.plugin import JiraPlugin
+from .plugins.mail.plugin import MailPlugin
 from .plugins.notes.plugin import NotesPlugin
 from .plugins.slack.plugin import SlackPlugin
 from .repositories import KvRepository
@@ -56,6 +57,7 @@ BUILTINS: list[Plugin[Any, Any]] = [
     GitStackPlugin(),
     JiraPlugin(),
     SlackPlugin(),
+    MailPlugin(),
     NotesPlugin(),
 ]
 """The plugins that come with the dashboard, listed here so a checkout run without

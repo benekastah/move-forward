@@ -26,25 +26,26 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
         kind: (publisher, marker or None)
         for kind, _, marker, publisher in _ROW_RE.findall(_section(DOC.read_text(), "## Kinds"))
     }
-    declared = {
-        kind: (
-            plugin.name,
-            "linking" if spec.linking is not False else "hiding" if spec.hides else None,
-        )
-        for plugin in registry.BUILTINS
-        for kind, spec in plugin.kinds.items()
-    }
+    declared: dict[str, tuple[str, str | None]] = {}
+    for plugin in registry.BUILTINS:
+        for kind, spec in plugin.kinds.items():
+            marker = "linking" if spec.linking is not False else "hiding" if spec.hides else None
+            declared.setdefault(kind, (plugin.name, marker))  # a family's first publisher
     assert documented == declared
 
 
 def test_each_kind_documents_exactly_its_models_attributes() -> None:
+    """A family's section lists what every publisher's model has, each one's own marked."""
     text = DOC.read_text()
+    fields: dict[str, set[str]] = {}
     for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():
-            section = _section(_section(text, "## Attributes"), f"### `{kind}`")
-            cells = _ATTRIBUTE_CELL_RE.findall(section)
-            documented = {name for cell in cells for name in re.findall(r"`(\w+)`", cell)}
-            assert documented == set(spec.attrs.model_fields), kind
+            fields.setdefault(kind, set()).update(spec.attrs.model_fields)
+    for kind, declared in fields.items():
+        section = _section(_section(text, "## Attributes"), f"### `{kind}`")
+        cells = _ATTRIBUTE_CELL_RE.findall(section)
+        documented = {name for cell in cells for name in re.findall(r"`(\w+)`", cell)}
+        assert documented == declared, kind
 
 
 def test_the_fetched_table_names_every_fetchable_kind_and_what_it_carries() -> None:
