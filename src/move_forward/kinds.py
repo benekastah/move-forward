@@ -1,11 +1,13 @@
-"""The families of entity kinds core models: what more than one tool may represent (a pull
-request, a ticket, a person). A plugin's kind named for a family must extend its model,
+"""The families of entity kinds: what more than one tool may represent, core's (a pull
+request, a ticket, a person) and those plugins declare (`Plugin.families`). A plugin's kind
+named for a family must extend its model,
 adding the plugin's own fields, so every publisher's entities of the family carry what the
 family's model says and other plugins read them through it. A plugin's other kinds are its
 own, named for it (`git.branch`). See `docs/entities.md`."""
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Generator, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -146,15 +148,62 @@ class Family:
     be."""
 
 
-FAMILIES = {
-    family.name: family
-    for family in (
-        Family(PULL_REQUEST, "PR", PullRequest, is_url, PullRequestFetched),
-        Family(TICKET, "ticket", Ticket, is_url, TicketFetched),
-        Family(PERSON, "person", Person, is_host_login),
-    )
-}
-"""Every family, by name."""
+CORE_FAMILIES = (
+    Family(PULL_REQUEST, "PR", PullRequest, is_url, PullRequestFetched),
+    Family(TICKET, "ticket", Ticket, is_url, TicketFetched),
+    Family(PERSON, "person", Person, is_host_login),
+)
+"""The families core declares itself, as a plugin declares its own (`Plugin.families`)."""
+FAMILIES: dict[str, Family] = {}
+"""Every family, by name: core's and the plugins' (`declare`, as plugins are found)."""
+_DECLARED_BY: dict[str, str] = {}
+_FAMILY_NAME = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def declare(plugin: str, families: Iterable[Family]) -> None:
+    """Add a plugin's families to `FAMILIES`, or raise ValueError, adding none, for one whose
+    name isn't a family's (lower-case, no dot: a dotted kind is a plugin's own), whose model
+    has no `handle` (what text names its entities by), or that core or another plugin declares
+    differently. The same declaration from two plugins (a family package they share) is one
+    family."""
+    found: dict[str, Family] = {}
+    for family in families:
+        if not _FAMILY_NAME.fullmatch(family.name):
+            raise ValueError(
+                f"{plugin}'s family {family.name!r} isn't named like one: {_FAMILY_NAME.pattern}"
+            )
+        if "handle" not in family.model.model_fields:
+            raise ValueError(f"{plugin}'s family {family.name}'s model has no handle")
+        known = found.get(family.name) or FAMILIES.get(family.name)
+        if known is not None and known != family:
+            owner = plugin if family.name in found else _DECLARED_BY[family.name]
+            raise ValueError(f"{plugin}'s family {family.name} is declared differently by {owner}")
+        found[family.name] = family
+    for name, family in found.items():
+        if name not in FAMILIES:
+            _DECLARED_BY[name] = plugin
+        FAMILIES[name] = family
+
+
+@contextmanager
+def declaring(plugin: str, families: Iterable[Family], *, keep: bool = True) -> Generator[None]:
+    """Declare a plugin's families (`declare`) for the block: undone if the block raises (the
+    plugin is left out), and when it ends unless `keep`."""
+    saved, declared_by = dict(FAMILIES), dict(_DECLARED_BY)
+    kept = False
+    try:
+        declare(plugin, families)
+        yield
+        kept = keep
+    finally:
+        if not kept:
+            FAMILIES.clear()
+            FAMILIES.update(saved)
+            _DECLARED_BY.clear()
+            _DECLARED_BY.update(declared_by)
+
+
+declare("core", CORE_FAMILIES)
 
 
 def fits(kind: str, id: str) -> bool:

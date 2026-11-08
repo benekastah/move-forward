@@ -196,12 +196,6 @@ Confluence, Notion, Figma). In order:
    harness plugin authors get (`move_forward.testing`). Each step below extends it as it
    lands, so it shows what a plugin can do without core, and a core change that would break
    one fails it.
-2. **Families a plugin can declare.** `kinds.FAMILIES` is a closed list (pull request,
-   ticket, person), so every shared concept is a core edit. Let a plugin, or a small package
-   several share, declare a family (its model, id rule, label, what it carries when fetched
-   on demand, and any task ids its consumers share, as `REVIEW` is for PRs), with core only
-   enforcing it, and move the three there are onto the same path so it stays tested. Two
-   publishers that declare one family differently is an error at load, naming both.
 3. **The families most of those tools need.** An *organisation* (a CRM account, a support
    tool's organisation, an email domain), a *conversation* (mail, support tickets, chats),
    and an *incident*. Each with the attributes a consumer ranks by, and a person pointing at

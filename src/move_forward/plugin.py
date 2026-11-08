@@ -24,6 +24,7 @@ from .asking import Asker, InitSetup
 from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
+from .kinds import Family
 from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, SnapshotRepository
@@ -405,6 +406,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """e.g. "GitHub": the heading of the plugin's group on the page."""
     config_model: ClassVar[type[BaseModel]]
     """The model of the `[name]` section: C."""
+    families: ClassVar[tuple[Family, ...]] = ()
+    """Families of kinds the plugin declares (`kinds.Family`): what more than one tool may
+    represent, like core's pull request, ticket and person, with the model its kinds extend and
+    the rule its ids follow; its model needs a `handle`. Declared by the plugin, or by a
+    package several share, it needs no change to core. A plugin publishes kinds only of core's
+    families and those it declares, and one declaring a family differently from core or
+    another plugin is left out, and said why."""
     kinds: ClassVar[dict[str, KindSpec]] = {}
     """The entity kinds the plugin publishes, each with its spec: the model of its
     attributes, which the graph checks its entities against, and whether it links what it's

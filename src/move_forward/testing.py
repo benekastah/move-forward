@@ -25,7 +25,7 @@ from .config import Config
 from .db import Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec
-from .kinds import FAMILIES
+from .kinds import FAMILIES, Family, declaring
 from .notifications import Event
 from .page import Item, Panel, Surface
 from .panels import Dashboard
@@ -87,7 +87,9 @@ def _seed(name: str, entities: Sequence[Entity]) -> _Seed:
 class Harness:
     """A plugin enabled alone (with what `with_entities` seeds) over an in-memory database,
     run as core runs it: the graph core builds, the page it renders, its actions and pages.
-    `section` is the plugin's config section, as the TOML would have it."""
+    `section` is the plugin's config section, as the TOML would have it; `families`, those
+    other plugins declare whose entities it seeds or reads. The plugin must pass core's
+    checks (`registry.check_plugins`)."""
 
     def __init__(
         self,
@@ -97,6 +99,7 @@ class Harness:
         now: datetime = NOW,
         email: str = "me@x",
         teams: Sequence[str] = (),
+        families: Sequence[Family] = (),
     ):
         self.plugin = plugin
         self.now = now
@@ -106,9 +109,11 @@ class Harness:
         self._section = dict(section or {})
         self._email = email
         self._teams = list(teams)
+        self._families = (*plugin.families, *families)
         self._seeds: list[_Seed] = []
         self._previous: tuple[Graph, BaseModel | None] | None = None
         with self._installed():
+            registry.check_plugins([plugin])
             self.config = self._config()
             registry.migrate(self.config, self.db)
 
@@ -119,12 +124,18 @@ class Harness:
         `ticket`) as some plugin would publish them, or another plugin's own kind
         (`git.branch`) as that plugin. Returns the harness, to chain."""
         by_owner: dict[str, list[Entity]] = {}
-        for entity in entities:
-            kind = entity.ref.kind
-            owner = "seed" if kind in FAMILIES else kind.split(".", 1)[0]
-            by_owner.setdefault(owner, []).append(entity)
-        self._seeds += [_seed(owner, found) for owner, found in by_owner.items()]
         with self._installed():
+            for entity in entities:
+                kind = entity.ref.kind
+                if kind not in FAMILIES and "." not in kind:
+                    raise ValueError(
+                        f"{kind} is neither a family nor a plugin's kind: pass the family that"
+                        " another plugin declares as Harness(..., families=...)"
+                    )
+                owner = "seed" if kind in FAMILIES else kind.split(".", 1)[0]
+                by_owner.setdefault(owner, []).append(entity)
+            self._seeds += [_seed(owner, found) for owner, found in by_owner.items()]
+        with self._installed():  # again, with the new seeds
             self.config = self._config()
         return self
 
@@ -173,11 +184,12 @@ class Harness:
     def entities(self) -> list[Entity]:
         """What the plugin publishes, as the graph holds it: core's checks passed."""
         graph = self.graph()
-        return [
-            entity
-            for kind in self.plugin.kinds
-            for entity in graph.of_kind(f"{self.name}.{kind}" if kind in FAMILIES else kind)
-        ]
+        with self._installed():
+            return [
+                entity
+                for kind in self.plugin.kinds
+                for entity in graph.of_kind(f"{self.name}.{kind}" if kind in FAMILIES else kind)
+            ]
 
     def panels(self) -> list[Panel]:
         """The plugin's panels, as its `panels` makes them (before core adds buttons)."""
@@ -240,10 +252,12 @@ class Harness:
 
     @contextmanager
     def _installed(self) -> Generator[None]:
-        """Core sees only the plugin and the seeds, while a call runs."""
+        """Core sees only the plugin and the seeds, and the plugin's and the given families,
+        while a call runs."""
         saved = registry.PLUGINS
         registry.PLUGINS = [self.plugin, *self._seeds]
         try:
-            yield
+            with declaring(self.name, self._families, keep=False):
+                yield
         finally:
             registry.PLUGINS = saved

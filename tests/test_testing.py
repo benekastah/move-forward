@@ -25,7 +25,7 @@ from move_forward.api import (
     StoreRequest,
     attrs,
 )
-from move_forward.api.kinds import PULL_REQUEST, PullRequest
+from move_forward.api.kinds import FAMILIES, PULL_REQUEST, Family, PullRequest, is_url
 from move_forward.strict import Strict
 from move_forward.testing import NOW, Harness
 
@@ -184,3 +184,67 @@ def _config_error(section: dict[str, Any]) -> None:
 def test_a_bad_section_fails_as_the_config_would() -> None:
     with pytest.raises(ValueError, match=r"linear\.team"):
         _config_error({})
+
+
+class Deal(KindModel):
+    handle: str
+
+
+class CrmPlugin(Plugin[LinearConfig, LinearSnapshot]):
+    """A plugin publishing deals, a family it declares."""
+
+    name: ClassVar[str] = "crm"
+    title: ClassVar[str] = "CRM"
+    api_version = API_VERSION
+    config_model = LinearConfig
+    families = (Family("deal", "deal", Deal, is_url),)
+    kinds: ClassVar[dict[str, KindSpec]] = {"deal": KindSpec(Deal)}
+
+    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
+        return [
+            Entity(ref=Ref(kind="deal", id=id), title="Big", attrs=attrs(Deal(handle="D-1")))
+            for id in ("https://crm/deals/1", "D-1")  # the second breaks the family's rule
+        ]
+
+
+def test_a_plugin_publishes_a_family_it_declares_as_core_would() -> None:
+    crm = Harness(CrmPlugin(), {"team": "ENG"})
+    [deal] = crm.entities()
+    assert (deal.ref.id, deal.kind, deal.family) == ("https://crm/deals/1", "crm.deal", "deal")
+    assert "deal" not in FAMILIES  # declared only while the harness runs a call
+
+
+class DealReader(LinearPlugin):
+    """Reads deals, a family another plugin declares."""
+
+    name: ClassVar[str] = "reader"
+    kinds: ClassVar[dict[str, KindSpec]] = {}
+
+
+def test_a_plugin_reading_another_plugins_family_is_given_it() -> None:
+    reader = Harness(DealReader(), {"team": "ENG"}, families=CrmPlugin.families)
+    reader.with_entities(
+        [
+            Entity(ref=Ref(kind="deal", id=id), title="Big", attrs=attrs(Deal(handle="D-1")))
+            for id in ("https://crm/deals/1", "D-1")
+        ]
+    )
+    [deal] = reader.graph().of_kind("deal")
+    assert (deal.ref.id, deal.family) == ("https://crm/deals/1", "deal")
+
+
+class BorrowingCrm(CrmPlugin):
+    name: ClassVar[str] = "borrowing"
+    families = ()
+
+
+def test_the_harness_refuses_a_plugin_core_would_leave_out() -> None:
+    with pytest.raises(RuntimeError, match="a family it doesn't declare"):
+        Harness(BorrowingCrm(), {"team": "ENG"}, families=CrmPlugin.families)
+
+
+def test_seeding_a_family_the_harness_wasnt_given_says_so() -> None:
+    reader = Harness(DealReader(), {"team": "ENG"})
+    deal = Entity(ref=Ref(kind="deal", id="https://crm/deals/1"), title="Big", attrs={})
+    with pytest.raises(ValueError, match="families="):
+        reader.with_entities([deal])

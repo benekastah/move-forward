@@ -16,7 +16,7 @@ from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
-from .kinds import FAMILIES, fits, named_for
+from .kinds import CORE_FAMILIES, FAMILIES, declare, declaring, fits, named_for
 from .plugin import (
     API_VERSION,
     Context,
@@ -124,11 +124,15 @@ prefix, so it can't be any of core's. `tests/test_registry.py` checks the list a
 config, the commands and the server."""
 
 
+_CORE_FAMILY_NAMES = {family.name for family in CORE_FAMILIES}
+
+
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     """Raise unless every plugin is built against this dashboard's `API_VERSION`, and its
     name is its own and fit to be one: lower-case, not two plugins', and none of core's
     (`RESERVED_NAMES`). A plugin's kinds are named for it
-    (`git.branch`), or for a family (`kinds.FAMILIES`), whose model they must extend."""
+    (`git.branch`), or for a family, core's or one it declares (`Plugin.families`), whose model
+    they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -146,10 +150,11 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():
             family = FAMILIES.get(kind)
+            usable = _CORE_FAMILY_NAMES | {f.name for f in plugin.families}
             if family is None and not named_for(plugin.name, kind):
                 raise RuntimeError(
                     f"{plugin.name}'s kind {kind!r} must be named {plugin.name}.<name>,"
-                    f" or for a family: {', '.join(FAMILIES)}"
+                    f" or for a family: {', '.join(sorted(usable))}"
                 )
             # The type says so, but a plugin needn't be type-checked.
             if not issubclass(cast(type[BaseModel], spec.attrs), KindModel):
@@ -157,9 +162,13 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                     f"{plugin.name}'s {kind} attributes must be a KindModel, not"
                     f" {spec.attrs.__name__}"
                 )
+            if family is not None and kind not in usable:
+                raise RuntimeError(
+                    f"{plugin.name}'s kind {kind} is a family it doesn't declare in its families"
+                )
             if family is not None and not issubclass(spec.attrs, family.model):
                 raise RuntimeError(
-                    f"{plugin.name}'s {kind} must extend core's {family.model.__name__}"
+                    f"{plugin.name}'s {kind} must extend {family.model.__name__}"
                     f" (the {family.label} family), not {spec.attrs.__name__}"
                 )
 
@@ -168,8 +177,12 @@ def discover() -> tuple[list[Plugin[Any, Any]], list[str]]:
     """Every plugin, by name: the built-ins and the other packages' (`ENTRY_POINTS`), with
     what went wrong loading one. A plugin that won't import, isn't a `Plugin` or fails
     `check_plugins` (a built-in's name, a reserved one) is left out, and said why; a
-    built-in failing it is a bug, and raises."""
+    built-in failing it is a bug, and raises. Each plugin's families (`Plugin.families`) are
+    declared before it's checked, so its kinds can be of them; a plugin left out declares
+    none."""
     plugins = list(BUILTINS)
+    for builtin in plugins:
+        declare(builtin.name, builtin.families)
     check_plugins(plugins)
     errors: list[str] = []
     for point in entry_points(group=ENTRY_POINTS):
@@ -178,11 +191,13 @@ def discover() -> tuple[list[Plugin[Any, Any]], list[str]]:
             plugin: object = loaded() if isinstance(loaded, type) else loaded
             if not isinstance(plugin, Plugin):
                 raise TypeError(f"{point.value} isn't a Plugin")
-            check_plugins([*plugins, cast(Plugin[Any, Any], plugin)])
+            installed = cast(Plugin[Any, Any], plugin)
+            with declaring(installed.name, installed.families):
+                check_plugins([*plugins, installed])
         except Exception as e:  # noqa: BLE001 (any failure leaves just this plugin out)
             errors.append(f"plugin {point.name} ({point.value}) is left out: {e}")
             continue
-        plugins.append(cast(Plugin[Any, Any], plugin))
+        plugins.append(installed)
     return sorted(plugins, key=lambda p: p.name), errors
 
 

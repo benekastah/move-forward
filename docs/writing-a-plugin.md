@@ -259,6 +259,16 @@ class LinearPlugin(...):
   it, and give each entity an id by the family's rule (`api.kinds.FAMILIES[...].id_rule`:
   a URL for a ticket or a PR, `<host>/<login>` for a person), so it's unique across tools. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
   through the family's model, whoever publishes it.
+- **Your own families.** For something several tools share that core doesn't model (a CRM
+  deal, say), declare the family in `families`: a `Family` with its name (lower-case, no
+  dot), label, model (with a `handle`, as every family's has), id rule (`api.kinds.is_url`,
+  say) and, if it's fetched on demand, its fetched model. A plugin publishes kinds only of
+  core's families and those it declares itself, so every plugin publishing one declares it:
+  put it in a package they import, so they declare the same one. A plugin declaring a family
+  differently from core or another plugin is left out, and `mfd check` says so. The test
+  harness declares your plugin's families while it runs it, and those of other plugins
+  you read or seed when you pass them (`Harness(..., families=...)`). Task ids the family's consumers
+  share (as `REVIEW` is for PRs) can live in that package too.
 - **People.** A tool that knows who something is about publishes them as `person`s, with an
   `email` if it has one, and points the entity at them. Core then joins them with the same
   person in other tools (`graph.same_person`), and ranks and badges their items by contact type,
@@ -434,8 +444,8 @@ plugin and hook). The rest of the page, and the other plugins' refreshes, go on.
 ## Tests
 
 `move_forward.testing.Harness` runs a plugin as core runs it: enabled alone, over an
-in-memory database, with core's graph, page, actions and pages. It doesn't import pytest;
-wrap it in a fixture of your own.
+in-memory database, with core's graph, page, actions and pages. It refuses a plugin core's
+checks would leave out. It doesn't import pytest; wrap it in a fixture of your own.
 
 ```python
 def test_triage_lists_my_open_issues() -> None:
