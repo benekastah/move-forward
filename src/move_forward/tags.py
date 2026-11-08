@@ -141,7 +141,9 @@ def tagged(
         names = [
             Ref(kind=TAG, id=tag)
             for tag in dict.fromkeys(
-                t for text in [entity.title, *entity.mentions] for t in named(text, by_words)
+                t
+                for text in [entity.title, *entity.mentions]
+                for t in [*(h for h in tags(text) if h in carriers), *named(text, by_words)]
             )
             if entity.ref not in carriers[tag]
         ]

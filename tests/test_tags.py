@@ -117,3 +117,13 @@ def test_the_tags_of_a_ticket_reach_what_belongs_to_it() -> None:
     work = Entity(ref=Ref(kind="x.pr", id="1"), title="fix", refs=[ticket.ref])
     graph = Graph(tags.tagged([ticket, work], {}), linking={"ticket": None})
     assert [t.ref for t in graph.related(work.ref, TAG)] == [Ref(kind=TAG, id="chores")]
+
+
+def test_a_short_tag_is_named_with_its_hash() -> None:
+    found = _tagged(
+        _entity("1", "#qa thing"),
+        _entity("2", "sign-off", mentions=("waiting on #QA",)),
+        _entity("3", "qa sign-off"),
+    )
+    assert found["2"].refs == [Ref(kind=TAG, id="qa")]
+    assert found["3"].refs == []
