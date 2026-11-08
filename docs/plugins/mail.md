@@ -111,8 +111,10 @@ its latest message answers mail I sent (the newest 1000 within `known_days`; its
 "replies to me"; if my sent mail can't be read, nothing counts as replying), when it's from
 someone I know (badged "known"; only a verified sender), or when Gmail labels it Important
 (Gmail's `X-GM-LABELS`, read only from a server offering them); not for lists and automated
-mail, but flagged. The sender's contact type, or how much a tool says they matter, can raise
-it further.
+mail, but flagged. One from someone I know whose subject has one of `urgent_words` is
+critical (badged "urgent"); one whose subject has one of `low_words` counts as lists' mail,
+unless it replies to me or is from someone I know. The sender's contact type, or how much a
+tool says they matter, can raise it further.
 
 ## Pages
 

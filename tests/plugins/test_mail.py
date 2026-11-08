@@ -870,6 +870,7 @@ def test_low_words_rank_mail_with_lists_but_not_from_someone_i_know() -> None:
         message(2, subject="Digest of the week", thread="b", flagged=True),
         message(1, subject="Digestible news", thread="c"),  # not the whole word
         message(4, subject="Re: digest rollout, sign off?", thread="d", known=True),
+        message(5, subject="Re: your digest idea", thread="e", replies_to_me=True),
         low_words=["digest"],
     )
     deferred = {i.fingerprint: i.deferred for i in _items(harness)}
@@ -878,6 +879,7 @@ def test_low_words_rank_mail_with_lists_but_not_from_someone_i_know() -> None:
         "m2@acme.com": False,
         "m1@acme.com": False,
         "m4@acme.com": False,  # someone I know
+        "m5@acme.com": False,  # replies to me
     }
     titles = [i.title for i in harness.act_now()]
     assert not any("Weekly digest" in t for t in titles)
