@@ -67,7 +67,7 @@ gone.
 | --- | --- | --- | --- | --- |
 | `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket`s its branch, title and body mention by key |
 | `person` | github: me, and everyone it knows an email for; mail: whoever wrote a thread's latest message, when the server verified them (DMARC) | `<host>/<login>`; mail's `mail/<address>` | | |
-| `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with | `unread` or `flagged` | the `person` who wrote its latest message, if verified; it mentions its subject, then too |
+| `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with; for a reply from someone new to it, `<that>#<sender>` (or `#uid:<uid>`, with no address) | `unread` or `flagged` | the `person` who wrote its latest message, if verified; it mentions its subject, then too |
 | `git.repo` | git | GitHub `owner/name` | | |
 | `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |
 | `git_stack.stack_branch` | git_stack | its `git.branch`'s id | | its `git.branch`, which git may have deleted |

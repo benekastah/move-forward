@@ -51,20 +51,27 @@ def own_writers(writers: WriterRepository, snapshot: MailSnapshot, now: datetime
     """The snapshot with a reply from someone who hasn't written in its conversation before as a
     conversation of its own (`<thread>#<sender>`): anyone can name a conversation in
     `References`, and a stranger's reply mustn't take on the snooze, pin, priority or tags set
-    on it. A conversation first seen takes everyone writing in it: nothing's set on it yet."""
+    on it. A reply answering mail I sent joins (its writer had my message), but someone joining
+    on another's message is split. A writer the server once vouched for is known only when it
+    vouches again, as anyone can write their `From`. A message with no address to know its
+    writer by is split by its uid (`<thread>#uid:<uid>`). A conversation first seen takes
+    everyone writing in it: nothing's set on it yet."""
     known = writers.of(sorted({m.thread for m in snapshot.messages}))
     messages: list[Message] = []
-    wrote: list[tuple[str, str]] = []
+    wrote: dict[tuple[str, str], bool] = {}
     for message in snapshot.messages:
-        email = message.sender_email
-        if email is None:
-            messages.append(message)
-            continue
-        if message.thread in known and email not in known[message.thread]:
-            message = message.model_copy(update={"thread": f"{message.thread}#{email}"})
-        messages.append(message)
-        wrote.append((message.thread, email))
-    writers.wrote(list(dict.fromkeys(wrote)), now)
+        email, thread = message.sender_email, message.thread
+        if thread in known:
+            vouched = known[thread].get(email or "")
+            forged = vouched and not message.verified
+            if email is None:
+                thread = f"{thread}#uid:{message.uid}"
+            elif forged or (vouched is None and not message.replies_to_me):
+                thread = f"{thread}#{email}"
+        if email is not None and thread == message.thread:
+            wrote[thread, email] = wrote.get((thread, email), False) or message.verified
+        messages.append(message.model_copy(update={"thread": thread}))
+    writers.wrote([(thread, email, verified) for (thread, email), verified in wrote.items()], now)
     return snapshot.model_copy(update={"messages": messages})
 
 

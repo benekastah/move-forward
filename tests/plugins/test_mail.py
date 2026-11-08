@@ -959,7 +959,10 @@ def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt()
 
 
 def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
-    harness = mailbox(message(1, subject="Garbage day moved", sender="city@town.example"))
+    harness = mailbox(
+        message(1, subject="Garbage day moved", sender="city@town.example"),
+        message(0, subject="Garbage day moved", sender="x@evil.com", verified=False),
+    )
     thread = Ref(kind=THREAD, id="root@acme.com")
     TagRepository(harness.db).add(thread, "garbage-day", NOW)
     [alone] = _items(harness)
@@ -971,7 +974,7 @@ def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
     [shared] = _items(harness)  # tagging it by hand doesn't lose what its subject names
     assert "about #garbage-day" in shared.details
     assert shared.signals is not None and shared.signals.importance == 1
-    harness.store(  # a forged reply naming the conversation takes on nothing I put on it
+    harness.store(  # an unvouched reply in it says what it's about with nothing I put on it
         MailSnapshot(
             messages=[
                 message(2, subject="Pay this invoice now", sender="x@evil.com", verified=False),
@@ -979,9 +982,7 @@ def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
             ]
         )
     )
-    items = {i.title: i for i in _items(harness)}
-    forged = items["Pay this invoice now"]  # a newcomer: a conversation of its own
-    assert "#garbage-day" not in forged.badges
+    [forged] = _items(harness)
     assert not any(d.startswith("about") for d in forged.details)
     assert forged.signals is not None and forged.signals.importance == 0
 
@@ -1002,3 +1003,41 @@ def test_a_newcomers_reply_is_a_conversation_of_its_own() -> None:
     )
     threads = {i.fingerprint: i.subjects[0].id for i in _items(harness)}
     assert threads == {"m3@acme.com": "root@acme.com", "m4@acme.com": "root@acme.com#x@evil.com"}
+    harness.store(  # and stays so
+        MailSnapshot(messages=[message(5, subject="Re: plans", sender="x@evil.com")])
+    )
+    assert [i.subjects[0].id for i in _items(harness)] == ["root@acme.com#x@evil.com"]
+
+
+def test_a_reply_to_my_mail_joins_but_a_forged_or_addressless_one_doesnt() -> None:
+    harness = mailbox(message(1, subject="plans", sender="alice@acme.com"))
+    harness.store(
+        MailSnapshot(
+            messages=[
+                message(5, subject="Re: plans", sender="dave@acme.com", replies_to_me=True),
+                message(4, subject="Re: plans", sender="alice@acme.com", verified=False),
+                message(3, subject="Re: plans", sender_email=None),
+                message(2, subject="Re: plans", sender="carol@acme.com", verified=False),
+            ]
+        )
+    )
+    threads = {i.fingerprint: i.subjects[0].id for i in _items(harness)}
+    assert threads == {
+        "m5@acme.com": "root@acme.com",  # had my message
+        "m4@acme.com": "root@acme.com#alice@acme.com",  # alice was vouched for
+        "m3@acme.com": "root@acme.com#uid:3",
+        "m2@acme.com": "root@acme.com#carol@acme.com",
+    }
+
+
+def test_who_wrote_in_a_quiet_conversation_is_forgotten() -> None:
+    harness = mailbox(message(1, subject="plans", sender="alice@acme.com"))
+    harness.store(MailSnapshot(messages=[]))
+    harness.tick(89 * 86400)
+    assert harness.prune() == []
+    harness.tick(2 * 86400)
+    assert harness.prune() == ["forgot the writers of quiet conversations (1)"]
+    harness.store(  # first seen again: everyone writing in it is in it
+        MailSnapshot(messages=[message(2, subject="Re: plans", sender="bob@acme.com")])
+    )
+    assert [i.subjects[0].id for i in _items(harness)] == ["root@acme.com"]

@@ -55,7 +55,8 @@ MIGRATIONS = [
     CREATE TABLE mail_thread_writers ( -- kept: who has written in each conversation, as only
         thread TEXT NOT NULL,          -- unread and flagged mail is fetched
         email TEXT NOT NULL,
-        seen_at TEXT NOT NULL,         -- when they last wrote in it
+        verified INTEGER NOT NULL,     -- the server has vouched for their From in it
+        seen_at TEXT NOT NULL,         -- when their unread or flagged mail was last seen in it
         PRIMARY KEY (thread, email)
     );
     """,
@@ -160,27 +161,30 @@ class WriterRepository:
     def __init__(self, db: Database):
         self._db = db
 
-    def of(self, threads: list[str]) -> dict[str, set[str]]:
-        """The writers of the conversations, by conversation; none for one never seen."""
-        found: dict[str, set[str]] = {}
-        marks = ", ".join("?" * len(threads))
+    def of(self, threads: list[str]) -> dict[str, dict[str, bool]]:
+        """The writers of the conversations, by conversation, each with whether the server has
+        vouched for them in it; none for one never seen."""
+        found: dict[str, dict[str, bool]] = {}
         if not threads:
             return found
+        marks = ", ".join("?" * len(threads))
         rows = self._db.query(
-            f"SELECT thread, email FROM mail_thread_writers WHERE thread IN ({marks})",
+            f"SELECT thread, email, verified FROM mail_thread_writers WHERE thread IN ({marks})",
             tuple(threads),
         )
         for row in rows:
-            found.setdefault(row["thread"], set()).add(row["email"])
+            found.setdefault(row["thread"], {})[row["email"]] = bool(row["verified"])
         return found
 
-    def wrote(self, writers: list[tuple[str, str]], now: datetime) -> None:
-        """Keep that each `(thread, email)` wrote in it, as of `now`."""
+    def wrote(self, writers: list[tuple[str, str, bool]], now: datetime) -> None:
+        """Keep that each `(thread, email, verified)` wrote in it, as of `now`; once vouched
+        for in a conversation, they stay so."""
         with self._db.transaction() as conn:
             conn.executemany(
-                "INSERT INTO mail_thread_writers VALUES (?, ?, ?)"
-                " ON CONFLICT (thread, email) DO UPDATE SET seen_at = excluded.seen_at",
-                [(thread, email, now.isoformat()) for thread, email in writers],
+                "INSERT INTO mail_thread_writers (thread, email, verified, seen_at)"
+                " VALUES (?, ?, ?, ?) ON CONFLICT (thread, email) DO UPDATE SET"
+                " verified = MAX(verified, excluded.verified), seen_at = excluded.seen_at",
+                [(t, e, int(v), now.isoformat()) for t, e, v in writers],
             )
 
     def prune(self, before: datetime) -> int:

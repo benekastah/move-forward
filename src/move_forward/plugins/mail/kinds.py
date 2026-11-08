@@ -8,7 +8,7 @@ THREAD = "mail.thread"
 
 class ThreadAttrs(KindModel):
     """A `mail.thread`: a conversation with unread or flagged mail, by the Message-ID it
-    started with; it points at the `person` who wrote its latest message."""
+    started with, and a newcomer's reply by that and its sender (`own_writers`); it points at the `person` who wrote its latest message."""
 
     subject: str
     sender_email: str | None

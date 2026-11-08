@@ -72,15 +72,25 @@ through the plugin's `/mail/open` page, which sends the browser on to the mail a
 
 A conversation is the Message-ID its first message named, which anyone replying can name. So
 mail keeps who has written in each (a kept table, as only unread and flagged mail is fetched): a
-reply from someone who hasn't written there before is a conversation of its own, so it doesn't
-take on the snooze, pin, priority or tags set on it. A conversation first seen takes everyone
-writing in it, as nothing's been set on it yet. Who wrote is forgotten for conversations quiet
-for `prune_days`.
+reply from someone who hasn't written there before is a conversation of its own
+(`<thread>#<sender>`), so it doesn't take on the snooze, pin, priority or tags set on it. A
+conversation first seen takes everyone writing in it, as nothing's been set on it yet.
+
+- A reply answering mail I sent joins: its writer had my message (I wrote to them, or copied them).
+- Someone new answering another's message is split, though: a group member writing in for the
+  first time after I read the first message.
+- A writer the server once vouched for (DMARC) is known only when it vouches again; one it never
+  vouched for is known by their `From` alone, which anyone can write, so a forger naming them
+  joins.
+- A message with no address to know its writer by is a conversation of its own
+  (`<thread>#uid:<uid>`).
+
+Who wrote is forgotten for conversations quiet for `prune_days`.
 
 ## Publishes
 
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
-with, pointing at the `person` who wrote its latest message and, when its sender is verified,
+with (or that and its sender, for a newcomer's reply: see Conversations), pointing at the `person` who wrote its latest message and, when its sender is verified,
 mentioning its subject (so a ticket key in it relates the two). Its Gmail labels, Gmail's own
 (`#inbox`, `#starred`) and mine, are its tags, whoever sent it. A `#tag` in a subject puts no
 tag on the thread (`tags_from_text=False`): anyone can write one. A subject still names tags
