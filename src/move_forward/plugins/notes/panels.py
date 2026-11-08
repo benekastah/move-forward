@@ -366,17 +366,24 @@ class Builder:
         for entry in self.entries:
             for todo in entry.todos:
                 if todo.id == todo_id:
-                    links = _todo_links(todo, _entry_urls(entry), self._pr_done(), self.graph)
-                    mentioned = [link for link in links if link.strong]
-                    return Item(
-                        title=todo.text,
-                        url=(mentioned or links)[0].url if links else None,
-                        subtitle=entry.title,
-                        badges=["done"] if todo.done_on is not None else [todo.size or "unsized"],
-                        links=links,
-                        actions=todo_actions(todo, entry.title),
-                    )
+                    return self._kept(entry, todo, self._pr_done())
         return None
+
+    def _kept(self, entry: Entry, todo: Todo, states: dict[str, bool]) -> Item:
+        """A todo kept to untick once ticked off (or to tick again), with its box as it is now:
+        about nothing, so nothing but its own buttons is offered on what's done."""
+        links = _todo_links(todo, _entry_urls(entry), states, self.graph)
+        mentioned = [link for link in links if link.strong]
+        ticked = todo.done_on is not None
+        return Item(
+            title=todo.text,
+            url=(mentioned or links)[0].url if links else None,
+            subtitle=entry.title,
+            badges=["done"] if ticked else [todo.size or "unsized"],
+            links=links,
+            actions=todo_actions(todo, entry.title),
+            done=ticked,
+        )
 
     def todos(self) -> Panel:
         items: list[Item] = []
@@ -390,7 +397,7 @@ class Builder:
             keys = [self.graph.handle(TICKET, t) for t in entry_tickets(entry, self.graph)]
             blocked = _is_blocked(entry)
             quick = [t for t in open_todos if t.size == "quick"]
-            close_out = len(quick) == len(open_todos)
+            close_out = bool(open_todos) and len(quick) == len(open_todos)
             badges: list[str | Badge] = []
             if close_out:
                 badges.append(f"close-out: {len(open_todos)} quick todo(s)")
@@ -416,10 +423,7 @@ class Builder:
                 for n, t in enumerate(ordered)
             ]
             # Those ticked off today stay, ticked, to untick, as focus mode keeps them.
-            done = [
-                _todo_part(entry.title, t, urls, states, [], self.graph, add_todo=False)
-                for t in ticked
-            ]
+            done = [self._kept(entry, t, states) for t in ticked]
             # One todo isn't listed as a part, so the entry shows what its part would. Where it
             # stands in for the entry (focus mode), it's about the entry, so its importance and
             # Put on ice are the entry's, as on the page.
@@ -441,7 +445,7 @@ class Builder:
                     details=[f"[{t.size or '?'}] {t.text}" for t in ordered] if lone else [],
                     links=lone.links if lone else links,
                     rank=(0 if blocked else 100)
-                    + (50 if close_out and open_todos else 0)
+                    + (50 if close_out else 0)
                     + len(quick)
                     - (200 if not open_todos else 0),  # all ticked off: last
                     actions=lone.actions if lone else [add_todo_action(entry.title)],
@@ -459,16 +463,17 @@ class Builder:
                         if entry.updated_on
                         else None,
                     )
-                    if close_out and open_todos
+                    if close_out
                     else None,
                     parts=parts,
+                    done=not open_todos,
                 )
             )
         return Panel(
             key=TODOS,
             priority=Band.TODOS,
             title="Todos from the work notes",
-            description="Easy close-outs first; blocked work last.",
+            description="Easy close-outs first; blocked work last; what's all ticked off today after.",
             items=items,
             # A todo from nothing: no PR or ticket to start it from.
             actions=[

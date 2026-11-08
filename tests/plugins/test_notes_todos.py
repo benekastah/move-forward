@@ -107,5 +107,10 @@ def test_a_todo_ticked_off_today_stays_listed_ticked_to_untick() -> None:
         ("dishes", ["notes/todo_done"]),
         ("laundry", ["notes/todo_undone"]),  # ticked: unticking reopens it
     ]
-    assert items["Done today"].signals is None  # nothing left to do: not a close-out
+    done_today = items["Done today"]
+    assert (done_today.signals, done_today.badges, done_today.done) == (None, [], True)
+    assert chores.details == [] and chores.parts[1].badges == ["done"]
+    assert chores.parts[1].subjects == []  # nothing to rank or tag on what's done
+    stepped = [part.title for _, part in built.focus_items("notes.todos") or []]
+    assert stepped == ["dishes"]  # what's ticked off isn't a step
     assert list(items) == ["Chores", "Done today"]  # all ticked off: last
