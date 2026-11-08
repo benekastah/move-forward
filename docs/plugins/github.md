@@ -74,7 +74,8 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   under the teams' rules. A changes request counts even when another reviewer approved.
   After a push and a renewed request to the same reviewer, the old changes request is
   treated as waiting for review. Failing policy checks whose status descriptions say they
-  need an approval are waiting too; other policy failures remain here.
+  need an approval are waiting too, on a first review as on a later one; other policy
+  failures remain here.
   The reasons appear together on one item; assigned importance sorts before age.
 - **Ready for review**: my open, non-draft PRs without those blockers, waiting for approval.
   Pending CI is allowed. Each item says who it's waiting on.

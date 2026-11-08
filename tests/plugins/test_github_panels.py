@@ -26,7 +26,7 @@ from move_forward.plugins.github.models import (
     ReviewerSuggestion,
     TeamPrScore,
 )
-from move_forward.plugins.github.prs import has_ticket_link_line
+from move_forward.plugins.github.prs import has_ticket_link_line, review_blockers
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice
 
@@ -141,6 +141,20 @@ def test_changes_requested_moves_to_waiting_after_push_and_re_request() -> None:
     details = {item.title: item.details for item in panel(built, "github.fix_before_review").items}
     assert details["PR 2"] == ["policy failing: risk"]
     assert "changes requested" in details["PR 3"]
+
+
+def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None:
+    waiting = Check(
+        name="PR policy: guidelines",
+        state="FAILURE",
+        description="Review required. PR must have approval from primary reviewer.",
+    )
+    first = pr(1, requested_users=["bob"], review_decision="REVIEW_REQUIRED", checks=[waiting])
+    built = build(github=snapshot(mine=[first]), policy_checks=["PR policy: guidelines"])
+    assert titles(built, "github.ready_for_review") == ["PR 1"]
+    assert titles(built, "github.fix_before_review") == []
+    assert titles(built, "github.policy") == []  # nothing for me to do: no Meet PR policy
+    assert "failing policy checks" not in review_blockers(first, ME, ["PR policy: guidelines"])
 
 
 def test_each_individual_policy_team_needs_one_of_its_members_requested() -> None:

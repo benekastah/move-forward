@@ -115,6 +115,16 @@ def review_only_policy_failure(check: Check) -> bool:
     return description.startswith(("review required.", "pending required reviews:"))
 
 
+def policy_failures(pr: PullRequest, policy_checks: Collection[str]) -> list[Check]:
+    """The failing policy checks I can do something about: not those only waiting for
+    reviews (`review_only_policy_failure`), which pass once the PR is reviewed."""
+    return [
+        c
+        for c in failing_checks(pr)
+        if c.name in policy_checks and not review_only_policy_failure(c)
+    ]
+
+
 def unresolved_threads(pr: PullRequest, ignored: Collection[str] = ()) -> list[Thread]:
     """The open threads, except those started by an `ignored` login."""
     return [t for t in pr.threads if not t.resolved and t.author not in ignored]
@@ -309,7 +319,7 @@ def review_blockers(
         blockers.append("conflicts")
     if any(c.name not in policy_checks for c in failing_checks(pr)):
         blockers.append("failing checks")
-    if any(c.name in policy_checks for c in failing_checks(pr)):
+    if policy_failures(pr, policy_checks):
         blockers.append("failing policy checks")
     if unresolved_threads(pr, ignored):
         blockers.append("unresolved threads")

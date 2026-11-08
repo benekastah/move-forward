@@ -28,8 +28,8 @@ from .prs import (
     last_push_at,
     merge_blockers,
     needs_re_review,
+    policy_failures,
     primary_reviewers,
-    review_only_policy_failure,
     review_required,
     reviewer_assignment_reasons,
     ticket_keys,
@@ -351,12 +351,7 @@ class Builder:
             waiting_for_review = awaiting_re_review(pr)
             requested_changes_open = changes_requested(pr) and not waiting_for_review
             ci = [c for c in failing_checks(pr) if c.name not in self.config.policy_checks]
-            policy = [
-                c
-                for c in failing_checks(pr)
-                if c.name in self.config.policy_checks
-                and not (waiting_for_review and review_only_policy_failure(c))
-            ]
+            policy = policy_failures(pr, self.config.policy_checks)
             threads = unresolved_threads(pr, self.config.ignored_reviewers)
             unanswered = unanswered_feedback(pr, self.me, self.config.ignored_reviewers)
             assignment = self._assignment_reasons(pr)
@@ -516,7 +511,7 @@ class Builder:
         for pr in self.mine:
             if pr.is_draft:
                 continue
-            failing = [c for c in failing_checks(pr) if c.name in self.config.policy_checks]
+            failing = policy_failures(pr, self.config.policy_checks)
             if failing:
                 details = [f"{c.name}: {c.state}" for c in failing]
                 links = [Link(text=c.name, url=c.url) for c in failing if c.url]
