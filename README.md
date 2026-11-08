@@ -230,8 +230,9 @@ A `#tag` in an item's title or description (a PR's, a todo's; not in code or an 
 puts the tag on it, as does a label its tool gives it (where its plugin says so: a tag only
 labels give, often a common word like `bug`, is named only with its `#`), and so does
 its Tag field, on any item about something (a mail, a ticket, a branch), or `mfd tag`. Items
-show their tags as badges, with an Untag button for each one put on by hand; one put on by hand
-is kept until I take it off, or the item is gone (a deleted entry, a ticked-off todo, a mail once read); it stays
+show their tags as badges: those put on by hand first, each with an Untag button, then those in
+their text, then their tool's labels, coloured apart since only the tool takes them off. One
+put on by hand is kept until I take it off, or the item is gone (a deleted entry, a ticked-off todo, a mail once read); it stays
 on finished work, a merged PR or a done ticket. Text that names
 it, in a title or a description, however its words are spaced, hyphenated or cased ("Garbage day
 moved" names `#garbage-day`), points at it. A tag's words are separated by `-` or `_`; it needs

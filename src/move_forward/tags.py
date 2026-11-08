@@ -15,7 +15,7 @@ from . import act_now
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
 from .kinds import TAG
-from .page import Action, Item, ItemAdditions
+from .page import Action, Badge, Item, ItemAdditions
 from .repositories import TagRepository
 
 TAG_ACTION = f"{act_now.ACTIONS}/tag"
@@ -243,15 +243,31 @@ class Tags:
         self._known = sorted(t.ref.id for t in graph.of_kind(TAG))
 
     def additions(self, item: Item) -> ItemAdditions:
-        """A `#tag` badge per tag on what `item` is mainly about, a Tag field to add one, and an
-        Untag button per tag I added; nothing for an item about nothing, or about what hides
-        things (ice)."""
+        """A `#tag` badge per tag on what `item` is mainly about, those I added first, then those
+        in its text, then its tool's labels, coloured apart as only the tool takes them off; a
+        Tag field to add one, and an Untag button per tag I added. Nothing for an item about
+        nothing, or about what hides things (ice)."""
         if not item.subjects or self._graph.hides(item.subjects[0].kind):
             return ItemAdditions()
         subject = item.subjects[0]
         fields = {"kind": subject.kind, "id": subject.id}
+        carried = self._carried.get(subject, [])
+        mine = [tag for tag in self._added.get(subject, []) if tag in carried]
+        entity = self._graph.get(subject.kind, subject.id)
+        spec = self._graph.spec(subject.kind)
+        in_text = (
+            {t for text in [entity.title, *entity.mentions] for t in tags(prose(text))}
+            if entity and (spec is None or spec.tags_from_text)
+            else set[str]()
+        )
+        # In its text, a tag stays when its label goes: it's written, whatever the tool says.
+        written = [tag for tag in carried if tag not in mine and tag in in_text]
+        labels = [tag for tag in carried if tag not in mine and tag not in in_text]
         return ItemAdditions(
-            badges=[f"#{tag}" for tag in self._carried.get(subject, [])],
+            badges=[
+                *(f"#{tag}" for tag in [*mine, *written]),
+                *(Badge(text=f"#{tag}", tone="label") for tag in labels),
+            ],
             actions=[
                 Action(
                     name=TAG_ACTION,
