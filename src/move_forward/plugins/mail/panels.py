@@ -1,6 +1,7 @@
 """The mail panel: pure functions from the snapshot to panels."""
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from urllib.parse import quote
 
@@ -85,11 +86,13 @@ def about(graph: Graph, thread: Thread) -> list[str]:
 
 
 def says(words: list[str], subject: str) -> bool:
-    """Whether `subject` has one of `words` (or phrases) as whole words, ignoring case."""
+    """Whether `subject` has one of `words` (or phrases) as whole words, ignoring case, however
+    the words of a phrase are spaced, and however its accents are encoded (NFC or NFD)."""
+    subject = unicodedata.normalize("NFC", subject)
     return any(
-        re.search(rf"(?<!\w){re.escape(word.strip())}(?!\w)", subject, re.IGNORECASE)
+        re.search(rf"(?<!\w){r'\s+'.join(map(re.escape, parts))}(?!\w)", subject, re.IGNORECASE)
         for word in words
-        if word.strip()
+        if (parts := unicodedata.normalize("NFC", word).split())
     )
 
 
@@ -98,9 +101,10 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
     work = about(graph, thread)
     # Someone I write to, but only one the server vouched for: a forged From mustn't borrow it.
     known = latest.known and latest.verified
-    # Low words push anyone's mail down; urgent ones lift only someone I know: anyone can
-    # write "urgent".
-    bulk = latest.bulk or says(config.low_words, latest.subject)
+    # Low words push mail down, but not a reply to me or mail from someone I know, as Gmail's
+    # categories don't; urgent words lift only someone I know: anyone can write "urgent".
+    low = says(config.low_words, latest.subject) and not (latest.replies_to_me or known)
+    bulk = latest.bulk or low
     urgent = known and not bulk and says(config.urgent_words, latest.subject)
     who = latest.sender_name
     if latest.sender_email and latest.sender_email != who.lower():
@@ -134,9 +138,10 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
             verb="Read",
             task="read",
             effort="minutes",
-            importance=1
+            importance=2
+            if urgent
+            else 1
             if thread.flagged
-            or urgent
             or ((latest.important or latest.replies_to_me or work or known) and not bulk)
             else 0,
             waiting=[who] if person and latest.to_me else [],

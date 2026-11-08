@@ -19,6 +19,7 @@ from move_forward.plugins.mail.config import GMAIL_MESSAGE_URL, MailConfig
 from move_forward.plugins.mail.kinds import THREAD
 from move_forward.plugins.mail.models import MailSnapshot, Message
 from move_forward.plugins.mail.panels import panels as mail_panels
+from move_forward.plugins.mail.panels import says
 from move_forward.plugins.mail.plugin import MailPlugin
 from move_forward.plugins.mail.repository import MessageRepository
 from move_forward.plugins.mail.setup import questions
@@ -834,24 +835,49 @@ def test_urgent_words_lift_only_someone_i_know() -> None:
         message(3, subject="Outage in prod", thread="a", known=True),
         message(2, subject="Outage: act now", thread="b", sender="spam@x.com"),  # not known
         message(1, subject="outage", thread="c", known=True, verified=False),
+        message(4, subject="Lunch?", thread="d", known=True),
         urgent_words=["outage"],
     )
     items = {i.fingerprint: i for i in _items(harness)}
     assert "urgent" in [getattr(b, "text", b) for b in items["m3@acme.com"].badges]
-    assert items["m3@acme.com"].signals is not None
-    assert items["m3@acme.com"].signals.importance == 1
-    for other in ("m2@acme.com", "m1@acme.com"):
+    importance = {f: i.signals.importance for f, i in items.items() if i.signals}
+    assert (importance["m3@acme.com"], importance["m4@acme.com"]) == (2, 1)
+    for other in ("m2@acme.com", "m1@acme.com", "m4@acme.com"):
         assert "urgent" not in [getattr(b, "text", b) for b in items[other].badges]
 
 
-def test_low_words_rank_anyones_mail_with_lists_but_flagged_still_counts() -> None:
+@pytest.mark.parametrize(
+    ("words", "subject", "found"),
+    [
+        (["action required"], "Action  required: renew", True),
+        (["action required"], "action\u00a0required", True),
+        (["St\u00f6rung"], "Sto\u0308rung in prod", True),  # NFD
+        (["[URGENT]"], "[urgent] disk full", True),
+        (["C++"], "C++ review", True),
+        (["digest"], "Digestible", False),
+        ([" ", ""], "anything", False),
+    ],
+)
+def test_subject_words_match_whole_words_however_spaced_or_encoded(
+    words: list[str], subject: str, found: bool
+) -> None:
+    assert says(words, subject) is found
+
+
+def test_low_words_rank_mail_with_lists_but_not_from_someone_i_know() -> None:
     harness = mailbox(
-        message(3, subject="Weekly digest", thread="a", known=True),
+        message(3, subject="Weekly digest", thread="a", sender="news@list.com"),
         message(2, subject="Digest of the week", thread="b", flagged=True),
         message(1, subject="Digestible news", thread="c"),  # not the whole word
+        message(4, subject="Re: digest rollout, sign off?", thread="d", known=True),
         low_words=["digest"],
     )
     deferred = {i.fingerprint: i.deferred for i in _items(harness)}
-    assert deferred == {"m3@acme.com": True, "m2@acme.com": False, "m1@acme.com": False}
+    assert deferred == {
+        "m3@acme.com": True,
+        "m2@acme.com": False,
+        "m1@acme.com": False,
+        "m4@acme.com": False,  # someone I know
+    }
     titles = [i.title for i in harness.act_now()]
     assert not any("Weekly digest" in t for t in titles)
