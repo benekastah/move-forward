@@ -145,12 +145,6 @@ def _listed_parts(item: Item) -> list[Item]:
     return item.parts if len(item.parts) > 1 else []
 
 
-def _joined_parts(item: Item) -> list[Item]:
-    """The parts an item joined to another lists beneath that one: all of them, even one, so
-    its buttons say what they act on rather than sitting on the other item unlabelled."""
-    return item.parts
-
-
 def _joined_actions(item: Item) -> list[Action]:
     """The buttons an item joined to another puts on that one: those its single part, listed
     beneath it, doesn't carry."""
@@ -596,7 +590,8 @@ def _shown(
             "deferred": False,
             "parts": [
                 *_listed_parts(item),
-                *(part for joined in then for part in _joined_parts(joined.item)),
+                # All of a joined item's parts, even one, so its buttons say what they act on.
+                *(part for joined in then for part in joined.item.parts),
             ],
             "actions": [
                 *_without_repeats(

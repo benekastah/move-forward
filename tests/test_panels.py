@@ -633,6 +633,16 @@ def test_a_lone_todo_joined_to_another_item_is_listed_with_its_own_buttons() -> 
     assert [part.title for part in host.parts] == [f"check {url}", f"tidy {url}"]
     assert all(any(a.name == "notes/todo_done" for a in p.actions) for p in host.parts)
     assert not any(a.name == "notes/todo_done" for a in host.actions)  # none unlabelled
+    # One joined entry alone is listed and drawn too, not lost.
+    one = dashboard(
+        github=snapshot(mine=[pr(1, merge_state="DIRTY")]),
+        work_items=[entry("Lone", [todo(f"check {url}", "quick")], PRs=[url])],
+    )
+    [host] = [i for i in one.act_now() if i.title.startswith("Resolve conflicts")]
+    assert "notes/todo_done" in render.item_html(host)
+    # An entry's own lone todo still shows once, as the entry.
+    [own] = panel(one, "notes.todos").items
+    assert render.item_html(own).count("notes/todo_done") == 1
 
 
 def test_empty_notes_say_how_to_fill_them() -> None:

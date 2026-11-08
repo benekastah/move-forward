@@ -502,7 +502,11 @@ def _item(
         parts.append(f"<div class='item-subtitle'>{_e(item.subtitle)}</div>")
     if item.badges:
         parts.append("<div class='badges'>" + "".join(_badge(b) for b in item.badges) + "</div>")
-    show_parts = len(item.parts) > 1
+    # One part is drawn only when its buttons aren't the item's own: an entry with one todo
+    # shows it as itself, but one joined to another item in Act now is listed there.
+    show_parts = len(item.parts) > 1 or (
+        len(item.parts) == 1 and item.parts[0].actions != item.actions
+    )
     if item.details:
         parts.append(
             "<ul class='details'>" + "".join(f"<li>{_e(d)}</li>" for d in item.details) + "</ul>"
