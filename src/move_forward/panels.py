@@ -334,22 +334,23 @@ def _hides_nothing(kind: str) -> bool:
 
 
 def _with_importance_actions(
-    panel: Panel, priority_of: act_now.PriorityOf, hides: HidesKind
+    panel: Panel, priority_of: act_now.PriorityOf, hides: HidesKind, parts_only: bool = False
 ) -> Panel:
     """Add core's importance choices to every shown entity, including focus parts. An
     item's first subject is its primary entity, as for its anchor and Act now. An item about
-    what hides things (ice) has none: it's parked, so nothing ranks it."""
+    what hides things (ice) has none: it's parked, so nothing ranks it. With `parts_only`,
+    only to the parts: Act now gives its items their own."""
 
-    def add(item: Item) -> Item:
+    def add(item: Item, top: bool) -> Item:
         actions = list(item.actions)
-        if item.subjects and not hides(item.subjects[0].kind):
+        if not (top and parts_only) and item.subjects and not hides(item.subjects[0].kind):
             subject = item.subjects[0]
             actions.extend(act_now.importance_actions(subject, priority_of(subject)))
         return item.model_copy(
-            update={"actions": actions, "parts": [add(part) for part in item.parts]}
+            update={"actions": actions, "parts": [add(part, False) for part in item.parts]}
         )
 
-    return panel.model_copy(update={"items": [add(item) for item in panel.items]})
+    return panel.model_copy(update={"items": [add(item, True) for item in panel.items]})
 
 
 def _opened_on_buttons(panel: Panel) -> Panel:
@@ -423,10 +424,15 @@ def build(
     ]
     titles = {plugin.key: plugin.title for plugin in plugins}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
+    # Its listed parts get the importance choices they have in their panels, as the same
+    # todo offers the same wherever it's shown.
     ranked = [
-        _with_item_actions(p, p.key, "act_now", item_actions, known_action).model_copy(
-            update={"key": panel_key(ACT_NOW, p.key)}
-        )
+        _with_importance_actions(
+            _with_item_actions(p, p.key, "act_now", item_actions, known_action),
+            priority_of,
+            hides,
+            parts_only=True,
+        ).model_copy(update={"key": panel_key(ACT_NOW, p.key)})
         for p in act_now.panels(
             nominations, ranking, feedback, now, titles, units, priority_of, contact_importance
         )
