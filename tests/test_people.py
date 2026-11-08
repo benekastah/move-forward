@@ -57,6 +57,8 @@ def test_people_with_the_same_email_are_one_person_whichever_tool_publishes_them
     graph = Graph([SENDER, crm, other])
     assert [e.ref.id for e in graph.same_person(SENDER.ref.id)] == [SENDER.ref.id, crm.ref.id]
     assert [e.ref.id for e in graph.same_person(other.ref.id)] == [other.ref.id]
+    graph.same_person(SENDER.ref.id).clear()  # a caller's own copy
+    assert len(graph.same_person(SENDER.ref.id)) == 2
 
 
 @pytest.mark.parametrize("email", [None, "noreply@github.com", "no-reply@x.com", "not an address"])

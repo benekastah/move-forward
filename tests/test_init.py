@@ -380,13 +380,11 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
         (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),
         None,
     )
+    keys = [key for key in plugin.config_model.model_fields if key != "teams"]
     if start is None:
-        pytest.skip(f"the example has no [{plugin.name}]")
+        assert keys == [], f"the example has no [{plugin.name}]"
+        return
     end = next((n for n in range(start + 1, len(lines)) if header.match(lines[n])), len(lines))
-    section = "\n".join(lines[start:end])
-    missing = [
-        key
-        for key in plugin.config_model.model_fields
-        if key != "teams" and f"{key} =" not in section
-    ]
+    shown = "\n".join(lines[start:end])
+    missing = [key for key in keys if f"{key} =" not in shown]
     assert missing == []
