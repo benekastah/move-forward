@@ -555,3 +555,13 @@ def test_a_failed_store_leaves_what_was_kept() -> None:
     with pytest.raises(sqlite3.IntegrityError):
         MessageRepository(harness.db).replace(MailSnapshot(messages=clash))
     assert [m.uid for m in MessageRepository(harness.db).load().messages] == [1]
+
+
+def test_many_messages_are_fetched_in_chunks(
+    imap: Callable[..., FakeImap], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(client, "FETCH_CHUNK", 2)
+    server = imap([(uid, "\\Flagged", headers(message_id=f"m{uid}@x")) for uid in range(1, 6)])
+    snapshot = client.collect(_config(), ME, NOW)
+    fetches = [c[2] for c in server.calls if c[:2] == ("uid", "FETCH")]
+    assert fetches == ["1,2", "3,4", "5"] and len(snapshot.messages) == 5
