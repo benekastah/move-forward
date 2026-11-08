@@ -58,7 +58,9 @@ see [entities.md](../entities.md).
   changes and unpushed commits. A branch behind its upstream (say after a rebase) has no
   Push, since a plain push would be rejected, and says so instead. Also checkouts of open PRs (mine, or ones I review) that moved on
   GitHub: a branch with nothing to push whose PR's head, as github last saw it, is
-  another commit. That's read from github's PRs, so it shows without fetching.
+  another commit. That's read from github's PRs, so it shows without fetching; its Pull fetches
+  and fast-forwards the branch, refused when the PR was force-pushed or the checkout has
+  changes in the way.
 - **Cleanup**: local branches whose PR merged or whose remote is gone, with a Delete
   button each and Delete all (`git branch -D`; a branch checked out in a worktree is
   refused). A branch git-stack sees merged is left to git_stack's Clean, which untracks it
@@ -80,6 +82,7 @@ git nominates the branches Cleanup lists, quick to delete.
 
 | Path | Fields | Does |
 | --- | --- | --- |
+| `/actions/git/pull_branch` | `repo`, `branch` | Fetches its upstream's remote and fast-forwards the branch to its upstream, checked out or not; refused when it has commits its upstream doesn't, or its checkout has uncommitted changes. Never merges or forces. |
 | `/actions/git/push_branch` | `repo`, `branch` | `git push`, where git would push it: a branch with an upstream to its push remote; one without to its `pushRemote`, `remote.pushDefault`, its remote or the only remote, setting the upstream (refused when there are several and nothing says which). Never forces. |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`; the worktree must be the repo's. |
 | `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. Refused for a checked-out branch, or an iced one with commits since it was iced. |

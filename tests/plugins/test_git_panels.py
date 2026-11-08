@@ -319,6 +319,8 @@ def test_a_checkout_of_a_pr_that_moved_on_github_is_shown_without_fetching() -> 
     items = panel(built, "git.local_work").items
     assert [i.title for i in items] == ["alice/feature: PR #7 moved on GitHub; pull it"]
     assert items[0].badges == ["behind GitHub"] and items[0].url == reviewing.url
+    [pull] = [a for a in items[0].actions if a.name == "git/pull_branch"]
+    assert pull.label == "Pull" and pull.fields["branch"] == "alice/feature"
     unpushed = dashboard(  # with commits of its own to push, it's unpushed work instead
         github=snapshot(mine=[mine.model_copy(update={"head_oid": "e" * 40})]),
         local=local_snapshot(

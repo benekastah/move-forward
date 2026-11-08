@@ -24,7 +24,7 @@ from move_forward.plugins.notes.actions import ICED_FROM_DASHBOARD_NOTE
 from move_forward.plugins.notes.models import Entry, Link
 from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.registry import enabled, migrate
-from move_forward.shell import git
+from move_forward.shell import CommandError, git
 
 
 def _init(path: Path, bare: bool = False) -> None:
@@ -609,3 +609,64 @@ def test_a_todo_is_sized_as_its_added_and_afterwards(config: Config, tmp_path: P
             refresh.perform_action(
                 config, db, "notes/todo_size", {"todo": str(small.id), "size": bad}
             )
+
+
+def test_pull_fast_forwards_a_branch_checked_out_or_not_and_refuses_otherwise(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    fields = {"repo": str(repo), "branch": "wip"}
+    run("git/push_branch", config, fields)
+    other = tmp_path / "other"
+    git(tmp_path, "clone", "-q", "-b", "wip", str(tmp_path / "origin.git"), str(other))
+
+    def pushed_elsewhere(name: str) -> str:
+        _commit(other, name)
+        git(other, "push", "-q")
+        return git(other, "rev-parse", "HEAD")
+
+    ahead = pushed_elsewhere("c.txt")
+    assert run("git/pull_branch", config, fields) == "pulled wip"  # not checked out
+    assert git(repo, "rev-parse", "wip") == ahead
+    assert run("git/pull_branch", config, fields) == "wip is up to date"
+    git(repo, "switch", "-q", "wip")
+    ahead = pushed_elsewhere("d.txt")
+    (repo / "b.txt").write_text("changed")
+    with pytest.raises(ActionError, match="uncommitted changes"):
+        run("git/pull_branch", config, fields)
+    git(repo, "checkout", "--", "b.txt")
+    assert run("git/pull_branch", config, fields) == "pulled wip"  # checked out
+    assert git(repo, "rev-parse", "HEAD") == ahead
+    pushed_elsewhere("e.txt")
+    _commit(repo, "f.txt")  # diverged
+    with pytest.raises(ActionError, match="can't fast-forward"):
+        run("git/pull_branch", config, fields)
+
+
+def test_pull_moves_a_branch_in_a_linked_worktree_and_never_one_being_rebased(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    fields = {"repo": str(repo), "branch": "wip"}
+    run("git/push_branch", config, fields)
+    other = tmp_path / "other"
+    git(tmp_path, "clone", "-q", "-b", "wip", str(tmp_path / "origin.git"), str(other))
+    _commit(other, "c.txt")
+    git(other, "push", "-q")
+    linked = tmp_path / "linked"
+    git(repo, "worktree", "add", "-q", str(linked), "wip")
+    assert run("git/pull_branch", config, fields) == "pulled wip"
+    assert git(linked, "rev-parse", "HEAD") == git(other, "rev-parse", "HEAD")
+    git(repo, "worktree", "remove", str(linked))
+    _commit(other, "d.txt")
+    git(other, "push", "-q")
+    git(repo, "switch", "-q", "wip")
+    with pytest.raises(CommandError):  # stops mid-rebase, wip behind its upstream
+        git(repo, "rebase", "-q", "--exec", "false", "HEAD~1")
+    before = git(repo, "rev-parse", "refs/heads/wip")
+    with pytest.raises(ActionError, match="couldn't pull wip"):  # git refuses: it's rebasing
+        run("git/pull_branch", config, fields)
+    assert git(repo, "rev-parse", "refs/heads/wip") == before
+
+
+def test_pull_needs_an_upstream(config: Config, repo: Path) -> None:
+    with pytest.raises(ActionError, match="no upstream"):
+        run("git/pull_branch", config, {"repo": str(repo), "branch": "done"})
