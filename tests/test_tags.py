@@ -127,3 +127,10 @@ def test_a_short_tag_is_named_with_its_hash() -> None:
     )
     assert found["2"].refs == [Ref(kind=TAG, id="qa")]
     assert found["3"].refs == []
+
+
+def test_a_title_that_cant_carry_a_tag_still_names_one_by_its_hash() -> None:
+    carrier = _entity("1", "#qa thing")
+    mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#QA sign-off")
+    found = tags.tagged([carrier, mail], {"y.mail": KindSpec(tags.TagAttrs, tags_from_title=False)})
+    assert found[1].refs == [Ref(kind=TAG, id="qa")]
