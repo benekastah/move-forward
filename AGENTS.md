@@ -235,3 +235,36 @@ than what was meant.
   (`<reviewed sha>..HEAD`), so a fix can't bring in a bug no one looked at.
 - A PR merges once its reviews are answered and CI passes, in stack order, squashed into
   one commit; `git stack sync` then drops its commits from the branches above.
+
+## A full review
+
+A review of the whole code, rather than of one PR, after a run of merges or when asked: several
+fresh agents at once, each with no context but the code at one commit of `main`, so none
+reviews what it was told to expect, and each on its own part, so it reads all of that part.
+
+- **The reviewers**, one each:
+  - **every plugin**, `src/move_forward/plugins/<name>/`, its tests and its page in
+    `docs/plugins/`: its bugs, what it publishes against `docs/entities.md`, its config keys in
+    their four places, its use of `move_forward.api` alone;
+  - **core**, `src/move_forward/` but the plugins: the graph, Act now, panels, rendering, the
+    server and the CLI;
+  - **the database and migrations**: every migration (append-only, prefixed, not depending on
+    another plugin's), what's kept or fetched, pruning, rekeying, SQL that filters in SQL, and
+    data a crash or a concurrent refresh could leave half written;
+  - **what cuts across**: what one change made inconsistent elsewhere, the same item offering
+    the same wherever it's shown, security (the token, sign-in pages, what a sender or another
+    tool controls), Linux, macOS and Windows, and the plugin API's contract;
+  - **the docs**: the README, `docs/`, AGENTS.md, CHANGELOG and docstrings against what the
+    code does, and dead or stale text.
+- Each reads the code at the commit (`git show <sha>:<path>`, a detached worktree), changes
+  nothing, and checks each finding against the code, running it where it can, before
+  reporting it, with its severity (bug, should-fix, minor), file and line, a failure scenario
+  and a fix, as a PR's reviewer does.
+- **The findings go on one GitHub issue**, "Full review of `<short sha>`", opened first: each
+  reviewer posts one comment, saying who wrote it (an AI agent) and which part it reviewed,
+  its findings numbered with its part's prefix (`core 3`, `mail 2`, `db 1`) so they can be
+  answered by name. The JSON goes in a temporary directory, never the repo.
+- **The author** (the agent that started them) fixes what it decides to, in PRs as usual: one
+  kind of change each, reviewed as any PR, naming the findings they fix. Then it answers every
+  finding in one comment on the issue, by its name: fixed, with the PR, or not, and why. The
+  issue closes once every finding is answered and its fixes merged.
