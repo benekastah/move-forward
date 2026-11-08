@@ -23,10 +23,11 @@ from conftest import (
 from move_forward.plugins.github.models import (
     Check,
     DerivedSnapshot,
+    Review,
     ReviewerSuggestion,
     TeamPrScore,
 )
-from move_forward.plugins.github.prs import has_ticket_link_line, review_blockers
+from move_forward.plugins.github.prs import approved_by, has_ticket_link_line, review_blockers
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice
 
@@ -141,6 +142,110 @@ def test_changes_requested_moves_to_waiting_after_push_and_re_request() -> None:
     details = {item.title: item.details for item in panel(built, "github.fix_before_review").items}
     assert details["PR 2"] == ["policy failing: risk"]
     assert "changes requested" in details["PR 3"]
+
+
+def test_a_reviewer_who_since_approved_isnt_waited_on_for_a_re_review() -> None:
+    asked, pushed_at, asked_again = (
+        NOW - timedelta(days=1),
+        NOW - timedelta(hours=2),
+        NOW - timedelta(hours=1),
+    )
+    events = [
+        event("PullRequestReview", asked, actor="alice", state="CHANGES_REQUESTED"),
+        event("PullRequestReview", asked, actor="bob", state="CHANGES_REQUESTED"),
+        event("HeadRefForcePushedEvent", pushed_at),
+        event("ReviewRequestedEvent", asked_again, reviewer_kind="user", reviewer="bob"),
+    ]
+    reviews = [
+        approved_review("alice", NOW - timedelta(hours=20)),  # her latest review
+        Review(author="bob", state="CHANGES_REQUESTED", submitted_at=asked),
+    ]
+    waiting = pr(
+        1,
+        requested_users=["bob"],
+        review_decision="CHANGES_REQUESTED",
+        last_commit_at=pushed_at,
+        events=events,
+        reviews=reviews,
+    )
+    built = build(github=snapshot(mine=[waiting]))
+    assert titles(built, "github.ready_for_review") == ["PR 1"]
+    assert titles(built, "github.feedback") == []
+    assert "changes requested" not in review_blockers(waiting, ME, [])
+
+
+def test_a_comment_after_a_changes_request_doesnt_end_it() -> None:
+    asked, pushed_at, asked_again = (
+        NOW - timedelta(days=1),
+        NOW - timedelta(hours=2),
+        NOW - timedelta(hours=1),
+    )
+    events = [
+        event("PullRequestReview", asked, actor="alice", state="CHANGES_REQUESTED"),
+        event("PullRequestReview", asked, actor="bob", state="CHANGES_REQUESTED"),
+        event("HeadRefForcePushedEvent", pushed_at),
+        event(
+            "PullRequestReview", pushed_at + timedelta(minutes=5), actor="alice", state="COMMENTED"
+        ),
+        event("ReviewRequestedEvent", asked_again, reviewer_kind="user", reviewer="bob"),
+    ]
+    reviews = [
+        Review(author="alice", state="COMMENTED", submitted_at=pushed_at),  # GitHub's latest
+        Review(author="bob", state="CHANGES_REQUESTED", submitted_at=asked),
+    ]
+    still = pr(
+        1,
+        requested_users=["bob"],
+        review_decision="CHANGES_REQUESTED",
+        last_commit_at=pushed_at,
+        events=events,
+        reviews=reviews,
+    )
+    built = build(github=snapshot(mine=[still]))
+    assert titles(built, "github.ready_for_review") == []  # alice still asks for changes
+    assert "changes requested" in review_blockers(still, ME, [])
+
+
+def test_where_no_review_is_required_a_comment_doesnt_hide_a_decision() -> None:
+    asked = NOW - timedelta(days=1)
+    commented = Review(author="alice", state="COMMENTED", submitted_at=NOW)  # GitHub's latest
+    still = pr(
+        1,
+        review_decision=None,
+        reviews=[commented],
+        events=[event("PullRequestReview", asked, actor="alice", state="CHANGES_REQUESTED")],
+    )
+    assert "changes requested" in review_blockers(still, ME, [])
+    liked = still.model_copy(
+        update={"events": [event("PullRequestReview", asked, actor="alice", state="APPROVED")]}
+    )
+    assert "already approved" in review_blockers(liked, ME, [])
+
+
+def test_an_approval_then_a_comment_is_still_an_approval() -> None:
+    commented = Review(author="me", state="COMMENTED", submitted_at=NOW)  # GitHub's latest
+    reviewed = pr(
+        1,
+        reviews=[commented],
+        events=[event("PullRequestReview", NOW - timedelta(hours=1), actor="me", state="APPROVED")],
+    )
+    assert approved_by(reviewed, "me") and not approved_by(reviewed, "alice")
+
+
+def test_a_pr_i_approved_then_commented_on_wants_my_re_review_after_a_push() -> None:
+    approved_at, pushed_at = NOW - timedelta(days=2), NOW - timedelta(hours=1)
+    theirs = pr(
+        5,
+        author="alice",
+        review_decision="REVIEW_REQUIRED",
+        last_commit_at=pushed_at,
+        reviews=[
+            Review(author=ME, state="COMMENTED", submitted_at=approved_at + timedelta(hours=1))
+        ],
+        events=[event("PullRequestReview", approved_at, actor=ME, state="APPROVED")],
+    )
+    built = build(github=snapshot(reviewed_by_me=[theirs]))
+    assert "PR 5" in [i.title for p in built.panels if p.key.startswith("github.") for i in p.items]
 
 
 def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None:
@@ -402,6 +507,7 @@ def test_feedback_words_a_review_by_its_state_and_skips_a_bare_approval() -> Non
     dashboard = build(github=snapshot(mine=[reviewed]))
     [item] = panel(dashboard, "github.feedback").items
     assert item.details == [
+        "changes requested",  # bob's, from the timeline
         "approved with comments by alice",
         "changes requested by bob",
         "reviewed by carol",

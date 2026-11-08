@@ -73,7 +73,7 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   unresolved or unanswered feedback, changes requested, or reviewer assignments missing
   under the teams' rules. A changes request counts even when another reviewer approved.
   After a push and a renewed request to the same reviewer, the old changes request is
-  treated as waiting for review. Failing policy checks whose status descriptions say they
+  treated as waiting for review (a reviewer who has since approved isn't waited on). Failing policy checks whose status descriptions say they
   need an approval are waiting too, on a first review as on a later one; other policy
   failures remain here.
   The reasons appear together on one item; assigned importance sorts before age.

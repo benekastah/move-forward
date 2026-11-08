@@ -18,6 +18,7 @@ from .prs import (
     BEHIND_REASON,
     STATE_REASONS,
     approved,
+    approved_by,
     awaiting_re_review,
     can_be_requested,
     changes_requested,
@@ -234,9 +235,7 @@ class Builder:
         items: list[Item] = []
         if self.gh:
             for pr in self.gh.direct_requests:
-                approved_by_me = any(
-                    review.author == self.me and review.state == "APPROVED" for review in pr.reviews
-                )
+                approved_by_me = approved_by(pr, self.me)
                 if pr.is_draft or (approved_by_me and pr.review_decision != "REVIEW_REQUIRED"):
                     continue
                 items.append(
@@ -253,9 +252,7 @@ class Builder:
                 )
             seen = {item.url for item in items}
             for pr in self.gh.reviewed_by_me:
-                approved_by_me = any(
-                    review.author == self.me and review.state == "APPROVED" for review in pr.reviews
-                )
+                approved_by_me = approved_by(pr, self.me)
                 reason = needs_re_review(pr, self.me)
                 if (
                     pr.is_draft

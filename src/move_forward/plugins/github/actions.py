@@ -13,7 +13,7 @@ from ...api.shell import CommandError
 from . import client
 from .config import GitHubConfig
 from .models import PullRequest
-from .prs import primary_reviewers
+from .prs import decisions, primary_reviewers
 from .snapshots import PrRepository
 
 LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?")
@@ -90,8 +90,8 @@ def update_branch(req: ActionRequest[GitHubConfig]) -> ActionResult:
 def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     """Make `input`, a login, the PR's primary reviewer, in place of any other. They're asked
     to review too, as they must approve, unless they've been asked or have approved it:
-    asking again would ask for an approval already given. Any other latest review (a
-    comment, changes requested, a dismissed approval) gets them asked."""
+    asking again would ask for an approval already given. Any other last decision (changes
+    requested, a dismissed approval) gets them asked; a comment after an approval doesn't."""
     pr = _my_open_pr(req)
     login = _login(req, pr)
     if not req.ctx.config.has_primary_reviewer(pr.repo):
@@ -99,7 +99,7 @@ def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     current = primary_reviewers(pr)
     if any(_same(login, reviewer) for reviewer in current):
         raise ActionError(f"{login} is already the primary reviewer")
-    approvers = [review.author for review in pr.reviews if review.state == "APPROVED"]
+    approvers = [who for who, (_, state) in decisions(pr).items() if state == "APPROVED"]
     asked = any(_same(login, other) for other in [*pr.requested_users, *approvers])
     try:
         client.set_primary_reviewer(pr.url, login, current, request=not asked)
