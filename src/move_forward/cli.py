@@ -266,7 +266,10 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     token_commands = token_parser.add_subparsers(dest="token_command", required=True)
     set_parser = token_commands.add_parser("set", help="ask for a token and store it")
-    set_parser.add_argument("plugin", help="the plugin whose token to store, e.g. jira")
+    set_parser.add_argument(
+        "plugin",
+        help="the plugin whose token to store, e.g. jira, or one of its accounts: mail.work",
+    )
     token_commands.add_parser("check", help="say where each plugin's token is found")
     token_commands.add_parser(
         "rotate", help="make a new dashboard token and sign every browser out"
@@ -280,19 +283,21 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
 
 
 def _token_settings(config: config_module.Config) -> dict[str, keychain.TokenSettings]:
-    """Where each enabled plugin with a token keeps it (`Plugin.token_settings`)."""
+    """Where each enabled plugin keeps each of its tokens (`Plugin.tokens`), by the name
+    `mfd token set` takes: the plugin's, or `<plugin>.<account>` for one of several."""
     found: dict[str, keychain.TokenSettings] = {}
     for plugin in registry.PLUGINS:
         section = config.section(plugin.name)
-        if section is not None and (settings := plugin.token_settings(section)) is not None:
-            found[plugin.name] = settings
+        if section is not None:
+            for name, settings in plugin.tokens(section).items():
+                found[f"{plugin.name}.{name}" if name else plugin.name] = settings
     return found
 
 
 def _token(config: config_module.Config, config_path: Path, args: argparse.Namespace) -> int:
-    """`mfd token set <plugin>`: ask for the plugin's token without echoing it and store it
-    in the system's secret store, for the top-level `email`. `mfd token check`: say where
-    each enabled plugin's token is found, without showing it."""
+    """`mfd token set <plugin>` (or `<plugin>.<account>`): ask for the token without echoing
+    it and store it in the system's secret store, for the top-level `email`. `mfd token
+    check`: say where each enabled plugin's tokens are found, without showing them."""
     sections = _token_settings(config)
     if args.token_command == "rotate":
         path = auth.token_path(config.db_path)
@@ -312,7 +317,10 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
         return 0
     section = sections.get(args.plugin)
     if section is None:
-        print(f"[{args.plugin}] isn't in {config_path}, or keeps no token", file=sys.stderr)
+        print(
+            f"{args.plugin} isn't a token {config_path} keeps: {', '.join(sections) or 'none'}",
+            file=sys.stderr,
+        )
         return 1
     try:
         secret = getpass.getpass(f"{args.plugin} API token: ").strip()

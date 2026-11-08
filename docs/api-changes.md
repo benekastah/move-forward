@@ -15,6 +15,9 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **Several tokens**: `Plugin.tokens(config)` names every token a plugin keeps, `""` for its
+  own (by default `token_settings`'s) and one per account for a plugin reading several;
+  `mfd token set <plugin>.<account>` stores one.
 - **Organisations**: core declares the `organisation` family (`api.kinds.ORGANISATION`,
   `Organisation`: `handle`, `contact_type`, `importance`), with ids `<host>/<its id there>`.
   A person points at theirs, and its type or importance counts for that person's items as

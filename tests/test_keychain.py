@@ -149,7 +149,7 @@ def test_mfd_token_set_stores_what_it_asks_for(
     assert cli.main(["-c", str(config), "token", "set", "jira"]) == 0
     assert stored == [("move-forward-jira", "me@x", "s3cret")]
     assert cli.main(["-c", str(config), "token", "set", "slack"]) == 1
-    assert "[slack] isn't in" in capsys.readouterr().err
+    assert "slack isn't a token" in capsys.readouterr().err
 
 
 def test_mfd_token_check_says_where_each_token_is_without_showing_it(
@@ -211,3 +211,44 @@ def test_mfd_token_finds_a_plugins_token_by_its_token_settings(
     config.write_text(config.read_text() + '[github]\norg = "acme"\n')
     assert cli.main(["-c", str(config), "token", "check"]) == 0
     assert "github: from $GITHUB_PAT" in capsys.readouterr().out
+
+
+class _WorkToken:
+    token_env: str = "WORK_PAT"
+    keychain_service: str = "move-forward-github-work"
+
+
+class _GitHubWithAccounts(GitHubPlugin):
+    """github, keeping a token of its own and one for a work account."""
+
+    def tokens(self, config: GitHubConfig) -> dict[str, keychain.TokenSettings]:
+        return {"": _ElsewhereToken(), "work": _WorkToken()}
+
+
+def test_mfd_token_sets_and_checks_each_of_a_plugins_accounts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    swap = {"github": _GitHubWithAccounts()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    stored: list[tuple[str, str, str]] = []
+
+    def write(service: str, account: str, secret: str) -> None:
+        stored.append((service, account, secret))
+
+    monkeypatch.setattr(keychain, "write", write)
+
+    def nothing(service: str, account: str) -> str | None:
+        return None
+
+    monkeypatch.setattr(keychain, "read", nothing)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": "s3cret")  # pyright: ignore[reportUnknownLambdaType]
+    monkeypatch.delenv("WORK_PAT", raising=False)
+    monkeypatch.setenv("GITHUB_PAT", "x")
+    config = _config(tmp_path)
+    config.write_text(config.read_text() + '[github]\norg = "acme"\n')
+    assert cli.main(["-c", str(config), "token", "set", "github.work"]) == 0
+    assert stored == [("move-forward-github-work", "me@x", "s3cret")]
+    assert cli.main(["-c", str(config), "token", "check"]) == 0
+    out = capsys.readouterr().out
+    assert "github: from $GITHUB_PAT" in out
+    assert "github.work: missing; run `mfd token set github.work`" in out

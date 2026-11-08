@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Tokens for a plugin's accounts
+
+`mfd token set <plugin>.<account>` stores the token of one of a plugin's accounts, for a plugin
+reading several, and `mfd token check` lists each account's apart. An unknown name's error now
+lists the names there are. Nothing to change for one token per plugin.
+
 ### Merge when ready
 
 `POST /actions/github/auto_merge` with `pr` and `head` turns a PR's auto-merge on, and
