@@ -122,6 +122,8 @@ def test_notifications_use_a_server_stream_with_a_polling_fallback() -> None:
     assert "source.onmessage" in html
     # One tab at a time holds the stream, so tabs don't use up the browser's connections.
     assert "navigator.locks.request('mfd-notifications', listen)" in html
+    # One closed for good gives the lock up, so another tab can listen.
+    assert "source.readyState === EventSource.CLOSED" in html
     assert "else { poll(); setInterval(poll, NOTIFY_SECONDS * 1000); }" in html
 
 

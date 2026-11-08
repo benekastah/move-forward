@@ -240,12 +240,14 @@ NOTIFY_SCRIPT = (
     " document.addEventListener('DOMContentLoaded', () => {"
     "  if ('Notification' in window && Notification.permission === 'granted'"
     "   && 'EventSource' in window) {"
-    "   const listen = () => {"
+    "   const listen = () => new Promise((done) => {"
     "    const source = new EventSource('/notifications/stream');"
     "    source.onmessage = (event) => { try { show(JSON.parse(event.data)); } catch {} };"
-    "    return new Promise(() => {}); };"
-    "   if (navigator.locks) navigator.locks.request('mfd-notifications', listen);"
-    "   else listen();"
+    # Closed for good (refused: signed out, say): let another tab listen, and queue again.
+    "    source.onerror = () => { if (source.readyState === EventSource.CLOSED) {"
+    "     done(); setTimeout(hold, 60000); } }; });"
+    "   const hold = () => navigator.locks.request('mfd-notifications', listen);"
+    "   if (navigator.locks) hold(); else listen();"
     "  } else { poll(); setInterval(poll, NOTIFY_SECONDS * 1000); } });"
     "})();"
 )
