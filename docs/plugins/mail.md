@@ -66,8 +66,8 @@ through the plugin's `/mail/open` page, which sends the browser on to the mail a
 ## Publishes
 
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
-with, pointing at the `person` who wrote its latest message and mentioning its subject (so a
-ticket key in it relates the two). That `person` is `mail/<address>`, with the address as its
+with, pointing at the `person` who wrote its latest message and, when its sender is verified,
+mentioning its subject (so a ticket key in it relates the two). That `person` is `mail/<address>`, with the address as its
 `handle` and `email`, so core joins them with the same person in other tools, a CRM say, and
 ranks and badges their mail by their contact type. Only a sender the receiving server vouched
 for is published that way: one whose `From` passed DMARC (its one `dmarc` result), by the server's own
