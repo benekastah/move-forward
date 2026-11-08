@@ -17,8 +17,8 @@ catch up.
 
 - **Labels as tags**: `Entity.tags` lists the tags a tool puts on an entity (a ticket's or a
   PR's labels, as written there); core counts them as `#tags`, whatever the kind's
-  `tags_from_text`, and names a tag only labels give only by its `#`. Only labels people set
-  belong there, never the tool's own (Gmail's INBOX or CATEGORY_*).
+  `tags_from_text`, and names a tag only labels give only by its `#`. The plugin decides which
+  labels belong there, the tool's own (Gmail's `\Inbox`) included or not.
 - **Tags**: core publishes a `tag` (`api.kinds.TAG`) for each `#tag` in an entity's title or
   `mentions` (out of code), pointing at what carries it; an entity whose text names one points
   at it. A kind whose text anyone can write says `KindSpec(tags_from_text=False)`. No plugin may
