@@ -16,7 +16,7 @@ group_types = {Clients = "customer"}
 - `paths` (required): vCard files (`.vcf`, one or many contacts each), or directories searched
   for them, below them too: an export from Contacts, Google Contacts or Outlook, or the
   directory [vdirsyncer](https://vdirsyncer.pimutils.org/) keeps in sync with a CardDAV
-  server (iCloud, Fastmail, Nextcloud). A path that isn't there fails the refresh.
+  server (iCloud, Fastmail, Nextcloud) or with Google Contacts (its `google_contacts` storage). A path that isn't there fails the refresh.
 - `group_importance` (`{}`): how much the people in a group matter to me (0 normal, 1 high, 2
   critical), by its name, ignoring case; the highest of their groups' counts.
 - `group_types` (`{}`): what the people in a group are to me, a contact type (see the README's
@@ -26,7 +26,7 @@ group_types = {Clients = "customer"}
   reads them at once if there is one.
 
 A group is a card's category (`CATEGORIES`), or a group's own card naming its members:
-vCard 4's `KIND:group` with `MEMBER`s, or Apple's `X-ADDRESSBOOKSERVER-KIND` (what iCloud
+vCard 4's `KIND:group` with `MEMBER`s (by `UID` or `mailto:` address), or Apple's `X-ADDRESSBOOKSERVER-KIND` (what iCloud
 syncs). It reads vCard 4, 3 and 2.1 (quoted-printable values too); of a card, only its name,
 addresses, categories and `UID`.
 

@@ -23,7 +23,7 @@ class VcardConfig(Strict):
     paths: list[Path] = Field(min_length=1)
     """vCard files (`.vcf`, one or many contacts each), or directories searched for them, e.g.
     an export, or the directory vdirsyncer keeps in sync with a CardDAV server (iCloud,
-    Fastmail, Nextcloud)."""
+    Fastmail, Nextcloud) or Google Contacts."""
     group_importance: dict[str, Annotated[int, Field(ge=0, le=2)]] = Field(
         default_factory=dict[str, int]
     )

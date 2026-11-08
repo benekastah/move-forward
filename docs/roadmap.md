@@ -203,12 +203,6 @@ Confluence, Notion, Figma). In order:
 Table-shaped settings (a support plugin's views, a CRM's tiers) belong to "First-run setup
 in the browser", below, which already plans tables on the settings page.
 
-### Google Contacts
-
-vcard reads an address book's vCard files; Google Contacts isn't synced by CardDAV tools as
-readily, so a plugin of its own (the People API, with OAuth) would publish its starred contacts
-and groups as vcard does.
-
 ### mail
 
 - **A forged reply on its own, if it's ever abused.** A stranger's reply takes on the priority,

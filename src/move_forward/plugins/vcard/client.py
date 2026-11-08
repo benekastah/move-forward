@@ -1,6 +1,7 @@
 """Reading an address book's vCard files (RFC 6350, and the 3.0 and 2.1 still exported), as far
 as the plugin needs: names, addresses and groups. Nothing is written."""
 
+import codecs
 import hashlib
 import quopri
 from dataclasses import dataclass, field
@@ -23,10 +24,14 @@ class Card:
 
     uid: str | None = None
     name: str = ""
+    """Its first `FN`, else its `N`."""
+    has_fn: bool = False
+    """`name` is its first `FN`, which later ones and its `N` don't replace."""
     emails: list[str] = field(default_factory=list[str])
     categories: list[str] = field(default_factory=list[str])
     group: bool = False
-    """It's a group's card (`KIND:group`), naming its `members` by their `UID`."""
+    """It's a group's card (`KIND:group`), naming its `members` by their `UID` or address
+    (`mailto:`)."""
     members: list[str] = field(default_factory=list[str])
 
 
@@ -50,24 +55,30 @@ def collect(config: VcardConfig) -> VcardSnapshot:
     """Everyone with an address in the config's files: one `Contact` per address, the first
     card's name for it, and the groups of every card giving it."""
     cards = [card for path in files(config) for card in parse(_read(path))]
-    groups: dict[str, list[str]] = {}
+    by_uid: dict[str, list[str]] = {}
+    by_email: dict[str, list[str]] = {}
     for card in cards:
         if card.group and card.name:
             for member in card.members:
-                groups.setdefault(_uid(member), []).append(card.name)
+                email = _email(member) if member.lower().startswith("mailto:") else None
+                if email:
+                    by_email.setdefault(email, []).append(card.name)
+                else:
+                    by_uid.setdefault(_uid(member), []).append(card.name)
     names: dict[str, str] = {}
     their_groups: dict[str, list[str]] = {}
     for card in cards:
         if card.group:
             continue
-        named = [*card.categories, *(groups.get(_uid(card.uid), []) if card.uid else [])]
+        named = [*card.categories, *(by_uid.get(_uid(card.uid), []) if card.uid else [])]
         for email in card.emails:
-            names.setdefault(email, card.name or email)
-            their_groups.setdefault(email, []).extend(named)
+            if card.name:
+                names.setdefault(email, card.name)
+            their_groups.setdefault(email, []).extend([*named, *by_email.get(email, [])])
     return VcardSnapshot(
         contacts=[
-            Contact(email=email, name=name, groups=list(dict.fromkeys(their_groups[email])))
-            for email, name in names.items()
+            Contact(email=email, name=names.get(email, email), groups=list(dict.fromkeys(groups)))
+            for email, groups in their_groups.items()
         ]
     )
 
@@ -83,9 +94,20 @@ def signature(config: VcardConfig) -> str:
 
 def _read(path: Path) -> str:
     try:
-        return path.read_bytes().decode("utf-8-sig", errors="replace")
+        return decode(path.read_bytes())
     except OSError as e:
         raise SourceError(f"can't read {path}: {e}") from e
+
+
+def decode(raw: bytes) -> str:
+    """A file's text: UTF-16 by its byte-order mark, else UTF-8, else (2.1's raw 8-bit
+    values, as old exports write them) Windows-1252."""
+    if raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return raw.decode("utf-16", errors="replace")
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252", errors="replace")
 
 
 def _uid(text: str) -> str:
@@ -101,13 +123,16 @@ def parse(text: str) -> list[Card]:
     """The cards in a vCard file's text."""
     cards: list[Card] = []
     card: Card | None = None
+    nested = 0  # 2.1's `AGENT` can hold a whole card, which isn't this one's
     for line in _lines(text):
         name, params, value = _property(line)
-        if name == "BEGIN" and value.upper() == "VCARD":
-            card = Card()
-        elif card is None:
-            continue
-        elif name == "END" and value.upper() == "VCARD":
+        begins = name == "BEGIN" and value.upper() == "VCARD"
+        ends = name == "END" and value.upper() == "VCARD"
+        if card is None:
+            card = Card() if begins else None
+        elif begins or nested:
+            nested += 1 if begins else -1 if ends else 0
+        elif ends:
             cards.append(card)
             card = None
         else:
@@ -117,10 +142,13 @@ def parse(text: str) -> list[Card]:
 
 def _read_property(card: Card, name: str, value: str) -> None:
     if name == "FN":
-        card.name = _unescape(value).strip() or card.name
+        fn = _unescape(value).strip()
+        if fn and not card.has_fn:
+            card.name, card.has_fn = fn, True
     elif name == "N" and not card.name:
-        family, given, *more = [*_split(value, ";"), "", ""]
-        additional, prefix, suffix = [*more, "", "", ""][:3]
+        # Each part may be a list (`Jane,Ann`): its items are names too.
+        parts = [" ".join(_split(p, ",")) for p in _split_raw(value, ";")]
+        family, given, additional, prefix, suffix = [*parts, "", "", "", "", ""][:5]
         card.name = " ".join(p for p in (prefix, given, additional, family, suffix) if p.strip())
     elif name == "EMAIL":
         email = _email(_unescape(value))
@@ -147,11 +175,15 @@ def _email(text: str) -> str | None:
 
 def _lines(text: str) -> list[str]:
     """The file's logical lines: folded ones (a line starting with a space or tab continues the
-    last) joined, as are 2.1's quoted-printable values broken with a trailing `=`."""
+    last) joined, as are 2.1's quoted-printable values broken with a trailing `=`. 2.1 folds
+    at whitespace and keeps it; later versions fold anywhere and drop the space or tab."""
     lines: list[str] = []
+    old = False  # in a 2.1 card
     for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if raw.upper().startswith("VERSION:"):
+            old = raw[8:].strip() == "2.1"
         if raw[:1] in (" ", "\t") and lines:
-            lines[-1] += raw[1:]
+            lines[-1] += raw if old else raw[1:]
         elif lines and lines[-1].endswith("=") and _quoted_printable(lines[-1]):
             lines[-1] = lines[-1][:-1] + raw
         elif raw:
@@ -206,6 +238,11 @@ def _decoded(params: dict[str, str], value: str) -> str:
 
 def _split(value: str, sep: str) -> list[str]:
     """A list or structured value split at `sep` but where it's escaped, each part unescaped."""
+    return [_unescape(part) for part in _split_raw(value, sep)]
+
+
+def _split_raw(value: str, sep: str) -> list[str]:
+    """`value` split at `sep` but where it's escaped, its escapes kept."""
     parts: list[str] = []
     current: list[str] = []
     escaped = False
@@ -216,11 +253,11 @@ def _split(value: str, sep: str) -> list[str]:
         elif c == "\\":
             escaped = True
         elif c == sep:
-            parts.append(_unescape("".join(current)))
+            parts.append("".join(current))
             current = []
         else:
             current.append(c)
-    return [*parts, _unescape("".join(current))]
+    return [*parts, "".join(current)]
 
 
 def _unescape(text: str) -> str:

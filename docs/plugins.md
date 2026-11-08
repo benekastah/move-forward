@@ -43,7 +43,7 @@ flowchart LR
     jira([jira]) -- "publishes, its labels as tags" --> ticket
     mail([mail]) -- "publishes, pointing at its sender, its Gmail labels as tags" --> thread
     mail -- "publishes (senders, by email)" --> person
-    vcard([vcard]) -- "publishes (importance, contact_type, by email)" --> person
+    vcard([vcard]) -- "publishes (importance, contact_type, groups, by email)" --> person
     notes([notes]) -- publishes --> entry
     notes -- "publishes, pointing at what it hides" --> ice
     ice -. "hides what it covers" .-> core([core])

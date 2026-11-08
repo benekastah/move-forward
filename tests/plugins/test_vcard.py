@@ -4,10 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from move_forward.asking import Asker, InitSetup
 from move_forward.graph import Ref
 from move_forward.kinds import PERSON
 from move_forward.plugin import ChangedRequest, SourceError
-from move_forward.plugins.vcard import client
+from move_forward.plugins.vcard import client, setup
 from move_forward.plugins.vcard.config import VcardConfig
 from move_forward.plugins.vcard.models import Contact, VcardSnapshot
 from move_forward.plugins.vcard.plugin import VcardPlugin
@@ -157,6 +158,85 @@ def test_a_written_file_refreshes_it(tmp_path: Path) -> None:
         ChangedRequest(vcard.ctx, vcard.graph())
     ).changed  # nothing to compare yet
     assert not plugin.changed(ChangedRequest(vcard.ctx, vcard.graph())).changed
+    then = book.stat().st_mtime_ns
     book.write_text(card("FN:A", "EMAIL:a@acme.com", "CATEGORIES:Family"))
-    os.utime(book, ns=(1, 1))  # a clock too coarse to tell the write apart
+    os.utime(book, ns=(then, then))  # a clock too coarse to tell the write apart: its size does
     assert plugin.changed(ChangedRequest(vcard.ctx, vcard.graph())).changed
+    book.write_text(card("FN:B", "EMAIL:a@acme.com", "CATEGORIES:Family"))  # the same size
+    os.utime(book, ns=(then + 10**9, then + 10**9))
+    assert plugin.changed(ChangedRequest(vcard.ctx, vcard.graph())).changed
+
+
+def test_a_group_card_can_name_its_members_by_address(tmp_path: Path) -> None:
+    (tmp_path / "a.vcf").write_text(
+        card("FN:Bob", "EMAIL:bob@acme.com")
+        + card("FN:Team", "KIND:group", "MEMBER:mailto:Bob@Acme.com")
+    )
+    assert client.collect(config(tmp_path)).contacts[0].groups == ["Team"]
+
+
+def test_a_card_held_in_another_isnt_read_as_it() -> None:
+    text = (
+        "BEGIN:VCARD\nVERSION:2.1\nFN:Boss\nAGENT:\nBEGIN:VCARD\nVERSION:2.1\nFN:Assistant\n"
+        "EMAIL:assistant@acme.com\nEND:VCARD\nEMAIL:boss@acme.com\nEND:VCARD\n"
+    )
+    [found] = client.parse(text)
+    assert (found.name, found.emails) == ("Boss", ["boss@acme.com"])
+
+
+def test_the_first_fn_names_a_card_and_ns_lists_are_names() -> None:
+    assert client.parse(card("FN:First", "FN:Second"))[0].name == "First"
+    assert client.parse(card("N:Doe;Jane,Ann;;;"))[0].name == "Jane Ann Doe"
+
+
+def test_an_address_takes_the_name_of_a_card_that_has_one(tmp_path: Path) -> None:
+    (tmp_path / "a.vcf").write_text(card("EMAIL:a@acme.com") + card("FN:Ann", "EMAIL:a@acme.com"))
+    assert client.collect(config(tmp_path)).contacts[0].name == "Ann"
+    (tmp_path / "a.vcf").write_text(card("EMAIL:a@acme.com"))
+    assert client.collect(config(tmp_path)).contacts[0].name == "a@acme.com"
+
+
+def test_a_file_is_read_by_its_encoding() -> None:
+    text = card("FN:José", "EMAIL:jose@acme.com")
+    assert client.decode(text.encode("utf-16"))[: len("BEGIN")] == "BEGIN"
+    assert client.decode(text.encode("cp1252")) == text  # an old export's raw 8-bit
+    assert client.decode(b"\xef\xbb\xbf" + text.encode()) == text
+
+
+def test_21_keeps_the_space_it_folds_at_and_later_versions_drop_it() -> None:
+    old = "BEGIN:VCARD\nVERSION:2.1\nFN:John\n Smith\nEND:VCARD\n"
+    assert client.parse(old)[0].name == "John Smith"
+    assert client.parse(card("FN:John", " Smith"))[0].name == "JohnSmith"
+
+
+def test_a_bare_quoted_printable_and_a_quoted_parameter_are_read() -> None:
+    text = (
+        "BEGIN:VCARD\nVERSION:2.1\nFN;QUOTED-PRINTABLE:Ren=C3=A9\n"
+        'EMAIL;X-LABEL="work: main;desk":rene@acme.com\nEND:VCARD\n'
+    )
+    [found] = client.parse(text)
+    assert (found.name, found.emails) == ("René", ["rene@acme.com"])
+
+
+def test_a_path_can_be_one_file(tmp_path: Path) -> None:
+    book = tmp_path / "export.vcf"
+    book.write_text(card("FN:A", "EMAIL:a@acme.com"))
+    assert [c.email for c in client.collect(config(book)).contacts] == ["a@acme.com"]
+
+
+def test_init_asks_for_the_files_guessing_vdirsyncers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    (tmp_path / ".contacts").mkdir()
+    answers = iter([str(tmp_path / "missing"), ""])  # refused, then the guess
+    asked: list[str] = []
+
+    def prompt(question: str, default: str, complete: object = None, /) -> str:
+        asked.append(default)
+        return next(answers) or default
+
+    found = setup.questions(Asker(prompt), InitSetup(email="me@acme.com", cwd=tmp_path, teams=[]))
+    assert asked == ["~/.contacts", "~/.contacts"]
+    assert found == {"paths": ["~/.contacts"]}

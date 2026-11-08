@@ -139,7 +139,7 @@ points at a person is about them, so core ranks and badges its items by their co
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `handle` | string | their name in the tool, a login; mail's is their address |
+| `handle` | string | their name in the tool, a login; mail's and vcard's are their address |
 | `me` | bool | (github's) the person using the dashboard |
 | `groups` | list of strings | (vcard's) the address book's groups they're in |
 | `email` | string or null | their address; github's is their commit email, imported or looked up from commits |
