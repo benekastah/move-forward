@@ -1,6 +1,9 @@
 """The built-in plugins, and the enabled ones with their contexts."""
 
+import importlib
+import inspect
 import logging
+import pkgutil
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -13,6 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from . import act_now, notifications, tags, tls
+from . import plugins as builtin_plugins
 from .db import CORE, OWNER_RE, Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
@@ -30,13 +34,6 @@ from .plugin import (
     SourceError,
     UrlRequest,
 )
-from .plugins.git.plugin import GitPlugin
-from .plugins.git_stack.plugin import GitStackPlugin
-from .plugins.github.plugin import GitHubPlugin
-from .plugins.jira.plugin import JiraPlugin
-from .plugins.mail.plugin import MailPlugin
-from .plugins.notes.plugin import NotesPlugin
-from .plugins.slack.plugin import SlackPlugin
 from .repositories import KvRepository
 
 if TYPE_CHECKING:
@@ -51,17 +48,30 @@ page doesn't fill the log."""
 _last_logged: dict[tuple[str, str], float] = {}
 _last_logged_lock = threading.Lock()
 
+
+def builtin(package: str) -> Plugin[Any, Any]:
+    """The plugin a built-in package defines: the one `Plugin` subclass in its `plugin` module.
+    Raises TypeError for a package defining none, or more than one."""
+    module = importlib.import_module(f"{package}.plugin")
+    found: list[type[Plugin[Any, Any]]] = [
+        cast(type[Plugin[Any, Any]], cls)
+        for _, cls in inspect.getmembers(module, inspect.isclass)
+        if issubclass(cls, Plugin) and cls.__module__ == module.__name__
+    ]
+    if len(found) != 1:
+        raise TypeError(f"{module.__name__} defines {len(found)} Plugin subclasses, not one")
+    return found[0]()
+
+
 BUILTINS: list[Plugin[Any, Any]] = [
-    GitHubPlugin(),
-    GitPlugin(),
-    GitStackPlugin(),
-    JiraPlugin(),
-    SlackPlugin(),
-    MailPlugin(),
-    NotesPlugin(),
+    builtin(f"{builtin_plugins.__name__}.{found.name}")
+    for found in pkgutil.iter_modules(builtin_plugins.__path__)
+    if found.ispkg
 ]
-"""The plugins that come with the dashboard, listed here so a checkout run without
-installing it (or a venv whose metadata is stale) still has them."""
+"""The plugins that come with the dashboard: each package in `move_forward/plugins/`, by the
+`Plugin` subclass its `plugin.py` defines, so adding one needs no change here. Found in the
+package rather than by entry points, so a checkout run without installing it (or a venv whose
+metadata is stale) still has them."""
 ENTRY_POINTS = "move_forward.plugins"
 """The entry point group other packages' plugins are found in: each names a `Plugin`
 subclass, e.g. `linear = "move_forward_linear:LinearPlugin"`."""

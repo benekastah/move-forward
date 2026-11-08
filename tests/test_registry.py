@@ -3,6 +3,7 @@ plugin may take."""
 
 from collections.abc import Iterator
 from importlib.metadata import EntryPoint
+from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
@@ -225,3 +226,34 @@ def test_a_plugin_whose_families_cant_be_declared_is_left_out_and_declares_none(
     builtins = {p.name for p in registry.BUILTINS}
     assert {p.name for p in plugins} == (builtins | {"hub"} if first else builtins)
     assert dict(FAMILIES) == (before | {"deal": DEALS} if first else before)
+
+
+def test_every_package_in_plugins_is_a_built_in() -> None:
+    packages = sorted(
+        p.name
+        for p in (Path(registry.builtin_plugins.__file__).parent).iterdir()
+        if (p / "plugin.py").is_file()
+    )
+    assert sorted(p.name for p in registry.BUILTINS) == packages
+
+
+@pytest.mark.parametrize(
+    ("source", "count"),
+    [
+        ("", 0),
+        (
+            "class A(Plugin):\n    name = 'a'\nclass B(Plugin):\n    name = 'b'\n",
+            2,
+        ),
+    ],
+)
+def test_a_built_in_package_defines_one_plugin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str, count: int
+) -> None:
+    package = tmp_path / f"fake_builtin_{count}"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "plugin.py").write_text(f"from move_forward.plugin import Plugin\n{source}")
+    monkeypatch.syspath_prepend(str(tmp_path))  # pyright: ignore[reportUnknownMemberType]
+    with pytest.raises(TypeError, match=f"defines {count} Plugin subclasses, not one"):
+        registry.builtin(package.name)
