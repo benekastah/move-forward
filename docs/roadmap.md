@@ -232,6 +232,15 @@ Confluence, Notion, Figma). In order:
 Table-shaped settings (a support plugin's views, a CRM's tiers) belong to "First-run setup
 in the browser", below, which already plans tables on the settings page.
 
+### mail
+
+- **A conversation's own writers.** A conversation is the Message-ID its first message named,
+  which anyone replying can name, so a stranger's reply takes on the priority, pin or snooze
+  set on it (its flag no longer: that counts only the latest writer's mail). Keeping who has
+  written in each conversation (a kept table, as only unread and flagged mail is fetched)
+  would let a newcomer's reply start its own, without splitting a real conversation whenever
+  a sender can't be verified.
+
 ## Follow-ups
 
 ### Refreshing

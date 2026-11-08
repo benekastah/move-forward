@@ -73,6 +73,13 @@ the message). Anyone can write any
 `From`, and a forged one mustn't borrow a customer's type. Others' mail is still listed, from
 whoever it says. See [entities.md](../entities.md).
 
+A conversation is the Message-ID its first message named, which anyone replying can name.
+So its flag (and the importance it gives) counts only flagged mail from whoever wrote its latest
+message, and a verified one's flag only when the latest is verified too (an unverified
+message's flag can still be claimed by an unverified reply giving the same `From`, as everywhere
+when no sender can be verified); and a priority, pin or snooze I set on a
+conversation stays with it, whoever replies.
+
 When a message came is when the server received it (`INTERNALDATE`), not its `Date` header,
 which says whatever the sender likes.
 

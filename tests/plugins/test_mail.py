@@ -195,6 +195,33 @@ def test_mail_i_am_copied_on_is_not_to_me_and_flags_may_follow_the_headers() -> 
     assert found is not None and (found.to_me, found.seen) == (False, True)
 
 
+def test_a_reply_from_someone_else_doesnt_wear_a_conversations_flag() -> None:
+    harness = mailbox(
+        message(2, sender="stranger@evil.example", subject="Re: urgent wire"),
+        message(1, sender="cust@acme.com", flagged=True),
+    )
+    [item] = _items(harness)
+    assert "flagged" not in [getattr(b, "text", b) for b in item.badges]
+    assert item.signals is not None and item.signals.importance == 0
+    forged = mailbox(
+        message(2, sender="cust@acme.com", verified=False, subject="Re: urgent wire"),
+        message(1, sender="cust@acme.com", flagged=True),  # the real one, verified
+    )
+    [item] = _items(forged)
+    assert "flagged" not in [getattr(b, "text", b) for b in item.badges]
+    no_address = mailbox(
+        message(2, sender="", sender_email=None, subject="Re"),
+        message(1, sender="", sender_email=None, flagged=True),
+    )
+    [item] = _items(no_address)  # two without an address aren't one writer
+    assert "flagged" not in [getattr(b, "text", b) for b in item.badges]
+    flagged_by_writer = mailbox(
+        message(2, sender="cust@acme.com"), message(1, flagged=True, sender="cust@acme.com")
+    )
+    [item] = _items(flagged_by_writer)
+    assert "flagged" in [getattr(b, "text", b) for b in item.badges]
+
+
 def test_a_thread_without_a_message_id_is_its_uid() -> None:
     raw = b"From: a@b.com\r\nSubject: hi\r\n\r\n"
     found = client.message(b"1 (UID 9 FLAGS ())", raw, {ME})

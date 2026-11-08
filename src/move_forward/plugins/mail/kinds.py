@@ -16,7 +16,7 @@ class ThreadAttrs(KindModel):
     unread: int
     """How many of its messages are unread."""
     flagged: bool
-    """One of its messages is flagged."""
+    """It's flagged, as `panels.Thread.flagged` counts: by whoever wrote its latest message."""
     bulk: bool
     """Its latest message is a list's, a newsletter's or automated."""
     to_me: bool
