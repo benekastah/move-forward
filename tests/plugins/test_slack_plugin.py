@@ -126,7 +126,6 @@ def test_nudge_blockers_and_staleness() -> None:
     built = dashboard(slack=True, **stored)
     assert titles(built, "slack.nudges") == ["PR 2"]
     nudged = [i.title for i in built.act_now() if "the reviewers" in i.title]
-    # PR 3's failing policy check is for me to meet first, so Act now names that instead
     assert sorted(nudged) == ["Ping the reviewers: PR 2"]
 
 

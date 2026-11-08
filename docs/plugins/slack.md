@@ -49,8 +49,8 @@ set by hand wins over a lookup.
 
 ## Panels
 
-- **Nudge reviewers**: PRs in order (green, no conflicts, no open threads) with no review
-  activity for `[github] stale_review_hours`. The Ping link opens a page
+- **Nudge reviewers**: PRs in order (green, no conflicts, no open threads), with a reviewer
+  asked and not yet approving, and no review activity for `[github] stale_review_hours`. The Ping link opens a page
   with one message per requested reviewer or team, a link to their Slack DM or channel,
   and "mark as sent", which makes the next ping a follow-up. Nudges the skill logged in
   `work-notes.md` count too, once imported.

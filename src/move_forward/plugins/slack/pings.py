@@ -66,7 +66,6 @@ class PrView(Model):
     requested_teams: list[str] = Field(default_factory=list[str])
     review_blockers: list[str] | None = None
     review_stale: bool | None = None
-    failing_policy_checks: list[str] | None = None
     stale_review_hours: int | None = None
     last_review_activity: str | None = None
 
@@ -203,8 +202,6 @@ class Pinger:
                 + (f" (last {age(self.now, t.last_ping)} ago)" if t.last_ping else "")
                 for t in ping.targets
             ]
-            if pr.failing_policy_checks:
-                details.append(f"PR policy failing: {', '.join(pr.failing_policy_checks)}")
             last = _datetime(pr.last_review_activity)
             details.append(f"last review activity {age(self.now, last)} ago")
             since = last or _datetime(pr.created_at) or self.now
@@ -229,7 +226,7 @@ class Pinger:
             priority=Band.NUDGES,
             act_now=True,
             title="Nudge reviewers",
-            description="In order (green, no conflicts, no open threads) and quiet for"
-            f" {_quiet(self.my_open_prs)}.",
+            description="In order (green, no conflicts, no open threads), with a reviewer asked"
+            f" and not yet approving, and quiet for {_quiet(self.my_open_prs)}.",
             items=items,
         )
