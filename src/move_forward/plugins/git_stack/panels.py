@@ -139,7 +139,8 @@ class Builder:
             fields={"repo": repo_dir, "branch": branch},
             confirm=f"Run `git stack restack {branch}` in {repo_dir}? It rebases the branches of"
             f" its stack onto their parents there, pushing nothing. On a conflict it stops with"
-            f" the branch checked out in {repo_dir} and a rebase in progress, for you to resolve.",
+            f" the conflicting branch of the stack checked out in {repo_dir} and a rebase in"
+            " progress, for you to resolve.",
         )
 
     def stacks(self) -> Panel:

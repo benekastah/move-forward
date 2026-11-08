@@ -115,8 +115,8 @@ def stack_clean(req: ActionRequest[GitStackConfig]) -> str:
 
 def stack_restack(req: ActionRequest[GitStackConfig]) -> str:
     """`git stack restack <branch> --json`: rebase the branch's stack onto its parents, locally.
-    It pushes nothing; on a conflict it stops with the branch checked out in the repo's checkout
-    and a rebase in progress, and says where. A tracked name can't start with `-`, so it isn't
+    It pushes nothing; on a conflict it stops with the conflicting branch of the stack checked out
+    in the repo's checkout and a rebase in progress, and says where. A tracked name can't start with `-`, so it isn't
     taken for an option."""
     graph = req.graph
     target = f"{req.field('repo')}\t{req.field('branch')}"
