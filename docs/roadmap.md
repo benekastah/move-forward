@@ -209,9 +209,11 @@ Confluence, Notion, Figma). In order:
    mail's threads a conversation.
 4. **Who someone is, across tools.** A person with several identifiers (addresses, each
    tool's handle), not one email; `me` on core's `Person`, not just github's; how far an
-   identity can be trusted, since an address in a header proves nothing (#97 publishes a
+   identity can be trusted, since an address in a header proves nothing (mail publishes a
    sender only when the receiving server verified them; a family-level `verified` would let
-   any plugin say so, and core trust only that); and availability, which a calendar, an
+   any plugin say so, and core join and trust only that: a person's stated importance and
+   contact type spread to everyone with their email, and github's reviewer emails come from
+   commits, which anyone can author as someone else); and availability, which a calendar, an
    on-call schedule or a Slack status can each give, so Slack feature 6 (Reviewer
    availability) reads it from any of them rather than Slack alone.
 5. **What `Signals` can't say yet.** It has `due`, `waiting_since` and `importance` (where a
@@ -234,10 +236,6 @@ Confluence, Notion, Figma). In order:
    Message-IDs, which two mailboxes can share), table prefixes and the migrations ledger,
    `/<plugin>/<key>` pages, `requires` and `watches`, and keychain defaults. Without that,
    each plugin builds accounts of its own.
-10. **Trusting a person joined by email.** A person's stated importance (and contact type)
-    spreads to every person with their email. Mail publishes only verified senders, but github's
-    reviewer emails come from commits, which anyone can author as someone else, so a CRM's VIP
-    could rank a stranger's PR. Joining should count only identities a plugin vouches for (4).
 
 Table-shaped settings (a support plugin's views, a CRM's tiers) belong to "First-run setup
 in the browser", below, which already plans tables on the settings page.
@@ -286,9 +284,10 @@ vCard or CardDAV first, then Google Contacts. Mail's senders join them by email.
   `[slack.teams]`) could join the settings page then too.
 - **Act now, after living with it.** Questions to answer from use: whether quick wins
   should lead at the end of the day and important work in the morning (a weight profile
-  per part of the day, which could also rank personal mail down at 10am and work mail down at
-  10pm, with an instance (Plugins without core changes, 9) saying which it is); whether someone waiting on my team should weigh more (the `person`
-  entities would need team membership, which github already fetches); whether unknown
+  per part of the day, which could also rank personal mail down at 10am and work mail down
+  at 10pm, with an instance (Plugins without core changes, 9) saying which it is); whether
+  someone waiting on my team should weigh more (the `person` entities would need team
+  membership, which github already fetches); whether unknown
   effort should count as "hour"; and whether notes' todos should carry `due` and
   `waiting_since` (the notes don't record due dates yet).
 
