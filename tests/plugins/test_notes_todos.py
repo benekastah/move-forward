@@ -28,8 +28,8 @@ def test_a_todo_starts_from_nothing_as_an_entry_of_its_own() -> None:
     [
         (" ", "empty"),
         ("two\nlines", "one line"),
+        ("two\u2028lines", "one line"),  # any break splitlines takes
         ("Reviews requested of me", "a section"),
-        ("[quick] x", "todo's size"),
     ],
 )
 def test_a_todo_the_notes_would_read_back_otherwise_is_refused(text: str, why: str) -> None:
@@ -44,3 +44,21 @@ def test_a_todo_isnt_put_in_an_entry_on_ice() -> None:
     refresh.run_action(config, db, "notes/ice_item", {"kind": "notes.entry", "id": "fix the sink"})
     with pytest.raises(ActionError, match="on ice"):
         refresh.run_action(config, db, NEW, {"input": "fix the sink"})
+
+
+def test_a_leading_size_sizes_the_new_todo_and_a_bracket_is_kept() -> None:
+    config, db = stored()
+    refresh.run_action(config, db, NEW, {"input": "[quick] water plants"})
+    refresh.run_action(config, db, NEW, {"input": "[docs] fix the typo"})
+    items = {
+        i.title: i for i in panel(refresh.build_dashboard(config, db, NOW), "notes.todos").items
+    }
+    assert set(items) == {"water plants", "[docs] fix the typo"}
+    assert items["water plants"].signals is not None  # quick: a close-out
+
+
+def test_add_todo_creating_an_entry_refuses_a_title_the_notes_would_split() -> None:
+    config, db = stored()
+    fields = {"entry": "a\nb", "create": "1", "input": "x"}
+    with pytest.raises(ActionError, match="one line"):
+        refresh.run_action(config, db, "notes/todo_add", fields)
