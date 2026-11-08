@@ -400,7 +400,10 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         default_merge_method=_method(raw.repository.viewer_default_merge_method),
         auto_merge_allowed=raw.repository.auto_merge_allowed,
         delete_branch_on_merge=raw.repository.delete_branch_on_merge,
-        auto_merge=_method(raw.auto_merge_request.merge_method) if raw.auto_merge_request else None,
+        auto_merge=raw.auto_merge_request is not None,
+        auto_merge_method=_method(raw.auto_merge_request.merge_method)
+        if raw.auto_merge_request
+        else None,
         requested_users=[name for kind, name in filter(None, requested) if kind == "user"],
         requested_teams=[name for kind, name in filter(None, requested) if kind == "team"],
         reviews=[

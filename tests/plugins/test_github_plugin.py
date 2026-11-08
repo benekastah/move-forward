@@ -445,7 +445,8 @@ def test_merge_settings_are_kept_between_refreshes() -> None:
         default_merge_method="SQUASH",
         auto_merge_allowed=True,
         delete_branch_on_merge=True,
-        auto_merge="SQUASH",
+        auto_merge=True,
+        auto_merge_method="SQUASH",
     )
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)

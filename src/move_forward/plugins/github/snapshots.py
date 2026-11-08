@@ -118,6 +118,7 @@ class PrRepository:
                         pr.auto_merge_allowed,
                         pr.delete_branch_on_merge,
                         pr.auto_merge,
+                        pr.auto_merge_method,
                     )
                 )
                 rows["github_pr_labels"] += [(*key, i, v) for i, v in enumerate(pr.labels)]
@@ -243,7 +244,8 @@ class PrRepository:
             default_merge_method=row["default_merge_method"],
             auto_merge_allowed=bool(row["auto_merge_allowed"]),
             delete_branch_on_merge=bool(row["delete_branch_on_merge"]),
-            auto_merge=row["auto_merge"],
+            auto_merge=bool(row["auto_merge"]),
+            auto_merge_method=row["auto_merge_method"],
             requested_users=[
                 cast(str, r["name"])
                 for r in found["github_pr_requests"][key]

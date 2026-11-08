@@ -376,7 +376,8 @@ MIGRATIONS = [
     ALTER TABLE github_prs ADD COLUMN default_merge_method TEXT;
     ALTER TABLE github_prs ADD COLUMN auto_merge_allowed INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE github_prs ADD COLUMN delete_branch_on_merge INTEGER NOT NULL DEFAULT 0;
-    ALTER TABLE github_prs ADD COLUMN auto_merge TEXT; -- the method it merges by itself with
+    ALTER TABLE github_prs ADD COLUMN auto_merge INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE github_prs ADD COLUMN auto_merge_method TEXT;
     """,
     ),
 ]

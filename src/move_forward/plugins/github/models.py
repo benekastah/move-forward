@@ -93,14 +93,17 @@ class PullRequest(Model):
     """How its repo lets it merge; empty while not known yet (kept from before they were
     fetched, until the next full refresh), not as "it can't"."""
     default_merge_method: MergeMethod | None = None
-    """The method GitHub picks for me in its repo: my last used, else the repo's default."""
+    """The method GitHub picks for me in its repo: my last used, else the repo's default; None
+    when GitHub names none, or one it added since (see `client._method`)."""
     auto_merge_allowed: bool = False
     """Its repo lets a PR merge by itself once it's ready (auto-merge)."""
     delete_branch_on_merge: bool = False
     """Its repo deletes a PR's branch once it merges."""
-    auto_merge: MergeMethod | None = None
-    """The method it'll merge by itself with, once ready; None without auto-merge on, or with a
-    method GitHub added since (see `client._method`)."""
+    auto_merge: bool = False
+    """It'll merge by itself once ready (auto-merge is on)."""
+    auto_merge_method: MergeMethod | None = None
+    """The method it'll merge by itself with; None without auto-merge, or with a method GitHub
+    added since (see `client._method`)."""
     requested_users: list[str] = Field(default_factory=list)
     requested_teams: list[str] = Field(default_factory=list)
     reviews: list[Review] = Field(default_factory=list)
