@@ -454,7 +454,11 @@ class Builder:
                     + (50 if close_out else 0)
                     + len(quick)
                     - (200 if not open_todos else 0),  # all ticked off: last
-                    actions=lone.actions if lone else [add_todo_action(entry.title)],
+                    # A ticked stand-in offers its box, and the entry its Add todo all the same.
+                    actions=[
+                        *(lone.actions if lone else []),
+                        *([add_todo_action(entry.title)] if not lone or lone.done else []),
+                    ],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
                     # Only a close-out has signals: what notes nominates for Act now.
                     signals=Signals(
