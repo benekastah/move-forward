@@ -246,8 +246,9 @@ NOTIFY_SCRIPT = (
     # Closed for good (refused: signed out, say): let another tab listen, and queue again.
     "    source.onerror = () => { if (source.readyState === EventSource.CLOSED) {"
     "     done(); setTimeout(hold, 60000); } }; });"
-    "   const hold = () => navigator.locks.request('mfd-notifications', listen);"
-    "   if (navigator.locks) hold(); else listen();"
+    "   const hold = () => navigator.locks"
+    "    ? navigator.locks.request('mfd-notifications', listen) : listen();"
+    "   hold();"
     "  } else { poll(); setInterval(poll, NOTIFY_SECONDS * 1000); } });"
     "})();"
 )
