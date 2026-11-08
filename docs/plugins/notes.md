@@ -21,7 +21,7 @@ names are related through it.
   last. An entry with one open todo has its Done checkbox, Delete and Link on the entry, with
   the PRs and tickets it's linked to; entries with several show each todo below the entry
   with its own, and Add todo on the entry (and on its last todo in focus mode). Its New todo
-  field, with a size drop-down (or a leading `[quick]`), starts a todo from nothing, as an entry
+  field, with a size drop-down (or a leading `[quick]` or `[big]`), starts a todo from nothing, as an entry
   of its own titled by it; the empty panel says so. A title with a line break, or the work
   notes' "Reviews requested of me", is refused, as is a todo for an entry on ice.
   Focus mode also shows the todos one at a time; an entry's only todo stands in for it,
@@ -69,7 +69,7 @@ are done it's badged as probably done, which brings it back if it was snoozed or
 
 | Path | Fields | Does |
 | --- | --- | --- |
-| `/actions/notes/todo_new` | `input` (the todo), optional `choice` (`quick` or `big`) | Starts a todo from nothing: an entry titled by it, with it as its one todo; an entry of that title gets the todo instead (not one on ice, nor the same todo twice). |
+| `/actions/notes/todo_new` | `input` (the todo; a leading `[quick]` or `[big]` sizes it), optional `choice` (`quick` or `big`) | Starts a todo from nothing: an entry titled by it, with it as its one todo; an entry of that title gets the todo instead (not one on ice, nor the same todo twice). |
 | `/actions/notes/todo_add` | `entry`, `text` (or `input`), optional `size` (or `choice`: `quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds an open todo at the end of the entry's; with `create`, a missing entry is created first, with `where` as its `Where`. |
 | `/actions/notes/todo_size` | `todo`, `size` (`quick` or `big`) | Says how big an open todo is. |
 | `/actions/notes/todo_done` | `todo` (its id) | Records the todo as done today; redirects with `kept=notes:<id>`, so the focus page keeps it, ticked, to undo. |

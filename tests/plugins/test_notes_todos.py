@@ -62,3 +62,15 @@ def test_add_todo_creating_an_entry_refuses_a_title_the_notes_would_split() -> N
     fields = {"entry": "a\nb", "create": "1", "input": "x"}
     with pytest.raises(ActionError, match="one line"):
         refresh.run_action(config, db, "notes/todo_add", fields)
+
+
+def test_add_todo_takes_a_leading_size_as_new_todo_does() -> None:
+    config, db = stored()
+    refresh.run_action(config, db, NEW, {"input": "chores"})
+    fields = {"entry": "chores", "input": "[big] clean the garage"}
+    refresh.run_action(config, db, "notes/todo_add", fields)
+    [item] = panel(refresh.build_dashboard(config, db, NOW), "notes.todos").items
+    assert [(p.title, p.badges[0]) for p in item.parts] == [
+        ("chores", "unsized"),
+        ("clean the garage", "big"),
+    ]

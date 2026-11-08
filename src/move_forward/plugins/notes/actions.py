@@ -269,15 +269,17 @@ def todo_size(req: ActionRequest[NotesConfig]) -> str:
 
 def todo_add(req: ActionRequest[NotesConfig]) -> str:
     """Add an open todo to an entry: `input` (or `text`) with an optional size, quick or big, as
-    `size` (or `choice`, from its drop-down).
+    `size` (or `choice`, from its drop-down), or a leading `[quick]` or `[big]` in it, as the
+    notes write a size, so it reads back the same.
 
     With `create`, a missing entry is created first (`where` names its PR or ticket).
     """
     ctx, fields = req.ctx, req.fields
-    text = (fields.get("input") or fields.get("text") or "").strip()
+    text, written = sized((fields.get("input") or fields.get("text") or "").strip())
+    text = text.strip()
     if not text:
         raise ActionError("the todo is empty")
-    sized = _size(fields.get("size") or fields.get("choice") or "")
+    size = _size(fields.get("size") or fields.get("choice") or "") or written
     notes = NotesRepository(ctx.db)
     title = req.field("entry")
     entry_id = notes.entry_id(title)
@@ -287,7 +289,7 @@ def todo_add(req: ActionRequest[NotesConfig]) -> str:
         entry_id = notes.add_entry(title, ctx.today, INFERRED, where or None, links_in(where))
     if entry_id is None:
         raise ActionError(f"no work-notes entry titled {title}")
-    notes.add_todo(entry_id, text, sized, links_in(text))
+    notes.add_todo(entry_id, text, size, links_in(text))
     notes.touch(entry_id, ctx.today)
     return f"added: {text}"
 

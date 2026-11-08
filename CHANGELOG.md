@@ -12,7 +12,8 @@ as the Pull button on "moved on GitHub; pull it" items does. Nothing to change.
 
 ### New todo
 
-`POST /actions/notes/todo_new` with `input` (and optionally `choice`: `quick` or `big`) starts a
+`POST /actions/notes/todo_new` with `input` (a leading `[quick]` or `[big]` sizes it; or
+`choice`: `quick` or `big`) starts a
 todo from nothing, as an entry titled by it, as the Todos panel's New todo field does; it answers
 "already a todo" for one already open there. It and `todo_add`'s `create` refuse a title with a
 line break, or the work notes' "Reviews requested of me". Nothing to change.
