@@ -926,10 +926,16 @@ def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt()
     assert about("m1@acme.com") == []
 
 
-def test_mail_isnt_about_a_tag_i_put_on_it() -> None:
-    harness = mailbox(message(1, subject="Chores"))
-    harness.with_entities([Entity(ref=Ref(kind="notes.todo", id="1"), title="x")])
-    TagRepository(harness.db).add(Ref(kind=THREAD, id="root@acme.com"), "chores", NOW)
-    [item] = _items(harness)
-    assert "#chores" in item.badges
-    assert not any(d.startswith("about") for d in item.details)
+def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
+    harness = mailbox(message(1, subject="Garbage day moved", sender="city@town.example"))
+    thread = Ref(kind=THREAD, id="root@acme.com")
+    TagRepository(harness.db).add(thread, "garbage-day", NOW)
+    [alone] = _items(harness)
+    assert "#garbage-day" in alone.badges
+    assert not any(d.startswith("about") for d in alone.details)  # only it has the tag
+    harness.with_entities(
+        [Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out")]
+    )
+    [shared] = _items(harness)  # tagging it by hand doesn't lose what its subject names
+    assert "about #garbage-day" in shared.details
+    assert shared.signals is not None and shared.signals.importance == 1
