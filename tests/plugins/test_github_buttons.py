@@ -3,9 +3,11 @@
 import pytest
 from conftest import REPO, dashboard, panel, pr, snapshot, stored
 
+from move_forward.api.shell import CommandError
 from move_forward.plugin import ActionError
 from move_forward.plugins.github import client
-from move_forward.plugins.github.panels import MARK_READY, UPDATE_BRANCH
+from move_forward.plugins.github.models import Check
+from move_forward.plugins.github.panels import MARK_READY, RERUN_FAILED, UPDATE_BRANCH
 from move_forward.refresh import perform_action
 
 URL = f"https://github.com/{REPO}/pull/1"
@@ -90,3 +92,68 @@ def test_github_refusing_to_update_is_shown(monkeypatch: pytest.MonkeyPatch) -> 
     config, db = stored(github=snapshot(mine=[pr(1, merge_state="BEHIND")]))
     with pytest.raises(ActionError, match="merge conflict"):
         perform_action(config, db, UPDATE_BRANCH, {"pr": URL})
+
+
+def test_a_ci_failure_with_failed_runs_can_run_them_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    runs = "https://github.com/acme/widgets/actions/runs"
+    failing = pr(
+        1,
+        checks=[
+            Check(name="tests", state="FAILURE", url=f"{runs}/11/job/1"),
+            Check(name="lint", state="FAILURE", url=f"{runs}/11/job/2"),  # the same run
+            Check(name="build", state="FAILURE", url=f"{runs}/12"),
+            Check(name="policy", state="FAILURE", url=f"{runs}/13/job/3"),
+            Check(name="other", state="FAILURE", url="https://ci.example/9"),  # no run
+        ],
+    )
+    built = dashboard(github=snapshot(mine=[failing]), policy_checks=["policy"])
+    [item] = panel(built, "github.ci_failures").items
+    assert [a.label for a in item.actions if a.name == RERUN_FAILED] == ["Rerun failed"]
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[failing]), policy_checks=["policy"])
+    result = perform_action(config, db, RERUN_FAILED, {"pr": URL})
+    repo = f"github.com/{REPO}"
+    assert commands == [
+        ["gh", "run", "rerun", run, "--failed", "--repo", repo] for run in ("11", "12")
+    ]
+    assert [ref.id for ref in result.touched] == [URL]
+
+
+def test_a_ci_failure_naming_no_run_has_no_rerun(monkeypatch: pytest.MonkeyPatch) -> None:
+    failing = pr(1, checks=[Check(name="tests", state="FAILURE", url="https://ci.example/9")])
+    [item] = panel(dashboard(github=snapshot(mine=[failing])), "github.ci_failures").items
+    assert not [a for a in item.actions if a.name == RERUN_FAILED]
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[failing]))
+    with pytest.raises(ActionError, match="no failed Actions run that's over"):
+        perform_action(config, db, RERUN_FAILED, {"pr": URL})
+    assert commands == []
+
+
+def test_rerun_leaves_out_a_run_still_going_or_another_repos_and_tries_each(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runs = "https://github.com/acme/widgets/actions/runs"
+    failing = pr(
+        1,
+        checks=[
+            Check(name="a", state="FAILURE", url=f"{runs}/21/job/1"),
+            Check(name="b", state="PENDING", url=f"{runs}/21/job/2"),  # its run isn't over
+            Check(name="c", state="FAILURE", url="https://github.com/acme/ci/actions/runs/22"),
+            Check(name="d", state="FAILURE", url=f"{runs}/23?pr=1"),
+            Check(name="e", state="FAILURE", url=f"{runs}/24#step"),
+        ],
+    )
+    commands: list[list[str]] = []
+
+    def run(args: list[str]) -> str:
+        commands.append(args)
+        if args[3] == "23":
+            raise CommandError("already running")
+        return ""
+
+    monkeypatch.setattr(client, "run", run)
+    config, db = stored(github=snapshot(mine=[failing]))
+    result = perform_action(config, db, RERUN_FAILED, {"pr": URL})
+    assert [c[3] for c in commands] == ["23", "24"]  # each tried, though 23 was refused
+    assert "(1 run(s))" in result.notice and "run 23: already running" in result.notice
