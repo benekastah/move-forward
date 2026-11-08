@@ -21,8 +21,10 @@ class TokenSettings(Protocol):
     the secret store under a service. `mfd token` works for any plugin whose section has
     both."""
 
-    token_env: str
-    keychain_service: str
+    @property
+    def token_env(self) -> str: ...
+    @property
+    def keychain_service(self) -> str: ...
 
 
 def token(settings: TokenSettings, account: str) -> str | None:

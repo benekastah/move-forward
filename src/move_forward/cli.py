@@ -270,7 +270,7 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         "plugin",
         help="the plugin whose token to store, e.g. jira, or one of its accounts: mail.work",
     )
-    token_commands.add_parser("check", help="say where each plugin's token is found")
+    token_commands.add_parser("check", help="say where each plugin's tokens are found")
     token_commands.add_parser(
         "rotate", help="make a new dashboard token and sign every browser out"
     )
@@ -291,6 +291,17 @@ def _token_settings(config: config_module.Config) -> dict[str, keychain.TokenSet
         if section is not None:
             for name, settings in plugin.tokens(section).items():
                 found[f"{plugin.name}.{name}" if name else plugin.name] = settings
+    for where, values in (
+        ("token_env", {name: s.token_env for name, s in found.items()}),
+        ("keychain_service", {name: s.keychain_service for name, s in found.items()}),
+    ):
+        seen: dict[str, str] = {}
+        for name, value in values.items():
+            if value in seen:  # one would overwrite, or stand in for, the other
+                raise SystemExit(
+                    f"{seen[value]} and {name} share {where} {value!r}: give each its own"
+                )
+            seen[value] = name
     return found
 
 

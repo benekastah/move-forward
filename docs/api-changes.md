@@ -16,8 +16,9 @@ raising the version; it's listed so a plugin written against an earlier checkout
 catch up.
 
 - **Several tokens**: `Plugin.tokens(config)` names every token a plugin keeps, `""` for its
-  own (by default `token_settings`'s) and one per account for a plugin reading several;
-  `mfd token set <plugin>.<account>` stores one.
+  own (by default `token_settings`'s) and one per account for a plugin reading several, each
+  with its own `token_env` and `keychain_service`; `mfd token set <plugin>.<account>` stores
+  one. `api.keychain.TokenSettings` is what each is: anything with those two, read-only.
 - **Organisations**: core declares the `organisation` family (`api.kinds.ORGANISATION`,
   `Organisation`: `handle`, `contact_type`, `importance`), with ids `<host>/<its id there>`.
   A person points at theirs, and its type or importance counts for that person's items as

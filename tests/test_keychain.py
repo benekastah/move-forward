@@ -149,7 +149,7 @@ def test_mfd_token_set_stores_what_it_asks_for(
     assert cli.main(["-c", str(config), "token", "set", "jira"]) == 0
     assert stored == [("move-forward-jira", "me@x", "s3cret")]
     assert cli.main(["-c", str(config), "token", "set", "slack"]) == 1
-    assert "slack isn't a token" in capsys.readouterr().err
+    assert "slack isn't a token" in (err := capsys.readouterr().err) and err.endswith(": jira\n")
 
 
 def test_mfd_token_check_says_where_each_token_is_without_showing_it(
@@ -252,3 +252,24 @@ def test_mfd_token_sets_and_checks_each_of_a_plugins_accounts(
     out = capsys.readouterr().out
     assert "github: from $GITHUB_PAT" in out
     assert "github.work: missing; run `mfd token set github.work`" in out
+
+
+class _SharedToken:
+    token_env: str = "WORK_PAT"
+    keychain_service: str = "move-forward-github"
+
+
+class _GitHubSharingAToken(GitHubPlugin):
+    def tokens(self, config: GitHubConfig) -> dict[str, keychain.TokenSettings]:
+        return {"": _ElsewhereToken(), "work": _SharedToken()}
+
+
+def test_mfd_token_refuses_two_tokens_kept_in_one_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    swap = {"github": _GitHubSharingAToken()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    config = _config(tmp_path)
+    config.write_text(config.read_text() + '[github]\norg = "acme"\n')
+    with pytest.raises(SystemExit, match="github and github.work share keychain_service"):
+        cli.main(["-c", str(config), "token", "set", "github.work"])
