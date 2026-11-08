@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from ...api.shell import CommandError, run, stopping
-from .models import Check, GitHubSnapshot, PullRequest, Review, Thread, TimelineEvent
+from .models import Check, GitHubSnapshot, MergeMethod, PullRequest, Review, Thread, TimelineEvent
 
 log = logging.getLogger(__name__)
 COMMIT_EMAIL_LOOKUP_COUNT = 10
@@ -130,11 +130,13 @@ class _RawRepository(_Raw):
     rebase_merge_allowed: bool = Field(default=False, alias="rebaseMergeAllowed")
     auto_merge_allowed: bool = Field(default=False, alias="autoMergeAllowed")
     delete_branch_on_merge: bool = Field(default=False, alias="deleteBranchOnMerge")
-    viewer_default_merge_method: str | None = Field(default=None, alias="viewerDefaultMergeMethod")
+    viewer_default_merge_method: MergeMethod | None = Field(
+        default=None, alias="viewerDefaultMergeMethod"
+    )
 
 
 class _RawAutoMerge(_Raw):
-    merge_method: str | None = Field(default=None, alias="mergeMethod")
+    merge_method: MergeMethod = Field(alias="mergeMethod")
 
 
 class RawPullRequest(_Raw):
@@ -357,6 +359,11 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
     commit = next((c.commit for c in raw.commits.nodes if c), None)
     rollup = commit.status_check_rollup if commit else None
     files = [f for f in raw.files.nodes if f] if raw.files else []
+    allowed: tuple[tuple[MergeMethod, bool], ...] = (
+        ("MERGE", raw.repository.merge_commit_allowed),
+        ("SQUASH", raw.repository.squash_merge_allowed),
+        ("REBASE", raw.repository.rebase_merge_allowed),
+    )
     return PullRequest(
         url=raw.url,
         number=raw.number,
@@ -384,21 +391,11 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         review_decision=raw.review_decision,
         in_merge_queue=raw.is_in_merge_queue,
         merge_queue=raw.is_merge_queue_enabled,
-        merge_methods=[
-            method
-            for method, allowed in (
-                ("MERGE", raw.repository.merge_commit_allowed),
-                ("SQUASH", raw.repository.squash_merge_allowed),
-                ("REBASE", raw.repository.rebase_merge_allowed),
-            )
-            if allowed
-        ],
+        merge_methods=[method for method, yes in allowed if yes],
         default_merge_method=raw.repository.viewer_default_merge_method,
         auto_merge_allowed=raw.repository.auto_merge_allowed,
         delete_branch_on_merge=raw.repository.delete_branch_on_merge,
-        auto_merge=(raw.auto_merge_request.merge_method or "MERGE")
-        if raw.auto_merge_request
-        else None,
+        auto_merge=raw.auto_merge_request.merge_method if raw.auto_merge_request else None,
         requested_users=[name for kind, name in filter(None, requested) if kind == "user"],
         requested_teams=[name for kind, name in filter(None, requested) if kind == "team"],
         reviews=[

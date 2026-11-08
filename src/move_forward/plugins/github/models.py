@@ -56,6 +56,10 @@ class TimelineEvent(Model):
     """A review has text of its own, beyond its inline comments, for PullRequestReview."""
 
 
+MergeMethod = Literal["MERGE", "SQUASH", "REBASE"]
+"""How a PR merges: a merge commit, squashed, or rebased."""
+
+
 class PullRequest(Model):
     url: str
     number: int
@@ -85,15 +89,16 @@ class PullRequest(Model):
     in_merge_queue: bool = False
     merge_queue: bool = False
     """Its base branch has a merge queue: it merges by joining it."""
-    merge_methods: list[str] = Field(default_factory=list)
-    """How its repo lets it merge: `MERGE`, `SQUASH`, `REBASE`."""
-    default_merge_method: str | None = None
+    merge_methods: list[MergeMethod] = Field(default_factory=list)
+    """How its repo lets it merge; empty while not known yet (kept from before they were
+    fetched, until the next full refresh), not as "it can't"."""
+    default_merge_method: MergeMethod | None = None
     """The method GitHub picks for me in its repo: my last used, else the repo's default."""
     auto_merge_allowed: bool = False
     """Its repo lets a PR merge by itself once it's ready (auto-merge)."""
     delete_branch_on_merge: bool = False
     """Its repo deletes a PR's branch once it merges."""
-    auto_merge: str | None = None
+    auto_merge: MergeMethod | None = None
     """The method it'll merge by itself with, once ready; None without auto-merge on."""
     requested_users: list[str] = Field(default_factory=list)
     requested_teams: list[str] = Field(default_factory=list)

@@ -10,6 +10,7 @@ from .models import (
     Check,
     DerivedSnapshot,
     GitHubSnapshot,
+    MergeMethod,
     PullRequest,
     Review,
     ReviewerSuggestion,
@@ -59,6 +60,14 @@ def _when(value: str | None) -> datetime | None:
 
 Key = tuple[str, str]
 """A PR as one search found it: (list, url)."""
+
+
+_METHOD_COLUMNS: tuple[tuple[MergeMethod, str], ...] = (
+    ("MERGE", "merge_commit_allowed"),
+    ("SQUASH", "squash_merge_allowed"),
+    ("REBASE", "rebase_merge_allowed"),
+)
+"""Each merge method, by the column of `github_prs` saying the PR's repo allows it."""
 
 
 class PrRepository:
@@ -230,15 +239,7 @@ class PrRepository:
             review_decision=row["review_decision"],
             in_merge_queue=bool(row["in_merge_queue"]),
             merge_queue=bool(row["merge_queue"]),
-            merge_methods=[
-                method
-                for method, column in (
-                    ("MERGE", "merge_commit_allowed"),
-                    ("SQUASH", "squash_merge_allowed"),
-                    ("REBASE", "rebase_merge_allowed"),
-                )
-                if row[column]
-            ],
+            merge_methods=[method for method, column in _METHOD_COLUMNS if row[column]],
             default_merge_method=row["default_merge_method"],
             auto_merge_allowed=bool(row["auto_merge_allowed"]),
             delete_branch_on_merge=bool(row["delete_branch_on_merge"]),
