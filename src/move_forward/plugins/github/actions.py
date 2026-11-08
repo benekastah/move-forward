@@ -60,6 +60,20 @@ def request_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
+def mark_ready(req: ActionRequest[GitHubConfig]) -> ActionResult:
+    """Take the draft PR out of draft."""
+    pr = _my_open_pr(req)
+    if not pr.is_draft:
+        raise ActionError(f"{pr.repo}#{pr.number} isn't a draft")
+    try:
+        client.mark_ready(pr.url)
+    except CommandError as e:
+        raise ActionError(str(e)) from e
+    return ActionResult(
+        f"{pr.repo}#{pr.number} is ready for review", touched=[Ref(kind=PR, id=pr.url)]
+    )
+
+
 def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     """Make `input`, a login, the PR's primary reviewer, in place of any other. They're asked
     to review too, as they must approve, unless they've been asked or have reviewed it:
@@ -84,6 +98,7 @@ def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
 
 
 ACTIONS: dict[str, ActionHandler] = {
+    "mark_ready": mark_ready,
     "primary_reviewer": primary_reviewer,
     "request_reviewer": request_reviewer,
 }

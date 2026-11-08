@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Take a draft out of draft from the page
+
+A draft PR housekeeping says may be ready now has a Ready for review button. Scripts can post `pr`
+to `/actions/github/mark_ready`. Nothing to change.
+
 ### Say why something is on ice
 
 On ice items have a field to say why, in place of "iced from the dashboard". Scripts can post `ice`

@@ -408,6 +408,11 @@ def request_reviewer(url: str, login: str) -> None:
     run(["gh", "pr", "edit", url, "--add-reviewer", login])
 
 
+def mark_ready(url: str) -> None:
+    """Take the PR out of draft. Raises CommandError when GitHub refuses."""
+    run(["gh", "pr", "ready", url])
+
+
 def login(host: str) -> str:
     return run(api(host, "user", "--jq", ".login")).strip()
 
