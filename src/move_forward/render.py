@@ -80,7 +80,7 @@ RELOAD_SCRIPT = (
     # then: a failed fetch (or one that takes over FETCH_MS) is retried, after 1, 2, 4 and
     # 8 seconds, and when all fail, the next round tries again. One timer is pending at a
     # time, and each fetch has its own AbortController and timeout, cleared when it ends.
-    # The swap waits while something is being dragged or typed in. Dashboard action forms
+    # The swap waits while something is being dragged or a field has the focus. Dashboard action forms
     # use the same swap after their POST redirect, restoring scroll instead of navigating
     # to its anchor. The old elements go with their listeners; the other scripts bind the
     # new ones on `mfd:replaced`.
@@ -108,7 +108,7 @@ RELOAD_SCRIPT = (
     "   try { return await get(); } catch (err) { if (i === RETRIES) return null; }"
     "   await wait(1000 * 2 ** i); } };"
     " const busy = () => document.documentElement.dataset.dragging"
-    "  || document.activeElement?.closest('input, textarea');"
+    "  || document.activeElement?.closest('input, textarea, select');"
     " const swap = (next) => {"
     "  document.title = next.title;"
     "  document.body.dataset.reload = next.body.dataset.reload || '';"
@@ -245,7 +245,7 @@ NOTIFY_SCRIPT = (
 """Tells me of the events waiting on the server, as browser notifications; see inside."""
 FOCUS_KEYS_SCRIPT = (
     "document.addEventListener('keydown', (e) => {"
-    " if (e.target.closest('input, textarea')) return;"
+    " if (e.target.closest('input, textarea, select')) return;"
     " const link = document.querySelector(e.key === 'ArrowLeft' ? 'a.prev' : e.key === 'ArrowRight'"
     " ? 'a.next' : 'nothing'); if (link) link.click(); });"
 )
