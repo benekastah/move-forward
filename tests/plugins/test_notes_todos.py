@@ -1,10 +1,13 @@
 """Starting a todo on the dashboard, with nothing to start it from."""
 
-import pytest
-from conftest import NOW, panel, stored
+from datetime import date, timedelta
 
-from move_forward import refresh
+import pytest
+from conftest import NOW, dashboard, entry, panel, stored, todo
+
+from move_forward import localtime, refresh
 from move_forward.plugin import ActionError
+from move_forward.plugins.notes.models import Entry, Todo
 
 NEW = "notes/todo_new"
 
@@ -81,3 +84,28 @@ def test_the_size_chosen_wins_over_one_written() -> None:
     refresh.run_action(config, db, NEW, {"input": "[big] water plants", "choice": "quick"})
     [item] = panel(refresh.build_dashboard(config, db, NOW), "notes.todos").items
     assert (item.title, item.signals is not None) == ("water plants", True)  # quick: a close-out
+
+
+def _with_done(work: Entry, *done: tuple[str, date]) -> Entry:
+    ticked = [Todo(id=0, text=text, done_on=on) for text, on in done]
+    return work.model_copy(update={"todos": [*work.todos, *ticked]})
+
+
+def test_a_todo_ticked_off_today_stays_listed_ticked_to_untick() -> None:
+    today = localtime.day(NOW)
+    built = dashboard(
+        work_items=[
+            _with_done(entry("Chores", [todo("dishes")]), ("laundry", today)),
+            _with_done(entry("Done today", []), ("taxes", today)),
+            _with_done(entry("Done before", []), ("old", today - timedelta(days=1))),
+        ]
+    )
+    items = {i.title: i for i in panel(built, "notes.todos").items}
+    assert set(items) == {"Chores", "Done today"}  # what was ticked off before is gone
+    chores = items["Chores"]
+    assert [(p.title, [a.name for a in p.actions if a.checkbox]) for p in chores.parts] == [
+        ("dishes", ["notes/todo_done"]),
+        ("laundry", ["notes/todo_undone"]),  # ticked: unticking reopens it
+    ]
+    assert items["Done today"].signals is None  # nothing left to do: not a close-out
+    assert list(items) == ["Chores", "Done today"]  # all ticked off: last

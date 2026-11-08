@@ -4,7 +4,7 @@ branch. Pure functions; no I/O."""
 
 import re
 import textwrap
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time
 
 from ...api import Action, Badge, Band, Entity, Graph, Item, Link, Model, Panel, Ref, Signals, attrs
 from ...api.kinds import PULL_REQUEST as PR
@@ -286,11 +286,14 @@ class Builder:
         graph: Graph,
         entries: list[Entry],
         ices: list[Ice],
+        today: date | None = None,
     ):
         self.now = now
         self.graph = graph
         self.entries = entries
         self.ices = ices
+        self.today = today
+        """The local day: a todo ticked off on it stays listed, ticked, to untick."""
 
     def add_todo(self, item: Item) -> Action | None:
         """An Add todo field for an item about one of my open PRs or a ticket.
@@ -380,7 +383,8 @@ class Builder:
         states = self._pr_done()
         for entry in self.entries:
             open_todos = entry.open_todos
-            if not open_todos:
+            ticked = [t for t in entry.todos if t.done_on is not None and t.done_on == self.today]
+            if not open_todos and not ticked:
                 continue
             urls = _entry_urls(entry)
             keys = [self.graph.handle(TICKET, t) for t in entry_tickets(entry, self.graph)]
@@ -411,14 +415,20 @@ class Builder:
                 )
                 for n, t in enumerate(ordered)
             ]
+            # Those ticked off today stay, ticked, to untick, as focus mode keeps them.
+            done = [
+                _todo_part(entry.title, t, urls, states, [], self.graph, add_todo=False)
+                for t in ticked
+            ]
             # One todo isn't listed as a part, so the entry shows what its part would. Where it
             # stands in for the entry (focus mode), it's about the entry, so its importance and
             # Put on ice are the entry's, as on the page.
-            if len(parts) == 1:
+            if len(parts) == 1 and not done:
                 parts = [
                     parts[0].model_copy(update={"subjects": [Ref(kind=ENTRY, id=entry.title)]})
                 ]
-            lone = parts[0] if len(parts) == 1 else None
+            lone = parts[0] if len(parts) == 1 and not done else None
+            parts += done
             if lone and PROBABLY_DONE in lone.badges:
                 badges.append(PROBABLY_DONE)
             items.append(
@@ -428,11 +438,12 @@ class Builder:
                     subtitle=", ".join(keys),
                     badges=badges,
                     # Several todos are listed as its parts.
-                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered]
-                    if len(ordered) == 1
-                    else [],
+                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered] if lone else [],
                     links=lone.links if lone else links,
-                    rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
+                    rank=(0 if blocked else 100)
+                    + (50 if close_out and open_todos else 0)
+                    + len(quick)
+                    - (200 if not open_todos else 0),  # all ticked off: last
                     actions=lone.actions if lone else [add_todo_action(entry.title)],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
                     # Only a close-out has signals: what notes nominates for Act now.
@@ -448,7 +459,7 @@ class Builder:
                         if entry.updated_on
                         else None,
                     )
-                    if close_out
+                    if close_out and open_todos
                     else None,
                     parts=parts,
                 )

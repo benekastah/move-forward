@@ -49,7 +49,7 @@ EMPTY_NOTES = (
 
 def _builder(ctx: Context[NotesConfig], graph: Graph) -> Builder:
     notes = NotesRepository(ctx.db)
-    return Builder(ctx.now, graph, notes.entries(), notes.ices())
+    return Builder(ctx.now, graph, notes.entries(), notes.ices(), ctx.today)
 
 
 class NotesPlugin(Plugin[NotesConfig, BaseModel]):
