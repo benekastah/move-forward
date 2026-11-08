@@ -122,4 +122,8 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         return ItemAdditions(actions=[action] if action else [])
 
     def actions(self) -> dict[str, ActionHandler]:
-        return {"stack_clean": actions.stack_clean, "untrack": actions.untrack}
+        return {
+            "stack_clean": actions.stack_clean,
+            "stack_restack": actions.stack_restack,
+            "untrack": actions.untrack,
+        }

@@ -110,6 +110,26 @@ def stack_clean(req: ActionRequest[GitStackConfig]) -> str:
     return f"cleaned {repo}: {cleaned(found.events) or 'nothing merged to clean'}"
 
 
+def stack_restack(req: ActionRequest[GitStackConfig]) -> str:
+    """`git stack restack <branch> --json`: rebase the branch's stack onto its parents, locally.
+    It pushes nothing; on a conflict it stops, for me to resolve there, and says so."""
+    graph = req.graph
+    target = f"{req.field('repo')}\t{req.field('branch')}"
+    tracked = graph.view_one(STACK_BRANCH, target, StackBranchView)
+    if tracked is None:
+        raise ActionError(f"git-stack doesn't track {target!r} in one of git's checkouts")
+    if tracked.repo_dir not in repo_dirs(graph):
+        raise ActionError(f"{tracked.repo_dir} is not a configured repo")
+    found = run_json(
+        Path(tracked.repo_dir),
+        ["restack", "--", tracked.name],
+        lambda r: "; ".join(e.message for e in r.events if e.warning),
+        STACK_CLEAN_TIMEOUT_SECONDS,
+    )
+    warnings = [f"warning: {e.message}" for e in found.events if e.warning]
+    return "; ".join([f"restacked {tracked.name}'s stack", *warnings])
+
+
 def untrack(req: ActionRequest[GitStackConfig]) -> str:
     """`git stack untrack --json` the `<repo>\t<branch>` lines of `targets`, repo by repo.
     Each must be a branch git-stack tracks: `git stack untrack` takes globs too, and they'd

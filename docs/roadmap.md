@@ -148,9 +148,10 @@ Approving stays on GitHub: a review should come from having read the PR there.
 
 ### git and git_stack
 
-20. **Restack.** `git stack restack`, with a confirm, on a branch that needs it and on a conflict
-    that says to. It stays local: `sync` and `push` force-push (with lease), which the rule
-    against force-pushing from a button forbids unless that's changed.
+20. **Restack on a conflict.** Stacks' `needs-restack` items have Restack; github's merge
+    conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
+    force-push (with lease), which the rule against force-pushing from a button forbids unless
+    that's changed.
 
 ### jira
 

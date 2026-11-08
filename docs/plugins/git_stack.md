@@ -47,6 +47,7 @@ branches.
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/actions/git_stack/untrack` | `targets` (lines of `<repo dir>\t<branch>`) | `git stack untrack --json` for each repo's, saying which branches still stacked on them now start their own stacks. |
+| `/actions/git_stack/stack_restack` | `repo`, `branch` (a branch git-stack tracks there) | `git stack restack -- <branch> --json`, with a confirm: rebases its stack onto their parents locally, pushing nothing; on a conflict it stops there, and says so. Offered on Stacks' `needs-restack` items. |
 | `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local --json`, saying which branches it deleted, which it untracked but kept, and its warnings, or, when it fails, what it did first. |
 
 ## Notifications
