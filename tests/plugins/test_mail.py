@@ -807,6 +807,19 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
     misfiled.aside, misfiled.sent = {1}, {10: "mine@me"}
     [reply] = client.collect(_config(), ME, NOW).messages
     assert reply.replies_to_me and not reply.bulk
+    # Nor is someone I know, verified; one who isn't verified is put aside.
+    for verified, aside in ((True, False), (False, True)):
+        results = "Authentication-Results: mx.google.com; dmarc=pass header.from=friend.com"
+        raw = headers(sender="pal@friend.com", message_id="f@x", extra=results if verified else "")
+        known = imap([(1, "", raw)])
+        known.capabilities = ("IMAP4REV1", client.GMAIL)
+        known.aside, known.sent, known.sent_to = (
+            {1},
+            {10: "a@me", 11: "b@me"},
+            {10: "pal@friend.com", 11: "pal@friend.com"},
+        )
+        [found] = client.collect(_config(), ME, NOW).messages
+        assert (found.known, found.bulk) == (True, aside)
     failing = imap([(1, "", headers(message_id="sale@shop"))])
     failing.capabilities, failing.aside = ("IMAP4REV1", client.GMAIL), None
     assert not client.collect(_config(), ME, NOW).messages[0].bulk  # nothing put aside
