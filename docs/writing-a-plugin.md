@@ -380,7 +380,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   `req.fields` are its form
   fields, `req.surface` where the button was (`dashboard` or `focus`). A button with an
   `input` has a text field, posted as `input`; `suggestions` lists what it offers to pick
-  from. Check every field: they
+  from, and `choices` adds a drop-down beside it (label to value), posted as `choice`. Check every field: they
   come from a form, so treat them as untrusted (a repo must be configured, a worktree must
   be the repo's, an id must exist). Anything that deletes or rewrites sets `confirm`, and
   nothing force-pushes, resets or stashes. Read a required field with

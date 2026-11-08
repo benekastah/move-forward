@@ -501,3 +501,20 @@ def test_a_listed_part_does_not_repeat_its_items_button() -> None:
     html = render.item_html(item)
     assert html.count("/actions/notes/todo_add") == 1
     assert html.count("/actions/notes/todo_done") == 1
+
+
+def test_a_buttons_choices_are_a_drop_down_beside_its_field() -> None:
+    action = page.Action(
+        name="notes/todo_add",
+        label="Add",
+        fields={},
+        input="New",
+        choices={"Unsized": "", "Q<uick": "quick"},
+    )
+    html = render.buttons([action])
+    assert (
+        "<select name='choice' aria-label='Add'><option value=''>Unsized</option>"
+        "<option value='quick'>Q&lt;uick</option></select>"
+    ) in html
+    plain = action.model_copy(update={"choices": {}})
+    assert "<select" not in render.buttons([plain])
