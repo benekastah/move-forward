@@ -18,6 +18,8 @@ catch up.
 - **What's done, kept to undo**: `Item.done` marks an item or part whose work is done but
   is kept a while (a todo ticked off today): it's shown dimmed, isn't counted, and focus mode
   doesn't step through it.
+- **A label's badge**: `Badge(tone="label")` colours a tag its tool put on an item, which only
+  the tool takes off.
 - **Labels as tags**: `Entity.tags` lists the tags a tool puts on an entity (a ticket's or a
   PR's labels, as written there); core counts them as `#tags`, whatever the kind's
   `tags_from_text`, and names a tag only labels give only by its `#`. Only labels no outsider

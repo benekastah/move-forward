@@ -9,7 +9,7 @@ from move_forward import cli, panels, refresh, tags
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
-from move_forward.page import Item, ItemAdditions, Panel
+from move_forward.page import Badge, Item, ItemAdditions, Panel
 from move_forward.plugin import ActionError
 from move_forward.registry import enabled
 from move_forward.repositories import TagRepository
@@ -356,3 +356,13 @@ def test_a_labels_tag_i_put_on_by_hand_is_named_by_its_words() -> None:
         )
     }
     assert found["3"].refs == [Ref(kind=TAG, id="garbage-day")]
+
+
+def test_my_tags_come_first_and_a_tools_labels_are_coloured_apart() -> None:
+    ref = Ref(kind="x.a", id="1")
+    added = {ref: ["chores"]}
+    carrier = Entity(ref=ref, title="#errand", tags=["Garbage Day", "chores"])
+    graph = Graph(tags.tagged([carrier], {}, added))
+    found = tags.Tags(graph, added).additions(Item(title="t", subjects=[ref]))
+    assert found.badges == ["#chores", "#errand", Badge(text="#garbage-day", tone="label")]
+    assert [a.label for a in found.actions] == ["Tag", "Untag #chores"]  # a label isn't mine
