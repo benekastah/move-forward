@@ -167,12 +167,25 @@ def test_a_tool_can_say_how_much_someone_matters_for_all_their_mail() -> None:
     assert _contacts(SENDER, crm, _thread(SENDER)).importance(THREAD) == 2
 
 
-def test_the_highest_of_a_type_and_what_a_tool_says_counts() -> None:
-    starred = _person("contacts/alice", "alice@acme.com", importance=1)
-    labels = {"@acme.com": "vendor"}  # importance 0 by default
-    assert _contacts(SENDER, starred, _thread(SENDER), labels=labels).importance(THREAD) == 1
-    customer = {"alice@acme.com": "customer"}  # 1, as the tool says
-    assert _contacts(SENDER, _thread(SENDER), labels=customer).importance(THREAD) == 1
+def test_the_highest_of_a_tools_type_and_what_a_tool_says_counts() -> None:
+    starred = _person("contacts/alice", "alice@acme.com", "vendor", importance=1)  # vendor: 0
+    contact = _contacts(SENDER, starred, _thread(SENDER)).of(THREAD)
+    assert contact is not None and (contact.importance, contact.stated) == (1, True)
+    customer = _person("crm/alice", "alice@acme.com", "customer", importance=0)  # customer: 1
+    contact = _contacts(SENDER, customer, _thread(SENDER)).of(THREAD)
+    assert contact is not None and (contact.importance, contact.stated) == (1, False)
+
+
+def test_a_type_i_set_wins_over_what_a_tool_says() -> None:
+    vip = _person("crm/bob", "alice@acme.com", importance=2)
+    labels = {"alice@acme.com": "vendor"}  # I say: 0
+    assert _contacts(SENDER, vip, _thread(SENDER), labels=labels).importance(THREAD) == 0
+
+
+def test_a_stated_importance_above_the_type_is_badged() -> None:
+    vip = _person("crm/alice", "alice@acme.com", importance=2)
+    added = _contacts(SENDER, vip, _thread(SENDER)).additions(Item(title="x", subjects=[THREAD]))
+    assert added.badges == ["important"]
 
 
 def test_a_stated_importance_must_be_one_of_the_three() -> None:

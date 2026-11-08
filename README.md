@@ -218,9 +218,10 @@ for that address or for everyone at its domain (not for a domain anyone can have
 like gmail.com). Once one is set, a Clear type button goes with it, asking first; one set on a
 domain says so, as it clears everyone there. A type I set beats one a tool gives, and one on an
 address beats one on its domain. A tool can also say outright how much someone matters (a CRM's
-VIP, a starred contact). The highest of that and their type's importance raises the item in Act
-now and in panels ordered by importance. It never lowers what a plugin said, and a priority I set
-on the item replaces it.
+VIP, a starred contact), badged "important" when it's above their type's; a type I set still
+wins. The highest of that and their type's importance raises the item in Act now and in panels
+ordered by importance. It never lowers what a plugin said, and a priority I set on the item
+replaces it.
 
 ## Settings
 

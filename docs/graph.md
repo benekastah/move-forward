@@ -50,7 +50,7 @@ flowchart LR
 
 `notes.iced` hides what it points at; see [hidden entities](#hidden-entities). Slack reads
 people's emails, and core joins the people with the same email (`same_person`) and ranks what
-points at them by their contact type.
+points at them by their contact type, or by the importance a tool states for them.
 
 ## How it's built
 
