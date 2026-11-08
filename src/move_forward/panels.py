@@ -320,6 +320,7 @@ def _as_given(item: Item) -> Item:
         update={
             "act_now_fields": None,
             "opened_at": None,
+            "parts_listed": False,
             "parts": [_as_given(part) for part in item.parts],
         }
     )
