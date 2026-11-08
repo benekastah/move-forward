@@ -413,6 +413,12 @@ def mark_ready(url: str) -> None:
     run(["gh", "pr", "ready", url])
 
 
+def update_branch(url: str) -> None:
+    """Merge the PR's base into its branch on GitHub, without rewriting what's stacked on it.
+    Raises CommandError when GitHub refuses, as when that conflicts."""
+    run(["gh", "pr", "update-branch", url])
+
+
 def login(host: str) -> str:
     return run(api(host, "user", "--jq", ".login")).strip()
 

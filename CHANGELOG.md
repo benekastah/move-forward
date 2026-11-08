@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Update a PR's branch from the page
+
+A PR held as behind its base now has an Update branch button. Scripts can post `pr` to
+`/actions/github/update_branch`. Nothing to change.
+
 ### Take a draft out of draft from the page
 
 A draft PR housekeeping says may be ready now has a Ready for review button. Scripts can post `pr`

@@ -15,6 +15,7 @@ from ...api.kinds import TICKET
 from .config import GitHubConfig
 from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
 from .prs import (
+    BEHIND_REASON,
     STATE_REASONS,
     approved,
     awaiting_re_review,
@@ -39,6 +40,7 @@ ENTRY = "notes.entry"
 PRIMARY_REVIEWER = "github/primary_reviewer"
 REQUEST_REVIEWER = "github/request_reviewer"
 MARK_READY = "github/mark_ready"
+UPDATE_BRANCH = "github/update_branch"
 MAY_BE_READY = "draft with green CI and no open todos: ready?"
 
 
@@ -552,7 +554,10 @@ class Builder:
                 continue
             reasons = merge_blockers(pr, self.config.ignored_reviewers)
             if reasons and all(r in STATE_REASONS for r in reasons):
-                held.append(pr_item(self.now, pr, details=[f"held: {r}" for r in reasons]))
+                item = pr_item(self.now, pr, details=[f"held: {r}" for r in reasons])
+                held.append(
+                    self._with_update_button(item, pr) if BEHIND_REASON in reasons else item
+                )
             if reasons:
                 continue
             conditions = [c for e in self._entries(pr) for c in e.merge_conditions.get(pr.url, [])]
@@ -717,6 +722,17 @@ class Builder:
             " CODEOWNERS and the paths I work in.",
             items=items,
         )
+
+    def _with_update_button(self, item: Item, pr: PullRequest) -> Item:
+        """The PR's item with a button to bring its branch up to date with its base."""
+        update = Action(
+            name=UPDATE_BRANCH,
+            label="Update branch",
+            fields={"pr": pr.url},
+            confirm=f"Merge {pr.base} into {pr.head} on GitHub? Pull it here afterwards. Comments"
+            " from before it stop counting as unanswered, as with any push.",
+        )
+        return item.model_copy(update={"actions": [*item.actions, update]})
 
     # Picking reviewers
 

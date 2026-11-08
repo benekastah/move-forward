@@ -119,8 +119,10 @@ as `touched`, so it's fetched again at once.
     shown>`, so a push since then refuses it. A merge queue takes no method, and the button says
     Add to queue. Otherwise the method comes from a setting or the repo's default. Never
     `--admin`, and the branch stays for Cleanup.
-15. **Update branch.** `gh pr update-branch` (merging, not rebasing, which would rewrite what's
-    stacked on it) on a PR held as behind its base.
+15. **A base merge isn't an answer.** Comments count as answered once they're older than my last
+    push, by the head commit's date, so merging the base into a branch (Update branch, or by hand)
+    clears them with nothing said. Read past merge commits: it needs their parents fetched. Then
+    Update branch's confirm no longer needs to warn of it.
 16. **Run failed checks again.** `gh run rerun --failed` on CI failures, for checks whose URL
     names a run.
 
