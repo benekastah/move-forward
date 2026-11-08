@@ -1,6 +1,7 @@
 """Reading a mailbox over IMAP (the standard library's `imaplib`), headers only, read-only."""
 
 import imaplib
+import logging
 import re
 import ssl
 import unicodedata
@@ -15,6 +16,7 @@ from ...api import SourceError, keychain
 from .config import MailConfig
 from .models import MAX_SUBJECT, MailSnapshot, Message
 
+log = logging.getLogger(__name__)
 TIMEOUT_SECONDS = 30
 FETCH_CHUNK = 500
 """The most messages fetched by one command."""
@@ -145,12 +147,77 @@ def collect(config: MailConfig, email: str, now: datetime) -> MailSnapshot:
                 ),
                 "FETCH",
             )
+        # Last: it opens another mailbox.
+        sent = _sent_ids(imap, config, since)
     me = {a.lower() for a in (config.username, email) if "@" in a}
     trusted = config.trusted_auth_servers()
     messages = [
-        m for meta, headers in _fetched(fetched) if (m := message(meta, headers, me, trusted))
+        m.model_copy(update={"replies_to_me": bool(_referenced(headers) & sent)})
+        for meta, headers in _fetched(fetched)
+        if (m := message(meta, headers, me, trusted))
     ]
     return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
+
+
+_LISTED = re.compile(rb'^\(([^)]*)\) (?:"(?:[^"\\]|\\.)*"|NIL) (.+)$')
+
+
+def sent_mailbox(imap: imaplib.IMAP4, config: MailConfig) -> str | None:
+    """Where my sent mail is: `sent_mailbox`, else the mailbox the server marks `\\Sent`
+    (RFC 6154); None when it marks none."""
+    if config.sent_mailbox:
+        return config.sent_mailbox
+    for line in _ok(imap.list(), "LIST"):
+        found = _LISTED.match(line if isinstance(line, bytes) else b"")
+        if found and b"\\Sent" in found.group(1).split():
+            name = found.group(2).decode(errors="replace")
+            return (
+                name[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+                if name.startswith('"')
+                else name
+            )
+    return None
+
+
+def _sent_ids(imap: imaplib.IMAP4, config: MailConfig, since: str) -> set[str]:
+    """The Message-IDs of what I sent since `since`, newest `max_messages` of them: a message
+    naming one is answering me. Empty without a sent mailbox, or one that won't open."""
+    mailbox = sent_mailbox(imap, config)
+    if mailbox is None:
+        return set()
+    try:
+        _ok(imap.select(_quoted(mailbox), readonly=True), "EXAMINE")
+        [found] = _ok(imap.uid("SEARCH", "SINCE", since), "SEARCH")
+    except (RuntimeError, UnicodeEncodeError, imaplib.IMAP4.error) as e:
+        log.warning("can't read sent mail in %s: %s", mailbox, e)
+        return set()
+    uids = (found if isinstance(found, bytes) else b"").split()[-config.max_messages :]
+    ids: set[str] = set()
+    for start in range(0, len(uids), FETCH_CHUNK):
+        fetched = _ok(
+            imap.uid(
+                "FETCH",
+                b",".join(uids[start : start + FETCH_CHUNK]).decode(),
+                "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])",
+            ),
+            "FETCH",
+        )
+        for _, raw in _fetched(fetched):
+            headers = BytesHeaderParser(policy=default).parsebytes(raw)
+            ids.update(_message_ids(str(headers.get("Message-ID") or "")))
+    return ids
+
+
+def _referenced(raw: bytes) -> set[str]:
+    """The Message-IDs a message answers or follows: its `In-Reply-To` and `References`."""
+    headers = BytesHeaderParser(policy=default).parsebytes(raw)
+    found: set[str] = set()
+    for name in ("In-Reply-To", "References"):
+        try:
+            found.update(_message_ids(str(headers.get(name) or "")))
+        except (ValueError, IndexError, TypeError):  # a malformed header
+            continue
+    return found
 
 
 def status(config: MailConfig, email: str) -> str:

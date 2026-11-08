@@ -270,6 +270,9 @@ class FakeImap:
         self.messages = messages
         self.refuse = refuse
         self.capabilities: tuple[str, ...] = ("IMAP4REV1",)
+        self.sent: dict[int, str] = {}
+        """My sent mail by UID: its Message-IDs."""
+        self.open = ""
         self.calls: list[tuple[object, ...]] = []
 
     def __call__(self, host: str, port: int, ssl_context: object, timeout: int) -> "FakeImap":
@@ -285,10 +288,20 @@ class FakeImap:
 
     def select(self, mailbox: str, readonly: bool) -> tuple[str, list[bytes]]:
         self.calls.append(("select", mailbox, readonly))
+        self.open = mailbox
         return "OK", [b"3"]
 
     def uid(self, command: str, *args: str) -> tuple[str, list[object]]:
         self.calls.append(("uid", command, *args))
+        if self.open == '"Sent Items"':
+            if command == "SEARCH":
+                return "OK", [b" ".join(str(u).encode() for u in self.sent)]
+            wanted = {int(u) for u in args[0].split(",")}
+            return "OK", [
+                (f"1 (UID {u} BODY[] {{1}}".encode(), f"Message-ID: <{mid}>\r\n\r\n".encode())
+                for u, mid in self.sent.items()
+                if u in wanted
+            ]
         if command == "SEARCH":
             wanted_flag, seen = ("\\Flagged", True) if "FLAGGED" in args else ("\\Seen", False)
             return "OK", [
@@ -312,6 +325,14 @@ class FakeImap:
     def logout(self) -> tuple[str, list[bytes]]:
         self.calls.append(("logout",))
         return "BYE", [b""]
+
+    # Last, as its name would shadow `list` in the annotations after it.
+    def list(self) -> tuple[str, list[bytes]]:
+        self.calls.append(("list",))
+        return "OK", [
+            b'(\\HasNoChildren) "/" "INBOX"',
+            b'(\\HasNoChildren \\Sent) "/" "Sent Items"',
+        ]
 
 
 @pytest.fixture
@@ -610,3 +631,26 @@ def test_mail_gmail_finds_important_ranks_higher_but_not_a_lists() -> None:
     assert items["Digest"].signals is not None and items["Digest"].signals.importance == 0
     assert "important" not in items["Digest"].badges
     assert next(i.title for i in _items(harness)) == "Contract"
+
+
+def test_mail_answering_mine_replies_to_me(imap: Callable[..., FakeImap]) -> None:
+    server = imap(
+        [
+            (1, "", headers(message_id="r1@acme.com", references="<mine@me>")),
+            (2, "", headers(message_id="n1@acme.com")),
+        ]
+    )
+    server.sent = {10: "mine@me"}
+    snapshot = client.collect(_config(), ME, NOW)
+    assert {m.message_id: m.replies_to_me for m in snapshot.messages} == {
+        "r1@acme.com": True,
+        "n1@acme.com": False,
+    }
+    assert ("select", '"Sent Items"', True) in server.calls  # read-only, found by its \\Sent
+
+
+def test_a_reply_to_me_is_important() -> None:
+    harness = mailbox(message(2, subject="New", thread="n"), message(1, replies_to_me=True))
+    items = {i.title: i for i in _items(harness)}
+    assert "replies to me" in items["Renewal"].badges
+    assert items["Renewal"].signals is not None and items["Renewal"].signals.importance == 1

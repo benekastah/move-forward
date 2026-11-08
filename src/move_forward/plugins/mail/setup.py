@@ -7,6 +7,7 @@ TEMPLATE = """\
 # refresh_seconds = 900                 # how often it reads the mailbox; it also checks for changes every couple of minutes
 # port = 993                            # IMAP over TLS
 # mailbox = "INBOX"
+# sent_mailbox = ""                     # where my sent mail is, to know what answers me; empty: the one the server marks
 # since_days = 14                       # older mail is left out, flagged or not
 # max_messages = 200                    # the most unread read, newest first (flagged: all)
 # message_url = ""                      # a link to a message: {message_id}, {username}; e.g. Apple Mail's "message:%3C{message_id}%3E"
