@@ -23,7 +23,10 @@ names are related through it.
   with its own, and Add todo on the entry (and on its last todo in focus mode). Its New todo
   field, with a size drop-down (or a leading `[quick]` or `[big]`), starts a todo from nothing, as an entry
   of its own titled by it; the empty panel says so. A title with a line break, or the work
-  notes' "Reviews requested of me", is refused, as is a todo for an entry on ice.
+  notes' "Reviews requested of me", is refused, as is a todo for an entry on ice. A todo ticked
+  off today stays listed, ticked and dimmed, to untick, as focus mode keeps it, but isn't a step
+  in focus mode nor counted; an entry with nothing left but those goes last, and isn't a
+  close-out.
   Focus mode also shows the todos one at a time; an entry's only todo stands in for it,
   with its importance and Put on ice. While the notes are empty (just
   upgraded, say), it says how to import them.

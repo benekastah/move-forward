@@ -167,8 +167,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
     the page), status and where (not shown at all), `link`, and `remove`.
 26. **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
     and remove them on the PR's items.
-28. **Undo a tick on the dashboard.** Focus mode keeps a ticked todo to untick; the dashboard loses
-    it. Keep recently done todos, ticked, for a while.
 
 ### slack
 

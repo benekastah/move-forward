@@ -4,7 +4,7 @@ branch. Pure functions; no I/O."""
 
 import re
 import textwrap
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time
 
 from ...api import Action, Badge, Band, Entity, Graph, Item, Link, Model, Panel, Ref, Signals, attrs
 from ...api.kinds import PULL_REQUEST as PR
@@ -286,11 +286,14 @@ class Builder:
         graph: Graph,
         entries: list[Entry],
         ices: list[Ice],
+        today: date | None = None,
     ):
         self.now = now
         self.graph = graph
         self.entries = entries
         self.ices = ices
+        self.today = today
+        """The local day: a todo ticked off on it stays listed, ticked, to untick."""
 
     def add_todo(self, item: Item) -> Action | None:
         """An Add todo field for an item about one of my open PRs or a ticket.
@@ -363,30 +366,38 @@ class Builder:
         for entry in self.entries:
             for todo in entry.todos:
                 if todo.id == todo_id:
-                    links = _todo_links(todo, _entry_urls(entry), self._pr_done(), self.graph)
-                    mentioned = [link for link in links if link.strong]
-                    return Item(
-                        title=todo.text,
-                        url=(mentioned or links)[0].url if links else None,
-                        subtitle=entry.title,
-                        badges=["done"] if todo.done_on is not None else [todo.size or "unsized"],
-                        links=links,
-                        actions=todo_actions(todo, entry.title),
-                    )
+                    return self._kept(entry, todo, self._pr_done())
         return None
+
+    def _kept(self, entry: Entry, todo: Todo, states: dict[str, bool]) -> Item:
+        """A todo kept to untick once ticked off (or to tick again), with its box as it is now:
+        about nothing, so nothing but its own buttons is offered on what's done."""
+        links = _todo_links(todo, _entry_urls(entry), states, self.graph)
+        mentioned = [link for link in links if link.strong]
+        ticked = todo.done_on is not None
+        return Item(
+            title=todo.text,
+            url=(mentioned or links)[0].url if links else None,
+            subtitle=entry.title,
+            badges=["done"] if ticked else [todo.size or "unsized"],
+            links=links,
+            actions=todo_actions(todo, entry.title),
+            done=ticked,
+        )
 
     def todos(self) -> Panel:
         items: list[Item] = []
         states = self._pr_done()
         for entry in self.entries:
             open_todos = entry.open_todos
-            if not open_todos:
+            ticked = [t for t in entry.todos if t.done_on is not None and t.done_on == self.today]
+            if not open_todos and not ticked:
                 continue
             urls = _entry_urls(entry)
             keys = [self.graph.handle(TICKET, t) for t in entry_tickets(entry, self.graph)]
             blocked = _is_blocked(entry)
             quick = [t for t in open_todos if t.size == "quick"]
-            close_out = len(quick) == len(open_todos)
+            close_out = bool(open_todos) and len(quick) == len(open_todos)
             badges: list[str | Badge] = []
             if close_out:
                 badges.append(f"close-out: {len(open_todos)} quick todo(s)")
@@ -411,14 +422,19 @@ class Builder:
                 )
                 for n, t in enumerate(ordered)
             ]
+            # Those ticked off today stay, ticked, to untick, as focus mode keeps them.
+            done = [self._kept(entry, t, states) for t in ticked]
             # One todo isn't listed as a part, so the entry shows what its part would. Where it
             # stands in for the entry (focus mode), it's about the entry, so its importance and
             # Put on ice are the entry's, as on the page.
-            if len(parts) == 1:
+            if len(parts) == 1 and not done:
                 parts = [
                     parts[0].model_copy(update={"subjects": [Ref(kind=ENTRY, id=entry.title)]})
                 ]
-            lone = parts[0] if len(parts) == 1 else None
+            lone = parts[0] if len(parts) == 1 and not done else None
+            if not parts and len(done) == 1:
+                lone = done[0]  # its one todo, ticked off: the entry offers its box, to untick
+            parts += done
             if lone and PROBABLY_DONE in lone.badges:
                 badges.append(PROBABLY_DONE)
             items.append(
@@ -429,11 +445,20 @@ class Builder:
                     badges=badges,
                     # Several todos are listed as its parts.
                     details=[f"[{t.size or '?'}] {t.text}" for t in ordered]
-                    if len(ordered) == 1
+                    if lone and ordered
+                    else [f"done: {lone.title}"]
+                    if lone
                     else [],
                     links=lone.links if lone else links,
-                    rank=(0 if blocked else 100) + (50 if close_out else 0) + len(quick),
-                    actions=lone.actions if lone else [add_todo_action(entry.title)],
+                    rank=(0 if blocked else 100)
+                    + (50 if close_out else 0)
+                    + len(quick)
+                    - (200 if not open_todos else 0),  # all ticked off: last
+                    # A ticked stand-in offers its box, and the entry its Add todo all the same.
+                    actions=[
+                        *(lone.actions if lone else []),
+                        *([add_todo_action(entry.title)] if not lone or lone.done else []),
+                    ],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
                     # Only a close-out has signals: what notes nominates for Act now.
                     signals=Signals(
@@ -451,13 +476,14 @@ class Builder:
                     if close_out
                     else None,
                     parts=parts,
+                    done=not open_todos,
                 )
             )
         return Panel(
             key=TODOS,
             priority=Band.TODOS,
             title="Todos from the work notes",
-            description="Easy close-outs first; blocked work last.",
+            description="Easy close-outs first; blocked work last; what's all ticked off today after.",
             items=items,
             # A todo from nothing: no PR or ticket to start it from.
             actions=[
