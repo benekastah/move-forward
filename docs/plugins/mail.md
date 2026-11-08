@@ -99,9 +99,9 @@ Every conversation but those from lists and automated mail (unless flagged), as 
 Mail sent to me has its sender waiting since the server received it. A conversation is
 important when it's flagged, when its latest message answers mail I sent within `since_days`
 (its `In-Reply-To`, else the last of its `References`, names one of my sent Message-IDs;
-badged "replies to me"; if my sent mail can't be read, nothing counts as replying), or when Gmail labels
-it Important (Gmail's `X-GM-LABELS`, read only from a server offering them); not for lists and
-automated mail, but flagged. The sender's contact type can raise it further.
+badged "replies to me"; if my sent mail can't be read, nothing counts as replying), or when
+Gmail labels it Important (Gmail's `X-GM-LABELS`, read only from a server offering them); not
+for lists and automated mail, but flagged. The sender's contact type can raise it further.
 
 ## Pages
 
