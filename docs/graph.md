@@ -46,6 +46,8 @@ flowchart LR
     ice -->|hides| pr
     thread["mail.thread"] -->|from| person["person<br/>(github, mail)"]
     thread -->|mentions| ticket
+    tag["tag<br/>(core)"] -->|carried by| pr
+    thread -->|names| tag
 ```
 
 `notes.iced` hides what it points at; see [hidden entities](#hidden-entities). Slack reads
@@ -60,7 +62,8 @@ flowchart TB
     snapshot -->|"Plugin.entities"| published["entities, per plugin"]
     published --> check{"a kind the plugin owns, a ref not<br/>seen yet, fitting the kind's model?"}
     check -->|no| dropped["left out, logged:<br/>a plugin bug"]
-    check -->|yes| mentions["mentions of linking ids<br/>become refs"]
+    check -->|yes| tagged["core adds the tags on them;<br/>text naming one points at it"]
+    tagged --> mentions["mentions of linking ids<br/>become refs"]
     mentions --> index["indexed by ref, by kind,<br/>and by the refs pointing at each"]
     index --> built(["Graph"])
 ```
@@ -73,9 +76,11 @@ flowchart TB
    one, should two), and only it publishes them, each ref once. Core checks every entity
    for that and against its kind's model; one that fails is left out and logged, so the
    page goes on without it.
-3. Text an entity `mentions` that matches a linking kind's id pattern becomes a ref to it
+3. Core adds a `tag` per `#tag` in a title (or put on by hand), pointing at what carries
+   it, and points each entity whose title or mentions name one at it (see `move_forward.tags`).
+4. Text an entity `mentions` that matches a linking kind's id pattern becomes a ref to it
    (see [related entities](#related-entities)).
-4. The graph indexes entities by ref, by kind, and by the refs pointing at each, for the
+5. The graph indexes entities by ref, by kind, and by the refs pointing at each, for the
    lookups below.
 
 During a refresh the graph is built twice:
@@ -161,7 +166,9 @@ class NotesPlugin(Plugin[NotesConfig]):
 Core adds a kind of its own, `tag` (see `move_forward.tags`): one per `#tag` in an entity's
 title, pointing at what carries it, while each entity whose title or mentions name a tag points
 at it. It isn't linking, so it relates nothing through it: `related(ref, "tag")` gives the tags
-on or named by `ref`, and a tag's `refs` what carries it.
+on or named by `ref`, and by the tickets or entries it belongs to (one hop through a linking
+entity, as for any kind), and a tag's `refs` what carries it. A one-word tag shorter than
+three letters is named only with its `#`.
 
 `related(ref, kind)` finds entities of `kind` one hop from `ref`, in either direction, or
 linked with it by a linking entity that's one hop from both:

@@ -228,7 +228,8 @@ said, and a priority I set on the item replaces it.
 A `#tag` in an item's title (a PR's, a ticket's, a todo's) puts the tag on it. Text that names
 it, in a title or a description, however its words are spaced, hyphenated or cased ("Garbage day
 moved" names `#garbage-day`), points at it. A tag's words are separated by `-` or `_`; it needs
-a letter (`#7` is a PR's number). Tags relate items without making them one piece of work: icing
+a letter (`#7` is a PR's number), and one word shorter than three letters is named only with
+its `#`. Tags relate items without making them one piece of work: icing
 one, or setting its priority, doesn't touch the others. Core publishes each as a `tag` entity
 (see [entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
 shows.

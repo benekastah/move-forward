@@ -14,11 +14,33 @@ from .domain import KindModel
 from .graph import Entity, KindSpec, Ref
 from .kinds import TAG
 
-_TAG = re.compile(r"(?<![\w#&])#(\w[\w-]*)")
-"""A tag in text: `#` and a word, not inside one (`a#b`), nor an HTML entity (`&#39;`)."""
 _SEPARATORS = re.compile(r"[\s_-]+")
-_WORDS = re.compile(r"[^\W_]+")
-"""The words text names a tag by; `_` separates them, as `-` and spaces do."""
+_SHORTEST_NAMED = 3
+"""A one-word tag shorter than this is named only with its `#`: `#a` isn't every "a"."""
+
+
+def _in_word(c: str) -> bool:
+    """A letter, digit or combining mark: what a tag's words are made of, in any script."""
+    return c.isalnum() or unicodedata.category(c)[0] == "M"
+
+
+def _fold(text: str) -> str:
+    """`text` as tags are compared: NFC, case-folded (`STRASSE` is `straße`'s)."""
+    return unicodedata.normalize("NFC", unicodedata.normalize("NFC", text).casefold())
+
+
+def _words(text: str) -> list[tuple[str, int, int]]:
+    """The words in `text`, each with where it starts and ends; `_` separates them, as `-`
+    and spaces do."""
+    found: list[tuple[str, int, int]] = []
+    start: int | None = None
+    for i, c in enumerate([*text, " "]):
+        if _in_word(c):
+            start = i if start is None else start
+        elif start is not None:
+            found.append((text[start:i], start, i))
+            start = None
+    return found
 
 
 class TagAttrs(KindModel):
@@ -31,36 +53,49 @@ SPEC = KindSpec(TagAttrs, tags_from_title=False)
 
 
 def handle(text: str) -> str:
-    """The tag `text` names: its words, lower-case and NFC, joined by `-`; `Garbage_Day` is
+    """The tag `text` names: its words, case-folded and NFC, joined by `-`; `Garbage_Day` is
     `garbage-day`."""
-    text = unicodedata.normalize("NFC", text).lower()
-    return "-".join(word for word in _SEPARATORS.split(text) if word)
+    return "-".join(word for word, _, _ in _words(_fold(text)))
 
 
 def tags(text: str) -> list[str]:
-    """The tags in `text`, by handle, in order, once each. A tag needs a letter: `#7` is a PR's
-    number."""
-    found = (handle(m[1]) for m in _TAG.finditer(unicodedata.normalize("NFC", text)))
+    """The tags in `text`, by handle, in order, once each: `#` and words joined by `-` or `_`,
+    not inside a word (`a#b`) nor an HTML entity (`&#39;`). A tag needs a letter: `#7` is a
+    PR's number."""
+    text = unicodedata.normalize("NFC", text)
+    found: list[str] = []
+    for i, c in enumerate(text):
+        before = text[i - 1] if i else " "
+        if c != "#" or _in_word(before) or before in "#&_":
+            continue
+        end = i + 1
+        while end < len(text) and (_in_word(text[end]) or text[end] in "-_"):
+            end += 1
+        if end > i + 1 and _in_word(text[i + 1]):
+            found.append(handle(text[i + 1 : end]))
     return list(dict.fromkeys(t for t in found if any(c.isalpha() for c in t)))
 
 
-def named(text: str, handles: Mapping[str, Mapping[tuple[str, ...], str]]) -> list[str]:
+ByWords = Mapping[str, list[tuple[tuple[str, ...], str]]]
+"""Tags by their first word: each one's words and handle, the most words first."""
+
+
+def named(text: str, handles: ByWords) -> list[str]:
     """The tags `text` names by their words, consecutive and separated only by spaces, `-` or
     `_`, ignoring case, the longest at each word first: "garbage day" names `garbage-day`
-    before `garbage`. `handles` are the tags by first word, then by all their words."""
-    text = unicodedata.normalize("NFC", text).lower()
-    words = list(_WORDS.finditer(text))
+    before `garbage`."""
+    text = _fold(text)
+    words = _words(text)
     found: list[str] = []
     i = 0
     while i < len(words):
-        by_words = handles.get(words[i][0], {})
         match = next(
             (
                 (tag, len(key))
-                for key, tag in sorted(by_words.items(), key=lambda kv: -len(kv[0]))
-                if tuple(w[0] for w in words[i : i + len(key)]) == key
+                for key, tag in handles.get(words[i][0], [])
+                if tuple(w for w, _, _ in words[i : i + len(key)]) == key
                 and all(
-                    _SEPARATORS.fullmatch(text[a.end() : b.start()])
+                    _SEPARATORS.fullmatch(text[a[2] : b[1]])
                     for a, b in pairwise(words[i : i + len(key)])
                 )
             ),
@@ -74,13 +109,13 @@ def named(text: str, handles: Mapping[str, Mapping[tuple[str, ...], str]]) -> li
     return list(dict.fromkeys(found))
 
 
-def _by_words(handles: Iterable[str]) -> dict[str, dict[tuple[str, ...], str]]:
-    found: dict[str, dict[tuple[str, ...], str]] = {}
+def _by_words(handles: Iterable[str]) -> ByWords:
+    found: dict[str, list[tuple[tuple[str, ...], str]]] = {}
     for tag in handles:
-        key = tuple(_WORDS.findall(tag))
-        if key:
-            found.setdefault(key[0], {})[key] = tag
-    return found
+        words = tag.split("-")
+        if len(words) > 1 or len(tag) >= _SHORTEST_NAMED:
+            found.setdefault(words[0], []).append((tuple(words), tag))
+    return {word: sorted(tags, key=lambda kt: -len(kt[0])) for word, tags in found.items()}
 
 
 def tagged(

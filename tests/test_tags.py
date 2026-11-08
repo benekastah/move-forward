@@ -4,7 +4,7 @@ import pytest
 from conftest import NOW, pr, snapshot, stored
 
 from move_forward import refresh, tags
-from move_forward.graph import Entity, KindSpec, Ref
+from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
 from move_forward.registry import enabled
 
@@ -96,3 +96,24 @@ def test_no_plugin_declares_a_family_named_tag() -> None:
         declaring("x", [Family(TAG, "tag", Person, is_url)], keep=False),
     ):
         pass
+
+
+def test_words_are_compared_case_folded_and_short_tags_need_their_hash() -> None:
+    found = _tagged(
+        _entity("1", "#straße #a #İstanbul #हिन्दी"),
+        _entity("2", "STRASSE closed, a note, İSTANBUL trip, हिन्दी class"),
+        _entity("3", "ह"),
+    )
+    assert found["2"].refs == [
+        Ref(kind=TAG, id="strasse"),  # case-folded, as STRASSE is
+        Ref(kind=TAG, id="i̇stanbul"),
+        Ref(kind=TAG, id="हिन्दी"),
+    ]  # not #a: too short to be named without its #
+    assert found["3"].refs == []
+
+
+def test_the_tags_of_a_ticket_reach_what_belongs_to_it() -> None:
+    ticket = Entity(ref=Ref(kind="ticket", id="https://jira/APP-1"), title="#chores sink")
+    work = Entity(ref=Ref(kind="x.pr", id="1"), title="fix", refs=[ticket.ref])
+    graph = Graph(tags.tagged([ticket, work], {}), linking={"ticket": None})
+    assert [t.ref for t in graph.related(work.ref, TAG)] == [Ref(kind=TAG, id="chores")]
