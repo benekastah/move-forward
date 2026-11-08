@@ -16,8 +16,9 @@ from .models import PullRequest
 from .prs import decisions, primary_reviewers
 from .snapshots import PrRepository
 
-LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?")
-"""A GitHub login: also what keeps one from reading as an option of `gh`."""
+LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?")
+"""A GitHub login (with `_` for Enterprise Managed Users' `jdoe_acme`): also what keeps one
+from reading as an option of `gh`."""
 
 
 def _my_open_pr(req: ActionRequest[GitHubConfig]) -> PullRequest:

@@ -318,3 +318,21 @@ def test_collect_keeps_membership_per_team_even_when_a_person_is_in_both(
         require_member=lambda team: team == "bacon",
     )
     assert selective.team_memberships == {"acme/bacon": ["alex", "shared"]}
+    assert selective.team_members == []  # bacon is a requested team, not one of mine
+
+
+def test_collect_fails_when_one_of_my_teams_cant_be_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    def members(host: str, org: str, team: str) -> list[str]:
+        raise github.CommandError("gh: Not Found")
+
+    def search(host: str, query: str, with_files: bool = False) -> list[PullRequest]:
+        return []
+
+    def login(host: str) -> str:
+        return "me"
+
+    monkeypatch.setattr(github, "search_prs", search)
+    monkeypatch.setattr(github, "login", login)
+    monkeypatch.setattr(github, "team_members", members)
+    with pytest.raises(github.CommandError, match="Not Found"):
+        github.collect("github.com", "acme", ["bacon"], 14, datetime(2026, 10, 30, tzinfo=UTC))

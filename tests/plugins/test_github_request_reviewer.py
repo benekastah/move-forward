@@ -70,12 +70,15 @@ def test_requesting_one_asks_github_and_fetches_the_pr_again(
     result = perform_action(config, db, REQUEST_REVIEWER, {"pr": URL, "input": "alice"})
     assert commands == [["gh", "pr", "edit", URL, "--add-reviewer", "alice"]]
     assert [ref.id for ref in result.touched] == [URL]
+    perform_action(config, db, REQUEST_REVIEWER, {"pr": URL, "input": "jdoe_acme"})  # EMU
+    assert commands[-1] == ["gh", "pr", "edit", URL, "--add-reviewer", "jdoe_acme"]
 
 
 @pytest.mark.parametrize(
     ("url", "login", "says"),
     [
         (URL, "--repo=evil/x", "isn't a GitHub login"),
+        (URL, "_alice", "isn't a GitHub login"),
         (URL, ME.upper(), "author can't review"),
         (URL, "ALICE", "already asked"),
         ("https://github.com/other/repo/pull/9", "bob", "isn't one of my open PRs"),

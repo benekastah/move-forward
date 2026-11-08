@@ -510,13 +510,18 @@ def collect(
         for pr in future.result():
             team_requests.setdefault(pr.url, pr)
     memberships: dict[str, list[str]] = {}
+    mine_teams: set[str] = set()
     for (owner, team), future in member_futures.items():
         try:
             memberships[f"{owner}/{team}"] = sorted(set(future.result()))
         except CommandError:
+            if (owner, team) in {(org, t) for t in teams}:
+                raise  # one of my teams: a wrong slug, say, which I should hear about
             # A team in another org may be visible on the PR but not list its members.
             # The panel treats missing membership as unverified, never as a match.
             continue
+        if owner == org and team in teams:
+            mine_teams.add(f"{owner}/{team}")
     return GitHubSnapshot(
         login=login_future.result(),
         mine=mine_prs,
@@ -526,6 +531,6 @@ def collect(
         merged_recent=merged.result(),
         closed_recent=closed.result(),
         mentioned=mentioned.result(),
-        team_members=sorted({login for members in memberships.values() for login in members}),
+        team_members=sorted({login for key in mine_teams for login in memberships[key]}),
         team_memberships=memberships,
     )
