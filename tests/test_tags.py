@@ -144,6 +144,21 @@ Use `#fff` or ``#a`b`` here, not https://docs.x.io/guide/#installation or href="
     assert [e.ref.id for e in found.values() if e.ref.kind == TAG] == ["qa", "garbage-day", "after"]
 
 
+@pytest.mark.parametrize(
+    ("text", "found"),
+    [
+        ("#chores (#garbage)", ["chores", "garbage"]),  # brackets and quotes aren't targets
+        ('label it "#bug"', ["bug"]),
+        ("Fixed ```#x``` and\n```#y```\nWaiting on #qa", ["qa"]),  # code spans, not fences
+        ("see `foo\n#bar` ok", []),  # a span across a line break
+        ("``a` #in`` #out", ["out"]),  # closed by as many backticks
+        ("it`s #qa", ["qa"]),  # a lone backtick opens nothing
+    ],
+)
+def test_prose_keeps_what_isnt_code(text: str, found: list[str]) -> None:
+    assert tags.tags(tags.prose(text)) == found
+
+
 def test_code_doesnt_name_a_tag() -> None:
     found = _tagged(
         _entity("1", "#include"),

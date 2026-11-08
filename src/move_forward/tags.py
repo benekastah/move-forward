@@ -75,13 +75,19 @@ def tag_key(text: str) -> str:
 
 
 _CODE = re.compile(
-    r"^[ \t]*(?P<fence>`{3,}|~{3,}).*?(?:^[ \t]*(?P=fence)[`~]*[ \t]*$|\Z)"
+    r"^[ \t]*(?P<fence>`{3,}(?=[^`\n]*$)|~{3,}).*?(?:^[ \t]*(?P=fence)[`~]*[ \t]*$|\Z)"
     r"|<!--.*?(?:-->|\Z)"
-    r"|(?P<ticks>`+)[^\n]*?(?P=ticks)",
+    r"|(?<!`)(?P<ticks>`+)(?!`)(?:(?!\n[ \t]*\n).){0,500}?(?<!`)(?P=ticks)(?!`)",
     re.DOTALL | re.MULTILINE,
 )
-"""Code in Markdown (a fenced block, closed by a fence as long at a line's start; inline code)
+"""Code in Markdown (a fenced block, closed by a fence as long at a line's start; a code span,
+closed by a run of as many backticks, across lines but not a blank one, and not too long to
+look for)
 and HTML comments (a PR template's notes): `#include` or `#fff` there is no tag."""
+
+
+_TARGETS = ("](", '="', "='")
+"""What comes before a `#` that starts a link's target, not a tag."""
 
 
 def prose(text: str) -> str:
@@ -92,13 +98,13 @@ def prose(text: str) -> str:
 def tags(text: str) -> list[str]:
     """The tags in `text`, by handle, in order, once each: `#` and words joined by `-` or `_`,
     not inside a word (`a#b`), an HTML entity (`&#39;`), a URL or a link's target (`/#guide`,
-    `(#testing)`, `href="#top"`). A tag needs a letter: `#7` is a
+    `[x](#testing)`, `href="#top"`). A tag needs a letter: `#7` is a
     PR's number."""
     text = unicodedata.normalize("NFC", text)
     found: list[str] = []
     for i, c in enumerate(text):
         before = text[i - 1] if i else " "
-        if c != "#" or _in_word(before) or before in "#&_/(\"'=":
+        if c != "#" or _in_word(before) or before in "#&_/" or text[max(i - 2, 0) : i] in _TARGETS:
             continue
         end = i + 1
         while end < len(text) and (_in_word(text[end]) or text[end] in "-_"):
