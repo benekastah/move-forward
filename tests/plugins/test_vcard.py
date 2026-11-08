@@ -258,3 +258,13 @@ def test_folding_is_undone_by_each_cards_own_version() -> None:
 def test_a_cut_off_agents_card_doesnt_swallow_the_cards_after_it() -> None:
     text = "BEGIN:VCARD\nVERSION:2.1\nFN:Boss\nAGENT:\nBEGIN:VCARD\nFN:Assistant\n"
     assert [c.name for c in client.parse(text + card("FN:A") + card("FN:B"))] == ["Boss", "A", "B"]
+
+
+def test_an_agents_own_agent_is_skipped_too() -> None:
+    text = (
+        "BEGIN:VCARD\nVERSION:2.1\nFN:Boss\nAGENT:\nBEGIN:VCARD\nVERSION:2.1\nFN:Assistant\n"
+        "AGENT:\nBEGIN:VCARD\nVERSION:2.1\nFN:Intern\nEND:VCARD\nEND:VCARD\n"
+        "EMAIL:boss@acme.com\nEND:VCARD\n"
+    )
+    [found] = client.parse(text)
+    assert (found.name, found.emails) == ("Boss", ["boss@acme.com"])

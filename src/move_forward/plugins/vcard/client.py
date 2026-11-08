@@ -129,7 +129,7 @@ def parse(text: str) -> list[Card]:
     cards: list[Card] = []
     card: Card | None = None
     agent = False  # the last line was an empty `AGENT`: 2.1 puts the agent's own card next
-    nested = 0  # in the agent's card, which isn't this one's
+    nested = 0  # how deep in agents' cards (an agent's own agent too), which aren't this one's
     for line in _lines(text):
         name, params, value = _property(line)
         begins = name == "BEGIN" and value.upper() == "VCARD"
@@ -137,7 +137,8 @@ def parse(text: str) -> list[Card]:
         if begins and card is not None and agent:
             nested += 1
         elif nested and not begins:
-            nested -= 1 if ends else 0
+            if ends:
+                nested -= 1
         elif begins:
             if card is not None:  # the last one never ended: keep what it said
                 cards.append(card)
@@ -193,7 +194,8 @@ def _lines(text: str) -> list[str]:
     last) joined, as are 2.1's quoted-printable values broken with a trailing `=`. 2.1 folds
     at whitespace and keeps it; later versions fold anywhere and drop the space or tab."""
     lines: list[str] = []
-    old = False  # in a 2.1 card (an agent's card inside one, rare, sets it for the rest)
+    old = False  # in a 2.1 card; an agent's card inside one, rare, sets it by its own VERSION
+    # for the rest of the holder, or clears it, without one
     for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if raw.upper().startswith("BEGIN:VCARD"):
             old = False
