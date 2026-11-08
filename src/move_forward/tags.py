@@ -75,11 +75,13 @@ def tag_key(text: str) -> str:
 
 
 _CODE = re.compile(
-    r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)|`[^`\n]*`|<!--.*?(?:-->|\Z)|^(?: {4}|\t).*$",
+    r"^[ \t]*(?P<fence>`{3,}|~{3,}).*?(?:^[ \t]*(?P=fence)[`~]*[ \t]*$|\Z)"
+    r"|<!--.*?(?:-->|\Z)"
+    r"|(?P<ticks>`+)[^\n]*?(?P=ticks)",
     re.DOTALL | re.MULTILINE,
 )
-"""Code in Markdown (fenced blocks, inline code, indented lines) and HTML comments (a PR
-template's notes): `#include` or `#fff` there is no tag."""
+"""Code in Markdown (a fenced block, closed by a fence as long at a line's start; inline code)
+and HTML comments (a PR template's notes): `#include` or `#fff` there is no tag."""
 
 
 def prose(text: str) -> str:
@@ -89,13 +91,14 @@ def prose(text: str) -> str:
 
 def tags(text: str) -> list[str]:
     """The tags in `text`, by handle, in order, once each: `#` and words joined by `-` or `_`,
-    not inside a word (`a#b`) nor an HTML entity (`&#39;`). A tag needs a letter: `#7` is a
+    not inside a word (`a#b`), an HTML entity (`&#39;`), a URL or a link's target (`/#guide`,
+    `(#testing)`, `href="#top"`). A tag needs a letter: `#7` is a
     PR's number."""
     text = unicodedata.normalize("NFC", text)
     found: list[str] = []
     for i, c in enumerate(text):
         before = text[i - 1] if i else " "
-        if c != "#" or _in_word(before) or before in "#&_":
+        if c != "#" or _in_word(before) or before in "#&_/(\"'=":
             continue
         end = i + 1
         while end < len(text) and (_in_word(text[end]) or text[end] in "-_"):
@@ -159,7 +162,7 @@ def tagged(
     carrying: dict[str, list[Entity]] = {}
     for entity in entities:
         spec = specs.get(entity.ref.kind)
-        texts = [entity.title, *map(prose, entity.mentions)]
+        texts = [prose(text) for text in [entity.title, *entity.mentions]]
         own = (
             [t for text in texts for t in tags(text)] if spec is None or spec.tags_from_text else []
         )
@@ -175,7 +178,7 @@ def tagged(
             Ref(kind=TAG, id=tag)
             for tag in dict.fromkeys(
                 t
-                for text in [entity.title, *entity.mentions]
+                for text in [prose(text) for text in [entity.title, *entity.mentions]]
                 for t in [*(h for h in tags(text) if h in carriers), *named(text, by_words)]
             )
             if entity.ref not in carriers[tag]

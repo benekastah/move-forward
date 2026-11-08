@@ -126,23 +126,30 @@ def test_the_tags_of_a_ticket_reach_what_belongs_to_it() -> None:
 
 
 def test_a_tag_in_a_description_puts_it_on_the_entity_but_not_one_in_code() -> None:
-    body = """Waiting on #QA, see #garbage-day.
+    body = """Waiting on #QA, see [Testing](#testing).
 
+````md
 ```c
 #include <stdio.h>
 ```
-Use `#fff` here.
+#inner
+````
+Use `#fff` or ``#a`b`` here, not https://docs.x.io/guide/#installation or href="#foo".
+<!-- template: add #labels -->
+- item
+    continued with #garbage-day
 
-    #define X 1
-<!-- template: add #labels -->"""
-    found = _tagged(_entity("1", "Fix", mentions=(body,)), _entity("2", "#qa"))
-    assert {
-        t for t in found if t in ("qa", "garbage-day", "include", "fff", "define", "labels")
-    } == {
-        "qa",
-        "garbage-day",
-    }
-    assert found["qa"].refs == [Ref(kind="x.a", id="1"), Ref(kind="x.a", id="2")]
+#after"""
+    found = _tagged(_entity("1", "Handle `#parser` input", mentions=(body,)))
+    assert [e.ref.id for e in found.values() if e.ref.kind == TAG] == ["qa", "garbage-day", "after"]
+
+
+def test_code_doesnt_name_a_tag() -> None:
+    found = _tagged(
+        _entity("1", "#include"),
+        _entity("2", "Fix", mentions=("```\ninclude it\n```\n`include` <!-- include -->",)),
+    )
+    assert found["2"].refs == []
 
 
 def test_a_short_tag_is_named_with_its_hash() -> None:
