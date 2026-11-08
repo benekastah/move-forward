@@ -1,6 +1,7 @@
 """The mail plugin: reading a mailbox's headers over IMAP, and what it publishes and shows."""
 
 import imaplib
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ from move_forward.plugins.mail.config import GMAIL_MESSAGE_URL, MailConfig
 from move_forward.plugins.mail.kinds import THREAD
 from move_forward.plugins.mail.models import MailSnapshot, Message
 from move_forward.plugins.mail.plugin import MailPlugin
+from move_forward.plugins.mail.repository import MessageRepository
 from move_forward.plugins.mail.setup import questions
 from move_forward.repositories import ContactRepository
 from move_forward.testing import Harness
@@ -535,3 +537,11 @@ def test_init_guesses_gmail_from_my_email() -> None:
 
     found = questions(cast(Asker, ask), InitSetup(email=ME, cwd=Path()))
     assert found == {"host": "imap.gmail.com", "username": ME, "message_url": GMAIL_MESSAGE_URL}
+
+
+def test_a_failed_store_leaves_what_was_kept() -> None:
+    harness = mailbox(message(1))
+    clash = [message(2), message(2, subject="same uid")]  # the second can't go in
+    with pytest.raises(sqlite3.IntegrityError):
+        MessageRepository(harness.db).replace(MailSnapshot(messages=clash))
+    assert [m.uid for m in MessageRepository(harness.db).load().messages] == [1]
