@@ -189,6 +189,21 @@ def _shown(text: str) -> str:
     )
 
 
+def _address(text: str) -> str | None:
+    """`text`, lower-cased, if it can be shown and named as one address: one `@`, and nothing
+    hidden, spaced or slashed in it (a `/` can't go in a person's id). None otherwise."""
+    if text.count("@") != 1 or text != _shown(text) or " " in text or "/" in text:
+        return None
+    return text.lower()
+
+
+def _name(text: str) -> str:
+    """A sender's name as shown: not one with an `@` in it, which could pass for an address
+    (`Boss <boss@acme.com>`) while the real one is elsewhere."""
+    shown = _shown(text)
+    return "" if "@" in shown else shown
+
+
 def _without_comments(text: str) -> str:
     """`text` with its quoted strings and (possibly nested) comments blanked out: in
     `Authentication-Results` they hold what the sender chose, e.g. their envelope address."""
@@ -249,6 +264,7 @@ def message(
             return ""
 
     [(name, address), *_] = getaddresses([header("From")]) or [("", "")]
+    email = _address(address)
     to = {a.lower() for _, a in getaddresses([header("To")])}
     own = next(iter(_message_ids(header("Message-ID"))), None)
     thread = next(
@@ -270,8 +286,8 @@ def message(
         message_id=own,
         thread=thread or f"uid:{uid.group(1).decode()}",
         subject=subject,
-        sender_name=_shown(name) or address or "someone",
-        sender_email=address.lower() if "@" in address else None,
+        sender_name=_name(name) or email or "someone",
+        sender_email=email,
         to_me=bool(to & me),
         bulk=bool(header("List-Id"))
         or header("Precedence").strip().lower() in ("bulk", "list", "junk")
@@ -280,7 +296,7 @@ def message(
         seen="\\Seen" in flag_set,
         # One `@` only, so the domain checked is the one core reads as theirs.
         verified=bool(results)
-        and address.count("@") == 1
-        and dmarc_passed(results[0], trusted, address.partition("@")[2].lower()),
+        and email is not None
+        and dmarc_passed(results[0], trusted, email.partition("@")[2]),
         date=date,
     )

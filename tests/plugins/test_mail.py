@@ -170,6 +170,25 @@ def test_control_and_bidi_characters_are_dropped_from_what_is_shown() -> None:
     assert found is not None and (found.subject, found.sender_name) == ("Invoice fdp.exe", "Bob")
 
 
+@pytest.mark.parametrize(
+    "sender",
+    [
+        '"moc.emca\u202e"@evil.com',  # a bidi override in the address
+        '"a/b"@evil.com',  # a slash, which can't go in a person's id
+        '"a b"@evil.com',
+    ],
+)
+def test_an_address_that_cant_be_shown_as_one_isnt_kept(sender: str) -> None:
+    found = client.message(b"1 (UID 7 FLAGS ())", headers(sender=f"<{sender}>"), {ME})
+    assert found is not None and found.sender_email is None and not found.verified
+
+
+def test_a_name_that_could_pass_for_an_address_shows_the_address() -> None:
+    raw = headers(sender="=?utf-8?q?Boss_=3Cboss=40acme.com=3E=2C?= <x@evil.com>")
+    found = client.message(b"1 (UID 7 FLAGS ())", raw, {ME})
+    assert found is not None and (found.sender_name, found.sender_email) == ("x@evil.com",) * 2
+
+
 def test_what_emoji_and_scripts_need_is_kept() -> None:
     raw = headers(subject="=?utf-8?q?Pair_=F0=9F=91=A9=E2=80=8D=F0=9F=92=BB?=")
     found = client.message(b"1 (UID 7 FLAGS ())", raw, {ME})
@@ -435,7 +454,7 @@ def test_act_now_has_mail_sent_to_me_with_its_sender_waiting_but_not_lists() -> 
     )
     [item] = harness.act_now()
     assert item.title.endswith("Renewal")
-    assert any("Alice waiting" in d for d in item.details)
+    assert any("Alice <alice@acme.com> waiting" in d for d in item.details)  # who, not a name
 
 
 def test_a_customers_mail_is_badged_and_ranked_higher() -> None:
