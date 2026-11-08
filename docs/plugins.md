@@ -5,7 +5,7 @@ reads what the others publish; [graph.md](graph.md) explains the graph, and
 [entities.md](entities.md) lists every kind and attribute. Each plugin has a page of
 its own: [github](plugins/github.md), [git](plugins/git.md),
 [git_stack](plugins/git_stack.md), [jira](plugins/jira.md), [slack](plugins/slack.md),
-[mail](plugins/mail.md) and [notes](plugins/notes.md).
+[mail](plugins/mail.md), [vcard](plugins/vcard.md) and [notes](plugins/notes.md).
 These diagrams show who publishes and who reads what. Keep them in step with the code: a
 change to what a plugin publishes or reads, to its item actions or to its `requires`
 updates this file in the same commit.
@@ -43,6 +43,7 @@ flowchart LR
     jira([jira]) -- "publishes, its labels as tags" --> ticket
     mail([mail]) -- "publishes, pointing at its sender, its Gmail labels as tags" --> thread
     mail -- "publishes (senders, by email)" --> person
+    vcard([vcard]) -- "publishes (importance, contact_type, groups, by email)" --> person
     notes([notes]) -- publishes --> entry
     notes -- "publishes, pointing at what it hides" --> ice
     ice -. "hides what it covers" .-> core([core])

@@ -133,14 +133,15 @@ On my open PRs only:
 
 ### `person`
 
-The person family, modeled in core (`api.kinds.Person`); github adds `me`. People with the same
+The person family, modeled in core (`api.kinds.Person`); github adds `me`, vcard `groups`. People with the same
 `email` are one person, whichever tools publish them (`Graph.same_person`). An entity that
 points at a person is about them, so core ranks and badges its items by their contact type.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `handle` | string | their name in the tool, a login; mail's is their address |
+| `handle` | string | their name in the tool, a login; mail's and vcard's are their address |
 | `me` | bool | (github's) the person using the dashboard |
+| `groups` | list of strings | (vcard's) the address book's groups they're in |
 | `email` | string or null | their address; github's is their commit email, imported or looked up from commits |
 | `contact_type` | string or null | what they are to me, when the tool knows, e.g. `customer`; one I set beats it |
 | `importance` | 0, 1, 2 or null | how much they matter to me, when the tool knows (a CRM's VIP, a starred contact); the highest of it and their type's counts, but a type I set on their address wins |

@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### vCard address books
+
+A `[vcard]` section (`paths`, `group_importance`, `group_types`, `refresh_seconds`) reads an
+address book's vCard files, and ranks the people in its groups. Nothing to change unless you add
+it.
+
 ### Merge when ready
 
 `POST /actions/github/auto_merge` with `pr` and `head` turns a PR's auto-merge on, and
