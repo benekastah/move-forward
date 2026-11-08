@@ -230,6 +230,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("notes/todo_size", False, False),
         ("notes/todo_size", False, False),
         ("notes/todo_add", False, False),
+        ("notes/ice_item", False, False),  # it stands in for its entry, as on the page
     ]
     todo_id = part.actions[0].fields["todo"]
     assert part.actions[0].fields == {"todo": todo_id}  # addressed by id
@@ -237,8 +238,9 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         (a.label, a.fields["size"], a.selected) for a in part.actions if a.name == "notes/todo_size"
     ] == [("Quick", "quick", True), ("Big", "big", False)]
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
+    # A lone todo is about its entry, so its importance is the entry's, as on the page.
     assert [a.fields for a in part.actions if a.group == "Importance"] == [
-        {"kind": "notes.todo", "id": todo_id, "level": level} for level in ("0", "1", "2")
+        {"kind": "notes.entry", "id": "APP-2 mixed", "level": level} for level in ("0", "1", "2")
     ]
     # A single-todo entry can be completed on the dashboard as well as in Focus mode.
     assert [
@@ -353,6 +355,7 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
         "notes/todo_size",
         "notes/todo_size",
         "notes/todo_add",
+        "notes/ice_item",
     ]
     assert part.actions[2].input == "Jira key or PR URL"
     # Without a Jira site, keys aren't linked.

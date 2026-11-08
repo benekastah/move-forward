@@ -21,7 +21,8 @@ names are related through it.
   last. An entry with one open todo has its Done checkbox, Delete and Link on the entry, with
   the PRs and tickets it's linked to; entries with several show each todo below the entry
   with its own, and Add todo on the entry and each todo.
-  Focus mode also shows the todos one at a time. While the notes are empty (just
+  Focus mode also shows the todos one at a time; an entry's only todo stands in for it,
+  with its importance and Put on ice. While the notes are empty (just
   upgraded, say), it says how to import them.
 - **On ice**: parked stacks, PRs, tickets and work entries, with Reopen (thaw) and a field to
   say why (Replace note, offering what it says now, once it says something); git adds
