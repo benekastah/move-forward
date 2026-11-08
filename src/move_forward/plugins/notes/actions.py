@@ -100,7 +100,7 @@ def ice(req: ActionRequest[NotesConfig]) -> str:
     for name in names:
         b = branches[name]
         items.append(IcedItem(kind=BRANCH, ref_id=b.id, name=name, repo_dir=b.repo_dir, sha=b.sha))
-    note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
+    note = (fields.get("note") or "").strip() or ICED_FROM_DASHBOARD_NOTE
     ice_id = notes.add_ice(names[0], ctx.today, note, items)
     notes.replace_covers([ice_id], covers(graph, notes.ices()))
     return f"put {names[0]} on ice ({len(names)} branches)"
@@ -122,7 +122,7 @@ def ice_item(req: ActionRequest[NotesConfig]) -> str:
     iced = {(item.kind, item.ref_id) for i in notes.ices() for item in i.items}
     if (kind, ref_id) in iced or graph.hidden(entity.ref):
         raise ActionError(f"{entity.title} is already on ice")
-    note = fields.get("note") or ICED_FROM_DASHBOARD_NOTE
+    note = (fields.get("note") or "").strip() or ICED_FROM_DASHBOARD_NOTE
     item = IcedItem(kind=kind, ref_id=ref_id, name=entity.title)
     ice_id = notes.add_ice(entity.title, ctx.today, note, [item])
     notes.replace_covers([ice_id], covers(graph, notes.ices()))

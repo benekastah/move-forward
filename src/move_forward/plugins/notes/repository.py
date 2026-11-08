@@ -574,11 +574,14 @@ class NotesRepository:
 
     def set_ice_note(self, ice_id: int, note: str) -> str | None:
         """Say why it's on ice, in place of what was said. Its title; None if it isn't on ice."""
-        rows = self._db.query("SELECT title FROM notes_ice WHERE id = ?", (ice_id,))
-        if not rows:
-            return None
-        self._db.execute("UPDATE notes_ice SET note = ? WHERE id = ?", (note, ice_id))
-        return rows[0]["title"]
+        # The write first: it opens the transaction, so a thaw from another process can't land
+        # between it and the read.
+        with self._db.transaction() as conn:
+            update = "UPDATE notes_ice SET note = ? WHERE id = ?"
+            if conn.execute(update, (note, ice_id)).rowcount == 0:
+                return None
+            row = conn.execute("SELECT title FROM notes_ice WHERE id = ?", (ice_id,)).fetchone()
+            return row["title"]
 
     def delete_ice(self, ice_id: int) -> None:
         """Thaw: forget the act of icing and what it covered."""
