@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Rerun failed checks
+
+`POST /actions/github/rerun_failed` with `pr` (one of my open PRs) runs the failed jobs of its
+failing checks' finished Actions runs again, as CI failures' Rerun failed button does. Nothing
+to change.
+
 ### Tags
 
 `#tags` in titles and descriptions (out of code) relate items, and any item can be tagged by hand: `mfd tag <entity> <tag>

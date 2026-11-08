@@ -115,17 +115,23 @@ def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
 def rerun_failed(req: ActionRequest[GitHubConfig]) -> ActionResult:
     """Run the failed jobs of the PR's failing Actions runs again (`gh run rerun --failed`)."""
     pr = _my_open_pr(req)
-    runs = failed_runs(pr, req.ctx.config.policy_checks)
+    config = req.ctx.config
+    runs = failed_runs(config.host, pr, config.policy_checks)
     if not runs:
-        raise ActionError(f"{pr.repo}#{pr.number} has no failed Actions run to run again")
-    try:
-        for run_id in runs:
-            client.rerun_failed(req.ctx.config.host, pr.repo, run_id)
-    except CommandError as e:
-        raise ActionError(str(e)) from e
+        raise ActionError(f"{pr.repo}#{pr.number} has no failed Actions run that's over")
+    refused: list[str] = []
+    for run_id in runs:  # each, whatever another says
+        try:
+            client.rerun_failed(config.host, pr.repo, run_id)
+        except CommandError as e:
+            refused.append(f"run {run_id}: {e}")
+    if len(refused) == len(runs):
+        raise ActionError("; ".join(refused))
+    notice = (
+        f"running {pr.repo}#{pr.number}'s failed checks again ({len(runs) - len(refused)} run(s))"
+    )
     return ActionResult(
-        f"running {pr.repo}#{pr.number}'s failed checks again ({len(runs)} run(s))",
-        touched=[Ref(kind=PR, id=pr.url)],
+        notice + "".join(f"; {r}" for r in refused), touched=[Ref(kind=PR, id=pr.url)]
     )
 
 

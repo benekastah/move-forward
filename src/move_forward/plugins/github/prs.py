@@ -167,17 +167,21 @@ def failing_checks(pr: PullRequest) -> list[Check]:
     return [c for c in pr.checks if c.state in FAILING_CHECK_STATES]
 
 
-_RUN = re.compile(r"/actions/runs/(\d+)(?:/|$)")
-"""A GitHub Actions run in a check's URL (`…/actions/runs/123/job/456`)."""
+def _run_of(host: str, pr: PullRequest, url: str | None) -> str | None:
+    """The id of the PR's repo's Actions run a check's URL names (`https://<host>/<repo>/actions/
+    runs/123/job/456`); None for another repo's, or another CI's."""
+    prefix = f"https://{re.escape(host)}/{re.escape(pr.repo)}/actions/runs/"
+    found = re.match(prefix + r"([0-9]+)(?=[/?#]|$)", url or "")
+    return found[1] if found else None
 
 
-def failed_runs(pr: PullRequest, policy_checks: list[str]) -> list[str]:
-    """The Actions runs, by id, of the PR's failing checks but policy ones, once each: what
-    `gh run rerun --failed` can run again. Other checks' URLs name no run."""
-    found = (
-        _RUN.search(c.url) for c in failing_checks(pr) if c.url and c.name not in policy_checks
-    )
-    return list(dict.fromkeys(m[1] for m in found if m))
+def failed_runs(host: str, pr: PullRequest, policy_checks: list[str]) -> list[str]:
+    """The PR's repo's Actions runs, by id, that its failing checks but policy ones belong to,
+    once each, and that are over: what `gh run rerun --failed` can run again. A run with a check
+    still going is left out, as GitHub refuses it then."""
+    going = {_run_of(host, pr, c.url) for c in pending_checks(pr)}
+    found = (_run_of(host, pr, c.url) for c in failing_checks(pr) if c.name not in policy_checks)
+    return list(dict.fromkeys(run for run in found if run and run not in going))
 
 
 def pending_checks(pr: PullRequest) -> list[Check]:

@@ -493,7 +493,7 @@ class Builder:
                     )
             if details:
                 item = pr_item(self.now, pr, details=details, links=links, rank=len(failing))
-                if failed_runs(pr, self.config.policy_checks):
+                if failed_runs(self.config.host, pr, self.config.policy_checks):
                     rerun = Action(name=RERUN_FAILED, label="Rerun failed", fields={"pr": pr.url})
                     item = item.model_copy(update={"actions": [*item.actions, rerun]})
                 items.append(item)
