@@ -125,6 +125,16 @@ class _RawRef(_Raw):
 class _RawRepository(_Raw):
     name_with_owner: str = Field(alias="nameWithOwner")
     default_branch_ref: _RawRef | None = Field(default=None, alias="defaultBranchRef")
+    merge_commit_allowed: bool = Field(default=False, alias="mergeCommitAllowed")
+    squash_merge_allowed: bool = Field(default=False, alias="squashMergeAllowed")
+    rebase_merge_allowed: bool = Field(default=False, alias="rebaseMergeAllowed")
+    auto_merge_allowed: bool = Field(default=False, alias="autoMergeAllowed")
+    delete_branch_on_merge: bool = Field(default=False, alias="deleteBranchOnMerge")
+    viewer_default_merge_method: str | None = Field(default=None, alias="viewerDefaultMergeMethod")
+
+
+class _RawAutoMerge(_Raw):
+    merge_method: str | None = Field(default=None, alias="mergeMethod")
 
 
 class RawPullRequest(_Raw):
@@ -151,6 +161,8 @@ class RawPullRequest(_Raw):
     review_decision: str | None = Field(default=None, alias="reviewDecision")
     author: _Named | None = None
     repository: _RawRepository
+    is_merge_queue_enabled: bool = Field(default=False, alias="isMergeQueueEnabled")
+    auto_merge_request: _RawAutoMerge | None = Field(default=None, alias="autoMergeRequest")
     labels: _Nodes[_Label] = _Nodes()
     assignees: _Nodes[_Named] = _Nodes()
     review_requests: _Nodes[_ReviewRequest] = Field(default=_Nodes(), alias="reviewRequests")
@@ -371,6 +383,22 @@ def to_pull_request(raw: RawPullRequest) -> PullRequest:
         merge_state=raw.merge_state_status,
         review_decision=raw.review_decision,
         in_merge_queue=raw.is_in_merge_queue,
+        merge_queue=raw.is_merge_queue_enabled,
+        merge_methods=[
+            method
+            for method, allowed in (
+                ("MERGE", raw.repository.merge_commit_allowed),
+                ("SQUASH", raw.repository.squash_merge_allowed),
+                ("REBASE", raw.repository.rebase_merge_allowed),
+            )
+            if allowed
+        ],
+        default_merge_method=raw.repository.viewer_default_merge_method,
+        auto_merge_allowed=raw.repository.auto_merge_allowed,
+        delete_branch_on_merge=raw.repository.delete_branch_on_merge,
+        auto_merge=(raw.auto_merge_request.merge_method or "MERGE")
+        if raw.auto_merge_request
+        else None,
         requested_users=[name for kind, name in filter(None, requested) if kind == "user"],
         requested_teams=[name for kind, name in filter(None, requested) if kind == "team"],
         reviews=[

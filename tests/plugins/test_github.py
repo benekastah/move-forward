@@ -342,3 +342,34 @@ def test_a_team_whose_members_cant_be_read_is_left_out(
     assert found.team_memberships == {} and found.team_members == []
     assert "cannot read the members of my team acme/bacon" in caplog.text  # mine: said
     assert "elsewhere" not in caplog.text  # another's on a PR: may be private
+
+
+def test_a_prs_merge_settings_come_from_its_repo() -> None:
+    raw = {
+        **RAW_PR,
+        "isMergeQueueEnabled": True,
+        "autoMergeRequest": {"mergeMethod": "SQUASH"},
+        "repository": {
+            "nameWithOwner": "acme/widgets",
+            "defaultBranchRef": {"name": "main"},
+            "mergeCommitAllowed": False,
+            "squashMergeAllowed": True,
+            "rebaseMergeAllowed": True,
+            "autoMergeAllowed": True,
+            "deleteBranchOnMerge": True,
+            "viewerDefaultMergeMethod": "SQUASH",
+        },
+    }
+    pr = github.to_pull_request(github.RawPullRequest.model_validate(raw))
+    assert (pr.merge_queue, pr.merge_methods, pr.default_merge_method) == (
+        True,
+        ["SQUASH", "REBASE"],
+        "SQUASH",
+    )
+    assert (pr.auto_merge_allowed, pr.delete_branch_on_merge, pr.auto_merge) == (
+        True,
+        True,
+        "SQUASH",
+    )
+    plain = github.to_pull_request(github.RawPullRequest.model_validate(RAW_PR))
+    assert (plain.merge_queue, plain.merge_methods, plain.auto_merge) == (False, [], None)

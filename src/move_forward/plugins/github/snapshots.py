@@ -101,6 +101,14 @@ class PrRepository:
                         pr.in_merge_queue,
                         pr.rollup_state,
                         _iso(pr.last_commit_at),
+                        pr.merge_queue,
+                        "MERGE" in pr.merge_methods,
+                        "SQUASH" in pr.merge_methods,
+                        "REBASE" in pr.merge_methods,
+                        pr.default_merge_method,
+                        pr.auto_merge_allowed,
+                        pr.delete_branch_on_merge,
+                        pr.auto_merge,
                     )
                 )
                 rows["github_pr_labels"] += [(*key, i, v) for i, v in enumerate(pr.labels)]
@@ -221,6 +229,20 @@ class PrRepository:
             merge_state=row["merge_state"],
             review_decision=row["review_decision"],
             in_merge_queue=bool(row["in_merge_queue"]),
+            merge_queue=bool(row["merge_queue"]),
+            merge_methods=[
+                method
+                for method, column in (
+                    ("MERGE", "merge_commit_allowed"),
+                    ("SQUASH", "squash_merge_allowed"),
+                    ("REBASE", "rebase_merge_allowed"),
+                )
+                if row[column]
+            ],
+            default_merge_method=row["default_merge_method"],
+            auto_merge_allowed=bool(row["auto_merge_allowed"]),
+            delete_branch_on_merge=bool(row["delete_branch_on_merge"]),
+            auto_merge=row["auto_merge"],
             requested_users=[
                 cast(str, r["name"])
                 for r in found["github_pr_requests"][key]

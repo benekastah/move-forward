@@ -366,5 +366,18 @@ MIGRATIONS = [
     );
     """,
     ),
+    Migration(
+        "0014_merge_settings",
+        """
+    ALTER TABLE github_prs ADD COLUMN merge_queue INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE github_prs ADD COLUMN merge_commit_allowed INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE github_prs ADD COLUMN squash_merge_allowed INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE github_prs ADD COLUMN rebase_merge_allowed INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE github_prs ADD COLUMN default_merge_method TEXT;
+    ALTER TABLE github_prs ADD COLUMN auto_merge_allowed INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE github_prs ADD COLUMN delete_branch_on_merge INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE github_prs ADD COLUMN auto_merge TEXT; -- the method it merges by itself with
+    """,
+    ),
 ]
 """The github plugin's migrations."""

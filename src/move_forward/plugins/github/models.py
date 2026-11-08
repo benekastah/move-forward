@@ -83,6 +83,18 @@ class PullRequest(Model):
     merge_state: str
     review_decision: str | None = None
     in_merge_queue: bool = False
+    merge_queue: bool = False
+    """Its base branch has a merge queue: it merges by joining it."""
+    merge_methods: list[str] = Field(default_factory=list)
+    """How its repo lets it merge: `MERGE`, `SQUASH`, `REBASE`."""
+    default_merge_method: str | None = None
+    """The method GitHub picks for me in its repo: my last used, else the repo's default."""
+    auto_merge_allowed: bool = False
+    """Its repo lets a PR merge by itself once it's ready (auto-merge)."""
+    delete_branch_on_merge: bool = False
+    """Its repo deletes a PR's branch once it merges."""
+    auto_merge: str | None = None
+    """The method it'll merge by itself with, once ready; None without auto-merge on."""
     requested_users: list[str] = Field(default_factory=list)
     requested_teams: list[str] = Field(default_factory=list)
     reviews: list[Review] = Field(default_factory=list)
