@@ -84,9 +84,9 @@ is what's left to build.
   [git-stack](https://github.com/benekastah/git-stack/), which keeps stacked branches and
   their PRs in order).
 - **Small enough to review well.** One reviewer reads a PR whole, and it reads a small one
-  better: split a large change into a stack of PRs that each do one step and pass on their
-  own (a model, then what uses it; a refactor, then the feature on it) rather than one PR of
-  everything.
+  better: split a large change into a stack of PRs that each do one step and pass `dev.py
+  check` and CI on their own (a model, then what uses it; a refactor, then the feature on it)
+  rather than one PR of everything.
 - **Keep the docs up to date as you code**, in the same commit as the change,
   not in a docs pass afterwards:
   - the README for core: its config keys, commands, command-line options,
@@ -243,8 +243,8 @@ whole code takes several (see [A full review](#a-full-review)).
 
 ## A full review
 
-A review of the whole code, rather than of one PR (which one reviewer does: see above), after a
-run of merges or when asked: several fresh agents at once (each started anew, not a fork of the session that starts them), each with
+A review of the whole code, rather than of one PR, after a run of merges or when asked: several
+fresh agents at once (each started anew, not a fork of the session that starts them), each with
 no context but the code at one commit of `main` and its part, so none reviews what it was told
 to expect, and each reads all of its part.
 
