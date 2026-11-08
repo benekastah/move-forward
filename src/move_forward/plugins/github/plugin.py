@@ -49,7 +49,7 @@ from . import actions, changes, cli, client, derive, notifications, placing, pus
 from .config import GitHubConfig
 from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
-from .panels import PR, REVIEW_TASK, Builder
+from .panels import PR, REQUEST_REVIEWER_TASK, REVIEW_TASK, Builder
 from .people import PeopleRepository
 from .prs import (
     changes_requested,
@@ -79,8 +79,6 @@ CHANGED = "prs_changed"
 EVERYTHING = "*"
 LAST_FULL = "last_full_collect"
 """The kv key of when every search last ran."""
-REQUEST_REVIEWER_TASK = "request_reviewer"
-"""The task of Needs a reviewer's items in Act now."""
 
 
 def _pr_id(changed: str) -> client.PrId:
@@ -484,8 +482,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def act_now(self, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
         """The panels' items with signals, their own or their panel's (one with neither is
         listed only), the feedback on my drafts too, though a draft's item is
-        deferred; but not a deferred review: a draft isn't ready for one. A PR missing a
-        reviewer only once there's nothing else to do on it: it isn't ready to ask anyone."""
+        deferred; but not a deferred review: a draft isn't ready for one. Asking for a reviewer
+        loses its effort while there's something else to do on the PR, which is worth doing
+        before anyone looks at it, so it ranks below that and shows as "also" until then."""
         nominated = [
             item if item.signals else item.model_copy(update={"signals": panel.signals})
             for panel in req.panels
@@ -496,9 +495,15 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 item.deferred and (item.signals or panel.signals or Signals()).task == REVIEW_TASK
             )
         ]
-        asks = [i for i in nominated if i.signals and i.signals.task == REQUEST_REVIEWER_TASK]
-        busy = {i.url for i in nominated if i not in asks}
-        return [i for i in nominated if i not in asks or i.url not in busy]
+        busy = {
+            i.url for i in nominated if not (i.signals and i.signals.task == REQUEST_REVIEWER_TASK)
+        }
+        return [
+            i.model_copy(update={"signals": i.signals.model_copy(update={"effort": "unknown"})})
+            if i.signals and i.signals.task == REQUEST_REVIEWER_TASK and i.url in busy
+            else i
+            for i in nominated
+        ]
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS

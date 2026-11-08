@@ -22,14 +22,16 @@ def test_a_pr_missing_a_reviewer_has_the_field_and_reaches_act_now() -> None:
     assert _field(panel(built, "github.fix_before_review").items[0]) is not None
     [item] = built.act_now()
     assert item.title == "Request a reviewer: PR 1"
+    assert item.signals is not None and item.signals.effort == "minutes"  # quick, on its own
     assert _field(item) is not None
 
 
-def test_a_pr_with_something_else_to_do_is_not_nominated_for_a_reviewer() -> None:
+def test_a_reviewer_request_ranks_below_anything_else_to_do_on_the_pr() -> None:
     built = dashboard(github=snapshot(mine=[pr(1, mergeable="CONFLICTING")]))
     [item] = built.act_now()
     assert item.title == "Resolve conflicts: PR 1"
-    assert not any("Request a reviewer" in detail for detail in item.details)
+    assert "also: Request a reviewer" in item.details
+    assert _field(item) is not None
 
 
 def test_a_pr_with_a_reviewer_has_no_field() -> None:
