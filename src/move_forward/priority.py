@@ -4,9 +4,11 @@ A priority on an entity counts for the items about it, and about what it's part 
 a PR's items carry its ticket's and its work entry's, a work entry's carry its todos'.
 """
 
+from collections.abc import Mapping
+from typing import Protocol
+
 from .act_now import PriorityOf
 from .graph import Entity, Graph, Ref
-from .repositories import PriorityRepository
 
 TODO = "notes.todo"
 """The kind of a work entry's todo, published by notes."""
@@ -47,8 +49,16 @@ def _finished(entity: Entity) -> bool:
     return entity.lifecycle == "done"
 
 
-def forget_finished(repo: PriorityRepository, graph: Graph) -> int:
-    """Clear the priorities of what's done (`Entity.lifecycle`), or gone where gone means done
+class Forgettable(Protocol):
+    """What I said of entities, kept until they're done: priorities, tags."""
+
+    def all(self) -> Mapping[Ref, object]: ...
+
+    def clear(self, ref: Ref) -> None: ...
+
+
+def forget_finished(repo: Forgettable, graph: Graph) -> int:
+    """Clear what `repo` keeps (priorities, tags) of what's done (`Entity.lifecycle`), or gone where gone means done
     (`KindSpec.gone_means_done`: notes' entries and todos). One of a kind that can be fetched
     (`KindSpec.fetchable`: a PR long closed, a ticket) that the graph lacks is looked up; one
     that can't be found keeps its priority, and so does one of any other kind (a branch can

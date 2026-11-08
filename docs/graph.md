@@ -164,7 +164,7 @@ class NotesPlugin(Plugin[NotesConfig]):
 ```
 
 Core adds a kind of its own, `tag` (see `move_forward.tags`): one per `#tag` in an entity's
-title, pointing at what carries it, while each entity whose title or mentions name a tag points
+title or put on it by hand, pointing at what carries it, while each entity whose title or mentions name a tag points
 at it. It isn't linking, so it relates nothing through it: `related(ref, "tag")` gives the tags
 on or named by `ref`, and by the tickets or entries it belongs to (one hop through a linking
 entity, as for any kind), and a tag's `refs` what carries it. A one-word tag shorter than

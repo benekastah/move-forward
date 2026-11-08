@@ -67,8 +67,8 @@ def handle(text: str) -> str:
 def tag_key(text: str) -> str:
     """The tag I typed (`garbage day`, `#Garbage-Day`), by handle; ValueError when it has no
     letter, as `#7` doesn't."""
-    found = handle(text.strip().lstrip("#"))
-    if not any(c.isalpha() for c in found) or "#" in found:
+    found = handle(text)
+    if not any(c.isalpha() for c in found):
         raise ValueError(f"{text!r} isn't a tag: give it a word, e.g. #garbage-day")
     return found
 

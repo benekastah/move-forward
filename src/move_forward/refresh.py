@@ -395,12 +395,24 @@ def _prune_plugins(
         notices.append(f"act_now: forgot {dropped} snooze(s), dismissal(s) or pin(s)")
     if cleared := priority.forget_finished(PriorityRepository(db), graph):
         notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")
+    if cleared := priority.forget_finished(TagRepository(db), graph):
+        notices.append(f"tags: took the tags off {cleared} finished entity(ies)")
     for e in plugins:
         try:
             notices += [f"{e.name}: {n}" for n in e.plugin.prune(PruneRequest(e.ctx, graph))]
         except Exception:
             log.exception("%s: prune failed", e.name)
     return notices
+
+
+def _merged(first: ItemAdditions, then: ItemAdditions) -> ItemAdditions:
+    """Both one's additions to an item and the other's, in that order."""
+    return ItemAdditions(
+        actions=[*first.actions, *then.actions],
+        badges=[*first.badges, *then.badges],
+        details=[*first.details, *then.details],
+        links=[*first.links, *then.links],
+    )
 
 
 def build_dashboard(
@@ -470,21 +482,12 @@ def build_dashboard(
     tagging = tags.Tags(graph, TagRepository(db).all())
 
     def item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
-        found = contacts.additions(item)
-        on = tagging.additions(item)
-        found = ItemAdditions(
-            actions=[*found.actions, *on.actions], badges=[*found.badges, *on.badges]
-        )
+        found = _merged(contacts.additions(item), tagging.additions(item))
         for e, add in prepared:
             req = ItemActionsRequest(e.ctx, item, graph, owner, surface)
             added = call(e.name, "item_actions", lambda add=add, req=req: add(req), found)
             if added is not found:
-                found = ItemAdditions(
-                    actions=[*found.actions, *added.actions],
-                    badges=[*found.badges, *added.badges],
-                    details=[*found.details, *added.details],
-                    links=[*found.links, *added.links],
-                )
+                found = _merged(found, added)
         return found
 
     def hidden(item: Item) -> bool:
@@ -614,15 +617,14 @@ def _tag(db: Database, action: str, fields: dict[str, str], now: datetime) -> Ac
     """Tag: put the tag typed as `input` on the entity; Untag: take `tag` off it."""
     ref = Ref(kind=fields["kind"], id=fields["id"])
     repo = TagRepository(db)
+    try:
+        tag = tags.tag_key(fields["tag" if action == "untag" else "input"])
+    except ValueError as err:
+        raise ActionError(str(err)) from err
     if action == "untag":
-        tag = fields["tag"]
         return ActionResult(
             f"#{tag} taken off" if repo.remove(ref, tag) else f"#{tag} wasn't on it"
         )
-    try:
-        tag = tags.tag_key(fields["input"])
-    except ValueError as err:
-        raise ActionError(str(err)) from err
     return ActionResult(f"tagged #{tag}" if repo.add(ref, tag, now) else f"already #{tag}")
 
 

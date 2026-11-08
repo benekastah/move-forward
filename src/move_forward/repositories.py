@@ -195,7 +195,8 @@ class PriorityRepository:
 
 
 class TagRepository:
-    """The `#tags` I put on entities (`tags`), by handle: kept until I take them off."""
+    """The `#tags` I put on entities (`tags`), by handle: kept until I take them off, or the
+    entity is done (`priority.forget_finished`)."""
 
     def __init__(self, db: Database):
         self._db = db
@@ -214,6 +215,10 @@ class TagRepository:
                 (ref.kind, ref.id, tag, now.isoformat()),
             )
             return cursor.rowcount == 1
+
+    def clear(self, ref: Ref) -> None:
+        """Take every tag off the entity."""
+        self._db.execute("DELETE FROM tags WHERE kind = ? AND id = ?", (ref.kind, ref.id))
 
     def remove(self, ref: Ref, tag: str) -> bool:
         """Whether it was on the entity."""

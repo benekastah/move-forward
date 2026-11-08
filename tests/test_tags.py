@@ -5,10 +5,11 @@ from pathlib import Path
 import pytest
 from conftest import NOW, pr, snapshot, stored
 
-from move_forward import cli, refresh, tags
+from move_forward import cli, panels, priority, refresh, tags
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
+from move_forward.page import Item, ItemAdditions, Panel
 from move_forward.plugin import ActionError
 from move_forward.registry import enabled
 from move_forward.repositories import TagRepository
@@ -188,3 +189,62 @@ def test_the_tag_command_puts_a_tag_on_and_takes_it_off(
     assert cli.main(["-c", str(config), "tag", "Chores", "garbage-day", "--remove"]) == 0
     assert TagRepository(Database(db_path)).all() == {}
     assert "Chores: #garbage-day" in capsys.readouterr().out
+
+
+def test_tags_on_finished_work_are_forgotten() -> None:
+    merged = Ref(kind="pull_request", id="merged")
+    open_pr = Ref(kind="pull_request", id="open")
+    gone_entry = Ref(kind="notes.entry", id="Chores")  # deleted: a new "Chores" starts clean
+    graph = Graph(
+        [Entity(ref=merged, title="m", lifecycle="done"), Entity(ref=open_pr, title="o")],
+        kinds={
+            "pull_request": KindSpec(tags.TagAttrs),
+            "notes.entry": KindSpec(tags.TagAttrs, gone_means_done=True),
+        },
+    )
+    repo = TagRepository(Database(":memory:"))
+    for ref in (merged, open_pr, gone_entry):
+        repo.add(ref, "chores", NOW)
+    assert priority.forget_finished(repo, graph) == 2
+    assert repo.all() == {open_pr: ["chores"]}
+
+
+def test_untag_takes_the_tag_however_its_written() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1)]))
+    fields = {"kind": "pull_request", "id": pr(1).url}
+    refresh.run_action(config, db, "act_now/tag", {**fields, "input": "garbage-day"})
+    untag = {**fields, "tag": "#Garbage Day"}
+    assert refresh.run_action(config, db, "act_now/untag", untag) == "#garbage-day taken off"
+
+
+def test_ice_gets_no_tags_and_focus_parts_do() -> None:
+    graph = Graph(hiding=["notes.iced"])
+    tagging = tags.Tags(graph, {})
+    assert tagging.additions(Item(title="iced", subjects=[Ref(kind="notes.iced", id="1")])) == (
+        ItemAdditions()
+    )
+    part = Ref(kind="notes.todo", id="7")
+    stage = Panel(
+        key="stage",
+        title="Stage",
+        description="",
+        items=[
+            Item(
+                title="Entry",
+                subjects=[Ref(kind="notes.entry", id="e")],
+                parts=[Item(title="Todo", subjects=[part])],
+            )
+        ],
+    )
+    built = panels.build(
+        NOW,
+        [panels.PluginPanels("x", "X", [stage])],
+        {},
+        item_actions=lambda item, owner, surface: tagging.additions(item),
+    )
+    focused = built.focus_items("x.stage")
+    assert focused is not None
+    [(_, todo)] = focused
+    assert [a.fields for a in todo.actions if a.label == "Tag"] == [
+        {"kind": part.kind, "id": part.id}
+    ]
