@@ -2,7 +2,8 @@
 
 A type comes from me, on an address or a whole domain (`contacts`), or from a tool that knows
 (`Person.contact_type`, say a CRM's); a tool can also say how much they matter outright
-(`Person.importance`: a CRM's VIP, a starred contact). Mine wins over both. It counts for all of
+(`Person.importance`: a CRM's VIP, a starred contact). A type I set on an address wins over
+both; one on a domain counts as a type does. It counts for all of
 a person's entities, since `Graph.same_person` joins them by email, and for the items about any
 of them: core ranks those and badges them, so a plugin needs only to publish the person and
 point at them.
