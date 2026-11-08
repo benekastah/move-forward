@@ -95,9 +95,10 @@ catch up.
   `choice`; it needs an `input`.
 - **Choices for a text field**: `Action.suggestions` lists what an `input` offers to pick
   from; anything else can still be typed, so check the posted field as usual.
-- **Snoozing in a panel**: every item whose `signals` (or its panel's) have a `task` gets a Snooze
-  button in its panel. What's snoozed or dismissed, there or in Act now, stays in its panel,
-  last and dimmed (`Item.set_aside`), with Unsnooze; Act now leaves it out.
+- **Snoozing in a panel**: every item whose `signals` (or its panel's) have a `task` gets Snooze
+  and Dismiss in its panel (`act_now.set_aside_actions`). What's snoozed or dismissed, there or
+  in Act now, stays in its panel, last and dimmed (`Item.set_aside`), with Unsnooze or
+  Undismiss; Act now leaves it out.
 - **Fetching some entities again**: `Plugin.refresh_subjects(req)`
   (`SubjectsRequest(ctx, refs, snapshot)`) returns `Subjects(snapshot, updated)`, or None
   to be refreshed whole; `subjects_timeout_seconds`. An action's `touched` refs are
