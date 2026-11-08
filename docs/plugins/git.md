@@ -58,7 +58,9 @@ see [entities.md](../entities.md).
   changes and unpushed commits. A branch behind its upstream (say after a rebase) has no
   Push, since a plain push would be rejected, and says so instead. Also checkouts of open PRs (mine, or ones I review) that moved on
   GitHub: a branch with nothing to push whose PR's head, as github last saw it, is
-  another commit. That's read from github's PRs, so it shows without fetching.
+  another commit. That's read from github's PRs, so it shows without fetching; its Pull fetches
+  and fast-forwards the branch, refused when the PR was force-pushed or the checkout has
+  changes in the way.
 - **Cleanup**: local branches whose PR merged or whose remote is gone, with a Delete
   button each and Delete all (`git branch -D`; a branch checked out in a worktree is
   refused). A branch git-stack sees merged is left to git_stack's Clean, which untracks it

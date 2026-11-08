@@ -1,4 +1,4 @@
-"""The git plugin's buttons: delete, push and WIP-commit branches.
+"""The git plugin's buttons: delete, pull, push and WIP-commit branches.
 
 Every action checks its repo is one of the configured checkouts and returns a one-line
 notice for the page. Nothing here ever forces a push, resets, or stashes.
@@ -184,8 +184,10 @@ def push_branch(req: ActionRequest[GitConfig]) -> str:
 
 
 def pull_branch(req: ActionRequest[GitConfig]) -> str:
-    """Bring a branch up to its upstream, fast-forward only: refused when it has commits its
-    upstream doesn't, or its checkout has changes in the way. Never merges, never forces."""
+    """Bring a branch up to its upstream, fast-forward only: refused when its upstream was
+    rewritten (force-pushed), or its checkout has changes in the way. Never merges, never
+    forces. A branch checked out is merged in its worktree; one that isn't is moved by `git
+    fetch .`, which git refuses for a branch checked out, rebased or bisected anywhere."""
     ctx = req.ctx
     repo = repo_path(ctx.config, req.field("repo"))
     branch = req.field("branch")
@@ -193,26 +195,38 @@ def pull_branch(req: ActionRequest[GitConfig]) -> str:
         raise ActionError(f"{branch} doesn't exist in {repo}")
     try:
         remote = git(repo, "config", f"branch.{branch}.remote").strip()
+    except CommandError as e:
+        raise ActionError(f"{branch} has no upstream to pull from") from e
+    try:
         git(repo, "fetch", "--quiet", remote)
+    except CommandError as e:
+        raise ActionError(f"couldn't fetch {remote}: {e}") from e
+    try:
         upstream = git(repo, "rev-parse", "--verify", f"{branch}@{{upstream}}").strip()
         here = git(repo, "rev-parse", "--verify", f"refs/heads/{branch}").strip()
     except CommandError as e:
-        raise ActionError(f"{branch} has no upstream to pull from: {e}") from e
+        raise ActionError(f"{branch} has no upstream to pull from") from e
     if here == upstream:
         return f"{branch} is up to date"
     try:
         git(repo, "merge-base", "--is-ancestor", here, upstream)
     except CommandError as e:
-        raise ActionError(f"{branch} has commits its upstream doesn't: can't fast-forward") from e
+        raise ActionError(
+            f"{branch}'s upstream was rewritten (force-pushed?), or it has commits of its own:"
+            " can't fast-forward"
+        ) from e
     worktree = checked_out_in(repo, branch)
-    if worktree is None:
-        git(repo, "update-ref", f"refs/heads/{branch}", upstream, here)
-    else:
-        if git(Path(worktree), "status", "--porcelain", "--untracked-files=no").strip():
-            raise ActionError(
-                f"{branch} has uncommitted changes in {worktree}: commit or set them aside"
-            )
-        git(Path(worktree), "merge", "--ff-only", "--quiet", upstream)
+    try:
+        if worktree is None:
+            git(repo, "fetch", "--quiet", ".", f"{upstream}:refs/heads/{branch}")
+        else:
+            if git(Path(worktree), "status", "--porcelain", "--untracked-files=no").strip():
+                raise ActionError(
+                    f"{branch} has uncommitted changes in {worktree}: commit or set them aside"
+                )
+            git(Path(worktree), "merge", "--ff-only", "--quiet", upstream)
+    except CommandError as e:
+        raise ActionError(f"couldn't pull {branch}: {e}") from e
     return f"pulled {branch}"
 
 
