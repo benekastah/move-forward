@@ -134,7 +134,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         return [*found, *people.values()]
 
     def panels(self, req: PanelsRequest[MailConfig, MailSnapshot]) -> list[Panel]:
-        return panels(req.ctx.config, self.name, req.snapshot)
+        return panels(req.ctx.config, self.name, req.snapshot, req.graph)
 
     def pages(self) -> dict[str, PageHandler]:
         return {OPEN_PAGE: self._open}

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from ...api import Badge, Band, Item, Panel, Ref, Signals
+from ...api import Badge, Band, Graph, Item, Panel, Ref, Signals
 from .config import APP_SCHEMES, MailConfig
 from .kinds import THREAD
 from .models import MailSnapshot, Message
@@ -72,8 +72,19 @@ def link(config: MailConfig, plugin: str, thread: Thread) -> str | None:
     return f"/{plugin}/{OPEN_PAGE}?thread={quote(thread.id, safe='')}"
 
 
-def _item(config: MailConfig, plugin: str, thread: Thread) -> Item:
+def about(graph: Graph, thread: Thread) -> list[str]:
+    """The open units of work a conversation is about (a ticket or work entry its subject
+    names), by title: mail about my work is worth reading before the rest."""
+    return [
+        entity.title
+        for unit in graph.units(Ref(kind=THREAD, id=thread.id))
+        if (entity := graph.get(unit.kind, unit.id)) is not None and entity.lifecycle == "open"
+    ]
+
+
+def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item:
     latest = thread.latest
+    work = about(graph, thread)
     who = latest.sender_name
     if latest.sender_email and latest.sender_email != who.lower():
         who = f"{who} <{latest.sender_email}>"
@@ -94,7 +105,7 @@ def _item(config: MailConfig, plugin: str, thread: Thread) -> Item:
         url=link(config, plugin, thread),
         subjects=[Ref(kind=THREAD, id=thread.id)],
         badges=badges,
-        details=[f"from {who}"],
+        details=[f"from {who}", *(f"about {title}" for title in work)],
         rank=int(latest.date.timestamp()),
         deferred=latest.bulk and not thread.flagged,
         fingerprint=latest.message_id or str(latest.uid),
@@ -103,7 +114,8 @@ def _item(config: MailConfig, plugin: str, thread: Thread) -> Item:
             task="read",
             effort="minutes",
             importance=1
-            if thread.flagged or ((latest.important or latest.replies_to_me) and not latest.bulk)
+            if thread.flagged
+            or ((latest.important or latest.replies_to_me or work) and not latest.bulk)
             else 0,
             waiting=[who] if person and latest.to_me else [],
             waiting_since=latest.date if person and latest.to_me else None,
@@ -111,7 +123,9 @@ def _item(config: MailConfig, plugin: str, thread: Thread) -> Item:
     )
 
 
-def panels(config: MailConfig, plugin: str, snapshot: MailSnapshot | None) -> list[Panel]:
+def panels(
+    config: MailConfig, plugin: str, snapshot: MailSnapshot | None, graph: Graph
+) -> list[Panel]:
     """Mail: a conversation per item, the newest first, those from people who matter more
     (flagged, or by contact type) first of all; lists and automated mail last."""
     return [
@@ -121,7 +135,7 @@ def panels(config: MailConfig, plugin: str, snapshot: MailSnapshot | None) -> li
             title="Mail",
             description=f"Unread and flagged mail in {config.mailbox}, newest first; lists and "
             "automated mail last.",
-            items=[_item(config, plugin, thread) for thread in threads(snapshot)],
+            items=[_item(config, plugin, thread, graph) for thread in threads(snapshot)],
             sort_by_importance=True,
             act_now=True,
         )
