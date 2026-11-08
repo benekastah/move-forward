@@ -37,8 +37,10 @@ newest first. `token_env` and `keychain_service` say where its password is.
 `auth_servers` names the servers whose `Authentication-Results` count: their first word, the
 authserv-id (`mx.google.com` for Gmail, known without setting it; for another server, look in a
 message's source). A sender counts as who `From` says only when the topmost such header, stamped
-with one of those names, says DMARC passed for the `From` domain. For a host it isn't known for,
-or with `auth_servers = []`, no sender is verified, and their mail takes no contact type.
+with one of those names, has one `dmarc` result and it passed for the `From` domain (an address
+with more than one `@` never is). For a host it isn't known for, or with `auth_servers = []`,
+no sender is verified, and their mail takes no contact type. Microsoft 365 and Outlook.com stamp
+their results with no name, so their senders can't be verified.
 
 `refresh_seconds` (900) is how often it reads the mailbox in the background. Every two minutes it
 also asks the server for the mailbox's counts (one `STATUS`, without opening it), and reads it at
@@ -65,7 +67,7 @@ with, pointing at the `person` who wrote its latest message and mentioning its s
 ticket key in it relates the two). That `person` is `mail/<address>`, with the address as its
 `handle` and `email`, so core joins them with the same person in other tools, a CRM say, and
 ranks and badges their mail by their contact type. Only a sender the receiving server vouched
-for is published that way: one whose `From` passed DMARC, by the server's own
+for is published that way: one whose `From` passed DMARC (its one `dmarc` result), by the server's own
 `Authentication-Results` (the topmost, stamped with a name in `auth_servers`; any below came with
 the message). Anyone can write any
 `From`, and a forged one mustn't borrow a customer's type. Others' mail is still listed, from
