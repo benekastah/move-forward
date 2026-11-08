@@ -30,7 +30,9 @@ can't be read yet.
 
 `host` is the IMAP server (`imap.gmail.com`), and `port` (993) its port for IMAP over TLS.
 `username` is who to sign in as, and also my address, with the top-level `email`, for telling
-mail sent to me from mail I'm copied on. `mailbox` (`INBOX`) is the mailbox read. Mail older
+mail sent to me from mail I'm copied on. `mailbox` (`INBOX`) is the mailbox read, and
+`sent_mailbox` where my sent mail is (empty: the one the server marks as sent), whose
+Message-IDs alone are read, to know which mail answers me. Mail older
 than `since_days` (14) is left out, flagged or not; at most `max_messages` (200) unread are
 read, newest first, and every flagged one. `token_env` and `keychain_service` say where its
 password is.
@@ -95,9 +97,12 @@ which says whatever the sender likes.
 
 Every conversation but those from lists and automated mail (unless flagged), as Read, in minutes.
 Mail sent to me has its sender waiting since the server received it. A conversation is
-important when it's flagged, or when Gmail labels its latest message Important (Gmail's
-`X-GM-LABELS`, read only from a server offering them; not for lists and automated mail); and
-the sender's contact type can raise it further.
+important when it's flagged, when its latest message answers mail I sent (the newest
+`max_messages` within `since_days`; its `In-Reply-To`, else the last of its `References`, names
+one of my sent Message-IDs;
+badged "replies to me"; if my sent mail can't be read, nothing counts as replying), or when
+Gmail labels it Important (Gmail's `X-GM-LABELS`, read only from a server offering them); not
+for lists and automated mail, but flagged. The sender's contact type can raise it further.
 
 ## Pages
 

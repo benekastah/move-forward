@@ -43,6 +43,9 @@ class MailConfig(Strict):
     mail I'm copied on."""
     mailbox: str = DEFAULT_MAILBOX
     """The mailbox to read."""
+    sent_mailbox: str = ""
+    """Where my sent mail is, to know which mail answers me; empty, the mailbox the server
+    marks as sent (`[Gmail]/Sent Mail`, `Sent`). Only its Message-IDs are read."""
     since_days: int = Field(default=DEFAULT_SINCE_DAYS, ge=1)
     """Mail older than this is left out, flagged or not."""
     max_messages: int = Field(default=DEFAULT_MAX_MESSAGES, ge=1, le=2000)

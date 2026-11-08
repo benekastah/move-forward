@@ -82,7 +82,9 @@ def _item(config: MailConfig, plugin: str, thread: Thread) -> Item:
         badges.append(f"{thread.unread} unread")
     if thread.flagged:
         badges.append(Badge(text="flagged", tone="warn"))
-    if latest.important and not thread.flagged and not latest.bulk:
+    if latest.replies_to_me and not latest.bulk:
+        badges.append("replies to me")
+    elif latest.important and not thread.flagged and not latest.bulk:
         badges.append("important")
     if not latest.to_me and not latest.bulk:
         badges.append("cc")
@@ -100,7 +102,9 @@ def _item(config: MailConfig, plugin: str, thread: Thread) -> Item:
             verb="Read",
             task="read",
             effort="minutes",
-            importance=1 if thread.flagged or (latest.important and not latest.bulk) else 0,
+            importance=1
+            if thread.flagged or ((latest.important or latest.replies_to_me) and not latest.bulk)
+            else 0,
             waiting=[who] if person and latest.to_me else [],
             waiting_since=latest.date if person and latest.to_me else None,
         ),
