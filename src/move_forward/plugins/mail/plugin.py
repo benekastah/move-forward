@@ -1,5 +1,6 @@
 """The mail plugin: unread and flagged mail, so the people who matter get answered first."""
 
+from datetime import datetime, timedelta
 from typing import ClassVar
 
 from ...api import (
@@ -21,6 +22,7 @@ from ...api import (
     Panel,
     PanelsRequest,
     Plugin,
+    PruneRequest,
     Ref,
     Response,
     StoreRequest,
@@ -30,9 +32,9 @@ from ...api.kinds import PERSON
 from . import client
 from .config import MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
-from .models import MailSnapshot
+from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
-from .repository import MIGRATIONS, MessageRepository
+from .repository import MIGRATIONS, MessageRepository, WriterRepository
 from .setup import EXAMPLE, TEMPLATE, questions
 
 STATUS = "status"
@@ -43,6 +45,27 @@ def person_id(email: str) -> str:
     """The id of the `person` with address `email`: `mail/<address>`, the same whichever mail
     plugin publishes them, and apart from any code host's `<host>/<login>`."""
     return f"mail/{email}"
+
+
+def own_writers(writers: WriterRepository, snapshot: MailSnapshot, now: datetime) -> MailSnapshot:
+    """The snapshot with a reply from someone who hasn't written in its conversation before as a
+    conversation of its own (`<thread>#<sender>`): anyone can name a conversation in
+    `References`, and a stranger's reply mustn't take on the snooze, pin, priority or tags set
+    on it. A conversation first seen takes everyone writing in it: nothing's set on it yet."""
+    known = writers.of(sorted({m.thread for m in snapshot.messages}))
+    messages: list[Message] = []
+    wrote: list[tuple[str, str]] = []
+    for message in snapshot.messages:
+        email = message.sender_email
+        if email is None:
+            messages.append(message)
+            continue
+        if message.thread in known and email not in known[message.thread]:
+            message = message.model_copy(update={"thread": f"{message.thread}#{email}"})
+        messages.append(message)
+        wrote.append((message.thread, email))
+    writers.wrote(list(dict.fromkeys(wrote)), now)
+    return snapshot.model_copy(update={"messages": messages})
 
 
 class MailPlugin(Plugin[MailConfig, MailSnapshot]):
@@ -74,7 +97,16 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         return client.collect(ctx.config, ctx.email, ctx.now)
 
     def store(self, req: StoreRequest[MailConfig, MailSnapshot]) -> None:
-        MessageRepository(req.ctx.db).replace(req.snapshot)
+        """Keep the snapshot, a newcomer's reply as a conversation of its own (`own_writers`)."""
+        ctx = req.ctx
+        snapshot = own_writers(WriterRepository(ctx.db), req.snapshot, ctx.now)
+        MessageRepository(ctx.db).replace(snapshot)
+
+    def prune(self, req: PruneRequest[MailConfig]) -> list[str]:
+        """Forget who wrote in conversations quiet for `prune_days`."""
+        ctx = req.ctx
+        gone = WriterRepository(ctx.db).prune(ctx.now - timedelta(days=ctx.prune_days))
+        return [f"forgot the writers of quiet conversations ({gone})"] if gone else []
 
     def load(self, req: LoadRequest[MailConfig]) -> MailSnapshot | None:
         return MessageRepository(req.ctx.db).load()

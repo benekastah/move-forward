@@ -979,6 +979,26 @@ def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
             ]
         )
     )
-    [forged] = _items(harness)
+    items = {i.title: i for i in _items(harness)}
+    forged = items["Pay this invoice now"]  # a newcomer: a conversation of its own
+    assert "#garbage-day" not in forged.badges
     assert not any(d.startswith("about") for d in forged.details)
     assert forged.signals is not None and forged.signals.importance == 0
+
+
+def test_a_newcomers_reply_is_a_conversation_of_its_own() -> None:
+    harness = mailbox(
+        message(2, subject="Re: plans", sender="bob@acme.com"),
+        message(1, subject="plans", sender="alice@acme.com"),
+    )  # first seen: both write in it
+    assert len(_items(harness)) == 1
+    harness.store(
+        MailSnapshot(
+            messages=[
+                message(4, subject="Re: plans", sender="x@evil.com", verified=False),
+                message(3, subject="Re: plans", sender="bob@acme.com"),
+            ]
+        )
+    )
+    threads = {i.fingerprint: i.subjects[0].id for i in _items(harness)}
+    assert threads == {"m3@acme.com": "root@acme.com", "m4@acme.com": "root@acme.com#x@evil.com"}

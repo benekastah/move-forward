@@ -49,6 +49,17 @@ MIGRATIONS = [
     );
     """,
     ),
+    Migration(
+        "0006_writers",
+        """
+    CREATE TABLE mail_thread_writers ( -- kept: who has written in each conversation, as only
+        thread TEXT NOT NULL,          -- unread and flagged mail is fetched
+        email TEXT NOT NULL,
+        seen_at TEXT NOT NULL,         -- when they last wrote in it
+        PRIMARY KEY (thread, email)
+    );
+    """,
+    ),
 ]
 
 
@@ -140,3 +151,43 @@ def _message(row: sqlite3.Row, labels: list[str]) -> Message:
         labels=labels,
         date=datetime.fromisoformat(row["date"]),
     )
+
+
+class WriterRepository:
+    """`mail_thread_writers`: who has written in each conversation (kept; `prune` clears
+    conversations quiet a while)."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def of(self, threads: list[str]) -> dict[str, set[str]]:
+        """The writers of the conversations, by conversation; none for one never seen."""
+        found: dict[str, set[str]] = {}
+        marks = ", ".join("?" * len(threads))
+        if not threads:
+            return found
+        rows = self._db.query(
+            f"SELECT thread, email FROM mail_thread_writers WHERE thread IN ({marks})",
+            tuple(threads),
+        )
+        for row in rows:
+            found.setdefault(row["thread"], set()).add(row["email"])
+        return found
+
+    def wrote(self, writers: list[tuple[str, str]], now: datetime) -> None:
+        """Keep that each `(thread, email)` wrote in it, as of `now`."""
+        with self._db.transaction() as conn:
+            conn.executemany(
+                "INSERT INTO mail_thread_writers VALUES (?, ?, ?)"
+                " ON CONFLICT (thread, email) DO UPDATE SET seen_at = excluded.seen_at",
+                [(thread, email, now.isoformat()) for thread, email in writers],
+            )
+
+    def prune(self, before: datetime) -> int:
+        """Forget conversations no one has written in since `before`; how many writers went."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM mail_thread_writers WHERE thread IN (SELECT thread FROM"
+                " mail_thread_writers GROUP BY thread HAVING MAX(julianday(seen_at)) < julianday(?))",
+                (before.isoformat(),),
+            ).rowcount

@@ -68,6 +68,15 @@ It must be an `https://` link or start with `message:` or `mid:`; empty, the def
 unlinked. The page links only to http(s), so an item with a `message:` or `mid:` link goes
 through the plugin's `/mail/open` page, which sends the browser on to the mail app.
 
+## Conversations
+
+A conversation is the Message-ID its first message named, which anyone replying can name. So
+mail keeps who has written in each (a kept table, as only unread and flagged mail is fetched): a
+reply from someone who hasn't written there before is a conversation of its own, so it doesn't
+take on the snooze, pin, priority or tags set on it. A conversation first seen takes everyone
+writing in it, as nothing's been set on it yet. Who wrote is forgotten for conversations quiet
+for `prune_days`.
+
 ## Publishes
 
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started

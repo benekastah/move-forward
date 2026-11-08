@@ -214,15 +214,6 @@ Without a CRM, an address book says who matters: starred or favourite contacts, 
 (Family), published as people with an `importance`, which core ranks by with no core change.
 vCard or CardDAV first, then Google Contacts. Mail's senders join them by email.
 
-### mail
-
-- **A conversation's own writers.** A conversation is the Message-ID its first message named,
-  which anyone replying can name, so a stranger's reply takes on the priority, pin or snooze
-  set on it (its flag no longer: that counts only the latest writer's mail). Keeping who has
-  written in each conversation (a kept table, as only unread and flagged mail is fetched)
-  would let a newcomer's reply start its own, without splitting a real conversation whenever
-  a sender can't be verified.
-
 ## Follow-ups
 
 ### Refreshing
