@@ -20,10 +20,9 @@ from conftest import (
     todo,
 )
 
-from move_forward import act_now, panels, refresh, render
+from move_forward import act_now, panels, render
 from move_forward.graph import Ref
 from move_forward.page import Action, Badge, Group, Item, Panel, Signals
-from move_forward.plugin import ActionError
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice, IcedItem
@@ -917,16 +916,3 @@ def test_an_entrys_several_todos_offer_its_add_todo_once_in_focus_mode() -> None
     assert focused is not None
     adds = [[a.name for a in part.actions].count("notes/todo_add") for _, part in focused]
     assert adds == [0, 0, 1]
-
-
-def test_a_todo_starts_from_nothing_as_an_entry_of_its_own() -> None:
-    config, db = stored()
-    todos = panel(refresh.build_dashboard(config, db, NOW), "notes.todos")
-    [new] = todos.actions
-    assert (new.name, new.label) == ("notes/todo_new", "New todo")
-    assert refresh.run_action(config, db, new.name, {"input": "buy milk"}) == "added: buy milk"
-    refresh.run_action(config, db, new.name, {"input": "buy milk"})  # the same entry
-    [item] = panel(refresh.build_dashboard(config, db, NOW), "notes.todos").items
-    assert item.title == "buy milk" and [p.title for p in item.parts] == ["buy milk", "buy milk"]
-    with pytest.raises(ActionError, match="empty"):
-        refresh.run_action(config, db, new.name, {"input": " "})

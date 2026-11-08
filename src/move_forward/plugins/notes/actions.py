@@ -15,6 +15,7 @@ from ...api import (
     ActionResult,
     Graph,
     Model,
+    Ref,
     SourceError,
 )
 from ...api.ids import branch_parts
@@ -22,7 +23,7 @@ from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .config import NotesConfig
 from .covers import covers
-from .markdown import links_in
+from .markdown import REVIEWS_SECTION, links_in
 from .models import Entry, IcedItem, Link, Size, Todo
 from .repository import NotesRepository
 
@@ -281,6 +282,7 @@ def todo_add(req: ActionRequest[NotesConfig]) -> str:
     title = req.field("entry")
     entry_id = notes.entry_id(title)
     if entry_id is None and fields.get("create"):
+        _entry_title(title)
         where = fields.get("where", "")
         entry_id = notes.add_entry(title, ctx.today, INFERRED, where or None, links_in(where))
     if entry_id is None:
@@ -290,18 +292,36 @@ def todo_add(req: ActionRequest[NotesConfig]) -> str:
     return f"added: {text}"
 
 
+def _entry_title(text: str) -> str:
+    """`text` as a new entry's title, refused where the skill's markdown (`mfd notes export`)
+    would read it back as something else: a line break splits its heading, a title of a
+    section of its own is that section, and a leading `[quick]` is a todo's size."""
+    if "\n" in text or "\r" in text:
+        raise ActionError("an entry's title is one line")
+    if text.casefold() == REVIEWS_SECTION.casefold():
+        raise ActionError(f"{text!r} is a section of the work notes, not an entry")
+    if text.startswith("["):
+        raise ActionError(f"{text!r} would read back as a todo's size: drop the leading [")
+    return text
+
+
 def todo_new(req: ActionRequest[NotesConfig]) -> str:
-    """Start a todo from nothing: `input` as a new entry's title and its one todo, as notes alone
-    is a todo list. An entry of that title gets the todo instead."""
-    ctx = req.ctx
-    text = (req.fields.get("input") or "").strip()
+    """Start a todo from nothing: `input` as a new entry's title and its one todo, sized by
+    `choice` (from its drop-down), as notes alone is a todo list. An entry of that title gets
+    the todo instead, but not one on ice, where it would be hidden, nor twice."""
+    ctx, graph = req.ctx, req.graph
+    text = _entry_title((req.fields.get("input") or "").strip())
     if not text:
         raise ActionError("the todo is empty")
+    if graph.hidden(Ref(kind=ENTRY, id=text)):
+        raise ActionError(f"{text!r} is an entry on ice: thaw it, or name the todo otherwise")
     notes = NotesRepository(ctx.db)
     entry_id = notes.entry_id(text)
     if entry_id is None:
         entry_id = notes.add_entry(text, ctx.today, INFERRED, None, links_in(text))
-    notes.add_todo(entry_id, text, None, links_in(text))
+    elif any(t.text == text for e in notes.entries() if e.title == text for t in e.open_todos):
+        return f"already a todo: {text}"
+    notes.add_todo(entry_id, text, _size(req.fields.get("choice") or ""), links_in(text))
     notes.touch(entry_id, ctx.today)
     return f"added: {text}"
 

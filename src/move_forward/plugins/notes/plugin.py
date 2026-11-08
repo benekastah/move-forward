@@ -41,8 +41,8 @@ from .panels import ENTRY, ICED, TODO, TODOS, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 EMPTY_NOTES = (
-    "No notes yet: `mfd notes import <dir>` reads the skill's work-notes.md and on-ice.md,"
-    " and `mfd notes add-entry <title>` starts one."
+    "No notes yet: New todo starts one here, `mfd notes import <dir>` reads the skill's"
+    " work-notes.md and on-ice.md, and `mfd notes add-entry <title>` starts an entry."
 )
 """What the Todos panel says while the notes are empty."""
 

@@ -460,7 +460,15 @@ class Builder:
             description="Easy close-outs first; blocked work last.",
             items=items,
             # A todo from nothing: no PR or ticket to start it from.
-            actions=[Action(name=TODO_NEW, label="New todo", fields={}, input=ADD_TODO_INPUT)],
+            actions=[
+                Action(
+                    name=TODO_NEW,
+                    label="New todo",
+                    fields={},
+                    input=ADD_TODO_INPUT,
+                    choices=TODO_SIZES,
+                )
+            ],
         )
 
     def iced(self) -> Panel:

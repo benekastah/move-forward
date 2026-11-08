@@ -100,6 +100,8 @@ that needs a core one says so, and lands on top of it.
 2. **Set aside from anywhere.** An item only Act now shows (nominated with no panel item) has
    nowhere to come back from but `mfd unsnooze`; and `mfd snooze` takes only a PR's URL, while
    `mfd unsnooze` takes any entity: give it the same, with a task, through the button's action.
+3. **An empty panel with a field opens.** A panel with no items is drawn collapsed, so a
+   panel-wide field (notes' New todo) is hidden just when it's wanted: draw such a panel open.
 6. **Importance where it means something.** Say whether every panel sorts by it, since only two
    do now, not What next or Feedback.
 7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
