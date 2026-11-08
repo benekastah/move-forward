@@ -162,14 +162,19 @@ def merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
 
 
 def auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
-    """Let the PR merge by itself once approved and green (auto-merge), as Merge when ready
-    offers: where its repo allows it, at the `head` the button showed, and not while the work
-    notes hold it."""
+    """Let the PR merge by itself once it has what its base requires (auto-merge), as Merge when
+    ready offers: where its repo allows it and its base requires a review it hasn't had (else
+    it would merge at once), at the `head` the button showed, and not while the work notes
+    hold it."""
     pr = _my_open_pr(req)
     if req.field("head") != pr.head_oid:
         raise ActionError(f"{pr.repo}#{pr.number} has new commits since: look again")
     if not pr.auto_merge_allowed:
         raise ActionError(f"{pr.repo} doesn't allow auto-merge")
+    if pr.review_decision != "REVIEW_REQUIRED":
+        raise ActionError(
+            f"{pr.repo}#{pr.number} needs no review it hasn't had: it would merge at once"
+        )
     if conditions := merge_conditions(req.graph, pr):
         raise ActionError(f"the work notes hold {pr.repo}#{pr.number}: {'; '.join(conditions)}")
     method = merge_method(pr, req.ctx.config.merge.method)
@@ -180,7 +185,7 @@ def auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
     except CommandError as e:
         raise ActionError(str(e)) from e
     return ActionResult(
-        f"{pr.repo}#{pr.number} merges by itself once ready", touched=[Ref(kind=PR, id=pr.url)]
+        f"{pr.repo}#{pr.number} merges by itself once approved", touched=[Ref(kind=PR, id=pr.url)]
     )
 
 

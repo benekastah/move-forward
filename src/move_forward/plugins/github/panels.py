@@ -748,22 +748,15 @@ class Builder:
         )
 
     def _with_auto_merge(self, item: Item, pr: PullRequest) -> Item:
-        """The PR's item with Merge when ready where its repo allows auto-merge (and how it'd
-        merge is known), or, once that's on, a badge saying so and Cancel auto-merge. Nothing
-        while the work notes hold it: GitHub would merge it regardless."""
-        if pr.auto_merge:
-            cancel = Action(
-                name=CANCEL_AUTO_MERGE, label="Cancel auto-merge", fields={"pr": pr.url}
-            )
-            return item.model_copy(
-                update={
-                    "badges": [*item.badges, Badge(text=MERGES_WHEN_READY, tone="good")],
-                    "actions": [*item.actions, cancel],
-                }
-            )
+        """The PR's item with Merge when ready where its repo allows auto-merge, how it'd merge
+        is known, and its base requires a review it hasn't had: auto-merge waits only for what
+        GitHub requires, so without that it would merge at once, before anyone looked. Not
+        while the work notes hold it, nor once auto-merge is on (see `_auto_merging`)."""
         method = merge_method(pr, self.config.merge.method)
         if (
-            not pr.auto_merge_allowed
+            pr.auto_merge
+            or not pr.auto_merge_allowed
+            or pr.review_decision != "REVIEW_REQUIRED"
             or (method is None and not pr.merge_queue)
             or merge_conditions(self.graph, pr)
         ):
@@ -773,10 +766,36 @@ class Builder:
             name=AUTO_MERGE,
             label="Merge when ready",
             fields={"pr": pr.url, "head": pr.head_oid},
-            confirm=f"Let {pr.repo}#{pr.number} merge by itself once approved and green, by {how},"
-            f" at {pr.head_oid[:7]}? A push after this isn't merged unseen.",
+            confirm=f"Let {pr.repo}#{pr.number} merge by itself, by {how}, once it has what"
+            f" {pr.base} requires (an approval, green checks), at {pr.head_oid[:7]}? A push"
+            " after this isn't merged unseen.",
         )
         return item.model_copy(update={"actions": [*item.actions, button]})
+
+    def _auto_merging(self, panel: Panel) -> Panel:
+        """The panel with, on every item about one of my PRs with auto-merge on, a badge saying
+        so and Cancel auto-merge, wherever it's shown; a warning one while the work notes hold
+        it, as GitHub merges it regardless."""
+        prs = {pr.url: pr for pr in self.mine if pr.auto_merge}
+
+        def marked(item: Item) -> Item:
+            pr = prs.get(item.url or "")
+            if pr is None:
+                return item
+            held = merge_conditions(self.graph, pr)
+            badge = (
+                Badge(text=f"{MERGES_WHEN_READY}, though held", tone="warn")
+                if held
+                else Badge(text=MERGES_WHEN_READY, tone="good")
+            )
+            cancel = Action(
+                name=CANCEL_AUTO_MERGE, label="Cancel auto-merge", fields={"pr": pr.url}
+            )
+            return item.model_copy(
+                update={"badges": [*item.badges, badge], "actions": [*item.actions, cancel]}
+            )
+
+        return panel.model_copy(update={"items": [marked(item) for item in panel.items]})
 
     def _with_merge_button(self, item: Item, pr: PullRequest) -> Item:
         """The PR's item with Add to queue where its base has a merge queue, else Merge with the
@@ -893,4 +912,4 @@ class Builder:
             self.team_prs(),
             self.metadata(),
         ]
-        return [self._with_primary_reviewers(panel) for panel in panels]
+        return [self._auto_merging(self._with_primary_reviewers(panel)) for panel in panels]

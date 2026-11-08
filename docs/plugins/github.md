@@ -82,10 +82,12 @@ labels as its tags but `placeholder_labels` and `split_pr_labels`, which are abo
   failures remain here.
   The reasons appear together on one item; assigned importance sorts before age.
 - **Ready for review**: my open, non-draft PRs without those blockers, waiting for approval.
-  Pending CI is allowed. Each item says who it's waiting on. Where its repo allows auto-merge,
-  Merge when ready lets it merge by itself once approved and green (with the method below, or
-  its merge queue); once on, it's badged "merges when ready", with Cancel auto-merge. Not while
-  the work notes hold it.
+  Pending CI is allowed. Each item says who it's waiting on. Where its repo allows auto-merge
+  and its base requires a review it hasn't had, Merge when ready lets it merge by itself once it
+  has what the base requires (an approval, green checks), with the method below or its merge
+  queue; not while the work notes hold it. Once on, every item about it is badged "merges when
+  ready" ("…, though held" as a warning, if the work notes hold it since), with Cancel
+  auto-merge.
 - **Ready for me to review**: non-draft PRs requesting me as an individual, plus PRs
   pushed after my approval when GitHub says `REVIEW_REQUIRED`. Team-only requests stay in
   Requested from my teams; a new push alone does not bring an approved PR back. Like

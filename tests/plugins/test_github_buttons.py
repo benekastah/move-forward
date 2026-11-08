@@ -302,3 +302,36 @@ def test_no_merge_when_ready_where_not_allowed_or_held(monkeypatch: pytest.Monke
     with pytest.raises(ActionError, match="after the migration"):
         perform_action(config, db, AUTO_MERGE, {"pr": URL, "head": "abc1234def"})
     assert commands == []
+
+
+def test_merge_when_ready_is_refused_where_it_would_merge_at_once_or_cant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands = _commands(monkeypatch)
+    no_review = _awaiting(auto_merge_allowed=True, merge_methods=["SQUASH"], review_decision=None)
+    [item] = panel(dashboard(github=snapshot(mine=[no_review])), "github.ready_for_review").items
+    assert not [a for a in item.actions if a.name == AUTO_MERGE]  # it would merge at once
+    cases = [
+        (no_review, "abc1234def", "would merge at once"),
+        (_awaiting(auto_merge_allowed=True, merge_methods=["SQUASH"]), "0000000", "new commits"),
+        (_awaiting(merge_methods=["SQUASH"]), "abc1234def", "doesn't allow auto-merge"),
+        (_awaiting(auto_merge_allowed=True), "abc1234def", "isn't known yet"),
+    ]
+    for case, head, said in cases:
+        config, db = stored(github=snapshot(mine=[case]))
+        with pytest.raises(ActionError, match=said):
+            perform_action(config, db, AUTO_MERGE, {"pr": URL, "head": head})
+    assert commands == []
+
+
+def test_auto_merge_on_shows_wherever_the_pr_is_and_warns_when_held() -> None:
+    failing = Check(name="tests", state="FAILURE", url="https://ci/1")
+    on = pr(1, auto_merge=True, auto_merge_allowed=True, checks=[failing], rollup_state="FAILURE")
+    built = dashboard(github=snapshot(mine=[on]))
+    [fixing] = panel(built, "github.fix_before_review").items
+    assert Badge(text="merges when ready", tone="good") in fixing.badges
+    assert [a.name for a in fixing.actions if a.name == CANCEL_AUTO_MERGE] == [CANCEL_AUTO_MERGE]
+    noted = entry("APP-1 Fix", [], **{"Merge conditions": ["after the migration"], "Where": [URL]})
+    held = dashboard(github=snapshot(mine=[on]), work_items=[noted])
+    [fixing] = panel(held, "github.fix_before_review").items
+    assert Badge(text="merges when ready, though held", tone="warn") in fixing.badges
