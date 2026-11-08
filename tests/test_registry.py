@@ -39,6 +39,7 @@ class OldLinearPlugin(LinearPlugin):
 class Deal(KindModel):
     """A deal in some CRM: a family no built-in declares."""
 
+    handle: str
     value: int
 
 
@@ -80,6 +81,22 @@ class DottedPlugin(LinearPlugin):
 
 class OldHubPlugin(HubPlugin):
     api_version = 0
+
+
+class BorrowerPlugin(LinearPlugin):
+    """Publishes deals without declaring the family: whoever else loads first, it's left out."""
+
+    name: ClassVar[str] = "borrower"
+    kinds: ClassVar[dict[str, KindSpec]] = {"deal": KindSpec(attrs=Deal)}
+
+
+class Handleless(KindModel):
+    value: int
+
+
+class HandlelessPlugin(LinearPlugin):
+    name: ClassVar[str] = "handleless"
+    families = (Family("thing", "thing", Handleless, is_url),)
 
 
 @pytest.fixture(autouse=True)
@@ -192,12 +209,16 @@ def test_installed_plugins_declare_a_family_core_doesnt_know(
         ("PersonPlugin", "persons's family person is declared differently by core"),
         ("DottedPlugin", "dotted's family 'crm.deal' isn't named like one"),
         ("OldHubPlugin", "hub is built against API version 0"),
+        ("BorrowerPlugin", "borrower's kind deal is a family it doesn't declare"),
+        ("HandlelessPlugin", "handleless's family thing's model has no handle"),
     ],
 )
 def test_a_plugin_whose_families_cant_be_declared_is_left_out_and_declares_none(
     monkeypatch: pytest.MonkeyPatch, plugin: str, said: str
 ) -> None:
-    first = [("hub", f"{__name__}:HubPlugin")] if plugin == "RivalPlugin" else []
+    first = (
+        [("hub", f"{__name__}:HubPlugin")] if plugin in ("RivalPlugin", "BorrowerPlugin") else []
+    )
     _installed(monkeypatch, *first, ("x", f"{__name__}:{plugin}"))
     before = dict(FAMILIES)
     plugins, errors = registry.discover()

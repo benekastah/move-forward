@@ -25,7 +25,7 @@ from .config import Config
 from .db import Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec
-from .kinds import FAMILIES
+from .kinds import FAMILIES, declaring
 from .notifications import Event
 from .page import Item, Panel, Surface
 from .panels import Dashboard
@@ -80,7 +80,8 @@ def _seed(name: str, entities: Sequence[Entity]) -> _Seed:
         e.ref.kind: KindSpec(FAMILIES[e.ref.kind].model if e.ref.kind in FAMILIES else _AnyAttrs)
         for e in entities
     }
-    cls = type(f"Seed_{name}", (_Seed,), {"name": name, "kinds": kinds})
+    families = tuple(FAMILIES[kind] for kind in kinds if kind in FAMILIES)
+    cls = type(f"Seed_{name}", (_Seed,), {"name": name, "kinds": kinds, "families": families})
     return cls(name, entities)
 
 
@@ -119,12 +120,13 @@ class Harness:
         `ticket`) as some plugin would publish them, or another plugin's own kind
         (`git.branch`) as that plugin. Returns the harness, to chain."""
         by_owner: dict[str, list[Entity]] = {}
-        for entity in entities:
-            kind = entity.ref.kind
-            owner = "seed" if kind in FAMILIES else kind.split(".", 1)[0]
-            by_owner.setdefault(owner, []).append(entity)
-        self._seeds += [_seed(owner, found) for owner, found in by_owner.items()]
         with self._installed():
+            for entity in entities:
+                kind = entity.ref.kind
+                owner = "seed" if kind in FAMILIES else kind.split(".", 1)[0]
+                by_owner.setdefault(owner, []).append(entity)
+            self._seeds += [_seed(owner, found) for owner, found in by_owner.items()]
+        with self._installed():  # again, with the new seeds
             self.config = self._config()
         return self
 
@@ -173,11 +175,12 @@ class Harness:
     def entities(self) -> list[Entity]:
         """What the plugin publishes, as the graph holds it: core's checks passed."""
         graph = self.graph()
-        return [
-            entity
-            for kind in self.plugin.kinds
-            for entity in graph.of_kind(f"{self.name}.{kind}" if kind in FAMILIES else kind)
-        ]
+        with self._installed():
+            return [
+                entity
+                for kind in self.plugin.kinds
+                for entity in graph.of_kind(f"{self.name}.{kind}" if kind in FAMILIES else kind)
+            ]
 
     def panels(self) -> list[Panel]:
         """The plugin's panels, as its `panels` makes them (before core adds buttons)."""
@@ -240,10 +243,12 @@ class Harness:
 
     @contextmanager
     def _installed(self) -> Generator[None]:
-        """Core sees only the plugin and the seeds, while a call runs."""
+        """Core sees only the plugin and the seeds, and the families the plugin declares, while
+        a call runs."""
         saved = registry.PLUGINS
         registry.PLUGINS = [self.plugin, *self._seeds]
         try:
-            yield
+            with declaring(self.name, self.plugin.families, keep=False):
+                yield
         finally:
             registry.PLUGINS = saved

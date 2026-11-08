@@ -17,7 +17,9 @@ catch up.
 
 - **Families a plugin declares**: `Plugin.families` declares a family core doesn't model
   (`api.kinds.Family`), whose kinds the plugin, and others declaring the same family,
-  publish as they would core's. One declared differently from core or another plugin
+  publish as they would core's; a plugin publishes kinds only of core's families and its
+  own. A family's model needs a `handle`. `api.kinds.is_url` and `is_host_login` are core's
+  id rules, for a family to use. One declared differently from core or another plugin
   leaves its plugin out.
 - **How much a person matters**: `Person.importance` (0 to 2) lets a tool say it outright, a
   CRM's VIP or a starred contact, rather than through a type and `[people] contact_types`. Core

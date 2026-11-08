@@ -1,4 +1,5 @@
-"""The families of entity kinds core models, for plugins to publish and read."""
+"""The families of entity kinds, core's and what a plugin needs to declare its own, for
+plugins to publish and read."""
 
 from ..kinds import (
     FAMILIES,
@@ -12,6 +13,8 @@ from ..kinds import (
     PullRequestFetched,
     Ticket,
     TicketFetched,
+    is_host_login,
+    is_url,
 )
 
 __all__ = [
@@ -26,4 +29,6 @@ __all__ = [
     "PullRequestFetched",
     "Ticket",
     "TicketFetched",
+    "is_host_login",
+    "is_url",
 ]

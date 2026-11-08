@@ -36,7 +36,7 @@ def test_a_kind_named_for_a_family_must_extend_its_model() -> None:
         team: str
 
     registry.check_plugins([_plugin("linear", {TICKET: KindSpec(LinearTicket)})])
-    with pytest.raises(RuntimeError, match="linear's ticket must extend core's Ticket"):
+    with pytest.raises(RuntimeError, match="linear's ticket must extend Ticket"):
         registry.check_plugins([_plugin("linear", {TICKET: KindSpec(_OwnTicket)})])
 
 

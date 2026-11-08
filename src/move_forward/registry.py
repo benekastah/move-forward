@@ -16,7 +16,7 @@ from . import act_now, notifications, tls
 from .db import CORE, OWNER_RE, Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
-from .kinds import FAMILIES, declare, fits, named_for
+from .kinds import CORE_FAMILIES, FAMILIES, declare, declaring, fits, named_for
 from .plugin import (
     API_VERSION,
     Context,
@@ -124,11 +124,15 @@ prefix, so it can't be any of core's. `tests/test_registry.py` checks the list a
 config, the commands and the server."""
 
 
+_CORE_FAMILY_NAMES = {family.name for family in CORE_FAMILIES}
+
+
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     """Raise unless every plugin is built against this dashboard's `API_VERSION`, and its
     name is its own and fit to be one: lower-case, not two plugins', and none of core's
     (`RESERVED_NAMES`). A plugin's kinds are named for it
-    (`git.branch`), or for a family (`kinds.FAMILIES`), whose model they must extend."""
+    (`git.branch`), or for a family, core's or one it declares (`Plugin.families`), whose model
+    they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -157,9 +161,15 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                     f"{plugin.name}'s {kind} attributes must be a KindModel, not"
                     f" {spec.attrs.__name__}"
                 )
+            if family is not None and kind not in _CORE_FAMILY_NAMES | {
+                f.name for f in plugin.families
+            }:
+                raise RuntimeError(
+                    f"{plugin.name}'s kind {kind} is a family it doesn't declare in its families"
+                )
             if family is not None and not issubclass(spec.attrs, family.model):
                 raise RuntimeError(
-                    f"{plugin.name}'s {kind} must extend core's {family.model.__name__}"
+                    f"{plugin.name}'s {kind} must extend {family.model.__name__}"
                     f" (the {family.label} family), not {spec.attrs.__name__}"
                 )
 
@@ -177,18 +187,15 @@ def discover() -> tuple[list[Plugin[Any, Any]], list[str]]:
     check_plugins(plugins)
     errors: list[str] = []
     for point in entry_points(group=ENTRY_POINTS):
-        families = dict(FAMILIES)
         try:
             loaded: object = point.load()
             plugin: object = loaded() if isinstance(loaded, type) else loaded
             if not isinstance(plugin, Plugin):
                 raise TypeError(f"{point.value} isn't a Plugin")
             installed = cast(Plugin[Any, Any], plugin)
-            declare(installed.name, installed.families)
-            check_plugins([*plugins, installed])
+            with declaring(installed.name, installed.families):
+                check_plugins([*plugins, installed])
         except Exception as e:  # noqa: BLE001 (any failure leaves just this plugin out)
-            FAMILIES.clear()
-            FAMILIES.update(families)
             errors.append(f"plugin {point.name} ({point.value}) is left out: {e}")
             continue
         plugins.append(installed)

@@ -25,7 +25,7 @@ from move_forward.api import (
     StoreRequest,
     attrs,
 )
-from move_forward.api.kinds import PULL_REQUEST, PullRequest
+from move_forward.api.kinds import FAMILIES, PULL_REQUEST, Family, PullRequest, is_url
 from move_forward.strict import Strict
 from move_forward.testing import NOW, Harness
 
@@ -184,3 +184,31 @@ def _config_error(section: dict[str, Any]) -> None:
 def test_a_bad_section_fails_as_the_config_would() -> None:
     with pytest.raises(ValueError, match=r"linear\.team"):
         _config_error({})
+
+
+class Deal(KindModel):
+    handle: str
+
+
+class CrmPlugin(Plugin[LinearConfig, LinearSnapshot]):
+    """A plugin publishing deals, a family it declares."""
+
+    name: ClassVar[str] = "crm"
+    title: ClassVar[str] = "CRM"
+    api_version = API_VERSION
+    config_model = LinearConfig
+    families = (Family("deal", "deal", Deal, is_url),)
+    kinds: ClassVar[dict[str, KindSpec]] = {"deal": KindSpec(Deal)}
+
+    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
+        return [
+            Entity(ref=Ref(kind="deal", id=id), title="Big", attrs=attrs(Deal(handle="D-1")))
+            for id in ("https://crm/deals/1", "D-1")  # the second breaks the family's rule
+        ]
+
+
+def test_a_plugin_publishes_a_family_it_declares_as_core_would() -> None:
+    crm = Harness(CrmPlugin(), {"team": "ENG"})
+    [deal] = crm.entities()
+    assert (deal.ref.id, deal.kind, deal.family) == ("https://crm/deals/1", "crm.deal", "deal")
+    assert "deal" not in FAMILIES  # declared only while the harness runs a call
