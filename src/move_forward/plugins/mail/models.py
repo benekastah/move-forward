@@ -22,7 +22,8 @@ class Message(Model):
     sender_name: str
     """Who it's from, by name, else by address."""
     sender_email: str | None
-    """Their address, lower-case; None when it has none."""
+    """Their address, lower-case, as `From` says (unchecked: see `verified`); None when it
+    gives none that can be shown as one address."""
     to_me: bool
     """I'm among its `To`, not just copied."""
     bulk: bool

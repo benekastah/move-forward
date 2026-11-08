@@ -190,9 +190,12 @@ def _shown(text: str) -> str:
 
 
 def _address(text: str) -> str | None:
-    """`text`, lower-cased, if it can be shown and named as one address: one `@`, and nothing
-    hidden, spaced or slashed in it (a `/` can't go in a person's id). None otherwise."""
-    if text.count("@") != 1 or text != _shown(text) or " " in text or "/" in text:
+    """`text`, lower-cased, if it can be shown as one address: one `@`, and nothing hidden or
+    spaced in it (control, format or space characters: a soft hyphen or a word joiner would
+    make it read as another). None otherwise."""
+    if text.count("@") != 1 or any(
+        unicodedata.category(c) in ("Cc", "Cf", "Zs", "Zl", "Zp") for c in text
+    ):
         return None
     return text.lower()
 

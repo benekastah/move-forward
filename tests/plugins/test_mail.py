@@ -174,13 +174,20 @@ def test_control_and_bidi_characters_are_dropped_from_what_is_shown() -> None:
     "sender",
     [
         '"moc.emca\u202e"@evil.com',  # a bidi override in the address
-        '"a/b"@evil.com',  # a slash, which can't go in a person's id
         '"a b"@evil.com',
+        "bo\u00adss@acme.com",  # a soft hyphen: reads as boss@acme.com
+        "boss\u2060@acme.com",  # a word joiner
     ],
 )
 def test_an_address_that_cant_be_shown_as_one_isnt_kept(sender: str) -> None:
     found = client.message(b"1 (UID 7 FLAGS ())", headers(sender=f"<{sender}>"), {ME})
     assert found is not None and found.sender_email is None and not found.verified
+
+
+def test_an_address_with_a_slash_is_shown_but_is_no_one() -> None:
+    harness = mailbox(message(1, sender='"a/b"@evil.com'))
+    [thread] = harness.entities()
+    assert thread.attrs["sender_email"] == '"a/b"@evil.com' and thread.refs == []
 
 
 def test_a_name_that_could_pass_for_an_address_shows_the_address() -> None:

@@ -99,7 +99,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
             refs: list[Ref] = []
             # Only a sender the server vouched for is a person: core gives people their
             # contact type, which a forged `From` mustn't borrow.
-            if email and latest.verified:
+            # A `/` can't go in a person's id (`mail/<address>`): such a sender is no one.
+            if email and latest.verified and "/" not in email:
                 person = people.setdefault(
                     email,
                     Entity(
