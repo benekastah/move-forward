@@ -136,6 +136,7 @@ before the command's name.
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <PR URL>` ends it. |
 | `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Act now's Clear priority does `clear`. |
+| `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one I put there off; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, task, until, fingerprint), for the skill. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
@@ -225,7 +226,11 @@ said, and a priority I set on the item replaces it.
 
 ## Tags
 
-A `#tag` in an item's title (a PR's, a ticket's, a todo's) puts the tag on it. Text that names
+A `#tag` in an item's title (a PR's, a ticket's, a todo's) puts the tag on it, and so does
+its Tag field, on any item about something (a mail, a ticket, a branch), or `mfd tag`. Items
+show their tags as badges, with an Untag button for each one put on by hand; one put on by hand
+is kept until I take it off, or the item is gone (a deleted entry, a ticked-off todo, a mail once read); it stays
+on finished work, a merged PR or a done ticket. Text that names
 it, in a title or a description, however its words are spaced, hyphenated or cased ("Garbage day
 moved" names `#garbage-day`), points at it. A tag's words are separated by `-` or `_`; it needs
 a letter (`#7` is a PR's number), and one word shorter than three letters is named only with
@@ -357,6 +362,8 @@ over 64 KiB:
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
 | `/actions/act_now/<snooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and what's shown with it) until tomorrow, dismisses it, or pins or unpins it; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
 | `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 0 not important, 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
+| `/actions/act_now/tag` | `kind`, `id` (the entity), `input` (the tag: `garbage-day`, `#Garbage Day`) | Puts the tag on the entity, as `mfd tag` does. |
+| `/actions/act_now/untag` | `kind`, `id`, `tag` (its handle) | Takes off a tag I put on it. |
 | `/actions/act_now/contact` | `choice` (an address or `@domain`), `input` (the type) | Sets what someone is to me, as `mfd contact` does. |
 | `/actions/act_now/contact_clear` | `who` (an address or `@domain`) | Clears the type I set. |
 

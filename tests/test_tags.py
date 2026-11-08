@@ -1,12 +1,18 @@
 """`#tags`: what carries one is related to it, and what names it points at it."""
 
+from pathlib import Path
+
 import pytest
 from conftest import NOW, pr, snapshot, stored
 
-from move_forward import refresh, tags
+from move_forward import cli, panels, refresh, tags
+from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
+from move_forward.page import Item, ItemAdditions, Panel
+from move_forward.plugin import ActionError
 from move_forward.registry import enabled
+from move_forward.repositories import TagRepository
 
 
 @pytest.mark.parametrize(
@@ -134,3 +140,125 @@ def test_a_title_that_cant_carry_a_tag_still_names_one_by_its_hash() -> None:
     mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#QA sign-off")
     found = tags.tagged([carrier, mail], {"y.mail": KindSpec(tags.TagAttrs, tags_from_title=False)})
     assert found[1].refs == [Ref(kind=TAG, id="qa")]
+
+
+def test_a_tag_put_on_by_hand_shows_on_its_items_and_comes_off() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1, title="Fix it")]))
+    fields = {"kind": "pull_request", "id": pr(1).url}
+    assert refresh.run_action(config, db, "act_now/tag", {**fields, "input": "#Garbage Day"}) == (
+        "tagged #garbage-day"
+    )
+    assert refresh.run_action(config, db, "act_now/tag", {**fields, "input": "garbage-day"}) == (
+        "already #garbage-day"
+    )
+    with pytest.raises(ActionError, match="isn't a tag"):
+        refresh.run_action(config, db, "act_now/tag", {**fields, "input": "#7"})
+    items = [
+        i
+        for p in refresh.build_dashboard(config, db, NOW).panels
+        for i in p.items
+        if i.subjects and i.subjects[0].id == pr(1).url
+    ]
+    assert items
+    for item in items:  # the same wherever it's shown
+        assert "#garbage-day" in item.badges
+        assert [a.label for a in item.actions if a.group == "Tags"] == [
+            "Tag",
+            "Untag #garbage-day",
+        ]
+    graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
+    assert [t.refs for t in graph.of_kind(TAG)] == [[Ref(kind="pull_request", id=pr(1).url)]]
+    untag = {**fields, "tag": "garbage-day"}
+    assert refresh.run_action(config, db, "act_now/untag", untag) == "#garbage-day taken off"
+    assert refresh.run_action(config, db, "act_now/untag", untag) == "#garbage-day wasn't on it"
+    assert TagRepository(db).all() == {}
+
+
+def test_the_tag_command_puts_a_tag_on_and_takes_it_off(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "config.toml"
+    db_path = tmp_path / "dashboard.db"
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n')
+    assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
+    assert cli.main(["-c", str(config), "tag", "Chores", "#Garbage_Day"]) == 0
+    assert cli.main(["-c", str(config), "tag", "Chores", "#7"]) == 1
+    assert cli.main(["-c", str(config), "tag", "Nothing", "x"]) == 1
+    entry = Ref(kind="notes.entry", id="Chores")
+    assert TagRepository(Database(db_path)).all() == {entry: ["garbage-day"]}
+    assert cli.main(["-c", str(config), "tag", "Chores", "garbage-day", "--remove"]) == 0
+    assert TagRepository(Database(db_path)).all() == {}
+    assert "Chores: #garbage-day" in capsys.readouterr().out
+
+
+def test_tags_on_gone_entities_are_forgotten_and_finished_work_keeps_them() -> None:
+    config, db = stored(
+        github=snapshot(mine=[pr(1)], merged=[pr(2, merged_at="2026-10-29T00:00:00Z")]),
+    )
+    gone_entry = Ref(kind="notes.entry", id="Chores")  # deleted: a new "Chores" starts clean
+    merged = Ref(kind="pull_request", id=pr(2).url)
+    repo = TagRepository(db)
+    for ref in (gone_entry, merged):
+        repo.add(ref, "chores", NOW)
+    plugins = enabled(config, db, NOW)
+    graph, _ = refresh.stored_graph(db, plugins)
+    notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
+    assert "tags: took my tags off 1 entity(ies) that are gone" in notices
+    assert repo.all() == {merged: ["chores"]}
+
+
+def test_untag_takes_the_tag_however_its_written() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1)]))
+    fields = {"kind": "pull_request", "id": pr(1).url}
+    refresh.run_action(config, db, "act_now/tag", {**fields, "input": "garbage-day"})
+    untag = {**fields, "tag": "#Garbage Day"}
+    assert refresh.run_action(config, db, "act_now/untag", untag) == "#garbage-day taken off"
+
+
+def test_ice_gets_no_tags_and_focus_parts_do() -> None:
+    graph = Graph(hiding=["notes.iced"])
+    tagging = tags.Tags(graph, {})
+    assert tagging.additions(Item(title="iced", subjects=[Ref(kind="notes.iced", id="1")])) == (
+        ItemAdditions()
+    )
+    part = Ref(kind="notes.todo", id="7")
+    stage = Panel(
+        key="stage",
+        title="Stage",
+        description="",
+        items=[
+            Item(
+                title="Entry",
+                subjects=[Ref(kind="notes.entry", id="e")],
+                parts=[Item(title="Todo", subjects=[part])],
+            )
+        ],
+    )
+    built = panels.build(
+        NOW,
+        [panels.PluginPanels("x", "X", [stage])],
+        {},
+        item_actions=lambda item, owner, surface: tagging.additions(item),
+    )
+    focused = built.focus_items("x.stage")
+    assert focused is not None
+    [(_, todo)] = focused
+    assert [a.fields for a in todo.actions if a.label == "Tag"] == [
+        {"kind": part.kind, "id": part.id}
+    ]
+
+
+def test_forget_gone_keeps_tags_on_done_work_in_the_graph() -> None:
+    merged, gone = Ref(kind="pull_request", id="merged"), Ref(kind="notes.todo", id="9")
+    graph = Graph(
+        [Entity(ref=merged, title="m", lifecycle="done")],
+        kinds={
+            "pull_request": KindSpec(tags.TagAttrs),
+            "notes.todo": KindSpec(tags.TagAttrs, gone_means_done=True),
+        },
+    )
+    repo = TagRepository(Database(":memory:"))
+    for ref in (merged, gone):
+        repo.add(ref, "chores", NOW)
+    assert tags.forget_gone(repo, graph) == 1
+    assert repo.all() == {merged: ["chores"]}

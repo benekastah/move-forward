@@ -13,7 +13,18 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from . import act_now, localtime, notifications, panels, people, priority, registry, shell, tls
+from . import (
+    act_now,
+    localtime,
+    notifications,
+    panels,
+    people,
+    priority,
+    registry,
+    shell,
+    tags,
+    tls,
+)
 from .act_now import Feedback
 from .config import Config
 from .db import CORE, Database
@@ -56,6 +67,7 @@ from .repositories import (
     LayoutRepository,
     PriorityRepository,
     SnapshotRepository,
+    TagRepository,
 )
 from .shell import CommandError
 
@@ -76,9 +88,10 @@ class PageFailed(Exception):
 
 
 def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str, BaseModel | None]]:
-    """The graph over what's stored, with the snapshots it was built from."""
+    """The graph over what's stored, with the snapshots it was built from, and the tags I put on
+    entities."""
     snapshots = {e.name: e.snapshot() for e in plugins}
-    return build_graph(plugins, snapshots), snapshots
+    return build_graph(plugins, snapshots, TagRepository(db).all()), snapshots
 
 
 def _store(
@@ -382,12 +395,24 @@ def _prune_plugins(
         notices.append(f"act_now: forgot {dropped} snooze(s), dismissal(s) or pin(s)")
     if cleared := priority.forget_finished(PriorityRepository(db), graph):
         notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")
+    if cleared := tags.forget_gone(TagRepository(db), graph):
+        notices.append(f"tags: took my tags off {cleared} entity(ies) that are gone")
     for e in plugins:
         try:
             notices += [f"{e.name}: {n}" for n in e.plugin.prune(PruneRequest(e.ctx, graph))]
         except Exception:
             log.exception("%s: prune failed", e.name)
     return notices
+
+
+def _merged(first: ItemAdditions, then: ItemAdditions) -> ItemAdditions:
+    """Both one's additions to an item and the other's, in that order."""
+    return ItemAdditions(
+        actions=[*first.actions, *then.actions],
+        badges=[*first.badges, *then.badges],
+        details=[*first.details, *then.details],
+        links=[*first.links, *then.links],
+    )
 
 
 def build_dashboard(
@@ -454,19 +479,15 @@ def build_dashboard(
     ]
 
     contacts = people.Contacts(ContactRepository(db).all(), graph, config.people)
+    tagging = tags.Tags(graph, TagRepository(db).all())
 
     def item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
-        found = contacts.additions(item)
+        found = _merged(contacts.additions(item), tagging.additions(item))
         for e, add in prepared:
             req = ItemActionsRequest(e.ctx, item, graph, owner, surface)
             added = call(e.name, "item_actions", lambda add=add, req=req: add(req), found)
             if added is not found:
-                found = ItemAdditions(
-                    actions=[*found.actions, *added.actions],
-                    badges=[*found.badges, *added.badges],
-                    details=[*found.details, *added.details],
-                    links=[*found.links, *added.links],
-                )
+                found = _merged(found, added)
         return found
 
     def hidden(item: Item) -> bool:
@@ -592,6 +613,21 @@ def _set_contact(db: Database, fields: dict[str, str], now: datetime) -> ActionR
     return ActionResult(f"{who}: {contact_type}")
 
 
+def _tag(db: Database, action: str, fields: dict[str, str], now: datetime) -> ActionResult:
+    """Tag: put the tag typed as `input` on the entity; Untag: take `tag` off it."""
+    ref = Ref(kind=fields["kind"], id=fields["id"])
+    repo = TagRepository(db)
+    try:
+        tag = tags.tag_key(fields["tag" if action == "untag" else "input"])
+    except ValueError as err:
+        raise ActionError(str(err)) from err
+    if action == "untag":
+        return ActionResult(
+            f"#{tag} taken off" if repo.remove(ref, tag) else f"#{tag} wasn't on it"
+        )
+    return ActionResult(f"tagged #{tag}" if repo.add(ref, tag, now) else f"already #{tag}")
+
+
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
@@ -599,10 +635,12 @@ def _act_now_action(
     or unpin it, by its main subject and task, and the items joined to it (`also`) alike; set
     or clear the priority of its main subject; and set or clear who someone is to me."""
     now = datetime.now(UTC)
-    if action in ("priority", "contact", "contact_clear"):
+    if action in ("priority", "contact", "contact_clear", "tag", "untag"):
         try:
             if action == "priority":
                 return _set_priority(db, fields, now)
+            if action in ("tag", "untag"):
+                return _tag(db, action, fields, now)
             if action == "contact":
                 return _set_contact(db, fields, now)
             try:

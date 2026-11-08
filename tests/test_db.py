@@ -329,8 +329,10 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
     path = tmp_path / "old.db"
     db = Database(path)
     db.execute("DROP TABLE contacts")
+    db.execute("DROP TABLE tags")
     db.execute(
-        "DELETE FROM migrations WHERE owner = 'core' AND name IN ('0013_opened', '0014_contacts')"
+        "DELETE FROM migrations WHERE owner = 'core'"
+        " AND name IN ('0013_opened', '0014_contacts', '0015_tags')"
     )
     db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
     db.execute(
