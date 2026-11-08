@@ -36,7 +36,8 @@ to change.
 `#tags` in titles and descriptions (out of code) relate items, and any item can be tagged by hand: `mfd tag <entity> <tag>
 [--kind K] [--remove]`, or `POST /actions/act_now/tag` (`kind`, `id`, `input`) and
 `/actions/act_now/untag` (`kind`, `id`, `tag`). Items show their tags as badges. Nothing to
-change; scripts reading items' badges or buttons will see `#tag` badges and a Tags group.
+change; scripts reading items' badges or buttons will see `#tag` badges and a Tags group. A
+tag from a tool's label is a badge object, `{"text": "#bug", "tone": "label"}`, not a string.
 
 ### Mail
 

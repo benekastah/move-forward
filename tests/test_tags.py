@@ -366,3 +366,11 @@ def test_my_tags_come_first_and_a_tools_labels_are_coloured_apart() -> None:
     found = tags.Tags(graph, added).additions(Item(title="t", subjects=[ref]))
     assert found.badges == ["#chores", "#errand", Badge(text="#garbage-day", tone="label")]
     assert [a.label for a in found.actions] == ["Tag", "Untag #chores"]  # a label isn't mine
+
+
+def test_a_tag_written_and_labelled_is_written() -> None:
+    ref = Ref(kind="x.a", id="1")
+    carrier = Entity(ref=ref, title="Fix #bug", tags=["bug"])
+    graph = Graph(tags.tagged([carrier], {}))
+    found = tags.Tags(graph, {}).additions(Item(title="t", subjects=[ref]))
+    assert found.badges == ["#bug"]  # it stays when the label goes: not coloured as one

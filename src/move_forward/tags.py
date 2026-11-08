@@ -254,11 +254,15 @@ class Tags:
         carried = self._carried.get(subject, [])
         mine = [tag for tag in self._added.get(subject, []) if tag in carried]
         entity = self._graph.get(subject.kind, subject.id)
-        labelled = {handle(label) for label in entity.tags} if entity else set[str]()
-        written = [tag for tag in carried if tag not in mine and tag not in labelled]
-        labels = [
-            tag for tag in carried if tag not in mine and tag in labelled and tag not in written
-        ]
+        spec = self._graph.spec(subject.kind)
+        in_text = (
+            {t for text in [entity.title, *entity.mentions] for t in tags(prose(text))}
+            if entity and (spec is None or spec.tags_from_text)
+            else set[str]()
+        )
+        # In its text, a tag stays when its label goes: it's written, whatever the tool says.
+        written = [tag for tag in carried if tag not in mine and tag in in_text]
+        labels = [tag for tag in carried if tag not in mine and tag not in in_text]
         return ItemAdditions(
             badges=[
                 *(f"#{tag}" for tag in [*mine, *written]),

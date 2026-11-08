@@ -360,7 +360,7 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
 - Each `Item` names its `subjects`, the entities it's about, main one first. Other plugins
   add their buttons by them, and core hides items whose subject is on ice.
 - A badge is a string, or `Badge(text, tone="warn")` for one that needs attention (`good`
-  for one going well). A link to what's over sets `done`, and is struck through. An item
+  for one going well; `label` is core's, for a tag a tool's label puts on an item). A link to what's over sets `done`, and is struck through. An item
   that's not for now (a draft) is `deferred`: it sorts last, and Act now leaves it out
   unless the plugin's `act_now` nominates it.
 - An item or part whose work is done but kept a while to undo (a todo ticked off today) is
