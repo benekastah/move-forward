@@ -593,6 +593,7 @@ def _shown(
                 # All of a joined item's parts, even one, so its buttons say what they act on.
                 *(part for joined in then for part in joined.item.parts),
             ],
+            "parts_listed": any(joined.item.parts for joined in then),
             "actions": [
                 *_without_repeats(
                     [

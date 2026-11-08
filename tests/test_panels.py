@@ -640,9 +640,9 @@ def test_a_lone_todo_joined_to_another_item_is_listed_with_its_own_buttons() -> 
     )
     [host] = [i for i in one.act_now() if i.title.startswith("Resolve conflicts")]
     assert "notes/todo_done" in render.item_html(host)
-    # An entry's own lone todo still shows once, as the entry.
+    # An entry's own lone todo still shows once, as the entry, not again as a part.
     [own] = panel(one, "notes.todos").items
-    assert render.item_html(own).count("notes/todo_done") == 1
+    assert "item-parts" not in render.item_html(own)
 
 
 def test_empty_notes_say_how_to_fill_them() -> None:
