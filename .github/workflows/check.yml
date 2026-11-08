@@ -21,7 +21,8 @@ concurrency:
 
 jobs:
   # Whether anything but docs changed. A pull request touching only Markdown skips the checks
-  # (CI passed still reports); main always runs them.
+  # (CI passed still reports); main always runs them. docs/entities.md counts as code: a test
+  # checks it against the plugins' models.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -30,16 +31,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 2  # the merge GitHub would make, and its first parent: the base
       - id: diff
         env:
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -eu
           if [ "$EVENT" != pull_request ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "$BASE...$HEAD" | grep -qvE '\.md$'; then
+            exit 0
+          fi
+          # Its own line, so a failing diff fails the step rather than reading as no code.
+          files=$(git diff --name-only --no-renames HEAD^1 HEAD)
+          if printf '%s\n' "$files" | grep -vE '\.md$' | grep -q . \
+            || printf '%s\n' "$files" | grep -qx 'docs/entities.md'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
@@ -57,7 +62,6 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.12"
-          enable-cache: true
       - run: python dev.py static
 
   # The tests, on every system, in parallel on each.
@@ -76,7 +80,6 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.12"
-          enable-cache: true
       - run: python dev.py tests
 
   # The one check the ruleset on main requires, so changing the jobs doesn't change what's
