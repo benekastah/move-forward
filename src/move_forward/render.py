@@ -542,17 +542,44 @@ scrolls to where the item was, even once it's gone from the end of its panel."""
 SPOT_ID = "spot"
 
 
+def _nesting(items: list[Item]) -> dict[int | None, list[tuple[int, Item]]]:
+    """Each item's children by its place (None for the roots), from their `parent_anchor`: a
+    child goes under the first item with that anchor, so it's drawn once, and an item whose
+    parents lead back to it (a cycle) is a root, so it's drawn at all."""
+    owner: dict[str, int] = {}
+    for index, item in enumerate(items):
+        if item.anchor:
+            owner.setdefault(item.anchor, index)
+
+    def parent(index: int) -> int | None:
+        found = owner.get(items[index].parent_anchor or "")
+        return found if found != index else None
+
+    def cycles(index: int) -> bool:
+        """Whether `index` is in a loop of parents (not merely below one)."""
+        seen: set[int] = set()
+        at = parent(index)
+        while at is not None and at not in seen:
+            if at == index:
+                return True
+            seen.add(at)
+            at = parent(at)
+        return False
+
+    children: dict[int | None, list[tuple[int, Item]]] = {}
+    for index, item in enumerate(items):
+        up = None if cycles(index) else parent(index)
+        children.setdefault(up, []).append((index, item))
+    return children
+
+
 def _panel(panel: Panel, spot: Spot | None = None) -> str:
     open_attr = _open(bool(panel.items))
     indexed = list(enumerate(panel.items))
-    anchors = {item.anchor for item in panel.items if item.anchor}
-    children: dict[str | None, list[tuple[int, Item]]] = {}
-    for index, item in indexed:
-        parent = item.parent_anchor if item.parent_anchor in anchors else None
-        children.setdefault(parent, []).append((index, item))
+    children = _nesting(panel.items)
 
     def cell(index: int, item: Item) -> str:
-        descendants = children.get(item.anchor, []) if item.anchor else []
+        descendants = children.get(index, [])
         nested = "".join(cell(n, child) for n, child in descendants)
         marker = (
             f"<li id='{SPOT_ID}' aria-hidden='true'></li>" if spot == (panel.key, index) else ""
@@ -561,7 +588,7 @@ def _panel(panel: Panel, spot: Spot | None = None) -> str:
             item, at=panel.key, pos=index, children=nested, child_count=len(descendants)
         )
 
-    items = "".join(cell(index, item) for index, item in children.get(None, []))
+    items = "".join(cell(index, item) for index, item in children.get(None, []))  # roots
     if spot and spot[0] == panel.key and spot[1] >= len(indexed):
         items += f"<li id='{SPOT_ID}' aria-hidden='true'></li>"
     return (
