@@ -26,6 +26,10 @@ def review_required(pr: PullRequest) -> bool:
     return pr.review_decision is not None
 
 
+CANNOT_VERIFY = "cannot verify members of"
+"""How a reason says a team's members couldn't be read."""
+
+
 def reviewer_assignment_reasons(
     pr: PullRequest,
     default: str,
@@ -48,10 +52,16 @@ def reviewer_assignment_reasons(
             continue
         members = memberships.get(f"{owner}/{team}")
         if members is None:
-            reasons.append(f"cannot verify members of {team}")
+            reasons.append(f"{CANNOT_VERIFY} {team}")
         elif requested.isdisjoint(login.casefold() for login in members):
             reasons.append(f"request a member of {team}")
     return reasons
+
+
+def can_be_requested(reasons: list[str]) -> bool:
+    """Whether asking someone could answer `reasons`, from `reviewer_assignment_reasons`:
+    not when all they say is that a team's members can't be read."""
+    return any(not reason.startswith(CANNOT_VERIFY) for reason in reasons)
 
 
 def approved(pr: PullRequest) -> bool:
