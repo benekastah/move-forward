@@ -29,6 +29,7 @@ from .prs import (
     is_bot,
     last_push_at,
     merge_blockers,
+    merge_method,
     needs_re_review,
     policy_failures,
     primary_reviewers,
@@ -45,6 +46,7 @@ REQUEST_REVIEWER = "github/request_reviewer"
 MARK_READY = "github/mark_ready"
 UPDATE_BRANCH = "github/update_branch"
 RERUN_FAILED = "github/rerun_failed"
+MERGE = "github/merge"
 REQUEST_REVIEWER_TASK = "request_reviewer"
 """The task of Needs a reviewer's items in Act now."""
 MAY_BE_READY = "draft with green CI and no open todos: ready?"
@@ -165,6 +167,16 @@ def _review(
         waiting=[pr.author] if pr.author else [],
         waiting_since=waiting_since or requested_of(pr, me, team_slugs),
     )
+
+
+def merge_holds(graph: Graph, pr: PullRequest, ignored: Collection[str]) -> list[str]:
+    """Why the PR isn't ready to merge, as Ready to merge decides: GitHub's blockers
+    (`merge_blockers`) and the work notes' merge conditions on it. Empty when it's ready."""
+    entries = graph.view_related(pr_ref(pr), ENTRY, _EntryView)
+    conditions = [c for e in entries for c in e.merge_conditions.get(pr.url, [])]
+    drafted = ["a draft"] if pr.is_draft else []
+    queued = ["in the merge queue"] if pr.in_merge_queue else []
+    return [*drafted, *queued, *merge_blockers(pr, ignored), *conditions]
 
 
 class Builder:
@@ -566,18 +578,17 @@ class Builder:
                 )
             if reasons:
                 continue
-            conditions = [c for e in self._entries(pr) for c in e.merge_conditions.get(pr.url, [])]
-            if conditions:
-                held.append(pr_item(self.now, pr, details=[f"held: {c}" for c in conditions]))
+            # The rule Merge goes by: listed here only when nothing holds it.
+            if holds := merge_holds(self.graph, pr, self.config.ignored_reviewers):
+                held.append(pr_item(self.now, pr, details=[f"held: {h}" for h in holds]))
             else:
                 merge = Signals(
                     verb="Merge", task="merge", effort="minutes", closes=f"{pr.repo}#{pr.number}"
                 )
-                ready.append(
-                    pr_item(
-                        self.now, pr, details=["approved, green, base is default"], signals=merge
-                    )
+                item = pr_item(
+                    self.now, pr, details=["approved, green, base is default"], signals=merge
                 )
+                ready.append(self._with_merge_button(item, pr))
         return (
             Panel(
                 key="ready_to_merge",
@@ -728,6 +739,31 @@ class Builder:
             " CODEOWNERS and the paths I work in.",
             items=items,
         )
+
+    def _with_merge_button(self, item: Item, pr: PullRequest) -> Item:
+        """The PR's item with Add to queue where its base has a merge queue, else Merge with the
+        method it'd use; neither while how its repo merges isn't known yet."""
+        method = merge_method(pr, self.config.merge.method)
+        fields = {"pr": pr.url, "head": pr.head_oid}
+        if pr.merge_queue:
+            button = Action(
+                name=MERGE,
+                label="Add to queue",
+                fields=fields,
+                confirm=f"Add {pr.repo}#{pr.number} to {pr.base}'s merge queue at"
+                f" {pr.head_oid[:7]}? The queue merges it once its checks pass.",
+            )
+        elif method is not None:
+            button = Action(
+                name=MERGE,
+                label="Merge",
+                fields=fields,
+                confirm=f"Merge {pr.repo}#{pr.number} into {pr.base} ({method.lower()}) at"
+                f" {pr.head_oid[:7]}?",
+            )
+        else:
+            return item
+        return item.model_copy(update={"actions": [*item.actions, button]})
 
     def _with_update_button(self, item: Item, pr: PullRequest) -> Item:
         """The PR's item with a button to bring its branch up to date with its base."""

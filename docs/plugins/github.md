@@ -49,7 +49,9 @@ complexity grows faster than size), `stale_draft_days` (my drafts untouched that
 splitting" or are "worth splitting", in PR housekeeping) and `split_pr_labels` (labels that
 mean worth splitting whatever the lines), and `reviewer_history_days`
 how far back commits count for reviewer suggestions. `[github.teams]` gives a team's GitHub
-slug where it isn't the team's name.
+slug where it isn't the team's name. `[github.merge]` `method` (`merge`, `squash` or `rebase`) is
+how Merge merges where a repo allows several; a repo allowing just one uses that, and one that
+doesn't allow it uses the one GitHub picks for me (my last used, else the repo's default).
 `default_team_reviewer_assignment` is `"team"` by default: a team request is enough.
 `team_reviewer_assignment` overrides it by GitHub team slug, for example
 `{ bacon = "individual" }`. For an `"individual"` team, the PR must request at least one
@@ -108,7 +110,7 @@ labels as its tags but `placeholder_labels` and `split_pr_labels`, which are abo
   the base branch requires no review; Ready to merge asks for no approval there. These PRs,
   here and in Fix before review, have a field to request a reviewer, suggesting the requested
   teams' members as far as they're known, then recent committers; any login can be typed.
-- **Ready to merge** and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs). A PR that GitHub's merge state calls BEHIND ("behind base: update the branch", with an Update branch button that asks first) or BLOCKED with nothing else we can see ("blocked by branch protection") isn't ready either: it's held, with that reason.
+- **Ready to merge** (with Merge, or Add to queue where its base has a merge queue) and **Held by merge conditions** (from the work notes: a PR is held by the conditions on it, not by those on its entry's other PRs). A PR that GitHub's merge state calls BEHIND ("behind base: update the branch", with an Update branch button that asks first) or BLOCKED with nothing else we can see ("blocked by branch protection") isn't ready either: it's held, with that reason.
 - **In the merge queue**: my PRs waiting in it. Nothing to act on, so Act now ignores it.
 - **Requested from my teams**: PRs waiting on any of my `teams`, ranked by how many files
   CODEOWNERS gives those teams (required first) and how many are in directories I commit
@@ -129,6 +131,7 @@ members as far as they're known, then recent committers; any login can be typed.
 
 | Path | Fields | Does |
 | --- | --- | --- |
+| `/actions/github/merge` | `pr` (the URL of one of my PRs ready to merge), `head` (the commit the button showed) | With a confirm: adds it to its base's merge queue (`gh pr merge --match-head-commit`), or starts merging it with the method above through GitHub's async merge (GitHub finishes it in a moment). Refused once it has new commits, or Ready to merge wouldn't list it (a blocker, a work-notes merge condition); never as an admin. Offered once how its repo merges is known (after a full refresh). |
 | `/actions/github/update_branch` | `pr` (the URL of one of my open PRs that's behind its base) | Merges its base into its branch on GitHub (`gh pr update-branch`), not rebasing, so what's stacked on it isn't rewritten. |
 | `/actions/github/mark_ready` | `pr` (the URL of one of my draft PRs) | Takes it out of draft. |
 | `/actions/github/rerun_failed` | `pr` (the URL of one of my open PRs, on CI failures when a failing check's URL names an Actions run of its repo that's over) | Runs the failed jobs of those runs again (`gh run rerun --failed`), policy checks left out; a run GitHub refuses doesn't stop the rest. |

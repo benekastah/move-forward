@@ -83,6 +83,9 @@ org = "example-org"
 # split_pr_labels = []                   # labels that mean worth splitting, e.g. ["size/XL"]
 # reviewer_history_days = 180
 
+# [github.merge]
+# method = "squash"                     # where a repo allows several; else GitHub's pick for me
+
 # [github.teams]                        # a team's slug, where it isn't the team's name
 # my-team = "my-team-reviewers"
 

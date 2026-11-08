@@ -366,7 +366,10 @@ def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[An
     missing = [
         key
         for key, field in plugin.config_model.model_fields.items()
-        if not field.is_required() and key != "teams" and f"# {key} =" not in written
+        if not field.is_required()
+        and key != "teams"
+        and f"# {key} =" not in written
+        and f"[{plugin.name}.{key}]" not in written  # a table of its own
     ]
     assert missing == []
 
@@ -386,5 +389,7 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
         return
     end = next((n for n in range(start + 1, len(lines)) if header.match(lines[n])), len(lines))
     shown = "\n".join(lines[start:end])
-    missing = [key for key in keys if f"{key} =" not in shown]
+    missing = [
+        key for key in keys if f"{key} =" not in shown and f"[{plugin.name}.{key}]" not in shown
+    ]
     assert missing == []

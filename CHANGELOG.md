@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Merge
+
+`POST /actions/github/merge` with `pr` and `head` merges a PR ready to merge, or adds it to its
+merge queue, as Ready to merge's Merge and Add to queue buttons do. A new `[github.merge]`
+`method` says how, where a repo allows several. Nothing to change.
+
 ### Restack
 
 `POST /actions/git_stack/stack_restack` with `repo` and `branch` runs `git stack restack` on its

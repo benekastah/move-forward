@@ -221,6 +221,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         "split_pr_suggest_lines",
         "split_pr_lines",
         "split_pr_labels",
+        "merge",
     ):
         if key in o:
             github[key] = o.pop(key)

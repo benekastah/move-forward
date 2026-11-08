@@ -24,6 +24,15 @@ DEFAULT_REVIEWER_HISTORY_DAYS = 180
 ReviewerAssignment = Literal["team", "individual"]
 
 
+class MergeConfig(Strict):
+    """`[github.merge]`: how I like PRs merged, where a repo leaves it to me."""
+
+    method: Literal["merge", "squash", "rebase"] | None = None
+    """How to merge where a repo allows several methods, e.g. `squash`. A repo allowing just one
+    uses that, and one that doesn't allow this uses the one GitHub picks for me (my last used,
+    else the repo's default). A merge queue picks its own."""
+
+
 class GitHubConfig(Strict):
     """`[github]`: the organization and its pull-request conventions."""
 
@@ -61,6 +70,8 @@ class GitHubConfig(Strict):
     flags them."""
     teams: dict[str, str] = Field(default_factory=dict)
     """A team's slug, by its name in the top-level `teams`, where the slug isn't the name."""
+    merge: MergeConfig = Field(default_factory=MergeConfig)
+    """`[github.merge]`: how I like PRs merged."""
     default_team_reviewer_assignment: ReviewerAssignment = "team"
     """Whether a requested team alone is enough (`team`), or each requested team also
     needs a requested member (`individual`). A PR with no reviewer request still needs one."""
