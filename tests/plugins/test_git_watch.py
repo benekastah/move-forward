@@ -80,10 +80,23 @@ def watcher() -> Iterator[watch.Watcher]:
     found.stop()
 
 
+@pytest.mark.parametrize("per_directory", [True, False])
+def test_a_new_worktrees_directory_moves_a_repo_only_where_watched_a_directory_at_a_time(
+    monkeypatch: pytest.MonkeyPatch, per_directory: bool
+) -> None:
+    """On Linux a new directory is watched late, so its HEAD can be written unseen; elsewhere a
+    directory is reported changed whenever its index is written."""
+    monkeypatch.setattr(watch, "PER_DIRECTORY", per_directory)
+    assert watch.moves_repo(Path("worktrees/wt")) is per_directory
+    assert watch.moves_repo(Path("worktrees")) is per_directory
+    assert watch.moves_repo(Path("worktrees/wt/HEAD"))
+
+
 def test_refs_head_packed_refs_and_config_move_a_repo() -> None:
     assert watch.moves_repo(Path("refs/heads/me/x"))
     assert watch.moves_repo(Path("HEAD")) and watch.moves_repo(Path("packed-refs"))
     assert watch.moves_repo(Path("worktrees/wt/HEAD"))
+    assert not watch.moves_repo(Path("worktrees/wt/index"))
     assert watch.moves_repo(Path("config"))  # e.g. git-stack tracking a branch
     assert not watch.moves_repo(Path("index"))
     assert not watch.moves_repo(Path("objects/ab/cdef"))
