@@ -215,10 +215,8 @@ class ContactRepository:
 
     def clear(self, who: str) -> bool:
         """Forget the type kept on `who`; whether there was one."""
-        if not self._db.query("SELECT 1 FROM contacts WHERE who = ?", (who,)):
-            return False
-        self._db.execute("DELETE FROM contacts WHERE who = ?", (who,))
-        return True
+        with self._db.transaction() as conn:
+            return conn.execute("DELETE FROM contacts WHERE who = ?", (who,)).rowcount > 0
 
 
 class FeedbackRepository:

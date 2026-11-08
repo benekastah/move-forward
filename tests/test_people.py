@@ -364,6 +364,8 @@ def test_the_buttons_set_and_clear_a_type() -> None:
     cleared = refresh.perform_action(config, db, people.CLEAR_CONTACT_ACTION, {"who": "@Acme.com"})
     assert cleared.notice == "@acme.com: type cleared"
     assert ContactRepository(db).all() == {}
+    again = refresh.perform_action(config, db, people.CLEAR_CONTACT_ACTION, {"who": "@acme.com"})
+    assert again.notice == "@acme.com had no type"
 
 
 @pytest.mark.parametrize(

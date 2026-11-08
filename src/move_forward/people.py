@@ -75,15 +75,15 @@ def contact_key(text: str) -> str:
 
 
 def clear_label(text: str, clear: Callable[[str], bool]) -> tuple[str, bool]:
-    """Clear the label `text` names with `clear` (which says whether one was kept): as given,
-    lower-cased, so one kept on what can't be labelled any more (a domain that's since become
-    public) still goes; else as `contact_key` makes it. The label, and whether one was kept;
-    raises ValueError as `contact_key` does, for text that's neither."""
+    """Clear the label `text` names with `clear` (which says whether one was kept), lower-cased,
+    so one kept on what can't be labelled any more (a domain that's since become public) still
+    goes. The label, and whether one was kept; for text that names nothing kept, raises
+    ValueError as `contact_key` does when it couldn't be a label either."""
     found = text.strip().lower()
     if clear(found):
         return found, True
-    key = contact_key(text)
-    return key, key != found and clear(key)
+    contact_key(text)
+    return found, False
 
 
 class PeopleConfig(Strict):
