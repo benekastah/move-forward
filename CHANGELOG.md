@@ -10,6 +10,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 `POST /actions/git/pull_branch` with `repo` and `branch` fast-forwards a branch to its upstream,
 as the Pull button on "moved on GitHub; pull it" items does. Nothing to change.
 
+### New todo
+
+`POST /actions/notes/todo_new` with `input` starts a todo from nothing, as an entry titled by it,
+as the Todos panel's New todo field does. Nothing to change.
+
 ### Rerun failed checks
 
 `POST /actions/github/rerun_failed` with `pr` (one of my open PRs) runs the failed jobs of its

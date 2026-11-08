@@ -290,7 +290,24 @@ def todo_add(req: ActionRequest[NotesConfig]) -> str:
     return f"added: {text}"
 
 
+def todo_new(req: ActionRequest[NotesConfig]) -> str:
+    """Start a todo from nothing: `input` as a new entry's title and its one todo, as notes alone
+    is a todo list. An entry of that title gets the todo instead."""
+    ctx = req.ctx
+    text = (req.fields.get("input") or "").strip()
+    if not text:
+        raise ActionError("the todo is empty")
+    notes = NotesRepository(ctx.db)
+    entry_id = notes.entry_id(text)
+    if entry_id is None:
+        entry_id = notes.add_entry(text, ctx.today, INFERRED, None, links_in(text))
+    notes.add_todo(entry_id, text, None, links_in(text))
+    notes.touch(entry_id, ctx.today)
+    return f"added: {text}"
+
+
 ACTIONS: dict[str, ActionHandler] = {
+    "todo_new": todo_new,
     "todo_done": todo_done,
     "todo_undone": todo_undone,
     "todo_delete": todo_delete,

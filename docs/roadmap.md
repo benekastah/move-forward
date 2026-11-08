@@ -164,8 +164,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
     the page), status and where (not shown at all), `link`, and `remove`.
 26. **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
     and remove them on the PR's items.
-27. **Start a todo from nothing.** The docs call notes alone a todo list, but a todo needs a PR
-    or ticket to start from on the page. A New entry button on the panel (`mfd notes add-entry`).
 28. **Undo a tick on the dashboard.** Focus mode keeps a ticked todo to untick; the dashboard loses
     it. Keep recently done todos, ticked, for a while.
 

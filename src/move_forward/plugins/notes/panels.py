@@ -22,6 +22,7 @@ TODOS = "todos"
 """The todos panel's key."""
 BRANCH = "git.branch"
 TODO_ADD = "notes/todo_add"
+TODO_NEW = "notes/todo_new"
 
 
 # Output models
@@ -458,6 +459,8 @@ class Builder:
             title="Todos from the work notes",
             description="Easy close-outs first; blocked work last.",
             items=items,
+            # A todo from nothing: no PR or ticket to start it from.
+            actions=[Action(name=TODO_NEW, label="New todo", fields={}, input=ADD_TODO_INPUT)],
         )
 
     def iced(self) -> Panel:
