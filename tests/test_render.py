@@ -149,16 +149,22 @@ def test_items_whose_parents_lead_back_to_them_or_share_an_anchor_show_once() ->
         page.Item(title="PR Self", subjects=[Ref(kind="pull_request", id="s")]),
     ]
     looped[2] = looped[2].model_copy(update={"parent_anchor": looped[2].anchor})
+    # Below the loop, not in it: nested under A, which is drawn as a root.
+    looped.append(
+        page.Item(title="PR C", subjects=[Ref(kind="pull_request", id="c")], parent_anchor=a.anchor)
+    )
     shared = [
         page.Item(title="Task 1", subjects=[a_ref]),
         page.Item(title="Task 2", subjects=[a_ref]),
         page.Item(title="Child", subjects=[b_ref], parent_anchor=a.anchor),
     ]
-    for items, titles in ((looped, ["PR A", "PR B", "PR Self"]), (shared, ["Child"])):
+    for items, titles in ((looped, ["PR A", "PR B", "PR Self", "PR C"]), (shared, ["Child"])):
         html = render._panel(  # pyright: ignore[reportPrivateUsage]
             page.Panel(key="p", title="P", description="", items=items)
         )
         assert all(html.count(f">{title}<") == 1 for title in titles), html
+        if items is looped:
+            assert f"data-key='children:{a.anchor}'" in html  # C under A
 
 
 def test_panel_renders_nested_items_with_persistent_collapse_controls() -> None:

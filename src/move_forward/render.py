@@ -556,10 +556,11 @@ def _nesting(items: list[Item]) -> dict[int | None, list[tuple[int, Item]]]:
         return found if found != index else None
 
     def cycles(index: int) -> bool:
-        seen = {index}
+        """Whether `index` is in a loop of parents (not merely below one)."""
+        seen: set[int] = set()
         at = parent(index)
-        while at is not None:
-            if at in seen:
+        while at is not None and at not in seen:
+            if at == index:
                 return True
             seen.add(at)
             at = parent(at)
