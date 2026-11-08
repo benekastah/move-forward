@@ -343,3 +343,16 @@ def test_a_labels_tag_written_by_someone_is_named_by_its_words() -> None:
     labelled = Entity(ref=Ref(kind="x.a", id="1"), title="t", tags=["Garbage Day"])
     found = _tagged(labelled, _entity("2", "#garbage-day prep"), _entity("3", "garbage day moved"))
     assert found["3"].refs == [Ref(kind=TAG, id="garbage-day")]
+
+
+def test_a_labels_tag_i_put_on_by_hand_is_named_by_its_words() -> None:
+    labelled = Entity(ref=Ref(kind="x.a", id="1"), title="t", tags=["Garbage Day"])
+    found = {
+        e.ref.id: e
+        for e in tags.tagged(
+            [labelled, _entity("h", "tagged"), _entity("3", "garbage day moved")],
+            {},
+            {Ref(kind="x.a", id="h"): ["garbage-day"]},
+        )
+    }
+    assert found["3"].refs == [Ref(kind=TAG, id="garbage-day")]
