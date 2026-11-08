@@ -292,7 +292,8 @@ class FeedbackRepository:
             return conn.execute(
                 "DELETE FROM act_now_feedback WHERE subject_kind = ? AND subject_id = ?"
                 " AND (? IS NULL OR task = ?)"
-                " AND (action = 'dismiss' OR (action = 'snooze' AND until > ?))",
+                # julianday: `until` keeps the local offset it was set with.
+                " AND (action = 'dismiss' OR (action = 'snooze' AND julianday(until) > julianday(?)))",
                 (kind, id, task, task, now.isoformat()),
             ).rowcount
 
@@ -304,7 +305,8 @@ class FeedbackRepository:
         """Drop snoozes that are over, and anything said before `before`; how many went."""
         with self._db.transaction() as conn:
             return conn.execute(
-                "DELETE FROM act_now_feedback WHERE until < ? OR created_at < ?",
+                "DELETE FROM act_now_feedback"
+                " WHERE julianday(until) < julianday(?) OR julianday(created_at) < julianday(?)",
                 (now.isoformat(), before.isoformat()),
             ).rowcount
 

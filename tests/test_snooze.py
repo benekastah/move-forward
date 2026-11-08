@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -97,3 +97,31 @@ def test_a_snooze_ends_at_the_configured_local_hour_of_its_last_day() -> None:
     assert (local.date(), local.hour, local.minute) == (tomorrow, 9, 0)
     midnight = localtime.local(ActNowConfig().snooze_until("pull_request", NOW))
     assert (midnight.date(), midnight.hour) == (tomorrow, 0)
+
+
+PACIFIC = timezone(timedelta(hours=-8))
+
+
+def test_only_snoozes_still_running_come_back_or_stay_whatever_their_offset() -> None:
+    feedback = FeedbackRepository(Database(":memory:"))
+    now = datetime(2026, 11, 10, 10, tzinfo=UTC)
+    running = datetime(2026, 11, 10, 9, tzinfo=PACIFIC)  # 17:00 UTC
+    over = datetime(2026, 11, 10, 1, tzinfo=PACIFIC)  # 09:00 UTC
+    for task, until in (("running", running), ("over", over)):
+        feedback.say(
+            ("x.a", "1", task), Feedback(action="snooze", fingerprint="f", until=until), now
+        )
+    feedback.prune(now, now - timedelta(days=30))
+    assert set(feedback.all()) == {("x.a", "1", "running")}  # the prune ends only what's over
+    assert feedback.bring_back("x.a", "1", None, now) == 1
+    assert feedback.all() == {}
+
+
+def test_unsnooze_from_a_stale_page_leaves_a_pin_made_since() -> None:
+    config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
+    feedback = FeedbackRepository(db)
+    key = ("pull_request", pr(1).url, "review")
+    feedback.say(key, Feedback(action="pin", fingerprint="f"), NOW)
+    fields = {"kind": key[0], "id": key[1], "task": key[2], "fingerprint": "f"}
+    assert refresh.run_action(config, db, "act_now/unsnooze", fields) == "back"
+    assert feedback.all()[key].action == "pin"
