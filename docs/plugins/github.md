@@ -74,7 +74,8 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   under the teams' rules. A changes request counts even when another reviewer approved.
   After a push and a renewed request to the same reviewer, the old changes request is
   treated as waiting for review. Failing policy checks whose status descriptions say they
-  need an approval are waiting too; other policy failures remain here.
+  need an approval are waiting too, on a first review as on a later one; other policy
+  failures remain here.
   The reasons appear together on one item; assigned importance sorts before age.
 - **Ready for review**: my open, non-draft PRs without those blockers, waiting for approval.
   Pending CI is allowed. Each item says who it's waiting on.
@@ -93,7 +94,8 @@ tickets they name), and `person` (`<host>/<login>`) for me and everyone it knows
   is green now. Checks
   named in `policy_checks` never count as failures.
 - **PR policy**: failing checks named in `policy_checks`, linked to their details, which
-  say what's missing (a label, an assignee).
+  say what's missing (a label, an assignee); not one only waiting for a review, until the PR
+  is approved and it still fails.
 - **Merge conflicts**.
 - **Ready for me to review** and **Requested from my teams** size a review by the files that
   CODEOWNERS gives me or my teams, when there are some: "my part: 12 lines in 2 of 119
