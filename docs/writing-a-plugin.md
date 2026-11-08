@@ -68,7 +68,7 @@ or whose name is taken (by a built-in, or by core: `registry.RESERVED_NAMES`, su
 
 The built-in plugins are found in `move_forward/plugins/` instead (`registry.BUILTINS`), so
 a checkout run without installing still has them: each package there is one, by the one
-`Plugin` subclass its `plugin.py` defines. Adding one changes nothing in core.
+`Plugin` subclass its `plugin.py` defines, named as the package is. Adding one changes nothing in core.
 
 ## Config
 

@@ -50,9 +50,15 @@ _last_logged_lock = threading.Lock()
 
 
 def builtin(package: str) -> Plugin[Any, Any]:
-    """The plugin a built-in package defines: the one `Plugin` subclass in its `plugin` module.
-    Raises TypeError for a package defining none, or more than one."""
-    module = importlib.import_module(f"{package}.plugin")
+    """The plugin a built-in package defines: the one `Plugin` subclass in its `plugin` module,
+    named as the package is. Raises TypeError for a package with no `plugin` module, one
+    defining no plugin or several, or a plugin named otherwise."""
+    try:
+        module = importlib.import_module(f"{package}.plugin")
+    except ModuleNotFoundError as e:
+        if e.name != f"{package}.plugin":
+            raise  # something the plugin imports
+        raise TypeError(f"{package} has no plugin.py: every package in plugins/ is one") from e
     found: list[type[Plugin[Any, Any]]] = [
         cast(type[Plugin[Any, Any]], cls)
         for _, cls in inspect.getmembers(module, inspect.isclass)
@@ -60,7 +66,10 @@ def builtin(package: str) -> Plugin[Any, Any]:
     ]
     if len(found) != 1:
         raise TypeError(f"{module.__name__} defines {len(found)} Plugin subclasses, not one")
-    return found[0]()
+    plugin = found[0]()
+    if plugin.name != package.rpartition(".")[2]:
+        raise TypeError(f"{module.__name__}'s plugin is named {plugin.name!r}, not as its package")
+    return plugin
 
 
 BUILTINS: list[Plugin[Any, Any]] = [
