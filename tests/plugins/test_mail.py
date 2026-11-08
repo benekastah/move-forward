@@ -737,3 +737,12 @@ def test_mail_about_my_open_work_says_so_and_is_important() -> None:
     assert items["Re: APP-12"].signals is not None and items["Re: APP-12"].signals.importance == 1
     assert not any(d.startswith("about") for d in items["About APP-9"].details)  # done
     assert items["Lunch"].signals is not None and items["Lunch"].signals.importance == 0
+
+
+def test_only_a_verified_senders_subject_says_what_its_about() -> None:
+    vouched = mailbox(message(1, subject="Re: APP-12"))
+    [thread] = [e for e in vouched.entities() if e.ref.kind == THREAD]
+    assert thread.mentions == ["Re: APP-12"]
+    forged = mailbox(message(1, subject="Re: APP-12 urgent", verified=False))
+    [thread] = [e for e in forged.entities() if e.ref.kind == THREAD]
+    assert thread.mentions == []  # typing a key doesn't make it about my ticket

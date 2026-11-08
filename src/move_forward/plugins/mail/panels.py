@@ -73,8 +73,9 @@ def link(config: MailConfig, plugin: str, thread: Thread) -> str | None:
 
 
 def about(graph: Graph, thread: Thread) -> list[str]:
-    """The open units of work a conversation is about (a ticket or work entry its subject
-    names), by title: mail about my work is worth reading before the rest."""
+    """The open units of work a conversation is about (one of my tickets its subject names, for
+    a verified sender: see `MailPlugin.entities`), by title: mail about my work is worth
+    reading before the rest."""
     return [
         entity.title
         for unit in graph.units(Ref(kind=THREAD, id=thread.id))
