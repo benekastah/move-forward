@@ -227,7 +227,8 @@ said, and a priority I set on the item replaces it.
 ## Tags
 
 A `#tag` in an item's title or description (a PR's, a todo's; not in code or an HTML comment)
-puts the tag on it, as does a label its tool gives it (where its plugin says so), and so does
+puts the tag on it, as does a label its tool gives it (where its plugin says so: a tag only
+labels give, often a common word like `bug`, is named only with its `#`), and so does
 its Tag field, on any item about something (a mail, a ticket, a branch), or `mfd tag`. Items
 show their tags as badges, with an Untag button for each one put on by hand; one put on by hand
 is kept until I take it off, or the item is gone (a deleted entry, a ticked-off todo, a mail once read); it stays

@@ -166,20 +166,26 @@ def tagged(
     """The entities, each pointing too at the tags its text names (but one it carries), then a
     `tag` per tag on any of them, in its title or mentions out of their code (where its kind's
     `tags_from_text`), stated by its tool (`Entity.tags`: labels), or `added` by hand, pointing
-    at what carries it: open while one of those is."""
+    at what carries it: open while one of those is. A tag only labels give is named only with
+    its `#`."""
     carrying: dict[str, list[Entity]] = {}
+    chosen: set[str] = set()
+    """The tags someone wrote or put on by hand, not only a tool's labels."""
     for entity in entities:
         spec = specs.get(entity.ref.kind)
         texts = [prose(text) for text in [entity.title, *entity.mentions]]
         own = (
             [t for text in texts for t in tags(text)] if spec is None or spec.tags_from_text else []
         )
-        own += [h for h in map(handle, entity.tags) if any(c.isalpha() for c in h)]
-        for tag in dict.fromkeys([*own, *(added or {}).get(entity.ref, [])]):
+        own += (added or {}).get(entity.ref, [])
+        chosen.update(own)
+        labels = [h for h in map(handle, entity.tags) if any(c.isalpha() for c in h)]
+        for tag in dict.fromkeys([*own, *labels]):
             carrying.setdefault(tag, []).append(entity)
     if not carrying:
         return entities
-    by_words = _by_words(carrying)
+    # A label is often a common word ("bug"): one only a tool gave is named by its `#` alone.
+    by_words = _by_words(chosen)
     carriers = {tag: {c.ref for c in found} for tag, found in carrying.items()}
     result: list[Entity] = []
     for entity in entities:
