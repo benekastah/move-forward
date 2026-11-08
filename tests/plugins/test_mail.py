@@ -195,18 +195,19 @@ def test_mail_i_am_copied_on_is_not_to_me_and_flags_may_follow_the_headers() -> 
     assert found is not None and (found.to_me, found.seen) == (False, True)
 
 
-def test_a_stranger_naming_a_thread_starts_their_own() -> None:
-    root = message(1, sender="cust@acme.com", flagged=True)
-    colleague = message(2, sender="bob@acme.com", verified=False)  # a domain already in it
-    vouched = message(3, sender="partner@other.com")  # verified
-    stranger = message(4, sender="ceo@acme.com.evil", verified=False)
-    kept = client.own_threads([stranger, vouched, colleague, root])
-    assert [m.thread for m in kept] == [
-        "m4@acme.com",
-        "root@acme.com",
-        "root@acme.com",
-        "root@acme.com",
-    ]
+def test_a_reply_from_someone_else_doesnt_wear_a_conversations_flag() -> None:
+    harness = mailbox(
+        message(2, sender="stranger@evil.example", subject="Re: urgent wire"),
+        message(1, sender="cust@acme.com", flagged=True),
+    )
+    [item] = _items(harness)
+    assert "flagged" not in [getattr(b, "text", b) for b in item.badges]
+    assert item.signals is not None and item.signals.importance == 0
+    flagged_by_writer = mailbox(
+        message(2, sender="cust@acme.com"), message(1, flagged=True, sender="cust@acme.com")
+    )
+    [item] = _items(flagged_by_writer)
+    assert "flagged" in [getattr(b, "text", b) for b in item.badges]
 
 
 def test_a_thread_without_a_message_id_is_its_uid() -> None:

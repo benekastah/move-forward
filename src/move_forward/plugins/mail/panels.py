@@ -28,7 +28,10 @@ class Thread:
 
     @property
     def flagged(self) -> bool:
-        return any(m.flagged for m in self.messages)
+        """One of its messages from whoever wrote the latest is flagged: anyone can reply into
+        a conversation by naming it, and mustn't wear a flag I put on someone else's mail."""
+        writer = self.latest.sender_email
+        return any(m.flagged for m in self.messages if m.sender_email == writer)
 
 
 def threads(snapshot: MailSnapshot | None) -> list[Thread]:
