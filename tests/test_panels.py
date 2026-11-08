@@ -928,3 +928,22 @@ def test_whats_done_is_dimmed_uncounted_and_not_stepped_through() -> None:
     page = render._panel(board.panel("x.p"))  # pyright: ignore[reportPrivateUsage]
     assert "<span class='count'>1</span>" in page
     assert "class='item opened'" in render.item_html(ticked)
+
+
+def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
+    signals = Signals(verb="Close", task="close", effort="minutes")
+    done = Item(
+        title="done", subjects=[Ref(kind="x.a", id="d")], signals=signals, done=True, rank=9
+    )
+    live = Item(title="live", subjects=[Ref(kind="x.a", id="l")], signals=signals, rank=1)
+    stage = Panel(key="p", title="P", description="", items=[done, live], act_now=True)
+    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage], [done, live])], {})
+    assert [i.title for i in board.panel("x.p").items] == ["live", "done"]
+    assert [i.title for i in board.act_now()] == ["Close: live"]
+    entry_ = Item(title="e", parts=[Item(title="a"), Item(title="b")])
+    ticked = entry_.model_copy(update={"parts": [Item(title="a"), Item(title="b", done=True)]})
+    assert (
+        act_now.Nomination("x", ticked).fingerprint != act_now.Nomination("x", entry_).fingerprint
+    )
+    gone = entry_.model_copy(update={"parts": [Item(title="a"), Item(title="c", done=True)]})
+    assert act_now.Nomination("x", ticked).fingerprint == act_now.Nomination("x", gone).fingerprint

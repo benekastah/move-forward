@@ -192,8 +192,8 @@ def _sorted(
     priority_of: act_now.PriorityOf = act_now.no_priority,
     contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
 ) -> Panel:
-    """Highest rank first, deferred items after, and what's set aside last; optionally importance
-    before rank."""
+    """Highest rank first, deferred items after, and what's set aside or done last; optionally
+    importance before rank."""
 
     def importance(item: Item) -> int:
         assigned = [priority_of(ref) for ref in item.subjects]
@@ -207,7 +207,7 @@ def _sorted(
             "items": sorted(
                 panel.items,
                 key=lambda i: (
-                    i.set_aside is not None,
+                    i.set_aside is not None or i.done,
                     i.deferred,
                     -(importance(i) if panel.sort_by_importance else 0),
                     -i.rank,

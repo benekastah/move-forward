@@ -177,7 +177,8 @@ class Nomination:
         if item.fingerprint is not None:
             return item.fingerprint
         badges = [b if isinstance(b, str) else b.text for b in item.badges]
-        parts = [part.title for part in _listed_parts(item)]
+        # What's done but kept to undo goes the next day: it's no change to the item.
+        parts = [part.title for part in _listed_parts(item) if not part.done]
         seen = json.dumps([item.title, badges, item.details, *([parts] if parts else [])])
         return hashlib.sha256(seen.encode()).hexdigest()[:16]
 
@@ -441,7 +442,8 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not (now and set_aside(nom.fingerprint, said(nom), now) is not None)
+        if not nom.item.done
+        and not (now and set_aside(nom.fingerprint, said(nom), now) is not None)
     ]
     candidates.sort(
         key=lambda c: (
