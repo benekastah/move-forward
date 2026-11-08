@@ -273,6 +273,12 @@ class FakeImap:
         self.sent: dict[int, str] = {}
         """My sent mail by UID: its Message-IDs."""
         self.open = ""
+        self.listed: list[bytes] | None = [
+            b'(\\HasNoChildren) "/" "INBOX"',
+            b'(\\HasNoChildren \\Sent) "/" "Sent Items"',
+        ]
+        self.closed: set[str] = set()
+        """Mailboxes that won't open."""
         self.calls: list[tuple[object, ...]] = []
 
     def __call__(self, host: str, port: int, ssl_context: object, timeout: int) -> "FakeImap":
@@ -288,6 +294,8 @@ class FakeImap:
 
     def select(self, mailbox: str, readonly: bool) -> tuple[str, list[bytes]]:
         self.calls.append(("select", mailbox, readonly))
+        if mailbox in self.closed:
+            return "NO", [b"no such mailbox"]
         self.open = mailbox
         return "OK", [b"3"]
 
@@ -329,10 +337,9 @@ class FakeImap:
     # Last, as its name would shadow `list` in the annotations after it.
     def list(self) -> tuple[str, list[bytes]]:
         self.calls.append(("list",))
-        return "OK", [
-            b'(\\HasNoChildren) "/" "INBOX"',
-            b'(\\HasNoChildren \\Sent) "/" "Sent Items"',
-        ]
+        if self.listed is None:
+            raise imaplib.IMAP4.error("LIST failed")
+        return "OK", self.listed
 
 
 @pytest.fixture
@@ -654,3 +661,50 @@ def test_a_reply_to_me_is_important() -> None:
     items = {i.title: i for i in _items(harness)}
     assert "replies to me" in items["Renewal"].badges
     assert items["Renewal"].signals is not None and items["Renewal"].signals.importance == 1
+
+
+def test_reading_my_sent_mail_finds_it_by_its_flag_or_config_and_never_fails_the_inbox(
+    imap: Callable[..., FakeImap],
+) -> None:
+    reply = headers(message_id="r@x", extra="In-Reply-To: <mine@me>")
+    server = imap([(1, "", reply)])
+    server.sent = {10: "mine@me"}
+    server.listed = [b'(\\HasNoChildren) "/" "INBOX"']  # nothing marked \\Sent
+    assert not client.collect(_config(), ME, NOW).messages[0].replies_to_me
+    server = imap([(1, "", reply)])
+    server.sent = {10: "mine@me"}
+    server.listed = []
+    configured = client.collect(_config(sent_mailbox="Sent Items"), ME, NOW)
+    assert configured.messages[0].replies_to_me  # sent_mailbox needs no LIST
+    for broken in ("closed", "list"):
+        server = imap([(1, "", reply)])
+        server.sent = {10: "mine@me"}
+        if broken == "closed":
+            server.closed = {'"Sent Items"'}
+        else:
+            server.listed = None
+        [found] = client.collect(_config(), ME, NOW).messages  # the inbox still comes
+        assert not found.replies_to_me
+
+
+def test_only_a_messages_parent_says_its_answering_me() -> None:
+    raw = headers(references="<mine@me> <someone@x>")  # mine is long ago in the chain
+    assert client._referenced(raw) == {"someone@x"}  # pyright: ignore[reportPrivateUsage]
+    raw = headers(references="<mine@me>", extra="In-Reply-To: <other@x>")
+    assert client._referenced(raw) == {"other@x"}  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_quoted_sent_mailbox_name_is_unescaped() -> None:
+    class Listing:
+        def list(self) -> tuple[str, list[bytes]]:
+            return "OK", [b'(\\Sent) "/" "My \\"Sent\\" \\\\ box"']
+
+    found = client.sent_mailbox(cast(Any, Listing()), _config())
+    assert found == 'My "Sent" \\ box'
+
+
+def test_a_lists_reply_to_me_isnt_important() -> None:
+    harness = mailbox(message(1, replies_to_me=True, bulk=True))
+    [item] = _items(harness)
+    assert "replies to me" not in item.badges
+    assert item.signals is not None and item.signals.importance == 0

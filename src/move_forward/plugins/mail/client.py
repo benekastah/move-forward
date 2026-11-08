@@ -181,43 +181,45 @@ def sent_mailbox(imap: imaplib.IMAP4, config: MailConfig) -> str | None:
 
 def _sent_ids(imap: imaplib.IMAP4, config: MailConfig, since: str) -> set[str]:
     """The Message-IDs of what I sent since `since`, newest `max_messages` of them: a message
-    naming one is answering me. Empty without a sent mailbox, or one that won't open."""
-    mailbox = sent_mailbox(imap, config)
-    if mailbox is None:
-        return set()
+    naming one is answering me. Empty without a sent mailbox, or when reading it fails in any
+    way: the inbox, already read, matters more."""
     try:
+        mailbox = sent_mailbox(imap, config)
+        if mailbox is None:
+            return set()
         _ok(imap.select(_quoted(mailbox), readonly=True), "EXAMINE")
         [found] = _ok(imap.uid("SEARCH", "SINCE", since), "SEARCH")
-    except (RuntimeError, UnicodeEncodeError, imaplib.IMAP4.error) as e:
-        log.warning("can't read sent mail in %s: %s", mailbox, e)
-        return set()
-    uids = (found if isinstance(found, bytes) else b"").split()[-config.max_messages :]
-    ids: set[str] = set()
-    for start in range(0, len(uids), FETCH_CHUNK):
-        fetched = _ok(
-            imap.uid(
+        uids = (found if isinstance(found, bytes) else b"").split()[-config.max_messages :]
+        ids: set[str] = set()
+        for start in range(0, len(uids), FETCH_CHUNK):
+            fetched = _ok(
+                imap.uid(
+                    "FETCH",
+                    b",".join(uids[start : start + FETCH_CHUNK]).decode(),
+                    "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])",
+                ),
                 "FETCH",
-                b",".join(uids[start : start + FETCH_CHUNK]).decode(),
-                "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])",
-            ),
-            "FETCH",
-        )
-        for _, raw in _fetched(fetched):
-            headers = BytesHeaderParser(policy=default).parsebytes(raw)
-            ids.update(_message_ids(str(headers.get("Message-ID") or "")))
-    return ids
+            )
+            for _, raw in _fetched(fetched):
+                headers = BytesHeaderParser(policy=default).parsebytes(raw)
+                ids.update(_message_ids(str(headers.get("Message-ID") or "")))
+        return ids
+    except (RuntimeError, UnicodeEncodeError, OSError, imaplib.IMAP4.error) as e:
+        log.warning("can't read my sent mail, so nothing counts as replying to me: %s", e)
+        return set()
 
 
 def _referenced(raw: bytes) -> set[str]:
-    """The Message-IDs a message answers or follows: its `In-Reply-To` and `References`."""
+    """The Message-ID a message answers: its `In-Reply-To`, else the last of its `References`
+    (its parent). Not the whole `References` chain: that names everything before in the
+    conversation, mine among it long ago."""
     headers = BytesHeaderParser(policy=default).parsebytes(raw)
-    found: set[str] = set()
-    for name in ("In-Reply-To", "References"):
-        try:
-            found.update(_message_ids(str(headers.get(name) or "")))
-        except (ValueError, IndexError, TypeError):  # a malformed header
-            continue
-    return found
+    try:
+        if parent := _message_ids(str(headers.get("In-Reply-To") or "")):
+            return set(parent)
+        return set(_message_ids(str(headers.get("References") or ""))[-1:])
+    except (ValueError, IndexError, TypeError):  # a malformed header
+        return set()
 
 
 def status(config: MailConfig, email: str) -> str:

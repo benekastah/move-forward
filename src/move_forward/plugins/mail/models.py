@@ -33,7 +33,8 @@ class Message(Model):
     important: bool = False
     """Gmail labels it Important; never from another server."""
     replies_to_me: bool = False
-    """It answers or follows mail I sent (its `In-Reply-To` or `References` names one)."""
+    """It answers mail I sent within `since_days` (its `In-Reply-To`, else the last of its
+    `References`, names one)."""
     seen: bool
     verified: bool
     """The receiving server found its `From` authentic (DMARC passed), so its sender is who it
