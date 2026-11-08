@@ -1,7 +1,20 @@
 """Picking a PR's primary reviewer: an assignee besides its author, in the repos that have one."""
 
+from datetime import timedelta
+
 import pytest
-from conftest import ME, NOW, REPO, approved_review, dashboard, panel, pr, snapshot, stored
+from conftest import (
+    ME,
+    NOW,
+    REPO,
+    approved_review,
+    dashboard,
+    event,
+    panel,
+    pr,
+    snapshot,
+    stored,
+)
 
 from move_forward.page import Item
 from move_forward.plugin import ActionError
@@ -160,7 +173,19 @@ def test_a_new_one_replaces_the_old(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.parametrize(
     "already",
-    [{"requested_users": ["ALICE"]}, {"reviews": [approved_review("alice")]}],
+    [
+        {"requested_users": ["ALICE"]},
+        {"reviews": [approved_review("alice")]},
+        # Approved, then commented: GitHub's latest review is the comment.
+        {
+            "reviews": [Review(author="alice", state="COMMENTED", submitted_at=NOW)],
+            "events": [
+                event(
+                    "PullRequestReview", NOW - timedelta(hours=1), actor="alice", state="APPROVED"
+                )
+            ],
+        },
+    ],
 )
 def test_someone_asked_or_who_approved_is_not_asked_again(
     monkeypatch: pytest.MonkeyPatch, already: dict[str, object]

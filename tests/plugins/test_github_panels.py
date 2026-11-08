@@ -232,6 +232,22 @@ def test_an_approval_then_a_comment_is_still_an_approval() -> None:
     assert approved_by(reviewed, "me") and not approved_by(reviewed, "alice")
 
 
+def test_a_pr_i_approved_then_commented_on_wants_my_re_review_after_a_push() -> None:
+    approved_at, pushed_at = NOW - timedelta(days=2), NOW - timedelta(hours=1)
+    theirs = pr(
+        5,
+        author="alice",
+        review_decision="REVIEW_REQUIRED",
+        last_commit_at=pushed_at,
+        reviews=[
+            Review(author=ME, state="COMMENTED", submitted_at=approved_at + timedelta(hours=1))
+        ],
+        events=[event("PullRequestReview", approved_at, actor=ME, state="APPROVED")],
+    )
+    built = build(github=snapshot(reviewed_by_me=[theirs]))
+    assert "PR 5" in [i.title for p in built.panels if p.key.startswith("github.") for i in p.items]
+
+
 def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None:
     waiting = Check(
         name="PR policy: guidelines",
