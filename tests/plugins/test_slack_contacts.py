@@ -82,3 +82,17 @@ def test_the_contacts_page_offers_clear_with_a_confirm_for_a_team_with_a_channel
     assert "/actions/slack/clear_team_channel" in page and "Forget web" in page
     SlackRepository(db).unset_team_channel("web")
     assert "clear_team_channel" not in str(refresh.plugin_page(config, db, "/slack/contacts", {}))
+
+
+def test_clear_forgets_a_persons_slack_id_so_its_looked_up_again() -> None:
+    config, db = stored(slack=True, github=snapshot())
+    slack = SlackRepository(db)
+    slack.set_contact("bob", None)  # a blank form: kept unlinked
+    page = str(refresh.plugin_page(config, db, "/slack/contacts", {}))
+    assert "/actions/slack/clear_contact" in page and "Forget what" in page
+    assert refresh.run_action(config, db, "slack/clear_contact", {"login": "bob"}) == (
+        "forgot what was kept for bob; they're looked up again"
+    )
+    assert "bob" not in slack.contacts()
+    with pytest.raises(ActionError, match="nothing is kept for bob"):
+        refresh.perform_action(config, db, "slack/clear_contact", {"login": "bob"})
