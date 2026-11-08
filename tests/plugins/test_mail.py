@@ -282,6 +282,8 @@ class FakeImap:
         ]
         self.closed: set[str] = set()
         self.sent_fails = False
+        self.aside: set[int] = set()
+        """What Gmail files under Promotions or Social."""
         """Mailboxes that won't open."""
         self.calls: list[tuple[object, ...]] = []
 
@@ -319,6 +321,8 @@ class FakeImap:
                 for u, mid in self.sent.items()
                 if u in wanted
             ]
+        if command == "SEARCH" and "X-GM-RAW" in args:
+            return "OK", [b" ".join(str(u).encode() for u in sorted(self.aside))]
         if command == "SEARCH":
             wanted_flag, seen = ("\\Flagged", True) if "FLAGGED" in args else ("\\Seen", False)
             return "OK", [
@@ -785,3 +789,17 @@ def test_an_item_shows_one_of_replies_to_me_known_and_important() -> None:
     [item] = _items(harness)
     shown = [b for b in item.badges if b in ("replies to me", "known", "important")]
     assert shown == ["replies to me"]
+
+
+def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeImap]) -> None:
+    server = imap(
+        [(1, "", headers(message_id="sale@shop")), (2, "", headers(message_id="hi@friend"))]
+    )
+    server.capabilities = ("IMAP4REV1", client.GMAIL)
+    server.aside = {1}
+    found = {m.message_id: m.bulk for m in client.collect(_config(), ME, NOW).messages}
+    assert found == {"sale@shop": True, "hi@friend": False}
+    plain = imap([(1, "", headers(message_id="sale@shop"))])
+    plain.aside = {1}  # not Gmail: not asked
+    assert not client.collect(_config(), ME, NOW).messages[0].bulk
+    assert not any("X-GM-RAW" in c for c in plain.calls)
