@@ -228,6 +228,18 @@ Confluence, Notion, Figma). In order:
    a text area (replying to a ticket), and a date (snooze until, follow up on).
 8. **Customer data.** A kind can say it's sensitive, and `mfd dump`, logs, notifications and
    exports leave out or redact its entities' text; `prune` drops them once they're done.
+9. **More than one of a plugin.** A plugin has one config section, so a work and a personal
+   mailbox, or a CRM in two orgs, can't both be read. Instances (`[mail.work]`,
+   `[mail.personal]`), each with its own config, tables and entities, without each plugin
+   building accounts of its own.
+10. **Work and personal.** Personal mail at 10am and work mail at 10pm should rank lower. An
+    instance (9) could say which it is, and Act now weigh it by the part of the day (as "Act
+    now, after living with it" below asks for quick wins and the morning).
+11. **A contacts plugin.** Without a CRM, an address book says who matters: starred or
+    favourite contacts, groups (Family), published as people with an `importance` (vCard or
+    CardDAV first, then Google Contacts). Mail's senders join them by email. A person's stated
+    importance should then count only for an address that's verified, as contact types do
+    for mail (4).
 
 Table-shaped settings (a support plugin's views, a CRM's tiers) belong to "First-run setup
 in the browser", below, which already plans tables on the settings page.
