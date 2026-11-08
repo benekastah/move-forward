@@ -177,8 +177,10 @@ class Nomination:
         if item.fingerprint is not None:
             return item.fingerprint
         badges = [b if isinstance(b, str) else b.text for b in item.badges]
-        # What's done but kept to undo goes the next day: it's no change to the item.
-        parts = [part.title for part in _listed_parts(item) if not part.done]
+        # What's done but kept to undo goes the next day: it's no change to the item, so it's
+        # left out before counting whether there are parts enough to list.
+        open_parts = [part for part in item.parts if not part.done]
+        parts = [part.title for part in open_parts] if len(open_parts) > 1 else []
         seen = json.dumps([item.title, badges, item.details, *([parts] if parts else [])])
         return hashlib.sha256(seen.encode()).hexdigest()[:16]
 

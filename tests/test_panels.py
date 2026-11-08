@@ -945,5 +945,5 @@ def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
     assert (
         act_now.Nomination("x", ticked).fingerprint != act_now.Nomination("x", entry_).fingerprint
     )
-    gone = entry_.model_copy(update={"parts": [Item(title="a"), Item(title="c", done=True)]})
+    gone = entry_.model_copy(update={"parts": [Item(title="a")]})  # the next day
     assert act_now.Nomination("x", ticked).fingerprint == act_now.Nomination("x", gone).fingerprint
