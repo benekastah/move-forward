@@ -577,14 +577,11 @@ class NotesRepository:
         # The write first: it opens the transaction, so a thaw from another process can't land
         # between it and the read.
         with self._db.transaction() as conn:
-            if (
-                conn.execute("UPDATE notes_ice SET note = ? WHERE id = ?", (note, ice_id)).rowcount
-                == 0
-            ):
+            update = "UPDATE notes_ice SET note = ? WHERE id = ?"
+            if conn.execute(update, (note, ice_id)).rowcount == 0:
                 return None
-            return conn.execute("SELECT title FROM notes_ice WHERE id = ?", (ice_id,)).fetchone()[
-                "title"
-            ]
+            row = conn.execute("SELECT title FROM notes_ice WHERE id = ?", (ice_id,)).fetchone()
+            return row["title"]
 
     def delete_ice(self, ice_id: int) -> None:
         """Thaw: forget the act of icing and what it covered."""
