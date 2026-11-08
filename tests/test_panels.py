@@ -615,6 +615,7 @@ def test_act_nows_listed_parts_offer_the_importance_their_panel_does() -> None:
         return [a.fields["level"] for a in part.actions if a.group == "Importance"]
 
     assert [levels(part) for part in item.parts] == [["0", "1", "2"], ["0", "1", "2"]]
+    assert len([a for a in item.actions if a.group == "Importance"]) == 3  # Act now's own, once
     [panel_item] = panel(built, "notes.todos").items
     assert [levels(part) for part in panel_item.parts] == [levels(part) for part in item.parts]
 
