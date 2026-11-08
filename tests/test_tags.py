@@ -74,7 +74,7 @@ def test_text_names_a_tag_however_it_spaces_hyphenates_or_cases_it() -> None:
 def test_a_kind_others_write_doesnt_put_tags_on_its_entities() -> None:
     sale = Entity(ref=Ref(kind="y.mail", id="1"), title="#sale ends Friday")
     other = Entity(ref=Ref(kind="y.mail", id="2"), title="Sale!")
-    found = tags.tagged([sale, other], {"y.mail": KindSpec(tags.TagAttrs, tags_from_title=False)})
+    found = tags.tagged([sale, other], {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)})
     assert [e.ref for e in found] == [sale.ref, other.ref]  # no tag, so nothing names one
 
 
@@ -125,20 +125,41 @@ def test_the_tags_of_a_ticket_reach_what_belongs_to_it() -> None:
     assert [t.ref for t in graph.related(work.ref, TAG)] == [Ref(kind=TAG, id="chores")]
 
 
+def test_a_tag_in_a_description_puts_it_on_the_entity_but_not_one_in_code() -> None:
+    body = """Waiting on #QA, see #garbage-day.
+
+```c
+#include <stdio.h>
+```
+Use `#fff` here.
+
+    #define X 1
+<!-- template: add #labels -->"""
+    found = _tagged(_entity("1", "Fix", mentions=(body,)), _entity("2", "#qa"))
+    assert {
+        t for t in found if t in ("qa", "garbage-day", "include", "fff", "define", "labels")
+    } == {
+        "qa",
+        "garbage-day",
+    }
+    assert found["qa"].refs == [Ref(kind="x.a", id="1"), Ref(kind="x.a", id="2")]
+
+
 def test_a_short_tag_is_named_with_its_hash() -> None:
-    found = _tagged(
-        _entity("1", "#qa thing"),
-        _entity("2", "sign-off", mentions=("waiting on #QA",)),
-        _entity("3", "qa sign-off"),
+    mail = Entity(ref=Ref(kind="y.mail", id="m"), title="sign-off", mentions=["waiting on #QA"])
+    other = Entity(ref=Ref(kind="y.mail", id="o"), title="qa sign-off")
+    found = tags.tagged(
+        [_entity("1", "#qa thing"), mail, other],
+        {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)},
     )
-    assert found["2"].refs == [Ref(kind=TAG, id="qa")]
-    assert found["3"].refs == []
+    assert found[1].refs == [Ref(kind=TAG, id="qa")]
+    assert found[2].refs == []
 
 
 def test_a_title_that_cant_carry_a_tag_still_names_one_by_its_hash() -> None:
     carrier = _entity("1", "#qa thing")
     mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#QA sign-off")
-    found = tags.tagged([carrier, mail], {"y.mail": KindSpec(tags.TagAttrs, tags_from_title=False)})
+    found = tags.tagged([carrier, mail], {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)})
     assert found[1].refs == [Ref(kind=TAG, id="qa")]
 
 

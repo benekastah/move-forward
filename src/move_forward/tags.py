@@ -1,4 +1,4 @@
-"""`#tags`: put on an entity by a `#tag` in its title, or by hand (`TagRepository`, and the
+"""`#tags`: put on an entity by a `#tag` in its title or `mentions` (out of code), or by hand (`TagRepository`, and the
 Tag field core adds to items: `Tags`), they relate
 everything carrying them. Core publishes a `tag` entity for each (`kinds.TAG`), pointing at what
 carries it, and points at it every entity whose text (title or `mentions`) names it, as
@@ -56,7 +56,7 @@ class TagAttrs(KindModel):
     handle: str
 
 
-SPEC = KindSpec(TagAttrs, tags_from_title=False)
+SPEC = KindSpec(TagAttrs, tags_from_text=False)
 
 
 def handle(text: str) -> str:
@@ -72,6 +72,19 @@ def tag_key(text: str) -> str:
     if not any(c.isalpha() for c in found):
         raise ValueError(f"{text!r} isn't a tag: give it a word, e.g. #garbage-day")
     return found
+
+
+_CODE = re.compile(
+    r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)|`[^`\n]*`|<!--.*?(?:-->|\Z)|^(?: {4}|\t).*$",
+    re.DOTALL | re.MULTILINE,
+)
+"""Code in Markdown (fenced blocks, inline code, indented lines) and HTML comments (a PR
+template's notes): `#include` or `#fff` there is no tag."""
+
+
+def prose(text: str) -> str:
+    """`text` without its code (`_CODE`), where a `#` means something else."""
+    return _CODE.sub(" ", text)
 
 
 def tags(text: str) -> list[str]:
@@ -140,12 +153,16 @@ def tagged(
     added: Mapping[Ref, list[str]] | None = None,
 ) -> list[Entity]:
     """The entities, each pointing too at the tags its text names (but one it carries), then a
-    `tag` per tag on any of them, in its title (where its kind's `tags_from_title`) or `added`
-    by hand, pointing at what carries it: open while one of those is."""
+    `tag` per tag on any of them, in its title or mentions out of their code (where its kind's
+    `tags_from_text`), or `added` by hand, pointing at what carries it: open while one of those
+    is."""
     carrying: dict[str, list[Entity]] = {}
     for entity in entities:
         spec = specs.get(entity.ref.kind)
-        own = tags(entity.title) if spec is None or spec.tags_from_title else []
+        texts = [entity.title, *map(prose, entity.mentions)]
+        own = (
+            [t for text in texts for t in tags(text)] if spec is None or spec.tags_from_text else []
+        )
         for tag in dict.fromkeys([*own, *(added or {}).get(entity.ref, [])]):
             carrying.setdefault(tag, []).append(entity)
     if not carrying:

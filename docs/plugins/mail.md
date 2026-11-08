@@ -73,7 +73,7 @@ through the plugin's `/mail/open` page, which sends the browser on to the mail a
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
 with, pointing at the `person` who wrote its latest message and, when its sender is verified,
 mentioning its subject (so a ticket key in it relates the two). A `#tag` in a subject puts no
-tag on the thread (`tags_from_title=False`): anyone can write one. A subject still names tags
+tag on the thread (`tags_from_text=False`): anyone can write one. A subject still names tags
 in the graph whoever sent it; only what mail says it's about, and how it ranks, waits for a
 verified sender. That `person` is `mail/<address>`, with the address as its
 `handle` and `email`, so core joins them with the same person in other tools, a CRM say, and

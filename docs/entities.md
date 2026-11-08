@@ -218,8 +218,9 @@ The ticket family, modeled in core (`api.kinds.Ticket`); jira adds `status`,
 
 ### `tag`
 
-Published by core, not a plugin: a `#tag` in some entity's title (unless its kind says
-`KindSpec(tags_from_title=False)`), or put on one by hand (`mfd tag`), titled `#garbage-day`, open while something carrying it
+Published by core, not a plugin: a `#tag` in some entity's title or mentions, out of code
+(unless its kind says
+`KindSpec(tags_from_text=False)`), or put on one by hand (`mfd tag`), titled `#garbage-day`, open while something carrying it
 is. A tag needs a letter (`#7` is a PR's number). It isn't a linking kind: what it relates
 isn't one piece of work.
 

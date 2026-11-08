@@ -80,9 +80,10 @@ class KindSpec:
     (notes' todos), and keeps them where only finishing removes them."""
     resolvable: bool = False
     """Whether `mfd priority <id>`, given no kind, looks among its entities by id."""
-    tags_from_title: bool = True
-    """Whether a `#tag` in its entities' titles puts the tag on them (see `tags`). False where
-    anyone can write one, as mail's senders write its subjects: their text still names tags."""
+    tags_from_text: bool = True
+    """Whether a `#tag` in its entities' text, their title or `mentions` (a PR's body, out of its
+    code), puts the tag on them (see `tags`). False where anyone can write it, as mail's
+    senders write its subjects: their text still names tags."""
     fetched_attrs: type[KindModel] | None = None
     """The model the `attrs` of its entities `Plugin.fetch` returns must fit. None: its
     family's (`kinds.Family.fetched`: what the prune reads, whoever publishes), else any of
