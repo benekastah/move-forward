@@ -63,6 +63,15 @@ def clear_team_channel_action(req: ActionRequest[SlackConfig]) -> str:
     return f"forgot {team}'s channel"
 
 
+def clear_contact_action(req: ActionRequest[SlackConfig]) -> str:
+    """Forget where a person's pings go, as `mfd slack contact unset` does, so they're imported
+    or looked up again."""
+    login = req.field("login")
+    if not SlackRepository(req.ctx.db).unset_contact(login):
+        raise ActionError(f"{login} has no Slack id kept")
+    return f"forgot {login}'s Slack id"
+
+
 def set_contact_action(req: ActionRequest[SlackConfig]) -> str:
     ctx, fields = req.ctx, req.fields
     return set_contact(SlackRepository(ctx.db), req.field("login"), fields.get("slack_id", ""))
@@ -124,6 +133,21 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
             "set_contact",
             {"login": login},
             [("slack_id", contacts[login].slack_id or "" if login in contacts else "", "U0123456")],
+        )
+        + (
+            html.buttons(
+                [
+                    Action(
+                        name="slack/clear_contact",
+                        label="Clear",
+                        fields={"login": login},
+                        confirm=f"Forget {login}'s Slack id? It's imported or looked up again.",
+                    )
+                ],
+                back=CONTACTS_PATH,
+            )
+            if login in contacts
+            else ""
         )
         + "</td></tr>"
         for login in sorted(users | set(contacts))
