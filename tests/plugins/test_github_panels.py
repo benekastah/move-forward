@@ -159,6 +159,8 @@ def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None
     wrong = pr(2, review_decision="APPROVED", reviews=[approved_review("bob")], checks=[waiting])
     built = build(github=snapshot(mine=[wrong]), policy_checks=["PR policy: guidelines"])
     assert titles(built, "github.policy") == ["PR 2"]
+    assert titles(built, "github.fix_before_review") == ["PR 2"]
+    assert "failing policy checks" in review_blockers(wrong, ME, ["PR policy: guidelines"])
 
 
 def test_each_individual_policy_team_needs_one_of_its_members_requested() -> None:
