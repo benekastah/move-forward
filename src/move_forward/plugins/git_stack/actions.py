@@ -1,4 +1,5 @@
-"""The git-stack plugin's buttons: `git stack clean`, and untracking iced branches.
+"""The git-stack plugin's buttons: `git stack clean` and `restack`, and untracking iced
+branches.
 
 The repo must be one git has branches in, i.e. one of `[git] repos`.
 """
@@ -15,6 +16,8 @@ from .panels import STACK_BRANCH, StackBranchView, repo_dirs
 
 STACK_CLEAN_TIMEOUT_SECONDS = 600
 """`git stack clean` fetches and checks every stack, which takes a while in a big repo."""
+RESTACK_TIMEOUT_SECONDS = 300
+"""`git stack restack` works offline, but rebases every branch of a stack."""
 
 
 class _Event(BaseModel):
@@ -108,6 +111,33 @@ def stack_clean(req: ActionRequest[GitStackConfig]) -> str:
         STACK_CLEAN_TIMEOUT_SECONDS,
     )
     return f"cleaned {repo}: {cleaned(found.events) or 'nothing merged to clean'}"
+
+
+def stack_restack(req: ActionRequest[GitStackConfig]) -> str:
+    """`git stack restack <branch> --json`: rebase the branch's stack onto its parents, locally.
+    It pushes nothing; on a conflict it stops with the conflicting branch of the stack checked out
+    in the repo's checkout and a rebase in progress, and says where. A tracked name can't start with `-`, so it isn't
+    taken for an option."""
+    graph = req.graph
+    target = f"{req.field('repo')}\t{req.field('branch')}"
+    tracked = graph.view_one(STACK_BRANCH, target, StackBranchView)
+    if tracked is None:
+        raise ActionError(f"git-stack doesn't track {target!r} in one of git's checkouts")
+    if tracked.repo_dir not in repo_dirs(graph):
+        raise ActionError(f"{tracked.repo_dir} is not a configured repo")
+    try:
+        found = run_json(
+            Path(tracked.repo_dir),
+            ["restack", tracked.name],
+            lambda r: "",
+            RESTACK_TIMEOUT_SECONDS,
+        )
+    except ActionError as e:
+        raise ActionError(f"{e}, in {tracked.repo_dir}") from e
+    warnings = [e.message for e in found.events if e.warning]
+    if warnings:
+        return f"restacked what it could of {tracked.name}'s stack; " + "; ".join(warnings)
+    return f"restacked {tracked.name}'s stack"
 
 
 def untrack(req: ActionRequest[GitStackConfig]) -> str:

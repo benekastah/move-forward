@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Restack
+
+`POST /actions/git_stack/stack_restack` with `repo` and `branch` runs `git stack restack` on its
+stack, locally, as Stacks' Restack button does. Nothing to change.
+
 ### Pull
 
 `POST /actions/git/pull_branch` with `repo` and `branch` fast-forwards a branch to its upstream,

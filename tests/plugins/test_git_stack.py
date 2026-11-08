@@ -57,6 +57,13 @@ def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
     ]
     restack = next(i for i in panel(built, "git_stack.stacks").items if "restack" in i.title)
     assert restack.url == pr(2).url
+    [button] = [a for a in restack.actions if a.name == "git_stack/stack_restack"]
+    assert (button.name, button.fields) == (
+        "git_stack/stack_restack",
+        {"repo": "/src/widgets", "branch": "me/APP-2-branch"},
+    )
+    assert button.confirm is not None and "pushing nothing" in button.confirm
+    assert "rebase in progress" in button.confirm
     clean = panel(built, "git_stack.stacks").actions
     assert [(a.name, a.fields, a.label) for a in clean] == [
         ("git_stack/stack_clean", {"repo": "/src/widgets"}, "Clean about 1 merged in widgets")
@@ -448,3 +455,65 @@ def test_a_repos_clean_is_nominated_by_a_branch_not_on_ice_one_per_repo() -> Non
         a.fields["repo"] for i in items for a in i.actions if a.name == "git_stack/stack_clean"
     )
     assert repos == ["/src/gadgets", "/src/widgets"]
+
+
+def test_restack_runs_git_stack_restack_on_a_tracked_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ran: list[tuple[str, ...]] = []
+
+    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
+        ran.append(args)
+        return _json_lines([FETCHING], {"type": "result", "stacks": []})
+
+    monkeypatch.setattr(actions, "git", fake_git)
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/a")]),
+        stacks=stacks(StackBranch(name="me/a", parent="main", status="needs-restack")),
+    )
+    fields = {"repo": "/src/widgets", "branch": "me/a"}
+    assert refresh.run_action(config, db, "git_stack/stack_restack", fields) == (
+        "restacked me/a's stack"
+    )
+    assert ran == [("stack", "restack", "me/a", "--json")]  # --json read as an option, not a name
+    with pytest.raises(ActionError, match="doesn't track"):
+        refresh.run_action(config, db, "git_stack/stack_restack", {**fields, "branch": "me/b"})
+
+
+def test_a_restack_that_stops_on_a_conflict_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    def conflict(repo: Path, *args: str, timeout: int = 0) -> str:
+        out = _json_lines([], {"type": "error", "message": "conflict in me/a: resolve it"})
+        raise CommandError("git stack restack: conflict", out)
+
+    monkeypatch.setattr(actions, "git", conflict)
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/a")]),
+        stacks=stacks(StackBranch(name="me/a", parent="main", status="needs-restack")),
+    )
+    with pytest.raises(ActionError, match="restack failed: conflict in me/a: resolve it, in /src/"):
+        refresh.run_action(
+            config, db, "git_stack/stack_restack", {"repo": "/src/widgets", "branch": "me/a"}
+        )
+
+
+def test_a_restack_that_skips_a_branch_doesnt_say_it_restacked_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    skipped: JsonEvent = {
+        "type": "not-restacked-in-other-worktree",
+        "message": "skipping me/a: checked out in /wt",
+        "warning": True,
+    }
+
+    def fake_git(repo: Path, *args: str, timeout: int = 0) -> str:
+        return _json_lines([skipped], {"type": "result", "stacks": []})
+
+    monkeypatch.setattr(actions, "git", fake_git)
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/a")]),
+        stacks=stacks(StackBranch(name="me/a", parent="main", status="needs-restack")),
+    )
+    notice = refresh.run_action(
+        config, db, "git_stack/stack_restack", {"repo": "/src/widgets", "branch": "me/a"}
+    )
+    assert notice == "restacked what it could of me/a's stack; skipping me/a: checked out in /wt"

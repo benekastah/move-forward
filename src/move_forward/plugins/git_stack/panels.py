@@ -14,6 +14,8 @@ from .models import GitStackSnapshot, StackBranch
 
 CLEAN = "git_stack/stack_clean"
 """The button that runs `git stack clean -d local` in a repo."""
+RESTACK = "git_stack/stack_restack"
+"""The button that runs `git stack restack` on a branch's stack."""
 
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
@@ -130,6 +132,17 @@ class Builder:
         prs = self.graph.view_related(branch_ref(repo_dir, branch), PR, _PrView)
         return next((pr for pr in prs if pr.mine and pr.state == state), None)
 
+    def _restack(self, repo_dir: str, branch: str) -> Action:
+        return Action(
+            name=RESTACK,
+            label="Restack",
+            fields={"repo": repo_dir, "branch": branch},
+            confirm=f"Run `git stack restack {branch}` in {repo_dir}? It rebases the branches of"
+            f" its stack onto their parents there, pushing nothing. On a conflict it stops with"
+            f" the conflicting branch of the stack checked out in {repo_dir} and a rebase in"
+            " progress, for you to resolve.",
+        )
+
     def stacks(self) -> Panel:
         items: list[Item] = []
         actions: list[Action] = []
@@ -162,7 +175,11 @@ class Builder:
                         url=pr.url if pr else None,
                         subtitle=f"{repo.dir} · on {b.parent}",
                         rank=1,
-                        actions=[clean] if is_merged else [],
+                        actions=[clean]
+                        if is_merged
+                        else [self._restack(repo.dir, b.name)]
+                        if b.status == "needs-restack"
+                        else [],
                         signals=Signals(verb="Clean up", task="stack_clean", effort="minutes")
                         if is_merged
                         else None,
