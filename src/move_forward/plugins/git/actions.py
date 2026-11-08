@@ -183,6 +183,39 @@ def push_branch(req: ActionRequest[GitConfig]) -> str:
     return f"pushed {branch}"
 
 
+def pull_branch(req: ActionRequest[GitConfig]) -> str:
+    """Bring a branch up to its upstream, fast-forward only: refused when it has commits its
+    upstream doesn't, or its checkout has changes in the way. Never merges, never forces."""
+    ctx = req.ctx
+    repo = repo_path(ctx.config, req.field("repo"))
+    branch = req.field("branch")
+    if not branch_exists(repo, branch):
+        raise ActionError(f"{branch} doesn't exist in {repo}")
+    try:
+        remote = git(repo, "config", f"branch.{branch}.remote").strip()
+        git(repo, "fetch", "--quiet", remote)
+        upstream = git(repo, "rev-parse", "--verify", f"{branch}@{{upstream}}").strip()
+        here = git(repo, "rev-parse", "--verify", f"refs/heads/{branch}").strip()
+    except CommandError as e:
+        raise ActionError(f"{branch} has no upstream to pull from: {e}") from e
+    if here == upstream:
+        return f"{branch} is up to date"
+    try:
+        git(repo, "merge-base", "--is-ancestor", here, upstream)
+    except CommandError as e:
+        raise ActionError(f"{branch} has commits its upstream doesn't: can't fast-forward") from e
+    worktree = checked_out_in(repo, branch)
+    if worktree is None:
+        git(repo, "update-ref", f"refs/heads/{branch}", upstream, here)
+    else:
+        if git(Path(worktree), "status", "--porcelain", "--untracked-files=no").strip():
+            raise ActionError(
+                f"{branch} has uncommitted changes in {worktree}: commit or set them aside"
+            )
+        git(Path(worktree), "merge", "--ff-only", "--quiet", upstream)
+    return f"pulled {branch}"
+
+
 def wip_commit(req: ActionRequest[GitConfig]) -> str:
     """Commit the modified tracked files of a worktree of the repo as "WIP". Untracked files
     are left."""

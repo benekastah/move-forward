@@ -214,6 +214,7 @@ class Builder:
             subtitle=f"{repo.dir} · last commit here {age(self.now, branch.committed_at)} ago",
             badges=["behind GitHub"],
             subjects=[branch_ref(repo.dir, branch.name), pr.subject],
+            actions=[action("pull_branch", "Pull", {"repo": repo.dir, "branch": branch.name})],
         )
 
     def cleanup(self) -> Panel:

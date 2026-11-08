@@ -609,3 +609,34 @@ def test_a_todo_is_sized_as_its_added_and_afterwards(config: Config, tmp_path: P
             refresh.perform_action(
                 config, db, "notes/todo_size", {"todo": str(small.id), "size": bad}
             )
+
+
+def test_pull_fast_forwards_a_branch_checked_out_or_not_and_refuses_otherwise(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    fields = {"repo": str(repo), "branch": "wip"}
+    run("git/push_branch", config, fields)
+    other = tmp_path / "other"
+    git(tmp_path, "clone", "-q", "-b", "wip", str(tmp_path / "origin.git"), str(other))
+
+    def pushed_elsewhere(name: str) -> str:
+        _commit(other, name)
+        git(other, "push", "-q")
+        return git(other, "rev-parse", "HEAD")
+
+    ahead = pushed_elsewhere("c.txt")
+    assert run("git/pull_branch", config, fields) == "pulled wip"  # not checked out
+    assert git(repo, "rev-parse", "wip") == ahead
+    assert run("git/pull_branch", config, fields) == "wip is up to date"
+    git(repo, "switch", "-q", "wip")
+    ahead = pushed_elsewhere("d.txt")
+    (repo / "b.txt").write_text("changed")
+    with pytest.raises(ActionError, match="uncommitted changes"):
+        run("git/pull_branch", config, fields)
+    git(repo, "checkout", "--", "b.txt")
+    assert run("git/pull_branch", config, fields) == "pulled wip"  # checked out
+    assert git(repo, "rev-parse", "HEAD") == ahead
+    pushed_elsewhere("e.txt")
+    _commit(repo, "f.txt")  # diverged
+    with pytest.raises(ActionError, match="can't fast-forward"):
+        run("git/pull_branch", config, fields)

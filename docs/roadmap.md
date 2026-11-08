@@ -148,8 +148,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
 
 ### git and git_stack
 
-18. **Pull.** On a branch whose PR moved on GitHub ("pull it"), fast-forward only, and refused
-    with local changes in the way.
 20. **Restack.** `git stack restack`, with a confirm, on a branch that needs it and on a conflict
     that says to. It stays local: `sync` and `push` force-push (with lease), which the rule
     against force-pushing from a button forbids unless that's changed.

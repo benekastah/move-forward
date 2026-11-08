@@ -273,5 +273,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             "delete_together": actions.delete_together,
             "restore_together": actions.restore_together,
             "push_branch": actions.push_branch,
+            "pull_branch": actions.pull_branch,
             "wip_commit": actions.wip_commit,
         }
