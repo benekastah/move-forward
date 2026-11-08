@@ -143,8 +143,6 @@ as `touched`, so it's fetched again at once.
     push, by the head commit's date, so merging the base into a branch (Update branch, or by hand)
     clears them with nothing said. Read past merge commits: it needs their parents fetched. Then
     Update branch's confirm no longer needs to warn of it.
-16. **Run failed checks again.** `gh run rerun --failed` on CI failures, for checks whose URL
-    names a run.
 
 Approving stays on GitHub: a review should come from having read the PR there.
 

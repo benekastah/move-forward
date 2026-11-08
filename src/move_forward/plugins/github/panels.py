@@ -22,6 +22,7 @@ from .prs import (
     awaiting_re_review,
     can_be_requested,
     changes_requested,
+    failed_runs,
     failing_checks,
     has_conflicts,
     has_ticket_link_line,
@@ -43,6 +44,7 @@ PRIMARY_REVIEWER = "github/primary_reviewer"
 REQUEST_REVIEWER = "github/request_reviewer"
 MARK_READY = "github/mark_ready"
 UPDATE_BRANCH = "github/update_branch"
+RERUN_FAILED = "github/rerun_failed"
 REQUEST_REVIEWER_TASK = "request_reviewer"
 """The task of Needs a reviewer's items in Act now."""
 MAY_BE_READY = "draft with green CI and no open todos: ready?"
@@ -490,7 +492,11 @@ class Builder:
                         + (f": {event.reason}" if event.reason else "")
                     )
             if details:
-                items.append(pr_item(self.now, pr, details=details, links=links, rank=len(failing)))
+                item = pr_item(self.now, pr, details=details, links=links, rank=len(failing))
+                if failed_runs(pr, self.config.policy_checks):
+                    rerun = Action(name=RERUN_FAILED, label="Rerun failed", fields={"pr": pr.url})
+                    item = item.model_copy(update={"actions": [*item.actions, rerun]})
+                items.append(item)
         return Panel(
             key="ci_failures",
             priority=Band.CI,

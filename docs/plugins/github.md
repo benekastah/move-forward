@@ -94,7 +94,8 @@ labels as its tags but `placeholder_labels` and `split_pr_labels`, which are abo
 - **CI failures**: failing checks and merge-queue evictions in the last
   `merge_queue_eviction_days` (2), unless the PR is back in the queue, was queued again, or
   is green now. Checks
-  named in `policy_checks` never count as failures.
+  named in `policy_checks` never count as failures. One whose failing checks name an Actions run
+  has Rerun failed.
 - **PR policy**: failing checks named in `policy_checks`, linked to their details, which
   say what's missing (a label, an assignee); not one only waiting for a review, until the PR
   is approved and it still fails.
@@ -130,6 +131,7 @@ members as far as they're known, then recent committers; any login can be typed.
 | --- | --- | --- |
 | `/actions/github/update_branch` | `pr` (the URL of one of my open PRs that's behind its base) | Merges its base into its branch on GitHub (`gh pr update-branch`), not rebasing, so what's stacked on it isn't rewritten. |
 | `/actions/github/mark_ready` | `pr` (the URL of one of my draft PRs) | Takes it out of draft. |
+| `/actions/github/rerun_failed` | `pr` (the URL of one of my open PRs, on CI failures when a failing check's URL names an Actions run) | Runs the failed jobs of those runs again (`gh run rerun --failed`), policy checks left out. |
 | `/actions/github/request_reviewer` | `pr` (the URL of one of my open PRs), `input` (a login) | Asks them to review it. |
 | `/actions/github/primary_reviewer` | `pr` (the URL of one of my open PRs, in a repo in `primary_reviewer_repos`), `input` (a login) | Assigns them in place of whoever else is assigned besides the author, and asks for their review unless they're already asked or have approved it. |
 

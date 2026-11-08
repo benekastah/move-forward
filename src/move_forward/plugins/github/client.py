@@ -421,6 +421,12 @@ def update_branch(url: str) -> None:
     run(["gh", "pr", "update-branch", url])
 
 
+def rerun_failed(host: str, repo: str, run_id: str) -> None:
+    """Run the failed jobs of Actions run `run_id` in `repo` (`owner/name`) on `host` again.
+    Raises CommandError when GitHub refuses, as when the run is still going."""
+    run(["gh", "run", "rerun", run_id, "--failed", "--repo", f"{host}/{repo}"])
+
+
 def login(host: str) -> str:
     return run(api(host, "user", "--jq", ".login")).strip()
 

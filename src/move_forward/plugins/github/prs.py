@@ -167,6 +167,19 @@ def failing_checks(pr: PullRequest) -> list[Check]:
     return [c for c in pr.checks if c.state in FAILING_CHECK_STATES]
 
 
+_RUN = re.compile(r"/actions/runs/(\d+)(?:/|$)")
+"""A GitHub Actions run in a check's URL (`…/actions/runs/123/job/456`)."""
+
+
+def failed_runs(pr: PullRequest, policy_checks: list[str]) -> list[str]:
+    """The Actions runs, by id, of the PR's failing checks but policy ones, once each: what
+    `gh run rerun --failed` can run again. Other checks' URLs name no run."""
+    found = (
+        _RUN.search(c.url) for c in failing_checks(pr) if c.url and c.name not in policy_checks
+    )
+    return list(dict.fromkeys(m[1] for m in found if m))
+
+
 def pending_checks(pr: PullRequest) -> list[Check]:
     return [c for c in pr.checks if c.state not in FAILING_CHECK_STATES | PASSING_CHECK_STATES]
 

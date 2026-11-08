@@ -5,7 +5,8 @@ from conftest import REPO, dashboard, panel, pr, snapshot, stored
 
 from move_forward.plugin import ActionError
 from move_forward.plugins.github import client
-from move_forward.plugins.github.panels import MARK_READY, UPDATE_BRANCH
+from move_forward.plugins.github.models import Check
+from move_forward.plugins.github.panels import MARK_READY, RERUN_FAILED, UPDATE_BRANCH
 from move_forward.refresh import perform_action
 
 URL = f"https://github.com/{REPO}/pull/1"
@@ -90,3 +91,39 @@ def test_github_refusing_to_update_is_shown(monkeypatch: pytest.MonkeyPatch) -> 
     config, db = stored(github=snapshot(mine=[pr(1, merge_state="BEHIND")]))
     with pytest.raises(ActionError, match="merge conflict"):
         perform_action(config, db, UPDATE_BRANCH, {"pr": URL})
+
+
+def test_a_ci_failure_with_failed_runs_can_run_them_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    runs = "https://github.com/acme/widgets/actions/runs"
+    failing = pr(
+        1,
+        checks=[
+            Check(name="tests", state="FAILURE", url=f"{runs}/11/job/1"),
+            Check(name="lint", state="FAILURE", url=f"{runs}/11/job/2"),  # the same run
+            Check(name="build", state="FAILURE", url=f"{runs}/12"),
+            Check(name="policy", state="FAILURE", url=f"{runs}/13/job/3"),
+            Check(name="other", state="FAILURE", url="https://ci.example/9"),  # no run
+        ],
+    )
+    built = dashboard(github=snapshot(mine=[failing]), policy_checks=["policy"])
+    [item] = panel(built, "github.ci_failures").items
+    assert [a.label for a in item.actions if a.name == RERUN_FAILED] == ["Rerun failed"]
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[failing]), policy_checks=["policy"])
+    result = perform_action(config, db, RERUN_FAILED, {"pr": URL})
+    repo = f"github.com/{REPO}"
+    assert commands == [
+        ["gh", "run", "rerun", run, "--failed", "--repo", repo] for run in ("11", "12")
+    ]
+    assert [ref.id for ref in result.touched] == [URL]
+
+
+def test_a_ci_failure_naming_no_run_has_no_rerun(monkeypatch: pytest.MonkeyPatch) -> None:
+    failing = pr(1, checks=[Check(name="tests", state="FAILURE", url="https://ci.example/9")])
+    [item] = panel(dashboard(github=snapshot(mine=[failing])), "github.ci_failures").items
+    assert not [a for a in item.actions if a.name == RERUN_FAILED]
+    commands = _commands(monkeypatch)
+    config, db = stored(github=snapshot(mine=[failing]))
+    with pytest.raises(ActionError, match="no failed Actions run"):
+        perform_action(config, db, RERUN_FAILED, {"pr": URL})
+    assert commands == []

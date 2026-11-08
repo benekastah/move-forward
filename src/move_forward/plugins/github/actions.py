@@ -13,7 +13,7 @@ from ...api.shell import CommandError
 from . import client
 from .config import GitHubConfig
 from .models import PullRequest
-from .prs import decisions, primary_reviewers
+from .prs import decisions, failed_runs, primary_reviewers
 from .snapshots import PrRepository
 
 LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?")
@@ -112,9 +112,27 @@ def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
+def rerun_failed(req: ActionRequest[GitHubConfig]) -> ActionResult:
+    """Run the failed jobs of the PR's failing Actions runs again (`gh run rerun --failed`)."""
+    pr = _my_open_pr(req)
+    runs = failed_runs(pr, req.ctx.config.policy_checks)
+    if not runs:
+        raise ActionError(f"{pr.repo}#{pr.number} has no failed Actions run to run again")
+    try:
+        for run_id in runs:
+            client.rerun_failed(req.ctx.config.host, pr.repo, run_id)
+    except CommandError as e:
+        raise ActionError(str(e)) from e
+    return ActionResult(
+        f"running {pr.repo}#{pr.number}'s failed checks again ({len(runs)} run(s))",
+        touched=[Ref(kind=PR, id=pr.url)],
+    )
+
+
 ACTIONS: dict[str, ActionHandler] = {
     "mark_ready": mark_ready,
     "primary_reviewer": primary_reviewer,
     "request_reviewer": request_reviewer,
+    "rerun_failed": rerun_failed,
     "update_branch": update_branch,
 }
