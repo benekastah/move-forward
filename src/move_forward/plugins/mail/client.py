@@ -207,8 +207,8 @@ def _my_sent(
 ) -> tuple[set[str], Counter[str]]:
     """What I sent in the last `known_days`, its newest `SENT_CAP`: their Message-IDs (a
     message naming one is answering me) and how often I wrote to each address (`To` and `Cc`,
-    lower-case, but `me`, so copying myself doesn't make me someone I know). Nothing without a sent mailbox, or when reading it fails in any way: the
-    inbox, already read, matters more."""
+    lower-case, but `me`, so copying myself doesn't make me someone I know). Nothing without a
+    sent mailbox, or when reading it fails in any way: the inbox, already read, matters more."""
     try:
         mailbox = sent_mailbox(imap, config)
         if mailbox is None:

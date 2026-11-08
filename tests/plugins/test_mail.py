@@ -778,3 +778,10 @@ def test_a_known_sender_is_important_only_when_verified() -> None:
     assert "known" in items["m1@acme.com"].badges
     assert items["m1@acme.com"].signals is not None and items["m1@acme.com"].signals.importance == 1
     assert "known" not in items["m2@acme.com"].badges  # a forged From mustn't borrow it
+
+
+def test_an_item_shows_one_of_replies_to_me_known_and_important() -> None:
+    harness = mailbox(message(1, replies_to_me=True, known=True, important=True))
+    [item] = _items(harness)
+    shown = [b for b in item.badges if b in ("replies to me", "known", "important")]
+    assert shown == ["replies to me"]
