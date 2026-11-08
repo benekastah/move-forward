@@ -1,7 +1,9 @@
 """Set up and check this clone, the same on macOS, Linux and Windows.
 
     python dev.py venv               # .venv with the package (editable) and the dev tools
-    python dev.py check [ARGS...]    # format, lint, types, then the tests (ARGS go to pytest)
+    python dev.py check [ARGS...]    # static, then tests (ARGS go to pytest)
+    python dev.py static             # format, lint and types: the same on every system
+    python dev.py tests [ARGS...]    # the tests, in parallel (ARGS go to pytest)
     python dev.py coverage [ARGS...] # the tests under coverage.py, and what they don't run
     python dev.py install            # venv, `mfd` on PATH, the git hooks, then `mfd init`
     python dev.py pre-commit         # what the pre-commit hook runs
@@ -57,13 +59,25 @@ def venv() -> None:
 
 
 def check(pytest_args: list[str]) -> None:
-    """Every check: Ruff's formatting (fix with `ruff format`) and linter (`ruff check --fix`
-    fixes what it can), basedpyright in strict mode, then the tests."""
+    """Every check: `static`, then `tests`."""
+    static()
+    tests(pytest_args)
+
+
+def static() -> None:
+    """The checks that don't depend on the system, so CI runs them once: Ruff's formatting
+    (fix with `ruff format`) and linter (`ruff check --fix` fixes what it can), and
+    basedpyright in strict mode."""
     venv()
     run(tool("ruff"), "format", "--check", "--quiet")
     run(tool("ruff"), "check", "--quiet")
     run(tool("basedpyright"))
-    run(tool("python"), "-m", "pytest", *pytest_args)
+
+
+def tests(pytest_args: list[str]) -> None:
+    """The tests, spread over the machine's cores (pytest-xdist)."""
+    venv()
+    run(tool("python"), "-m", "pytest", "--numprocesses", "auto", *pytest_args)
 
 
 def coverage(pytest_args: list[str]) -> None:
@@ -213,6 +227,10 @@ def main(argv: list[str]) -> None:
         venv()
     elif command == "check":
         check(rest)
+    elif command == "static":
+        static()
+    elif command == "tests":
+        tests(rest)
     elif command == "coverage":
         coverage(rest)
     elif command == "install":

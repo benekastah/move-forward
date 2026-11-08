@@ -11,7 +11,7 @@ dependencies = ["cryptography>=50.0.2", "pydantic>=2.7", "watchfiles>=1.3.0"]
 mfd = "move_forward.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "basedpyright>=1.18", "coverage>=7.17.0"]
+dev = ["pytest>=8", "pytest-xdist>=3.8.0", "ruff>=0.6", "basedpyright>=1.18", "coverage>=7.17.0"]
 
 [build-system]
 requires = ["hatchling"]

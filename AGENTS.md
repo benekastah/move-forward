@@ -146,7 +146,8 @@ is what's left to build.
   certificate) and watchfiles (git watching its repos) are the only ones; tools are
   reached through their CLIs (`gh`, `git`) or the standard library.
 - **Linux, macOS and Windows, with every change.** Each change must keep working
-  on all three; CI runs `dev.py check` on each, and it must pass on all of them.
+  on all three; CI runs `dev.py tests` on each (and `dev.py static`, the same everywhere, once),
+  and they must pass on all of them.
   Use `pathlib` rather than joining paths with `/`, and write paths into TOML or
   URLs with `as_posix()`. Branch on `sys.platform` rather than assuming POSIX
   (modes, process groups, `os.execv`, `time.tzset`), and when a system needs its
@@ -178,7 +179,7 @@ is what's left to build.
 ## Before committing
 
 ```sh
-python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest
+python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest -n auto
 python3 dev.py coverage  # optional: what the tests don't run
 ```
 
