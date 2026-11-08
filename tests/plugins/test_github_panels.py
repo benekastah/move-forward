@@ -27,7 +27,7 @@ from move_forward.plugins.github.models import (
     ReviewerSuggestion,
     TeamPrScore,
 )
-from move_forward.plugins.github.prs import has_ticket_link_line, review_blockers
+from move_forward.plugins.github.prs import approved_by, has_ticket_link_line, review_blockers
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice
 
@@ -220,6 +220,16 @@ def test_where_no_review_is_required_a_comment_doesnt_hide_a_decision() -> None:
         update={"events": [event("PullRequestReview", asked, actor="alice", state="APPROVED")]}
     )
     assert "already approved" in review_blockers(liked, ME, [])
+
+
+def test_an_approval_then_a_comment_is_still_an_approval() -> None:
+    commented = Review(author="me", state="COMMENTED", submitted_at=NOW)  # GitHub's latest
+    reviewed = pr(
+        1,
+        reviews=[commented],
+        events=[event("PullRequestReview", NOW - timedelta(hours=1), actor="me", state="APPROVED")],
+    )
+    assert approved_by(reviewed, "me") and not approved_by(reviewed, "alice")
 
 
 def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None:

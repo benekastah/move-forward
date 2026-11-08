@@ -13,7 +13,7 @@ from ...api.shell import CommandError
 from . import client
 from .config import GitHubConfig
 from .models import PullRequest
-from .prs import primary_reviewers
+from .prs import approved_by, decisions, primary_reviewers
 from .snapshots import PrRepository
 
 LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?")
@@ -99,7 +99,7 @@ def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     current = primary_reviewers(pr)
     if any(_same(login, reviewer) for reviewer in current):
         raise ActionError(f"{login} is already the primary reviewer")
-    approvers = [review.author for review in pr.reviews if review.state == "APPROVED"]
+    approvers = [reviewer for reviewer in decisions(pr) if approved_by(pr, reviewer)]
     asked = any(_same(login, other) for other in [*pr.requested_users, *approvers])
     try:
         client.set_primary_reviewer(pr.url, login, current, request=not asked)

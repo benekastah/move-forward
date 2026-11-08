@@ -88,9 +88,15 @@ def decisions(pr: PullRequest) -> dict[str, tuple[datetime, str]]:
     return decided
 
 
+def approved_by(pr: PullRequest, login: str) -> bool:
+    """Whether `login`'s last decision on the PR is an approval (see `decisions`)."""
+    decided = decisions(pr).get(login)
+    return decided is not None and decided[1] == "APPROVED"
+
+
 def approved(pr: PullRequest) -> bool:
     """GitHub's verdict when it gives one (its rules count who may approve, and dismissed
-    or stale reviews); else, where no review is required, whether anyone's latest review
+    or stale reviews); else, where no review is required, whether anyone's last decision
     approves."""
     if pr.review_decision is not None:
         return pr.review_decision == "APPROVED"
