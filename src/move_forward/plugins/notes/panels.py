@@ -35,9 +35,11 @@ def _by_pr(conditions: list[Condition]) -> dict[str, list[str]]:
     return found
 
 
-def todo_actions(todo: Todo, entry: str, suggested: bool = False) -> list[Action]:
+def todo_actions(
+    todo: Todo, entry: str, suggested: bool = False, add_todo: bool = True
+) -> list[Action]:
     """A todo's checkbox (Done, or undone once it's done) and, while open, its Delete, Link, size
-    and Add todo buttons. The todo is addressed by id.
+    and (with `add_todo`) its entry's Add todo buttons. The todo is addressed by id.
 
     `suggested` draws the Done box bigger, when every PR the todo is about is merged or closed.
     """
@@ -70,7 +72,7 @@ def todo_actions(todo: Todo, entry: str, suggested: bool = False) -> list[Action
             for label, size in TODO_SIZES.items()
             if size
         ),
-        add_todo_action(entry),
+        *([add_todo_action(entry)] if add_todo else []),
     ]
 
 
@@ -162,8 +164,10 @@ def _todo_part(
     done: dict[str, bool],
     badges: list[str | Badge],
     graph: Graph,
+    add_todo: bool = True,
 ) -> Item:
-    """One todo as the Todos panel and focus mode show it, linked to the PR it mentions if any.
+    """One todo as the Todos panel and focus mode show it, linked to the PR it mentions if any,
+    with its entry's Add todo if `add_todo`.
 
     When every PR it mentions is merged or closed, the todo is probably done: it says so and
     its Done box is drawn bigger.
@@ -178,7 +182,7 @@ def _todo_part(
         subtitle=entry,
         badges=[todo.size or "unsized", *([PROBABLY_DONE] if probably_done else []), *badges],
         links=links,
-        actions=todo_actions(todo, entry, suggested=probably_done),
+        actions=todo_actions(todo, entry, suggested=probably_done, add_todo=add_todo),
         subjects=[Ref(kind=TODO, id=str(todo.id))],
     )
 
@@ -395,9 +399,16 @@ class Builder:
             ordered = sorted(open_todos, key=lambda t: t.size != "quick")
             parts = [
                 _todo_part(
-                    entry.title, t, urls, states, badges[1 if close_out else 0 :], self.graph
+                    entry.title,
+                    t,
+                    urls,
+                    states,
+                    badges[1 if close_out else 0 :],
+                    self.graph,
+                    # The entry's Add todo once, as the page shows it: on its last todo.
+                    add_todo=n == len(ordered) - 1,
                 )
-                for t in ordered
+                for n, t in enumerate(ordered)
             ]
             # One todo isn't listed as a part, so the entry shows what its part would. Where it
             # stands in for the entry (focus mode), it's about the entry, so its importance and

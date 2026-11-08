@@ -908,3 +908,11 @@ def test_whats_set_aside_isnt_counted_nor_stepped_through_and_is_dimmed() -> Non
     page = render._panel(board.panel("x.p"))  # pyright: ignore[reportPrivateUsage]
     assert "<span class='count'>0</span>" in page
     assert "class='item opened'" in page
+
+
+def test_an_entrys_several_todos_offer_its_add_todo_once_in_focus_mode() -> None:
+    noted = entry("APP-3 three", [todo("one", "quick"), todo("two", "quick"), todo("three")])
+    focused = build(work_items=[noted]).focus_items("notes.todos")
+    assert focused is not None
+    adds = [[a.name for a in part.actions].count("notes/todo_add") for _, part in focused]
+    assert adds == [0, 0, 1]
