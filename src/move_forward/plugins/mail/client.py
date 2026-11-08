@@ -292,7 +292,8 @@ def _message_ids(text: str) -> list[str]:
 
 def _gm_labels(meta: bytes) -> list[str]:
     """The message's Gmail labels (`X-GM-LABELS`), unquoted and decoded from IMAP's modified
-    UTF-7 (`&AOk-` is `é`); none from other servers. Gmail's own start with `\\`."""
+    UTF-7 (`&AOk-` is `é`); none from other servers. Gmail's own start with `\\`. One sent as
+    an IMAP literal (`{n}`) isn't read: Gmail quotes them."""
     found = _GM_LABELS.search(meta)
     labels: list[str] = []
     for raw in _LABEL.findall(found.group(1)) if found else []:

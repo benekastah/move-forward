@@ -1,4 +1,5 @@
-"""The mail plugin's table: the unread and flagged messages the last refresh found."""
+"""The mail plugin's tables: the unread and flagged messages the last refresh found, and their
+labels."""
 
 import sqlite3
 from datetime import datetime
@@ -105,20 +106,17 @@ class MessageRepository:
         rows = self._db.query(
             "SELECT * FROM mail_messages WHERE thread = ? ORDER BY position LIMIT 1", (thread,)
         )
-        return (
-            _message(rows[0], self._labels(rows[0]["uid"]).get(rows[0]["uid"], []))
-            if rows
-            else None
+        if not rows:
+            return None
+        labels = self._db.query(
+            "SELECT label FROM mail_message_labels WHERE uid = ? ORDER BY rowid", (rows[0]["uid"],)
         )
+        return _message(rows[0], [row["label"] for row in labels])
 
-    def _labels(self, uid: int | None = None) -> dict[int, list[str]]:
-        """The messages' labels by uid: all of them, or `uid`'s."""
+    def _labels(self) -> dict[int, list[str]]:
+        """Every message's labels by uid, as they came."""
         found: dict[int, list[str]] = {}
-        rows = self._db.query(
-            "SELECT uid, label FROM mail_message_labels WHERE ? IS NULL OR uid = ? ORDER BY label",
-            (uid, uid),
-        )
-        for row in rows:
+        for row in self._db.query("SELECT uid, label FROM mail_message_labels ORDER BY rowid"):
             found.setdefault(row["uid"], []).append(row["label"])
         return found
 
