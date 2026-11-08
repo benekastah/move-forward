@@ -1,8 +1,10 @@
 """Finding the plugins: the built-ins, and other packages' by entry point; and the names no
 plugin may take."""
 
+import sys
 from collections.abc import Iterator
 from importlib.metadata import EntryPoint
+from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
@@ -225,3 +227,57 @@ def test_a_plugin_whose_families_cant_be_declared_is_left_out_and_declares_none(
     builtins = {p.name for p in registry.BUILTINS}
     assert {p.name for p in plugins} == (builtins | {"hub"} if first else builtins)
     assert dict(FAMILIES) == (before | {"deal": DEALS} if first else before)
+
+
+def test_every_package_in_plugins_is_a_built_in_named_for_it() -> None:
+    packages = sorted(
+        p.name
+        for p in (Path(registry.builtin_plugins.__file__).parent).iterdir()
+        if (p / "__init__.py").is_file()
+    )
+    assert sorted(p.name for p in registry.BUILTINS) == packages
+
+
+@pytest.mark.parametrize(
+    ("source", "error"),
+    [
+        (None, "has no plugin.py"),
+        ("", "defines 0 Plugin subclasses, not one"),
+        (
+            "class A(Plugin):\n    name = 'a'\nclass B(Plugin):\n    name = 'b'\n",
+            "defines 2 Plugin subclasses, not one",
+        ),
+        ("class A(Plugin):\n    name = 'other'\n", "named 'other', not 'fake_builtin'"),
+    ],
+)
+def test_a_built_in_package_defines_one_plugin_named_for_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str | None, error: str
+) -> None:
+    package = tmp_path / "fake_builtin"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    if source is not None:
+        (package / "plugin.py").write_text(f"from move_forward.plugin import Plugin\n{source}")
+    monkeypatch.syspath_prepend(str(tmp_path))  # pyright: ignore[reportUnknownMemberType]
+    try:
+        with pytest.raises(TypeError, match=error):
+            registry.builtin(package.name)
+    finally:  # each case imports its own
+        for name in ("fake_builtin", "fake_builtin.plugin"):
+            sys.modules.pop(name, None)
+
+
+def test_what_a_built_in_imports_failing_is_said_as_it_is(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package = tmp_path / "fake_broken"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "plugin.py").write_text("import fake_missing_dependency\n")
+    monkeypatch.syspath_prepend(str(tmp_path))  # pyright: ignore[reportUnknownMemberType]
+    try:
+        with pytest.raises(ModuleNotFoundError, match="fake_missing_dependency"):
+            registry.builtin(package.name)
+    finally:
+        for name in ("fake_broken", "fake_broken.plugin"):
+            sys.modules.pop(name, None)
