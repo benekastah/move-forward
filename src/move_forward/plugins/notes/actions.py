@@ -140,15 +140,13 @@ def ice_note(req: ActionRequest[NotesConfig]) -> str:
     """Say why something is on ice: `input`, in place of what's said now."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
-    ice_id = _ice_id(req)
-    found = next((i for i in notes.ices() if i.id == ice_id), None)
-    if found is None:
-        raise ActionError("that is not on ice")
     note = req.field("input").strip()
     if not note:
         raise ActionError("the note is empty")
-    notes.set_ice_note(ice_id, note)
-    return f"noted why {found.title} is on ice"
+    title = notes.set_ice_note(_ice_id(req), note)
+    if title is None:
+        raise ActionError("that is not on ice")
+    return f"noted why {title} is on ice"
 
 
 def thaw(req: ActionRequest[NotesConfig]) -> str:
