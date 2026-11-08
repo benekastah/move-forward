@@ -423,3 +423,15 @@ def test_the_mentioned_list_round_trips_and_the_rebuild_asks_for_a_fresh_collect
     store.replace(snapshot(mentioned=[pr(2, author="alice")]))
     loaded = store.load()
     assert loaded is not None and [p.number for p in loaded.mentioned] == [2]
+
+
+def test_a_prs_labels_are_its_tags_but_its_shapes() -> None:
+    labelled = pr(1, labels=["Garbage Day", "needs-team", "too-big"])
+    entities = GitHubPlugin().entities(
+        EntitiesRequest(
+            _context(placeholder_labels=["needs-team"], split_pr_labels=["too-big"]),
+            snapshot(mine=[labelled]),
+        )
+    )
+    [entity] = [e for e in entities if e.ref.kind == "pull_request"]
+    assert entity.tags == ["Garbage Day"]

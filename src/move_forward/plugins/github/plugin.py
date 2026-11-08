@@ -381,6 +381,13 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             state=state,
             lifecycle="open" if state == "open" else "done",
             mentions=[pr.head, pr.title, pr.body],
+            # Its labels are its tags, but the template's placeholders and those that say it's
+            # worth splitting: they're about the PR's shape, not its topic.
+            tags=[
+                label
+                for label in pr.labels
+                if label not in ctx.config.placeholder_labels + ctx.config.split_pr_labels
+            ],
             attrs=attrs(pr_attrs),
         )
 
