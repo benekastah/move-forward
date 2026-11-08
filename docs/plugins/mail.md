@@ -33,7 +33,10 @@ can't be read yet.
 mail sent to me from mail I'm copied on. `mailbox` (`INBOX`) is the mailbox read, and
 `sent_mailbox` where my sent mail is (empty: the one the server marks as sent), whose
 Message-IDs and recipients alone are read, to know which mail answers me and whom I know:
-someone I wrote to at least twice in the last `known_days` (90). Mail older
+someone I wrote to at least twice in the last `known_days` (90). `urgent_words` are words or
+phrases in a subject that make a conversation from someone I know (verified) important,
+badged "urgent", and `low_words` ones that rank anyone's with lists' mail (flagged mail still
+counts): whole words, ignoring case; both empty by default. Mail older
 than `since_days` (14) is left out, flagged or not; at most `max_messages` (200) unread are
 read, newest first, and every flagged one. `token_env` and `keychain_service` say where its
 password is.

@@ -827,3 +827,31 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
     plain.aside = {1}  # not Gmail: not asked
     assert not client.collect(_config(), ME, NOW).messages[0].bulk
     assert not any("X-GM-RAW" in c for c in plain.calls)
+
+
+def test_urgent_words_lift_only_someone_i_know() -> None:
+    harness = mailbox(
+        message(3, subject="Outage in prod", thread="a", known=True),
+        message(2, subject="Outage: act now", thread="b", sender="spam@x.com"),  # not known
+        message(1, subject="outage", thread="c", known=True, verified=False),
+        urgent_words=["outage"],
+    )
+    items = {i.fingerprint: i for i in _items(harness)}
+    assert "urgent" in [getattr(b, "text", b) for b in items["m3@acme.com"].badges]
+    assert items["m3@acme.com"].signals is not None
+    assert items["m3@acme.com"].signals.importance == 1
+    for other in ("m2@acme.com", "m1@acme.com"):
+        assert "urgent" not in [getattr(b, "text", b) for b in items[other].badges]
+
+
+def test_low_words_rank_anyones_mail_with_lists_but_flagged_still_counts() -> None:
+    harness = mailbox(
+        message(3, subject="Weekly digest", thread="a", known=True),
+        message(2, subject="Digest of the week", thread="b", flagged=True),
+        message(1, subject="Digestible news", thread="c"),  # not the whole word
+        low_words=["digest"],
+    )
+    deferred = {i.fingerprint: i.deferred for i in _items(harness)}
+    assert deferred == {"m3@acme.com": True, "m2@acme.com": False, "m1@acme.com": False}
+    titles = [i.title for i in harness.act_now()]
+    assert not any("Weekly digest" in t for t in titles)

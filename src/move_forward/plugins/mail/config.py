@@ -50,6 +50,13 @@ class MailConfig(Strict):
     known_days: int = Field(default=DEFAULT_KNOWN_DAYS, ge=1)
     """How far back my sent mail is read: someone I wrote to at least twice in it is someone I
     know, whose mail counts as important; mail answering any of it replies to me."""
+    urgent_words: list[str] = Field(default_factory=list[str])
+    """Words or phrases in a subject that make the conversation important, e.g. "outage",
+    "action required": whole words, ignoring case. Only from someone I know, verified, as
+    anyone can write them."""
+    low_words: list[str] = Field(default_factory=list[str])
+    """Words or phrases in a subject that rank the conversation with lists' mail, e.g.
+    "digest", "FYI": whole words, ignoring case, from anyone; flagged mail still counts."""
     since_days: int = Field(default=DEFAULT_SINCE_DAYS, ge=1)
     """Mail older than this is left out, flagged or not."""
     max_messages: int = Field(default=DEFAULT_MAX_MESSAGES, ge=1, le=2000)
