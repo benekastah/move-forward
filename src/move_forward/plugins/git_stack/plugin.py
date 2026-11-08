@@ -93,7 +93,13 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         """Merged branches, quick to clean up, as git nominates the merged branches it can
         delete; the rest of Stacks is news rather than something to do. One per repo: its
         Clean cleans them all, so more would only take Act now's places with the same button."""
-        merged = [item for panel in req.panels for item in panel.items if item.signals]
+        # Not one on ice: core would leave it out, and with it the repo's only Clean.
+        merged = [
+            item
+            for panel in req.panels
+            for item in panel.items
+            if item.signals and not any(req.graph.hidden(ref) for ref in item.subjects)
+        ]
         by_repo: dict[str, list[Item]] = {}
         for item in merged:
             repo = next((a.fields["repo"] for a in item.actions if a.name == CLEAN), "")
