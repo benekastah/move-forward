@@ -20,7 +20,7 @@ names are related through it.
 - **Todos**: open `Left to do` items from the work notes, easy close-outs first, blocked
   last. An entry with one open todo has its Done checkbox, Delete and Link on the entry, with
   the PRs and tickets it's linked to; entries with several show each todo below the entry
-  with its own, and Add todo on the entry and each todo.
+  with its own, and Add todo on the entry (and on each todo in focus mode).
   Focus mode also shows the todos one at a time; an entry's only todo stands in for it,
   with its importance and Put on ice. While the notes are empty (just
   upgraded, say), it says how to import them.

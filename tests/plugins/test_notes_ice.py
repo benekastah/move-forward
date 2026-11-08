@@ -171,6 +171,13 @@ def test_on_ice_items_offer_to_replace_their_note() -> None:
     assert on_ice.details == ["waiting on design"]
 
 
+def test_a_blank_note_when_icing_says_the_default() -> None:
+    config, db = _work()
+    refresh.run_action(config, db, ICE, {"kind": "ticket", "id": "APP-1", "note": "  "})
+    [iced] = NotesRepository(db).ices()
+    assert iced.note == "iced from the dashboard"
+
+
 def test_icing_an_entry_hides_it_and_what_its_tickets_link() -> None:
     config, db = _work()
     _ice_item(config, db, "notes.entry", "APP-1 Fix")
