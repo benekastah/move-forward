@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from urllib.parse import quote
 
 from ...api import Badge, Band, Graph, Item, Panel, Ref, Signals
+from ...api.kinds import TAG
 from .config import APP_SCHEMES, MailConfig
 from .kinds import THREAD
 from .models import MailSnapshot, Message
@@ -85,6 +86,29 @@ def about(graph: Graph, thread: Thread) -> list[str]:
     ]
 
 
+def named_tags(graph: Graph, thread: Thread) -> list[str]:
+    """The `#tags` a conversation is about, by handle, when its latest sender is verified: those
+    its subject names, and those I put on it, each while something else open carries it, so a
+    tag only it has isn't news. Anyone can write a subject, and reply into a conversation by
+    naming it (`References`), taking on what I put on it: an unverified sender gets none."""
+    ref = Ref(kind=THREAD, id=thread.id)
+    entity = graph.get(THREAD, thread.id)
+    if entity is None or not thread.latest.verified:
+        return []
+    named = [r.id for r in entity.refs if r.kind == TAG]
+    mine = [tag.ref.id for tag in graph.of_kind(TAG) if ref in tag.refs]
+    return [
+        handle
+        for handle in dict.fromkeys([*named, *mine])
+        if (tag := graph.get(TAG, handle)) is not None
+        and any(
+            (carrier := graph.get(r.kind, r.id)) is not None and carrier.lifecycle == "open"
+            for r in tag.refs
+            if r != ref  # not the open thread itself
+        )
+    ]
+
+
 def says(words: list[str], subject: str) -> bool:
     """Whether `subject` has one of `words` (or phrases) as whole words, ignoring case, however
     the words of a phrase are spaced, and however its accents are encoded (NFC or NFD)."""
@@ -99,6 +123,7 @@ def says(words: list[str], subject: str) -> bool:
 def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item:
     latest = thread.latest
     work = about(graph, thread)
+    tagged = named_tags(graph, thread)
     # Someone I write to, but only one the server vouched for: a forged From mustn't borrow it.
     known = latest.known and latest.verified
     # Low words push mail down, but not a reply to me or mail from someone I know, as Gmail's
@@ -106,6 +131,10 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
     low = says(config.low_words, latest.subject) and not (latest.replies_to_me or known)
     bulk = latest.bulk or low
     urgent = known and not bulk and says(config.urgent_words, latest.subject)
+    # A one-word tag ("invoice") is a word any stranger may write, so it's said but lifts
+    # nothing (someone I know is lifted anyway); one of several words ("garbage day") is hard
+    # to hit by chance.
+    tag_matters = any("-" in tag for tag in tagged)
     who = latest.sender_name
     if latest.sender_email and latest.sender_email != who.lower():
         who = f"{who} <{latest.sender_email}>"
@@ -130,7 +159,11 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
         url=link(config, plugin, thread),
         subjects=[Ref(kind=THREAD, id=thread.id)],
         badges=badges,
-        details=[f"from {who}", *(f"about {title}" for title in work)],
+        details=[
+            f"from {who}",
+            *(f"about {title}" for title in work),
+            *(f"about #{tag}" for tag in tagged),
+        ],
         rank=int(latest.date.timestamp()),
         deferred=bulk and not thread.flagged,
         fingerprint=latest.message_id or str(latest.uid),
@@ -142,7 +175,10 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
             if urgent
             else 1
             if thread.flagged
-            or ((latest.important or latest.replies_to_me or work or known) and not bulk)
+            or (
+                (latest.important or latest.replies_to_me or work or tag_matters or known)
+                and not bulk
+            )
             else 0,
             waiting=[who] if person and latest.to_me else [],
             waiting_since=latest.date if person and latest.to_me else None,
