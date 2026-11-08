@@ -84,8 +84,10 @@ def test_refs_head_packed_refs_and_config_move_a_repo() -> None:
     assert watch.moves_repo(Path("refs/heads/me/x"))
     assert watch.moves_repo(Path("HEAD")) and watch.moves_repo(Path("packed-refs"))
     assert watch.moves_repo(Path("worktrees/wt/HEAD"))
-    # Its new directory too: on a busy machine its HEAD can be written before it's watched.
-    assert watch.moves_repo(Path("worktrees")) and watch.moves_repo(Path("worktrees/wt"))
+    # On Linux its new directory too: on a busy machine its HEAD can be written before it's
+    # watched. Elsewhere a directory is reported changed when its index is written.
+    assert watch.moves_repo(Path("worktrees/wt")) is watch.PER_DIRECTORY
+    assert watch.moves_repo(Path("worktrees")) is watch.PER_DIRECTORY
     assert not watch.moves_repo(Path("worktrees/wt/index"))
     assert watch.moves_repo(Path("config"))  # e.g. git-stack tracking a branch
     assert not watch.moves_repo(Path("index"))
