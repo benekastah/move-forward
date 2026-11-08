@@ -390,7 +390,7 @@ server and copy a backup over `dashboard.db`.
 ## Development
 
 ```sh
-python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest
+python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest -n auto
 python3 dev.py coverage  # the tests under coverage.py: what they miss, and htmlcov/index.html
 .venv/bin/ruff format    # fix formatting
 ```

@@ -1,5 +1,6 @@
-# Runs every check (formatting, lint, types, tests) on Linux, macOS and Windows: once per
-# pull request (on the merge GitHub would make), and on whatever lands on main.
+# Runs the static checks (formatting, lint, types) once and the tests on Linux, macOS and
+# Windows: once per pull request (on the merge GitHub would make), and on whatever lands on
+# main.
 name: check
 
 on:
@@ -19,7 +20,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # Whether anything but docs changed. A pull request touching only Markdown skips the checks
+  # (CI passed still reports); main always runs them.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE...$HEAD" | grep -qvE '\.md$'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Formatting, lint and types are the same on every system: once, on Linux.
+  static:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: python dev.py static
+
+  # The tests, on every system, in parallel on each.
+  tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -32,17 +76,25 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.12"
-      - run: python dev.py check
+          enable-cache: true
+      - run: python dev.py tests
 
-  # The one check the ruleset on main requires, so changing the matrix doesn't change what's
+  # The one check the ruleset on main requires, so changing the jobs doesn't change what's
   # required. It runs even if a check failed (a skipped required check would count as
-  # passing), and fails unless every check passed.
+  # passing), and fails unless every check passed, or docs alone changed.
   passed:
     name: CI passed
     if: always()
-    needs: check
+    needs: [changes, static, tests]
     runs-on: ubuntu-latest
     steps:
       - name: Fail unless every check passed
-        if: needs.check.result != 'success'
-        run: exit 1
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          STATIC: ${{ needs.static.result }}
+          TESTS: ${{ needs.tests.result }}
+        run: |
+          [ "$CHANGES" = success ] || exit 1
+          [ "$CODE" = false ] && exit 0
+          [ "$STATIC" = success ] && [ "$TESTS" = success ]
