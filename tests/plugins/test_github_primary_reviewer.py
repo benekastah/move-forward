@@ -1,13 +1,13 @@
 """Picking a PR's primary reviewer: an assignee besides its author, in the repos that have one."""
 
 import pytest
-from conftest import ME, REPO, approved_review, dashboard, panel, pr, snapshot, stored
+from conftest import ME, NOW, REPO, approved_review, dashboard, panel, pr, snapshot, stored
 
 from move_forward.page import Item
 from move_forward.plugin import ActionError
 from move_forward.plugins.github import client
 from move_forward.plugins.github.client import RawPullRequest
-from move_forward.plugins.github.models import DerivedSnapshot, ReviewerSuggestion
+from move_forward.plugins.github.models import DerivedSnapshot, Review, ReviewerSuggestion
 from move_forward.plugins.github.panels import PRIMARY_REVIEWER
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.refresh import perform_action
@@ -137,6 +137,15 @@ def test_setting_one_assigns_them_and_asks_for_their_review(
     assert [ref.id for ref in result.touched] == [URL]
 
 
+@pytest.mark.parametrize("state", ["COMMENTED", "CHANGES_REQUESTED", "DISMISSED"])
+def test_a_review_that_is_not_an_approval_still_gets_them_asked(
+    monkeypatch: pytest.MonkeyPatch, state: str
+) -> None:
+    review = Review(author="alice", state=state, submitted_at=NOW)
+    commands, _ = _run(monkeypatch, "alice", pr(1, reviews=[review]))
+    assert "--add-reviewer" in commands[0]
+
+
 def test_a_new_one_replaces_the_old(monkeypatch: pytest.MonkeyPatch) -> None:
     commands, _ = _run(monkeypatch, "bob", pr(1, assignees=[ME, "alice"]))
     assert commands[0][4:] == [
@@ -153,7 +162,7 @@ def test_a_new_one_replaces_the_old(monkeypatch: pytest.MonkeyPatch) -> None:
     "already",
     [{"requested_users": ["ALICE"]}, {"reviews": [approved_review("alice")]}],
 )
-def test_someone_asked_or_who_reviewed_is_not_asked_again(
+def test_someone_asked_or_who_approved_is_not_asked_again(
     monkeypatch: pytest.MonkeyPatch, already: dict[str, object]
 ) -> None:
     commands, _ = _run(monkeypatch, "alice", pr(1, **already))

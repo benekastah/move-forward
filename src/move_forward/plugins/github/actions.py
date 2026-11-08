@@ -90,8 +90,9 @@ def update_branch(req: ActionRequest[GitHubConfig]) -> ActionResult:
 
 def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     """Make `input`, a login, the PR's primary reviewer, in place of any other. They're asked
-    to review too, as they must approve, unless they've been asked or have reviewed it:
-    asking again would ask for a review already given."""
+    to review too, as they must approve, unless they've been asked or have approved it:
+    asking again would ask for an approval already given. Any other latest review (a
+    comment, changes requested, a dismissed approval) gets them asked."""
     pr = _my_open_pr(req)
     login = _login(req, pr)
     if not req.ctx.config.has_primary_reviewer(pr.repo):
@@ -99,8 +100,8 @@ def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     current = primary_reviewers(pr)
     if any(_same(login, reviewer) for reviewer in current):
         raise ActionError(f"{login} is already the primary reviewer")
-    reviewed = [review.author for review in pr.reviews]
-    asked = any(_same(login, other) for other in [*pr.requested_users, *reviewed])
+    approvers = [review.author for review in pr.reviews if review.state == "APPROVED"]
+    asked = any(_same(login, other) for other in [*pr.requested_users, *approvers])
     try:
         client.set_primary_reviewer(pr.url, login, current, request=not asked)
     except CommandError as e:
