@@ -76,7 +76,9 @@ is what's left to build.
 - **One kind of change per PR.** Don't change core in the PR that adds or
   changes a plugin. If a plugin needs something new from core (a hook, a
   `Context` field, a graph method), land that first, on its own, with its own
-  tests, and stack the plugin PR on it (`git stack branch`).
+  tests, and stack the plugin PR on it (`git stack branch`, from
+  [git-stack](https://github.com/benekastah/git-stack/), which keeps stacked branches and
+  their PRs in order).
 - **Keep the docs up to date as you code**, in the same commit as the change,
   not in a docs pass afterwards:
   - the README for core: its config keys, commands, command-line options,
@@ -178,5 +180,52 @@ python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict
 python3 dev.py coverage  # optional: what the tests don't run
 ```
 
-It must pass on every commit, not just the last one in a PR. Commit in small,
-logical steps with messages that say why, not just what.
+It must pass on a PR's last commit: PRs are squash-merged, so that's what reaches `main`.
+Commit in small, logical steps with messages that say why, not just what.
+
+## Reviewing a PR
+
+Every PR is reviewed before it merges, drafts included, by a fresh agent with no context
+but the PR: not a fork of the session that wrote it, so it judges what the code says rather
+than what was meant.
+
+- **The reviewer** reads the diff against the PR's base, its commit messages and this file,
+  and changes nothing. It looks for, most important first: bugs (inputs or state that give a
+  wrong result or a crash); surprises, and what the change makes inconsistent outside
+  itself; tests that are missing, can't fail without the change, or enshrine a wrong
+  behavior; docs, docstrings and comments that are missing or untrue (or only describe
+  what the code used to do); dead code; readability; security. It checks each finding
+  against the code before reporting it, and gives it a severity (bug, should-fix, minor),
+  a failure scenario and a fix.
+- **It posts one GitHub review of type COMMENT**, never approving or requesting changes,
+  saying who wrote it (an AI agent) in its first line. Its findings are numbered in one
+  sequence, those in the body first. Each is an inline comment on the line it's about,
+  starting with its number and severity; one with no line in the diff (something missing,
+  unchanged code) goes in the review's body. The JSON goes in a temporary directory, never
+  the repo, where a commit could pick it up:
+
+  ```sh
+  gh pr view N --json headRefOid -q .headRefOid   # the head GitHub has, not a local one
+  gh api repos/{owner}/{repo}/pulls/N/reviews --method POST --input "$TMP/review.json"
+  # {"commit_id": "<that sha>", "event": "COMMENT", "body": "...",
+  #  "comments": [{"path": "src/...", "line": 42, "side": "RIGHT", "body": "..."}]}
+  ```
+
+  GitHub rejects an inline comment on a line outside the diff.
+- **The PR's author** (the agent that wrote it and started the reviewer) then decides what
+  to fix, fixes it, and pushes. Then it answers every finding, none skipped: inline ones in
+  their own thread, the body's in one PR comment, by the review's numbers. Each answer
+  says who wrote it (an AI agent) as the review does, since it's posted from a person's
+  account; whether it was fixed and why, or why not (a finding that's wrong, out of scope,
+  or not worth its cost says which); and for a fix, the commit that made it, as GitHub
+  links it (its short hash). Push before answering, so the commits are there to link.
+
+  ```sh
+  gh api repos/{owner}/{repo}/pulls/N/reviews/REVIEW_ID/comments --jq '.[] | {id, body}'
+  gh api repos/{owner}/{repo}/pulls/N/comments/ID/replies -f body=...
+  ```
+- **Fixes are reviewed too**, unless all they change is wording (docs, comments, messages):
+  a fresh reviewer, the same way, on what changed since the reviewed head
+  (`<reviewed sha>..HEAD`), so a fix can't bring in a bug no one looked at.
+- A PR merges once its reviews are answered and CI passes, in stack order, squashed into
+  one commit; `git stack sync` then drops its commits from the branches above.
