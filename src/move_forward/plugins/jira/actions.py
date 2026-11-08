@@ -16,14 +16,14 @@ def transition(req: ActionRequest[JiraConfig]) -> str:
     if not client.is_key(key):
         raise ActionError(f"not a ticket key: {key}")
     try:
-        client.transition(ctx.config, ctx.email, key, names)
+        moved = client.transition(ctx.config, ctx.email, key, names)
     except LookupError as e:
         raise ActionError(str(e)) from e
     except urllib.error.HTTPError as e:
         raise ActionError(f"Jira refused to move {key} to {to} (HTTP {e.code})") from e
     except urllib.error.URLError as e:
         raise ActionError(f"couldn't reach Jira: {e.reason}") from e
-    return f"moved {key} to {to}"
+    return f"moved {key} to {moved}"
 
 
 ACTIONS: dict[str, ActionHandler] = {"transition": transition}

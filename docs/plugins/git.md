@@ -62,8 +62,8 @@ see [entities.md](../entities.md).
 - **Cleanup**: local branches whose PR merged or whose remote is gone, with a Delete
   button each and Delete all (`git branch -D`; a branch checked out in a worktree is
   refused). A branch git-stack sees merged is left to git_stack's Clean, which untracks it
-  as it deletes it. When notes also offers Put on ice, Delete and Put on ice appear as
-  one group with emoji icons and title labels; Delete still asks for confirmation.
+  as it deletes it. Delete is a 🗑️ icon, its label in its title; when notes also offers
+  Put on ice, the two appear as one group. Delete still asks for confirmation.
 
 On notes' On ice panel, git adds Delete branches to a stack: the local ones, all or none,
 after a confirmation; refused for a branch with commits since it was iced; remote branches
