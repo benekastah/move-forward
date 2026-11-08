@@ -916,3 +916,34 @@ def test_an_entrys_several_todos_offer_its_add_todo_once_in_focus_mode() -> None
     assert focused is not None
     adds = [[a.name for a in part.actions].count("notes/todo_add") for _, part in focused]
     assert adds == [0, 0, 1]
+
+
+def test_whats_done_is_dimmed_uncounted_and_not_stepped_through() -> None:
+    ticked = Item(title="ticked", done=True)
+    entry_ = Item(title="entry", parts=[Item(title="open"), ticked])
+    all_done = Item(title="all done", done=True, parts=[ticked])
+    stage = Panel(key="p", title="P", description="", items=[entry_, all_done])
+    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage])], {})
+    assert [part.title for _, part in board.focus_items("x.p") or []] == ["open"]
+    page = render._panel(board.panel("x.p"))  # pyright: ignore[reportPrivateUsage]
+    assert "<span class='count'>1</span>" in page
+    assert "class='item opened'" in render.item_html(ticked)
+
+
+def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
+    signals = Signals(verb="Close", task="close", effort="minutes")
+    done = Item(
+        title="done", subjects=[Ref(kind="x.a", id="d")], signals=signals, done=True, rank=9
+    )
+    live = Item(title="live", subjects=[Ref(kind="x.a", id="l")], signals=signals, rank=1)
+    stage = Panel(key="p", title="P", description="", items=[done, live], act_now=True)
+    board = panels.build(NOW, [panels.PluginPanels("x", "X", [stage], [done, live])], {})
+    assert [i.title for i in board.panel("x.p").items] == ["live", "done"]
+    assert [i.title for i in board.act_now()] == ["Close: live"]
+    entry_ = Item(title="e", parts=[Item(title="a"), Item(title="b")])
+    ticked = entry_.model_copy(update={"parts": [Item(title="a"), Item(title="b", done=True)]})
+    assert (
+        act_now.Nomination("x", ticked).fingerprint != act_now.Nomination("x", entry_).fingerprint
+    )
+    gone = entry_.model_copy(update={"parts": [Item(title="a")]})  # the next day
+    assert act_now.Nomination("x", ticked).fingerprint == act_now.Nomination("x", gone).fingerprint

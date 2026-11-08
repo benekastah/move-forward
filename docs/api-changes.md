@@ -15,6 +15,9 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **What's done, kept to undo**: `Item.done` marks an item or part whose work is done but
+  is kept a while (a todo ticked off today): it's shown dimmed, isn't counted, and focus mode
+  doesn't step through it.
 - **Labels as tags**: `Entity.tags` lists the tags a tool puts on an entity (a ticket's or a
   PR's labels, as written there); core counts them as `#tags`, whatever the kind's
   `tags_from_text`, and names a tag only labels give only by its `#`. Only labels no outsider

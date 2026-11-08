@@ -500,7 +500,7 @@ def _item(
         if item.subjects
         else ""
     )
-    cls = "item opened" if item.opened_at or item.set_aside else "item"
+    cls = "item opened" if item.opened_at or item.set_aside or item.done else "item"
     parts = [
         f"<li class='{cls}'{anchor}{data}><div class='item-head'>",
         f"<div class='item-title'>{title}</div>"
@@ -584,8 +584,8 @@ def _nesting(items: list[Item]) -> dict[int | None, list[tuple[int, Item]]]:
 
 
 def _live(panel: Panel) -> int:
-    """How many of the panel's items there are to do: not what's set aside."""
-    return sum(item.set_aside is None for item in panel.items)
+    """How many of the panel's items there are to do: not what's set aside, or done."""
+    return sum(item.set_aside is None and not item.done for item in panel.items)
 
 
 def _panel(panel: Panel, spot: Spot | None = None) -> str:
