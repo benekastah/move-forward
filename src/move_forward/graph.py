@@ -80,6 +80,9 @@ class KindSpec:
     (notes' todos), and keeps them where only finishing removes them."""
     resolvable: bool = False
     """Whether `mfd priority <id>`, given no kind, looks among its entities by id."""
+    tags_from_title: bool = True
+    """Whether a `#tag` in its entities' titles puts the tag on them (see `tags`). False where
+    anyone can write one, as mail's senders write its subjects: their text still names tags."""
     fetched_attrs: type[KindModel] | None = None
     """The model the `attrs` of its entities `Plugin.fetch` returns must fit. None: its
     family's (`kinds.Family.fetched`: what the prune reads, whoever publishes), else any of
@@ -244,11 +247,12 @@ class Graph:
         return list(self._people_by_email[address]) if address else [person]
 
     def spec(self, kind: str) -> KindSpec | None:
-        """What the publisher of `kind` says of it; None for a kind no plugin publishes."""
+        """What the publisher of `kind` (a plugin, or core for `tag`) says of it; None for a
+        kind nobody publishes."""
         return self._kinds.get(kind)
 
     def kinds(self) -> list[str]:
-        """The kinds the plugins publish, in plugin order."""
+        """The kinds published: core's `tag`, then the plugins', in plugin order."""
         return list(self._kinds)
 
     def hides(self, kind: str) -> bool:

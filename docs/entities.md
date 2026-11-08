@@ -74,6 +74,7 @@ gone.
 | `ticket` (linking) | jira | the issue's URL, `<site>/browse/<key>` | the issue's status | |
 | `notes.entry` (linking) | notes | the entry's title | | the `pull_request`s and `ticket`s linked to it and its open todos (each open todo is a `notes.todo` that points back at its entry), and the `ticket`s its title mentions by key |
 | `notes.todo` | notes | the todo's id (a number) | `open` (a ticked-off todo is gone) | its `notes.entry` |
+| `tag` | core, for each `#tag` on an entity | the tag's handle (`garbage-day` for `#garbage-day` or `#Garbage_Day`) | | what carries it; an entity whose title or mentions name it ("Garbage day", however spaced, hyphenated or cased) points at it |
 | `notes.iced` (hiding) | notes | the act of icing's id | | what it puts on ice (a stack's `git.branch`es, or a `pull_request`, `ticket` or `notes.entry`), and what else that covers: the branches' `pull_request`s and `git_stack.stack_branch`es, an entry's refs |
 
 `url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
@@ -214,6 +215,17 @@ The ticket family, modeled in core (`api.kinds.Ticket`); jira adds `status`,
 | --- | --- | --- |
 | `entry` | string | its entry's title |
 | `size` | string or null | `quick` or `big`; null while unsized |
+
+### `tag`
+
+Published by core, not a plugin: a `#tag` in some entity's title (unless its kind says
+`KindSpec(tags_from_title=False)`), titled `#garbage-day`, open while something carrying it
+is. A tag needs a letter (`#7` is a PR's number). It isn't a linking kind: what it relates
+isn't one piece of work.
+
+| Attribute | Type | Meaning |
+| --- | --- | --- |
+| `handle` | string | the tag's words, lower-case, joined by `-` |
 
 ### `notes.iced`
 

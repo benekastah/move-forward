@@ -223,6 +223,17 @@ address still wins, one on their domain doesn't. The highest of that and their t
 raises the item in Act now and in panels ordered by importance. It never lowers what a plugin
 said, and a priority I set on the item replaces it.
 
+## Tags
+
+A `#tag` in an item's title (a PR's, a ticket's, a todo's) puts the tag on it. Text that names
+it, in a title or a description, however its words are spaced, hyphenated or cased ("Garbage day
+moved" names `#garbage-day`), points at it. A tag's words are separated by `-` or `_`; it needs
+a letter (`#7` is a PR's number), and one word shorter than three letters is named only with
+its `#`. Tags relate items without making them one piece of work: icing
+one, or setting its priority, doesn't touch the others. Core publishes each as a `tag` entity
+(see [entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
+shows.
+
 ## Settings
 
 `/settings` (Settings, in the header) shows the config's settings as a form: the top

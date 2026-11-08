@@ -4,8 +4,8 @@ models say."""
 import re
 from pathlib import Path
 
-from move_forward import registry
-from move_forward.kinds import FAMILIES
+from move_forward import registry, tags
+from move_forward.kinds import FAMILIES, TAG
 
 DOC = Path(__file__).parent.parent / "docs" / "entities.md"
 _ROW_RE = re.compile(r"^\| `([\w.]+)`( \((\w+)\))? \| (\w+)", re.MULTILINE)
@@ -26,7 +26,7 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
         kind: (publisher, marker or None)
         for kind, _, marker, publisher in _ROW_RE.findall(_section(DOC.read_text(), "## Kinds"))
     }
-    declared: dict[str, tuple[str, str | None]] = {}
+    declared: dict[str, tuple[str, str | None]] = {TAG: ("core", None)}
     for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():
             marker = "linking" if spec.linking is not False else "hiding" if spec.hides else None
@@ -37,7 +37,7 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
 def test_each_kind_documents_exactly_its_models_attributes() -> None:
     """A family's section lists what every publisher's model has, each one's own marked."""
     text = DOC.read_text()
-    fields: dict[str, set[str]] = {}
+    fields: dict[str, set[str]] = {TAG: set(tags.SPEC.attrs.model_fields)}
     for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():
             fields.setdefault(kind, set()).update(spec.attrs.model_fields)

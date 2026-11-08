@@ -21,6 +21,10 @@ TICKET = "ticket"
 """The family of tickets (issues), which link what's about them."""
 PERSON = "person"
 """The family of people."""
+TAG = "tag"
+"""Core's own kind: a `#tag`, carried by the entities whose title has it, or that I put it on
+(see `tags`); text naming it only points at it. No plugin publishes it, nor declares a
+family by its name."""
 
 REVIEW = "review"
 """The task (`Signals.task`) of reviewing a pull request, whoever publishes it: `mfd snooze`
@@ -168,6 +172,8 @@ def declare(plugin: str, families: Iterable[Family]) -> None:
     family."""
     found: dict[str, Family] = {}
     for family in families:
+        if family.name == TAG:
+            raise ValueError(f"{plugin}'s family {TAG} is core's kind")
         if not _FAMILY_NAME.fullmatch(family.name):
             raise ValueError(
                 f"{plugin}'s family {family.name!r} isn't named like one: {_FAMILY_NAME.pattern}"

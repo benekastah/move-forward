@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from . import act_now, notifications, tls
+from . import act_now, notifications, tags, tls
 from .db import CORE, OWNER_RE, Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
-from .kinds import CORE_FAMILIES, FAMILIES, declare, declaring, fits, named_for
+from .kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named_for
 from .plugin import (
     API_VERSION,
     Context,
@@ -334,7 +334,8 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     (`kinds.Family.id_rule`). One that isn't is a plugin bug:
     it's logged and left out, and the page goes on without it. So is a plugin whose
     `entities`, `url_for` or `linking_patterns` raises: the graph is built without its
-    answer."""
+    answer. Core adds the `tag`s on the entities, and points those whose text names one at
+    it (see `tags`)."""
     entities: list[Entity] = []
     seen: set[Ref] = set()
     for e in plugins:
@@ -420,10 +421,11 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
             {},
         )
         linking.update(patterns)
-    specs: dict[str, KindSpec] = {}
+    specs: dict[str, KindSpec] = {TAG: tags.SPEC}
     for e in plugins:
         for kind, spec in e.plugin.kinds.items():
             specs.setdefault(kind, spec)  # a family's first publisher's
+    entities = tags.tagged(entities, specs)
     hiding = [kind for kind, spec in specs.items() if spec.hides]
     graph = Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
     related = _relations(plugins, graph)

@@ -294,6 +294,10 @@ class LinearPlugin(...):
   `gone_means_done`; one whose entities `fetch` can look up after they've left the
   snapshot is `fetchable`; one `mfd priority <id>` should look in without `--kind` is
   `resolvable`.
+- **Tags.** A `#tag` in an entity's title puts the tag on it, and text in its title or
+  `mentions` naming one points it at the tag (see the README's Tags). A kind whose titles
+  anyone can write (mail's subjects) is `KindSpec(..., tags_from_title=False)`. Read the tags on
+  or named by an entity with `graph.related(ref, TAG)` (`api.kinds.TAG`).
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
   graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune.

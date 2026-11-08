@@ -15,6 +15,10 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **Tags**: core publishes a `tag` (`api.kinds.TAG`) for each `#tag` in an entity's title,
+  pointing at what carries it; an entity whose title or `mentions` name one points at it. A
+  kind whose titles anyone can write says `KindSpec(tags_from_title=False)`. No plugin may
+  publish `tag` or name a family so.
 - **Families a plugin declares**: `Plugin.families` declares a family core doesn't model
   (`api.kinds.Family`), whose kinds the plugin, and others declaring the same family,
   publish as they would core's; a plugin publishes kinds only of core's families and its
