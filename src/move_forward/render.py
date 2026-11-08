@@ -219,7 +219,10 @@ REFRESH_ICON_SCRIPT = (
 """Highlights each dot of the refresh favicon in turn; see inside."""
 NOTIFY_SCRIPT = (
     # The server sends events over a live connection, avoiding browser timers throttled in
-    # hidden tabs. Older browsers fall back to polling. Without permission neither takes
+    # hidden tabs. Only one tab holds it: each holds a connection for good, and over HTTP/1
+    # a browser has about six per host, so a few tabs would leave none for pages and
+    # buttons. The tabs queue for a lock; the one holding it listens, and when it closes the
+    # next takes over. Older browsers fall back to polling. Without permission neither takes
     # events. A notification's `tag` replaces one still showing for the same thing.
     "(() => {"
     " const NOTIFY_SECONDS = 15;"
@@ -237,8 +240,12 @@ NOTIFY_SCRIPT = (
     " document.addEventListener('DOMContentLoaded', () => {"
     "  if ('Notification' in window && Notification.permission === 'granted'"
     "   && 'EventSource' in window) {"
-    "   const source = new EventSource('/notifications/stream');"
-    "   source.onmessage = (event) => { try { show(JSON.parse(event.data)); } catch {} };"
+    "   const listen = () => {"
+    "    const source = new EventSource('/notifications/stream');"
+    "    source.onmessage = (event) => { try { show(JSON.parse(event.data)); } catch {} };"
+    "    return new Promise(() => {}); };"
+    "   if (navigator.locks) navigator.locks.request('mfd-notifications', listen);"
+    "   else listen();"
     "  } else { poll(); setInterval(poll, NOTIFY_SECONDS * 1000); } });"
     "})();"
 )
