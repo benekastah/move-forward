@@ -12,7 +12,8 @@ class ThreadAttrs(KindModel):
 
     subject: str
     sender_email: str | None
-    """Who wrote its latest message, lower-case; None when they gave no address."""
+    """Who its latest message's `From` says wrote it, lower-case; None when it gives no usable
+    address. Unchecked: the thread points at a `person` only when the sender was verified."""
     unread: int
     """How many of its messages are unread."""
     flagged: bool
@@ -22,7 +23,7 @@ class ThreadAttrs(KindModel):
     to_me: bool
     """Its latest message has me among its `To`, not just copied."""
     latest: str
-    """When its latest message was sent, an ISO datetime."""
+    """When the server received its latest message, an ISO datetime."""
 
 
 class MailPerson(Person):

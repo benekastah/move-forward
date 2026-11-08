@@ -143,7 +143,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         """Send the browser to a thread's latest message in the mail app, for a `message_url`
         the page won't link to itself (`message:`, `mid:`). Only a thread the mailbox has, so
         the link is always one the config made."""
-        [wanted] = req.query.get("thread") or [""]
+        wanted = (req.query.get("thread") or [""])[0]
         latest = MessageRepository(req.ctx.db).latest(wanted)
         url = message_url(req.ctx.config, latest) if latest else None
         if url is None:

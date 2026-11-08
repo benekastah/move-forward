@@ -145,7 +145,7 @@ points at a person is about them, so core ranks and badges its items by their co
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `subject` | string | its latest message's |
-| `sender_email` | string or null | who wrote its latest message, lower-case |
+| `sender_email` | string or null | who its latest message's `From` says wrote it, lower-case: unchecked (the thread points at a `person` only when the sender was verified) |
 | `unread` | int | how many of its messages are unread |
 | `flagged` | bool | flagged by whoever wrote its latest message (see docs/plugins/mail.md) |
 | `bulk` | bool | its latest message is a list's, a newsletter's or automated |

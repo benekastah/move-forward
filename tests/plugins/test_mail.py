@@ -513,6 +513,8 @@ def test_an_app_link_goes_through_the_open_page_which_sends_the_browser_on() -> 
     assert (found.status, found.headers["Location"]) == (303, "message:%3Cm1@acme.com%3E")
     missing = harness.page("open", {"thread": ["gone@acme.com"]})
     assert isinstance(missing, Response) and missing.status == 404
+    twice = harness.page("open", {"thread": ["root@acme.com", "other"]})  # the first counts
+    assert isinstance(twice, Response) and twice.status == 303
 
 
 def test_a_message_id_cant_break_out_of_its_place_in_the_link() -> None:
