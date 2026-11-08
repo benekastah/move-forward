@@ -206,6 +206,22 @@ def test_a_comment_after_a_changes_request_doesnt_end_it() -> None:
     assert "changes requested" in review_blockers(still, ME, [])
 
 
+def test_where_no_review_is_required_a_comment_doesnt_hide_a_decision() -> None:
+    asked = NOW - timedelta(days=1)
+    commented = Review(author="alice", state="COMMENTED", submitted_at=NOW)  # GitHub's latest
+    still = pr(
+        1,
+        review_decision=None,
+        reviews=[commented],
+        events=[event("PullRequestReview", asked, actor="alice", state="CHANGES_REQUESTED")],
+    )
+    assert "changes requested" in review_blockers(still, ME, [])
+    liked = still.model_copy(
+        update={"events": [event("PullRequestReview", asked, actor="alice", state="APPROVED")]}
+    )
+    assert "already approved" in review_blockers(liked, ME, [])
+
+
 def test_a_policy_check_waiting_for_reviews_doesnt_hold_a_first_review() -> None:
     waiting = Check(
         name="PR policy: guidelines",
@@ -465,6 +481,7 @@ def test_feedback_words_a_review_by_its_state_and_skips_a_bare_approval() -> Non
     dashboard = build(github=snapshot(mine=[reviewed]))
     [item] = panel(dashboard, "github.feedback").items
     assert item.details == [
+        "changes requested",  # bob's, from the timeline
         "approved with comments by alice",
         "changes requested by bob",
         "reviewed by carol",

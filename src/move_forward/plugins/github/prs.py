@@ -64,31 +64,14 @@ def can_be_requested(reasons: list[str]) -> bool:
     return any(not reason.startswith(CANNOT_VERIFY) for reason in reasons)
 
 
-def approved(pr: PullRequest) -> bool:
-    """GitHub's verdict when it gives one (its rules count who may approve, and dismissed
-    or stale reviews); else, where no review is required, whether anyone's latest review
-    approves."""
-    if pr.review_decision is not None:
-        return pr.review_decision == "APPROVED"
-    return any(r.state == "APPROVED" for r in pr.reviews)
-
-
-def changes_requested(pr: PullRequest) -> bool:
-    return pr.review_decision == "CHANGES_REQUESTED" or any(
-        r.state == "CHANGES_REQUESTED" for r in pr.reviews
-    )
-
-
 DECISIONS = ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")
 """The review states that say where a reviewer stands; a comment doesn't."""
 
 
-def awaiting_re_review(pr: PullRequest) -> bool:
-    """A requested changes review was followed by a push and a fresh request to that
-    reviewer. GitHub can still report CHANGES_REQUESTED until they review again. Only
-    reviewers whose last say still requests changes count: one who has since approved, or
-    whose request was dismissed, isn't waited on. A comment says nothing either way, though
-    GitHub's latest review can be one."""
+def decisions(pr: PullRequest) -> dict[str, tuple[datetime, str]]:
+    """Where each reviewer last stood, and since when: their last approve, request-changes or
+    dismiss, from the timeline and their latest review. GitHub's latest review can be a
+    comment, which says nothing either way."""
     decided = {
         review.author: (review.submitted_at, review.state)
         for review in pr.reviews
@@ -102,11 +85,37 @@ def awaiting_re_review(pr: PullRequest) -> bool:
             and (event.actor not in decided or decided[event.actor][0] <= event.at)
         ):
             decided[event.actor] = (event.at, event.state)
-    requests = {
-        reviewer: at for reviewer, (at, state) in decided.items() if state == "CHANGES_REQUESTED"
-    }
+    return decided
+
+
+def approved(pr: PullRequest) -> bool:
+    """GitHub's verdict when it gives one (its rules count who may approve, and dismissed
+    or stale reviews); else, where no review is required, whether anyone's latest review
+    approves."""
+    if pr.review_decision is not None:
+        return pr.review_decision == "APPROVED"
+    return any(state == "APPROVED" for _, state in decisions(pr).values())
+
+
+def changes_requested(pr: PullRequest) -> bool:
+    return pr.review_decision == "CHANGES_REQUESTED" or any(
+        state == "CHANGES_REQUESTED" for _, state in decisions(pr).values()
+    )
+
+
+def awaiting_re_review(pr: PullRequest) -> bool:
+    """A requested changes review was followed by a push and a fresh request to that
+    reviewer. GitHub can still report CHANGES_REQUESTED until they review again. Only
+    reviewers whose last say still requests changes count: one who has since approved, or
+    whose request was dismissed, isn't waited on. A comment says nothing either way, though
+    GitHub's latest review can be one."""
     if not changes_requested(pr):
         return False
+    requests = {
+        reviewer: at
+        for reviewer, (at, state) in decisions(pr).items()
+        if state == "CHANGES_REQUESTED"
+    }
     pushed = last_push_at(pr)
     if not requests or pushed is None:
         return False
