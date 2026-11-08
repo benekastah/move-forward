@@ -173,6 +173,7 @@ def _important(meta: bytes) -> bool:
     """Whether Gmail labels the message Important (`X-GM-LABELS`); False from other servers."""
     found = _GM_LABELS.search(meta)
     labels = _LABEL.findall(found.group(1)) if found else []
+    # Only good for this comparison: a quoted label equal to \Important has no `\"` in it.
     return any(label.strip(b'"').replace(b"\\\\", b"\\") == b"\\Important" for label in labels)
 
 
