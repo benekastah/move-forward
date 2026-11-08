@@ -89,12 +89,14 @@ which says whatever the sender likes.
 - **Mail**: a conversation per item, newest first; those whose people matter more (flagged, or
   by contact type) come first, and lists, newsletters and automated mail (`List-Id`,
   `Precedence: bulk`, `Auto-Submitted`) last. Each says who it's from, how many messages are
-  unread, whether it's flagged, and `cc` when I'm only copied.
+  unread, whether it's flagged (or Gmail finds it important), and `cc` when I'm only copied.
 
 ## Act now
 
 Every conversation but those from lists and automated mail (unless flagged), as Read, in minutes.
-Mail sent to me has its sender waiting since the server received it; a flagged conversation is important; and
+Mail sent to me has its sender waiting since the server received it. A conversation is
+important when it's flagged, or when Gmail labels its latest message Important (Gmail's
+`X-GM-LABELS`, read only from a server offering them; not for lists and automated mail); and
 the sender's contact type can raise it further.
 
 ## Pages
