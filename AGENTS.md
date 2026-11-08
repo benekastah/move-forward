@@ -83,6 +83,10 @@ is what's left to build.
   tests, and stack the plugin PR on it (`git stack branch`, from
   [git-stack](https://github.com/benekastah/git-stack/), which keeps stacked branches and
   their PRs in order).
+- **Small enough to review well.** One reviewer reads a PR whole, and it reads a small one
+  better: split a large change into a stack of PRs that each do one step and pass `dev.py
+  check` and CI on their own (a model, then what uses it; a refactor, then the feature on it)
+  rather than one PR of everything.
 - **Keep the docs up to date as you code**, in the same commit as the change,
   not in a docs pass afterwards:
   - the README for core: its config keys, commands, command-line options,
@@ -191,9 +195,10 @@ Commit in small, logical steps with messages that say why, not just what.
 
 ## Reviewing a PR
 
-Every PR is reviewed before it merges, drafts included, by a fresh agent with no context
+Every PR is reviewed before it merges, drafts included, by one fresh agent with no context
 but the PR: not a fork of the session that wrote it, so it judges what the code says rather
-than what was meant.
+than what was meant. One reviewer is enough for a PR, as PRs are kept small; reviewing the
+whole code takes several (see [A full review](#a-full-review)).
 
 - **The reviewer** reads the diff against the PR's base, its commit messages and this file,
   and changes nothing. It looks for, most important first: bugs (inputs or state that give a
