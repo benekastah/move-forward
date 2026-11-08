@@ -209,6 +209,12 @@ def test_a_reply_from_someone_else_doesnt_wear_a_conversations_flag() -> None:
     )
     [item] = _items(forged)
     assert "flagged" not in [getattr(b, "text", b) for b in item.badges]
+    no_address = mailbox(
+        message(2, sender="", sender_email=None, subject="Re"),
+        message(1, sender="", sender_email=None, flagged=True),
+    )
+    [item] = _items(no_address)  # two without an address aren't one writer
+    assert "flagged" not in [getattr(b, "text", b) for b in item.badges]
     flagged_by_writer = mailbox(
         message(2, sender="cust@acme.com"), message(1, flagged=True, sender="cust@acme.com")
     )
