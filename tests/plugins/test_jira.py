@@ -316,7 +316,7 @@ def test_a_ticket_moves_to_the_first_of_several_statuses_it_can(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sent = _jira_replies(monkeypatch, '{"transitions": [{"id": "31", "to": {"name": "Done"}}]}')
-    jira.transition(CONFIG, "me@x.com", "APP-1", ["Closed", "done"])
+    assert jira.transition(CONFIG, "me@x.com", "APP-1", ["Closed", "done"]) == "Done"
     assert sent[-1] == ("/rest/api/3/issue/APP-1/transitions", {"transition": {"id": "31"}})
 
 
