@@ -620,6 +620,21 @@ def test_act_nows_listed_parts_offer_the_importance_their_panel_does() -> None:
     assert [levels(part) for part in panel_item.parts] == [levels(part) for part in item.parts]
 
 
+def test_a_lone_todo_joined_to_another_item_is_listed_with_its_own_buttons() -> None:
+    url = "https://github.com/acme/widgets/pull/1"
+    built = dashboard(
+        github=snapshot(mine=[pr(1, merge_state="DIRTY")]),
+        work_items=[
+            entry("Lone", [todo(f"check {url}", "quick")], PRs=[url]),
+            entry("Other", [todo(f"tidy {url}", "quick")], PRs=[url]),
+        ],
+    )
+    [host] = [i for i in built.act_now() if i.title.startswith("Resolve conflicts")]
+    assert [part.title for part in host.parts] == [f"check {url}", f"tidy {url}"]
+    assert all(any(a.name == "notes/todo_done" for a in p.actions) for p in host.parts)
+    assert not any(a.name == "notes/todo_done" for a in host.actions)  # none unlabelled
+
+
 def test_empty_notes_say_how_to_fill_them() -> None:
     empty = dashboard().panel("notes.todos")
     assert "mfd notes import <dir>" in empty.description
