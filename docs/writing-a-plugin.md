@@ -254,10 +254,10 @@ class LinearPlugin(...):
   `tests/test_entities_doc.py` fails until you do. [plugins.md](plugins.md) draws who
   publishes and reads what.
 - **Families.** A kind that more than one tool could publish (a pull request, a ticket, a
-  person) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
+  person, an organisation) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
   extend its model (`class LinearIssue(Ticket)`), setting `handle` to how your tool shows
   it, and give each entity an id by the family's rule (`api.kinds.FAMILIES[...].id_rule`:
-  a URL for a ticket or a PR, `<host>/<login>` for a person), so it's unique across tools. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
+  a URL for a ticket or a PR, `<host>/<login>` for a person, `<host>/<id>` for an organisation), so it's unique across tools. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
   through the family's model, whoever publishes it.
 - **Your own families.** For something several tools share that core doesn't model (a CRM
   deal, say), declare the family in `families`: a `Family` with its name (lower-case, no

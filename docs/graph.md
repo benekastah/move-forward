@@ -15,7 +15,7 @@ the plugins' own tables.
 
 An entity is named by a **ref**: a kind and an id within it (a PR's URL, `<repo dir>\t<branch>`,
 a ticket's key). A plugin's own kinds are named for it (`git.branch`, `notes.entry`); a
-family's (`pull_request`, `ticket`, `person`, modeled in core, or one a plugin declares) are named for the family,
+family's (`pull_request`, `ticket`, `person`, `organisation`, modeled in core, or one a plugin declares) are named for the family,
 whoever publishes them, and core sets the entity's `kind` to the publisher's
 (`github.pull_request`). Besides its ref it has a title, an
 optional URL and state, the refs it points at, and attributes:
