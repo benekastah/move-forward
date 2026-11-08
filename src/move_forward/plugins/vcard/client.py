@@ -52,8 +52,9 @@ def files(config: VcardConfig) -> list[Path]:
 
 
 def collect(config: VcardConfig) -> VcardSnapshot:
-    """Everyone with an address in the config's files: one `Contact` per address, the first
-    card's name for it, and the groups of every card giving it."""
+    """Everyone with an address in the config's files: one `Contact` per address, the name of
+    the first card giving it that has one (else the address), and the groups of every card
+    giving it."""
     cards = [card for path in files(config) for card in parse(_read(path))]
     by_uid: dict[str, list[str]] = {}
     by_email: dict[str, list[str]] = {}
@@ -100,14 +101,18 @@ def _read(path: Path) -> str:
 
 
 def decode(raw: bytes) -> str:
-    """A file's text: UTF-16 by its byte-order mark, else UTF-8, else (2.1's raw 8-bit
-    values, as old exports write them) Windows-1252."""
+    """A file's text: UTF-16 by its byte-order mark, else each line UTF-8 or, failing that
+    (2.1's raw 8-bit values, as old exports write them), Windows-1252."""
     if raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
         return raw.decode("utf-16", errors="replace")
+    return "\n".join(_decoded_line(line) for line in raw.removeprefix(codecs.BOM_UTF8).split(b"\n"))
+
+
+def _decoded_line(line: bytes) -> str:
     try:
-        return raw.decode("utf-8-sig")
+        return line.decode("utf-8")
     except UnicodeDecodeError:
-        return raw.decode("cp1252", errors="replace")
+        return line.decode("cp1252", errors="replace")
 
 
 def _uid(text: str) -> str:
@@ -123,20 +128,30 @@ def parse(text: str) -> list[Card]:
     """The cards in a vCard file's text."""
     cards: list[Card] = []
     card: Card | None = None
-    nested = 0  # 2.1's `AGENT` can hold a whole card, which isn't this one's
+    agent = False  # the last line was an empty `AGENT`: 2.1 puts the agent's own card next
+    nested = 0  # in the agent's card, which isn't this one's
     for line in _lines(text):
         name, params, value = _property(line)
         begins = name == "BEGIN" and value.upper() == "VCARD"
         ends = name == "END" and value.upper() == "VCARD"
-        if card is None:
-            card = Card() if begins else None
-        elif begins or nested:
+        if nested:
             nested += 1 if begins else -1 if ends else 0
+        elif begins and card is not None and agent:
+            nested = 1
+        elif begins:
+            if card is not None:  # the last one never ended: keep what it said
+                cards.append(card)
+            card = Card()
+        elif card is None:
+            pass
         elif ends:
             cards.append(card)
             card = None
         else:
             _read_property(card, name, _decoded(params, value))
+        agent = name == "AGENT" and not value.strip()
+    if card is not None:
+        cards.append(card)
     return cards
 
 
@@ -180,7 +195,9 @@ def _lines(text: str) -> list[str]:
     lines: list[str] = []
     old = False  # in a 2.1 card
     for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-        if raw.upper().startswith("VERSION:"):
+        if raw.upper().startswith("BEGIN:VCARD"):
+            old = False
+        elif raw.upper().startswith("VERSION:"):
             old = raw[8:].strip() == "2.1"
         if raw[:1] in (" ", "\t") and lines:
             lines[-1] += raw if old else raw[1:]

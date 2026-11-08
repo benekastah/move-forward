@@ -198,8 +198,10 @@ def test_an_address_takes_the_name_of_a_card_that_has_one(tmp_path: Path) -> Non
 
 def test_a_file_is_read_by_its_encoding() -> None:
     text = card("FN:José", "EMAIL:jose@acme.com")
-    assert client.decode(text.encode("utf-16"))[: len("BEGIN")] == "BEGIN"
+    assert client.decode(text.encode("utf-16")) == text
     assert client.decode(text.encode("cp1252")) == text  # an old export's raw 8-bit
+    mixed = card("FN:José", "EMAIL:j@acme.com").encode() + "FN:René\r\n".encode("cp1252")
+    assert "José" in client.decode(mixed) and "René" in client.decode(mixed)
     assert client.decode(b"\xef\xbb\xbf" + text.encode()) == text
 
 
@@ -240,3 +242,14 @@ def test_init_asks_for_the_files_guessing_vdirsyncers(
     found = setup.questions(Asker(prompt), InitSetup(email="me@acme.com", cwd=tmp_path, teams=[]))
     assert asked == ["~/.contacts", "~/.contacts"]
     assert found == {"paths": ["~/.contacts"]}
+
+
+def test_a_card_that_never_ends_keeps_what_it_said_and_the_next_are_read() -> None:
+    text = "BEGIN:VCARD\nFN:Broken\nEMAIL:b@acme.com\n" + card("FN:A") + card("FN:B")
+    assert [c.name for c in client.parse(text)] == ["Broken", "A", "B"]
+    assert [c.name for c in client.parse("BEGIN:VCARD\nFN:Cut off\n")] == ["Cut off"]
+
+
+def test_folding_is_undone_by_each_cards_own_version() -> None:
+    text = "BEGIN:VCARD\nVERSION:2.1\nFN:A\nEND:VCARD\nBEGIN:VCARD\nFN:Jo\n hn\nEND:VCARD\n"
+    assert [c.name for c in client.parse(text)] == ["A", "John"]

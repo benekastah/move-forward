@@ -16,7 +16,8 @@ group_types = {Clients = "customer"}
 - `paths` (required): vCard files (`.vcf`, one or many contacts each), or directories searched
   for them, below them too: an export from Contacts, Google Contacts or Outlook, or the
   directory [vdirsyncer](https://vdirsyncer.pimutils.org/) keeps in sync with a CardDAV
-  server (iCloud, Fastmail, Nextcloud) or with Google Contacts (its `google_contacts` storage). A path that isn't there fails the refresh.
+  server (iCloud, Fastmail, Nextcloud) or with Google Contacts (its `google_contacts`
+  storage). A path that isn't there fails the refresh.
 - `group_importance` (`{}`): how much the people in a group matter to me (0 normal, 1 high, 2
   critical), by its name, ignoring case; the highest of their groups' counts.
 - `group_types` (`{}`): what the people in a group are to me, a contact type (see the README's
@@ -25,10 +26,10 @@ group_types = {Clients = "customer"}
   for a file added, removed or written (by their times and sizes, without reading them), and
   reads them at once if there is one.
 
-A group is a card's category (`CATEGORIES`), or a group's own card naming its members:
-vCard 4's `KIND:group` with `MEMBER`s (by `UID` or `mailto:` address), or Apple's `X-ADDRESSBOOKSERVER-KIND` (what iCloud
-syncs). It reads vCard 4, 3 and 2.1 (quoted-printable values too); of a card, only its name,
-addresses, categories and `UID`.
+A group is a card's category (`CATEGORIES`), or a group's own card naming its members: vCard
+4's `KIND:group` with `MEMBER`s (by `UID` or `mailto:` address), or Apple's
+`X-ADDRESSBOOKSERVER-KIND` (what iCloud syncs). It reads vCard 4, 3 and 2.1 (quoted-printable
+values too); of a card, only its name, addresses, categories and `UID`.
 
 ## Publishes
 
@@ -36,8 +37,9 @@ A `person` for each address in the address book, `vcard/<address>`, titled by th
 the `importance` and `contact_type` their groups give and the `groups` they're in; see
 [entities.md](../entities.md). Core joins them with the same person in other tools by email
 (mail's senders, github's committers), so their items rank and are badged by it. A card with
-several addresses gives a person for each; an address on several cards takes the first card's
-name and every card's groups. A type I set on someone (Set type) beats their groups'.
+several addresses gives a person for each; an address on several cards takes the name of the
+first that has one (else it's named by itself) and every card's groups. A type I set on someone
+(Set type) beats their groups'.
 
 ## Panels
 
