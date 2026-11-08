@@ -608,7 +608,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def handle_named(self, req: NamedRequest[C]) -> str | None:
         """The `handle` of the entity of one of its linking kinds that text its pattern matched
         names, when that isn't the text itself: e.g. a tag's `garbage-day`, for `Garbage Day`
-        matched case-insensitively. None: the text is the handle, as a ticket's key is."""
+        matched case-insensitively. None: the text is the handle, as a ticket's key is. Asked
+        of a kind's publishers, for every match, every time core builds the graph: keep it
+        cheap, with no I/O. Of a family's publishers, the first with an answer wins."""
         return None
 
     # Page

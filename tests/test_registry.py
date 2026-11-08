@@ -8,13 +8,14 @@ from typing import Any, ClassVar
 import pytest
 from conftest import dashboard
 
-from move_forward import cli, config, kinds, registry, render, server
+from move_forward import cli, config, kinds, refresh, registry, render, server
+from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, KindSpec, Ref
 from move_forward.kinds import FAMILIES, Family, Person, declaring, is_url
 from move_forward.plugin import API_VERSION, EntitiesRequest, NamedRequest, Plugin
 from move_forward.strict import Strict
-from move_forward.testing import Harness
+from move_forward.testing import NOW, Harness
 
 
 class LinearConfig(Strict):
@@ -263,3 +264,39 @@ class TaggerPlugin(LinearPlugin):
 def test_a_plugins_handle_named_links_text_to_its_entities() -> None:
     graph = Harness(TaggerPlugin(), {"team": "ENG"}).graph()
     assert graph.units(Ref(kind="tagger.note", id="n")) == [Ref(kind="tagger.tag", id="1")]
+
+
+class BrokenTaggerPlugin(TaggerPlugin):
+    def handle_named(self, req: NamedRequest[Any]) -> str | None:
+        raise RuntimeError("boom")
+
+
+def test_a_failing_handle_named_leaves_the_match_as_it_is() -> None:
+    graph = Harness(BrokenTaggerPlugin(), {"team": "ENG"}).graph()
+    assert graph.units(Ref(kind="tagger.note", id="n")) == [
+        Ref(kind="tagger.tag", id="GARBAGE  DAY")
+    ]
+
+
+class GreedyPlugin(LinearPlugin):
+    """Answers for every kind, though it publishes none."""
+
+    name: ClassVar[str] = "greedy"
+
+    def handle_named(self, req: NamedRequest[Any]) -> str | None:
+        return "not-mine"
+
+
+def test_only_a_kinds_publishers_say_which_handle_names_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(registry, "PLUGINS", [GreedyPlugin(), BrokenTaggerPlugin()])
+    loaded = config.Config.model_validate(
+        {"email": "me@x", "greedy": {"team": "A"}, "tagger": {"team": "B"}}
+    )
+    db = Database(":memory:")
+    registry.migrate(loaded, db)
+    graph, _ = refresh.stored_graph(db, registry.enabled(loaded, db, NOW))
+    assert graph.units(Ref(kind="tagger.note", id="n")) == [
+        Ref(kind="tagger.tag", id="GARBAGE  DAY")  # not greedy's "not-mine"
+    ]

@@ -390,6 +390,8 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         return None
 
     def handle_named(kind: str, text: str) -> str | None:
+        # Only a publisher of the kind knows its handles: unlike a URL, which any plugin may
+        # know of another's entity (jira's of a ticket github names), text isn't an id.
         for e in plugins:
             if kind not in e.plugin.kinds:
                 continue
