@@ -236,6 +236,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("notes/todo_size", False, False),
         ("notes/todo_add", False, False),
         ("act_now/snooze", False, False),  # its entry's, as on the page
+        ("act_now/dismiss", False, False),
         ("notes/ice_item", False, False),  # it stands in for its entry, as on the page
     ]
     todo_id = part.actions[0].fields["todo"]
@@ -261,6 +262,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         "notes/todo_size",
         "notes/todo_add",
         "act_now/snooze",
+        "act_now/dismiss",
         "notes/ice_item",
     ]
     assert (
@@ -416,10 +418,11 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
         "where": "https://jira/browse/APP-8",
     }
     assert add("notes.todos", "APP-1 Fix") == {"entry": "APP-1 Fix"}
-    # Other people's PRs get the snooze and the shared importance choices.
+    # Other people's PRs get Snooze, Dismiss and the shared importance choices.
     review = next(i for i in panel(dashboard, "github.reviews_for_me").items)
     assert [a.name for a in review.actions if a.group not in ("Importance", "Tags")] == [
-        "act_now/snooze"
+        "act_now/snooze",
+        "act_now/dismiss",
     ]
 
 
@@ -843,7 +846,7 @@ def test_an_item_set_aside_waits_last_in_its_panel_until_it_changes() -> None:
     assert [a.label for a in waiting[1].actions if a.group == "Act now"] == ["Unsnooze"]
     changed = shown("after")
     assert [(i.title, i.set_aside) for i in changed] == [("after", None), ("other", None)]
-    assert [a.label for a in changed[0].actions if a.group == "Act now"] == ["Snooze"]
+    assert [a.label for a in changed[0].actions if a.group == "Act now"] == ["Snooze", "Dismiss"]
 
 
 def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:

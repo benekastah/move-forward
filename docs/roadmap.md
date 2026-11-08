@@ -97,11 +97,9 @@ that needs a core one says so, and lands on top of it.
 
 ### Core
 
-2. **Dismiss in the panels.** What's set aside now waits in its panel with Unsnooze or
-   Undismiss, so Dismiss can join Snooze there. An item only Act now shows (nominated with no
-   panel item) still has nowhere to come back from but `mfd unsnooze`.
-   `mfd snooze` still takes only a PR's URL, while `mfd unsnooze` takes any entity: give it
-   the same, with a task, through the button's own action rather than its own copy.
+2. **Set aside from anywhere.** An item only Act now shows (nominated with no panel item) has
+   nowhere to come back from but `mfd unsnooze`; and `mfd snooze` takes only a PR's URL, while
+   `mfd unsnooze` takes any entity: give it the same, with a task, through the button's action.
 6. **Importance where it means something.** Say whether every panel sorts by it, since only two
    do now, not What next or Feedback.
 7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,

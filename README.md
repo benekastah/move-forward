@@ -175,7 +175,7 @@ fetches again just what you opened in the last half hour, not its plugins whole;
 Items with something to do have the same Snooze in their own panels. An item snoozed or
 dismissed, in Act now or its panel, leaves Act now and waits in its panel, last and dimmed, with
 Unsnooze (or Undismiss), until it changes or the snooze ends; panel and group counts leave it
-out, and focus mode skips it. Pin and Dismiss are Act now's.
+out, and focus mode skips it. Dismiss goes with Snooze wherever an item is; Pin is Act now's.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by

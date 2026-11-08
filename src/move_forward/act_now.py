@@ -530,20 +530,18 @@ def importance_actions(subject: Ref, level: int | None) -> list[Action]:
     ]
 
 
-def snooze_action(fields: dict[str, str], aside: SetAside | None = None) -> Action:
-    """The Snooze button of an item named by `fields`, wherever it's shown; for one set aside
-    (`aside`), Unsnooze or Undismiss in its place."""
-    if aside is None:
+def set_aside_actions(fields: dict[str, str], aside: SetAside | None = None) -> list[Action]:
+    """The buttons that set an item named by `fields` aside, wherever it's shown: Snooze and
+    Dismiss; for one set aside (`aside`), Unsnooze or Undismiss in their place."""
+
+    def button(action: str, label: str, icon: str) -> Action:
         return Action(
-            name=f"{ACTIONS}/snooze", label="Snooze", fields=fields, group="Act now", icon="💤"
+            name=f"{ACTIONS}/{action}", label=label, fields=fields, group="Act now", icon=icon
         )
-    return Action(
-        name=f"{ACTIONS}/unsnooze",
-        label="Unsnooze" if aside == "snooze" else "Undismiss",
-        fields=fields,
-        group="Act now",
-        icon="⏰",
-    )
+
+    if aside is not None:
+        return [button("unsnooze", "Unsnooze" if aside == "snooze" else "Undismiss", "⏰")]
+    return [button("snooze", "Snooze", "💤"), button("dismiss", "Dismiss", "👋")]
 
 
 def _buttons(
@@ -567,8 +565,7 @@ def _buttons(
         )
 
     return [
-        snooze_action(fields),
-        button("dismiss", "Dismiss", "👋"),
+        *set_aside_actions(fields),
         button("unpin", "Unpin", "📌", True) if pinned else button("pin", "Pin", "📌", False),
         *importance_actions(nomination.item.subjects[0], level),
     ]

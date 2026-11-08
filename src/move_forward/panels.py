@@ -257,15 +257,15 @@ def _with_snooze(
             return item
         fingerprint = nominated.get(key, nomination.fingerprint)
         aside = act_now.set_aside(fingerprint, feedback.get(key), now)
-        button = act_now.snooze_action(act_now.feedback_fields(key, fingerprint), aside)
+        buttons = act_now.set_aside_actions(act_now.feedback_fields(key, fingerprint), aside)
         parts = [
             part
             if act_now.Nomination(plugin, part).key is not None
-            else part.model_copy(update={"actions": [*part.actions, button], "set_aside": aside})
+            else part.model_copy(update={"actions": [*part.actions, *buttons], "set_aside": aside})
             for part in item.parts
         ]
         return item.model_copy(
-            update={"actions": [*item.actions, button], "set_aside": aside, "parts": parts}
+            update={"actions": [*item.actions, *buttons], "set_aside": aside, "parts": parts}
         )
 
     return panel.model_copy(update={"items": [snoozable(item) for item in panel.items]})
