@@ -2,8 +2,10 @@
 
 A type comes from me, on an address or a whole domain (`contacts`), or from a tool that knows
 (`Person.contact_type`, say a CRM's); a tool can also say how much they matter outright
-(`Person.importance`: a CRM's VIP, a starred contact). A type I set on an address wins over
-both; one on a domain counts as a type does. It counts for all of a person's entities, since
+(`Person.importance`: a CRM's VIP, a starred contact), and so can the organisation a person
+points at (`Organisation`), for its people. A type I set on an address wins over all of them;
+one on a domain counts as a type does, and a tool's on the person over one on their
+organisation. It counts for all of a person's entities, since
 `Graph.same_person` joins them by email, and for the items about any of them: core ranks those
 and badges them, so a plugin needs only to publish the person and point at them.
 """
@@ -18,7 +20,7 @@ from pydantic import Field, field_validator
 from . import act_now
 from .domain import Model
 from .graph import Graph, Ref
-from .kinds import PERSON, personal_email
+from .kinds import ORGANISATION, PERSON, personal_email
 from .page import Action, Item, ItemAdditions
 from .strict import Strict
 
@@ -111,6 +113,13 @@ def _tool_type(text: str | None) -> str | None:
         return None
 
 
+class _OrganisationView(Model):
+    """What core reads of an `organisation`."""
+
+    contact_type: str | None = None
+    importance: int | None = None
+
+
 class _PersonView(Model):
     """What core reads of a `person`."""
 
@@ -151,16 +160,33 @@ class Contacts:
             found = self._labels[labelled]
             return Contact(email, found, self._types.get(found, 0), labelled)
         same = self._graph.view_same_person(person.id, _PersonView)
+        orgs = self._organisations([p.id for p in same])
         if labelled is not None:
             found: str | None = self._labels[labelled]  # on their whole domain
         else:
-            # Where tools disagree, the first in the graph's order: the plugins' order.
-            found = next((t for p in same if (t := _tool_type(p.contact_type))), None)
+            # Where tools disagree, the first in the graph's order: the plugins' order. What
+            # a tool says of them beats what it says of where they work.
+            found = next((t for p in [*same, *orgs] if (t := _tool_type(p.contact_type))), None)
         by_type = self._types.get(found, 0) if found else 0
-        # A tool can also state it outright (a CRM's VIP, a starred contact): the highest counts,
-        # above a type on their domain too (a VIP at a customer).
-        stated = max((p.importance or 0 for p in same), default=0)
+        # A tool can also state it outright (a CRM's VIP, a starred contact, a key account): the
+        # highest counts, above a type on their domain too (a VIP at a customer).
+        stated = max((p.importance or 0 for p in [*same, *orgs]), default=0)
         return Contact(email, found, max(by_type, stated), labelled, stated > by_type)
+
+    def _organisations(self, people: list[str]) -> list[_OrganisationView]:
+        """The organisations the `person` entities point at, in their order, once each."""
+        refs = dict.fromkeys(
+            r
+            for id in people
+            if (person := self._graph.get(PERSON, id))
+            for r in person.refs
+            if r.kind == ORGANISATION
+        )
+        return [
+            org
+            for r in refs
+            if (org := self._graph.view_one(ORGANISATION, r.id, _OrganisationView))
+        ]
 
     def of(self, ref: Ref) -> Contact | None:
         """Who `ref` is about, itself when it's a person: the one who matters most, the first of

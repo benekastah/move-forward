@@ -166,11 +166,10 @@ Confluence, Notion, Figma). In order:
    harness plugin authors get (`move_forward.testing`). Each step below extends it as it
    lands, so it shows what a plugin can do without core, and a core change that would break
    one fails it.
-3. **The families most of those tools need.** An *organisation* (a CRM account, a support
-   tool's organisation, an email domain), a *conversation* (mail, support tickets, chats),
-   and an *incident*. Each with the attributes a consumer ranks by, and a person pointing at
-   their organisation. Contact types' `@domain` labels are an organisation already, and
-   mail's threads a conversation.
+3. **The families most of those tools need.** A *conversation* (mail, support tickets,
+   chats) and an *incident*, each with the attributes a consumer ranks by; mail's threads are
+   a conversation already. Core has the *organisation* family, which people point at, but
+   nothing joins them by email domain yet: contact types' `@domain` labels are one already.
 4. **Who someone is, across tools.** A person with several identifiers (addresses, each
    tool's handle), not one email; `me` on core's `Person`, not just github's; how far an
    identity can be trusted, since an address in a header proves nothing (mail publishes a

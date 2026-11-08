@@ -14,7 +14,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref, attrs
-from move_forward.kinds import PERSON, Person, personal_email
+from move_forward.kinds import ORGANISATION, PERSON, Organisation, Person, fits, personal_email
 from move_forward.page import Item, Panel, Signals
 from move_forward.people import Contacts, PeopleConfig
 from move_forward.plugin import (
@@ -45,6 +45,20 @@ def _person(
             Person(handle=id, email=email, contact_type=contact_type, importance=importance)
         ),
     )
+
+
+def _organisation(
+    id: str, contact_type: str | None = None, importance: int | None = None
+) -> Entity:
+    return Entity(
+        ref=Ref(kind=ORGANISATION, id=id),
+        title=id,
+        attrs=attrs(Organisation(handle=id, contact_type=contact_type, importance=importance)),
+    )
+
+
+def _at(person: Entity, *orgs: Entity) -> Entity:
+    return person.model_copy(update={"refs": [*person.refs, *(o.ref for o in orgs)]})
 
 
 def _thread(*about: Entity) -> Entity:
@@ -427,3 +441,36 @@ def test_the_button_checks_what_it_is_given(fields: dict[str, str], says: str) -
     with pytest.raises(ActionError, match=says):
         refresh.perform_action(config, db, people.CONTACT_ACTION, fields)
     assert ContactRepository(db).all() == {}
+
+
+def test_what_their_organisation_is_counts_for_its_peoples_mail() -> None:
+    acme = _organisation("crm.example.com/acme", "customer")
+    crm = _at(_person("crm.example.com/42", "alice@acme.com"), acme)
+    contact = _contacts(SENDER, crm, acme, _thread(SENDER)).of(THREAD)
+    assert contact is not None and (contact.contact_type, contact.importance) == ("customer", 1)
+    key = _organisation("crm.example.com/acme", importance=2)  # a key account
+    crm = _at(_person("crm.example.com/42", "alice@acme.com"), key)
+    assert _contacts(SENDER, crm, key, _thread(SENDER)).importance(THREAD) == 2
+
+
+def test_what_a_tool_or_i_say_of_someone_beats_what_their_organisation_is() -> None:
+    acme = _organisation("crm.example.com/acme", "customer")
+    crm = _at(_person("crm.example.com/42", "alice@acme.com", "vendor"), acme)
+    tool = _contacts(SENDER, crm, acme, _thread(SENDER)).of(THREAD)
+    assert tool is not None and tool.contact_type == "vendor"
+    crm = _at(_person("crm.example.com/42", "alice@acme.com"), acme)
+    labels = {"@acme.com": "partner"}
+    domain = _contacts(SENDER, crm, acme, _thread(SENDER), labels=labels).of(THREAD)
+    assert domain is not None and domain.contact_type == "partner"
+
+
+def test_only_the_organisation_a_person_points_at_is_theirs() -> None:
+    acme = _organisation("crm.example.com/acme", "customer")
+    pointing = acme.model_copy(update={"refs": [SENDER.ref]})  # it says nothing of who's at it
+    contact = _contacts(SENDER, pointing, _thread(SENDER)).of(THREAD)
+    assert contact is not None and contact.contact_type is None
+
+
+def test_an_organisations_id_is_its_hosts() -> None:
+    assert fits(ORGANISATION, "crm.example.com/acme")
+    assert not fits(ORGANISATION, "Acme")

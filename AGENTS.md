@@ -27,8 +27,8 @@ is what's left to build.
   model of its attributes, which the graph checks its entities against, and its flags
   (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `tags_from_text`). An entity says
   whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
-  states. What more than one tool may represent (a pull request, a ticket, a person) is a
-  family (`api.kinds.Family`): core declares those three, and a plugin (or a package several
+  states. What more than one tool may represent (a pull request, a ticket, a person, an
+  organisation) is a family (`api.kinds.Family`): core declares those four, and a plugin (or a package several
   share) declares others in `families`. A plugin's kind of a family extends its model, and
   its ids follow the family's rule (a URL; `<host>/<login>` for a person), so they're
   unique whoever publishes them. A consumer reads

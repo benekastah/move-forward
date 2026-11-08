@@ -15,6 +15,10 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **Organisations**: core declares the `organisation` family (`api.kinds.ORGANISATION`,
+  `Organisation`: `handle`, `contact_type`, `importance`), with ids `<host>/<its id there>`.
+  A person points at theirs, and its type or importance counts for that person's items as
+  their own would.
 - **What's done, kept to undo**: `Item.done` marks an item or part whose work is done but
   is kept a while (a todo ticked off today): it's shown dimmed, isn't counted, and focus mode
   doesn't step through it.
