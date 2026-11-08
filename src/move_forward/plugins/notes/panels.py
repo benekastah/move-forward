@@ -399,7 +399,13 @@ class Builder:
                 )
                 for t in ordered
             ]
-            # One todo isn't listed as a part, so the entry shows what its part would.
+            # One todo isn't listed as a part, so the entry shows what its part would. Where it
+            # stands in for the entry (focus mode), it's about the entry, so its importance and
+            # Put on ice are the entry's, as on the page.
+            if len(parts) == 1:
+                parts = [
+                    parts[0].model_copy(update={"subjects": [Ref(kind=ENTRY, id=entry.title)]})
+                ]
             lone = parts[0] if len(parts) == 1 else None
             if lone and PROBABLY_DONE in lone.badges:
                 badges.append(PROBABLY_DONE)
