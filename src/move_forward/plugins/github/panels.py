@@ -750,7 +750,7 @@ class Builder:
     def _with_auto_merge(self, item: Item, pr: PullRequest) -> Item:
         """The PR's item with Merge when ready where its repo allows auto-merge, how it'd merge
         is known, and its base requires a review it hasn't had: auto-merge waits only for what
-        GitHub requires, so without that it would merge at once, before anyone looked. Not
+        GitHub requires, so without that it wouldn't wait for anyone to look. Not
         while the work notes hold it, nor once auto-merge is on (see `_auto_merging`)."""
         method = merge_method(pr, self.config.merge.method)
         if (

@@ -460,8 +460,8 @@ def merge(host: str, repo: str, number: int, method: MergeMethod, head: str) -> 
 
 def auto_merge(url: str, method: MergeMethod | None, head: str) -> None:
     """Let the PR merge by itself once it has what its base requires (auto-merge), with `method`
-    (None: its merge queue picks), if its head is still `head`. One already mergeable `gh`
-    merges at once. Raises CommandError when GitHub refuses, as for a PR in a linked stack."""
+    (None: its merge queue picks), if its head is still `head`. `gh` merges a PR that's
+    already mergeable at once. Raises CommandError when GitHub refuses, as for a PR in a linked stack."""
     how = [f"--{method.lower()}"] if method else []
     run(["gh", "pr", "merge", url, "--auto", *how, "--match-head-commit", head])
 

@@ -164,7 +164,7 @@ def merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
 def auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
     """Let the PR merge by itself once it has what its base requires (auto-merge), as Merge when
     ready offers: where its repo allows it and its base requires a review it hasn't had (else
-    it would merge at once), at the `head` the button showed, and not while the work notes
+    it wouldn't wait for one), at the `head` the button showed, and not while the work notes
     hold it."""
     pr = _my_open_pr(req)
     if req.field("head") != pr.head_oid:
@@ -173,7 +173,8 @@ def auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
         raise ActionError(f"{pr.repo} doesn't allow auto-merge")
     if pr.review_decision != "REVIEW_REQUIRED":
         raise ActionError(
-            f"{pr.repo}#{pr.number} needs no review it hasn't had: it would merge at once"
+            f"{pr.repo}#{pr.number} isn't waiting on a required review: auto-merge wouldn't wait"
+            " for one"
         )
     if conditions := merge_conditions(req.graph, pr):
         raise ActionError(f"the work notes hold {pr.repo}#{pr.number}: {'; '.join(conditions)}")

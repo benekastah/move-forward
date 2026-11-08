@@ -310,9 +310,9 @@ def test_merge_when_ready_is_refused_where_it_would_merge_at_once_or_cant(
     commands = _commands(monkeypatch)
     no_review = _awaiting(auto_merge_allowed=True, merge_methods=["SQUASH"], review_decision=None)
     [item] = panel(dashboard(github=snapshot(mine=[no_review])), "github.ready_for_review").items
-    assert not [a for a in item.actions if a.name == AUTO_MERGE]  # it would merge at once
+    assert not [a for a in item.actions if a.name == AUTO_MERGE]  # it wouldn't wait for a review
     cases = [
-        (no_review, "abc1234def", "would merge at once"),
+        (no_review, "abc1234def", "wouldn't wait"),
         (_awaiting(auto_merge_allowed=True, merge_methods=["SQUASH"]), "0000000", "new commits"),
         (_awaiting(merge_methods=["SQUASH"]), "abc1234def", "doesn't allow auto-merge"),
         (_awaiting(auto_merge_allowed=True), "abc1234def", "isn't known yet"),
@@ -334,4 +334,7 @@ def test_auto_merge_on_shows_wherever_the_pr_is_and_warns_when_held() -> None:
     noted = entry("APP-1 Fix", [], **{"Merge conditions": ["after the migration"], "Where": [URL]})
     held = dashboard(github=snapshot(mine=[on]), work_items=[noted])
     [fixing] = panel(held, "github.fix_before_review").items
-    assert Badge(text="merges when ready, though held", tone="warn") in fixing.badges
+    assert [b for b in fixing.badges if isinstance(b, Badge) and b.text.startswith("merges")] == [
+        Badge(text="merges when ready, though held", tone="warn")
+    ]
+    assert CANCEL_AUTO_MERGE in [a.name for a in fixing.actions]
