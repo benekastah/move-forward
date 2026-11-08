@@ -400,3 +400,51 @@ def test_a_merged_stack_branch_reaches_act_now_with_clean() -> None:
     clean = next(a for a in item.actions if a.name == "git_stack/stack_clean")
     assert clean.confirm is not None
     assert clean.fields["repo"] == "/src/widgets"
+
+
+def test_act_now_cleans_a_repos_merged_branches_with_one_item() -> None:
+    built = dashboard(
+        github=snapshot(),
+        local=local_snapshot(branches=[local_branch("main")]),
+        stacks=stacks(
+            StackBranch(name="main"),
+            StackBranch(name="me/a", parent="main", status="merged"),
+            StackBranch(name="me/b", parent="main", status="merged"),
+            StackBranch(name="me/c", parent="main", status="merged"),
+        ),
+    )
+    [item] = built.act_now()  # one Clean cleans them all
+    assert "and 2 more merged here" in item.details
+    assert len(titles(built, "git_stack.stacks")) == 3  # the panel lists each
+
+
+def test_a_repos_clean_is_nominated_by_a_branch_not_on_ice_one_per_repo() -> None:
+    two = GitStackSnapshot(
+        repos=[
+            StackRepo(
+                dir="/src/widgets",
+                branches=[
+                    StackBranch(name="main"),
+                    StackBranch(name="me/a", parent="main", status="merged"),
+                    StackBranch(name="me/b", parent="main", status="merged"),
+                ],
+            ),
+            StackRepo(
+                dir="/src/gadgets",
+                branches=[
+                    StackBranch(name="main"),
+                    StackBranch(name="me/c", parent="main", status="merged"),
+                ],
+            ),
+        ]
+    )
+    built = dashboard(
+        github=snapshot(), local=local_snapshot(), stacks=two, iced_stacks=[iced("me/a")]
+    )
+    items = built.act_now()
+    assert sorted(i.title for i in items) == ["Clean up: me/b: merged", "Clean up: me/c: merged"]
+    assert not any("more merged here" in d for i in items for d in i.details)  # me/a is iced
+    repos = sorted(
+        a.fields["repo"] for i in items for a in i.actions if a.name == "git_stack/stack_clean"
+    )
+    assert repos == ["/src/gadgets", "/src/widgets"]
