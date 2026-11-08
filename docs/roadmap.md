@@ -230,19 +230,23 @@ Confluence, Notion, Figma). In order:
    exports leave out or redact its entities' text; `prune` drops them once they're done.
 9. **More than one of a plugin.** A plugin has one config section, so a work and a personal
    mailbox, or a CRM in two orgs, can't both be read. Instances (`[mail.work]`,
-   `[mail.personal]`), each with its own config, tables and entities, without each plugin
-   building accounts of its own.
-10. **Work and personal.** Personal mail at 10am and work mail at 10pm should rank lower. An
-    instance (9) could say which it is, and Act now weigh it by the part of the day (as "Act
-    now, after living with it" below asks for quick wins and the morning).
-11. **A contacts plugin.** Without a CRM, an address book says who matters: starred or
-    favourite contacts, groups (Family), published as people with an `importance` (vCard or
-    CardDAV first, then Google Contacts). Mail's senders join them by email. A person's stated
-    importance should then count only for an address that's verified, as contact types do
-    for mail (4).
+   `[mail.personal]`) need, per instance: kind names and their ids (mail's threads are
+   Message-IDs, which two mailboxes can share), table prefixes and the migrations ledger,
+   `/<plugin>/<key>` pages, `requires` and `watches`, and keychain defaults. Without that,
+   each plugin builds accounts of its own.
+10. **Trusting a person joined by email.** A person's stated importance (and contact type)
+    spreads to every person with their email. Mail publishes only verified senders, but github's
+    reviewer emails come from commits, which anyone can author as someone else, so a CRM's VIP
+    could rank a stranger's PR. Joining should count only identities a plugin vouches for (4).
 
 Table-shaped settings (a support plugin's views, a CRM's tiers) belong to "First-run setup
 in the browser", below, which already plans tables on the settings page.
+
+### A contacts plugin
+
+Without a CRM, an address book says who matters: starred or favourite contacts, groups
+(Family), published as people with an `importance`, which core ranks by with no core change.
+vCard or CardDAV first, then Google Contacts. Mail's senders join them by email.
 
 ### mail
 
@@ -282,7 +286,8 @@ in the browser", below, which already plans tables on the settings page.
   `[slack.teams]`) could join the settings page then too.
 - **Act now, after living with it.** Questions to answer from use: whether quick wins
   should lead at the end of the day and important work in the morning (a weight profile
-  per part of the day); whether someone waiting on my team should weigh more (the `person`
+  per part of the day, which could also rank personal mail down at 10am and work mail down at
+  10pm, with an instance (Plugins without core changes, 9) saying which it is); whether someone waiting on my team should weigh more (the `person`
   entities would need team membership, which github already fetches); whether unknown
   effort should count as "hour"; and whether notes' todos should carry `due` and
   `waiting_since` (the notes don't record due dates yet).
