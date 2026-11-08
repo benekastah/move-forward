@@ -278,6 +278,7 @@ class FakeImap:
             b'(\\HasNoChildren \\Sent) "/" "Sent Items"',
         ]
         self.closed: set[str] = set()
+        self.sent_fails = False
         """Mailboxes that won't open."""
         self.calls: list[tuple[object, ...]] = []
 
@@ -302,6 +303,8 @@ class FakeImap:
     def uid(self, command: str, *args: str) -> tuple[str, list[object]]:
         self.calls.append(("uid", command, *args))
         if self.open == '"Sent Items"':
+            if command == "FETCH" and self.sent_fails:
+                raise TimeoutError("timed out")
             if command == "SEARCH":
                 return "OK", [b" ".join(str(u).encode() for u in self.sent)]
             wanted = {int(u) for u in args[0].split(",")}
@@ -676,13 +679,15 @@ def test_reading_my_sent_mail_finds_it_by_its_flag_or_config_and_never_fails_the
     server.listed = []
     configured = client.collect(_config(sent_mailbox="Sent Items"), ME, NOW)
     assert configured.messages[0].replies_to_me  # sent_mailbox needs no LIST
-    for broken in ("closed", "list"):
+    for broken in ("closed", "list", "fetch"):
         server = imap([(1, "", reply)])
         server.sent = {10: "mine@me"}
         if broken == "closed":
             server.closed = {'"Sent Items"'}
-        else:
+        elif broken == "list":
             server.listed = None
+        else:
+            server.sent_fails = True  # a timeout fetching my sent mail
         [found] = client.collect(_config(), ME, NOW).messages  # the inbox still comes
         assert not found.replies_to_me
 
