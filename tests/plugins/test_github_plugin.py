@@ -364,6 +364,24 @@ def test_partial_collect_fetches_membership_for_a_new_individual_policy_team(
     assert found.team_memberships["acme/bacon"] == ["shared"]
 
 
+def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _context(teams={"core": "core-squad"})  # a team whose slug isn't its name
+    PrRepository(ctx.db).replace(
+        snapshot(mine=[pr(1)], team_memberships={"acme/core-squad": ["ann"], "acme/x": ["zed"]})
+    )
+    ctx.kv.set(LAST_FULL, NOW.isoformat())
+    ctx.kv.set(CHANGED, json.dumps(["acme/widgets#1"]))
+
+    def fetch_prs(host: str, ids: list[client.PrId]) -> list[PullRequest]:
+        return [pr(1)]
+
+    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
+    found = GitHubPlugin().collect(CollectRequest(ctx))
+    assert found.team_members == ["ann"]  # mine, not acme/x's
+
+
 def test_the_daily_prune_looks_up_old_misses_again() -> None:
     ctx = _context()
     people = PeopleRepository(ctx.db)

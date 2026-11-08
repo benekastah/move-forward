@@ -55,7 +55,8 @@ slug where it isn't the team's name.
 `{ bacon = "individual" }`. For an `"individual"` team, the PR must request at least one
 member of that team as a person too. A person in several requested teams can satisfy each
 of them. Membership is fetched per team; if it cannot be verified, the PR stays in
-Fix before review with that reason (and for one of my `teams`, the log says why). A PR requiring review with no reviewer requested
+Fix before review with that reason (and for one of my `teams`, the log says why). A PR
+requiring review with no reviewer requested
 still needs one.
 `primary_reviewer_repos` lists the repos (`owner/name`) where a PR has a primary reviewer: an
 assignee besides its author, who must approve. GitHub enforces that; it only adds the field
