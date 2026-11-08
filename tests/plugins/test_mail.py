@@ -939,3 +939,14 @@ def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
     [shared] = _items(harness)  # tagging it by hand doesn't lose what its subject names
     assert "about #garbage-day" in shared.details
     assert shared.signals is not None and shared.signals.importance == 1
+    harness.store(  # a forged reply naming the conversation takes on nothing I put on it
+        MailSnapshot(
+            messages=[
+                message(2, subject="Pay this invoice now", sender="x@evil.com", verified=False),
+                message(1, subject="Garbage day moved", sender="city@town.example"),
+            ]
+        )
+    )
+    [forged] = _items(harness)
+    assert not any(d.startswith("about") for d in forged.details)
+    assert forged.signals is not None and forged.signals.importance == 0

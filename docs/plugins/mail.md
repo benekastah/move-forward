@@ -111,7 +111,8 @@ important when it's flagged, when its subject names one of my open tickets, or a
 several words something open carries (see the README's Tags), and its sender is verified
 (shown as "about APP-12 …" or "about #garbage-day"; a priority I set on that ticket counts for
 it too; a one-word tag, like `#invoice`, any stranger may write, so it's shown but raises
-nothing; a tag I put on the mail counts too, from any sender, while something else open has it),
+nothing; a tag I put on the mail counts too, while something else open has it and its latest sender is
+verified, since anyone can reply into a conversation),
 when
 its latest message answers mail I sent (the newest 1000 within `known_days`; its
 `In-Reply-To`, else the last of its `References`, names one of my sent Message-IDs; badged

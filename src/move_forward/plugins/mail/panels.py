@@ -87,14 +87,15 @@ def about(graph: Graph, thread: Thread) -> list[str]:
 
 
 def named_tags(graph: Graph, thread: Thread) -> list[str]:
-    """The `#tags` a conversation is about, by handle: those a verified sender's subject names
-    (anyone can write a subject: an unverified one names none), and those I put on it, each
-    while something else open carries it, so a tag only it has isn't news."""
+    """The `#tags` a conversation is about, by handle, when its latest sender is verified: those
+    its subject names, and those I put on it, each while something else open carries it, so a
+    tag only it has isn't news. Anyone can write a subject, and reply into a conversation by
+    naming it (`References`), taking on what I put on it: an unverified sender gets none."""
     ref = Ref(kind=THREAD, id=thread.id)
     entity = graph.get(THREAD, thread.id)
-    if entity is None:
+    if entity is None or not thread.latest.verified:
         return []
-    named = [r.id for r in entity.refs if r.kind == TAG] if thread.latest.verified else []
+    named = [r.id for r in entity.refs if r.kind == TAG]
     mine = [tag.ref.id for tag in graph.of_kind(TAG) if ref in tag.refs]
     return [
         handle
