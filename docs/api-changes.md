@@ -15,6 +15,9 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **Tags**: core publishes a linking `tag` (`api.kinds.TAG`) for each `#tag` in an entity's
+  `mentions`; no plugin may publish it or name a family `tag`. `Graph` takes `handle_named`,
+  the handle a pattern's match stands for.
 - **Families a plugin declares**: `Plugin.families` declares a family core doesn't model
   (`api.kinds.Family`), whose kinds the plugin, and others declaring the same family,
   publish as they would core's; a plugin publishes kinds only of core's families and its

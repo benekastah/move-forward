@@ -37,8 +37,8 @@ is what's left to build.
   unit of work (a ticket, a work entry) is declared `linking` (with
   `linking_patterns` narrowing its id pattern from the plugin's data); an entity
   that may name one publishes the text in `mentions` rather than refs to
-  another plugin's kind. A kind whose entities hide what they point at (ice) is
-  declared `hides`, and core leaves items about hidden things off the page;
+  another plugin's kind; core adds a linking `tag` for each `#tag` in mentions. A
+  kind whose entities hide what they point at (ice) is declared `hides`, and core leaves items about hidden things off the page;
   plugins don't filter them out themselves.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each

@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from . import act_now, notifications, tls
+from . import act_now, notifications, tags, tls
 from .db import CORE, OWNER_RE, Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
-from .kinds import CORE_FAMILIES, FAMILIES, declare, declaring, fits, named_for
+from .kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named_for
 from .plugin import (
     API_VERSION,
     Context,
@@ -334,7 +334,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
     (`kinds.Family.id_rule`). One that isn't is a plugin bug:
     it's logged and left out, and the page goes on without it. So is a plugin whose
     `entities`, `url_for` or `linking_patterns` raises: the graph is built without its
-    answer."""
+    answer. Core adds a `tag` for each `#tag` in the entities' mentions (see `tags`)."""
     entities: list[Entity] = []
     seen: set[Ref] = set()
     for e in plugins:
@@ -420,12 +420,15 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
             {},
         )
         linking.update(patterns)
-    specs: dict[str, KindSpec] = {}
+    found = tags.entities(entities)
+    entities += found
+    linking[TAG] = tags.pattern(t.ref.id for t in found)
+    specs: dict[str, KindSpec] = {TAG: tags.SPEC}
     for e in plugins:
         for kind, spec in e.plugin.kinds.items():
             specs.setdefault(kind, spec)  # a family's first publisher's
     hiding = [kind for kind, spec in specs.items() if spec.hides]
-    graph = Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
+    graph = Graph(entities, url_for, fetch, linking, hiding, specs, handle_for, tags.handle_named)
     related = _relations(plugins, graph)
     if not related:
         return graph
@@ -435,7 +438,7 @@ def build_graph(plugins: list[Enabled], snapshots: dict[str, BaseModel | None]) 
         else e
         for e in entities
     ]
-    return Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
+    return Graph(entities, url_for, fetch, linking, hiding, specs, handle_for, tags.handle_named)
 
 
 def _relations(plugins: list[Enabled], graph: Graph) -> dict[Ref, list[Ref]]:
