@@ -203,11 +203,11 @@ Confluence, Notion, Figma). In order:
 Table-shaped settings (a support plugin's views, a CRM's tiers) belong to "First-run setup
 in the browser", below, which already plans tables on the settings page.
 
-### A contacts plugin
+### Google Contacts
 
-Without a CRM, an address book says who matters: starred or favourite contacts, groups
-(Family), published as people with an `importance`, which core ranks by with no core change.
-vCard or CardDAV first, then Google Contacts. Mail's senders join them by email.
+vcard reads an address book's vCard files; Google Contacts isn't synced by CardDAV tools as
+readily, so a plugin of its own (the People API, with OAuth) would publish its starred contacts
+and groups as vcard does.
 
 ### mail
 
