@@ -160,8 +160,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 return placed.model_copy(
                     update={
                         "team_memberships": memberships,
-                        "team_members": sorted(
-                            {login for members in memberships.values() for login in members}
+                        "team_members": client.my_team_members(
+                            memberships, config.org, _team_slugs(ctx)
                         ),
                     }
                 )

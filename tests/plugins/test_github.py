@@ -318,3 +318,27 @@ def test_collect_keeps_membership_per_team_even_when_a_person_is_in_both(
         require_member=lambda team: team == "bacon",
     )
     assert selective.team_memberships == {"acme/bacon": ["alex", "shared"]}
+    assert selective.team_members == []  # bacon is a requested team, not one of mine
+
+
+def test_a_team_whose_members_cant_be_read_is_left_out(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    requested = pr(1, requested_teams=["elsewhere"])
+
+    def members(host: str, org: str, team: str) -> list[str]:
+        raise github.CommandError("gh: Not Found")
+
+    def search(host: str, query: str, with_files: bool = False) -> list[PullRequest]:
+        return [requested] if "is:open author:@me" in query else []
+
+    def login(host: str) -> str:
+        return "me"
+
+    monkeypatch.setattr(github, "search_prs", search)
+    monkeypatch.setattr(github, "login", login)
+    monkeypatch.setattr(github, "team_members", members)
+    found = github.collect("github.com", "acme", ["bacon"], 14, datetime(2026, 10, 30, tzinfo=UTC))
+    assert found.team_memberships == {} and found.team_members == []
+    assert "cannot read the members of my team acme/bacon" in caplog.text  # mine: said
+    assert "elsewhere" not in caplog.text  # another's on a PR: may be private

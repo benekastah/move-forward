@@ -3,6 +3,7 @@
 The `Raw*` models mirror the GraphQL response shape, dropping anything we didn't ask for.
 """
 
+import logging
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -14,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ...api.shell import CommandError, run, stopping
 from .models import Check, GitHubSnapshot, PullRequest, Review, Thread, TimelineEvent
 
+log = logging.getLogger(__name__)
 COMMIT_EMAIL_LOOKUP_COUNT = 10
 PAGE_SIZE = 20
 """PRs per search page. Each carries threads, checks and events (up to 100 of them, GraphQL's
@@ -423,6 +425,11 @@ def login(host: str) -> str:
     return run(api(host, "user", "--jq", ".login")).strip()
 
 
+def my_team_members(memberships: dict[str, list[str]], org: str, teams: list[str]) -> list[str]:
+    """The logins in my `teams`, from every team's members (keyed `owner/team`)."""
+    return sorted({login for team in teams for login in memberships.get(f"{org}/{team}", [])})
+
+
 def team_members(host: str, org: str, team: str) -> list[str]:
     out = run(api(host, "--paginate", f"orgs/{org}/teams/{team}/members", "--jq", ".[].login"))
     return out.split()
@@ -513,10 +520,12 @@ def collect(
     for (owner, team), future in member_futures.items():
         try:
             memberships[f"{owner}/{team}"] = sorted(set(future.result()))
-        except CommandError:
-            # A team in another org may be visible on the PR but not list its members.
-            # The panel treats missing membership as unverified, never as a match.
-            continue
+        except CommandError as e:
+            # A team in another org may be visible on the PR but not list its members; one of
+            # mine with a wrong slug, say, is worth a line in the log. The panel treats missing
+            # membership as unverified, never as a match.
+            if team in teams and owner == org:
+                log.warning("cannot read the members of my team %s/%s: %s", owner, team, e)
     return GitHubSnapshot(
         login=login_future.result(),
         mine=mine_prs,
@@ -526,6 +535,6 @@ def collect(
         merged_recent=merged.result(),
         closed_recent=closed.result(),
         mentioned=mentioned.result(),
-        team_members=sorted({login for members in memberships.values() for login in members}),
+        team_members=my_team_members(memberships, org, teams),
         team_memberships=memberships,
     )
