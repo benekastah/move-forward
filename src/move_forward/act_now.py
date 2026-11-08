@@ -20,7 +20,7 @@ from pydantic import Field, field_validator
 from . import localtime
 from .domain import Model
 from .graph import Ref
-from .page import Action, Badge, Item, Link, Panel, Signals, age
+from .page import Action, Badge, Item, Link, Panel, SetAside, Signals, age
 from .strict import Strict
 
 KEY = "now"
@@ -220,15 +220,11 @@ def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomina
     ), level
 
 
-SetAside = Literal["snooze", "dismiss"]
-"""How an item is set aside: snoozed, or dismissed. Act now leaves it out; its panel shows it
-dimmed and last, with Unsnooze."""
-
-
-def set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> SetAside | None:
-    """How the item is set aside, snoozed until later or dismissed, if it hasn't changed since;
-    None while it isn't. What Act now and every panel go by."""
-    if feedback is None or feedback.fingerprint != nomination.fingerprint:
+def set_aside(fingerprint: str, feedback: Feedback | None, now: datetime) -> SetAside | None:
+    """How the item with `fingerprint` (as Act now nominates it) is set aside, snoozed until
+    later or dismissed, if it hasn't changed since; None while it isn't. What Act now and every
+    panel go by."""
+    if feedback is None or feedback.fingerprint != fingerprint:
         return None
     if feedback.action == "dismiss":
         return "dismiss"
@@ -445,7 +441,7 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not (now and set_aside(nom, said(nom), now) is not None)
+        if not (now and set_aside(nom.fingerprint, said(nom), now) is not None)
     ]
     candidates.sort(
         key=lambda c: (
@@ -492,13 +488,18 @@ def panels(
     ]
 
 
+def feedback_fields(key: FeedbackKey, fingerprint: str) -> dict[str, str]:
+    """The fields that name an item to what's said of it (`act_now/<action>`)."""
+    kind, id, task = key
+    return {"kind": kind, "id": id, "task": task, "fingerprint": fingerprint}
+
+
 def _member_fields(
     nomination: Nomination, key: FeedbackKey, members_of: list[Nomination]
 ) -> dict[str, str]:
     """The fields that name an item (by its `key`), and those shown with it (`members`, posted
     as `also`), to the buttons that set it aside."""
-    kind, id, task = key
-    fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
+    fields = feedback_fields(key, nomination.fingerprint)
     members = [[*n.key, n.fingerprint] for n in members_of if n.key is not None]
     if members:
         fields["also"] = json.dumps(members)

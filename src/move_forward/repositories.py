@@ -285,16 +285,16 @@ class FeedbackRepository:
             key,
         )
 
-    def set_aside_on(self, ref: Ref) -> list[FeedbackKey]:
-        """What's snoozed or dismissed about the entity, by its tasks' keys."""
-        return [
-            (row["subject_kind"], row["subject_id"], row["task"])
-            for row in self._db.query(
-                "SELECT subject_kind, subject_id, task FROM act_now_feedback"
-                " WHERE subject_kind = ? AND subject_id = ? AND action IN ('snooze', 'dismiss')",
-                (ref.kind, ref.id),
-            )
-        ]
+    def bring_back(self, kind: str, id: str, task: str | None, now: datetime) -> int:
+        """Forget the snoozes still running and the dismissals of the entity's items (`task`'s,
+        or all its tasks'), leaving a pin or an open as it is; how many went."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM act_now_feedback WHERE subject_kind = ? AND subject_id = ?"
+                " AND (? IS NULL OR task = ?)"
+                " AND (action = 'dismiss' OR (action = 'snooze' AND until > ?))",
+                (kind, id, task, task, now.isoformat()),
+            ).rowcount
 
     def rekey(self, kinds: Collection[str], identify: Identify) -> int:
         """`PriorityRepository.rekey`, for what was said of items about `kinds`."""

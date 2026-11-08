@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -57,7 +57,7 @@ def test_unsnooze_brings_back_anything_set_aside(
         ("other", "pin"),
     ]
     for task, action in said:
-        until = NOW + timedelta(days=1) if action == "snooze" else None
+        until = datetime.now(UTC) + timedelta(days=1) if action == "snooze" else None
         feedback.say(
             ("notes.entry", "Chores", task),
             Feedback(action=action, fingerprint="f", until=until),

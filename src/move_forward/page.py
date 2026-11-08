@@ -151,6 +151,11 @@ class Signals(Model):
     a count in it changing, keeps it. A nominated item must have one."""
 
 
+SetAside = Literal["snooze", "dismiss"]
+"""How an item is set aside: snoozed, or dismissed. Act now leaves it out; its panel shows it
+dimmed and last, with Unsnooze, and doesn't count it."""
+
+
 class Item(Model):
     title: str
     url: str | None = None
@@ -187,7 +192,7 @@ class Item(Model):
     opened_at: datetime | None = None
     """Set by core, in Act now: when I opened the item, if it hasn't changed since; it's
     shown dimmed."""
-    set_aside: Literal["snooze", "dismiss"] | None = None
+    set_aside: "SetAside | None" = None
     """Set by core, in a panel: how I set the item aside (`act_now.set_aside`), if it hasn't
     changed since; it's shown dimmed and last, with Unsnooze."""
     parts: list["Item"] = Field(default_factory=list)

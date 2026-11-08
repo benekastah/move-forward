@@ -583,6 +583,11 @@ def _nesting(items: list[Item]) -> dict[int | None, list[tuple[int, Item]]]:
     return children
 
 
+def _live(panel: Panel) -> int:
+    """How many of the panel's items there are to do: not what's set aside."""
+    return sum(item.set_aside is None for item in panel.items)
+
+
 def _panel(panel: Panel, spot: Spot | None = None) -> str:
     open_attr = _open(bool(panel.items))
     indexed = list(enumerate(panel.items))
@@ -605,7 +610,7 @@ def _panel(panel: Panel, spot: Spot | None = None) -> str:
         f"<details class='panel{'' if panel.items else ' empty'}' id='{_e(panel.key)}'"
         f" data-key='{_e(panel.key)}'"
         f" data-drag{open_attr}>"
-        f"<summary><h2>{_e(panel.title)}</h2><span class='count'>{len(panel.items)}</span>"
+        f"<summary><h2>{_e(panel.title)}</h2><span class='count'>{_live(panel)}</span>"
         f"<span class='description'>{_e(panel.description)}</span></summary>"
         f"{buttons(panel.actions, at=panel.key)}<ul class='items'>{items}</ul></details>"
     )
@@ -662,7 +667,7 @@ def _group(
     """A group section; panel keys the dashboard left out (e.g. Stacks without git-stack) are
     skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click."""
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
-    count = sum(len(panel.items) for panel in panels)
+    count = sum(_live(panel) for panel in panels)
     status = _status_of(group.key, dashboard.sources)
     refreshed = _refreshed(group.key, status, dashboard.generated_at, refreshing) if status else ""
     return (

@@ -235,6 +235,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("notes/todo_size", False, False),
         ("notes/todo_size", False, False),
         ("notes/todo_add", False, False),
+        ("act_now/snooze", False, False),  # its entry's, as on the page
         ("notes/ice_item", False, False),  # it stands in for its entry, as on the page
     ]
     todo_id = part.actions[0].fields["todo"]
@@ -857,3 +858,50 @@ def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:
 
     assert "Clear priority" not in labels(None)
     assert "Clear priority" in labels(1)
+
+
+def _set_aside_board(
+    action: "act_now.SetAside", nominated_detail: str | None = None
+) -> panels.Dashboard:
+    """A panel with one item about a PR, set aside as `action`, Act now having nominated it
+    (with an extra detail, as git_stack adds one, if `nominated_detail`)."""
+    item = Item(
+        title="Fix it",
+        subjects=[Ref(kind="pull_request", id="pr")],
+        signals=Signals(verb="Fix", task="fix"),
+    )
+    nominee = item.model_copy(update={"details": [nominated_detail]}) if nominated_detail else item
+    fingerprint = act_now.Nomination("x", nominee).fingerprint
+    feedback: dict[act_now.FeedbackKey, act_now.Feedback] = {
+        ("pull_request", "pr", "fix"): act_now.Feedback(
+            action=action,
+            fingerprint=fingerprint,
+            until=NOW + timedelta(days=1) if action == "snooze" else None,
+        )
+    }
+    panel_ = Panel(key="p", title="P", description="", items=[item])
+    plugin = panels.PluginPanels("x", "X", [panel_], [nominee])
+    return panels.build(NOW, [plugin], {}, feedback=feedback)
+
+
+def test_a_dismissed_item_waits_with_undismiss() -> None:
+    [item] = _set_aside_board("dismiss").panel("x.p").items
+    assert item.set_aside == "dismiss"
+    assert [a.label for a in item.actions if a.group == "Act now"] == ["Undismiss"]
+
+
+def test_an_item_set_aside_in_act_now_is_set_aside_in_its_panel_though_act_now_saw_it_otherwise() -> (
+    None
+):
+    board = _set_aside_board("snooze", nominated_detail="and 2 more merged here")
+    assert board.act_now() == []
+    [item] = board.panel("x.p").items
+    assert item.set_aside == "snooze"
+
+
+def test_whats_set_aside_isnt_counted_nor_stepped_through_and_is_dimmed() -> None:
+    board = _set_aside_board("snooze")
+    assert board.focus_items("x.p") == []
+    page = render._panel(board.panel("x.p"))  # pyright: ignore[reportPrivateUsage]
+    assert "<span class='count'>0</span>" in page
+    assert "class='item opened'" in page

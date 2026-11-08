@@ -524,11 +524,8 @@ def main(argv: list[str] | None = None) -> int:
         except LookupError as err:
             print(err, file=sys.stderr)
             return 1
-        feedback = FeedbackRepository(db)
-        keys = [k for k in feedback.set_aside_on(ref) if args.task in (None, k[2])]
-        for key in keys:
-            feedback.forget(key)
-        print(f"brought back {len(keys)} item(s)" if keys else f"nothing of {ref.id} is set aside")
+        back = FeedbackRepository(db).bring_back(ref.kind, ref.id, args.task, datetime.now(UTC))
+        print(f"brought back {back} item(s)" if back else f"nothing of {ref.id} is set aside")
         return 0
     if args.command == "snoozes":
         now = datetime.now(UTC)

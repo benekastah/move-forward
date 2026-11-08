@@ -180,6 +180,7 @@ class Dashboard(Model):
             (panel, part)
             for panel in panels
             for item in panel.items
+            if item.set_aside is None  # set aside: nothing to do now
             for part in item.parts or [item]
         ]
 
@@ -240,26 +241,34 @@ def _with_snooze(
     plugin: str,
     feedback: dict[act_now.FeedbackKey, act_now.Feedback],
     now: datetime,
+    nominated: dict[act_now.FeedbackKey, str],
 ) -> Panel:
     """Each of a panel's items that has a task with Snooze, as in Act now; one set aside there
-    or here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze."""
-    items: list[Item] = []
-    for item in panel.items:
+    or here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze. An item is
+    known by the fingerprint Act now has for it (`nominated`, by key), so both agree, else its
+    own; its parts without a task of their own carry its button, as focus mode shows them."""
+
+    def snoozable(item: Item) -> Item:
         nomination = act_now.Nomination(
             plugin, item if item.signals else item.model_copy(update={"signals": panel.signals})
         )
         key = nomination.key
         if key is None:
-            items.append(item)
-            continue
-        aside = act_now.set_aside(nomination, feedback.get(key), now)
-        kind, id, task = key
-        fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
-        button = act_now.snooze_action(fields, aside)
-        items.append(
-            item.model_copy(update={"actions": [*item.actions, button], "set_aside": aside})
+            return item
+        fingerprint = nominated.get(key, nomination.fingerprint)
+        aside = act_now.set_aside(fingerprint, feedback.get(key), now)
+        button = act_now.snooze_action(act_now.feedback_fields(key, fingerprint), aside)
+        parts = [
+            part
+            if act_now.Nomination(plugin, part).key is not None
+            else part.model_copy(update={"actions": [*part.actions, button], "set_aside": aside})
+            for part in item.parts
+        ]
+        return item.model_copy(
+            update={"actions": [*item.actions, button], "set_aside": aside, "parts": parts}
         )
-    return panel.model_copy(update={"items": items})
+
+    return panel.model_copy(update={"items": [snoozable(item) for item in panel.items]})
 
 
 KnownAction = Callable[[str], bool]
@@ -319,13 +328,19 @@ def _with_item_actions(
 
 def _as_given(item: Item) -> Item:
     """A plugin's item without what only core sets (`act_now_fields`, `opened_at`,
-    `parts_listed`)."""
-    if item.act_now_fields is None and item.opened_at is None and not item.parts:
+    `parts_listed`, `set_aside`)."""
+    if (
+        item.act_now_fields is None
+        and item.opened_at is None
+        and item.set_aside is None
+        and not item.parts
+    ):
         return item
     return item.model_copy(
         update={
             "act_now_fields": None,
             "opened_at": None,
+            "set_aside": None,
             "parts_listed": False,
             "parts": [_as_given(part) for part in item.parts],
         }
@@ -429,6 +444,7 @@ def build(
         for item in plugin.nominations
         if not hidden(item) and _tasked(plugin.key, item)
     ]
+    nominated = {n.key: n.fingerprint for n in nominations if n.key is not None}
     titles = {plugin.key: plugin.title for plugin in plugins}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
     # Its listed parts get the importance choices they have in their panels, as the same
@@ -467,7 +483,7 @@ def build(
                 )
                 for plugin in plugins
                 for panel in plugin.panels
-                for shown in [_with_snooze(panel, plugin.key, feedback or {}, now)]
+                for shown in [_with_snooze(panel, plugin.key, feedback or {}, now, nominated)]
             ),
         ],
         groups=laid_out(groups(plugins, [p.key for p in ranked]), layout or Layout()),
