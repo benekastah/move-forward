@@ -224,3 +224,16 @@ def test_once_a_day_questions_are_kept_by_name(run: Run, tmp_path: Path) -> None
     assert run("asked", "Bad Name")[0] == 1
     assert run("export", str(tmp_path / "out"))[0] == 0  # the import's and export's key too
     assert "Last asked: 2026-10-30" in (tmp_path / "out" / "on-ice.md").read_text()
+
+
+def test_todo_add_takes_a_leading_size_unless_size_says(run: Run, config: Path) -> None:
+    run("add-entry", "Chores")
+    assert _json(run, "todo", "add", "Chores", "[big] clean the garage")["notice"] == (
+        "added: clean the garage"
+    )
+    run("todo", "add", "Chores", "[big] water plants", "--size", "quick")
+    [shown] = _json(run, "list")
+    assert [(t["text"], t["size"]) for t in shown["todos"]] == [
+        ("clean the garage", "big"),
+        ("water plants", "quick"),
+    ]

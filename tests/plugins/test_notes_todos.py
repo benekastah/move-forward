@@ -74,3 +74,10 @@ def test_add_todo_takes_a_leading_size_as_new_todo_does() -> None:
         ("chores", "unsized"),
         ("clean the garage", "big"),
     ]
+
+
+def test_the_size_chosen_wins_over_one_written() -> None:
+    config, db = stored()
+    refresh.run_action(config, db, NEW, {"input": "[big] water plants", "choice": "quick"})
+    [item] = panel(refresh.build_dashboard(config, db, NOW), "notes.todos").items
+    assert (item.title, item.signals is not None) == ("water plants", True)  # quick: a close-out

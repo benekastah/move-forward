@@ -224,11 +224,12 @@ def cmd_todo_add(req: CliRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
-    text = args.text.strip()
+    text, written = markdown.sized(args.text.strip())  # as the notes write a size
+    text = text.strip()
     if not text:
         raise ValueError("the todo is empty")
     links = [*markdown.links_in(text), *(actions.link_for(graph, v) for v in args.link)]
-    size: Size | None = args.size
+    size: Size | None = args.size or written
     todo_id = notes.add_todo(entry.id, text, size, list(dict.fromkeys(links)))
     notes.touch(entry.id, ctx.today)
     return Result(f"added todo {todo_id}", {"notice": f"added: {text}", "id": todo_id})
