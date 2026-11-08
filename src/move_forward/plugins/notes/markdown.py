@@ -73,14 +73,15 @@ def attach_conditions(texts: list[str], entry_prs: list[str]) -> tuple[list[Cond
     return conditions, kept
 
 
-def _sized(text: str) -> tuple[str, Size | None]:
+def sized(text: str) -> tuple[str, Size | None]:
+    """A todo's text without its leading `[quick]` or `[big]`, and that size."""
     if match := _SIZE_RE.match(text):
         return text[match.end() :], "quick" if match.group(1).lower() == "quick" else "big"
     return text, None
 
 
 def _todo(text: str, done_on: date | None = None) -> Todo:
-    text, size = _sized(text)
+    text, size = sized(text)
     return Todo(id=0, text=text, size=size, done_on=done_on, links=links_in(text))
 
 

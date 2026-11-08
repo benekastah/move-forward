@@ -100,6 +100,8 @@ that needs a core one says so, and lands on top of it.
 2. **Set aside from anywhere.** An item only Act now shows (nominated with no panel item) has
    nowhere to come back from but `mfd unsnooze`; and `mfd snooze` takes only a PR's URL, while
    `mfd unsnooze` takes any entity: give it the same, with a task, through the button's action.
+3. **An empty panel with a field opens.** A panel with no items is drawn collapsed, so a
+   panel-wide field (notes' New todo) is hidden just when it's wanted: draw such a panel open.
 6. **Importance where it means something.** Say whether every panel sorts by it, since only two
    do now, not What next or Feedback.
 7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
@@ -165,8 +167,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
     the page), status and where (not shown at all), `link`, and `remove`.
 26. **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
     and remove them on the PR's items.
-27. **Start a todo from nothing.** The docs call notes alone a todo list, but a todo needs a PR
-    or ticket to start from on the page. A New entry button on the panel (`mfd notes add-entry`).
 28. **Undo a tick on the dashboard.** Focus mode keeps a ticked todo to untick; the dashboard loses
     it. Keep recently done todos, ticked, for a while.
 

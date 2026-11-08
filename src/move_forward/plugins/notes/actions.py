@@ -15,6 +15,7 @@ from ...api import (
     ActionResult,
     Graph,
     Model,
+    Ref,
     SourceError,
 )
 from ...api.ids import branch_parts
@@ -22,7 +23,7 @@ from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .config import NotesConfig
 from .covers import covers
-from .markdown import links_in
+from .markdown import REVIEWS_SECTION, links_in, sized
 from .models import Entry, IcedItem, Link, Size, Todo
 from .repository import NotesRepository
 
@@ -268,29 +269,68 @@ def todo_size(req: ActionRequest[NotesConfig]) -> str:
 
 def todo_add(req: ActionRequest[NotesConfig]) -> str:
     """Add an open todo to an entry: `input` (or `text`) with an optional size, quick or big, as
-    `size` (or `choice`, from its drop-down).
+    `size` (or `choice`, from its drop-down), or a leading `[quick]` or `[big]` in it, as the
+    notes write a size, so it reads back the same.
 
     With `create`, a missing entry is created first (`where` names its PR or ticket).
     """
     ctx, fields = req.ctx, req.fields
-    text = (fields.get("input") or fields.get("text") or "").strip()
+    text, written = sized((fields.get("input") or fields.get("text") or "").strip())
+    text = text.strip()
     if not text:
         raise ActionError("the todo is empty")
-    sized = _size(fields.get("size") or fields.get("choice") or "")
+    size = _size(fields.get("size") or fields.get("choice") or "") or written
     notes = NotesRepository(ctx.db)
     title = req.field("entry")
     entry_id = notes.entry_id(title)
     if entry_id is None and fields.get("create"):
+        _entry_title(title)
         where = fields.get("where", "")
         entry_id = notes.add_entry(title, ctx.today, INFERRED, where or None, links_in(where))
     if entry_id is None:
         raise ActionError(f"no work-notes entry titled {title}")
-    notes.add_todo(entry_id, text, sized, links_in(text))
+    notes.add_todo(entry_id, text, size, links_in(text))
+    notes.touch(entry_id, ctx.today)
+    return f"added: {text}"
+
+
+def _entry_title(text: str) -> str:
+    """`text` as a new entry's title, refused where the skill's markdown (`mfd notes export`)
+    would read it back as something else: a line break (any `splitlines` takes) splits its
+    heading, and a title of a section of its own is that section."""
+    if len(text.splitlines()) > 1:
+        raise ActionError("an entry's title is one line")
+    if text.casefold() == REVIEWS_SECTION.casefold():
+        raise ActionError(f"{text!r} is a section of the work notes, not an entry")
+    return text
+
+
+def todo_new(req: ActionRequest[NotesConfig]) -> str:
+    """Start a todo from nothing: `input` as a new entry's title and its one todo, sized by
+    `choice` (from its drop-down), or by a leading `[quick]` or `[big]`, as the notes write a
+    size, so it reads back the same; as notes alone is a todo list. An entry of that title gets
+    the todo instead, but not one on ice, where it would be hidden, nor twice."""
+    ctx, graph = req.ctx, req.graph
+    text, written = sized((req.fields.get("input") or "").strip())
+    text = _entry_title(text.strip())
+    if not text:
+        raise ActionError("the todo is empty")
+    if graph.hidden(Ref(kind=ENTRY, id=text)):
+        raise ActionError(f"{text!r} is an entry on ice: thaw it, or name the todo otherwise")
+    notes = NotesRepository(ctx.db)
+    entry_id = notes.entry_id(text)
+    if entry_id is None:
+        entry_id = notes.add_entry(text, ctx.today, INFERRED, None, links_in(text))
+    elif any(t.text == text for e in notes.entries() if e.title == text for t in e.open_todos):
+        return f"already a todo: {text}"
+    chosen = _size(req.fields.get("choice") or "") or written
+    notes.add_todo(entry_id, text, chosen, links_in(text))
     notes.touch(entry_id, ctx.today)
     return f"added: {text}"
 
 
 ACTIONS: dict[str, ActionHandler] = {
+    "todo_new": todo_new,
     "todo_done": todo_done,
     "todo_undone": todo_undone,
     "todo_delete": todo_delete,

@@ -15,6 +15,16 @@ stack, locally, as Stacks' Restack button does. Nothing to change.
 `POST /actions/git/pull_branch` with `repo` and `branch` fast-forwards a branch to its upstream,
 as the Pull button on "moved on GitHub; pull it" items does. Nothing to change.
 
+### New todo
+
+`POST /actions/notes/todo_new` with `input` (a leading `[quick]` or `[big]` sizes it; or
+`choice`: `quick` or `big`) starts a
+todo from nothing, as an entry titled by it, as the Todos panel's New todo field does; it answers
+"already a todo" for one already open there. It and `todo_add`'s `create` refuse a title with a
+line break, or the work notes' "Reviews requested of me". `todo_add` and `mfd notes todo add`
+take a leading `[quick]` or `[big]` in the text as its size, as the notes write it. Nothing to
+change.
+
 ### Rerun failed checks
 
 `POST /actions/github/rerun_failed` with `pr` (one of my open PRs) runs the failed jobs of its
