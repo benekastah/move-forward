@@ -432,6 +432,8 @@ class Builder:
                     parts[0].model_copy(update={"subjects": [Ref(kind=ENTRY, id=entry.title)]})
                 ]
             lone = parts[0] if len(parts) == 1 and not done else None
+            if not parts and len(done) == 1:
+                lone = done[0]  # its one todo, ticked off: the entry offers its box, to untick
             parts += done
             if lone and PROBABLY_DONE in lone.badges:
                 badges.append(PROBABLY_DONE)
@@ -442,7 +444,11 @@ class Builder:
                     subtitle=", ".join(keys),
                     badges=badges,
                     # Several todos are listed as its parts.
-                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered] if lone else [],
+                    details=[f"[{t.size or '?'}] {t.text}" for t in ordered]
+                    if lone and ordered
+                    else [f"done: {lone.title}"]
+                    if lone
+                    else [],
                     links=lone.links if lone else links,
                     rank=(0 if blocked else 100)
                     + (50 if close_out else 0)

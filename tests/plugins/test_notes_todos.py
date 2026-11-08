@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pytest
 from conftest import NOW, dashboard, entry, panel, stored, todo
 
-from move_forward import localtime, refresh
+from move_forward import localtime, refresh, render
 from move_forward.plugin import ActionError
 from move_forward.plugins.notes.models import Entry, Todo
 
@@ -109,6 +109,8 @@ def test_a_todo_ticked_off_today_stays_listed_ticked_to_untick() -> None:
     ]
     done_today = items["Done today"]
     assert (done_today.signals, done_today.badges, done_today.done) == (None, [], True)
+    shown = render.item_html(done_today)  # its one todo, ticked: reachable to untick
+    assert "taxes" in shown and "notes/todo_undone" in shown
     assert chores.details == [] and chores.parts[1].badges == ["done"]
     assert chores.parts[1].subjects == []  # nothing to rank or tag on what's done
     stepped = [part.title for _, part in built.focus_items("notes.todos") or []]
