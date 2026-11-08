@@ -60,6 +60,7 @@ flowchart LR
     pr -. "transitions (related)" .-> jira
     pr -. "pings, nudges" .-> slack([slack])
     person -. "emails, to look up Slack ids" .-> slack
+    ticket -. "title, lifecycle: what a verified sender's mail is about" .-> mail
     pr -. "todo link states; an iced branch's PRs" .-> notes
     repo -. "an iced branch's checkout" .-> notes
     stack_branch -. "what tracks an iced branch" .-> notes

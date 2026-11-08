@@ -66,8 +66,8 @@ through the plugin's `/mail/open` page, which sends the browser on to the mail a
 ## Publishes
 
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
-with, pointing at the `person` who wrote its latest message and mentioning its subject (so a
-ticket key in it relates the two). That `person` is `mail/<address>`, with the address as its
+with, pointing at the `person` who wrote its latest message and, when its sender is verified,
+mentioning its subject (so a ticket key in it relates the two). That `person` is `mail/<address>`, with the address as its
 `handle` and `email`, so core joins them with the same person in other tools, a CRM say, and
 ranks and badges their mail by their contact type. Only a sender the receiving server vouched
 for is published that way: one whose `From` passed DMARC (its one `dmarc` result), by the server's own
@@ -97,12 +97,13 @@ which says whatever the sender likes.
 
 Every conversation but those from lists and automated mail (unless flagged), as Read, in minutes.
 Mail sent to me has its sender waiting since the server received it. A conversation is
-important when it's flagged, when its latest message answers mail I sent (the newest
-`max_messages` within `since_days`; its `In-Reply-To`, else the last of its `References`, names
-one of my sent Message-IDs;
-badged "replies to me"; if my sent mail can't be read, nothing counts as replying), or when
-Gmail labels it Important (Gmail's `X-GM-LABELS`, read only from a server offering them); not
-for lists and automated mail, but flagged. The sender's contact type can raise it further.
+important when it's flagged, when its subject names one of my open tickets and its sender is
+verified (shown as "about APP-12 …"; a priority I set on that ticket counts for it too), when
+its latest message answers mail I sent (the newest `max_messages` within `since_days`; its
+`In-Reply-To`, else the last of its `References`, names one of my sent Message-IDs; badged
+"replies to me"; if my sent mail can't be read, nothing counts as replying), or when Gmail
+labels it Important (Gmail's `X-GM-LABELS`, read only from a server offering them); not for
+lists and automated mail, but flagged. The sender's contact type can raise it further.
 
 ## Pages
 

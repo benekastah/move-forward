@@ -11,13 +11,14 @@ import pytest
 from pydantic import ValidationError
 
 from move_forward.asking import Asker, InitSetup
-from move_forward.graph import Entity, Ref, attrs
+from move_forward.graph import Entity, Graph, Ref, attrs
 from move_forward.kinds import PERSON, Person
 from move_forward.plugin import ChangedRequest, Response, SourceError
 from move_forward.plugins.mail import client
 from move_forward.plugins.mail.config import GMAIL_MESSAGE_URL, MailConfig
 from move_forward.plugins.mail.kinds import THREAD
 from move_forward.plugins.mail.models import MailSnapshot, Message
+from move_forward.plugins.mail.panels import panels as mail_panels
 from move_forward.plugins.mail.plugin import MailPlugin
 from move_forward.plugins.mail.repository import MessageRepository
 from move_forward.plugins.mail.setup import questions
@@ -713,3 +714,35 @@ def test_a_lists_reply_to_me_isnt_important() -> None:
     [item] = _items(harness)
     assert "replies to me" not in item.badges
     assert item.signals is not None and item.signals.importance == 0
+
+
+def test_mail_about_my_open_work_says_so_and_is_important() -> None:
+    ticket = Entity(ref=Ref(kind="ticket", id="https://j/APP-12"), title="APP-12 Fix login")
+    done = Entity(ref=Ref(kind="ticket", id="https://j/APP-9"), title="APP-9 Old", lifecycle="done")
+    snapshot = MailSnapshot(
+        messages=[
+            message(3, subject="Lunch", sender="carol@x.com", thread="l"),
+            message(2, subject="About APP-9", sender="dan@x.com", thread="o"),
+            message(1, subject="Re: APP-12"),
+        ]
+    )
+    threads = [
+        Entity(ref=Ref(kind=THREAD, id="root@acme.com"), title="Re: APP-12", refs=[ticket.ref]),
+        Entity(ref=Ref(kind=THREAD, id="o"), title="About APP-9", refs=[done.ref]),
+    ]
+    graph = Graph([ticket, done, *threads], linking={"ticket": None})
+    [panel] = mail_panels(_config(), "mail", snapshot, graph)
+    items = {i.title: i for i in panel.items}
+    assert "about APP-12 Fix login" in items["Re: APP-12"].details
+    assert items["Re: APP-12"].signals is not None and items["Re: APP-12"].signals.importance == 1
+    assert not any(d.startswith("about") for d in items["About APP-9"].details)  # done
+    assert items["Lunch"].signals is not None and items["Lunch"].signals.importance == 0
+
+
+def test_only_a_verified_senders_subject_says_what_its_about() -> None:
+    vouched = mailbox(message(1, subject="Re: APP-12"))
+    [thread] = [e for e in vouched.entities() if e.ref.kind == THREAD]
+    assert thread.mentions == ["Re: APP-12"]
+    forged = mailbox(message(1, subject="Re: APP-12 urgent", verified=False))
+    [thread] = [e for e in forged.entities() if e.ref.kind == THREAD]
+    assert thread.mentions == []  # typing a key doesn't make it about my ticket

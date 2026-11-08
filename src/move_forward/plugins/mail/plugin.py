@@ -117,7 +117,10 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
                     url=link(req.ctx.config, self.name, thread),
                     state="flagged" if thread.flagged else "unread",
                     refs=refs,
-                    mentions=[latest.subject],
+                    # What it's about only for a sender the server vouched for: naming my ticket
+                    # makes mail important, says "about" it and takes its priority, which a
+                    # forged From mustn't get by typing a key.
+                    mentions=[latest.subject] if latest.verified else [],
                     attrs=attrs(
                         ThreadAttrs(
                             subject=latest.subject,
@@ -134,7 +137,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         return [*found, *people.values()]
 
     def panels(self, req: PanelsRequest[MailConfig, MailSnapshot]) -> list[Panel]:
-        return panels(req.ctx.config, self.name, req.snapshot)
+        return panels(req.ctx.config, self.name, req.snapshot, req.graph)
 
     def pages(self) -> dict[str, PageHandler]:
         return {OPEN_PAGE: self._open}
