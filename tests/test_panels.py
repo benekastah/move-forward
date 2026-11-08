@@ -731,6 +731,8 @@ def test_what_only_core_sets_on_an_item_is_cleared_from_a_plugins() -> None:
         subjects=[Ref(kind="pull_request", id="p")],
         act_now_fields='{"kind": "other", "id": "y", "task": "t", "fingerprint": "f"}',
         opened_at=NOW,
+        parts=[Item(title="part")],
+        parts_listed=True,
     )
     built = panels.build(
         NOW,
@@ -743,6 +745,7 @@ def test_what_only_core_sets_on_an_item_is_cleared_from_a_plugins() -> None:
     )
     [shown] = built.panel("notes.t").items
     assert shown.act_now_fields is None and shown.opened_at is None
+    assert not shown.parts_listed
 
 
 def test_what_a_lone_todo_links_shows_on_its_entry() -> None:
