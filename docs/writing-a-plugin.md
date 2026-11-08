@@ -259,6 +259,10 @@ class LinearPlugin(...):
   it, and give each entity an id by the family's rule (`api.kinds.FAMILIES[...].id_rule`:
   a URL for a ticket or a PR, `<host>/<login>` for a person), so it's unique across tools. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
   through the family's model, whoever publishes it.
+- **People.** A tool that knows who something is about publishes them as `person`s, with an
+  `email` if it has one, and points the entity at them. Core then joins them with the same
+  person in other tools (`graph.same_person`), and ranks and badges their items by contact type,
+  which a tool that knows it (a CRM) sets in `contact_type`. Don't do either yourself.
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
   declared `linking`, so the graph relates what's about it. Give it the pattern of its ids
   (`KindSpec(..., linking=r"...")`, or None and narrow it from what the plugin has seen)

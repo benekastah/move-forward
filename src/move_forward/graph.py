@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, JsonValue
 
 from .domain import KindModel, Model
-from .kinds import fits
+from .kinds import PERSON, fits, personal_email
 
 UrlFor = Callable[[str, str], str | None]
 """Asks the plugins for an entity's URL by kind and id, whether or not it's in the graph."""
@@ -181,6 +181,11 @@ class Graph:
                 self._by_kind[entity.kind].append(entity)
             for target in entity.refs:
                 self._pointing_at[target].append(entity)
+        self._people_by_email: dict[str, list[Entity]] = defaultdict(list)
+        for person in self._by_kind[PERSON]:
+            email = person.attrs.get("email")
+            if isinstance(email, str) and (address := personal_email(email)):
+                self._people_by_email[address].append(person)
 
     def get(self, kind: str, id: str) -> Entity | None:
         return self._by_ref.get(Ref(kind=kind, id=id))
@@ -226,6 +231,17 @@ class Graph:
         if ref.kind in self._linking:
             linkers.append(ref)
         return list(dict.fromkeys(linkers))
+
+    def same_person(self, id: str) -> list[Entity]:
+        """The `person` entities of the same human as the person `id`, whichever tools publish
+        them: those with their email, itself among them. Just itself without an email, or with
+        one many people share; nothing when the graph doesn't have them."""
+        person = self.get(PERSON, id)
+        if person is None:
+            return []
+        email = person.attrs.get("email")
+        address = personal_email(email) if isinstance(email, str) else None
+        return self._people_by_email[address] if address else [person]
 
     def spec(self, kind: str) -> KindSpec | None:
         """What the publisher of `kind` says of it; None for a kind no plugin publishes."""
@@ -317,6 +333,10 @@ class Graph:
     def view_by_handle[V: BaseModel](self, kind: str, handle: str, model: type[V]) -> list[V]:
         """`by_handle(kind, handle)`, each as `model` (see `view`)."""
         return [_as(entity, model) for entity in self.by_handle(kind, handle)]
+
+    def view_same_person[V: BaseModel](self, id: str, model: type[V]) -> list[V]:
+        """`same_person`, each as `model` (see `view`)."""
+        return [_as(entity, model) for entity in self.same_person(id)]
 
     def view_one[V: BaseModel](self, kind: str, id: str, model: type[V]) -> V | None:
         """One entity as `model` (see `view`); None when the graph doesn't have it."""

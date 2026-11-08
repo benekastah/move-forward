@@ -11,6 +11,12 @@ Add todo has a size drop-down, and open todos have Quick and Big buttons, postin
 to `/actions/notes/todo_size`. Sized quick, a todo can make its entry a close-out in Act now.
 Nothing to change.
 
+### Contact types
+
+`mfd contact <address|@domain> <type|clear>` and `mfd contacts` set and list what people are to me,
+and `[people] contact_types` says what each type is worth. Scripts can post `choice` and `input` to
+`/actions/act_now/contact`, and `who` to `/actions/act_now/contact_clear`. Nothing to change.
+
 ### Update a PR's branch from the page
 
 A PR held as behind its base now has an Update branch button. Scripts can post `pr` to

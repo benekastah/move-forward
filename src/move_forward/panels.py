@@ -184,13 +184,19 @@ class Dashboard(Model):
         ]
 
 
-def _sorted(panel: Panel, priority_of: act_now.PriorityOf = act_now.no_priority) -> Panel:
+def _sorted(
+    panel: Panel,
+    priority_of: act_now.PriorityOf = act_now.no_priority,
+    contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
+) -> Panel:
     """Highest rank first, deferred items last; optionally importance before rank."""
 
     def importance(item: Item) -> int:
         assigned = [priority_of(ref) for ref in item.subjects]
         levels = [act_now.PRIORITY_IMPORTANCE[level] for level in assigned if level is not None]
-        return max(levels, default=(item.signals.importance if item.signals else 0))
+        own = [item.signals.importance if item.signals else 0]
+        own += [contact_importance(ref) for ref in item.subjects]
+        return max(levels, default=max(own))
 
     return panel.model_copy(
         update={
@@ -381,14 +387,16 @@ def build(
     surface: Surface = "dashboard",
     known_action: KnownAction = _any_action,
     hides: HidesKind = _hides_nothing,
+    contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
 ) -> Dashboard:
     """The dashboard: Act now, ranked from the plugins' nominations, then the plugins' panels in
     their groups, without hidden items, each item with the plugins' buttons, sorted, in the
     `layout`'s order. `ranking` is `[act_now]`, `feedback` what I said of its items, and
     `units` the graph's, for Act now to join items about the same unit of work, and
     `priority_of` what I set as the priority of what an item is about; `known_action` says
-    which buttons post to an action that's there, and `hides` which kinds hide what they point
-    at. A panel's key is its plugin's name and its own, e.g. `github.conflicts`,
+    which buttons post to an action that's there, `hides` which kinds hide what they point
+    at, and `contact_importance` what who an item is about adds to it. A panel's key is its
+    plugin's name and its own, e.g. `github.conflicts`,
     so two plugins' panels never clash."""
     plugins = [
         PluginPanels(
@@ -419,7 +427,9 @@ def build(
         _with_item_actions(p, p.key, "act_now", item_actions, known_action).model_copy(
             update={"key": panel_key(ACT_NOW, p.key)}
         )
-        for p in act_now.panels(nominations, ranking, feedback, now, titles, units, priority_of)
+        for p in act_now.panels(
+            nominations, ranking, feedback, now, titles, units, priority_of, contact_importance
+        )
     ]
     return Dashboard(
         generated_at=now,
@@ -440,6 +450,7 @@ def build(
                         hides,
                     ),
                     priority_of,
+                    contact_importance,
                 )
                 for plugin in plugins
                 for panel in plugin.panels

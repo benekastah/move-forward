@@ -31,6 +31,9 @@ OPTIONAL_SETTINGS = """\
 # prune_days = 90                        # clear work finished this long ago from the notes
 """
 OPTIONAL_ACT_NOW_SETTINGS = """\
+# [people]                              # what people are to me
+# contact_types = { customer = 1, partner = 1, vendor = 0 }  # the types offered, each with the importance it gives (0 to 2)
+
 # [act_now]                             # how Act now ranks what the plugins nominate
 # size = 7                               # items shown
 # per_plugin = 3                         # so one busy tool can't fill the list

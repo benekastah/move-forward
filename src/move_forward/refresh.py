@@ -13,7 +13,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from . import act_now, localtime, notifications, panels, priority, registry, shell, tls
+from . import act_now, localtime, notifications, panels, people, priority, registry, shell, tls
 from .act_now import Feedback
 from .config import Config
 from .db import CORE, Database
@@ -50,6 +50,7 @@ from .plugin import (
 from .prune import prune_if_due
 from .registry import Enabled, build_graph, call, enabled
 from .repositories import (
+    ContactRepository,
     FeedbackRepository,
     KvRepository,
     LayoutRepository,
@@ -452,8 +453,10 @@ def build_dashboard(
         for e in plugins
     ]
 
+    contacts = people.Contacts(ContactRepository(db).all(), graph, config.people)
+
     def item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
-        found = ItemAdditions()
+        found = contacts.additions(item)
         for e, add in prepared:
             req = ItemActionsRequest(e.ctx, item, graph, owner, surface)
             added = call(e.name, "item_actions", lambda add=add, req=req: add(req), found)
@@ -488,6 +491,7 @@ def build_dashboard(
         surface,
         _known_action(plugins),
         graph.hides,
+        contacts.importance,
     )
     return built.model_copy(update={"problems": list(registry.DISCOVERY_ERRORS)})
 
@@ -577,16 +581,35 @@ def _set_priority(db: Database, fields: dict[str, str], now: datetime) -> Action
     return ActionResult(f"priority: {act_now.PRIORITIES[level].lower()}")
 
 
+def _set_contact(db: Database, fields: dict[str, str], now: datetime) -> ActionResult:
+    """Set type: what the person or domain `choice` is to me, the type typed as `input`."""
+    try:
+        who = people.contact_key(fields["choice"])
+        contact_type = people.contact_type(fields["input"])
+    except ValueError as err:
+        raise ActionError(str(err)) from err
+    ContactRepository(db).set(who, contact_type, now)
+    return ActionResult(f"{who}: {contact_type}")
+
+
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
     """Act now's own buttons: snooze an item (for as long as `config` says), dismiss it, or pin
-    or unpin it, by its main subject and task, and the items joined to it (`also`) alike; and
-    set or clear the priority of its main subject."""
+    or unpin it, by its main subject and task, and the items joined to it (`also`) alike; set
+    or clear the priority of its main subject; and set or clear who someone is to me."""
     now = datetime.now(UTC)
-    if action == "priority":
+    if action in ("priority", "contact", "contact_clear"):
         try:
-            return _set_priority(db, fields, now)
+            if action == "priority":
+                return _set_priority(db, fields, now)
+            if action == "contact":
+                return _set_contact(db, fields, now)
+            try:
+                who, kept = people.clear_label(fields["who"], ContactRepository(db).clear)
+            except ValueError as err:
+                raise ActionError(str(err)) from err
+            return ActionResult(f"{who}: type cleared" if kept else f"{who} had no type")
         except KeyError as err:
             raise ActionError(f"missing field {err}") from err
     try:

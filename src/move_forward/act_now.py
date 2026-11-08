@@ -179,6 +179,26 @@ def no_priority(ref: Ref) -> int | None:
     return None
 
 
+ContactImportance = Callable[[Ref], int]
+"""The importance the contact type of who a subject is about gives it (see `people`)."""
+
+
+def no_contact_importance(ref: Ref) -> int:
+    """No one's contact type counts (without a database)."""
+    return 0
+
+
+def _with_contact_importance(
+    nomination: Nomination, contact_importance: ContactImportance
+) -> Nomination:
+    """The nomination raised to the importance of who it's about; it's never lowered."""
+    raised = max((contact_importance(s) for s in nomination.item.subjects), default=0)
+    if raised <= nomination.signals.importance:
+        return nomination
+    signals = nomination.signals.model_copy(update={"importance": raised})
+    return Nomination(nomination.plugin, nomination.item.model_copy(update={"signals": signals}))
+
+
 def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomination, int | None]:
     """The nomination with the highest priority I set on its subjects replacing its plugin's
     importance, and that priority; as it is, and None, when I set none."""
@@ -372,13 +392,14 @@ def panels(
     titles: dict[str, str] | None = None,
     units: Units = no_units,
     priority_of: PriorityOf = no_priority,
+    contact_importance: ContactImportance = no_contact_importance,
 ) -> list[Panel]:
     """Act now's panels: nominations not snoozed or dismissed (those I opened dimmed, in
     their place), pinned ones first and
     then the best (by score, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
-    in all, each with buttons to snooze, dismiss, pin or prioritize it; a priority I set
-    replaces the item's importance. They're split into a panel per
+    in all, each with buttons to snooze, dismiss, pin or prioritize it; who it's about can raise
+    the item's importance, and a priority I set replaces it. They're split into a panel per
     plugin (keyed and, by `titles`, titled after it), so they flow across the page; the
     panels come in their best items' order, and each item is badged with its place overall.
     With nothing to act on, one empty panel says so."""
@@ -391,7 +412,9 @@ def panels(
     """The priority I set on a nomination, by its `id`."""
     prioritized_nominations: list[Nomination] = []
     for nomination in nominations:
-        changed, level = prioritized(nomination, priority_of)
+        changed, level = prioritized(
+            _with_contact_importance(nomination, contact_importance), priority_of
+        )
         if level is not None:
             levels[id(changed)] = level
         prioritized_nominations.append(changed)

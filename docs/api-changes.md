@@ -15,6 +15,9 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **One person across tools**: `Graph.same_person(id)` and `view_same_person(id, model)` give the
+  `person` entities with the same email. A publisher may set `Person.contact_type`, and point
+  an entity at its person: core ranks and badges items about them.
 - **Imports.** Core is `move_forward.api` (with `api.html`, `api.shell`, `api.http`,
   `api.localtime`, `api.keychain`, `api.kinds` and `api.ids`) and nothing else.
 - **Hooks take one request object** (`PanelsRequest(ctx, snapshot, graph)` and so on).

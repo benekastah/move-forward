@@ -326,7 +326,10 @@ def test_every_built_in_plugins_migrations_make_only_its_tables() -> None:
 def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
     path = tmp_path / "old.db"
     db = Database(path)
-    db.execute("DELETE FROM migrations WHERE owner = 'core' AND name = '0013_opened'")
+    db.execute("DROP TABLE contacts")
+    db.execute(
+        "DELETE FROM migrations WHERE owner = 'core' AND name IN ('0013_opened', '0014_contacts')"
+    )
     db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
     db.execute(
         "INSERT INTO act_now_feedback VALUES ('k', 'x', 't', 'pending', NULL, 'f', '2026-10-30')"

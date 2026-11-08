@@ -194,6 +194,31 @@ class PriorityRepository:
         return _rekey(self._db, "priorities", "kind", "id", kinds, identify)
 
 
+class ContactRepository:
+    """What I said people are to me (`contacts`), by address or `@domain`: kept until I clear
+    it."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def all(self) -> dict[str, str]:
+        return {
+            row["who"]: row["contact_type"]
+            for row in self._db.query("SELECT * FROM contacts ORDER BY who")
+        }
+
+    def set(self, who: str, contact_type: str, now: datetime) -> None:
+        self._db.execute(
+            "INSERT OR REPLACE INTO contacts VALUES (?, ?, ?)",
+            (who, contact_type, now.isoformat()),
+        )
+
+    def clear(self, who: str) -> bool:
+        """Forget the type kept on `who`; whether there was one."""
+        with self._db.transaction() as conn:
+            return conn.execute("DELETE FROM contacts WHERE who = ?", (who,)).rowcount > 0
+
+
 class FeedbackRepository:
     """What I said of Act now's items (`act_now_feedback`): kept, pruned with `prune`."""
 

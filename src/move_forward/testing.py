@@ -62,6 +62,7 @@ class _Seed(Plugin[BaseModel, BaseModel]):
     """A stand-in publisher of entities a test places: a family's, or another plugin's kind
     (`<plugin>.<kind>`), as that plugin would publish them."""
 
+    title: ClassVar[str] = "Seeded"
     always_on: ClassVar[bool] = True
     api_version = API_VERSION
     config_model = _NoSettings

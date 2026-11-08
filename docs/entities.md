@@ -128,13 +128,16 @@ On my open PRs only:
 
 ### `person`
 
-The person family, modeled in core (`api.kinds.Person`); github adds `me`.
+The person family, modeled in core (`api.kinds.Person`); github adds `me`. People with the same
+`email` are one person, whichever tools publish them (`Graph.same_person`). An entity that
+points at a person is about them, so core ranks and badges its items by their contact type.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `handle` | string | their name in the tool, a login |
 | `me` | bool | (github's) the person using the dashboard |
-| `email` | string or null | their commit email, imported or looked up from commits |
+| `email` | string or null | their address; github's is their commit email, imported or looked up from commits |
+| `contact_type` | string or null | what they are to me, when the tool knows, e.g. `customer`; one I set beats it |
 
 ### `git.repo`
 

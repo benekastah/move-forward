@@ -79,6 +79,7 @@ RESERVED_NAMES = frozenset(
         "email",
         "https",
         "notifications",
+        "people",
         "port",
         "prune_days",
         "refresh_on_load_seconds",
@@ -87,6 +88,8 @@ RESERVED_NAMES = frozenset(
         # Core's commands, `mfd <command>`.
         "cert",
         "check",
+        "contact",
+        "contacts",
         "dump",
         "init",
         "logout",
