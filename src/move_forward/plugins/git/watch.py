@@ -53,16 +53,20 @@ def _within(path: Path, root: Path) -> Path | None:
 def moves_repo(relative: Path) -> bool:
     """Whether a change at `relative`, a path in a common git directory, moves the repo:
     `HEAD`, `packed-refs`, anything under `refs/`, a linked worktree's `HEAD` (one added
-    `--detach`ed moves no ref), or `config` (where branches' upstreams are set, and git-stack
-    keeps its stacks)."""
+    `--detach`ed moves no ref) or its new directory, or `config` (where branches' upstreams
+    are set, and git-stack keeps its stacks). The directory counts because on Linux a new
+    directory is watched only once it's seen, and `git worktree add` writes its `HEAD` at
+    once: on a busy machine, before the watch is there."""
     parts = relative.parts
     if not parts:
         return False
     if parts[0] == "refs":
         return True
+    if parts[0] == "worktrees":
+        return len(parts) <= 2 or (len(parts) == 3 and parts[2] == "HEAD")
     if len(parts) == 1:
         return parts[0] in ("HEAD", "packed-refs", "config")
-    return parts[0] == "worktrees" and len(parts) == 3 and parts[2] == "HEAD"
+    return False
 
 
 def git_dir(worktree: Path) -> Path | None:
