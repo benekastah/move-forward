@@ -40,7 +40,7 @@ flowchart LR
     git([git]) -- publishes --> repo
     git -- "publishes (repo_dir, ahead, ...)" --> branch
     git_stack([git_stack]) -- "publishes, pointing at branch" --> stack_branch[git_stack.stack_branch]
-    jira([jira]) -- publishes --> ticket
+    jira([jira]) -- "publishes, its labels as tags" --> ticket
     mail([mail]) -- "publishes, pointing at its sender" --> thread
     mail -- "publishes (senders, by email)" --> person
     notes([notes]) -- publishes --> entry

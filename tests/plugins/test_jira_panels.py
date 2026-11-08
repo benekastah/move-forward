@@ -301,3 +301,13 @@ def test_a_ticket_not_started_is_flagged_only_for_an_open_pr() -> None:
         ),
     )
     assert panel(built, "jira.jira_transitions").items == []
+
+
+def test_a_tickets_labels_are_its_tags_but_its_escalation() -> None:
+    jira = _jira(
+        [issue("APP-1", labels=["Garbage Day", "esc-sev1"])],
+        {"site": "https://jira", "escalation_label_prefix": "esc-"},
+    )
+    [ticket] = jira.entities()
+    assert ticket.tags == ["Garbage Day"]
+    assert [t.ref.id for t in jira.graph().of_kind("tag")] == ["garbage-day"]

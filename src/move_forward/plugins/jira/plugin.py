@@ -433,7 +433,9 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         return {TICKET: key_pattern(IssueRepository(ctx.db).projects())}
 
     def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
-        snapshot = req.snapshot
+        """A `ticket` per issue, its labels its tags, but those that say how far it's escalated
+        (`escalation_label_prefix`), which are no topic."""
+        snapshot, prefix = req.snapshot, req.ctx.config.escalation_label_prefix
         return [
             Entity(
                 ref=ticket_ref(issue),
@@ -441,6 +443,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 url=issue.url,
                 state=issue.status,
                 lifecycle="done" if issue.status_category == "done" else "open",
+                tags=[label for label in issue.labels if not (prefix and label.startswith(prefix))],
                 attrs=attrs(
                     JiraTicket(
                         handle=issue.key,

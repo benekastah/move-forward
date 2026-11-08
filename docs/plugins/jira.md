@@ -47,7 +47,8 @@ first), and the top one raises their importance in Act now by a step.
 ## Publishes
 
 `ticket` for each of my open tickets, by its URL (`<site>/browse/<key>`), with its key as
-its `handle`. Tickets are a linking kind: a PR or a work entry
+its `handle`, and its labels as its tags (see the README's Tags), but those starting with
+`escalation_label_prefix`. Tickets are a linking kind: a PR or a work entry
 that mentions a ticket's key is related to it. jira remembers every project it has seen a
 ticket in (mine, or one linked from the notes), and only those projects' keys (`APP-12`)
 count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
