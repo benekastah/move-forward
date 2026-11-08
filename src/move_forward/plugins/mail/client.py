@@ -189,13 +189,26 @@ def _shown(text: str) -> str:
     )
 
 
+_IGNORABLE = (
+    (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C), (0x115F, 0x1160), (0x17B4, 0x17B5),
+    (0x180B, 0x180F), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164),
+    (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF),
+)  # fmt: skip
+"""Unicode's default-ignorable code points: drawn as nothing, whatever their category."""
+
+
+def _invisible(c: str) -> bool:
+    return unicodedata.category(c) in ("Cc", "Cf", "Zs", "Zl", "Zp") or any(
+        low <= ord(c) <= high for low, high in _IGNORABLE
+    )
+
+
 def _address(text: str) -> str | None:
     """`text`, lower-cased, if it can be shown as one address: one `@`, and nothing hidden or
-    spaced in it (control, format or space characters: a soft hyphen or a word joiner would
-    make it read as another). None otherwise."""
-    if text.count("@") != 1 or any(
-        unicodedata.category(c) in ("Cc", "Cf", "Zs", "Zl", "Zp") for c in text
-    ):
+    spaced in it (control, format, space or default-ignorable characters: a soft hyphen, a
+    word joiner or a variation selector would make it read as another). None otherwise."""
+    if text.count("@") != 1 or any(_invisible(c) for c in text):
         return None
     return text.lower()
 

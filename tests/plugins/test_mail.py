@@ -177,6 +177,9 @@ def test_control_and_bidi_characters_are_dropped_from_what_is_shown() -> None:
         '"a b"@evil.com',
         "bo\u00adss@acme.com",  # a soft hyphen: reads as boss@acme.com
         "boss\u2060@acme.com",  # a word joiner
+        "bo\u034fss@acme.com",  # a combining grapheme joiner
+        "boss\ufe0f@acme.com",  # a variation selector
+        "bo\u3164ss@acme.com",  # a Hangul filler
     ],
 )
 def test_an_address_that_cant_be_shown_as_one_isnt_kept(sender: str) -> None:
