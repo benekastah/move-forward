@@ -31,8 +31,8 @@ can't be read yet.
 `host` is the IMAP server (`imap.gmail.com`), and `port` (993) its port for IMAP over TLS.
 `username` is who to sign in as, and also my address, with the top-level `email`, for telling
 mail sent to me from mail I'm copied on. `mailbox` (`INBOX`) is the mailbox read. Mail older
-than `since_days` (14) is left out, flagged or not, and at most `max_messages` (200) are read,
-newest first. `token_env` and `keychain_service` say where its password is.
+than `since_days` (14) is left out, flagged or not; at most `max_messages` (200) unread are
+read, newest first, and every flagged one. `token_env` and `keychain_service` say where its password is.
 
 `auth_servers` names the servers whose `Authentication-Results` count: their first word, the
 authserv-id (`mx.google.com` for Gmail, known without setting it; for another server, look in a

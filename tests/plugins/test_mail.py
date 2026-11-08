@@ -289,7 +289,14 @@ class FakeImap:
     def uid(self, command: str, *args: str) -> tuple[str, list[object]]:
         self.calls.append(("uid", command, *args))
         if command == "SEARCH":
-            return "OK", [b" ".join(str(u).encode() for u, _, _ in self.messages)]
+            wanted_flag, seen = ("\\Flagged", True) if "FLAGGED" in args else ("\\Seen", False)
+            return "OK", [
+                b" ".join(
+                    str(u).encode()
+                    for u, flags, _ in self.messages
+                    if (wanted_flag in flags) == seen
+                )
+            ]
         wanted = {int(u) for u in args[0].split(",")}
         found: list[object] = []
         for uid, flags, raw in self.messages:
@@ -327,18 +334,21 @@ def test_collect_reads_headers_only_without_marking_anything_read(
 ) -> None:
     server = imap(
         [
+            (4, "\\Seen \\Flagged", headers(subject="Marked", message_id="marked@acme.com")),
             (5, "", headers(message_id="old@acme.com")),
-            (6, "\\Seen \\Flagged", headers(subject="Newer", message_id="new@acme.com")),
+            (6, "", headers(subject="Newer", message_id="new@acme.com")),
         ]
     )
     snapshot = client.collect(_config(since_days=7, max_messages=1), "me@work.com", NOW)
-    assert [m.subject for m in snapshot.messages] == ["Newer"]  # the newest, at most one
+    # The newest unread, at most one, and every flagged one, however old.
+    assert sorted(m.subject for m in snapshot.messages) == ["Marked", "Newer"]
     assert ("connect", "imap.gmail.com", 993, client.TIMEOUT_SECONDS) in server.calls
     assert ("login", ME, "app-password") in server.calls
     assert ("select", '"INBOX"', True) in server.calls  # read-only: EXAMINE
-    assert ("uid", "SEARCH", "SINCE", "31-Oct-2026", "OR", "UNSEEN", "FLAGGED") in server.calls
+    assert ("uid", "SEARCH", "SINCE", "31-Oct-2026", "UNSEEN") in server.calls
+    assert ("uid", "SEARCH", "SINCE", "31-Oct-2026", "FLAGGED") in server.calls
     [fetch] = [c for c in server.calls if c[:2] == ("uid", "FETCH")]
-    assert fetch[2] == "6" and "BODY.PEEK[HEADER.FIELDS (" in str(fetch[3])
+    assert fetch[2] == "4,6" and "BODY.PEEK[HEADER.FIELDS (" in str(fetch[3])
     assert server.calls[-1] == ("logout",)
 
 
