@@ -89,8 +89,14 @@ A conversation is the Message-ID its first message named, which anyone replying 
 So its flag (and the importance it gives) counts only flagged mail from whoever wrote its latest
 message, and a verified one's flag only when the latest is verified too (an unverified
 message's flag can still be claimed by an unverified reply giving the same `From`, as everywhere
-when no sender can be verified); and a priority, pin or snooze I set on a
-conversation stays with it, whoever replies.
+when no sender can be verified).
+
+A priority, pin or tag I put on a conversation stays with it, whoever replies, a known
+limitation. A snooze or dismiss doesn't: any new reply brings it back, as it's kept by the
+latest message. Only the first message's Message-ID names the conversation, so it's mostly
+someone already in it, and what they gain is a place on my own page; from a sender the server
+didn't verify, a tag its subject names doesn't make it about my work nor raise it further. Telling a newcomer from
+someone already in the conversation would split real conversations.
 
 When a message came is when the server received it (`INTERNALDATE`), not its `Date` header,
 which says whatever the sender likes.
