@@ -322,7 +322,8 @@ one is refreshed whole. It answers `204 No Content`, or `400` for a body that is
 `GET /notifications/stream` keeps a signed-in connection open and sends notifications as
 server events (`data: <JSON list>`), with a heartbeat every five seconds. `POST
 /notifications` returns the same JSON once for clients that cannot use the stream. Both
-take the events they deliver from the queue.
+take the events they deliver from the queue. The page opens the stream in one tab at a time,
+so open tabs don't use up the browser's few connections to the dashboard.
 
 A plugin's pages are served at `/<plugin>/<page>` (slack's ping page is `/slack/ping`), and
 its own page at `/<plugin>`; core's paths' first segments (`focus`, `settings`, `login`,
