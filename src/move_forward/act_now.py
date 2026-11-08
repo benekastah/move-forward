@@ -20,7 +20,7 @@ from pydantic import Field, field_validator
 from . import localtime
 from .domain import Model
 from .graph import Ref
-from .page import Action, Badge, Item, Link, Panel, Signals, age
+from .page import Action, Badge, Item, Link, Panel, SetAside, Signals, age
 from .strict import Strict
 
 KEY = "now"
@@ -220,13 +220,17 @@ def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomina
     ), level
 
 
-def set_aside(nomination: Nomination, feedback: Feedback | None, now: datetime) -> bool:
-    """Snoozed until later, or dismissed, and not changed since."""
-    if feedback is None or feedback.fingerprint != nomination.fingerprint:
-        return False
+def set_aside(fingerprint: str, feedback: Feedback | None, now: datetime) -> SetAside | None:
+    """How the item with `fingerprint` (as Act now nominates it) is set aside, snoozed until
+    later or dismissed, if it hasn't changed since; None while it isn't. What Act now and every
+    panel go by."""
+    if feedback is None or feedback.fingerprint != fingerprint:
+        return None
     if feedback.action == "dismiss":
-        return True
-    return feedback.action == "snooze" and feedback.until is not None and feedback.until > now
+        return "dismiss"
+    if feedback.action == "snooze" and feedback.until is not None and feedback.until > now:
+        return "snooze"
+    return None
 
 
 def opened_at(nomination: Nomination, feedback: Feedback | None, now: datetime) -> datetime | None:
@@ -437,7 +441,7 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not (now and set_aside(nom, said(nom), now))
+        if not (now and set_aside(nom.fingerprint, said(nom), now) is not None)
     ]
     candidates.sort(
         key=lambda c: (
@@ -484,13 +488,18 @@ def panels(
     ]
 
 
+def feedback_fields(key: FeedbackKey, fingerprint: str) -> dict[str, str]:
+    """The fields that name an item to what's said of it (`act_now/<action>`)."""
+    kind, id, task = key
+    return {"kind": kind, "id": id, "task": task, "fingerprint": fingerprint}
+
+
 def _member_fields(
     nomination: Nomination, key: FeedbackKey, members_of: list[Nomination]
 ) -> dict[str, str]:
     """The fields that name an item (by its `key`), and those shown with it (`members`, posted
     as `also`), to the buttons that set it aside."""
-    kind, id, task = key
-    fields = {"kind": kind, "id": id, "task": task, "fingerprint": nomination.fingerprint}
+    fields = feedback_fields(key, nomination.fingerprint)
     members = [[*n.key, n.fingerprint] for n in members_of if n.key is not None]
     if members:
         fields["also"] = json.dumps(members)
@@ -498,19 +507,43 @@ def _member_fields(
 
 
 def importance_actions(subject: Ref, level: int | None) -> list[Action]:
-    """The three importance choices for a subject, with its current choice highlighted."""
+    """The three importance choices for a subject, with its current choice highlighted, and
+    a way to clear it once there is one."""
     fields = {"kind": subject.kind, "id": subject.id}
     return [
-        Action(
-            name=f"{ACTIONS}/priority",
-            label=label,
-            fields={**fields, "level": str(choice)},
-            group="Importance",
-            selected=choice == level,
-            icon=PRIORITY_ICONS[choice],
-        )
-        for choice, label in PRIORITIES.items()
+        *(
+            Action(
+                name=f"{ACTIONS}/priority",
+                label=label,
+                fields={**fields, "level": str(choice)},
+                group="Importance",
+                selected=choice == level,
+                icon=PRIORITY_ICONS[choice],
+            )
+            for choice, label in PRIORITIES.items()
+        ),
+        *(
+            [Action(name=f"{ACTIONS}/priority", label="Clear priority", fields=fields)]
+            if level is not None
+            else []
+        ),
     ]
+
+
+def snooze_action(fields: dict[str, str], aside: SetAside | None = None) -> Action:
+    """The Snooze button of an item named by `fields`, wherever it's shown; for one set aside
+    (`aside`), Unsnooze or Undismiss in its place."""
+    if aside is None:
+        return Action(
+            name=f"{ACTIONS}/snooze", label="Snooze", fields=fields, group="Act now", icon="💤"
+        )
+    return Action(
+        name=f"{ACTIONS}/unsnooze",
+        label="Unsnooze" if aside == "snooze" else "Undismiss",
+        fields=fields,
+        group="Act now",
+        icon="⏰",
+    )
 
 
 def _buttons(
@@ -533,19 +566,11 @@ def _buttons(
             selected=selected,
         )
 
-    subject = nomination.item.subjects[0]
-    priority = {"kind": subject.kind, "id": subject.id}
-
     return [
-        button("snooze", "Snooze", "💤"),
+        snooze_action(fields),
         button("dismiss", "Dismiss", "👋"),
         button("unpin", "Unpin", "📌", True) if pinned else button("pin", "Pin", "📌", False),
-        *importance_actions(subject, level),
-        *(
-            [Action(name=f"{ACTIONS}/priority", label="Clear priority", fields=priority)]
-            if level is not None
-            else []
-        ),
+        *importance_actions(nomination.item.subjects[0], level),
     ]
 
 

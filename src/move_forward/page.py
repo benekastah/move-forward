@@ -151,6 +151,11 @@ class Signals(Model):
     a count in it changing, keeps it. A nominated item must have one."""
 
 
+SetAside = Literal["snooze", "dismiss"]
+"""How an item is set aside: snoozed, or dismissed. Act now leaves it out; its panel shows it
+dimmed and last, with Unsnooze, and doesn't count it."""
+
+
 class Item(Model):
     title: str
     url: str | None = None
@@ -187,6 +192,9 @@ class Item(Model):
     opened_at: datetime | None = None
     """Set by core, in Act now: when I opened the item, if it hasn't changed since; it's
     shown dimmed."""
+    set_aside: "SetAside | None" = None
+    """Set by core, in a panel: how I set the item aside (`act_now.set_aside`), if it hasn't
+    changed since; it's shown dimmed and last, with Unsnooze."""
     parts: list["Item"] = Field(default_factory=list)
     """Pieces of this item, e.g. a work item's todos: the dashboard and Act now list them beneath
     it when there are several, with their own buttons, and focus mode shows them one at a time
@@ -224,9 +232,6 @@ class Panel(Model):
     the next thing to do."""
     signals: Signals | None = None
     """The signals of its items that carry none, for Act now: e.g. "Review", in minutes."""
-    snoozable: bool = False
-    """Its items, which must be `act_now` ones, get a Snooze button, and stay off the panel
-    until they change or the snooze ends: the same snooze as Act now's."""
 
 
 Surface = Literal["dashboard", "focus", "act_now"]

@@ -178,13 +178,18 @@ def test_a_review_snoozed_in_its_panel_stays_away_for_the_days_set_for_prs() -> 
 
     snooze = next(a for a in reviews()[0].actions if a.label == "Snooze")
     assert refresh.run_action(config, db, snooze.name, snooze.fields).startswith("snoozed until ")
-    assert reviews() == []
+    [waiting] = reviews()
+    assert waiting.set_aside == "snooze"
     (said,) = FeedbackRepository(db).all().values()
     now = datetime.now(UTC)  # the snooze counts from the real time, not NOW
     assert said.until is not None and now + timedelta(days=6) < said.until <= now + timedelta(
         days=7
     )
     assert refresh.build_dashboard(config, db, NOW).act_now() == []
+    unsnooze = next(a for a in waiting.actions if a.label == "Unsnooze")
+    assert refresh.run_action(config, db, unsnooze.name, unsnooze.fields) == "back"
+    assert reviews()[0].set_aside is None
+    assert refresh.build_dashboard(config, db, NOW).act_now() != []
 
 
 def test_a_snoozed_review_returns_when_the_prs_head_moves() -> None:

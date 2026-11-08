@@ -111,11 +111,15 @@ have a field to pick them. Scripts can post `pr` and `input` (a login) to
 entity matters, as `mfd priority` does; leave out `level` to clear it. Scripts can use it
 instead of running the command; nothing needs changing.
 
-### Snoozed reviews leave their panels
+### Snooze and Clear priority wherever an item is
 
-An item snoozed or dismissed in Act now, or snoozed from the panel, also leaves Ready for me
-to review and Replies for me until it changes or the snooze ends. A script reading those
-panels from `mfd dump` no longer sees it there: use `mfd snoozes` to list what's snoozed.
+Every item with something to do now has Snooze in its own panel, and Clear priority once one is
+set. An item snoozed or dismissed, there or in Act now, stays in its panel, last and dimmed, with
+Unsnooze (or Undismiss), until it changes or the snooze ends; it used to leave Ready for me to
+review and Replies for me. In `mfd dump`, such an item has `set_aside` (`snooze` or `dismiss`).
+`POST /actions/act_now/unsnooze` (the Snooze button's fields) brings it back, and `mfd unsnooze
+<entity> [--kind K] [--task T]` now takes any entity, as `mfd priority` does, not only a PR's
+URL, and brings back what's dismissed too.
 
 ### Refresh progress in the tab icon
 

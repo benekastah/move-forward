@@ -140,8 +140,7 @@ thread), CI failures (about an hour), PR policy failures (quick), merge conflict
 hour, or quick when restacking fixes them), PRs needing a reviewer (quick, but below anything else to do on the PR, where Act now
 shows it as an "also" line on that item; not when already approved or all that's missing is a
 team's members being readable) and PRs ready to merge (quick, closing the PR). Fix before review, Ready for review, Held, the merge queue,
-Requested from my teams and PR housekeeping aren't nominated. Ready for me to review and Replies for me
-have Snooze on their items, and leave out what's snoozed or dismissed.
+Requested from my teams and PR housekeeping aren't nominated.
 
 ## Commands
 

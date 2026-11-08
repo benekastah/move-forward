@@ -285,6 +285,18 @@ class FeedbackRepository:
             key,
         )
 
+    def bring_back(self, kind: str, id: str, task: str | None, now: datetime) -> int:
+        """Forget the snoozes still running and the dismissals of the entity's items (`task`'s,
+        or all its tasks'), leaving a pin or an open as it is; how many went."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM act_now_feedback WHERE subject_kind = ? AND subject_id = ?"
+                " AND (? IS NULL OR task = ?)"
+                # julianday: `until` keeps the local offset it was set with.
+                " AND (action = 'dismiss' OR (action = 'snooze' AND julianday(until) > julianday(?)))",
+                (kind, id, task, task, now.isoformat()),
+            ).rowcount
+
     def rekey(self, kinds: Collection[str], identify: Identify) -> int:
         """`PriorityRepository.rekey`, for what was said of items about `kinds`."""
         return _rekey(self._db, "act_now_feedback", "subject_kind", "subject_id", kinds, identify)
@@ -293,7 +305,8 @@ class FeedbackRepository:
         """Drop snoozes that are over, and anything said before `before`; how many went."""
         with self._db.transaction() as conn:
             return conn.execute(
-                "DELETE FROM act_now_feedback WHERE until < ? OR created_at < ?",
+                "DELETE FROM act_now_feedback"
+                " WHERE julianday(until) < julianday(?) OR julianday(created_at) < julianday(?)",
                 (now.isoformat(), before.isoformat()),
             ).rowcount
 

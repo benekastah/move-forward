@@ -40,8 +40,3 @@ def snooze_review(
         (PULL_REQUEST, url, REVIEW), Feedback(action="snooze", fingerprint=head, until=until), now
     )
     return until
-
-
-def wake_review(feedback: FeedbackRepository, url: str) -> None:
-    """End the snooze of PR `url`'s review, if there is one."""
-    feedback.forget((PULL_REQUEST, url, REVIEW))

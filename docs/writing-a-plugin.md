@@ -381,8 +381,9 @@ something in that unit, so give such items a `verb` that reads well after anothe
 A plugin that nominates by due date passes `req.due_horizon` to `due_pressure`, so it agrees
 with `[act_now] due_warning_days`.
 Set `Item.fingerprint` to what would make a snoozed or dismissed item worth another look.
-Set `snoozable=True` on such a panel to give its items a Snooze there too; what's snoozed or
-dismissed then stays off the panel as well.
+An item with a `task` also has Snooze in its own panel; what's snoozed or dismissed waits there,
+last and dimmed, with Unsnooze, and Act now leaves it out. Give a task to any item it makes
+sense to set aside.
 
 Every nominated item needs a `task`: a stable id for what doing it is (`triage`,
 `transition`), lower-case letters, digits and `_`. Act now keeps a snooze, dismissal or pin

@@ -97,12 +97,11 @@ that needs a core one says so, and lands on top of it.
 
 ### Core
 
-1. **Snooze and Clear priority everywhere.** Every item with a task gets Snooze in its own
-   panel, drawn as in Act now (💤, grouped), which replaces `Panel.snoozable`; and every panel
-   gets Clear priority once one is set. Pin stays in Act now: it only concerns that ranking.
-2. **Undo what's set aside.** A place on the page listing what's snoozed and dismissed, each
-   with a button to bring it back. Then Dismiss joins Snooze in the panels, and not before:
-   it can't be undone until this exists.
+2. **Dismiss in the panels.** What's set aside now waits in its panel with Unsnooze or
+   Undismiss, so Dismiss can join Snooze there. An item only Act now shows (nominated with no
+   panel item) still has nowhere to come back from but `mfd unsnooze`.
+   `mfd snooze` still takes only a PR's URL, while `mfd unsnooze` takes any entity: give it
+   the same, with a task, through the button's own action rather than its own copy.
 6. **Importance where it means something.** Say whether every panel sorts by it, since only two
    do now, not What next or Feedback.
 7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,

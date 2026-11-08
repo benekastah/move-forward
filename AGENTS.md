@@ -61,8 +61,8 @@ is what's left to build.
   come from `item_actions`, called per item with whose item it is and where it's
   shown; a plugin that reads its tables for them does so once per page in
   `prepare_item_actions`. Core adds its own to items: the importance choices on
-  every item about an entity (but what `hides`), a Snooze on the items of a `snoozable` panel,
-  Snooze, Dismiss, Pin and Clear priority in Act now, and on an item about a person
+  every item about an entity (but what `hides`), with Clear priority once one's set, a Snooze on
+  every item with a task, Dismiss and Pin in Act now, and on an item about a person
   (`people.py`) their contact type and Set type; and on every item about an entity (but what
   `hides`) its `#tag` badges, a Tag field and an Untag per tag I put on it (`tags.py`). A plugin nominates items for
   core's Act now with `act_now`, each with `Signals` (effort, what it closes,

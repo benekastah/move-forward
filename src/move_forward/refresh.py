@@ -631,9 +631,10 @@ def _tag(db: Database, action: str, fields: dict[str, str], now: datetime) -> Ac
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
-    """Act now's own buttons: snooze an item (for as long as `config` says), dismiss it, or pin
-    or unpin it, by its main subject and task, and the items joined to it (`also`) alike; set
-    or clear the priority of its main subject; and set or clear who someone is to me."""
+    """Act now's own buttons, on any surface: snooze an item (for as long as `config` says),
+    dismiss it, bring it back (unsnooze), or pin or unpin it, by its main subject and task, and
+    the items joined to it (`also`) alike; set or clear the priority of its main subject; tag
+    it; and set or clear who someone is to me."""
     now = datetime.now(UTC)
     if action in ("priority", "contact", "contact_clear", "tag", "untag"):
         try:
@@ -673,6 +674,10 @@ def _act_now_action(
         for kind, id, task, _ in members:
             feedback.forget((kind, id, task))
         return ActionResult("unpinned")
+    if action == "unsnooze":  # a pin made since, from another page, stays
+        for kind, id, task, _ in members:
+            feedback.bring_back(kind, id, task, now)
+        return ActionResult("back")
     if action == "snooze":
         said = [
             Feedback(action="snooze", fingerprint=f, until=config.snooze_until(kind, now))

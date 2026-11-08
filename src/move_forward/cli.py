@@ -241,8 +241,14 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     contact_parser.add_argument("who", help="an email address, or @domain for everyone there")
     contact_parser.add_argument("type", help="e.g. customer, or clear")
     commands.add_parser("contacts", help="print the contact types I set as JSON: who, contact_type")
-    unsnooze_parser = commands.add_parser("unsnooze", help="end a PR's review snooze")
-    unsnooze_parser.add_argument("url", help="the PR's URL")
+    unsnooze_parser = commands.add_parser(
+        "unsnooze", help="bring back what's snoozed or dismissed about an entity"
+    )
+    unsnooze_parser.add_argument(
+        "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
+    )
+    unsnooze_parser.add_argument("--kind", help="the entity's kind, e.g. mail.thread")
+    unsnooze_parser.add_argument("--task", help="only this task of its, e.g. review")
     commands.add_parser(
         "snoozes",
         help="print the Act now items snoozed now as JSON: kind, id, task, until, fingerprint",
@@ -512,8 +518,14 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(rows, indent=2))
         return 0
     if args.command == "unsnooze":
-        snooze.wake_review(FeedbackRepository(db), args.url)
-        print("snooze ended")
+        graph, _ = stored_graph(db, enabled(config, db, datetime.now(UTC)))
+        try:
+            ref = priority.resolve(graph, args.entity, args.kind)
+        except LookupError as err:
+            print(err, file=sys.stderr)
+            return 1
+        back = FeedbackRepository(db).bring_back(ref.kind, ref.id, args.task, datetime.now(UTC))
+        print(f"brought back {back} item(s)" if back else f"nothing of {ref.id} is set aside")
         return 0
     if args.command == "snoozes":
         now = datetime.now(UTC)
