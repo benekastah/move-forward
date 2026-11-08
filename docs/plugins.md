@@ -61,7 +61,7 @@ flowchart LR
     pr -. "pings, nudges" .-> slack([slack])
     person -. "emails, to look up Slack ids" .-> slack
     ticket -. "title, lifecycle: what a verified sender's mail is about" .-> mail
-    tag[tag] -. "what a verified sender's subject names, if something open carries it" .-> mail
+    tag[tag] -. "the tags a verified sender's mail has (its subject's, or mine), if something else open carries them" .-> mail
     pr -. "todo link states; an iced branch's PRs" .-> notes
     repo -. "an iced branch's checkout" .-> notes
     stack_branch -. "what tracks an iced branch" .-> notes
