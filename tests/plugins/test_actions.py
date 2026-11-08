@@ -554,17 +554,19 @@ def test_the_jira_transition_button_moves_the_ticket_and_reports_what_jira_refus
     config = config.with_section("jira", JiraConfig(site="https://j.example/"))
     moved: list[tuple[str, list[str]]] = []
 
-    def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> None:
+    def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> str:
         if statuses[0] == "Nowhere":
             raise LookupError(f"{key} can't move to {statuses[0]}; it can go to: Done")
         moved.append((key, statuses))
+        return statuses[-1]  # as if the workflow offered only the last
 
     monkeypatch.setattr(jira_client, "transition", transition)
     assert run("jira/transition", config, {"key": "APP-1", "to": "In Review"}) == (
         "moved APP-1 to In Review"
     )
     assert moved == [("APP-1", ["In Review"])]
-    run("jira/transition", config, {"key": "APP-1", "to": "Done", "also": "Closed\nShipped"})
+    also = {"key": "APP-1", "to": "Done", "also": "Closed\nShipped"}
+    assert run("jira/transition", config, also) == "moved APP-1 to Shipped"  # where it went
     assert moved[-1] == ("APP-1", ["Done", "Closed", "Shipped"])
     with pytest.raises(ActionError, match="can go to: Done"):
         run("jira/transition", config, {"key": "APP-1", "to": "Nowhere"})
