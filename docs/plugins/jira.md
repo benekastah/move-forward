@@ -59,7 +59,7 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
   naming the statuses the ticket can go to, when there is none). A ticket in progress or
   in review whose only PRs were closed without merging is flagged too ("reopen it or move
   the ticket back"; in review, with a button back to in progress). So is a ticket not started
-  that has PRs, with a button to in progress.
+  with an open PR, with a button to in progress; merged or closed PRs alone don't flag it.
 - **Rollouts**: tickets in a `status_rollout` status, each with its PRs as links saying where
   each is ("ready to merge #123", "draft #124", "merged #120"): "Advance the rollout" while some are
   open (low urgency, raised when one is ready to merge), "Finish the rollout" with a Move to Closed
