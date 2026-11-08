@@ -620,6 +620,31 @@ def test_act_nows_listed_parts_offer_the_importance_their_panel_does() -> None:
     assert [levels(part) for part in panel_item.parts] == [levels(part) for part in item.parts]
 
 
+def test_a_lone_todo_joined_to_another_item_is_listed_with_its_own_buttons() -> None:
+    url = "https://github.com/acme/widgets/pull/1"
+    built = dashboard(
+        github=snapshot(mine=[pr(1, merge_state="DIRTY")]),
+        work_items=[
+            entry("Lone", [todo(f"check {url}", "quick")], PRs=[url]),
+            entry("Other", [todo(f"tidy {url}", "quick")], PRs=[url]),
+        ],
+    )
+    [host] = [i for i in built.act_now() if i.title.startswith("Resolve conflicts")]
+    assert [part.title for part in host.parts] == [f"check {url}", f"tidy {url}"]
+    assert all(any(a.name == "notes/todo_done" for a in p.actions) for p in host.parts)
+    assert not any(a.name == "notes/todo_done" for a in host.actions)  # none unlabelled
+    # One joined entry alone is listed and drawn too, not lost.
+    one = dashboard(
+        github=snapshot(mine=[pr(1, merge_state="DIRTY")]),
+        work_items=[entry("Lone", [todo(f"check {url}", "quick")], PRs=[url])],
+    )
+    [host] = [i for i in one.act_now() if i.title.startswith("Resolve conflicts")]
+    assert "notes/todo_done" in render.item_html(host)
+    # An entry's own lone todo still shows once, as the entry, not again as a part.
+    [own] = panel(one, "notes.todos").items
+    assert "item-parts" not in render.item_html(own)
+
+
 def test_empty_notes_say_how_to_fill_them() -> None:
     empty = dashboard().panel("notes.todos")
     assert "mfd notes import <dir>" in empty.description
@@ -706,6 +731,8 @@ def test_what_only_core_sets_on_an_item_is_cleared_from_a_plugins() -> None:
         subjects=[Ref(kind="pull_request", id="p")],
         act_now_fields='{"kind": "other", "id": "y", "task": "t", "fingerprint": "f"}',
         opened_at=NOW,
+        parts=[Item(title="part")],
+        parts_listed=True,
     )
     built = panels.build(
         NOW,
@@ -718,6 +745,7 @@ def test_what_only_core_sets_on_an_item_is_cleared_from_a_plugins() -> None:
     )
     [shown] = built.panel("notes.t").items
     assert shown.act_now_fields is None and shown.opened_at is None
+    assert not shown.parts_listed
 
 
 def test_what_a_lone_todo_links_shows_on_its_entry() -> None:

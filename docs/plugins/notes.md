@@ -52,8 +52,9 @@ it without recording it.
 
 notes nominates entries whose open todos are all quick: close-outs, finishing the entry. A
 blocked one ranks lower until it's gone `[act_now] blocked_stale_days` untouched. An entry
-with one todo has its buttons in Act now, on whichever item it's joined to if any; one with
-several lists them, each with its own buttons, as the Todos panel does. Once a lone todo's PRs
+with one todo has its buttons in Act now, and joined to another item it's listed beneath that
+one with them. An entry with several lists each todo with its own buttons, as the Todos panel
+does. Once a lone todo's PRs
 are done it's badged as probably done, which brings it back if it was snoozed or dismissed.
 
 ## Buttons

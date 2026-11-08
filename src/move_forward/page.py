@@ -190,7 +190,11 @@ class Item(Model):
     parts: list["Item"] = Field(default_factory=list)
     """Pieces of this item, e.g. a work item's todos: the dashboard and Act now list them beneath
     it when there are several, with their own buttons, and focus mode shows them one at a time
-    instead of it. A single part's buttons belong on the item, as it isn't listed."""
+    instead of it. A single part's buttons belong on the item, as it isn't listed, unless
+    `parts_listed`."""
+    parts_listed: bool = False
+    """List `parts` even when there's one: core sets it on an Act now item showing the parts of
+    an item joined to it, whose buttons aren't its own."""
 
     @property
     def anchor(self) -> str | None:

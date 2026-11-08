@@ -145,6 +145,13 @@ def _listed_parts(item: Item) -> list[Item]:
     return item.parts if len(item.parts) > 1 else []
 
 
+def _joined_actions(item: Item) -> list[Action]:
+    """The buttons an item joined to another puts on that one: those its single part, listed
+    beneath it, doesn't carry."""
+    shown = item.parts[0].actions if len(item.parts) == 1 else []
+    return [action for action in item.actions if action not in shown]
+
+
 @dataclass(frozen=True)
 class Nomination:
     """An item a plugin put forward for Act now."""
@@ -583,14 +590,16 @@ def _shown(
             "deferred": False,
             "parts": [
                 *_listed_parts(item),
-                *(part for joined in then for part in _listed_parts(joined.item)),
+                # All of a joined item's parts, even one, so its buttons say what they act on.
+                *(part for joined in then for part in joined.item.parts),
             ],
+            "parts_listed": any(joined.item.parts for joined in then),
             "actions": [
                 *_without_repeats(
                     [
                         *item.actions,
                         *(action for other in group.also for action in other.item.actions),
-                        *(action for joined in then for action in joined.item.actions),
+                        *(action for joined in then for action in _joined_actions(joined.item)),
                     ]
                 ),
                 *_buttons(nomination, members, pinned, levels.get(id(nomination))),
