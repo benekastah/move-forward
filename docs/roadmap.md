@@ -141,9 +141,8 @@ Approving stays on GitHub: a review should come from having read the PR there.
 
 ### notes
 
-24. **Size a todo.** Dashboard todos are all unsized, so never close-outs. `todo_add` already takes
-    `size`; give it a control, and a way to size an existing todo (there's none, in the CLI
-    either).
+24. **Size a todo from the CLI.** `todo add --size` sizes a new one; nothing sizes an existing
+    one but the page's Quick and Big.
 25. **Edit an entry.** What the CLI can do to one: `blocked-on` (its badge can't be cleared from
     the page), status and where (not shown at all), `link`, and `remove`.
 26. **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add

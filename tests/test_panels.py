@@ -26,7 +26,7 @@ from move_forward.page import Action, Badge, Group, Item, Panel, Signals
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice, IcedItem
-from move_forward.plugins.notes.panels import ADD_TODO_INPUT
+from move_forward.plugins.notes.panels import ADD_TODO_INPUT, TODO_SIZES
 from move_forward.refresh import kept_item
 
 build = dashboard
@@ -227,10 +227,15 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("notes/todo_done", True, False),
         ("notes/todo_delete", False, False),
         ("notes/todo_link", False, False),
+        ("notes/todo_size", False, False),
+        ("notes/todo_size", False, False),
         ("notes/todo_add", False, False),
     ]
     todo_id = part.actions[0].fields["todo"]
     assert part.actions[0].fields == {"todo": todo_id}  # addressed by id
+    assert [
+        (a.label, a.fields["size"], a.selected) for a in part.actions if a.name == "notes/todo_size"
+    ] == [("Quick", "quick", True), ("Big", "big", False)]
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
     assert [a.fields for a in part.actions if a.group == "Importance"] == [
         {"kind": "notes.todo", "id": todo_id, "level": level} for level in ("0", "1", "2")
@@ -242,6 +247,8 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         "notes/todo_done",
         "notes/todo_delete",
         "notes/todo_link",
+        "notes/todo_size",
+        "notes/todo_size",
         "notes/todo_add",
         "notes/ice_item",
     ]
@@ -343,6 +350,8 @@ def test_todo_links_include_the_tickets_and_prs_only_the_todo_mentions() -> None
         "notes/todo_done",
         "notes/todo_delete",
         "notes/todo_link",
+        "notes/todo_size",
+        "notes/todo_size",
         "notes/todo_add",
     ]
     assert part.actions[2].input == "Jira key or PR URL"
@@ -374,6 +383,7 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
         item = next(i for i in panel(dashboard, panel_key).items if i.title == title)
         [action] = [a for a in item.actions if a.name == "notes/todo_add"]
         assert action.input == ADD_TODO_INPUT
+        assert action.choices == TODO_SIZES
         return action.fields
 
     assert add("github.needs_reviewer", covered.title) == {"entry": "APP-1 Fix"}

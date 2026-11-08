@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Size a todo on the page
+
+Add todo has a size drop-down, and open todos have Quick and Big buttons, posting `todo` and `size`
+to `/actions/notes/todo_size`. Sized quick, a todo can make its entry a close-out in Act now.
+Nothing to change.
+
 ### Update a PR's branch from the page
 
 A PR held as behind its base now has an Update branch button. Scripts can post `pr` to

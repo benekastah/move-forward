@@ -246,8 +246,31 @@ def todo_link(req: ActionRequest[NotesConfig]) -> str:
     return f"linked {value}"
 
 
+def _size(size: str) -> Size | None:
+    """A todo's size from a form: quick, big, or blank for none."""
+    if size not in ("", "quick", "big"):
+        raise ActionError(f"size must be quick or big, not {size!r}")
+    return "quick" if size == "quick" else "big" if size == "big" else None
+
+
+def todo_size(req: ActionRequest[NotesConfig]) -> str:
+    """Say how big an open todo is: `size`, quick or big."""
+    ctx = req.ctx
+    notes = NotesRepository(ctx.db)
+    entry, todo = _todo(notes, req, done=False)
+    size = _size(req.field("size"))
+    if size is None:
+        raise ActionError("size must be quick or big")
+    if todo.size == size:
+        return f"{todo.text} is already {size}"
+    notes.set_todo_size(todo.id, size)
+    notes.touch(entry.id, ctx.today)
+    return f"{todo.text} is {size}"
+
+
 def todo_add(req: ActionRequest[NotesConfig]) -> str:
-    """Add an open todo to an entry: `input` (or `text`) with an optional `size`, quick or big.
+    """Add an open todo to an entry: `input` (or `text`) with an optional size, quick or big, as
+    `size` (or `choice`, from its drop-down).
 
     With `create`, a missing entry is created first (`where` names its PR or ticket).
     """
@@ -255,9 +278,7 @@ def todo_add(req: ActionRequest[NotesConfig]) -> str:
     text = (fields.get("input") or fields.get("text") or "").strip()
     if not text:
         raise ActionError("the todo is empty")
-    size = fields.get("size", "")
-    if size not in ("", "quick", "big"):
-        raise ActionError(f"size must be quick or big, not {size!r}")
+    sized = _size(fields.get("size") or fields.get("choice") or "")
     notes = NotesRepository(ctx.db)
     title = req.field("entry")
     entry_id = notes.entry_id(title)
@@ -266,7 +287,6 @@ def todo_add(req: ActionRequest[NotesConfig]) -> str:
         entry_id = notes.add_entry(title, ctx.today, INFERRED, where or None, links_in(where))
     if entry_id is None:
         raise ActionError(f"no work-notes entry titled {title}")
-    sized: Size | None = "quick" if size == "quick" else "big" if size == "big" else None
     notes.add_todo(entry_id, text, sized, links_in(text))
     notes.touch(entry_id, ctx.today)
     return f"added: {text}"
@@ -278,6 +298,7 @@ ACTIONS: dict[str, ActionHandler] = {
     "todo_delete": todo_delete,
     "todo_link": todo_link,
     "todo_add": todo_add,
+    "todo_size": todo_size,
     "ice": ice,
     "ice_item": ice_item,
     "ice_note": ice_note,
