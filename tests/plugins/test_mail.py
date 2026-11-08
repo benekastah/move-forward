@@ -23,7 +23,7 @@ from move_forward.plugins.mail.panels import says
 from move_forward.plugins.mail.plugin import MailPlugin
 from move_forward.plugins.mail.repository import MessageRepository
 from move_forward.plugins.mail.setup import questions
-from move_forward.repositories import ContactRepository
+from move_forward.repositories import ContactRepository, TagRepository
 from move_forward.testing import Harness
 
 NOW = datetime(2026, 11, 7, 12, tzinfo=UTC)
@@ -887,17 +887,49 @@ def test_low_words_rank_mail_with_lists_but_not_from_someone_i_know() -> None:
 
 def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt() -> None:
     harness = mailbox(
-        message(4, subject="Garbage day moved", thread="g"),
-        message(3, subject="garbage day!!", thread="u", sender="x@spam.com", verified=False),
-        message(2, subject="#sale ends Friday", thread="s"),
-        message(1, subject="Sale on now", thread="t"),
+        message(6, subject="Garbage day moved", thread="g"),
+        message(5, subject="garbage day!!", thread="u", sender="x@spam.com", verified=False),
+        message(4, subject="#sale ends Friday", thread="s"),
+        message(3, subject="Sale on now", thread="t"),
+        message(2, subject="Your invoice is overdue", thread="i", sender="x@billing.example"),
+        message(1, subject="Re: APP-9 lunch", thread="d"),
     )
     harness.with_entities(
-        [Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out")]
+        [
+            Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out"),
+            Entity(ref=Ref(kind="notes.todo", id="8"), title="pay the #invoice"),
+            Entity(ref=Ref(kind="notes.todo", id="9"), title="#lunch", lifecycle="done"),
+            Entity(  # done, carrying a tag something open carries too
+                ref=Ref(kind="ticket", id="https://j/APP-9"),
+                title="APP-9 #garbage-day bins",
+                lifecycle="done",
+            ),
+        ]
     )
     items = {i.fingerprint: i for i in _items(harness)}
-    assert "about #garbage-day" in items["m4@acme.com"].details
-    assert items["m4@acme.com"].signals.importance == 1
-    assert not any(d.startswith("about") for d in items["m3@acme.com"].details)  # unverified
-    for sale in ("m2@acme.com", "m1@acme.com"):  # a sender's #tag puts no tag on their mail
-        assert not any(d.startswith("about") for d in items[sale].details)
+
+    def about(fingerprint: str) -> list[str]:
+        return [d for d in items[fingerprint].details if d.startswith("about")]
+
+    def importance(fingerprint: str) -> int:
+        signals = items[fingerprint].signals
+        assert signals is not None
+        return signals.importance
+
+    assert (about("m6@acme.com"), importance("m6@acme.com")) == (["about #garbage-day"], 1)
+    assert about("m5@acme.com") == []  # unverified
+    assert about("m4@acme.com") == about("m3@acme.com") == []  # a sender's #tag is no tag
+    # One word anyone may write: said, but it lifts nothing.
+    assert (about("m2@acme.com"), importance("m2@acme.com")) == (["about #invoice"], 0)
+    # Only what its own subject names: not the tags of the done ticket it names, nor #lunch,
+    # carried by nothing open.
+    assert about("m1@acme.com") == []
+
+
+def test_mail_isnt_about_a_tag_i_put_on_it() -> None:
+    harness = mailbox(message(1, subject="Chores"))
+    harness.with_entities([Entity(ref=Ref(kind="notes.todo", id="1"), title="x")])
+    TagRepository(harness.db).add(Ref(kind=THREAD, id="root@acme.com"), "chores", NOW)
+    [item] = _items(harness)
+    assert "#chores" in item.badges
+    assert not any(d.startswith("about") for d in item.details)

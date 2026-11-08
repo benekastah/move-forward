@@ -77,27 +77,31 @@ def link(config: MailConfig, plugin: str, thread: Thread) -> str | None:
 
 def about(graph: Graph, thread: Thread) -> list[str]:
     """The open units of work a conversation is about (one of my tickets its subject names, for
-    a verified sender: see `MailPlugin.entities`), by title, then, for a verified sender, the
-    `#tags` its subject names that something else open carries: mail about my work is worth
+    a verified sender: see `MailPlugin.entities`), by title: mail about my work is worth
     reading before the rest."""
-    ref = Ref(kind=THREAD, id=thread.id)
-    units = [
+    return [
         entity.title
-        for unit in graph.units(ref)
+        for unit in graph.units(Ref(kind=THREAD, id=thread.id))
         if (entity := graph.get(unit.kind, unit.id)) is not None and entity.lifecycle == "open"
     ]
-    if not thread.latest.verified:
-        return units  # anyone can write a subject: it names a tag only for one vouched for
-    tagged = [
-        tag.title
-        for tag in graph.related(ref, TAG)
-        if any(
-            (carrier := graph.get(r.kind, r.id)) is not None and carrier.lifecycle == "open"
-            for r in tag.refs
-            if r != ref
+
+
+def named_tags(graph: Graph, thread: Thread) -> list[str]:
+    """The `#tags` a verified sender's subject names (not those put on the thread itself) that
+    something open carries, by handle. Anyone can write a subject: an unverified one names
+    none."""
+    entity = graph.get(THREAD, thread.id)
+    if entity is None or not thread.latest.verified:
+        return []
+    return [
+        tag.ref.id
+        for ref in entity.refs
+        if ref.kind == TAG
+        and (tag := graph.get(TAG, ref.id)) is not None
+        and any(
+            (c := graph.get(r.kind, r.id)) is not None and c.lifecycle == "open" for r in tag.refs
         )
     ]
-    return [*units, *tagged]
 
 
 def says(words: list[str], subject: str) -> bool:
@@ -114,6 +118,7 @@ def says(words: list[str], subject: str) -> bool:
 def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item:
     latest = thread.latest
     work = about(graph, thread)
+    tagged = named_tags(graph, thread)
     # Someone I write to, but only one the server vouched for: a forged From mustn't borrow it.
     known = latest.known and latest.verified
     # Low words push mail down, but not a reply to me or mail from someone I know, as Gmail's
@@ -121,6 +126,10 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
     low = says(config.low_words, latest.subject) and not (latest.replies_to_me or known)
     bulk = latest.bulk or low
     urgent = known and not bulk and says(config.urgent_words, latest.subject)
+    # A one-word tag ("invoice") is a word any stranger may write, so it's said but lifts
+    # nothing (someone I know is lifted anyway); one of several words ("garbage day") is hard
+    # to hit by chance.
+    tag_matters = any("-" in tag for tag in tagged)
     who = latest.sender_name
     if latest.sender_email and latest.sender_email != who.lower():
         who = f"{who} <{latest.sender_email}>"
@@ -145,7 +154,11 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
         url=link(config, plugin, thread),
         subjects=[Ref(kind=THREAD, id=thread.id)],
         badges=badges,
-        details=[f"from {who}", *(f"about {title}" for title in work)],
+        details=[
+            f"from {who}",
+            *(f"about {title}" for title in work),
+            *(f"about #{tag}" for tag in tagged),
+        ],
         rank=int(latest.date.timestamp()),
         deferred=bulk and not thread.flagged,
         fingerprint=latest.message_id or str(latest.uid),
@@ -157,7 +170,10 @@ def _item(config: MailConfig, plugin: str, thread: Thread, graph: Graph) -> Item
             if urgent
             else 1
             if thread.flagged
-            or ((latest.important or latest.replies_to_me or work or known) and not bulk)
+            or (
+                (latest.important or latest.replies_to_me or work or tag_matters or known)
+                and not bulk
+            )
             else 0,
             waiting=[who] if person and latest.to_me else [],
             waiting_since=latest.date if person and latest.to_me else None,
