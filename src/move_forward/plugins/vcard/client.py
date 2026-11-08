@@ -134,14 +134,14 @@ def parse(text: str) -> list[Card]:
         name, params, value = _property(line)
         begins = name == "BEGIN" and value.upper() == "VCARD"
         ends = name == "END" and value.upper() == "VCARD"
-        if nested:
-            nested += 1 if begins else -1 if ends else 0
-        elif begins and card is not None and agent:
-            nested = 1
+        if begins and card is not None and agent:
+            nested += 1
+        elif nested and not begins:
+            nested -= 1 if ends else 0
         elif begins:
             if card is not None:  # the last one never ended: keep what it said
                 cards.append(card)
-            card = Card()
+            card, nested = Card(), 0
         elif card is None:
             pass
         elif ends:
@@ -193,7 +193,7 @@ def _lines(text: str) -> list[str]:
     last) joined, as are 2.1's quoted-printable values broken with a trailing `=`. 2.1 folds
     at whitespace and keeps it; later versions fold anywhere and drop the space or tab."""
     lines: list[str] = []
-    old = False  # in a 2.1 card
+    old = False  # in a 2.1 card (an agent's card inside one, rare, sets it for the rest)
     for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if raw.upper().startswith("BEGIN:VCARD"):
             old = False

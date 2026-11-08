@@ -253,3 +253,8 @@ def test_a_card_that_never_ends_keeps_what_it_said_and_the_next_are_read() -> No
 def test_folding_is_undone_by_each_cards_own_version() -> None:
     text = "BEGIN:VCARD\nVERSION:2.1\nFN:A\nEND:VCARD\nBEGIN:VCARD\nFN:Jo\n hn\nEND:VCARD\n"
     assert [c.name for c in client.parse(text)] == ["A", "John"]
+
+
+def test_a_cut_off_agents_card_doesnt_swallow_the_cards_after_it() -> None:
+    text = "BEGIN:VCARD\nVERSION:2.1\nFN:Boss\nAGENT:\nBEGIN:VCARD\nFN:Assistant\n"
+    assert [c.name for c in client.parse(text + card("FN:A") + card("FN:B"))] == ["Boss", "A", "B"]
