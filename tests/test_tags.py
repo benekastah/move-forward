@@ -307,3 +307,17 @@ def test_forget_gone_keeps_tags_on_done_work_in_the_graph() -> None:
         repo.add(ref, "chores", NOW)
     assert tags.forget_gone(repo, graph) == 1
     assert repo.all() == {merged: ["chores"]}
+
+
+def test_a_tools_labels_are_tags_whatever_its_kind_says_of_its_text() -> None:
+    mail = Entity(ref=Ref(kind="y.mail", id="m"), title="#sale", tags=["Garbage Day", "7"])
+    other = _entity("2", "garbage day moved")
+    found = {
+        e.ref.id: e
+        for e in tags.tagged(
+            [mail, other], {"y.mail": KindSpec(tags.TagAttrs, tags_from_text=False)}
+        )
+    }
+    assert found["garbage-day"].refs == [mail.ref]  # a label, not the sender's #sale
+    assert "sale" not in found and "7" not in found
+    assert found["2"].refs == [Ref(kind=TAG, id="garbage-day")]

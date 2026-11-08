@@ -15,6 +15,9 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **Labels as tags**: `Entity.tags` lists the tags a tool puts on an entity (a ticket's or a
+  PR's labels, as written there); core counts them as `#tags`, whatever the kind's
+  `tags_from_text`.
 - **Tags**: core publishes a `tag` (`api.kinds.TAG`) for each `#tag` in an entity's title or
   `mentions` (out of code), pointing at what carries it; an entity whose text names one points
   at it. A kind whose text anyone can write says `KindSpec(tags_from_text=False)`. No plugin may

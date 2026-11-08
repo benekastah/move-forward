@@ -29,6 +29,7 @@ class Entity(Model):
     refs: list[Ref]  # what it points at
     mentions: list[str]  # text that may name linking entities, see below
     attrs: dict[str, JsonValue]
+    tags: list[str]  # tags its tool puts on it, e.g. labels: see move_forward.tags
 ```
 
 Refs are how entities relate. They can point at an entity no plugin publishes (a ticket
