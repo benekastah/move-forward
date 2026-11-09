@@ -265,4 +265,6 @@ def test_rekeying_moves_links_todos_links_and_whats_on_ice_once_each() -> None:
     [read] = notes.entries()
     assert [link.ref for link in read.links] == [URL]
     assert [link.ref for link in read.todos[0].links] == [URL]
-    assert [item.ref_id for ice in notes.ices() for item in ice.items] == [URL]
+    assert [(ice.title, [item.ref_id for item in ice.items]) for ice in notes.ices()] == [
+        ("b", [URL])  # "a" held only what "b" holds: it goes, not left empty
+    ]

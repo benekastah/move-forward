@@ -528,7 +528,8 @@ class NotesRepository:
     def rekey(self, kinds: Collection[str], identify: Callable[[str, str], str]) -> int:
         """Give the links and what's on ice of `kinds` the ids `identify` says their entities
         have now (`Graph.identify`: a ticket kept by its key gets its URL); where the new
-        id is there already, the old row goes. How many ids changed. `identify` runs before
+        id is there already, the old row goes, and an act of icing left with nothing with it.
+        How many ids changed. `identify` runs before
         the transaction, not in it: it asks plugins (`url_for`), which may use the database."""
         marks = ", ".join("?" * len(kinds))
         tables = [
@@ -552,6 +553,8 @@ class NotesRepository:
                     (new, kind, old),
                 )
                 conn.execute(f"DELETE FROM {table} WHERE kind = ? AND {column} = ?", (kind, old))
+            # An act of icing whose only item was on ice already, in another, is that one.
+            conn.execute("DELETE FROM notes_ice WHERE id NOT IN (SELECT ice_id FROM notes_iced)")
         return len(moves)
 
     def replace_covers(self, ice_ids: list[int], covers: dict[int, list[Ref]]) -> None:
