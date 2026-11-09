@@ -207,14 +207,14 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
     assert not plugin.changed(ChangedRequest(ctx, Graph([])))  # no refresh every check
 
 
-@pytest.mark.parametrize("second", ["acme/widgets", "Acme/Widgets"])
+@pytest.mark.parametrize("second", ["Acme/widgets", "acme/WIDGETS"])
 def test_two_clones_of_one_github_repo_are_warned_of(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, second: str
 ) -> None:
-    """Published once when the remotes name it alike, as the graph keeps one id; GitHub's names
-    ignore case, so ones that differ in it are the same repo, warned of all the same."""
+    """Published once, by the first's name, and warned of: GitHub's names ignore case, so remotes
+    that differ in it name the same repo."""
     clones = [_repo(tmp_path / "a"), _repo(tmp_path / "b")]
-    for clone, name in zip(clones, ["acme/widgets", second], strict=True):
+    for clone, name in zip(clones, ["Acme/widgets", second], strict=True):
         git(clone, "remote", "add", "origin", f"git@github.com:{name}.git")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
@@ -230,9 +230,7 @@ def test_two_clones_of_one_github_repo_are_warned_of(
     plugin = GitPlugin(watching=False)
     found = plugin.collect(CollectRequest(ctx))
     repos = [e for e in plugin.entities(EntitiesRequest(ctx, found)) if e.ref.kind == "git.repo"]
-    published = [(e.ref.id, e.attrs["dir"]) for e in repos]
-    assert published[0] == ("acme/widgets", str(clones[0]))
-    assert len(published) == (1 if second == "acme/widgets" else 2)
+    assert [(e.ref.id, e.attrs["dir"]) for e in repos] == [("Acme/widgets", str(clones[0]))]
     plugin.collect(CollectRequest(ctx))  # warned of once a run, not every collect
     [warning] = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
-    assert f"{clones[0]}, {clones[1]} are each a clone of acme/widgets" in warning
+    assert f"{clones[0]}, {clones[1]} are each a clone of Acme/widgets" in warning

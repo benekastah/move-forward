@@ -105,11 +105,13 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         )
         if not partial:
             ctx.kv.set(LAST_FULL, ctx.now.isoformat())
-        by_name: dict[str, list[str]] = {}
+        by_name: dict[str, tuple[str, list[str]]] = {}  # GitHub's names ignore case
         for repo in found.repos:
-            if repo.github_repo:  # GitHub's names ignore case, though the graph's ids don't
-                by_name.setdefault(repo.github_repo.casefold(), []).append(repo.dir)
-        for name, dirs in by_name.items():
+            if repo.github_repo:
+                by_name.setdefault(repo.github_repo.casefold(), (repo.github_repo, []))[1].append(
+                    repo.dir
+                )
+        for name, dirs in by_name.values():
             if len(dirs) > 1 and tuple(dirs) not in self._clones_warned:
                 self._clones_warned.add(tuple(dirs))
                 ctx.log.warning(
@@ -230,8 +232,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         published: set[str] = set()
         for repo in snapshot.repos if snapshot else []:
             repo_ref = Ref(kind=REPO, id=repo.github_repo) if repo.github_repo else None
-            if repo_ref and repo_ref.id not in published:
-                published.add(repo_ref.id)
+            if repo_ref and repo_ref.id.casefold() not in published:  # GitHub's names ignore case
+                published.add(repo_ref.id.casefold())
                 entities.append(
                     Entity(
                         ref=repo_ref,
