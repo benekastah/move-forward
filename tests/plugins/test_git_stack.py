@@ -23,7 +23,7 @@ from legacy import save_json_snapshot
 
 from move_forward import refresh
 from move_forward.db import Database
-from move_forward.graph import Ref
+from move_forward.graph import Graph, Ref
 from move_forward.plugin import ActionError, ChangedRequest, CollectAfterRequest
 from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack import actions, changes, client, events
@@ -578,9 +578,9 @@ def test_a_linked_worktrees_config_is_its_main_repositorys(tmp_path: Path) -> No
     )
     linked = tmp_path / "linked"
     git(repo, "worktree", "add", "-q", "-b", "side", str(linked))
-    assert changes.config_file(linked) == (repo / ".git" / "config").resolve()
-    assert changes.config_file(repo) == repo / ".git" / "config"
-    assert changes.config_file(tmp_path) is None
+    before = changes.fingerprint(Graph(), [str(linked)])
+    git(repo, "config", "branch.side.stackParent", "main")  # as `git stack` records it
+    assert changes.fingerprint(Graph(), [str(linked)]) != before
 
 
 def test_the_branches_kept_before_current_was_dropped_are_kept() -> None:

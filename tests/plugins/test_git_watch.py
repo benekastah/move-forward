@@ -14,12 +14,12 @@ from conftest import NOW
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.plugin import ChangedRequest, CollectRequest, Context, StoreRequest
-from move_forward.plugins.git import changes, watch
+from move_forward.plugins.git import watch
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.plugin import MOVED, GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.repositories import KvRepository
-from move_forward.shell import git
+from move_forward.shell import git, git_common_dir
 
 WAIT_SECONDS = 10.0
 QUIET_SECONDS = 1.0
@@ -201,7 +201,7 @@ def test_the_plugin_refreshes_the_repo_an_edit_changed(tmp_path: Path) -> None:
         assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # starts watching
         (repo / "src" / "deep" / "a.py").write_text("changed\n")
         assert _until(lambda: plugin.changed(ChangedRequest(ctx(1), Graph([]))))
-        assert KvRepository(db, "git").get(MOVED) == json.dumps([str(changes.common_dir(repo))])
+        assert KvRepository(db, "git").get(MOVED) == json.dumps([str(git_common_dir(repo))])
     finally:
         plugin.stop_watching()
 

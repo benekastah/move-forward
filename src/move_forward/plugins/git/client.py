@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
-from ...api.shell import CommandError, git
-from . import changes
+from ...api.shell import CommandError, git, git_common_dir
 from .models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 log = logging.getLogger(__name__)
@@ -390,7 +389,7 @@ def collect(
     failed: list[Exception] = []
 
     def one(repo: Path) -> LocalRepo | None:
-        if only is not None and str(repo) in before and str(changes.common_dir(repo)) not in only:
+        if only is not None and str(repo) in before and str(git_common_dir(repo)) not in only:
             return before[str(repo)]
         try:
             return collect_repo(

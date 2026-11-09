@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from ...api import Graph, Model
+from ...api.shell import git_common_dir
 
 BRANCH = "git.branch"
 
@@ -27,24 +28,6 @@ class _BranchView(Model):
     gone: bool = False
 
 
-def config_file(repo: Path) -> Path | None:
-    """The file git keeps `repo`'s config in: `.git/config`, or for a linked worktree (whose
-    `.git` names its own git directory) the main repository's. None when it isn't a
-    checkout."""
-    dot = repo / ".git"
-    if dot.is_dir():
-        return dot / "config"
-    if not dot.is_file():
-        return None
-    text = dot.read_text(encoding="utf-8").strip()
-    if not text.startswith("gitdir:"):
-        return None
-    own = (repo / text.removeprefix("gitdir:").strip()).resolve()
-    common = own / "commondir"
-    base = (own / common.read_text(encoding="utf-8").strip()).resolve() if common.is_file() else own
-    return base / "config"
-
-
 def fingerprint(graph: Graph, repo_dirs: list[str]) -> str:
     """A digest of what moves a stack in `repo_dirs`: git's branches there, and the time,
     size and identity of each repository's config file."""
@@ -55,7 +38,8 @@ def fingerprint(graph: Graph, repo_dirs: list[str]) -> str:
     )
     configs: list[str] = []
     for repo in sorted(repo_dirs):
-        path = config_file(Path(repo))
+        common = git_common_dir(Path(repo))  # a linked worktree's is the main repository's
+        path = common / "config" if common else None
         try:
             stat = path.stat() if path else None
         except OSError:

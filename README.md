@@ -71,9 +71,9 @@ in the morning) on its last day.
 
 Teams are named once, at the top level. A plugin that has its own idea of a
 team maps the names in a `teams` table of its section: `[github.teams]` gives
-a team's GitHub slug where it isn't the name, `[slack.teams]` the channel its
-review pings go to, `[jira.teams]` its id in Jira's team field. A name there
-that the top-level `teams` doesn't have is an error.
+a team's GitHub slug where it isn't the name, and `[slack.teams]` the channel
+its review pings go to. A name there that the top-level `teams` doesn't have is
+an error.
 
 ## Plugins
 

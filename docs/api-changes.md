@@ -15,6 +15,9 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **A checkout's git directory**: `api.shell.git_common_dir(repo)` is the directory holding a
+  checkout's refs and config (its `.git`, or a linked worktree's main repository's), read
+  from the files without running git; None when `repo` isn't a checkout.
 - **The dashboard's URL**: `Context.dashboard_url` is always `http://localhost:<port>`, as the
   dashboard no longer serves HTTPS.
 - **Who may hide by text**: `Entity.mentions_hide` (True by default) says whether a unit of

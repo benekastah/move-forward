@@ -28,7 +28,7 @@ def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> str:
     return f"imported {len(people)} people, {len(teams)} teams and {len(pings)} logged nudges"
 
 
-def list_contacts(ctx: Context[SlackConfig], as_json: bool) -> str:
+def list_destinations(ctx: Context[SlackConfig], as_json: bool) -> str:
     """People's Slack ids and teams' channels, each with where it came from."""
     slack = SlackRepository(ctx.db)
     sources = slack.sources()
@@ -55,8 +55,8 @@ def run_command(ctx: Context[SlackConfig], args: argparse.Namespace) -> str:
     command = args.slack_command
     if command == "import":
         return import_markdown(ctx, Path(args.dir).expanduser())
-    if command == "contacts":
-        return list_contacts(ctx, args.json)
+    if command == "destinations":
+        return list_destinations(ctx, args.json)
     if command == "contact" and args.contact_command == "set":
         return contacts.set_contact(slack, args.login, args.slack_id)
     if command == "contact":
@@ -76,7 +76,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
         "import", help="read reviewer-map.md (and nudges in work-notes.md) from a directory"
     )
     import_parser.add_argument("dir", type=Path)
-    commands.add_parser("contacts", help="where people's and teams' pings go").add_argument(
+    commands.add_parser("destinations", help="where people's and teams' pings go").add_argument(
         "--json", action="store_true", help="print JSON, for scripts"
     )
     contact = commands.add_parser("contact", help="set or forget a person's Slack id")
