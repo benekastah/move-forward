@@ -33,12 +33,10 @@ from .plugin import (
     API_VERSION,
     Context,
     EntitiesRequest,
-    GraphEventsRequest,
     PanelsRequest,
     Plugin,
     PruneRequest,
     Response,
-    StoreRequest,
     page_path,
 )
 from .repositories import SnapshotRepository
@@ -112,7 +110,8 @@ class Harness:
         self._teams = list(teams)
         self._families = (*plugin.families, *families)
         self._seeds: list[_Seed] = []
-        self._previous: tuple[Graph, BaseModel | None] | None = None
+        self._previous: refresh.Before | None = None
+        """What held before the last `store`, for `events`."""
         with self._installed():
             registry.check_plugins([plugin])
             self.config = self._config()
@@ -142,9 +141,12 @@ class Harness:
 
     def store(self, snapshot: BaseModel) -> None:
         """Keep `snapshot` as a refresh would after collecting it: the plugin's `store`, and
-        when it was fetched. What the graph held before is kept for `graph_events`."""
-        self._previous = (self.graph(), self.snapshot())
-        self.plugin.store(StoreRequest(self.ctx, snapshot))
+        when it was fetched. What held before is kept for `events`."""
+        with self._installed():
+            self._previous = refresh.before_refresh(
+                self.db, registry.enabled(self.config, self.db, self.now)
+            )
+            refresh.store_snapshot(self._enabled(), snapshot)
         SnapshotRepository(self.db).save_fetched(self.plugin.name, self.now)
 
     def tick(self, seconds: float) -> None:
@@ -157,10 +159,7 @@ class Harness:
     def ctx(self) -> Context[Any]:
         """The plugin's context, as core gives it at `now`."""
         with self._installed():
-            [enabled] = [
-                e for e in registry.enabled(self.config, self.db, self.now) if e.name == self.name
-            ]
-        return enabled.ctx
+            return self._enabled().ctx
 
     @property
     def name(self) -> str:
@@ -169,10 +168,7 @@ class Harness:
     def snapshot(self) -> BaseModel | None:
         """What the plugin last stored, through its `load`."""
         with self._installed():
-            [enabled] = [
-                e for e in registry.enabled(self.config, self.db, self.now) if e.name == self.name
-            ]
-            return enabled.snapshot()
+            return self._enabled().snapshot()
 
     def graph(self) -> Graph:
         """The graph core builds from the plugin's and the seeded entities."""
@@ -223,23 +219,30 @@ class Harness:
         with self._installed():
             return refresh.plugin_page(self.config, self.db, page_path(self.name, key), query or {})
 
-    def graph_events(self) -> list[Event]:
-        """What the plugin's `graph_events` says changed between the graph before the last
-        `store` and now."""
+    def events(self) -> list[Event]:
+        """Every event the plugin makes of what changed between before the last `store` and
+        now, as core finds them after a refresh, subscribed to or not; none for the first."""
         if self._previous is None:
             raise RuntimeError("store a snapshot first: the events are of what it changed")
-        previous_graph, previous_snapshot = self._previous
-        return self.plugin.graph_events(
-            GraphEventsRequest(
-                self.ctx, self.graph(), self.snapshot(), previous_graph, previous_snapshot
+        previous = self._previous
+        with self._installed():
+            me = self._enabled()
+            return refresh.events_of(
+                me, previous.snapshots[self.name], me.snapshot(), previous.graph, self.graph()
             )
-        )
 
     def prune(self) -> list[str]:
         """Run the plugin's daily prune now; what it says it did."""
         return self.plugin.prune(PruneRequest(self.ctx, self.graph()))
 
     # Helpers
+
+    def _enabled(self) -> registry.Enabled:
+        """The plugin as core enables it; call it with the plugin `_installed`."""
+        [enabled] = [
+            e for e in registry.enabled(self.config, self.db, self.now) if e.name == self.name
+        ]
+        return enabled
 
     def _config(self) -> Config:
         return Config.model_validate(

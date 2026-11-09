@@ -1,7 +1,7 @@
 """Notification events of the git plugin: local branches that can be deleted.
 
 Whether a branch can be deleted depends on its PR having merged, which github knows, so it's
-read from the Cleanup panel as built from the graph (`Plugin.graph_events`).
+read from the Cleanup panel as built from the graph before and after a refresh.
 """
 
 from ...api import Event, Panel

@@ -167,6 +167,29 @@ def test_a_subscribed_kind_is_stored_from_the_second_refresh() -> None:
 
 
 @pytest.mark.usefixtures("git")
+def test_events_are_asked_after_a_refresh_of_anything_with_the_graph_before_and_after(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """What another plugin's entities say may change what a plugin has to say, so it's asked
+    even when it wasn't fetched: its snapshot then is the same before and after."""
+    asked: list[tuple[bool, bool]] = []
+
+    def record(self: _Git, req: EventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
+        asked.append((req.before == req.after, req.previous_graph is not req.graph))
+        return []
+
+    monkeypatch.setattr(_Git, "events", record)
+    config = Config.model_validate(
+        {"email": "me@x", "git": {"repos": []}, "notifications": {"subscribe": ["git.changed"]}}
+    )
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    refresh.refresh(config, db, NOW)  # the first store: nothing to compare with
+    refresh.refresh(config, db, NOW, only=set())
+    assert asked == [(True, True)]
+
+
+@pytest.mark.usefixtures("git")
 def test_without_a_subscription_nothing_is_stored() -> None:
     assert _run([]).take(NOW, KEEP) == []
 

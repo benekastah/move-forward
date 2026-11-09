@@ -9,7 +9,6 @@ from move_forward import refresh, registry
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import GraphEventsRequest
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack import events
@@ -19,7 +18,7 @@ from move_forward.plugins.github.snapshots import PrRepository
 
 
 class _Refreshes:
-    """git's `graph_events` over what's stored, as successive refreshes ask it: each against
+    """git's `events` over what's stored, as successive refreshes ask it: each against
     what the one before saw (the first against nothing)."""
 
     def __init__(self, pair: tuple[Config, Database]):
@@ -33,9 +32,9 @@ class _Refreshes:
         git = next(e for e in enabled if e.name == "git")
         now = cast(LocalSnapshot | None, snapshots["git"])
         before_graph, before = self.previous or (graph, None)
-        req = GraphEventsRequest(git.ctx, graph, now, before_graph, before)
         self.previous = (graph, now)
-        return [e.title for e in GitPlugin().graph_events(req)]
+        events = refresh.events_of(git, before, now, before_graph, graph)
+        return [e.title for e in events if e.kind == "branch_deletable"]
 
 
 def test_a_branch_whose_pr_merges_is_deletable_once_and_not_the_first_time() -> None:

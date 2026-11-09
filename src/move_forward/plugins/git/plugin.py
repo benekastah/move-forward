@@ -15,7 +15,7 @@ from ...api import (
     EntitiesRequest,
     Entity,
     Event,
-    GraphEventsRequest,
+    EventsRequest,
     InitSetup,
     ItemActionsRequest,
     ItemAdditions,
@@ -290,15 +290,11 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
 
-    def graph_events(self, req: GraphEventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
+    def events(self, req: EventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
         """`branch_deletable`: a branch Cleanup lists now and didn't before this refresh."""
-        if req.previous_snapshot is None:
-            return []
         config, now = req.ctx.config, req.ctx.now
-        before = Builder(config, now, req.previous_snapshot, req.previous_graph).cleanup()
-        return events.newly_deletable(
-            before, Builder(config, now, req.snapshot, req.graph).cleanup()
-        )
+        before = Builder(config, now, req.before, req.previous_graph).cleanup()
+        return events.newly_deletable(before, Builder(config, now, req.after, req.graph).cleanup())
 
     def item_actions(self, req: ItemActionsRequest[GitConfig]) -> ItemAdditions:
         item, graph = req.item, req.graph

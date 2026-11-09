@@ -169,12 +169,12 @@ def test_the_clock_moves_and_core_is_left_as_it_was() -> None:
     assert before == registry.PLUGINS
 
 
-def test_graph_events_need_a_store_first() -> None:
+def test_events_need_a_store_first() -> None:
     linear = Harness(LinearPlugin(), {"team": "ENG"})
     with pytest.raises(RuntimeError, match="store a snapshot first"):
-        linear.graph_events()
+        linear.events()
     linear.store(LinearSnapshot(issues=[]))
-    assert linear.graph_events() == []
+    assert linear.events() == []
 
 
 def _config_error(section: dict[str, Any]) -> None:

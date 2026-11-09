@@ -8,7 +8,6 @@ from move_forward import refresh, registry
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import GraphEventsRequest
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.changes import KINDS, changes
 from move_forward.plugins.jira.config import JiraConfig
@@ -49,7 +48,7 @@ def test_the_last_blocker_finishing_is_said() -> None:
 
 
 class _Refreshes:
-    """jira's `graph_events` over what's stored, as successive refreshes ask it: each against
+    """jira's `events` over what's stored, as successive refreshes ask it: each against
     what the one before saw (the first against nothing)."""
 
     def __init__(self, pair: tuple[Config, Database]):
@@ -63,9 +62,9 @@ class _Refreshes:
         jira = next(e for e in enabled if e.name == "jira")
         now = cast(JiraSnapshot | None, snapshots["jira"])
         before_graph, before = self.previous or (graph, None)
-        req = GraphEventsRequest(jira.ctx, graph, now, before_graph, before)
         self.previous = (graph, now)
-        return [e.thing for e in JiraPlugin().graph_events(req)]
+        events = refresh.events_of(jira, before, now, before_graph, graph)
+        return [e.thing for e in events if e.kind == "closeable"]
 
 
 def test_a_ticket_whose_prs_merge_is_closeable_once_and_not_the_first_time() -> None:

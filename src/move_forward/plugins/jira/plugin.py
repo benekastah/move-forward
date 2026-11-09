@@ -22,7 +22,6 @@ from ...api import (
     EventsRequest,
     FetchRequest,
     Graph,
-    GraphEventsRequest,
     HandleRequest,
     InitSetup,
     Item,
@@ -423,20 +422,14 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         return questions(ask, setup)
 
     def events(self, req: EventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
-        ctx, before, after = req.ctx, req.before, req.after
-        return changes.changes(ctx.config, before, after)
-
-    def graph_events(self, req: GraphEventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
-        """`closeable`: a ticket the transitions panel proposes closing (its PRs are merged)
-        now and didn't before this refresh."""
-        if req.previous_snapshot is None:
-            return []
-        config = req.ctx.config
-        before = _closing(config, req.previous_snapshot, req.previous_graph)
-        snapshot = req.snapshot or JiraSnapshot(issues=[])
-        issues = {i.key: i for i in snapshot.issues}
-        now = _closing(config, snapshot, req.graph)
-        return [changes.closeable(issues[key]) for key in sorted(now - before) if key in issues]
+        """What changed on my tickets, and `closeable`: a ticket the transitions panel
+        proposes closing (its PRs are merged) now and didn't before this refresh."""
+        config, before, after = req.ctx.config, req.before, req.after
+        closing = _closing(config, before, req.previous_graph)
+        issues = {i.key: i for i in after.issues}
+        now = _closing(config, after, req.graph)
+        closeable = [changes.closeable(issues[key]) for key in sorted(now - closing)]
+        return [*changes.changes(config, before, after), *closeable]
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS

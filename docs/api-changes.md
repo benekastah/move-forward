@@ -76,6 +76,14 @@ for themselves (a token, a request, an example config) is core's.
 - **No `Person.importance`**: a person's items rank by their contact type alone (one I set,
   or a tool's `Person.contact_type`), and the "VIP" badge is gone. A plugin that set it
   publishes the person without it, or the graph leaves them out.
+- **One events hook**: `graph_events` and `GraphEventsRequest` are gone, and `events` takes
+  both inputs. `EventsRequest` has the plugin's snapshot `before` the refresh and `after` it,
+  and the graph before it (`previous_graph`, where `graph` was) and now (`graph`). It's asked
+  after every refresh of anything, as `graph_events` was, never before the plugin's first
+  snapshot. A plugin that had `graph_events` moves it into `events`, reading
+  `before`/`after` for `previous_snapshot`/`snapshot`; one reading `req.graph` in `events`
+  reads `req.previous_graph`. `Harness.graph_events()` is `Harness.events()`, every event the
+  plugin makes since the last `store`.
 
 ## Version 1
 

@@ -187,19 +187,17 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   stored their snapshots, with the graph. It's refreshed on its own schedule, not with the
   plugins it reads; to refresh soon after they change, it `watches` them.
 - `notification_kinds` and `events(req)` make browser notifications: when the user has
-  subscribed to one of the kinds (`<plugin>.<kind>`), `events` gets the last good
-  snapshot (`req.before`), the one just collected (`req.after`) and the graph from before
-  the refresh, and returns an `Event` for what changed: its
+  subscribed to one of the kinds (`<plugin>.<kind>`), `events` is asked after every refresh,
+  of anything, with the plugin's snapshot before it and now (`req.before`, `req.after`, the
+  same when this refresh didn't fetch it) and the graph before it and now
+  (`req.previous_graph`, `req.graph`), and returns an `Event` for what became true: its
   `thing` (the plugin's events with the same one are told together; core keeps it as
   `<plugin>:<thing>`, so another plugin's events about one URL stay apart), `title`, `text`, and `anchor` (an
   item's `page.anchor(kind, id)`, to open the dashboard at it). Say it on a change of state,
-  not while it holds, and nothing about what `before` has no state for. A failure is
-  logged and the refresh goes on.
-- `graph_events(req)` makes events from what the graph says, e.g. a ticket's PRs all
-  merged: compare what holds now (`req.graph`, `req.snapshot`) with what held before the
-  refresh (`req.previous_graph`, `req.previous_snapshot`) and say what became true. Before
-  the plugin's first snapshot `previous_snapshot` is None: say nothing then. After a
-  restart, "before" is what was stored when the dashboard stopped.
+  not while it holds, and nothing about what `before` has no state for, e.g. a ticket's PRs
+  all merged now and not before. It isn't asked before the plugin's first snapshot, which has
+  nothing to compare with; after a restart, "before" is what was stored when the dashboard
+  stopped. A failure is logged and the refresh goes on.
 - `after_collect(req)` runs after every refresh, for work that needs the graph and
   writes the plugin's tables, e.g. notes finding what its ice covers.
 
@@ -467,7 +465,7 @@ def test_triage_lists_my_open_issues() -> None:
 
 It has `entities()` (what the graph holds of the plugin's), `panels()`, `dashboard()`,
 `act_now()`, `render_item(item)`, `run_action(name, fields)`, `page(key, query)`,
-`graph_events()` (since the last `store`), `prune()`, and `tick(seconds)` to move its clock.
+`events()` (since the last `store`), `prune()`, and `tick(seconds)` to move its clock.
 `tests/plugins/test_jira_panels.py` uses it.
 
 - **Panel tests** build the page as core does and assert on panel contents.

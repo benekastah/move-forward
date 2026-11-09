@@ -323,7 +323,7 @@ def test_opening_elsewhere_keeps_a_pin() -> None:
     assert said.action == "pin"
 
 
-def test_graph_events_compare_with_what_was_stored_before_the_refresh(
+def test_events_compare_with_what_was_stored_before_the_refresh(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """After a restart too: what was stored when the dashboard stopped is what the first

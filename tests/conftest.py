@@ -14,7 +14,7 @@ from move_forward.db import Database
 from move_forward.domain import Model
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
-from move_forward.plugin import AfterCollectRequest, StoreRequest
+from move_forward.plugin import AfterCollectRequest
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
@@ -38,7 +38,7 @@ from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
 from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
 from move_forward.plugins.slack.repository import SlackRepository
-from move_forward.refresh import build_dashboard, stored_graph
+from move_forward.refresh import build_dashboard, store_snapshot, stored_graph
 from move_forward.registry import BUILTINS, enabled, migrate
 from move_forward.repositories import SnapshotRepository
 
@@ -259,7 +259,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         know_jira_projects(db, "APP")
     for e in enabled(config, db, NOW):  # kept as a refresh keeps them
         if e.name in snapshots:
-            e.plugin.store(StoreRequest(e.ctx, snapshots[e.name]))
+            store_snapshot(e, snapshots[e.name])
             SnapshotRepository(db).save_fetched(e.name, NOW)
     plugins = enabled(config, db, NOW)
     notes = next(e for e in plugins if e.name == "notes")

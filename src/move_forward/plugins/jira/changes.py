@@ -1,5 +1,5 @@
 """What changed between two Jira snapshots, as notification events (`Plugin.events`), and
-which tickets can be closed now (`Plugin.graph_events`).
+which tickets can be closed now (from the graph).
 
 Each says something once, when a state changes; a ticket the earlier snapshot didn't hold
 only ever says it was assigned.
