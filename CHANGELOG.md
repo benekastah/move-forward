@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Focus mode walks Act now or one panel
+
+Focus mode no longer has All or a walk of a plugin's group: `/focus?cat=all` and
+`/focus?cat=<plugin>` (e.g. `cat=github`) now answer `404`. Link to `/focus?cat=act` for Act now,
+or to a panel's walk, `/focus?cat=<plugin>.<panel>` (e.g. `cat=notes.todos`), which are
+unchanged. The list at `/focus` shows each group's title without a link.
+
 ### `mfd snooze` takes any entity, as the Snooze button does
 
 `mfd snooze <entity> [7d|12h] [--kind K] [--task T]` names what to snooze as `mfd priority` and

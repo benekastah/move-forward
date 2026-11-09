@@ -156,9 +156,6 @@ def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
         ("git", ["git.local_work", "git.cleanup"]),
         ("git_stack", ["git_stack.stacks"]),
     ]
-    everything = dashboard.focus_items(panels.FOCUS_ALL)
-    assert everything is not None  # every item's panel, in the page's order; all empty here
-    assert dashboard.focus_items("github") == []
 
 
 def test_focus_items_by_category() -> None:
@@ -169,15 +166,6 @@ def test_focus_items_by_category() -> None:
             direct_requests=[pr(3, author="bob")],
         ),
     )
-    everything = dashboard.focus_items(panels.FOCUS_ALL)
-    assert everything is not None
-    keys = [panel.key for panel, _ in everything]
-    assert (
-        keys.index("github.reviews_for_me")
-        < keys.index("github.conflicts")
-        < keys.index("github.needs_reviewer")
-    )
-    assert [i.title for _, i in everything if _.key == "github.reviews_for_me"] == [pr(3).title]
     act = dashboard.focus_items("act")  # the review request, then the conflicted PR
     assert act is not None and [i.title for _, i in act] == [
         f"Review: {pr(3).title}",  # quick, and its author is waiting
@@ -187,8 +175,11 @@ def test_focus_items_by_category() -> None:
     one = dashboard.focus_items("slack.nudges")
     assert one is not None and [i.title for _, i in one] == [pr(1).title]
     assert dashboard.focus_items("nope") is None
+    assert dashboard.focus_items("all") is None  # no walk of everything
+    assert dashboard.focus_items("github") is None  # nor of a group but Act now
     assert dashboard.focus_title("act") == "Act now"
-    assert dashboard.focus_title(panels.FOCUS_ALL) == "All"
+    assert dashboard.focus_title("slack.nudges") == "Nudge reviewers"
+    assert dashboard.focus_title("github") is None
     assert dashboard.focus_title("nope") is None
 
 

@@ -327,7 +327,7 @@ About 200 lines of core (`render.py:734-827`, `panels.py:138-195`, the server, a
 `kept`/`kept_item` hook). It's also a third surface under "an item offers the same wherever
 it's shown". The Act now walk-through and the todos split are the useful parts.
 
-**Option (S):** drop its All and per-group walks.
+**Option (S):** drop its All and per-group walks. **Done:** it walks Act now or one panel.
 
 ---
 

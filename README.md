@@ -170,8 +170,8 @@ Below Act now is a collapsible group per enabled plugin holding its panels.
 Panels go in the skill's step order (each panel's priority), and groups by
 their most urgent panel: notes (todos), github, mail, git, git_stack, slack, jira.
 Drag a group's or a panel's title to move it (a panel within its group; Act
-now stays first); the order is kept in the database, and focus mode follows
-it. A group or panel new since then goes after the one it followed by default.
+now stays first); the order is kept in the database, and focus mode's list of
+panels follows it. A group or panel new since then goes after the one it followed by default.
 Panels that order by importance use the priority set on an item's subject first, then
 their own rank for ties.
 Every item with an entity subject but what's on ice, including a todo in the Notes panel or Focus mode, shows
@@ -274,11 +274,11 @@ question, or listing them in `[notifications] subscribe` (for example
 
 ## Focus mode
 
-The Focus button in the header opens a list of categories: All, each group
-and each panel, with counts. Pick one to see a single item at a time, with
-Prev and Next (or the left and right arrow keys). All goes through the panels
-as the page shows them, but Act now, whose items are in the other panels too.
-Work entries are split into their todos ([notes](docs/plugins/notes.md#panels) says how).
+The Focus button in the header opens a list of what to walk through: Act now, and each
+panel under its group's title, with counts. Pick one to see a single item at a time, with
+Prev and Next (or the left and right arrow keys). Act now goes through its items in their
+order overall; a panel, in its own. Work entries are split into their todos
+([notes](docs/plugins/notes.md#panels) says how).
 Buttons on a focused item come back to the same item afterwards.
 
 ## API
@@ -319,7 +319,7 @@ Pages (GET, HTML):
 | `/` | The dashboard. |
 | `/settings` | The config's settings as a form (see [Settings](#settings)). |
 | `/focus` | Focus mode's category list. |
-| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `all`, a group key (`act` or a plugin's name, e.g. `github`) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
+| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `act` (Act now) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
 
 Plugins add pages and buttons of their own, listed on their pages (see
 [Plugins](#plugins)).
