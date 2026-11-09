@@ -74,7 +74,10 @@ def run_json(repo: Path, args: list[str], done: Callable[[_Report], str], timeou
     except CommandError as e:
         if not e.stdout.strip():
             raise
-        failed = report(e.stdout)
+        try:
+            failed = report(e.stdout)
+        except ActionError:  # it stopped before its report (a crash, a kill): say why
+            raise ActionError(f"git stack {args[0]} failed: {e}") from e
         so_far = done(failed)
         raise ActionError(
             f"git stack {args[0]} failed: {failed.message or e}"

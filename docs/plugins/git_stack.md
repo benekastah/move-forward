@@ -20,7 +20,8 @@ have deleted), with its parent, status and, on a stack's bottom branch, its grou
 ## Panels
 
 - **Stacks**: `git stack info` statuses other than up-to-date, and tracked branches with
-  no PR, with a button per repo that runs `git stack clean -d local` for its merged
+  no PR, one item per branch ("me/x: needs-restack, no PR"); a merged one is about its
+  merged PR. With a button per repo that runs `git stack clean -d local` for its merged
   branches. Its count is about right: it comes from the last offline `git stack info`,
   while clean fetches and asks GitHub. It covers every stack, iced ones too: it never
   restacks or pushes, so an iced stack is left as it is unless a branch of it merged, and

@@ -31,12 +31,10 @@ from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
 from .panels import CLEAN, STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
 from .repository import MIGRATIONS, StackRepository
+from .setup import TEMPLATE
 
 FINGERPRINT = "stacks_fingerprint"
 """The kv key of the last `changes.fingerprint`."""
-TEMPLATE = """\
-# refresh_seconds = 1800                # how often it refreshes regardless of git's changes
-"""
 
 
 class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):

@@ -9,7 +9,6 @@ class StackBranch(Model):
     name: str
     parent: str | None = None
     status: str | None = None
-    current: bool = False
     group: str | None = None
 
 
