@@ -1,3 +1,4 @@
+import shlex
 import sys
 import time
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -142,24 +143,39 @@ def test_mfd_snooze_takes_any_entity_and_refuses_one_it_cannot_snooze(
     config = tmp_path / "config.toml"
     db_path = tmp_path / "dashboard.db"
     config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
-    assert cli.main(["-c", str(config), "notes", "add-entry", "Home chores"]) == 0
+    assert cli.main(["-c", str(config), "notes", "add-entry", "Bob's chores"]) == 0
     assert (
         cli.main(
-            ["-c", str(config), "notes", "todo", "add", "Home chores", "sweep", "--size", "quick"]
+            ["-c", str(config), "notes", "todo", "add", "Bob's chores", "sweep", "--size", "quick"]
         )
         == 0
     )
     capsys.readouterr()
-    assert cli.main(["-c", str(config), "snooze", "Home chores", "2d"]) == 0
+    assert cli.main(["-c", str(config), "snooze", "Bob's chores", "2d"]) == 0
     assert "snoozed 1 item(s) until " in capsys.readouterr().out
     [(kind, id, _)] = FeedbackRepository(Database(db_path)).all()
-    assert (kind, id) == ("notes.entry", "Home chores")
-    assert cli.main(["-c", str(config), "snooze", "Home chores"]) == 1  # snoozed: no Snooze button
+    assert (kind, id) == ("notes.entry", "Bob's chores")
+    assert cli.main(["-c", str(config), "snooze", "Bob's chores"]) == 1  # snoozed: no Snooze button
     said = capsys.readouterr().err
-    assert "nothing about Home chores" in said
-    assert '`mfd unsnooze "Home chores" --kind notes.entry` first' in said  # one word to a shell
+    assert "nothing about Bob's chores" in said
+    again = cli.command_line(["mfd", "unsnooze", "Bob's chores", "--kind", "notes.entry"])
+    assert f"`{again}` first" in said
     assert cli.main(["-c", str(config), "snooze", "Nothing"]) == 1
-    assert cli.main(["-c", str(config), "snooze", "Home chores", "1w"]) == 1
+    assert cli.main(["-c", str(config), "snooze", "Bob's chores", "1w"]) == 1
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows splits a command line its own way")
+def test_a_command_line_reads_back_as_its_words_in_a_posix_shell() -> None:
+    words = ["mfd", "unsnooze", 'Bob\'s "chores" & $HOME `x`', "--kind", "notes.entry"]
+    assert shlex.split(cli.command_line(words)) == words
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="POSIX shells split a command line their own way"
+)
+def test_a_command_line_quotes_windows_arguments_with_spaces_or_quotes() -> None:
+    words = ["mfd", "unsnooze", 'Bob\'s "chores"', "--kind", "notes.entry"]
+    assert cli.command_line(words) == 'mfd unsnooze "Bob\'s \\"chores\\"" --kind notes.entry'
 
 
 def test_a_snooze_ends_at_the_configured_local_hour_of_its_last_day() -> None:

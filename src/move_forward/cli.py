@@ -7,6 +7,8 @@ import io
 import json
 import logging
 import os
+import shlex
+import subprocess
 import sys
 import webbrowser
 from datetime import UTC, datetime
@@ -358,6 +360,14 @@ def _open_signed_in(token: str, port: int) -> int:
     return 0
 
 
+def command_line(words: list[str]) -> str:
+    """`words` as a command to paste into this system's shell, each argument kept whole
+    whatever it holds (an entry's id is its title): quoted for a POSIX shell, or on Windows
+    as its programs split their command line, though cmd and PowerShell still read their own
+    characters inside it (cmd's `&` and `%`, PowerShell's `$` and backtick)."""
+    return subprocess.list2cmdline(words) if sys.platform == "win32" else shlex.join(words)
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         # Printed as UTF-8, redirected or not: Windows' default is its code page, which can't
@@ -447,11 +457,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         buttons = snooze.snooze_buttons(build_dashboard(config, db, now), ref, args.task)
         if not buttons:
-            # Double-quoted where it has a space (an entry's id is its title): what cmd,
-            # PowerShell and POSIX shells all read as one word.
             words = ["mfd", "unsnooze", ref.id, "--kind", ref.kind]
             words += ["--task", args.task] if args.task else []
-            again = " ".join(f'"{w}"' if " " in w else w for w in words)
+            again = command_line(words)
             print(
                 f"nothing about {ref.id} is shown with a Snooze button: it may be snoozed or"
                 f" dismissed already (`{again}` first), or not shown at all",
