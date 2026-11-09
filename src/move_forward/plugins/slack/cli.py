@@ -1,5 +1,5 @@
-"""`mfd slack`: see and set where review pings go, and import the reviewer map and logged
-nudges from the skill's markdown."""
+"""`mfd slack`: see and set where review pings go; and what `mfd import` reads for slack,
+the reviewer map and logged nudges from the skill's markdown."""
 
 import argparse
 import json
@@ -12,20 +12,34 @@ from .config import SlackConfig
 from .repository import SlackRepository
 
 
-def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> str:
-    """Read Slack ids and team channels from `reviewer-map.md`, and logged nudges from
-    `work-notes.md`, replacing what an earlier import read. Can be run again any time."""
+def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> list[str]:
+    """Read Slack ids from `reviewer-map.md`, and logged nudges from `work-notes.md`,
+    replacing what an earlier import read; and set its teams' channels as if by hand, where
+    none is set, naming the teams whose channel set already differs from the map's. Nothing
+    when it has neither file. Can be run again any time."""
+    names = (markdown.REVIEWER_MAP_FILE, markdown.WORK_NOTES_FILE)
+    if not any((notes_dir / name).exists() for name in names):
+        return []
 
     def read(name: str) -> str:
         path = notes_dir / name
         return path.read_text(encoding="utf-8-sig", errors="replace") if path.exists() else ""
 
-    if not notes_dir.is_dir():
-        raise ValueError(f"{notes_dir} isn't a directory")
     people, teams = markdown.read_reviewer_map(read(markdown.REVIEWER_MAP_FILE))
     pings = markdown.read_nudges(read(markdown.WORK_NOTES_FILE))
-    SlackRepository(ctx.db).replace_imported(people, teams, pings)
-    return f"imported {len(people)} people, {len(teams)} teams and {len(pings)} logged nudges"
+    slack = SlackRepository(ctx.db)
+    set_teams = slack.replace_imported(people, teams, pings)
+    kept = slack.team_channels()
+    # Only a kept channel unlike the map's is worth a word: one equal to it changed nothing.
+    differ = sorted(t.slug for t in teams if kept.get(t.slug) != t)
+    said = ([f"set {len(set_teams)} teams' channels, as by hand"] if set_teams else []) + (
+        [f"left {', '.join(differ)}, whose channel set already differs from the map's"]
+        if differ
+        else []
+    )
+    return [f"imported {len(people)} people and {len(pings)} logged nudges"] + (
+        ["; ".join(said)] if said else []
+    )
 
 
 def list_destinations(ctx: Context[SlackConfig], as_json: bool) -> str:
@@ -53,8 +67,6 @@ def list_destinations(ctx: Context[SlackConfig], as_json: bool) -> str:
 def run_command(ctx: Context[SlackConfig], args: argparse.Namespace) -> str:
     slack = SlackRepository(ctx.db)
     command = args.slack_command
-    if command == "import":
-        return import_markdown(ctx, Path(args.dir).expanduser())
     if command == "destinations":
         return list_destinations(ctx, args.json)
     if command == "contact" and args.contact_command == "set":
@@ -72,10 +84,6 @@ def run_command(ctx: Context[SlackConfig], args: argparse.Namespace) -> str:
 
 def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     commands = parser.add_subparsers(dest="slack_command", required=True)
-    import_parser = commands.add_parser(
-        "import", help="read reviewer-map.md (and nudges in work-notes.md) from a directory"
-    )
-    import_parser.add_argument("dir", type=Path)
     commands.add_parser("destinations", help="where people's and teams' pings go").add_argument(
         "--json", action="store_true", help="print JSON, for scripts"
     )

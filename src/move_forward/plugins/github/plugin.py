@@ -1,6 +1,5 @@
 """The GitHub plugin."""
 
-import argparse
 import subprocess
 from datetime import datetime, timedelta
 from typing import ClassVar, cast
@@ -14,7 +13,6 @@ from ...api import (
     Asker,
     Changed,
     ChangedRequest,
-    CliHandler,
     CollectRequest,
     Context,
     EntitiesRequest,
@@ -25,6 +23,7 @@ from ...api import (
     Graph,
     Identity,
     IdentityRequest,
+    ImportRequest,
     InitSetup,
     Item,
     KindSpec,
@@ -46,12 +45,12 @@ from ...api import (
 )
 from ...api.kinds import PERSON
 from ...api.shell import CommandError
-from . import actions, changes, cli, client, derive, notifications, placing, pushes, relations
+from . import actions, changes, client, derive, notifications, placing, pushes, relations
 from .config import GitHubConfig
 from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
 from .panels import PR, REQUEST_REVIEWER_TASK, REVIEW_TASK, Builder
-from .people import PeopleRepository
+from .people import REVIEWER_MAP_FILE, PeopleRepository, read_reviewer_map
 from .prs import (
     changes_requested,
     last_review_activity,
@@ -125,7 +124,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),
         PERSON: KindSpec(GitHubPerson),
     }
-    cli_help = "import reviewers' emails from the skill's reviewer map"
     snapshot_model = GitHubSnapshot
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
     watches: ClassVar[list[str]] = ["git"]
@@ -514,8 +512,14 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         kind, id = req.kind, req.id
         return id if kind == PR else None
 
-    def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
-        return cli.add_commands(parser)
+    def import_dir(self, req: ImportRequest[GitHubConfig]) -> list[str]:
+        """Reviewers' emails from `reviewer-map.md`, replacing what an earlier import read."""
+        path = req.dir / REVIEWER_MAP_FILE
+        if not path.exists():
+            return []
+        emails = read_reviewer_map(path.read_text(encoding="utf-8-sig", errors="replace"))
+        PeopleRepository(req.ctx.db).replace_imported(emails)
+        return [f"imported {len(emails)} reviewers' emails"]
 
     def prune(self, req: PruneRequest[GitHubConfig]) -> list[str]:
         """Forget email lookups that found none `prune_days` ago, to try them again."""

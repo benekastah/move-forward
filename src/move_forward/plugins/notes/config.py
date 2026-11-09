@@ -6,7 +6,7 @@ from pydantic import model_validator
 
 from ...api import Strict
 
-IMPORT_ONCE = "the notes live in the database now: import them once with `mfd notes import <dir>`"
+IMPORT_ONCE = "the notes live in the database now: import them once with `mfd import <dir>`"
 """What to say to a config that still names the markdown notes' directory."""
 
 

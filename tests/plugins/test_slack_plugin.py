@@ -175,26 +175,17 @@ def test_iced_prs_get_no_pings() -> None:
     assert pings(github=snapshot(mine=[parked]), iced_stacks=[stack]) == {}
 
 
-def test_a_team_with_no_channel_gets_one_from_team_channel() -> None:
+def test_a_team_with_no_channel_set_is_named_without_one() -> None:
     mine = pr(1, requested_teams=["web", "core"])
-    found = pings(
-        github=snapshot(mine=[mine]),
-        teams=_teams(),  # web has a channel; core doesn't
-        team_channel="#team-{team}",
-    )
+    found = pings(github=snapshot(mine=[mine]), teams=_teams())  # web has a channel; core doesn't
     destinations = {t.name: t.destination for t in found[mine.url].targets}
-    assert destinations["core"] == "#team-core (guessed from team_channel)"
+    assert destinations["core"] == "team core"
     assert destinations["web"].startswith("#team-web (C1)")
-    unguessed = pings(github=snapshot(mine=[mine]), teams=_teams())
-    assert {t.name: t.destination for t in unguessed[mine.url].targets}["core"] == "team core"
 
 
-def test_team_channel_must_be_a_channel_with_the_team_in_it() -> None:
-    with pytest.raises(ValueError, match="must be a channel name with"):
-        SlackConfig(team_channel="team-{team}")
-    with pytest.raises(ValueError, match="must be a channel name with"):
-        SlackConfig(team_channel="#team")
-    assert SlackConfig(team_channel="#t-{team}").guessed_channel("web") == "#t-web"
+def test_a_config_still_setting_team_channel_is_told_its_gone() -> None:
+    with pytest.raises(ValueError, match=r"`team_channel` is gone.*\[slack.teams\].*team set"):
+        SlackConfig.model_validate({"team_channel": "#team-{team}"})
 
 
 def test_pings_are_worked_out_once_per_page_not_per_item(monkeypatch: pytest.MonkeyPatch) -> None:

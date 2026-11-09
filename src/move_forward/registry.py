@@ -112,6 +112,7 @@ RESERVED_NAMES = frozenset(
         "contact",
         "contacts",
         "dump",
+        "import",
         "init",
         "logout",
         "open",

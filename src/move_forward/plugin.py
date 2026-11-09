@@ -13,6 +13,7 @@ import traceback
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
@@ -334,6 +335,18 @@ class CliRequest[C: BaseModel]:
     args: argparse.Namespace
 
 
+@dataclass(frozen=True)
+class ImportRequest[C: BaseModel]:
+    """`mfd import <dir>`: what a plugin reads from `dir`, the move-forward skill's markdown
+    notes (`work-notes.md`, `on-ice.md`, `reviewer-map.md`)."""
+
+    ctx: Context[C]
+    dir: Path
+    replace: bool
+    """`--replace`: overwrite what's there where the plugin would otherwise keep it and skip
+    the import."""
+
+
 PageHandler = Callable[[PageRequest[Any]], str | Response | None]
 """Renders a page, as HTML or a `Response`; None means not found."""
 CliHandler = Callable[[CliRequest[Any]], int]
@@ -651,6 +664,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Add the arguments of `mfd <name>` to `parser` and return what runs it. Only called
         when `cli_help` is set."""
         raise NotImplementedError(f"{self.name} has cli_help but no cli")
+
+    def import_dir(self, req: ImportRequest[C]) -> list[str]:
+        """Read what the plugin recognises in `req.dir` (`mfd import`) into its tables, and
+        say what it read, one line each; nothing when it recognises nothing there. What it
+        won't overwrite without `req.replace` it skips, saying so in a line. Raises
+        `ValueError` or `OSError` when it fails, saying why."""
+        return []
 
     # Set-up and upkeep
 
