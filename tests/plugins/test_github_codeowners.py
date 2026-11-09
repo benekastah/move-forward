@@ -40,9 +40,7 @@ def test_catch_all_and_escaped_brackets() -> None:
     assert owners("client/pages/[id]/page.tsx") == (("@org/web",), False)
 
 
-def test_a_wildcard_last_names_only_what_it_matches_and_a_leading_globstar_matches_the_root() -> (
-    None
-):
+def test_only_a_bare_star_ends_ownership_below_and_globstars_are_whole_segments() -> None:
     rules = codeowners.CodeOwners(
         "docs/* @docs\n**/logs @logs\napps/**/build/ @build\n/packages/*-ui @ui\nfoo**/bar @x\n"
     )
@@ -55,6 +53,7 @@ def test_a_wildcard_last_names_only_what_it_matches_and_a_leading_globstar_match
     assert rules.owners("packages/web-ui/src/a.ts") == (("@ui",), False)  # not a bare `*`
     assert rules.owners("foobar") == ((), False)  # `**/` only as a whole segment
     assert rules.owners("foo-x/bar") == (("@x",), False)
+    assert rules.owners("foo/a/b/bar") == ((), False)  # `foo**` is `foo*`, in one segment
 
 
 def test_required_needs_the_configured_marker() -> None:

@@ -1,8 +1,9 @@
 """CODEOWNERS matching: which owners GitHub assigns to a path.
 
 Follows GitHub's rules: the last matching line wins, patterns behave like .gitignore
-(a leading or inner `/` anchors to the repo root, `*` stays within a path segment, `**`
-crosses segments, and a whole `**/` segment matches no directory too), and a pattern that
+(a leading or inner `/` anchors to the repo root, `*` stays within a path segment, `**` as
+a whole segment crosses segments, a `**/` one matching no directory too, and is a `*`
+inside one), and a pattern that
 names a directory owns everything below it, but one ending in a bare `*`, which GitHub reads
 as what's directly there: `docs/*` owns `docs/a.md`, not `docs/sub/b.md`.
 """
@@ -37,7 +38,8 @@ def _glob_to_regex(pattern: str) -> str:
             i += 3
             continue
         if pattern.startswith("**", i):
-            out.append(".*")
+            whole = (i == 0 or pattern[i - 1] == "/") and pattern[i + 2 : i + 3] in ("", "/")
+            out.append(".*" if whole else "[^/]*")
             i += 2
             continue
         if char == "*":
