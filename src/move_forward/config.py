@@ -180,8 +180,14 @@ class Config(Strict):
 
     @model_validator(mode="after")
     def _known_notifications(self) -> "Config":
-        """`[notifications] subscribe` names only kinds that exist."""
+        """`[notifications] subscribe` names only kinds that exist; the one HTTPS mode had says
+        it's gone, not that it's misspelled."""
         known = registry.notification_kinds()
+        if "dashboard.certificate_ending" in self.notifications.subscribe:
+            raise ValueError(
+                "[notifications] subscribe has dashboard.certificate_ending, which is gone with"
+                " HTTPS mode: take it out"
+            )
         bad = [kind for kind in self.notifications.subscribe if kind not in known]
         if bad:
             raise ValueError(f"[notifications] subscribe has {', '.join(bad)}: no such kind")

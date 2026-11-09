@@ -100,7 +100,7 @@ RESERVED_NAMES = frozenset(
         "db_backups",
         "db_path",
         "email",
-        "https",
+        "https",  # gone, and refused as such: a plugin of that name would be too
         "notifications",
         "people",
         "port",

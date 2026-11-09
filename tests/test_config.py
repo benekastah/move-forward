@@ -103,6 +103,12 @@ def test_moved_settings_say_where_they_went(tmp_path: Path) -> None:
         _load(tmp_path, MINIMAL + '\n[notes]\ndir = "~/n"\n')
 
 
+def test_a_subscription_to_the_certificates_notification_says_its_gone(tmp_path: Path) -> None:
+    text = MINIMAL + '\n[notifications]\nsubscribe = ["dashboard.certificate_ending"]\n'
+    with pytest.raises(ValidationError, match="gone with HTTPS mode: take it out"):
+        _load(tmp_path, text)
+
+
 def test_a_snooze_days_key_with_a_kinds_old_name_says_its_new_one(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match="the kind 'pr' is called 'pull_request' now"):
         _load(tmp_path, MINIMAL + "\n[act_now]\nsnooze_days = { pr = 7 }\n")
