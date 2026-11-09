@@ -48,17 +48,20 @@ class Config(Strict):
     """The teams I'm on or review for, by name. Plugins map a name to what their tool calls
     the team in their own `teams` table, e.g. `[github.teams]`."""
     db_path: Path = DEFAULT_DB_PATH
-    """The SQLite database holding snapshots, the notes and the plugins' tables."""
+    """The SQLite database holding the plugins' tables (what they fetched, and the notes), and
+    core's: when each plugin last fetched, priorities, tags, sessions and the like."""
     db_backups: int = DEFAULT_KEEP_BACKUPS
     """How many copies of the database to keep in `backups/` next to it. One is taken before
     migrations change the database; the oldest go first. 0 takes none."""
     port: int = DEFAULT_PORT
     """The localhost port `mfd serve` listens on."""
     refresh_on_load_seconds: int = DEFAULT_REFRESH_ON_LOAD_SECONDS
-    """A page load starts a background refresh if the last one began longer ago than this."""
+    """A page load asks each plugin whose last refresh began longer ago than this to refresh,
+    in the background."""
     prune_days: int = DEFAULT_PRUNE_DAYS
     """Work finished this long ago (merged PRs, closed tickets, done todos) is cleared from
-    the notes, and old pings from the database, by a daily job."""
+    the notes by a daily job, as are pings, Act now's dismissals and pins, and lookups that
+    found nothing (tried again) this old."""
     act_now: ActNowConfig = Field(default_factory=ActNowConfig)
     """`[act_now]`: how core ranks what the plugins nominate for Act now."""
     people: PeopleConfig = Field(default_factory=PeopleConfig)

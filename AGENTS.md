@@ -17,7 +17,7 @@ is what's left to build.
   tool), a repository module with its tables' migrations and queries,
   `panels.py` (pure functions from its snapshot and the graph to panels),
   `plugin.py` (the `Plugin` subclass), and `actions.py` if it has buttons.
-  Core's `domain.py` has only the base `Model`.
+  Core's `domain.py` has only the base `Model` and `KindModel`.
 - Plugins import core only from `move_forward.api` (ruff enforces it, and `tests/test_api.py`
   every form of import), and never import each other (`tests/test_api.py` again) or read
   each other's config, snapshots or tables. What one needs

@@ -9,8 +9,21 @@ is done, remove it in the same change, and delete this file once it's empty. The
 Every external tool is a plugin, so someone with a different set of tools (say, a
 salesperson on a CRM and a calendar) can run the dashboard with only the plugins that fit,
 and new tools can be added without touching the others. Plugins interact only through a
-small shared entity graph. The move-forward skill's notes move from markdown files into
-SQLite, behind a CLI and the HTTP API.
+small shared entity graph.
+
+## First: simplify
+
+Before building more, a review pass for what can go or be made simpler, since the code has
+grown complicated. Questions to answer, each with what to remove, merge or move:
+
+- **Features that do about the same thing**, where one would do (two ways of setting
+  something aside, of marking importance, of linking work, of telling me something changed).
+- **What in core makes writing a plugin hard**: hooks, request objects, flags and rules a
+  plugin must know about to do something simple.
+- **What makes the plugins complicated now**, and whether it could move to core: the same
+  work done in several plugins (keeping what moved, polling for changes, tokens and accounts,
+  sanitizing what a stranger wrote, item actions), or a plugin working around core.
+- **Anything overcomplicated**: code, config keys or docs that cost more than they give.
 
 ## Slack as a source of work
 
@@ -135,9 +148,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
     force-push (with lease), which the rule against force-pushing from a button forbids unless
     that's changed.
 
-### jira
-
-
 ### notes
 
 24. **Size a todo, and say why something's on ice, from the CLI.** `todo add --size` sizes a
@@ -147,9 +157,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
     the page), status and where (not shown at all), `link`, and `remove`.
 26. **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
     and remove them on the PR's items.
-
-### slack
-
 
 ## Plugins without core changes
 
@@ -200,8 +207,8 @@ in the browser", below, which already plans tables on the settings page.
 
 ### Accounts
 
-A plugin reads one login: github many repos but one account, jira one site, mail one mailbox.
-A plugin that can read several does it itself (mail does: see its page), as accounts in its own section, so it keeps one
+A plugin reads one login: github many repos but one account, jira one site. One that can read
+several does it itself (mail does: see its page), as accounts in its own section, so it keeps one
 set of tables, pages and actions, and settles what two of them both see the way its tool needs
 (the same conversation in two mailboxes is one item). Core gives each account its token:
 `Plugin.tokens` names them, and `mfd token set <plugin>.<account>` stores one.
@@ -214,6 +221,20 @@ set of tables, pages and actions, and settles what two of them both see the way 
 
 ### mail
 
+- **Gmail links that open the message.** The `message_url` `mfd init` suggests for Gmail,
+  `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}`, doesn't
+  open the message (seen on a personal Gmail). Find what does: the Message-ID's encoding in
+  the fragment (`message_url` percent-encodes all but `@`, so `+`, `=` and `/` change), its
+  angle brackets, `u/<address>` against `u/0`, or a link by Gmail's own ids (`X-GM-MSGID`,
+  `X-GM-THRID`, which IMAP gives), then fix the suggestion and `GMAIL_MESSAGE_URL`.
+- **Read Gmail without a password that can do more.** IMAP signs in to Gmail with an app
+  password or OAuth's `https://mail.google.com/` scope, and either can send and delete mail;
+  mail only promises, in its own code, to read headers. Gmail's API has a scope Google enforces
+  as read-only, `gmail.metadata` (headers and labels, never bodies), which fits mail exactly. A
+  Gmail account would read through the API, signing in with OAuth as slack does; other servers
+  stay on IMAP. The cost: `gmail.metadata` is a restricted scope, so a personal Google Cloud
+  project with an OAuth client and myself as a test user, whose sign-in Google lets last about
+  a week while the app is in testing (or the app goes through Google's verification).
 - **A forged reply on its own, if it's ever abused.** A stranger's reply takes on the priority,
   pin and tags set on its conversation, a known limitation (see
   [plugins/mail.md](plugins/mail.md)). If that's ever abused, give a message whose sender the
@@ -251,7 +272,7 @@ set of tables, pages and actions, and settles what two of them both see the way 
 - **Act now, after living with it.** Questions to answer from use: whether quick wins
   should lead at the end of the day and important work in the morning (a weight profile
   per part of the day, which could also rank personal mail down at 10am and work mail down
-  at 10pm, with an instance (Plugins without core changes, 9) saying which it is); whether
+  at 10pm, with mail's account (`[mail.home]`, `[mail.work]`) saying which it is); whether
   someone waiting on my team should weigh more (the `person` entities would need team
   membership, which github already fetches); whether unknown
   effort should count as "hour"; and whether notes' todos should carry `due` and

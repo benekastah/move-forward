@@ -14,6 +14,12 @@ Reach the dashboard at `http://mfd.localhost:<port>` (`mfd open` does). The `tls
 to the database is no longer read, and can be deleted, as can the authority `mfd cert --trust`
 added to the system's and browsers' stores.
 
+### Mail's server settings are set in the config file only
+
+`POST /settings` no longer changes `[mail]` `host`, `port`, `token_env`, `keychain_service`,
+`message_url` or `auth_servers` (nor an account's): it answers "nothing changed" and leaves the
+file alone, as for the other plugins' credential settings. Set them in the config file.
+
 ### Text in UTF-8 everywhere
 
 `mfd` prints UTF-8 even when its output is redirected (on Windows it used the code page, and

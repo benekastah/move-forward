@@ -3,8 +3,9 @@
 A local dashboard of everything in flight: my PRs and what they're waiting on,
 reviews asked of me, PRs my team should look at, local branches with
 unpushed or uncommitted work, git stack health, todos and merge conditions
-from my work notes, and my Jira tickets. No AI involved:
-everything is worked out from GitHub, git, Jira and the notes.
+from my work notes, my Jira tickets, mail that needs me, and whom to ping in Slack about my
+PRs. No AI involved: everything is worked out from GitHub, git, Jira, mail, Slack, my
+address book (vCard) and the notes.
 
 It runs a small HTTP server on localhost, refreshes in the background, and
 renders HTML. Browser scripts replace dashboard content after refreshes and
@@ -27,7 +28,7 @@ secure context, so nothing it does needs HTTPS.
 
 `dev.py install` ends with `mfd init` when there is no config yet: it asks for
 your email, which plugins to set up (github, git, and git_stack when it's
-installed, by default; jira and slack when you name them), then each chosen
+installed, by default; jira, mail, slack and vcard when you name them), then each chosen
 plugin's settings, with a guess from the machine as the default (the GitHub org
 of the current repo's remote, the teams `gh` says you're in, your git email).
 Tab completes plugin names, your org's team slugs and repo paths, and the org
@@ -233,7 +234,7 @@ shows.
 ## Settings
 
 `/settings` (Settings, in the header) shows the config's settings as a form: the top
-level's, `[act_now]`'s and each enabled plugin's, each with what it does. Saving writes
+level's, `[act_now]`'s, `[notifications]`' and each enabled plugin's, each with what it does. Saving writes
 only the settings that changed into the config file, each on its own line, keeping the
 file's comments and hand edits, and only if the result loads; otherwise the page says why
 and nothing is written. `mfd serve` then restarts with it, as it does whenever the file
@@ -375,23 +376,27 @@ neither is cleared `prune_days` after it last changed), a PR, ticket or
 entry on ice comes off it once its work is over the same way (a stack stays
 until it's reopened), the notes' offers and declines that old are forgotten,
 pings that old leave the database, and so do Act now's
-snoozes once over, and its dismissals and pins that old. Reviewer email lookups that
-found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
+snoozes once over, and its dismissals and pins that old. A priority set on work that's since
+finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. Reviewer email and Slack id
+lookups that found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
 ## How it stores things
 
 `dashboard.db` holds what each plugin last fetched, in that plugin's own
 tables (kept when a refresh fails, with the error shown alongside), the
-notes in the notes plugin's tables, the page's dragged order (core's `layout`), what you snoozed, dismissed or pinned in Act now (core's `act_now_feedback`), where pings go and the pings sent in the
-slack plugin's, and reviewers' emails in the github plugin's (from `mfd github
-import`, or looked up from commits). It's the
+notes in the notes plugin's tables, the page's dragged order (core's `layout`), what you
+snoozed, dismissed or pinned in Act now (core's `act_now_feedback`), the priorities, tags and
+contact types you set, the sign-in sessions and the notifications waiting to be told (core's
+too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
+plugin's (from `mfd github import`, or looked up from commits), and the messages and contacts
+mail and vcard read in theirs. It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.
 The server's token sits next to it, in `token`. The
 database, its backups and the token are readable by you alone (on Windows, by their access lists).
 
 The schema is built by migrations: core and each plugin own a list, applied in
-order at start-up and counted in `schema_versions`, so an older database
+order at start-up and kept by name in the `migrations` table, so an older database
 upgrades in place. Before the first migration that would change an existing
 database, it's copied to `backups/dashboard.db.<UTC time>` next to it (with
 SQLite's backup API, so the copy is consistent); the newest `db_backups` (10)
@@ -410,5 +415,7 @@ python3 dev.py coverage  # the tests under coverage.py: what they miss, and html
 
 On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points the repo at
 `git_hooks/`: `pre-commit` formats and lint-fixes staged Python, `pre-push` runs
-`dev.py check` on a push to `main`, as a branch has CI. GitHub Actions runs `dev.py check` on Linux, macOS and Windows once per
-pull request, and on every push to `main` (`.github/workflows/check.yml`).
+`dev.py check` on a push to `main`, as a branch has CI. GitHub Actions
+(`.github/workflows/check.yml`) runs `dev.py static` once, on Linux, and `dev.py tests` on
+Linux, macOS and Windows, for each pull request and push to `main`; a pull request that changes
+only Markdown (but `docs/entities.md`, which a test reads) skips them.

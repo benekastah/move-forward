@@ -68,6 +68,7 @@ flowchart LR
     stack_branch -. "what tracks an iced branch" .-> notes
     ticket -. "Add todo titles" .-> notes
     stack_branch -. "the stack to ice, with its group (its stack)" .-> notes
+    branch -. "the branch to ice, its commit; whether an iced one is gone" .-> notes
     person -. "who I am; who an item is about, for contact types" .-> core([core])
 ```
 
@@ -84,6 +85,8 @@ flowchart TB
         github([github])
         git([git])
         jira([jira])
+        mail([mail])
+        vcard([vcard])
     end
     subgraph Phase2["Phase 2: collect_after (sees the graph)"]
         git_stack([git_stack])

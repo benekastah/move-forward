@@ -149,8 +149,8 @@ def _locked_by(plugin: Plugin[Any, Any], section: BaseModel) -> frozenset[str]:
 
 
 def settings(config: Config) -> list[Setting]:
-    """What the page shows: the top level's settings, `[act_now]`'s, then each enabled
-    plugin's, in the order their models list them."""
+    """What the page shows: the top level's settings, `[act_now]`'s, `[notifications]`', then
+    each enabled plugin's, in the order their models list them."""
     sections = {p.name for p in registry.PLUGINS} | {"act_now", NOTIFICATIONS}
     found = _fields(config, None, sections)
     act_now = config.act_now
