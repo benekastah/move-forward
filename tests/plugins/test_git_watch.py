@@ -201,9 +201,6 @@ def test_the_plugin_refreshes_the_repo_an_edit_changed(tmp_path: Path) -> None:
         assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # starts watching
         (repo / "src" / "deep" / "a.py").write_text("changed\n")
         assert _until(lambda: plugin.changed(ChangedRequest(ctx(1), Graph([]))).changed)
-        assert KvRepository(db, "git").get(MOVED) == json.dumps([str(changes.common_dir(repo))])
-
-        assert _until(lambda: plugin.changed(ChangedRequest(ctx(1), Graph([]))))
         assert KvRepository(db, "git").get(MOVED) == json.dumps([str(git_common_dir(repo))])
     finally:
         plugin.stop_watching()
