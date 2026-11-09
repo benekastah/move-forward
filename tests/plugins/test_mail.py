@@ -27,7 +27,7 @@ from move_forward.plugins.mail.kinds import THREAD
 from move_forward.plugins.mail.models import MailSnapshot, Message
 from move_forward.plugins.mail.panels import message_url, says
 from move_forward.plugins.mail.panels import panels as mail_panels
-from move_forward.plugins.mail.plugin import MailPlugin
+from move_forward.plugins.mail.plugin import MailPlugin, merged
 from move_forward.plugins.mail.repository import MIGRATIONS, MessageRepository
 from move_forward.plugins.mail.setup import questions
 from move_forward.repositories import ContactRepository, TagRepository
@@ -1190,3 +1190,27 @@ def test_an_account_on_its_own_server_trusts_only_its_own_results() -> None:
     home, work = config.mailboxes()
     assert home.trusted_auth_servers() == {"mx.google.com"}
     assert work.trusted_auth_servers() == set()  # imap.work.example's are unknown
+
+
+@pytest.mark.parametrize(("home", "work"), [(False, False), (True, False), (False, True)])
+def test_a_copy_merges_only_when_both_senders_are_verified(home: bool, work: bool) -> None:
+    first = message(1, account="home", verified=home)
+    copy = message(1, account="work", verified=work, flagged=True)
+    assert [(m.account, m.flagged) for m in merged([first], [copy])] == [
+        ("home", False),
+        ("work", True),
+    ]
+    both = merged([message(1, account="home")], [message(1, account="work", flagged=True)])
+    assert [(m.account, m.flagged) for m in both] == [("home", True)]
+
+
+def test_an_account_on_mails_own_host_keeps_mails_auth_servers() -> None:
+    config = MailConfig.model_validate(
+        {
+            "host": "imap.example.com",
+            "auth_servers": ["mx.example.com"],
+            "home": HOME,
+            "work": {"host": "imap.example.com", "username": "me@work.example"},
+        }
+    )
+    assert [m.trusted_auth_servers() for m in config.mailboxes()] == [{"mx.example.com"}] * 2

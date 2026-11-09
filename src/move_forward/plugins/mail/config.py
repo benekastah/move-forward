@@ -239,9 +239,9 @@ class MailConfig(Strict):
             mailbox=said(account.mailbox, self.mailbox),
             sent_mailbox=said(account.sent_mailbox, self.sent_mailbox),
             message_url=said(account.message_url, self.message_url),
-            # Whose results headers count depends on the server: one of its own trusts its own.
+            # Whose results headers count depends on the server: another trusts its own.
             auth_servers=account.auth_servers
-            if account.auth_servers is not None or account.host is not None
+            if account.auth_servers is not None or host != self.host
             else self.auth_servers,
             # A password is never shared: an account's isn't [mail]'s.
             token_env=account.token_env or f"{DEFAULT_MAIL_TOKEN_ENV}_{name.upper()}"

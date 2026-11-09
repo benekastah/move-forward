@@ -48,18 +48,19 @@ def person_id(email: str) -> str:
 
 def merged(read: list[Message], more: list[Message]) -> list[Message]:
     """`read`, from the mailboxes before, with another mailbox's messages: a copy of one already
-    read (the same Message-ID, from the same sender, as verified) adds only what's about me
-    there, flagged, to me, replying to me, from someone I know or important, to the first copy.
-    Within a mailbox nothing is merged, and a message only claiming another's Message-ID (from
-    someone else, or unverified where the other was) is its own: it takes nothing from it."""
-    first: dict[tuple[str | None, str | None, bool], int] = {
-        (m.message_id, m.sender_email, m.verified): i for i, m in enumerate(read) if m.message_id
+    read (the same Message-ID from the same sender, each copy's sender verified) adds only
+    what's about me there, flagged, to me, replying to me, from someone I know or important, to
+    the first copy. Only verified copies merge, as anyone can write a `From` and a Message-ID:
+    unverified, a message sent to two of my addresses is shown twice. Within a mailbox nothing
+    is merged."""
+    first: dict[tuple[str, str | None], int] = {
+        (m.message_id, m.sender_email): i for i, m in enumerate(read) if m.message_id and m.verified
     }
     found = list(read)
     taken: set[int] = set()  # a mailbox has one copy of a message: more claim to be it
     for message in more:
-        i = first.get((message.message_id, message.sender_email, message.verified))
-        if message.message_id is None or i is None or i in taken:
+        i = first.get((message.message_id, message.sender_email)) if message.message_id else None
+        if not message.verified or i is None or i in taken:
             found.append(message)
             continue
         taken.add(i)

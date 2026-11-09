@@ -129,7 +129,10 @@ my-team = "#team-my-team"
 # auth_servers = ["mx.google.com"]      # who stamps Authentication-Results (known for Gmail); senders are verified by them
 # token_env = "MAIL_PASSWORD"           # else the system's secret store, for my email
 # keychain_service = "move-forward-mail"
-# [mail.work]                           # another mailbox, taking from [mail] what it leaves out
+# Several mailboxes: no username above, but a table each, taking from [mail] what it leaves out
+# [mail.home]
+# username = "me@example.com"           # its password: `mfd token set mail.home`
+# [mail.work]
 # host = "imap.work.example"
 # username = "me@work.example"          # its password: `mfd token set mail.work`
 
