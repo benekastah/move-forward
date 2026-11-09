@@ -172,6 +172,11 @@ def test_the_comments_table_kept_before_is_dropped() -> None:
     db.migrate("jira", MIGRATIONS[:4])
     issue = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
     IssueRepository(db).replace(JiraSnapshot(issues=[issue]))
+    db.execute(  # a comment, as the table held them
+        "INSERT INTO jira_issue_comments VALUES (?, 0, '1', 'Alice', '2026-11-01T00:00:00+00:00',"
+        " 0, 1)",
+        (issue.key,),
+    )
     db.migrate("jira", MIGRATIONS)
     tables = db.query("SELECT name FROM sqlite_master WHERE name = 'jira_issue_comments'")
     assert tables == []

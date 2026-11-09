@@ -1,6 +1,6 @@
-from typing import cast
-
 """What Jira notifications say, from two snapshots and the graph."""
+
+from typing import cast
 
 from conftest import NOW, issue, pr, snapshot, stored
 

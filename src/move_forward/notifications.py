@@ -158,11 +158,6 @@ def available(plugin_kinds: dict[str, dict[str, str]]) -> dict[str, str]:
     return found
 
 
-def unknown(subscribed: list[str], known: set[str]) -> list[str]:
-    """The subscribed kinds that aren't any."""
-    return [kind for kind in subscribed if kind not in known]
-
-
 _SOURCE_STATE = "failing:"
 
 
