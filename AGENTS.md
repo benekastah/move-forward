@@ -117,11 +117,14 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 
   Before committing, look for docs the change made untrue: search the docs
   and docstrings for the names you renamed, moved or removed.
-- **Every config key appears in three places**: its model (with a docstring),
-  the README (core's) or the plugin's page in `docs/plugins/`, and `mfd init`'s rendered config
-  (core's in `init.py`; a plugin's in its `setup.py`, an optional key as a commented default in
-  its `init_template`, a required one with an example value in its `init_example`), which
-  `mfd init --example` is built from too. Config models reject unknown
+- **Every config key appears in two places**: its model (with a docstring), and the README
+  (core's) or the plugin's page in `docs/plugins/`. `mfd init` (and `mfd init --example`,
+  built the same way) writes each optional key from its model, commented out with its default
+  and its docstring's first sentence. A plugin writes by hand, in its `setup.py`, only what
+  its model can't say: a required key with an example value in its `init_example`, a table of
+  example entries (`[github.teams]`, `[mail.<name>]`) in its `init_tables`, and in its
+  `init_shown` an example value for a key whose default says less (or is None).
+  Core's `[notifications]` is still written by hand, in `init.py`. Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
   `MOVED_SETTINGS` in `config.py`), and a removed plugin's section says it's gone
   (`REMOVED_PLUGINS`).

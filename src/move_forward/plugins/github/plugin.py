@@ -59,7 +59,7 @@ from .prs import (
     review_blockers,
     reviewer_assignment_reasons,
 )
-from .setup import EXAMPLE, TEMPLATE, questions
+from .setup import EXAMPLE, TABLES, questions
 from .snapshots import DerivedRepository, PrRepository
 from .tables import MIGRATIONS
 
@@ -110,7 +110,8 @@ def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
 class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     name = "github"
     title = "GitHub"
-    init_template = TEMPLATE
+    init_tables = TABLES
+    init_shown: ClassVar[dict[str, object]] = {"merge": {"method": "squash"}}
     init_example = EXAMPLE
     init_example_on = True
     init_finds_teams = True

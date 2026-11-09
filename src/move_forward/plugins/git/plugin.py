@@ -36,7 +36,7 @@ from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
 from .panels import Builder, branch_ref, delete_iced_action, restore_iced_action
 from .repository import MIGRATIONS, LocalRepository
-from .setup import EXAMPLE, TEMPLATE, questions
+from .setup import EXAMPLE, questions
 
 REPO = "git.repo"
 BRANCH = "git.branch"
@@ -53,7 +53,6 @@ LAST_STATUS = "last_status_check"
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     name = "git"
     title = "Git"
-    init_template = TEMPLATE
     init_example = EXAMPLE
     init_example_on = True
     config_model = GitConfig

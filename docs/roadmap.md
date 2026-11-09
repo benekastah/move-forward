@@ -47,7 +47,7 @@ Before building features on it, check, with a real user token:
   (`mentions`, `threads`, `saved`, `discussions`, `recognize_pings`, `availability`,
   `reactions`, `rebump_after_changes`); those that send or change something are off by
   default (`summary`, with where it goes and an optional schedule, and `focus_status`).
-  Like every config key, each goes in its four places.
+  Like every config key, each goes in its two places.
 - Messages are kept as ids, who, when, the channel and a short snippet only, in kept
   tables pruned after `prune_days`. Nothing is ever sent without a click.
 - Slack is polled, on slack's own `refresh_seconds`, with `changed` checking cheaply in

@@ -44,7 +44,7 @@ from .config import SlackConfig
 from .models import Ping, TeamChannel
 from .pings import Pinger, PingTarget, PrPing
 from .repository import MIGRATIONS, SlackRepository
-from .setup import EXAMPLE, TEMPLATE, questions
+from .setup import EXAMPLE, TABLES, questions
 
 PING = "ping"
 """The ping page for one of my PRs, `/slack/ping?pr=<PR URL>`."""
@@ -147,7 +147,7 @@ def ping_page(ping: PrPing, now: datetime, notice: str = "") -> str:
 class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     name = "slack"
     title = "Slack"
-    init_template = TEMPLATE
+    init_tables = TABLES
     init_example = EXAMPLE
     init_example_on = True
     config_model = SlackConfig

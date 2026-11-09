@@ -35,7 +35,7 @@ from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
 from .repository import MIGRATIONS, MessageRepository
-from .setup import EXAMPLE, TEMPLATE, questions
+from .setup import EXAMPLE, TABLES, questions
 
 STATUS = "status"
 """The kv key of the mailbox's status at the last look, for `changed`."""
@@ -88,7 +88,8 @@ def merged(read: list[Message], more: list[Message]) -> list[Message]:
 class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     name = "mail"
     title = "Mail"
-    init_template = TEMPLATE
+    init_tables = TABLES
+    init_shown: ClassVar[dict[str, object]] = {"auth_servers": ["mx.google.com"]}
     init_example = EXAMPLE
     config_model = MailConfig
     api_version = API_VERSION

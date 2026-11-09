@@ -380,19 +380,127 @@ def _tables(field: FieldInfo) -> bool:
     return field.json_schema_extra == {"tables": True}
 
 
-@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
-def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[Any, Any]) -> None:
-    written = plugin.init_template + plugin.init_example
+LEFT_OUT = init.render_config(init.EXAMPLE_ANSWERS, {})
+"""What `mfd init` writes when asked for no plugin: every offered plugin's section commented
+out."""
+_COMMENTED_KEY = re.compile(r"^# ([a-z_]+) = (.*?)(?:  # (.*))?$")
+"""A commented-out key as `mfd init` writes it: its name, value and comment."""
+
+
+@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+def test_every_key_of_a_plugin_left_out_is_a_commented_line(plugin: Plugin[Any, Any]) -> None:
+    """A plugin's required keys (with its example values), its optional keys (with their
+    defaults), and its tables (with an example), each commented out."""
+    shown = "\n".join(_section_lines(LEFT_OUT, plugin.name) or [])
     missing = [
         key
         for key, field in plugin.config_model.model_fields.items()
-        if not field.is_required()
-        and key != "teams"
-        and f"# {key} =" not in written
-        and f"[{plugin.name}.{key}]" not in written  # a table of its own
-        and not (_tables(field) and f"# [{plugin.name}." in written)  # tables by name
+        if f"\n# {key} =" not in f"\n{shown}"
+        and f"# [{plugin.name}.{key}]" not in shown  # a table of its own
+        and not (_tables(field) and f"# [{plugin.name}." in shown)  # tables by name
     ]
     assert missing == []
+
+
+@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+def test_what_mfd_init_writes_for_a_plugin_loads_uncommented(plugin: Plugin[Any, Any]) -> None:
+    """Its section left out, uncommented, and its section chosen (with its example's
+    values), its commented defaults uncommented, are each a section it takes."""
+    left_out = _section_lines(LEFT_OUT, plugin.name)
+    assert left_out is not None
+    _check_uncommented(plugin, left_out)
+    values = tomllib.loads(_uncomment(plugin.init_example))
+    text = init.render_config(init.EXAMPLE_ANSWERS, {plugin.name: values})
+    chosen = _section_lines(text, plugin.name)
+    assert chosen is not None and not chosen[0].startswith("#")
+    _check_uncommented(plugin, chosen)
+
+
+@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+def test_a_plugins_commented_defaults_are_its_defaults(plugin: Plugin[Any, Any]) -> None:
+    """Uncommenting a left-out section's optional keys changes nothing, but for the keys it
+    shows an example of instead (`init_shown`) and its example tables (`init_tables`)."""
+    lines = _section_lines(LEFT_OUT, plugin.name) or []
+    uncommented = _uncomment("\n".join(line for line in lines if not line.startswith("##")))
+    loaded = plugin.config_model.model_validate(tomllib.loads(uncommented)[plugin.name])
+    bare = plugin.config_model.model_validate(tomllib.loads(_uncomment(plugin.init_example)))
+    fields = plugin.config_model.model_fields
+    examples = {
+        *plugin.init_shown,
+        *(k for k in fields if f"[{plugin.name}.{k}]" in plugin.init_tables),
+    }
+    assert loaded.model_dump(exclude=examples) == bare.model_dump(exclude=examples)
+
+
+def test_cores_commented_defaults_are_its_defaults() -> None:
+    """Uncommenting core's top-level keys and its own tables changes nothing."""
+    top = LEFT_OUT.split("\n# [", 1)[0]  # up to the first section, a plugin's
+    loaded = config.Config.model_validate(
+        tomllib.loads(_uncomment(top) + "\n" + _uncomment(init.core_tables()))
+    )
+    assert loaded == config.Config.model_validate(init.EXAMPLE_ANSWERS)
+    assert "# prune_days = 90" in top and "# [act_now]" in init.core_tables()
+
+
+def _uncomment(text: str) -> str:
+    """`text` with its commented-out keys and tables uncommented, but not its prose."""
+    return "\n".join(
+        line[2:] if re.match(r"# (\[|[a-z_-]+ =)", line) else line for line in text.splitlines()
+    )
+
+
+def test_a_keys_comment_is_the_first_sentence_of_its_docstring() -> None:
+    assert init.summary("Worktrees to leave out, e.g. ones agents\n    create. More.") == (
+        "Worktrees to leave out, e.g. ones agents create."
+    )
+    assert init.summary("`[act_now]`: how core ranks. More.") == "How core ranks."
+    assert init.summary("No sentence") == "No sentence"
+
+
+def test_every_commented_key_has_its_docstrings_first_sentence() -> None:
+    """Each optional key `mfd init` writes, core's and the plugins', has a docstring, whose
+    first sentence is its comment."""
+    models: dict[str, type[BaseModel]] = {"": config.Config}
+    models |= {
+        key: field.annotation
+        for key, field in config.Config.model_fields.items()
+        if isinstance(field.annotation, type)
+        and issubclass(field.annotation, BaseModel)
+        and key not in init.HAND_WRITTEN
+    }
+    models |= {plugin.name: plugin.config_model for plugin in init.offered()}
+    examples = {p.name: tomllib.loads(_uncomment(p.init_example)) for p in init.offered()}
+    table = ""
+    checked: list[str] = []
+    for line in LEFT_OUT.splitlines():
+        if header := re.match(r"^# \[([a-z_]+)\]", line):
+            table = header[1]
+        elif (key := _COMMENTED_KEY.match(line)) and table in models:
+            field = models[table].model_fields.get(key[1])
+            if field is None or key[1] in examples.get(table, {}):
+                continue  # an example table's key (`[github.teams]`'s), or the init_example's
+            assert field.description, f"{table}.{key[1]} has no docstring"
+            assert key[3] == init.summary(field.description), f"{table}.{key[1]}"
+            checked.append(f"{table}.{key[1]}")
+    assert {"prune_days", "act_now.size", "github.history_days", "mail.port"} <= {
+        name.removeprefix(".") for name in checked
+    }
+
+
+def test_a_tokens_place_shows_the_sections_own_default() -> None:
+    lines = _section_lines(LEFT_OUT, "jira") or []
+    assert any(line.startswith('# token_env = "JIRA_API_TOKEN"') for line in lines)
+    assert any(line.startswith('# keychain_service = "move-forward-jira"') for line in lines)
+
+
+def test_answered_keys_are_not_commented_defaults_too() -> None:
+    text = init.render_config(
+        {"email": "e@x.y", "teams": [], "port": 9000}, {"github": {"org": "a", "host": "h"}}
+    )
+    top = text.split("\n# [", 1)[0]
+    github = "\n".join(_section_lines(text, "github") or [])
+    assert "# port =" not in top and "\nport = 9000" in top
+    assert "# host =" not in github and 'host = "h"' in github
 
 
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
@@ -450,12 +558,17 @@ def test_mfd_init_example_writes_a_config_with_the_plugins_their_examples_turn_o
 
 
 def _example_section(plugin: Plugin[Any, Any]) -> list[str] | None:
-    """`mfd init --example`'s lines for a plugin's section, up to the next section's; None
-    when it has none."""
-    lines = [str(line) for line in init.example().splitlines()]
+    """`mfd init --example`'s lines for a plugin's section; None when it has none."""
+    return _section_lines(init.example(), plugin.name)
+
+
+def _section_lines(text: str, name: str) -> list[str] | None:
+    """The lines of `text`, a config `mfd init` wrote, for the section `name` (commented out or
+    not), with its own tables, up to the next section's; None when it has none."""
+    lines = text.splitlines()
     header = re.compile(r"^(# )?\[([a-z_]+)\]")
     start = next(
-        (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),
+        (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == name),
         None,
     )
     if start is None:
@@ -476,10 +589,6 @@ def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, 
     if section is None:
         return  # no section to give (notes: always on)
     _check_uncommented(plugin, section)
-    if "\n##" in f"\n{plugin.init_template}":
-        # And `mfd init`'s copy of the alternative, with its required keys as in the example.
-        written = f"[{plugin.name}]\n{plugin.init_example}{plugin.init_template}"
-        _check_uncommented(plugin, written.splitlines())
 
 
 def _check_uncommented(plugin: Plugin[Any, Any], section: list[str]) -> None:

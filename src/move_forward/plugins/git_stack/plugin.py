@@ -32,7 +32,6 @@ from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
 from .panels import CLEAN, STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
 from .repository import MIGRATIONS, StackRepository
-from .setup import TEMPLATE
 
 FINGERPRINT = "stacks_fingerprint"
 """The kv key of the last `changes.fingerprint`."""
@@ -43,7 +42,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     title = "Git Stack"
     config_model = GitStackConfig
     api_version = API_VERSION
-    init_template = TEMPLATE
     init_example_on = True
     requires: ClassVar[list[str]] = ["git"]
     watches: ClassVar[list[str]] = ["git"]
