@@ -221,6 +221,12 @@ set of tables, pages and actions, and settles what two of them both see the way 
 
 ### mail
 
+- **Gmail links that open the message.** The `message_url` `mfd init` suggests for Gmail,
+  `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}`, doesn't
+  open the message (seen on a personal Gmail). Find what does: the Message-ID's encoding in
+  the fragment (`message_url` percent-encodes all but `@`, so `+`, `=` and `/` change), its
+  angle brackets, `u/<address>` against `u/0`, or a link by Gmail's own ids (`X-GM-MSGID`,
+  `X-GM-THRID`, which IMAP gives), then fix the suggestion and `GMAIL_MESSAGE_URL`.
 - **Read Gmail without a password that can do more.** IMAP signs in to Gmail with an app
   password or OAuth's `https://mail.google.com/` scope, and either can send and delete mail;
   mail only promises, in its own code, to read headers. Gmail's API has a scope Google enforces
