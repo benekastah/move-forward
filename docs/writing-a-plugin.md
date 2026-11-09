@@ -1,7 +1,7 @@
 # Writing a plugin
 
-Every tool the dashboard knows about is a plugin: github, git, git_stack, jira, mail, slack,
-vcard and notes are all built this way, in `src/move_forward/plugins/<name>/`. Core knows no tool. It
+Every tool the dashboard knows about is a plugin: github, git, git_stack, jira, mail, slack
+and notes are all built this way, in `src/move_forward/plugins/<name>/`. Core knows no tool. It
 loads the config, enables the plugins whose section is there, runs their collectors, builds
 the [entity graph](graph.md) from what they publish, and renders their panels.
 

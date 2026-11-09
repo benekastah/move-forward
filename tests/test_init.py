@@ -330,7 +330,6 @@ def test_tab_completes_plugins_the_orgs_teams_and_directories(
         "jira",
         "mail",
         "slack",
-        "vcard",
     ]
     assert completions["GitHub"] == ["core", "core-infra"] and fetched == ["acme"]
     assert asking.directories(f"{tmp_path}/app/") == [f"{tmp_path}/app/src/"]

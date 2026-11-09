@@ -4,8 +4,8 @@ A local dashboard of everything in flight: my PRs and what they're waiting on,
 reviews asked of me, PRs my team should look at, local branches with
 unpushed or uncommitted work, git stack health, todos and merge conditions
 from my work notes, my Jira tickets, mail that needs me, and whom to ping in Slack about my
-PRs. No AI involved: everything is worked out from GitHub, git, Jira, mail, Slack, my
-address book (vCard) and the notes.
+PRs. No AI involved: everything is worked out from GitHub, git, Jira, mail, Slack and
+the notes.
 
 It runs a small HTTP server on localhost, refreshes in the background, and
 renders HTML. Browser scripts replace dashboard content after refreshes and
@@ -28,7 +28,7 @@ secure context, so nothing it does needs HTTPS.
 
 `dev.py install` ends with `mfd init` when there is no config yet: it asks for
 your email, which plugins to set up (github, git, and git_stack when it's
-installed, by default; jira, mail, slack and vcard when you name them), then each chosen
+installed, by default; jira, mail and slack when you name them), then each chosen
 plugin's settings, with a guess from the machine as the default (the GitHub org
 of the current repo's remote, the teams `gh` says you're in, your git email).
 Tab completes plugin names, your org's team slugs and repo paths, and the org
@@ -97,7 +97,6 @@ Each plugin's page has its config, setup, panels, commands and buttons:
 | [jira](docs/plugins/jira.md) | `[jira]` | my open tickets |
 | [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages; connects to the workspace's Slack app |
 | [mail](docs/plugins/mail.md) | `[mail]` | unread and flagged mail over IMAP, by subject and sender, the people who matter first |
-| [vcard](docs/plugins/vcard.md) | `[vcard]` | an address book's people, from vCard files (CardDAV through vdirsyncer): who matters, by their groups |
 | [notes](docs/plugins/notes.md) | `[notes]`, optional: always on | the skill's work notes (entries and todos) and what's on ice, in the database |
 
 Plugins from other packages are found by their `move_forward.plugins` entry point: install
@@ -393,8 +392,8 @@ notes in the notes plugin's tables, the page's dragged order (core's `layout`), 
 snoozed, dismissed or pinned in Act now (core's `act_now_feedback`), the priorities, tags and
 contact types you set, the sign-in sessions and the notifications waiting to be told (core's
 too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
-plugin's (from `mfd github import`, or looked up from commits), and the messages and contacts
-mail and vcard read in theirs. It's the
+plugin's (from `mfd github import`, or looked up from commits), and the messages
+mail reads in its own. It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.
 The server's token sits next to it, in `token`. The
 database, its backups and the token are readable by you alone (on Windows, by their access lists).

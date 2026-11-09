@@ -46,7 +46,7 @@ flowchart LR
     stack_branch["git_stack.stack_branch"] -->|tracks| branch
     ice["notes.iced"] -->|hides| branch
     ice -->|hides| pr
-    thread["mail.thread"] -->|from| person["person<br/>(github, mail, vcard)"]
+    thread["mail.thread"] -->|from| person["person<br/>(github, mail)"]
     thread -->|mentions| ticket
     tag["tag<br/>(core)"] -->|carried by| pr
     thread -->|names| tag
