@@ -149,7 +149,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         worktree's uncommitted edits changed. Watched repos say so as it happens (see
         `watch`); the rest are polled, their refs by their files' times (see `changes`) and
         their edits every `status_seconds` by `git status`. Which repos moved is kept for
-        `collect`, to read just those, and asks for a refresh until it has."""
+        `collect`, to read just those, and asks for a refresh until a collect takes them."""
         ctx = req.ctx
         watcher = self._watcher_for(ctx)
         moved_now, edited_now = watcher.take() if watcher else (set[Path](), set[Path]())
@@ -171,7 +171,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         if moved - pending:
             pending |= moved
             ctx.kv.set_json(MOVED, sorted(pending))
-        # Pending until `collect` reads them: what's seen in the check core makes right after
+        # Pending until `collect` takes them: what's seen in the check core makes right after
         # a refresh (whose answer it ignores) still asks for a refresh at the next one.
         return bool(pending) or (before is not None and set(before) != set(now))
 

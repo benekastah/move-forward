@@ -36,8 +36,9 @@ stacks are built on your own branches. `ignored_worktree_globs`
 leaves worktrees out, and `commit_history_days` says how far back
 your commits (by the repo's `user.email`) count towards the directories you work in. A
 repo git can't read (one whose git hangs, say) is logged and kept as it was last read, or
-left out if it never was (a path that isn't a repo), so it doesn't hold up the others; a
-worktree deleted without `git worktree remove` is left out.
+left out if it never was (a path that isn't a repo), so it doesn't hold up the others,
+until its next change or the next full read (every `refresh_seconds`); a worktree deleted
+without `git worktree remove` is left out.
 
 Remotes can have any names. "The default branch" is the default branch on every remote
 (`upstream/main` and `origin/main` in a fork): a commit on any of them is on the default
