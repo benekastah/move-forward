@@ -32,9 +32,9 @@ from .act_now import PRIORITIES
 from .db import Database
 from .graph import Ref
 from .kinds import label
-from .plugin import CliHandler, CliRequest
+from .plugin import CliHandler, CliRequest, ImportRequest
 from .refresh import build_dashboard, refresh, refresh_subjects, snooze_item, stored_graph
-from .registry import enabled, enabled_names, migrate
+from .registry import Enabled, enabled, enabled_names, migrate
 from .repositories import (
     ContactRepository,
     FeedbackRepository,
@@ -138,6 +138,15 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         "snoozes",
         help="print the Act now items snoozed now as JSON: kind, id, task, until, fingerprint",
     )
+    import_parser = commands.add_parser(
+        "import",
+        help="read the move-forward skill's markdown notes (work-notes.md, on-ice.md,"
+        " reviewer-map.md) from a directory into each plugin that knows them",
+    )
+    import_parser.add_argument("dir", type=Path)
+    import_parser.add_argument(
+        "--replace", action="store_true", help="replace the notes already there"
+    )
     init_parser = commands.add_parser("init", help="ask for each setting and write the config")
     init_parser.add_argument(
         "--example", action="store_true", help="write a commented example instead of asking"
@@ -212,6 +221,29 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
     if os.environ.get(settings.token_env):
         print(f"note: ${settings.token_env} is set, and is used before the secret store")
     return 0
+
+
+def _import(plugins: list[Enabled], directory: Path, replace: bool) -> int:
+    """`mfd import`: each enabled plugin reads what it knows from `directory`; one refusing
+    doesn't stop the others."""
+    if not directory.is_dir():
+        print(f"mfd import: {directory} isn't a directory", file=sys.stderr)
+        return 1
+    status, said = 0, False
+    for e in plugins:
+        try:
+            lines = e.plugin.import_dir(ImportRequest(e.ctx, directory, replace))
+        except (OSError, ValueError) as err:
+            print(f"mfd import: {e.name}: {err}", file=sys.stderr)
+            status, said = 1, True
+            continue
+        for line in lines:
+            print(f"{e.name}: {line}")
+            said = True
+    if not said:
+        print(f"mfd import: nothing in {directory} that an enabled plugin imports", file=sys.stderr)
+        return 1
+    return status
 
 
 def _open(url: str) -> None:
@@ -421,6 +453,8 @@ def main(argv: list[str] | None = None) -> int:
         ]
         print(json.dumps(snoozes, indent=2))
         return 0
+    if args.command == "import":
+        return _import(enabled(config, db, datetime.now(UTC)), args.dir.expanduser(), args.replace)
     if args.command in plugin_commands:
         plugins = enabled(config, db, datetime.now(UTC))
         e = next((e for e in plugins if e.name == args.command), None)

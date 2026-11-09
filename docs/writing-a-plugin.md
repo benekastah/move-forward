@@ -444,6 +444,10 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   dashboard's token, as every request does.
 - **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
   a handler `(req: CliRequest) -> int` that gets the parsed `req.args`.
+- **Importing.** `import_dir(req)` reads what the plugin recognises in `req.dir` for `mfd
+  import <dir>` into its tables, and returns what it read, one line each (none when it
+  recognises nothing there); it raises `ValueError` to refuse, e.g. to overwrite without
+  `req.replace` (`--replace`).
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the
 plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their

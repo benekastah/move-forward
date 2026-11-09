@@ -5,6 +5,25 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### One `mfd import <dir>` replaces the three imports
+
+`mfd notes import`, `mfd github import` and `mfd slack import` are gone. `mfd import <dir>
+[--replace]` reads the skill's markdown from `<dir>` into every enabled plugin that knows it,
+printing a line per plugin (`notes: imported …`, `github: …`, `slack: …`):
+
+| Was | Now |
+| --- | --- |
+| `mfd notes import <dir> [--replace]` | `mfd import <dir> [--replace]` |
+| `mfd github import <dir>` | `mfd import <dir>` |
+| `mfd slack import <dir>` | `mfd import <dir>` |
+
+A directory with neither `work-notes.md` nor `on-ice.md` no longer fails the notes' part: the
+command fails only when no plugin imports anything from it, or when one refuses (notes,
+already holding notes, without `--replace`), the others importing anyway. So to read a changed
+`reviewer-map.md` again once the notes are in, run `mfd import <dir>` without `--replace`
+(which would replace the notes too): github and slack import it, and the notes' refusal makes
+it exit 1. `mfd github` has no commands left.
+
 ### Slack's sign-in is gone
 
 slack no longer connects to a Slack app: `[slack] client_id`, the `/slack`, `/slack/connect` and

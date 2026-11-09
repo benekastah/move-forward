@@ -1,4 +1,5 @@
-"""`mfd notes`: read and change the notes, and import or export the skill's markdown.
+"""`mfd notes`: read and change the notes, and export them as the skill's markdown (which
+`mfd import` reads, through `import_notes`).
 
 Every command works without the server, straight on the database, and prints `--json` for
 scripts (the move-forward skill calls them). Changes go through the same functions as the
@@ -32,10 +33,10 @@ ASKED_ICE = "asked:ice"
 `on-ice.md`'s `Last asked`, which the import reads and the export writes."""
 
 
-def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> str:
-    """Read `work-notes.md` and `on-ice.md` from `notes_dir` into the tables. Refuses to
-    replace notes already there unless `replace`. (`mfd slack import` and `mfd github
-    import` read the reviewer map.)"""
+def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> list[str]:
+    """Read `work-notes.md` and `on-ice.md` from `notes_dir` into the tables, for `mfd
+    import`; nothing when it has neither. Refuses to replace notes already there unless
+    `replace`."""
 
     def read(name: str) -> str:
         path = notes_dir / name
@@ -43,7 +44,7 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
 
     names = (markdown.WORK_NOTES_FILE, markdown.ON_ICE_FILE)
     if not any((notes_dir / name).exists() for name in names):
-        raise ValueError(f"{notes_dir} has neither {' nor '.join(names)}: nothing to import")
+        return []
     repo = NotesRepository(ctx.db)
     work_notes = read(markdown.WORK_NOTES_FILE)
     entries, sections = markdown.read_work_notes(work_notes)
@@ -55,10 +56,8 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
         repo.replace_all(entries, ices, sections)
     if last_asked:
         repo.remember(ASKED_ICE, last_asked)
-    return (
-        f"imported {len(entries)} entries, {sum(len(e.todos) for e in entries)} todos"
-        f" and {len(ices)} stacks on ice"
-    )
+    todos = sum(len(e.todos) for e in entries)
+    return [f"imported {len(entries)} entries, {todos} todos and {len(ices)} stacks on ice"]
 
 
 def export_notes(ctx: Context[NotesConfig], notes_dir: Path, force: bool) -> str:
@@ -309,11 +308,6 @@ def cmd_thaw(req: CliRequest[NotesConfig]) -> Result:
     return Result(_notice(actions.thaw(ActionRequest(ctx, graph, {"ice": str(args.ice)}))))
 
 
-def cmd_import(req: CliRequest[NotesConfig]) -> Result:
-    ctx, args = req.ctx, req.args
-    return Result(import_notes(ctx, Path(args.dir).expanduser(), args.replace))
-
-
 def cmd_export(req: CliRequest[NotesConfig]) -> Result:
     ctx, args = req.ctx, req.args
     return Result(export_notes(ctx, Path(args.dir).expanduser(), args.force))
@@ -334,7 +328,6 @@ def _commands() -> dict[str, Command]:
         "recall": cmd_recall,
         "ice": cmd_ice,
         "thaw": cmd_thaw,
-        "import": cmd_import,
         "export": cmd_export,
     }
 
@@ -410,11 +403,6 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     )
     ice.add_argument("--note")
     add("thaw", "take what's on ice off it").add_argument("ice", type=int)
-    import_parser = add("import", "read work-notes.md and on-ice.md from a directory")
-    import_parser.add_argument("dir", type=Path)
-    import_parser.add_argument(
-        "--replace", action="store_true", help="replace the notes already imported"
-    )
     export_parser = add("export", "write work-notes.md and on-ice.md into a directory")
     export_parser.add_argument("dir", type=Path)
     export_parser.add_argument("--force", action="store_true", help="overwrite existing files")

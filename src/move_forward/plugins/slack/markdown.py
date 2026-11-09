@@ -1,4 +1,4 @@
-"""What the slack plugin reads from the move-forward skill's markdown, once, with `mfd slack
+"""What the slack plugin reads from the move-forward skill's markdown, once, with `mfd
 import`: people's Slack ids and teams' channels from `reviewer-map.md`, and the nudges the
 skill logged in `work-notes.md`."""
 

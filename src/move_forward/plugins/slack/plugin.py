@@ -1,7 +1,7 @@
 """The Slack plugin: review pings, and where they go.
 
-People's Slack ids, teams' channels and the pings sent live in its own tables; `mfd slack
-import` reads the first two from the skill's `reviewer-map.md`.
+People's Slack ids, teams' channels and the pings sent live in its own tables; `mfd import`
+reads the first two from the skill's `reviewer-map.md`.
 """
 
 import argparse
@@ -23,6 +23,7 @@ from ...api import (
     CliHandler,
     Context,
     Graph,
+    ImportRequest,
     InitSetup,
     ItemActionsRequest,
     ItemAdditions,
@@ -155,7 +156,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     locked_settings: ClassVar[frozenset[str]] = frozenset({"workspace_url"})
     """The workspace its links go to."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
-    cli_help = "see and set where review pings go, or import them from the skill's markdown"
+    cli_help = "see and set where review pings go"
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
@@ -222,6 +223,11 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
+
+    def import_dir(self, req: ImportRequest[SlackConfig]) -> list[str]:
+        """Slack ids and team channels from `reviewer-map.md`, and nudges logged in
+        `work-notes.md`."""
+        return cli.import_markdown(req.ctx, req.dir)
 
     def actions(self) -> dict[str, ActionHandler]:
         def mark_sent(req: ActionRequest[SlackConfig]) -> str:

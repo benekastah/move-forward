@@ -166,7 +166,7 @@ class Config(Strict):
         if "notes_dir" in settings:
             moved.append(
                 "`notes_dir` is gone; the notes live in the database now: import them once with"
-                " `mfd notes import <dir>`"
+                " `mfd import <dir>`"
             )
         if "https" in settings:
             moved.append(

@@ -230,20 +230,15 @@ def test_todo_add_takes_a_leading_size_unless_size_says(run: Run, config: Path) 
 
 
 def test_an_import_of_a_preamble_alone_doesnt_empty_the_notes_without_replace(
-    run: Run, tmp_path: Path
+    run: Run, config: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     run("add-entry", "APP-1 Fix it")
     notes_dir = tmp_path / "notes"
     notes_dir.mkdir()
     (notes_dir / "work-notes.md").write_text("# Work notes\n\nSome words before any entry.\n")
-    code, _, err = run("import", str(notes_dir))
-    assert code == 1 and "--replace" in err
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 1
+    assert "mfd import: notes: " in capsys.readouterr().err
     assert [e["title"] for e in _json(run, "list")] == ["APP-1 Fix it"]
-
-
-def test_an_import_from_a_directory_without_the_notes_says_so(run: Run, tmp_path: Path) -> None:
-    code, _, err = run("import", str(tmp_path / "typo"))
-    assert code == 1 and "nothing to import" in err
 
 
 @pytest.mark.parametrize(

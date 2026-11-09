@@ -1,6 +1,6 @@
 """The notes plugin: work entries with their todos, and what's on ice, in its own tables.
 
-`mfd notes import` reads them once from the move-forward skill's markdown files.
+`mfd import` reads them once from the move-forward skill's markdown files.
 """
 
 import argparse
@@ -20,6 +20,7 @@ from ...api import (
     EntitiesRequest,
     Entity,
     Graph,
+    ImportRequest,
     Item,
     ItemActionsRequest,
     ItemAdditions,
@@ -41,7 +42,7 @@ from .panels import ENTRY, ICED, TODO, TODOS, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 EMPTY_NOTES = (
-    "No notes yet: New todo starts one here, `mfd notes import <dir>` reads the skill's"
+    "No notes yet: New todo starts one here, `mfd import <dir>` reads the skill's"
     " work-notes.md and on-ice.md, and `mfd notes add-entry <title>` starts an entry."
 )
 """What the Todos panel says while the notes are empty."""
@@ -65,7 +66,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         ICED: KindSpec(IcedAttrs, hides=True),
         TODO: KindSpec(TodoAttrs, gone_means_done=True),
     }
-    cli_help = "import the skill's markdown notes, or export them back"
+    cli_help = "read and change the notes, or export them as the skill's markdown"
 
     def entities(self, req: EntitiesRequest[NotesConfig, BaseModel]) -> list[Entity]:
         ctx = req.ctx
@@ -127,6 +128,10 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
+
+    def import_dir(self, req: ImportRequest[NotesConfig]) -> list[str]:
+        """`work-notes.md` and `on-ice.md`."""
+        return cli.import_notes(req.ctx, req.dir, req.replace)
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS

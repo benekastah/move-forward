@@ -5,8 +5,8 @@ conditions and links, and what's on ice. Always on; a `[notes]` section only cha
 settings, and it has none yet. The smallest config, `email` alone, is a todo list.
 
 Notes kept as the skill's markdown files (`work-notes.md`, `on-ice.md`) are read in once
-with `mfd notes import <dir>`; `mfd notes export <dir>` writes them back out. (The skill's
-`reviewer-map.md` is read by `mfd github import` and `mfd slack import`.) The markdown can't
+with `mfd import <dir>` (which also gives github and slack what they read of them, such as
+the skill's `reviewer-map.md`); `mfd notes export <dir>` writes them back out. The markdown can't
 hold everything the database does: an export loses the links made with Link and the order of
 an entry's lines, and an import gives todos new ids.
 
@@ -109,7 +109,7 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its stack and group in git stack, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
-| `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database, refused when it has neither. Lines it doesn't understand are kept with their entry. Refuses to replace notes already there without `--replace` (anything read replaces them all, even a preamble alone), which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |
+| `mfd import <dir> [--replace]` | Core's command; notes reads the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database, and nothing when it has neither. Lines it doesn't understand are kept with their entry. Refuses to replace notes already there without `--replace` (anything read replaces them all, even a preamble alone), which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |
 | `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. `on-ice.md` holds only stacks: PRs, tickets and entries on ice stay in the database. |
 
 ### Keys to remember by

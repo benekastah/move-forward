@@ -106,12 +106,12 @@ def _notes_dir(tmp_path: Path) -> Path:
     return notes_dir
 
 
-def test_mfd_notes_import_then_export(
+def test_mfd_import_then_notes_export(
     tmp_path: Path, config: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     notes_dir = _notes_dir(tmp_path)
-    assert cli.main(["-c", str(config), "notes", "import", str(notes_dir)]) == 0
-    assert "imported 2 entries, 3 todos and 2 stacks on ice" in capsys.readouterr().out
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert "notes: imported 2 entries, 3 todos and 2 stacks on ice" in capsys.readouterr().out
     db = Database(tmp_path / "dashboard.db")
     assert [e.title for e in NotesRepository(db).entries()] == [
         "APP-1 Fix the widget",
@@ -119,9 +119,9 @@ def test_mfd_notes_import_then_export(
     ]
     assert NotesRepository(db).recall("asked:ice") == date(2026, 10, 30)  # its Last asked
 
-    assert cli.main(["-c", str(config), "notes", "import", str(notes_dir)]) == 1
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 1
     assert "--replace" in capsys.readouterr().err
-    assert cli.main(["-c", str(config), "notes", "import", str(notes_dir), "--replace"]) == 0
+    assert cli.main(["-c", str(config), "import", str(notes_dir), "--replace"]) == 0
 
     out = tmp_path / "out"
     assert cli.main(["-c", str(config), "notes", "export", str(out)]) == 0

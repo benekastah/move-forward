@@ -18,7 +18,7 @@ def read_reviewer_map(text: str) -> dict[str, str]:
 
 
 class PeopleRepository:
-    """Logins' commit emails: imported from the reviewer map (`mfd github import`), or looked
+    """Logins' commit emails: imported from the reviewer map (`mfd import`), or looked
     up in the person's commits; an import wins over a lookup, which never overwrites."""
 
     def __init__(self, db: Database):

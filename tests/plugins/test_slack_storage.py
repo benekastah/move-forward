@@ -1,4 +1,5 @@
-"""The slack plugin's tables: what its migration copies from core, and `mfd slack import`."""
+"""The slack plugin's tables: what its migration copies from core, and what `mfd import`
+reads for it."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,20 +50,22 @@ def test_the_reviewer_map_and_logged_nudges_are_read() -> None:
     ]
 
 
-def test_mfd_slack_import(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_mfd_import_reads_slack_ids_teams_and_nudges(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     notes_dir = tmp_path / "skill"
     notes_dir.mkdir()
     (notes_dir / markdown.REVIEWER_MAP_FILE).write_text(REVIEWER_MAP)
     (notes_dir / markdown.WORK_NOTES_FILE).write_text(WORK_NOTES)
     config = tmp_path / "config.toml"
     config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
-    assert cli.main(["-c", str(config), "slack", "import", str(notes_dir)]) == 0
-    assert "logged nudges" in capsys.readouterr().out
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert "slack: imported 2 people" in capsys.readouterr().out
     slack = SlackRepository(Database(tmp_path / "d.db"))
     slack.add_ping(Ping(pr_url="https://pr/9", target="user:x", kind="first", sent_at=NOW))
     imported = len(slack.pings()) - 1
     assert imported and slack.contacts()
     # Importing again replaces what the last import read, and keeps what the dashboard sent.
-    assert cli.main(["-c", str(config), "slack", "import", str(notes_dir)]) == 0
+    assert cli.main(["-c", str(config), "import", str(notes_dir), "--replace"]) == 0
     assert len(slack.pings()) == imported + 1
-    assert cli.main(["-c", str(config), "slack", "import", str(tmp_path / "nope")]) == 1
+    assert cli.main(["-c", str(config), "import", str(tmp_path / "nope")]) == 1

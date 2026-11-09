@@ -12,7 +12,7 @@ section.
 channel of a team nothing else names one for.
 
 People's Slack ids and teams' channels come from the skill's `reviewer-map.md`, read with
-`mfd slack import <dir>` (which also picks up the nudges the skill logged in
+`mfd import <dir>` (which also picks up the nudges the skill logged in
 `work-notes.md`), or are set by hand on `/slack/contacts` or with
 `mfd slack contact|team set`; what's set by hand wins over a later import. With a Slack token
 (`token_env`, default `SLACK_API_TOKEN`, else the system's secret store under
@@ -54,7 +54,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | `/actions/slack/set_contact` | `login`, `slack_id` (blank for none) | Sets where a person's pings go, by hand; it wins over imports, and blank keeps them unlinked. |
 | `/actions/slack/clear_contact` | `login` | Forgets where a person's pings go, asking first on the page, so they're imported or looked up again. |
 | `/actions/slack/set_team_channel` | `team`, `channel_name`, `channel_id` (one of them at least) | Sets where a team's pings go, by hand; `[slack.teams]` still wins. |
-| `/actions/slack/clear_team_channel` | `team` | Forgets a team's channel, asking first on the page; `[slack.teams]` still wins, and a later `mfd slack import` can bring an imported one back. |
+| `/actions/slack/clear_team_channel` | `team` | Forgets a team's channel, asking first on the page; `[slack.teams]` still wins, and a later `mfd import` can bring an imported one back. |
 
 ## Commands
 
@@ -63,4 +63,4 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | `mfd slack destinations [--json]` | Where people's and teams' pings go, and whether each was imported, set by hand or looked up by email. |
 | `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
 | `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel. |
-| `mfd slack import <dir>` | Read people's Slack ids and teams' channels from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read. |
+| `mfd import <dir>` | Core's command; slack reads people's Slack ids and teams' channels from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read. |
