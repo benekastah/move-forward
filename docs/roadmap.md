@@ -176,17 +176,18 @@ Confluence, Notion, Figma). In order:
    one fails it.
 3. **The families most of those tools need.** A *conversation* (mail, support tickets,
    chats) and an *incident*, each with the attributes a consumer ranks by; mail's threads are
-   a conversation already. Core has the *organisation* family, which people point at, but
-   nothing joins them by email domain yet: contact types' `@domain` labels are one already.
+   a conversation already. An *organisation* family (a CRM's account, a support tool's
+   organisation) that people point at, whose type or importance counts for its people's items,
+   once a plugin publishes one: contact types' `@domain` labels are the closest today.
 4. **Who someone is, across tools.** A person with several identifiers (addresses, each
    tool's handle), not one email; `me` on core's `Person`, not just github's; how far an
    identity can be trusted, since an address in a header proves nothing (mail publishes a
    sender only when the receiving server verified them; a family-level `verified` would let
-   any plugin say so, and core join and trust only that: a person's stated importance and
-   contact type spread to everyone with their email, and github's reviewer emails come from
-   commits, which anyone can author as someone else); and availability, which a calendar, an
-   on-call schedule or a Slack status can each give, so Slack feature 6 (Reviewer
-   availability) reads it from any of them rather than Slack alone.
+   any plugin say so, and core join and trust only that: a person's contact type spreads to
+   everyone with their email, and github's reviewer emails come from commits, which anyone
+   can author as someone else); and availability, which a calendar, an on-call schedule or a
+   Slack status can each give, so Slack feature 6 (Reviewer availability) reads it from any
+   of them rather than Slack alone.
 5. **What `Signals` can't say yet.** It has `due`, `waiting_since` and `importance` (where a
    plugin maps its tool's priority). Missing: a breach apart from `due` (a support SLA, an
    incident's acknowledgement), stakes apart from importance (a customer's tier, a deal's

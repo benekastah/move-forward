@@ -1,5 +1,5 @@
 """The families of entity kinds: what more than one tool may represent, core's (a pull
-request, a ticket, a person, an organisation) and those plugins declare (`Plugin.families`). A plugin's kind
+request, a ticket, a person) and those plugins declare (`Plugin.families`). A plugin's kind
 named for a family must extend its model,
 adding the plugin's own fields, so every publisher's entities of the family carry what the
 family's model says and other plugins read them through it. A plugin's other kinds are its
@@ -21,9 +21,6 @@ TICKET = "ticket"
 """The family of tickets (issues), which link what's about them."""
 PERSON = "person"
 """The family of people."""
-ORGANISATION = "organisation"
-"""The family of organisations: a CRM's account, a support tool's organisation, a company in
-an address book. A person points at theirs."""
 TAG = "tag"
 """Core's own kind: a `#tag`, carried by the entities whose title or mentions have it, or that I put it on
 (see `tags`); text naming it only points at it. No plugin publishes it, nor declares a
@@ -93,22 +90,6 @@ class Person(KindModel):
     """What joins them to the same person in other tools (`Graph.same_person`)."""
     contact_type: str | None = None
     """What they are to me, when the tool knows: "customer", say, from a CRM. See `people`."""
-    importance: int | None = Field(default=None, ge=0, le=2)
-    """How much they matter to me, when the tool knows (0 normal, 1 high, 2 critical): a CRM's
-    VIP, a contact I starred. It raises the items about them as a contact type's does."""
-
-
-class Organisation(KindModel):
-    """What every organisation has, whoever publishes it. A `person` points at the
-    organisations they're at; what they are to me counts for its people (see `people`)."""
-
-    handle: str
-    """Its name in the tool."""
-    contact_type: str | None = None
-    """What it is to me, when the tool knows: "customer", say, from a CRM."""
-    importance: int | None = Field(default=None, ge=0, le=2)
-    """How much it matters to me, when the tool knows (0 normal, 1 high, 2 critical): a key
-    account. Its people's items rank by it as by a contact type."""
 
 
 _EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
@@ -135,8 +116,7 @@ _HOST_LOGIN = re.compile(r"[A-Za-z0-9.-]+(?::[0-9]+)?/[^/\s]+")
 
 
 def is_host_login(id: str) -> bool:
-    """Whether `id` is `<host>/<login>`, e.g. `github.com/alice`: a person's id, and an
-    organisation's (`<host>/<its id there>`)."""
+    """Whether `id` is `<host>/<login>`, e.g. `github.com/alice`: a person's id."""
     return _HOST_LOGIN.fullmatch(id) is not None
 
 
@@ -172,7 +152,6 @@ CORE_FAMILIES = (
     Family(PULL_REQUEST, "PR", PullRequest, is_url, PullRequestFetched),
     Family(TICKET, "ticket", Ticket, is_url, TicketFetched),
     Family(PERSON, "person", Person, is_host_login),
-    Family(ORGANISATION, "organisation", Organisation, is_host_login),
 )
 """The families core declares itself, as a plugin declares its own (`Plugin.families`)."""
 FAMILIES: dict[str, Family] = {}
