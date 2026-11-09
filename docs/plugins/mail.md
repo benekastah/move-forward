@@ -98,7 +98,9 @@ message_url = "mid:{message_id}"
 
 Each has its own password, never `[mail]`'s: `mfd token set mail.work` stores it under
 `move-forward-mail-work`, or export `MAIL_PASSWORD_WORK` (or set the account's `token_env` and
-`keychain_service`). A conversation is one item whichever mailboxes have it, linked by the
+`keychain_service`). With accounts, `[mail]`'s own `token_env` or `keychain_service` would name
+no mailbox's password, so a config setting either there is refused: set it in the account it
+was for. A conversation is one item whichever mailboxes have it, linked by the
 mailbox of its latest message, and a message in two (sent to both addresses) counts once, as the
 first mailbox's, flagged, to me, replying to me, from someone I know or important if either copy
 is. Only copies whose sender both servers verified merge, as anyone can write a `From` and a

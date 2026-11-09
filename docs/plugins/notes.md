@@ -127,7 +127,13 @@ commands they replaced:
 | `offered:<PR URL>:nudge`, `offered:<PR URL>:fresh-review` | it offered to nudge the PR's reviewers, or a fresh review of it | `mfd notes offered <PR URL> nudge\|fresh-review`; `mfd notes offers --pr <URL>` is a `recall` of each |
 | `asked:<question>` | it asked a once-a-day question, e.g. `asked:ice` (whether anything should go on ice) | `mfd notes asked <question> [--on D]` and `last-asked <question>` |
 
-`asked:ice` is also `on-ice.md`'s `Last asked`, which `import` remembers and `export` writes.
+A key is matched exactly, character for character, but for the space around it, which is
+dropped: an entry's key has its title as it is now, so one named by its ticket, or by its title
+before an import changed it, is another key. Every key is forgotten `prune_days` after its
+day, so an empty `recall` means "not lately", not "never".
+
+`asked:ice` is also `on-ice.md`'s `Last asked`, which `import` remembers and `export` writes;
+once the prune has forgotten it, `export` writes no `Last asked` line.
 An offer is remembered by its day, not its time. The import keeps a `- Declined <date>: …`
 line (as the skill wrote declines and check-ins) as a line of its entry, as written, and
 remembers nothing of it.

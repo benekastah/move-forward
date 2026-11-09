@@ -1,10 +1,11 @@
 """The notes plugin's tables, through its repository."""
 
 import threading
-from datetime import date
+from datetime import date, timedelta, timezone
 
 import pytest
 
+from move_forward import localtime
 from move_forward.db import Database
 from move_forward.plugins.notes.models import (
     Condition,
@@ -244,8 +245,23 @@ def test_the_bookkeeping_commands_rows_are_remembered_under_their_keys() -> None
     tables = {r["name"] for r in db.query("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert not tables & {"notes_declined", "notes_offers"}
     kv = {(r["plugin"], r["key"]) for r in db.query("SELECT plugin, key FROM kv")}
-    assert ("notes", "other") in kv and ("core", "last_asked_ice") in kv
-    assert not {("notes", "last_asked_ice"), ("notes", "last_asked_standup")} & kv
+    assert kv == {  # core's table is only read
+        ("notes", "last_asked_ice"),
+        ("notes", "last_asked_standup"),
+        ("notes", "other"),
+        ("core", "last_asked_ice"),
+    }
+
+
+def test_an_offers_time_is_remembered_as_its_local_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(localtime, "zone", timezone(timedelta(hours=-7)))  # Pacific, in summer
+    db = Database(":memory:")
+    names = [m.name for m in MIGRATIONS]
+    db.migrate("notes", MIGRATIONS[: names.index("0009_remembered")])
+    pr = "https://github.com/acme/w/pull/1"
+    db.execute("INSERT INTO notes_offers VALUES (?, 'nudge', '2026-10-07T03:00:00+00:00')", (pr,))
+    db.migrate("notes", MIGRATIONS)
+    assert NotesRepository(db).recall(f"offered:{pr}:nudge") == date(2026, 10, 6)
 
 
 def test_remember_replaces_the_day_and_recall_gives_it_by_key() -> None:

@@ -18,7 +18,8 @@ TEMPLATE = """\
 # token_env = "MAIL_PASSWORD"           # else the system's secret store, for your email (`mfd token set mail`)
 # keychain_service = "move-forward-mail"
 ## Several mailboxes instead: a table each, saying its own host, port, username, mailbox,
-## sent_mailbox, message_url and auth_servers (each with its default above), and none in [mail]
+## sent_mailbox, message_url and auth_servers (each with its default above), and its own
+## token_env and keychain_service, and none of them in [mail]
 ## [mail.home]
 ## host = "imap.gmail.com"
 ## username = "me@example.com"          # its password: `mfd token set mail.home`, or $MAIL_PASSWORD_HOME
@@ -31,6 +32,8 @@ TEMPLATE = """\
 ## sent_mailbox = "Sent"
 ## message_url = "mid:{message_id}"
 ## auth_servers = ["mx.work.example"]
+## token_env = "MAIL_PASSWORD_WORK"
+## keychain_service = "move-forward-mail-work"
 """
 EXAMPLE = '# host = "imap.gmail.com"\n# username = "me@example.com"\n'
 GMAIL_DOMAINS = ("gmail.com", "googlemail.com")

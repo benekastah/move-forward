@@ -1137,6 +1137,14 @@ def test_a_mailbox_needs_a_host_and_a_username_and_an_account_a_name(
             {"auth_servers": ["mx.google.com"], "home": {**HOME, "auth_servers": []}},
             r"its `auth_servers` is no mailbox's: remove it",
         ),
+        (
+            {"token_env": "MAIL_PASSWORD", "home": HOME},
+            r"each with its own password, so its `token_env` names none",
+        ),
+        (
+            {"keychain_service": "move-forward-mail", "home": HOME},
+            r"so its `keychain_service` names none: set `keychain_service` in the \[mail.<name>\]",
+        ),
     ],
 )
 def test_an_account_takes_no_mailbox_key_from_mail_and_says_which_it_needs(

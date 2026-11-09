@@ -286,9 +286,11 @@ def cmd_recall(req: CliRequest[NotesConfig]) -> Result:
 
 
 def _key(key: str) -> str:
-    if not key.strip():
+    """`key` without the space around it (a shell substitution's newline, say); otherwise it's
+    matched exactly."""
+    if not (stripped := key.strip()):
         raise ValueError("the key is empty")
-    return key
+    return stripped
 
 
 def cmd_ice(req: CliRequest[NotesConfig]) -> Result:
@@ -388,7 +390,9 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
         "--pr", help="the PR it holds, by URL (needed to add; to remove, default every PR's)"
     )
     remember = add("remember", "record that something happened, by a key of the skill's")
-    remember.add_argument("key", help="what happened, e.g. checked:<entry title>")
+    remember.add_argument(
+        "key", help="what happened, e.g. checked:<entry title>; recall matches it exactly"
+    )
     remember.add_argument("--on", help="the day, YYYY-MM-DD (default: today)")
     add("recall", "the day `remember` last recorded for a key, or nothing").add_argument("key")
     ice = add(

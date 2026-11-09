@@ -200,6 +200,16 @@ def test_remember_keeps_the_day_by_key_and_recall_gives_it(run: Run) -> None:
     assert run("remember", " ")[0] == 1
 
 
+def test_a_key_is_stripped_and_otherwise_matched_exactly(run: Run) -> None:
+    """A trailing newline from a shell substitution makes no new key; anything else does."""
+    assert run("remember", "  asked:ice\n", "--on", "2026-10-29")[1] == (
+        "remembered asked:ice on 2026-10-29\n"
+    )
+    assert run("recall", "asked:ice")[1] == "2026-10-29\n"
+    assert run("recall", " asked:ice ")[1] == "2026-10-29\n"
+    assert run("recall", "asked:Ice")[1] == "\n"
+
+
 def test_asked_ice_is_on_ice_mds_last_asked(run: Run, tmp_path: Path) -> None:
     assert run("remember", "asked:ice", "--on", "2026-10-30")[0] == 0
     assert run("export", str(tmp_path / "out"))[0] == 0

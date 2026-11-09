@@ -70,14 +70,17 @@ def _remember_bookkeeping(conn: sqlite3.Connection) -> None:
         for row in conn.execute("SELECT pr, kind, offered_at FROM notes_offers")
     ]
     # `mfd notes asked` kept its days in core's kv, as the notes' `last_asked_<question>`.
+    # They're copied, not deleted: a plugin's migration doesn't write to core's tables, and
+    # nothing reads those few rows any more.
     if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'kv'").fetchone():
-        asked = "plugin = 'notes' AND key LIKE 'last!_asked!_%' ESCAPE '!'"
         found += [
             (f"asked:{row['key'].removeprefix('last_asked_')}", row["value"])
-            for row in conn.execute(f"SELECT key, value FROM kv WHERE {asked}")
+            for row in conn.execute(
+                "SELECT key, value FROM kv"
+                " WHERE plugin = 'notes' AND key LIKE 'last!_asked!_%' ESCAPE '!'"
+            )
             if row["value"]
         ]
-        conn.execute(f"DELETE FROM kv WHERE {asked}")
     conn.executemany(
         "INSERT INTO notes_remembered VALUES (?, ?)"
         " ON CONFLICT (key) DO UPDATE SET on_date = MAX(on_date, excluded.on_date)",

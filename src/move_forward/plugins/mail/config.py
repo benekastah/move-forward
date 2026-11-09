@@ -152,8 +152,8 @@ class MailConfig(TokenFields, MailboxKeys):
     default_keychain_service: ClassVar[str] = DEFAULT_MAIL_KEYCHAIN_SERVICE
 
     token_env: str = ""
-    """The environment variable holding `[mail]`'s own password; an account has its own.
-    `MAIL_PASSWORD` unless set."""
+    """The environment variable holding `[mail]`'s own password; an account has its own, and
+    with accounts `[mail]` can't set this or `keychain_service`. `MAIL_PASSWORD` unless set."""
     keychain_service: str = ""
     """The service `[mail]`'s own password is stored under in the system's secret store (the
     macOS keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't
@@ -212,6 +212,11 @@ class MailConfig(TokenFields, MailboxKeys):
             raise ValueError(
                 "[mail] has accounts, so its username names no mailbox: move it to an account"
                 " of its own ([mail.home]), with `mfd token set mail.home` for its password"
+            )
+        if token := next((k for k in ("token_env", "keychain_service") if k in section), None):
+            raise ValueError(
+                f"[mail] has accounts, each with its own password, so its `{token}` names none:"
+                f" set `{token}` in the [mail.<name>] it was for, and remove it from [mail]"
             )
         if shared := [k for k in MAILBOX_KEYS if k in section]:
             key = shared[0]

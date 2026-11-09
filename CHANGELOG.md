@@ -23,8 +23,13 @@ kept is copied over under these keys, an entry named by its title:
 | `mfd notes asked <question> [--on D]` | `mfd notes remember "asked:<question>" [--on D]` |
 | `mfd notes last-asked <question>` | `mfd notes recall "asked:<question>"` (empty, not `never`, when it wasn't) |
 
-An entry was named by its id, title, PR or ticket; a key names it by its title, which
-`mfd notes show <entry> --json` gives. An offer is now kept by its day rather than its time.
+An entry was named by its id, title, PR or ticket; a key names it by its title as it is now,
+which `mfd notes show <entry> --json` gives, and is matched exactly (but for the space around
+it). Every key is forgotten `prune_days` after its day: check-ins, asked-done days and
+once-a-day questions too, which were never forgotten before (only declines and offers were).
+Read an empty `recall` as "not lately", not "never". Once `asked:ice` is forgotten, `mfd notes
+export` writes `on-ice.md` without its `Last asked` line. An offer is now kept by its day rather
+than its time.
 `mfd notes offers` without `--pr` has no replacement: recall the PRs you're about to offer on.
 The entries in `mfd notes list --json` and `show --json` no longer have `checked_on`,
 `asked_done_on` or `declined`, and `show` no longer prints them: recall their keys instead.
@@ -40,8 +45,9 @@ no link, and the servers known for its host). With accounts, `[mail]` sets none 
 what's about all mail (`refresh_seconds`, `known_days`, `since_days`, `max_messages`,
 `urgent_words`, `low_words`). A config whose `[mail]` still sets one alongside accounts is
 refused, naming the key and the accounts that went without it: copy the key into each of those
-accounts it was for, then delete it from `[mail]`. Passwords are unchanged, as they were
-already each account's own.
+accounts it was for, then delete it from `[mail]`. Passwords were already each account's own,
+but `[mail]`'s `token_env` and `keychain_service` were ignored alongside accounts; now they're
+refused: set them in the account they were for, and remove them from `[mail]`.
 
 ### A page load no longer refreshes
 
