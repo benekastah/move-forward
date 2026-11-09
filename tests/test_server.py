@@ -470,7 +470,7 @@ def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: ser
         browser(client, Authorization="Bearer wrong"),
         browser(client, Cookie=wrong_session),
     ):
-        for path in ("/", "/slack/contacts"):  # a plugin's page too
+        for path in ("/", "/slack/contacts", "/slack/callback"):  # plugins' pages, sign-in's too
             response = get(client, path, headers)
             assert response.status == 401 and "mfd open" in response.read().decode()
     response = post(client, "/actions/slack/mark_sent", SENT, {"Authorization": "Bearer wrong"})

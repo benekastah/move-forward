@@ -28,6 +28,8 @@ CHANNEL_ID_RE = re.compile(r"^[CG][A-Z0-9]{6,}$")
 CHANNEL_NAME_RE = re.compile(r"^#[\w-]+$")
 LOOKUPS_FAILED = "lookups_failed"
 """The kv key of why looking up Slack ids by email last failed, for the contacts page."""
+BAD_TOKEN = {"invalid_auth", "not_authed", "token_expired", "token_revoked", "account_inactive"}
+"""Slack's refusals of the token itself, rather than of one lookup."""
 
 
 class _PersonView(Model):
@@ -219,6 +221,18 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
     return html.page("Where pings go", "where pings go", body)
 
 
+def _hint(failure: Exception) -> str:
+    """What to do about a lookup Slack refused for its token, after the refusal: give it the
+    scope it lacks, or a token that works."""
+    if not isinstance(failure, client.SlackError):
+        return ""
+    if failure.error == "missing_scope":
+        return ": the token needs users:read.email"
+    if failure.error in BAD_TOKEN:
+        return ": give slack a token that works, with `mfd token set slack`"
+    return ""
+
+
 def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
     """Find, through Slack's API, the Slack ids of people my open PRs ask to review whom
     nothing names a Slack id for, by the email github knows for them. Each is looked up once:
@@ -244,10 +258,7 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
             slack_id = client.lookup_by_email(api_token, email)
         # Slack's refusal, no network or a cut answer, or one that isn't JSON.
         except (client.SlackError, http.RequestError, ValueError) as e:
-            missing = isinstance(e, client.SlackError) and e.error == "missing_scope"
-            ctx.kv.set(
-                LOOKUPS_FAILED, f"{e}{': the token needs users:read.email' if missing else ''}"
-            )
+            ctx.kv.set(LOOKUPS_FAILED, f"{e}{_hint(e)}")
             return found
         slack.save_looked_up(login, slack_id, ctx.now)
         if slack_id:

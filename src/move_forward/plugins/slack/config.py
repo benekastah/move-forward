@@ -26,7 +26,8 @@ class SlackConfig(TokenFields):
 
     token_env: str = ""
     """The environment variable holding a Slack token with the `users:read.email` scope, for
-    finding requested reviewers' Slack ids by their email. No token, no lookups. `SLACK_API_TOKEN` unless set."""
+    finding requested reviewers' Slack ids by their email. No token, no lookups.
+    `SLACK_API_TOKEN` unless set."""
     keychain_service: str = ""
     """The service that token is stored under in the system's secret store (the macOS
     keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;

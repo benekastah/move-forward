@@ -298,8 +298,7 @@ def shared_token_services(config: "Config") -> list[str]:
     """The keychain services more than one token is kept under (as `tokens` says), each with
     whose, e.g. "jira ('Shared') and slack ('shared') keep their tokens in one place": storing
     one token would replace the other's. Case doesn't count, on every system, as Windows'
-    Credential Manager ignores it: one config means the same everywhere. Services a plugin
-    derives from its own (Slack's `-refresh`) aren't counted."""
+    Credential Manager ignores it: one config means the same everywhere."""
     by_service: dict[str, list[tuple[str, str]]] = {}
     for name, settings in tokens(config).items():
         service = settings.keychain_service
@@ -352,7 +351,6 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
             now=now,
             db=db,
             kv=KvRepository(db, plugin.name),
-            dashboard_url=f"http://localhost:{config.port}",
             name=plugin.name,
             tokens=plugin.tokens(section),
         )

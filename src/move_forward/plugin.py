@@ -57,10 +57,6 @@ class Context[C: BaseModel]:
     """For the plugin's own repository over its own tables, which its migrations made."""
     kv: KvRepository
     """Key/value state in the plugin's namespace."""
-    dashboard_url: str = ""
-    """Where the dashboard is served, e.g. `http://localhost:8765`, for a full URL of one of
-    its pages. It's `localhost`; the dashboard sends it on to `mfd.localhost`, where its
-    sign-in cookie is."""
     name: str = ""
     """The plugin's name, as `Plugin.name`."""
     tokens: Mapping[str, TokenSettings] | None = None
@@ -81,10 +77,6 @@ class Context[C: BaseModel]:
         """An action result's parameters keeping the plugin's item `key` on the focus page
         (`ActionResult.params`); `Plugin.kept_item` gets `key` back."""
         return {KEPT: f"{self.name}:{key}"}
-
-    def page_url(self, key: str) -> str:
-        """The full URL of one of the plugin's pages, e.g. `http://localhost:8765/slack/ping`."""
-        return self.dashboard_url + page_path(self.name, key)
 
     def part(self, name: str) -> str:
         """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
