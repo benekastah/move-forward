@@ -69,6 +69,7 @@ extend-select = ["I", "UP", "B", "C4", "SIM", "TID251"]
 "move_forward.supervisor".msg = "plugins import from move_forward.api"
 "move_forward.tags".msg = "plugins import from move_forward.api"
 "move_forward.testing".msg = "plugins import from move_forward.api"
+"move_forward.text".msg = "plugins import from move_forward.api"
 "move_forward.tomledit".msg = "plugins import from move_forward.api"
 
 [tool.ruff.lint.per-file-ignores]

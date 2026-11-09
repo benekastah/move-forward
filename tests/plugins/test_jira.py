@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.error
 import urllib.request
 from datetime import UTC, date, datetime
@@ -10,7 +11,16 @@ from legacy import save_json_snapshot
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Context, FetchRequest, LinkingRequest, SourceError
+from move_forward.https import RequestError
+from move_forward.plugin import (
+    ActionError,
+    ActionRequest,
+    Context,
+    FetchRequest,
+    LinkingRequest,
+    SourceError,
+)
+from move_forward.plugins.jira import actions
 from move_forward.plugins.jira import client as jira
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
@@ -240,7 +250,7 @@ def test_a_key_jira_doesnt_know_leaves_out_only_that_ticket(
     def fake_search(_config: object, _email: str, jql: str, _token: str) -> list[JiraIssue]:
         asked.append(jql)
         if "APP-404" in jql:
-            raise urllib.error.HTTPError("https://j", 400, "Bad Request", Message(), None)
+            raise RequestError("https://j", "Bad Request", 400)
         return [known] if "APP-1" in jql else []
 
     monkeypatch.setattr(jira, "search", fake_search)
@@ -251,10 +261,10 @@ def test_a_key_jira_doesnt_know_leaves_out_only_that_ticket(
 
 def test_other_jira_errors_still_fail_the_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_search(_config: object, _email: str, jql: str, _token: str) -> list[JiraIssue]:
-        raise urllib.error.HTTPError("https://j", 401, "Unauthorized", Message(), None)
+        raise RequestError("https://j", "Unauthorized", 401)
 
     monkeypatch.setattr(jira, "search", fake_search)
-    with pytest.raises(urllib.error.HTTPError):
+    with pytest.raises(RequestError):
         jira.tickets(JiraConfig(site="https://j"), "me@x", ["APP-1", "APP-2"], "t")
 
 
@@ -361,6 +371,28 @@ def test_a_ticket_that_cant_go_there_says_where_it_can(monkeypatch: pytest.Monke
     with pytest.raises(LookupError, match="can't move to In Review; it can go to: Done"):
         jira.transition(CONFIG, "me@x.com", "APP-1", ["In Review"])
     assert len(sent) == 1  # nothing was changed
+
+
+@pytest.mark.parametrize(
+    ("failure", "said"),
+    [
+        (
+            RequestError("https://j", "Conflict", 409),
+            "Jira refused to move APP-1 to Done (HTTP 409)",
+        ),
+        (RequestError("https://j", "timed out"), "couldn't reach Jira: timed out"),
+    ],
+)
+def test_a_transition_that_fails_says_whether_jira_refused_or_wasnt_reached(
+    monkeypatch: pytest.MonkeyPatch, failure: RequestError, said: str
+) -> None:
+    def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> str:
+        raise failure
+
+    monkeypatch.setattr(jira, "transition", transition)
+    request = ActionRequest(_ctx(Database(":memory:")), Graph([]), {"key": "APP-1", "to": "Done"})
+    with pytest.raises(ActionError, match=re.escape(said)):
+        actions.transition(request)
 
 
 def test_a_ticket_done_without_a_resolution_is_resolved_when_it_moved_to_done() -> None:

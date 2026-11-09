@@ -16,6 +16,7 @@ from email.policy import default
 from email.utils import getaddresses, parsedate_to_datetime
 
 from ...api import SourceError, keychain
+from ...api.html import shown
 from .config import Mailbox
 from .models import MAX_SUBJECT, MailSnapshot, Message
 
@@ -48,11 +49,6 @@ _INTERNALDATE = re.compile(
     rb'\bINTERNALDATE "\s*(\d{1,2})-([A-Za-z]{3})-(\d{4}) (\d\d):(\d\d):(\d\d) ([+-])(\d\d)(\d\d)"'
 )
 _QUOTED = re.compile(r'"(?:[^"\\]|\\.)*"')
-_HIDDEN = {
-    chr(c) for c in (0x061C, 0x200B, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A))
-}
-"""Characters that change how text reads without showing: bidi controls, and the zero-width
-space. Other format characters (ZWJ, ZWNJ) are kept: emoji and scripts need them."""
 
 
 def password(config: Mailbox, email: str) -> str:
@@ -371,14 +367,6 @@ def _sent(date: str) -> datetime | None:
         return None
 
 
-def _shown(text: str) -> str:
-    """`text` without control characters or those in `_HIDDEN`, which could make a subject or
-    name read as something else, and its whitespace collapsed."""
-    return " ".join(
-        "".join(" " if unicodedata.category(c) == "Cc" or c in _HIDDEN else c for c in text).split()
-    )
-
-
 _IGNORABLE = (
     (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C), (0x115F, 0x1160), (0x17B4, 0x17B5),
     (0x180B, 0x180F), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164),
@@ -406,8 +394,8 @@ def _address(text: str) -> str | None:
 def _name(text: str) -> str:
     """A sender's name as shown: not one with an `@` in it, which could pass for an address
     (`Boss <boss@acme.com>`) while the real one is elsewhere."""
-    shown = _shown(text)
-    return "" if "@" in shown else shown
+    name = shown(text)
+    return "" if "@" in name else name
 
 
 def _without_comments(text: str) -> str:
@@ -483,7 +471,7 @@ def message(
     # Raw, not decoded: a sender's address in it could hold an encoded word that decodes to
     # results of its own.
     results = [v for k, v in headers.raw_items() if k.lower() == "authentication-results"]
-    subject = _shown(header("Subject")) or "(no subject)"
+    subject = shown(header("Subject")) or "(no subject)"
     if len(subject) > MAX_SUBJECT:
         subject = subject[: MAX_SUBJECT - 1] + "…"
     auto = header("Auto-Submitted").strip().lower()

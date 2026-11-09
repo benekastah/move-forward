@@ -11,6 +11,7 @@ from . import localtime
 from .act_now import OPENED_FIELD
 from .page import Action, Badge, Group, Item, Link, Panel, SourceStatus, age
 from .panels import ACT_NOW, Dashboard
+from .text import shown
 
 PAGE_RELOAD_SECONDS = 60
 REFRESHING_RELOAD_SECONDS = 10
@@ -268,6 +269,11 @@ def _e(text: object) -> str:
     return escape(str(text), quote=True)
 
 
+def _shown(text: str) -> str:
+    """`text` as shown, escaped."""
+    return _e(shown(text))
+
+
 def e(text: object) -> str:
     """`text` escaped for HTML text and attribute values, for plugins' pages."""
     return _e(text)
@@ -329,9 +335,9 @@ def linkable(url: str | None) -> bool:
 def _badge(badge: str | Badge) -> str:
     """A badge, coloured by its tone."""
     if isinstance(badge, str):
-        return f"<span class='badge'>{_e(badge)}</span>"
+        return f"<span class='badge'>{_shown(badge)}</span>"
     tone = "" if badge.tone == "plain" else f" {badge.tone}"
-    return f"<span class='badge{tone}'>{_e(badge.text)}</span>"
+    return f"<span class='badge{tone}'>{_shown(badge.text)}</span>"
 
 
 def _link_action(action: Action) -> str:
@@ -449,8 +455,8 @@ def _link(link: Link) -> str:
     classes = [c for c, on in (("strong", link.strong), ("done", link.done)) if on]
     cls = f" class='{' '.join(classes)}'" if classes else ""
     if not linkable(link.url):
-        return f"<span{cls}>{_e(link.text)}</span>"
-    return f"<a href='{_e(link.url)}'{cls} target='_blank' rel='noopener'>{_e(link.text)}</a>"
+        return f"<span{cls}>{_shown(link.text)}</span>"
+    return f"<a href='{_e(link.url)}'{cls} target='_blank' rel='noopener'>{_shown(link.text)}</a>"
 
 
 def item_html(item: Item) -> str:
@@ -478,9 +484,9 @@ def _item(
     child_count: int = 0,
 ) -> str:
     title = (
-        f"<a href='{_e(item.url)}' target='_blank' rel='noopener'>{_e(item.title)}</a>"
+        f"<a href='{_e(item.url)}' target='_blank' rel='noopener'>{_shown(item.title)}</a>"
         if linkable(item.url)
-        else _e(item.title)
+        else _shown(item.title)
     )
     anchor = f" id='{_e(item.anchor)}'" if item.anchor else ""
     data = f" data-opened='{_e(item.act_now_fields)}'" if item.act_now_fields else ""
@@ -501,7 +507,7 @@ def _item(
         + "</div>",
     ]
     if item.subtitle:
-        parts.append(f"<div class='item-subtitle'>{_e(item.subtitle)}</div>")
+        parts.append(f"<div class='item-subtitle'>{_shown(item.subtitle)}</div>")
     if item.badges:
         parts.append("<div class='badges'>" + "".join(_badge(b) for b in item.badges) + "</div>")
     # One part is drawn only when it's marked listed: an entry with one todo shows it as
@@ -509,7 +515,9 @@ def _item(
     show_parts = len(item.parts) > 1 or (item.parts_listed and bool(item.parts))
     if item.details:
         parts.append(
-            "<ul class='details'>" + "".join(f"<li>{_e(d)}</li>" for d in item.details) + "</ul>"
+            "<ul class='details'>"
+            + "".join(f"<li>{_shown(d)}</li>" for d in item.details)
+            + "</ul>"
         )
     if show_parts:
         parts.append(

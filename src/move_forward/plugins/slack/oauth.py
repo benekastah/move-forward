@@ -18,13 +18,12 @@ import hashlib
 import hmac
 import secrets
 import threading
-import urllib.error
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
-from ...api import Context, Model, keychain
+from ...api import Context, Model, http, keychain
 from ...api.shell import CommandError
 from . import client, scopes
 from .config import SlackConfig
@@ -200,7 +199,7 @@ def finish(ctx: Context[SlackConfig], query: dict[str, list[str]]) -> Connection
                 "grant_type": "authorization_code",
             },
         )
-    except (client.SlackError, urllib.error.URLError) as e:
+    except (client.SlackError, http.RequestError) as e:
         raise SignInError(str(e)) from e
     parsed = _Answer.model_validate(answer)
     user = parsed.authed_user
@@ -271,7 +270,7 @@ def token(ctx: Context[SlackConfig]) -> str | None:
         except client.SlackError as e:
             _lose(ctx, f"refreshing its token failed ({e.error})")
             return None
-        except urllib.error.URLError:  # offline: the old token may still work
+        except http.RequestError:  # offline: the old token may still work
             return access if ctx.now < found.expires_at else None
         tokens = _Answer.model_validate(answer).user
         if not tokens.access_token:
@@ -322,6 +321,6 @@ def disconnect(ctx: Context[SlackConfig]) -> None:
     access = keychain.read(_app_service(ctx, found), ctx.email) if found else None
     if access:
         # Gone already, or offline: forgetting it is what matters here.
-        with contextlib.suppress(client.SlackError, urllib.error.URLError):
+        with contextlib.suppress(client.SlackError, http.RequestError):
             client.call("auth.revoke", access, {})
     forget(ctx)

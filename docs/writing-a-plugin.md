@@ -37,9 +37,11 @@ What it needs from another goes through the graph.
 A plugin uses core only through `move_forward.api` (relatively, `from ...api import
 Plugin, Context, Graph`): everything a plugin may use is there, and core's own modules may
 change without notice. Its submodules group the rest: `api.html` (`page`, `e` to escape,
-`buttons`, `linkable`), `api.shell` (`run`, `git`, `git_common_dir`, `CommandError`), `api.http`
-(`opener`, `require_https`), `api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`, `branch_parts`), `api.tags` (`handle`) and `api.keychain`
-(`token`, `read`, `write`, `delete`). Ruff refuses any other core import in a plugin, and
+`shown` to drop hidden characters, `buttons`, `linkable`), `api.shell` (`run`, `git`,
+`git_common_dir`, `CommandError`), `api.http` (`request`, `RequestError`, `opener`,
+`require_https`), `api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`,
+`branch_parts`), `api.tags` (`handle`) and `api.keychain` (`token`, `read`, `write`,
+`delete`). Ruff refuses any other core import in a plugin, and
 `tests/test_api.py` checks it too.
 
 ## Versions
@@ -114,7 +116,8 @@ class LinearConfig(Strict):
   (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading
   several accounts, each with its own token, names them all in `tokens(config)`, and `mfd
   token set <plugin>.<account>` stores one. Anything sent with a
-  token must go over HTTPS (`api.http`).
+  token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
+  the body, never the URL (its errors name the URL, without its query).
 - A section mapping the top-level teams to the tool's names for them (github's
   `[github.teams]`) names that field in `teams_field`, so the config refuses a team it
   doesn't have.

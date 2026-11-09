@@ -2,9 +2,7 @@
 the methods slack calls with the user token it gets."""
 
 import json
-import urllib.request
 from typing import Any
-from urllib.parse import urlencode
 
 from ...api import http
 
@@ -25,17 +23,17 @@ class SlackError(RuntimeError):
 
 def call(method: str, api_token: str | None, params: dict[str, str]) -> dict[str, Any]:
     """POST `params` (form-encoded) to Slack's `method`, with `api_token` if given, and return
-    its answer; raises SlackError when it isn't `ok`."""
-    url = API + method
-    http.require_https(url, "the Slack token")
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    if api_token:
-        headers["Authorization"] = f"Bearer {api_token}"
-    request = urllib.request.Request(
-        url, data=urlencode(params).encode(), headers=headers, method="POST"
+    its answer; raises SlackError when it isn't `ok`, `http.RequestError` when Slack can't
+    be reached, and ValueError for an answer that isn't JSON."""
+    headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
+    body = http.request(
+        API + method,
+        secret_name="the Slack token",
+        headers=headers,
+        form=params,
+        timeout=TIMEOUT_SECONDS,
     )
-    with http.opener.open(request, timeout=TIMEOUT_SECONDS) as response:
-        answer: dict[str, Any] = json.loads(response.read())
+    answer: dict[str, Any] = json.loads(body)
     if not answer.get("ok"):
         raise SlackError(method, str(answer.get("error", "an error")))
     return answer
