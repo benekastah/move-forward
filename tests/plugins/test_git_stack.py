@@ -56,7 +56,8 @@ def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
         "me/no-pr: tracked, no PR",
     ]
     merged = next(i for i in panel(built, "git_stack.stacks").items if "merged" in i.title)
-    assert merged.url == pr(3).url  # its merged PR, as git's cleanup has it
+    assert merged.url == pr(3).url  # linked, but not about it: ice on its ticket can't hide it
+    assert Ref(kind="pull_request", id=pr(3).url) not in merged.subjects
     restack = next(i for i in panel(built, "git_stack.stacks").items if "restack" in i.title)
     assert restack.url == pr(2).url
     [button] = [a for a in restack.actions if a.name == "git_stack/stack_restack"]
@@ -306,10 +307,12 @@ def test_a_clean_that_fails_partway_says_how_far_it_got(monkeypatch: pytest.Monk
 
 def test_a_clean_that_crashes_before_its_report_says_why(monkeypatch: pytest.MonkeyPatch) -> None:
     def crashing(repo: Path, *args: str, timeout: int = 0) -> str:
-        out = "\n".join(json.dumps(e) for e in [FETCHING]) + "\n"
+        out = "\n".join(json.dumps(e) for e in [FETCHING, DELETED_A]) + "\nTraceback\n"
         raise CommandError("git stack clean: Traceback ... KeyError: 'parent'", out)
 
-    with pytest.raises(ActionError, match=r"clean failed: git stack clean: Traceback"):
+    with pytest.raises(
+        ActionError, match=r"clean failed: git stack clean: Traceback.*\(after it deleted me/a\)"
+    ):
         _clean_with(monkeypatch, crashing)
 
 
@@ -575,3 +578,20 @@ def test_the_branches_kept_before_current_was_dropped_are_kept() -> None:
     assert StackRepository(db).load() == stacks(
         StackBranch(name="me/a", parent="main", status="merged", group="g"), dir="/src/w"
     )
+
+
+def test_a_branch_whose_only_pr_merged_or_a_merged_one_says_no_no_pr() -> None:
+    names = ["main", "me/APP-3-branch", "me/gone"]
+    built = dashboard(
+        github=snapshot(merged_recent=[pr(3, state="MERGED")]),
+        local=local_snapshot(branches=[local_branch(n) for n in names]),
+        stacks=stacks(
+            StackBranch(name="main"),
+            StackBranch(name="me/APP-3-branch", parent="main", status="needs-restack"),
+            StackBranch(name="me/gone", parent="main", status="merged"),  # no PR at all
+        ),
+    )
+    assert sorted(titles(built, "git_stack.stacks")) == [
+        "me/APP-3-branch: needs-restack",
+        "me/gone: merged",
+    ]

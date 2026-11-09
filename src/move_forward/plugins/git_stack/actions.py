@@ -66,6 +66,17 @@ def report(out: str) -> _Report:
         raise ActionError(f"couldn't read git stack's report: {e}") from e
 
 
+def _events(out: str) -> list[_Event]:
+    """The events a run printed, one JSON object a line, skipping what isn't one."""
+    found: list[_Event] = []
+    for line in out.splitlines():
+        try:
+            found.append(_Event.model_validate_json(line))
+        except ValidationError:
+            continue
+    return found
+
+
 def run_json(repo: Path, args: list[str], done: Callable[[_Report], str], timeout: int) -> _Report:
     """Run `git stack <args> --json` in `repo` and return its report. When it fails, raise
     the reason as an `ActionError`, with `done` of what it reported before failing."""
@@ -77,7 +88,10 @@ def run_json(repo: Path, args: list[str], done: Callable[[_Report], str], timeou
         try:
             failed = report(e.stdout)
         except ActionError:  # it stopped before its report (a crash, a kill): say why
-            raise ActionError(f"git stack {args[0]} failed: {e}") from e
+            so_far = done(_Report(type="error", events=_events(e.stdout)))
+            raise ActionError(
+                f"git stack {args[0]} failed: {e}" + (f" (after it {so_far})" if so_far else "")
+            ) from e
         so_far = done(failed)
         raise ActionError(
             f"git stack {args[0]} failed: {failed.message or e}"

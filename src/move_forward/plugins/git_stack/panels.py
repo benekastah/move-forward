@@ -130,10 +130,6 @@ class Builder:
         prs = self.graph.view_related(branch_ref(repo_dir, branch), PR, _PrView)
         return next((pr for pr in prs if pr.mine and pr.state == state), None)
 
-    def _has_pr(self, repo_dir: str, branch: str) -> bool:
-        """Whether the branch has a PR of mine, open or merged."""
-        return bool(self._pr(repo_dir, branch, "open") or self._pr(repo_dir, branch, "merged"))
-
     def _restack(self, repo_dir: str, branch: str) -> Action:
         return Action(
             name=RESTACK,
@@ -172,15 +168,16 @@ class Builder:
                     continue
                 listed.add(b.name)
                 is_merged = b.status == "merged"
-                # A merged branch's PR is the merged one, as git's own cleanup items have it.
-                pr = self._pr(repo.dir, b.name, "merged" if is_merged else "open")
-                no_pr = (
-                    not is_merged and b.parent is not None and not self._has_pr(repo.dir, b.name)
-                )
+                pr = self._pr(repo.dir, b.name, "open")
+                # A merged branch links its merged PR, but isn't about it: an iced ticket
+                # linking that PR mustn't hide the cleanup, nor its snooze key move.
+                merged_pr = self._pr(repo.dir, b.name, "merged") if pr is None else None
+                link = pr or merged_pr
+                no_pr = not is_merged and b.parent is not None and link is None
                 items.append(
                     Item(
                         title=f"{b.name}: {b.status}" + (", no PR" if no_pr else ""),
-                        url=pr.url if pr else None,
+                        url=link.url if link else None,
                         subtitle=f"{repo.dir} · on {b.parent}",
                         rank=1,
                         actions=[clean]
@@ -201,7 +198,7 @@ class Builder:
             for b in repo.branches:
                 if b.parent is None or b.name in listed:
                     continue
-                if not self._has_pr(repo.dir, b.name):
+                if not (self._pr(repo.dir, b.name, "open") or self._pr(repo.dir, b.name, "merged")):
                     items.append(
                         Item(
                             title=f"{b.name}: tracked, no PR",
