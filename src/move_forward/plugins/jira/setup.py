@@ -17,8 +17,6 @@ TEMPLATE = """\
 # priorities = ["Lowest", "Low", "Medium", "High", "Highest"]  # Jira's priority names, lowest first
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
-# [jira.teams]                            # a team's id in Jira's team field (unused yet)
-# core = "12345"
 """
 EXAMPLE = '# site = "https://example.atlassian.net"\n'
 

@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### `[jira.teams]` is gone
+
+Jira never used it. A config that still has a `[jira.teams]` table is refused when it loads:
+delete the table.
+
 ### Canceled browser requests no longer print tracebacks
 
 Closing a tab or canceling a page load while the server answers no longer prints a

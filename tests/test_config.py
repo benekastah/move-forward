@@ -103,6 +103,12 @@ def test_moved_settings_say_where_they_went(tmp_path: Path) -> None:
         _load(tmp_path, MINIMAL + '\n[notes]\ndir = "~/n"\n')
 
 
+def test_a_jira_teams_table_says_its_gone(tmp_path: Path) -> None:
+    text = MINIMAL + 'teams = ["core"]\n\n[git]\nrepos = []\n\n[jira]\nsite = "https://j"\n'
+    with pytest.raises(ValidationError, match=r"`\[jira.teams\]` is gone; .*delete the table"):
+        _load(tmp_path, text + '\n[jira.teams]\ncore = "12345"\n')
+
+
 def test_a_subscription_to_the_certificates_notification_says_its_gone(tmp_path: Path) -> None:
     text = MINIMAL + '\n[notifications]\nsubscribe = ["dashboard.certificate_ending"]\n'
     with pytest.raises(ValidationError, match="gone with HTTPS mode: take it out"):
