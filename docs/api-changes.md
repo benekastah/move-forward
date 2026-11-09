@@ -53,6 +53,11 @@ for themselves (a token, a request, an example config) is core's.
 - **Token fields**: `api.keychain.TokenFields` is a `Strict` base for a section keeping one
   token, with `token_env` and `keychain_service`, defaulting to the class's
   `default_token_env` and `default_keychain_service`.
+- **No `sign_in_pages`**: the `Plugin` attribute is gone, and with it the pages served
+  without the dashboard's token. Every plugin page needs the token now; a tool's sign-in
+  (OAuth) that sends the browser back to the dashboard isn't supported.
+- **No `ctx.dashboard_url` or `ctx.page_url(key)`**: only sign-ins sent a browser to a
+  plugin's page by its full URL. A page links to another by its path, `/<plugin>/<key>`.
 - **Text as shown**: `api.html.shown(text)` drops what could make text a stranger wrote read
   as something else (bidi controls, the zero-width space and zero-width no-break space, the
   word joiner, the soft hyphen, Hangul fillers, tag characters outside a flag; not ZWJ and

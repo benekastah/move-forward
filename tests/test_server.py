@@ -28,7 +28,6 @@ from move_forward.plugin import (
     ActionResult,
     Changed,
     ChangedRequest,
-    PageHandler,
     PageRequest,
     Response,
 )
@@ -471,8 +470,9 @@ def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: ser
         browser(client, Authorization="Bearer wrong"),
         browser(client, Cookie=wrong_session),
     ):
-        response = get(client, "/", headers)
-        assert response.status == 401 and "mfd open" in response.read().decode()
+        for path in ("/", "/slack/contacts", "/slack/callback"):  # plugins' pages, sign-in's too
+            response = get(client, path, headers)
+            assert response.status == 401 and "mfd open" in response.read().decode()
     response = post(client, "/actions/slack/mark_sent", SENT, {"Authorization": "Bearer wrong"})
     assert response.status == 401
     response.read()
@@ -759,38 +759,10 @@ def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
 
 
 def test_secrets_in_query_parameters_are_left_out_of_the_log() -> None:
-    line = "GET /slack/callback?code=abc&state=xyz&ok=1 /login?token=t0k HTTP/1.1"
+    line = "GET /login?code=abc&ok=1 /?token=t0k HTTP/1.1"
     assert server._redact(line) == (  # pyright: ignore[reportPrivateUsage]
-        "GET /slack/callback?code=…&state=…&ok=1 /login?token=… HTTP/1.1"
+        "GET /login?code=…&ok=1 /?token=… HTTP/1.1"
     )
-
-
-class _GitHubWithASignIn(GitHubPlugin):
-    sign_in_pages: ClassVar[frozenset[str]] = frozenset({"back", "settings"})
-
-    def pages(self) -> dict[str, PageHandler]:
-        def page(req: PageRequest[GitHubConfig]) -> str:
-            query = req.query
-            return f"back with {query.get('state', ['?'])[0]}"
-
-        return {"back": page, "private": page}
-
-
-def test_a_sign_in_page_is_served_without_the_cookie_and_the_rest_still_need_it(
-    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    swap = {"github": _GitHubWithASignIn()}
-    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    response = get(
-        client, "/github/back?state=s1", browser(client)
-    )  # as a redirect from Slack comes
-    assert response.status == 200 and response.read().decode() == "back with s1"
-    response = get(client, "/github/private?state=s1", browser(client))
-    assert response.status == 401
-    response.read()
-    response = get(client, "/settings", browser(client))  # not its page: no way round sign-in
-    assert response.status == 401
-    response.read()
 
 
 def test_the_settings_page_shows_and_saves_the_config(

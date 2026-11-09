@@ -70,7 +70,7 @@ to expect, and each reads all of its part.
     rekeying, SQL that filters in SQL, and data a crash or a concurrent refresh could leave half
     written;
   - **what cuts across** (`cross`): what one change made inconsistent elsewhere, the same item
-    offering the same wherever it's shown, security (the token, sign-in pages, what a sender or
+    offering the same wherever it's shown, security (the token, what a sender or
     another tool controls), Linux, macOS and Windows, the plugin API's contract, and the
     tooling (`dev.py`, `pyproject.toml`, `.github/workflows/`, `git_hooks/`);
   - **the docs** (`docs`): the README, `docs/`, AGENTS.md, CHANGELOG and docstrings against

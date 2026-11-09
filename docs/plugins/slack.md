@@ -1,40 +1,12 @@
 # slack
 
 Review pings: who to ask about my PRs, and the messages to send them. It reads my PRs from
-the graph, and from Slack, people's ids, through the workspace's Slack app when it's
-connected. Enabled by a `[slack]`
+the graph, and from Slack, people's ids, with the token you give it. Enabled by a `[slack]`
 section.
-
-## The Slack app
-
-slack can connect to a Slack app of the workspace's, signing in for a user token of your
-own. Without it, slack works as below with the token you give it, or none. One app serves
-the whole workspace, so someone makes it once. Slack's page (`/slack`) shows how:
-1. Create the app at api.slack.com/apps from the manifest checked in as
-   `src/move_forward/plugins/slack/manifest.json` (the page shows it to paste). It asks for
-   user scopes only, signs in with PKCE (so it has no client secret to share) and rotates
-   its tokens.
-2. Install it to the workspace (an admin may need to approve it; on Enterprise Grid,
-   install it to the organization).
-3. Share its client id.
-
-Then each person sets `client_id` in `[slack]` and presses Connect Slack on `/slack`.
-Slack sends the browser back to `http://localhost:<port>/slack/callback`. The manifest lists that URL for the default port; on another
-port, add yours to the app's redirect URLs. The sign-in's tokens go in the system's secret
-store under `keychain_service`-app (the access token) and `keychain_service`-refresh, apart
-from a token given by hand with `mfd token set slack` (under `keychain_service`), which
-connecting and disconnecting leave alone. A connection made before the app had its own entry
-kept its token in that one: there it stays (so `mfd token set slack` would replace it) until a
-refresh stores the new token in the app's own, which a token that doesn't run out never needs;
-connect again to move it now.
-`mfd token check` speaks of the token given by hand, and slack's page of the connection. The access token lasts 12 hours and is refreshed before it
-runs out; the refresh token lasts 30 days, so after a month away, connect again. When
-Slack refuses a refresh, slack forgets the connection, says why on its page, and goes back
-to the token given by hand, if any. Disconnect revokes the token and forgets it.
 
 ## Config
 
-`client_id` is the Slack app's (see above). `workspace_url` makes the ping page link to channels and people, `ping_first` and
+`workspace_url` makes the ping page link to channels and people, `ping_first` and
 `ping_follow_up` are the messages, `[slack.teams]` the channel each team's pings go to
 (winning over the reviewer map), and `team_channel` (e.g. `"#team-{team}"`) a guess at the
 channel of a team nothing else names one for.
@@ -42,15 +14,14 @@ channel of a team nothing else names one for.
 People's Slack ids and teams' channels come from the skill's `reviewer-map.md`, read with
 `mfd slack import <dir>` (which also picks up the nudges the skill logged in
 `work-notes.md`), or are set by hand on `/slack/contacts` or with
-`mfd slack contact|team set`; what's set by hand wins over a later import. With the app
-connected, or else a Slack token (`token_env`, default `SLACK_API_TOKEN`, else the
-system's secret store under
-`keychain_service` for your email, stored with `mfd token set slack`), each refresh also looks up the Slack id of every
-reviewer my open PRs ask for whom nothing names one for, by the email github knows for
-them. The token needs the `users:read.email` scope; a lookup that finds nobody is tried again
-once it's `prune_days` old (they may have joined Slack since), and an import or a value
-set by hand wins over a lookup. A lookup that fails (a token without the scope, a rate limit,
-no network) stops that refresh's, and Slack's page (`/slack`) says why until the next.
+`mfd slack contact|team set`; what's set by hand wins over a later import. With a Slack token
+(`token_env`, default `SLACK_API_TOKEN`, else the system's secret store under
+`keychain_service` for your email, stored with `mfd token set slack`), each refresh also looks
+up the Slack id of every reviewer my open PRs ask for whom nothing names one for, by the email
+github knows for them. The token needs the `users:read.email` scope; a lookup that finds nobody
+is tried again once it's `prune_days` old (they may have joined Slack since), and an import or
+a value set by hand wins over a lookup. A lookup that fails (a token without the scope, a rate
+limit, no network) stops that refresh's, and `/slack/contacts` says why until the next.
 
 ## Panels
 
@@ -73,10 +44,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | Path | Shows |
 | --- | --- |
 | `/slack/ping?pr=<PR URL>` | The ping page for one of my PRs. |
-| `/slack/contacts` | Where people's and teams' pings go, imported or set by hand, with a form to change each and a Clear button for what's kept (asking first); the ping page links to it. |
-| `/slack` | Setting up the Slack app, connecting to it, and what it's connected as, with the scopes each feature lacks. |
-| `/slack/connect` | Sends the browser to Slack for the sign-in the Connect button (a POST, which starts it) began; loading it starts nothing (not found without `client_id`). |
-| `/slack/callback` | Where Slack sends the browser back. Served without the dashboard's cookie, which browsers don't send on a redirect from Slack; it's refused unless it carries the single-use `state` of the sign-in started here, within 10 minutes. |
+| `/slack/contacts` | Where people's and teams' pings go, imported, set by hand or looked up, with a form to change each and a Clear button for what's kept (asking first), and why the last lookup by email failed, if it did; the ping page links to it. |
 
 ## Buttons
 
@@ -87,8 +55,6 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | `/actions/slack/clear_contact` | `login` | Forgets where a person's pings go, asking first on the page, so they're imported or looked up again. |
 | `/actions/slack/set_team_channel` | `team`, `channel_name`, `channel_id` (one of them at least) | Sets where a team's pings go, by hand; `[slack.teams]` still wins. |
 | `/actions/slack/clear_team_channel` | `team` | Forgets a team's channel, asking first on the page; `[slack.teams]` still wins, and a later `mfd slack import` can bring an imported one back. |
-| `/actions/slack/connect` | | Starts signing in to the Slack app (needs `client_id`), replacing any sign-in started before; `/slack/connect` then sends the browser to Slack. |
-| `/actions/slack/disconnect` | | Revokes the app's token with Slack and forgets it. |
 
 ## Commands
 

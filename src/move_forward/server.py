@@ -22,7 +22,7 @@ from .db import Database
 from .graph import Graph, Ref
 from .notifications import NotificationRepository
 from .panels import Layout
-from .plugin import KEPT, MAX_SUBJECTS, ActionError, ChangedRequest, Response, page_path
+from .plugin import KEPT, MAX_SUBJECTS, ActionError, ChangedRequest, Response
 from .refresh import (
     PageFailed,
     build_dashboard,
@@ -153,8 +153,8 @@ class App:
 
     @property
     def token(self) -> str:
-        """What every request but the sign-in handshake, `/login`, the static files and
-        plugins' sign-in pages must carry (or a session); see `auth`."""
+        """What every request but the sign-in handshake, `/login` and the static files must
+        carry (or a session); see `auth`."""
         if self._token_file is not None:
             self._token = self._token_file.get()
         return self._token
@@ -358,18 +358,6 @@ class App:
         found = NotificationRepository(self.db).take(datetime.now(UTC), keep)
         return json.dumps([n.model_dump() for n in found])
 
-    def sign_in_pages(self) -> set[str]:
-        """The paths of the enabled plugins' pages a tool's sign-in returns to
-        (`Plugin.sign_in_pages`): only their own pages, `/<plugin>/<key>`, so a plugin can't
-        open `/settings` or `/` to strangers."""
-        plugins = enabled(self.config, self.db, datetime.now(UTC))
-        return {
-            page_path(e.name, key)
-            for e in plugins
-            for key in e.plugin.sign_in_pages
-            if key in e.plugin.pages()
-        }
-
     def plugin_page(self, path: str, query: str, notice: str = "") -> str | Response | None:
         """An enabled plugin's page, with `notice` as its query's; None when there's none at
         `path`."""
@@ -433,9 +421,9 @@ def _back_to_page(query: str, extra: dict[str, str] | None = None) -> str:
 AT_RE = re.compile(r"[\w.-]+")
 """A panel's key, which a redirect may name in its `#` link."""
 
-TOKEN_PARAM_RE = re.compile(r"([?&](?:token|code|state)=)[^&\s]*")
-"""Query parameters that carry secrets: the sign-in token, and an OAuth sign-in's code and
-state, as a tool's sign-in (Slack's) sends them back."""
+TOKEN_PARAM_RE = re.compile(r"([?&](?:token|code)=)[^&\s]*")
+"""Query parameters that carry secrets: the dashboard's token, and `/login`'s one-time
+code."""
 
 
 def _redact(text: str) -> str:
@@ -625,9 +613,6 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 return
             if url.path == LOGIN_PATH:
                 self._login(url.query)
-                return
-            if url.path in app.sign_in_pages():  # proves itself; see Plugin.sign_in_pages
-                self._plugin_page(url.path, url.query, "")
                 return
             if self._refuse_strangers():
                 return
