@@ -1,8 +1,8 @@
-"""Notification events of the git_stack plugin: branches that need a restack or were merged,
-as change rules over its `stack_branch`es (`Plugin.change_rules`)."""
+"""Notification events of the git_stack plugin: branches that need a restack or were merged."""
 
-from ...api import ChangeRule, Model, becomes
-from .panels import STACK_BRANCH
+from ...api import Event, anchor
+from .models import GitStackSnapshot, StackBranch
+from .panels import stack_branch_ref
 
 KINDS = {
     "needs_restack": "a git stack branch needs a restack",
@@ -13,29 +13,29 @@ NEEDS_RESTACK = "needs-restack"
 MERGED = "merged"
 
 
-class _BranchView(Model):
-    """What the rules read of a `stack_branch`."""
-
-    id: str
-    repo_dir: str
-    name: str
-    stack_status: str | None
-
-
-def _rule(kind: str, status: str, text: str) -> ChangeRule[_BranchView]:
-    """`kind` when a branch's status becomes `status`."""
-    return ChangeRule(
+def _event(repo: str, branch: StackBranch, kind: str, text: str) -> Event:
+    ref = stack_branch_ref(repo, branch.name)
+    return Event(
         kind=kind,
-        entity=STACK_BRANCH,
-        view=_BranchView,
-        when=becomes(lambda b: b.stack_status == status),
+        thing=f"stack:{ref.id}",
+        title=f"{branch.name} in {repo}",
         text=text,
-        thing=lambda b: f"stack:{b.id}",
-        title=lambda b: f"{b.name} in {b.repo_dir}",
+        anchor=anchor(ref.kind, ref.id),
     )
 
 
-RULES = [
-    _rule("needs_restack", NEEDS_RESTACK, "needs a restack"),
-    _rule("merged", MERGED, "was merged"),
-]
+def changes(before: GitStackSnapshot, after: GitStackSnapshot) -> list[Event]:
+    """The branches whose status became `needs-restack` or `merged` since `before`; a branch
+    it didn't hold says nothing."""
+    old = {(repo.dir, b.name): b.status for repo in before.repos for b in repo.branches}
+    found: list[Event] = []
+    for repo in after.repos:
+        for branch in repo.branches:
+            key = (repo.dir, branch.name)
+            if key not in old or old[key] == branch.status:
+                continue
+            if branch.status == NEEDS_RESTACK:
+                found.append(_event(repo.dir, branch, "needs_restack", "needs a restack"))
+            elif branch.status == MERGED:
+                found.append(_event(repo.dir, branch, "merged", "was merged"))
+    return found

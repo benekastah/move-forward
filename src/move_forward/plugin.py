@@ -10,7 +10,7 @@ what it uses.
 import argparse
 import logging
 import traceback
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -25,7 +25,7 @@ from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
 from .kinds import Family
-from .notifications import ChangeRule, Event
+from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, SnapshotRepository
 
@@ -434,13 +434,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     it (`teams`, e.g. `[github.teams]`), so the config can check it names only teams it has;
     None for a plugin without one."""
     notification_kinds: ClassVar[dict[str, str]] = {}
-    """The events the plugin makes (by `change_rules`, `Item.notify` or `events`), by kind,
-    each with what it says, for the settings page and `mfd init` to offer: `pr_mergeable` is
-    stored and subscribed to as `github.pr_mergeable`."""
-    change_rules: ClassVar[Sequence[ChangeRule[Any]]] = ()
-    """The notification kinds raised when one of its entities changes, e.g. `pr_merged` when
-    a PR's state becomes merged: core evaluates them after every refresh, when I've
-    subscribed to one of its kinds, against the graph from before it."""
+    """The events the plugin's `events` makes, by kind, each with what it says, for the
+    settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
+    `github.pr_mergeable`."""
     change_check_seconds: ClassVar[int | None] = None
     """How often `mfd serve` asks `changed`; None for a plugin without such a check."""
     watches: ClassVar[list[str]] = []
@@ -523,9 +519,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         every refresh, of anything, when I've subscribed to one of its kinds, but never before
         the plugin has stored a snapshot to compare with. Say it only when the state changed
         (not mergeable to mergeable), and never about something new in `after` that `before`
-        hasn't any state for. A failure is logged and the refresh goes on. What a rule over
-        its entities can say goes in `change_rules`, and what's news for joining a panel in
-        `Item.notify`, rather than here."""
+        hasn't any state for. A failure is logged and the refresh goes on."""
         return []
 
     def collect_after(self, req: CollectAfterRequest[C]) -> S:

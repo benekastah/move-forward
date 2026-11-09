@@ -1,9 +1,8 @@
 """The GitHub plugin."""
 
 import subprocess
-from collections.abc import Sequence
 from datetime import datetime, timedelta
-from typing import Any, ClassVar, cast
+from typing import ClassVar, cast
 from urllib.parse import urlsplit
 
 from ...api import (
@@ -14,7 +13,6 @@ from ...api import (
     Asker,
     Changed,
     ChangedRequest,
-    ChangeRule,
     CollectRequest,
     Context,
     EntitiesRequest,
@@ -130,7 +128,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
     watches: ClassVar[list[str]] = ["git"]
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
-    change_rules: ClassVar[Sequence[ChangeRule[Any]]] = changes.RULES
 
     def __init__(self) -> None:
         self._poll_failed: str | None = None
@@ -408,11 +405,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 c.name for c in policy_failures(pr, ctx.config.policy_checks)
             ]
             fields["progress"] = progress(pr, ignored)
-            fields["review_decision"] = pr.review_decision
-            fields["rollup_state"] = pr.rollup_state
-            fields["mergeable"] = pr.mergeable
-            fields["in_merge_queue"] = pr.in_merge_queue
-            fields["failed_checks"] = [c.name for c in pr.checks if c.state in changes.FAILED]
             fields["review_stale"] = last is None or (ctx.now - last).total_seconds() >= stale_after
         pr_attrs = GitHubPullRequest.model_validate({**fields, "handle": f"#{pr.number}"})
         return Entity(

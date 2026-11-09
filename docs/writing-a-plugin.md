@@ -186,39 +186,18 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   `collect_after(req)` instead of `collect` (see git_stack): it runs once the others have
   stored their snapshots, with the graph. It's refreshed on its own schedule, not with the
   plugins it reads; to refresh soon after they change, it `watches` them.
-- `notification_kinds` names the browser notifications the plugin makes, each with what
-  it says; the user subscribes to them as `<plugin>.<kind>`. Each is raised one of three
-  ways, simplest first:
-  - **A change rule** (`change_rules`), when one of its entities changes:
-
-    ```python
-    change_rules = [
-        ChangeRule(
-            kind="closed",
-            entity=ISSUE,  # one of its kinds
-            view=_IssueView,  # what the rule reads, as `graph.view` makes it
-            when=becomes(lambda issue: issue.state == "closed"),  # given before and after
-            text="was closed",  # or made from the entity after
-        ),
-    ]
-    ```
-
-    Core asks each rule of every entity of its kind the plugin publishes both before a
-    refresh and after it, so one new to the graph says nothing, and `becomes` says it once,
-    as it comes true. The event is about the entity (`thing` its id, the title its title,
-    opening the page at its item) unless the rule's `thing` and `title` say otherwise.
-  - **`Item.notify`**, for an item newly in a panel (under Panels).
-  - **`events(req)`**, for what neither says (a new comment, a review requested): it's
-    asked after every refresh, of anything, with the plugin's snapshot before it and now
-    (`req.before`, `req.after`, the same when this refresh didn't fetch it) and the graph
-    before it and now (`req.previous_graph`, `req.graph`), and returns an `Event` for what
-    became true: its `thing` (the plugin's events with the same one are told together; core
-    keeps it as `<plugin>:<thing>`, so another plugin's events about one URL stay apart),
-    `title`, `text`, and `anchor` (an item's `page.anchor(kind, id)`, to open the dashboard
-    at it). Say it on a change of state, not while it holds, and nothing about what
-    `before` has no state for. It isn't asked before the plugin's first snapshot, which has
-    nothing to compare with; after a restart, "before" is what was stored when the
-    dashboard stopped. A failure is logged and the refresh goes on.
+- `notification_kinds` and `events(req)` make browser notifications: when the user has
+  subscribed to one of the kinds (`<plugin>.<kind>`), `events` is asked after every refresh,
+  of anything, with the plugin's snapshot before it and now (`req.before`, `req.after`, the
+  same when this refresh didn't fetch it) and the graph before it and now
+  (`req.previous_graph`, `req.graph`), and returns an `Event` for what became true: its
+  `thing` (the plugin's events with the same one are told together; core keeps it as
+  `<plugin>:<thing>`, so another plugin's events about one URL stay apart), `title`, `text`, and `anchor` (an
+  item's `page.anchor(kind, id)`, to open the dashboard at it). Say it on a change of state,
+  not while it holds, and nothing about what `before` has no state for. What's news because
+  it's newly in a panel needs no `events`: the item says so (`Item.notify`, under Panels). It isn't asked before the plugin's first snapshot, which has
+  nothing to compare with; after a restart, "before" is what was stored when the dashboard
+  stopped. A failure is logged and the refresh goes on.
 - `after_collect(req)` runs after every refresh, for work that needs the graph and
   writes the plugin's tables, e.g. notes finding what its ice covers.
 

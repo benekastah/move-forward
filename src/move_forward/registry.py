@@ -153,8 +153,7 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     name is its own and fit to be one: lower-case, not two plugins', none of core's
     (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`).
     A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
-    declares (`Plugin.families`), whose model they must extend. Its change rules raise its
-    `notification_kinds` about its `kinds`."""
+    declares (`Plugin.families`), whose model they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -195,16 +194,6 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                 raise RuntimeError(
                     f"{plugin.name}'s {kind} must extend {family.model.__name__}"
                     f" (the {family.label} family), not {spec.attrs.__name__}"
-                )
-        for rule in plugin.change_rules:
-            if rule.kind not in plugin.notification_kinds:
-                raise RuntimeError(
-                    f"{plugin.name}'s change rule {rule.kind} isn't in its notification_kinds"
-                )
-            if rule.entity not in plugin.kinds:
-                raise RuntimeError(
-                    f"{plugin.name}'s change rule {rule.kind} watches {rule.entity},"
-                    " which isn't one of its kinds"
                 )
 
 

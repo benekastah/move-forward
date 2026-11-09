@@ -2,9 +2,8 @@
 
 import math
 import re
-from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from ...api import (
     API_VERSION,
@@ -16,7 +15,6 @@ from ...api import (
     Band,
     Changed,
     ChangedRequest,
-    ChangeRule,
     CollectRequest,
     EntitiesRequest,
     Entity,
@@ -417,7 +415,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     }
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
-    change_rules: ClassVar[Sequence[ChangeRule[Any]]] = changes.RULES
     change_check_seconds: ClassVar[int | None] = 60
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
@@ -482,7 +479,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                         status=issue.status,
                         status_category=issue.status_category,
                         type=issue.type,
-                        open_blockers=issue.open_blockers,
                     )
                 ),
             )

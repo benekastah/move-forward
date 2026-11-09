@@ -11,10 +11,9 @@ import pytest
 from conftest import dashboard
 
 from move_forward import cli, config, kinds, registry, render, server
-from move_forward.domain import KindModel, Model
+from move_forward.domain import KindModel
 from move_forward.graph import KindSpec
 from move_forward.kinds import FAMILIES, Family, Person, declaring, is_url
-from move_forward.notifications import ChangeRule
 from move_forward.plugin import API_VERSION, Plugin
 from move_forward.strict import Strict
 
@@ -302,24 +301,3 @@ def test_a_plugin_named_for_a_core_indexs_prefix_is_refused() -> None:
 
     with pytest.raises(RuntimeError, match="would own core's pings_"):
         registry.check_plugins([Pings()])
-
-
-def test_a_change_rule_raises_one_of_its_plugins_kinds_about_one_of_its_kinds() -> None:
-    def rule(kind: str, entity: str) -> ChangeRule[Model]:
-        return ChangeRule(kind=kind, entity=entity, view=Model, when=lambda b, a: True, text="t")
-
-    class Tracker(Plugin[Strict, KindModel]):
-        name = "tracker"
-        config_model = Strict
-        api_version = API_VERSION
-        kinds: ClassVar[dict[str, KindSpec]] = {"tracker.issue": KindSpec(KindModel)}
-        notification_kinds: ClassVar[dict[str, str]] = {"closed": "an issue is closed"}
-
-    Tracker.change_rules = [rule("closed", "tracker.issue")]
-    registry.check_plugins([Tracker()])
-    Tracker.change_rules = [rule("opened", "tracker.issue")]
-    with pytest.raises(RuntimeError, match="change rule opened isn't in its notification_kinds"):
-        registry.check_plugins([Tracker()])
-    Tracker.change_rules = [rule("closed", "tracker.task")]
-    with pytest.raises(RuntimeError, match="watches tracker.task, which isn't one of its kinds"):
-        registry.check_plugins([Tracker()])

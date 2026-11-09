@@ -107,12 +107,6 @@ for themselves (a token, a request, an example config) is core's.
   plugin's `notification_kinds` when it first shows in its panels; core compares each
   refresh's panels with the last's (kept in core's `shown_notices`), so a plugin no longer
   builds the panel as it was to compare. `Notify` is new in `api`.
-- **Change rules**: `Plugin.change_rules` lists `ChangeRule(kind, entity, view, when, text,
-  thing=None, title=None)`s, each raising a notification kind when one of the plugin's
-  entities of `entity` changes so that `when(before, after)` holds; core evaluates them after
-  every refresh, skipping entities new to the graph. `api.becomes(holds)` makes a `when` for
-  `holds` coming true. `ChangeRule` and `becomes` are new in `api`; `check_plugins` refuses
-  a rule whose kind isn't in `notification_kinds` or whose entity isn't in `kinds`.
 
 ## Version 1
 

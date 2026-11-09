@@ -46,10 +46,6 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
   plugin last fetched, and why it failed.
-- A plugin's browser notifications (`notification_kinds`) come from rules over its entities'
-  attributes (`change_rules`, which core evaluates), from items newly in its panels
-  (`Item.notify`, which core compares between refreshes), and, for what neither says, from
-  its `events` hook.
 - Every plugin hook that runs with the plugin's context takes one request object
   (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
   breaking its overrides. Those called before there's a context take what they need:
