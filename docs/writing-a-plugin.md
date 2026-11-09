@@ -126,9 +126,8 @@ class LinearConfig(TokenFields):
 - A section mapping the top-level teams to the tool's names for them (github's
   `[github.teams]`) names that field in `teams_field`, so the config refuses a team it
   doesn't have.
-- A tool whose sign-in sends the browser back to the dashboard (OAuth) is given
-  `ctx.dashboard_url` (`http://localhost:8765`) to
-  build its redirect URL from, and a page of the plugin's to land on.
+- `ctx.dashboard_url` (`http://localhost:8765`) is where the dashboard is served, for a
+  full URL of one of its pages (`ctx.page_url(key)`).
 
 ## Collecting and storing
 
@@ -439,11 +438,8 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   (with `req.query` and `req.path`); core serves each at `/<plugin>/<key>`, and `""` at
   `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML (use
   `api.html.page` and `api.html.e` to escape everything), or a `Response`, e.g.
-  `Response.redirect(url)`. `ctx.page_url(key)` is a page's full URL. A page a tool's
-  sign-in (OAuth) redirects back to goes in `sign_in_pages` too, by its key: browsers don't
-  send the dashboard's cookie on a redirect from another site, so it's served without one,
-  and must check OAuth's single-use `state` before doing anything. Only the plugin's own
-  pages can be: a key that isn't one of `pages()` is ignored.
+  `Response.redirect(url)`. `ctx.page_url(key)` is a page's full URL. Every page needs the
+  dashboard's token, as every request does.
 - **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
   a handler `(req: CliRequest) -> int` that gets the parsed `req.args`.
 

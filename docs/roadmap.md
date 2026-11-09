@@ -184,8 +184,10 @@ Confluence, Notion, Figma). In order:
    dependencies, so each plugin would write its own paging, retries with backoff and
    rate-limit waits over `api.http.request` (which sends one request, with its timeout,
    and raises one `RequestError` when there's no answer). Do it once, with OAuth's
-   token refresh beside `sign_in_pages`, and API tokens through
-   `api.keychain` as now.
+   sign-in and token refresh, and API tokens through `api.keychain` as now. A sign-in needs
+   the page its redirect returns to served without the dashboard's token, which browsers
+   don't send on a redirect from another site, so that page checks OAuth's single-use
+   `state` itself.
 7. **Richer buttons.** Several fields on one form (today one text field and one drop-down),
    a text area (replying to a ticket), and a date (snooze until, follow up on).
 8. **Customer data.** A kind can say it's sensitive, and `mfd dump`, logs, notifications and

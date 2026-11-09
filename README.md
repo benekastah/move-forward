@@ -292,8 +292,7 @@ same data as JSON.
 
 Every request must carry the dashboard's token, so other programs and users on the machine
 can't read the page or press its buttons, but `/login` and its handshake
-(`/login/challenge`, `/login/code`), the static files, and a plugin's sign-in pages (where a
-tool's sign-in returns, which check their own single-use proof). The
+(`/login/challenge`, `/login/code`) and the static files. The
 token is in `token` next to the database (`~/.local/share/move-forward/token`), made on first
 start and readable only by you. Scripts send it as `Authorization: Bearer <token>`; it never
 goes in a URL. Browsers never hold it: `mfd open` signs the browser in, through the

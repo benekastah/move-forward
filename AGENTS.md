@@ -74,12 +74,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   (`tags.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,
   who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
   default, the items of its panels marked `act_now`.
-- Every request needs the dashboard's token, except signing in (`/login` and its
-  handshake), the static files, and the pages a tool's
-  sign-in (OAuth) returns to, which a plugin lists, by key, in `sign_in_pages`:
-  they must check their own single-use proof (OAuth's `state`) before doing
-  anything. A plugin's pages are served at `/<plugin>/<key>`, and it builds such a
-  redirect with `ctx.page_url(key)`.
+- Every request needs the dashboard's token, a plugin's pages (served at
+  `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
+  static files.
 
 ## Rules for changes
 
