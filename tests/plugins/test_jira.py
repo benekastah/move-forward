@@ -9,7 +9,7 @@ from typing import Self, cast
 import pytest
 from legacy import save_json_snapshot
 
-from move_forward import keychain
+from move_forward import https, keychain
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.https import RequestError
@@ -300,7 +300,7 @@ def _empty_search_with_myself(monkeypatch: pytest.MonkeyPatch, status: int) -> l
         return real(config, email, api_token, path)
 
     monkeypatch.setattr(jira, "_request", fake_request)
-    monkeypatch.setattr(jira.http.opener, "open", fake_open)
+    monkeypatch.setattr(https.opener, "open", fake_open)
     return asked
 
 

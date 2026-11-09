@@ -49,8 +49,8 @@ within the quick limits, an hour within the hour ones, else a day; they grow slo
 complexity grows faster than size), `stale_draft_days` (my drafts untouched that long get a "stale draft" line; 0: off),
 `split_pr_suggest_lines` and `split_pr_lines` (my PRs at least that many lines "may need
 splitting" or are "worth splitting", in PR housekeeping) and `split_pr_labels` (labels that
-mean worth splitting whatever the lines), and `reviewer_history_days`
-how far back commits count for reviewer suggestions. `[github.teams]` gives a team's GitHub
+mean worth splitting whatever the lines). Reviewer suggestions count commits as far back as
+`[git] commit_history_days`. `[github.teams]` gives a team's GitHub
 slug where it isn't the team's name. `[github.merge]` `method` (`merge`, `squash` or `rebase`) is
 how Merge merges where a repo allows several; a repo allowing just one uses that, and one that
 doesn't allow it uses the one GitHub picks for me (my last used, else the repo's default).

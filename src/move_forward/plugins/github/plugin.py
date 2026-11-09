@@ -357,7 +357,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 PeopleRepository(ctx.db).emails(),
                 ctx.config.org,
                 _team_slugs(ctx),
-                ctx.config.reviewer_history_days,
                 ctx.config.required_owner_marker,
                 wants_reviewer=lambda pr: wants_reviewer(ctx.config, pr),
             ),

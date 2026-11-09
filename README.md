@@ -40,12 +40,13 @@ existing file.
 
 The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
-`db_path`, `db_backups`, `refresh_on_load_seconds` (a page load refreshes
-plugins whose data is older than this) and `prune_days`. Each plugin that
+`db_path`, `db_backups` and `prune_days`. Each plugin that
 fetches refreshes on its own schedule, the `refresh_seconds` in its section
-(git every minute, github every 5, jira every 15, by default), and sooner when
+(github every 5 minutes, jira and mail every 15, git and git stack every 30 behind
+watching their repos, by default), and sooner when
 its plugin can tell cheaply that its tool has something new (each plugin's page
-says how). Everything about a tool is
+says how). Loading the page refreshes nothing: the Refresh buttons (a plugin's, or the
+header's) and an item's ↻ do. Everything about a tool is
 in that tool's plugin section; see [Plugins](#plugins).
 
 `[people]` says what the kinds of people I deal with mean: `contact_types` (`{ customer = 1,
@@ -286,32 +287,27 @@ Buttons on a focused item come back to the same item afterwards.
 
 Everything the page does goes through plain HTTP on `127.0.0.1:<port>`, so a
 script (or Claude) can drive it. Browsers use `mfd.localhost:<port>` (browsers send every
-`*.localhost` name to this machine), a name no other program on the machine uses: cookies ignore ports, so
-a cookie for `127.0.0.1` or `localhost` would go to every other server there. `mfd dump` prints the same data as JSON.
+`*.localhost` name to this machine). `mfd dump` prints the
+same data as JSON.
 
-Every request but `/login`, the sign-in handshake (`/login/challenge`, `/login/code`),
-the static files and a plugin's sign-in pages (where a tool's
-sign-in returns, e.g. `/slack/callback`, which check their own single-use proof) must carry
-the dashboard's token, so other programs and users on the machine can't read the page or press
-its buttons. The token is in `token` next to the database
-(`~/.local/share/move-forward/token`), made on first start and readable only by
-you. Scripts send it as `Authorization: Bearer <token>`. Browsers never hold it, and it is
-never in a URL. `mfd open` first makes the server and itself prove they know the token, with
-an HMAC over fresh nonces (`POST /login/challenge`, then `POST /login/code`): a program that
-grabbed the port can't answer, so the token isn't sent to it or trusted. Then it opens
-`/login?code=<code>`, a code good once, for a minute, which starts a session (a random id the
-server keeps only as a hash, good for 400 days) and sets its cookie
-(`move_forward_session_<port>`, `HttpOnly`, `SameSite=Strict`, host-only) before going to the
-dashboard. A request without the token or a session gets `401 Unauthorized`. `mfd logout` or
-`mfd token rotate` ends every session.
+Every request must carry the dashboard's token, so other programs and users on the machine
+can't read the page or press its buttons, but `/login` and its handshake
+(`/login/challenge`, `/login/code`), the static files, and a plugin's sign-in pages (where a
+tool's sign-in returns, e.g. `/slack/callback`, which check their own single-use proof). The
+token is in `token` next to the database (`~/.local/share/move-forward/token`), made on first
+start and readable only by you. Scripts send it as `Authorization: Bearer <token>`; it never
+goes in a URL. Browsers never hold it: `mfd open` signs the browser in, through the
+handshake, with a session that lasts 400 days. A request without the token or a session gets
+`401 Unauthorized`. `mfd logout` or `mfd token rotate` ends every session. How the handshake
+and sessions work is in `src/move_forward/auth.py`'s docstring.
 
 Requests must also name the server as `mfd.localhost:<port>`, `127.0.0.1:<port>` or
-`localhost:<port>` in their `Host` header (a page asked for under either of the last two,
-without a token in a header, is sent to the same path at `mfd.localhost`, where the session
-cookie is; scripts with the token are served where they are), and a POST that carries an
-`Origin` header must come from one of those. So other web pages open in the browser can't use the
-dashboard's buttons, while scripts like `curl`, which send no `Origin`, work.
-Anything else gets `403 Forbidden`.
+`localhost:<port>` in their `Host` header, and a POST that carries an `Origin` header must
+come from one of those, so other web pages open in the browser can't use the dashboard's
+buttons, while scripts like `curl`, which send no `Origin`, work. Anything else gets
+`403 Forbidden`. A script with the token is served at whichever of them it asks; a page asked
+for without it at `127.0.0.1` or `localhost` is redirected to `mfd.localhost`, where the
+browser's session is.
 
 Pages (GET, HTML):
 

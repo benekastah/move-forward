@@ -104,7 +104,7 @@ RESERVED_NAMES = frozenset(
         "people",
         "port",
         "prune_days",
-        "refresh_on_load_seconds",
+        "refresh_on_load_seconds",  # gone, as `https`
         "sections",
         "teams",
         # Core's commands, `mfd <command>`.

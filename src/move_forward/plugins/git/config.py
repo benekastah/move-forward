@@ -38,7 +38,8 @@ class GitConfig(Strict):
     )
     """Worktrees to leave out, e.g. ones agents create for themselves."""
     commit_history_days: int = DEFAULT_COMMIT_HISTORY_DAYS
-    """How far back my commits count towards "directories I work in"."""
+    """How far back commits count, in days, e.g. `180`: mine towards "directories I work in",
+    and others' towards github's reviewer suggestions."""
 
     @field_validator("repos")
     @classmethod

@@ -26,7 +26,6 @@ OPTIONAL_SETTINGS = """\
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # port = 8765                            # where the local server listens
 # db_backups = 10                        # copies kept in backups/, taken before migrations
-# refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                        # clear work finished this long ago from the notes
 """
 OPTIONAL_ACT_NOW_SETTINGS = """\
