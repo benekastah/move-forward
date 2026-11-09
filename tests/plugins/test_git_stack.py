@@ -338,6 +338,22 @@ def test_untrack_says_which_branches_now_start_their_own_stacks(
     assert notice == "untracked me/b; me/c now starts its own stack"
 
 
+def test_an_untrack_that_crashes_says_why_and_nothing_it_didnt_do(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def crashing(repo: Path, *args: str, timeout: int = 0) -> str:
+        raise CommandError("git stack untrack: Traceback", json.dumps(FETCHING) + "\nTraceback\n")
+
+    monkeypatch.setattr(actions, "git", crashing)
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/b")]),
+        stacks=stacks(StackBranch(name="me/b", parent="main")),
+    )
+    with pytest.raises(ActionError) as failed:
+        refresh.run_action(config, db, "git_stack/untrack", {"targets": "/src/widgets\tme/b"})
+    assert str(failed.value) == "git stack untrack failed: git stack untrack: Traceback"
+
+
 def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_record(
     tmp_path: Path,
 ) -> None:
@@ -580,7 +596,7 @@ def test_the_branches_kept_before_current_was_dropped_are_kept() -> None:
     )
 
 
-def test_a_branch_whose_only_pr_merged_or_a_merged_one_says_no_no_pr() -> None:
+def test_no_pr_is_said_only_of_a_branch_without_one_open_or_merged() -> None:
     names = ["main", "me/APP-3-branch", "me/gone"]
     built = dashboard(
         github=snapshot(merged_recent=[pr(3, state="MERGED")]),

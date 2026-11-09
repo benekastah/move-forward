@@ -168,9 +168,9 @@ class Builder:
                     continue
                 listed.add(b.name)
                 is_merged = b.status == "merged"
-                pr = self._pr(repo.dir, b.name, "open")
                 # A merged branch links its merged PR, but isn't about it: an iced ticket
                 # linking that PR mustn't hide the cleanup, nor its snooze key move.
+                pr = None if is_merged else self._pr(repo.dir, b.name, "open")
                 merged_pr = self._pr(repo.dir, b.name, "merged") if pr is None else None
                 link = pr or merged_pr
                 no_pr = not is_merged and b.parent is not None and link is None
