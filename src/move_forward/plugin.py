@@ -392,7 +392,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     kinds: ClassVar[dict[str, KindSpec]] = {}
     """The entity kinds the plugin publishes, each with its spec: the model of its
     attributes, which the graph checks its entities against, and whether it links what it's
-    about (see `Graph.related`; `linking_patterns` can narrow its id pattern), hides what it
+    about (see `Graph.related`; `linking_patterns` gives its id pattern), hides what it
     points at (core leaves items about hidden things off the page, but for the hiding
     plugin's own, e.g. notes' On ice), can be fetched, is done once gone, or is where `mfd
     priority` looks."""
@@ -561,11 +561,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def linking_patterns(self, req: LinkingRequest[C]) -> dict[str, str | None]:
         """Its `linking` kinds with the patterns of their ids as of now, e.g. only the project
-        keys jira has seen; None where no id can be found in text. Read from its tables, so
-        cheap: core asks every time it builds the graph."""
-        return {
-            kind: spec.linking for kind, spec in self.kinds.items() if spec.linking is not False
-        }
+        keys jira has seen; None where no id can be found in text, as by default. Read from
+        its tables, so cheap: core asks every time it builds the graph."""
+        return {kind: None for kind, spec in self.kinds.items() if spec.linking}
 
     def identity(self, req: IdentityRequest[C, S]) -> Identity | None:
         """Who I am in the plugin's tool (a login), for the page's footer, which lists each

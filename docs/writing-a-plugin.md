@@ -238,7 +238,7 @@ class IssueAttrs(KindModel):
 
 class LinearPlugin(...):
     kinds: ClassVar[dict[str, KindSpec]] = {
-        ISSUE: KindSpec(IssueAttrs, linking=None, fetchable=True, resolvable=True)
+        ISSUE: KindSpec(IssueAttrs, linking=True, fetchable=True, resolvable=True)
     }
 
     def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
@@ -287,9 +287,9 @@ class LinearPlugin(...):
   which a tool that knows it (a CRM) sets in `contact_type`, or by an `importance` it states
   outright (a VIP, a starred contact). Don't do either yourself.
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
-  declared `linking`, so the graph relates what's about it. Give it the pattern of its ids
-  (`KindSpec(..., linking=r"...")`, or None and narrow it from what the plugin has seen)
-  and other plugins' entities point at it from the text they mention:
+  declared `linking` (`KindSpec(..., linking=True)`), so the graph relates what's about it.
+  Give the pattern of its ids in `linking_patterns` (from what the plugin has seen, if need
+  be) and other plugins' entities point at it from the text they mention:
 
   ```python
   def linking_patterns(self, req: LinkingRequest[LinearConfig]) -> dict[str, str | None]:

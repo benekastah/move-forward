@@ -410,7 +410,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
-        TICKET: KindSpec(JiraTicket, linking=None, fetchable=True, resolvable=True)
+        TICKET: KindSpec(JiraTicket, linking=True, fetchable=True, resolvable=True)
     }
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS

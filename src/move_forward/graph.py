@@ -76,11 +76,10 @@ class KindSpec:
 
     attrs: type[KindModel]
     """The model its entities' `attrs` must fit."""
-    linking: str | None | Literal[False] = False
-    """Whether it links what it's about (see `Graph.related`): False if not; else the pattern
-    of its ids, for finding them in other entities' `mentions` (`Plugin.linking_patterns`
-    can narrow it as the plugin learns), or None when its entities point at what they link
-    themselves."""
+    linking: bool = False
+    """Whether it links what it's about (see `Graph.related`). The pattern of its ids, for
+    finding them in other entities' `mentions`, comes from `Plugin.linking_patterns`; without
+    one, its entities point at what they link themselves."""
     hides: bool = False
     """Whether its entities hide what they point at (notes' ice); see `Graph.hidden`."""
     fetchable: bool = False

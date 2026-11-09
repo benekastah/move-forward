@@ -29,7 +29,7 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
     declared: dict[str, tuple[str, str | None]] = {TAG: ("core", None)}
     for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():
-            marker = "linking" if spec.linking is not False else "hiding" if spec.hides else None
+            marker = "linking" if spec.linking else "hiding" if spec.hides else None
             declared.setdefault(kind, (plugin.name, marker))  # a family's first publisher
     assert documented == declared
 

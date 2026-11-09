@@ -26,6 +26,8 @@ Fewer things to know: what no plugin used is gone.
 - **Timeouts are core's**: the class variables `collect_timeout_seconds` and
   `subjects_timeout_seconds` are gone. `collect` (and `collect_after`) has five minutes, and
   `refresh_subjects` a minute, for every plugin.
+- **`KindSpec.linking` is a `bool`**: `linking=True` where it was `linking=None`. A pattern
+  for its ids comes only from `linking_patterns`, which by default gives none.
 
 ## Version 1
 

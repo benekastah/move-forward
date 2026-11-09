@@ -36,7 +36,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   another plugin's entities with `graph.view(kind, View)`, through its own
   small model of the fields it uses, not `attrs.get`. A kind that stands for a
   unit of work (a ticket, a work entry) is declared `linking` (with
-  `linking_patterns` narrowing its id pattern from the plugin's data); an entity
+  `linking_patterns` giving its id pattern from the plugin's data); an entity
   that may name one publishes the text in `mentions` (with `mentions_hide=False` where someone
   else wrote it, so what it names can't hide it) rather than refs to
   another plugin's kind. Core adds `tag`s (`tags.py`): what carries one points at it, but
