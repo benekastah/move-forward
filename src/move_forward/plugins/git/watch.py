@@ -106,6 +106,9 @@ class _Watch:
         self, paths: frozenset[Path], recursive: bool, on_change: Callable[[list[Path]], None]
     ):
         self.paths = paths
+        self.dead = False
+        """Its thread stopped on an error: what it watched is polled until the next `sync`
+        watches it anew."""
         self._on_change = on_change
         self._stop = threading.Event()
         self._notify = RustNotify(sorted(str(p) for p in paths), False, False, 0, recursive, True)
@@ -113,10 +116,15 @@ class _Watch:
         self._thread.start()
 
     def _run(self) -> None:
-        while not self._stop.is_set():
-            changes = self._notify.watch(DEBOUNCE_MS, STEP_MS, TIMEOUT_MS, self._stop)
-            if isinstance(changes, set):
-                self._on_change([Path(path) for _, path in changes])
+        try:
+            while not self._stop.is_set():
+                changes = self._notify.watch(DEBOUNCE_MS, STEP_MS, TIMEOUT_MS, self._stop)
+                if isinstance(changes, set):
+                    self._on_change([Path(path) for _, path in changes])
+        # Whatever stops it (watchfiles raises its own errors), it must say so and be polled.
+        except Exception as e:  # noqa: BLE001
+            log.warning("watching %d paths stopped, so polling them: %s", len(self.paths), e)
+            self.dead = True
 
     def close(self) -> None:
         self._stop.set()
@@ -152,15 +160,22 @@ class Watcher:
                 watch.close()
             self._watches.clear()
 
+    def _dead(self, recursive: bool) -> bool:
+        watch = self._watches.get(recursive)
+        return watch is not None and watch.dead
+
     @property
     def repos(self) -> set[Path]:
+        """The repos watched; none while the watch of them is dead, so they're polled."""
         with self._lock:
-            return set(self._repos)
+            return set() if self._dead(True) else set(self._repos)
 
     @property
     def worktrees(self) -> set[Path]:
+        """The worktrees watched; none while the watch of them is dead, so they're polled."""
         with self._lock:
-            return set(self._worktrees)
+            dead = self._dead(False) if PER_DIRECTORY else self._dead(True)
+            return set() if dead else set(self._worktrees)
 
     def sync(self, worktrees: dict[Path, Path]) -> None:
         """Watch exactly these worktrees (each with its common git directory, all resolved)
@@ -202,7 +217,7 @@ class Watcher:
     def _ensure(self, recursive: bool, paths: frozenset[Path]) -> bool:
         """Watch `paths` (recursively or not), unless they already are; whether they are."""
         current = self._watches.get(recursive)
-        if current is not None and current.paths == paths:
+        if current is not None and current.paths == paths and not current.dead:
             return True
         if current is not None:
             current.close()

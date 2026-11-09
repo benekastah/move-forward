@@ -11,7 +11,14 @@ from conftest import NOW
 
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import ChangedRequest, CollectRequest, Context, LoadRequest, StoreRequest
+from move_forward.plugin import (
+    ChangedRequest,
+    CollectRequest,
+    Context,
+    EntitiesRequest,
+    LoadRequest,
+    StoreRequest,
+)
 from move_forward.plugins.git import changes, client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalRepo
@@ -198,3 +205,28 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
         plugin.collect(CollectRequest(ctx))
     assert ctx.kv.get(LAST_FULL) is None  # the next collect reads every repo
     assert not plugin.changed(ChangedRequest(ctx, Graph([])))  # no refresh every check
+
+
+def test_two_clones_of_one_github_repo_publish_it_once_and_are_warned_of(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    clones = [_repo(tmp_path / "a"), _repo(tmp_path / "b")]
+    for clone in clones:
+        git(clone, "remote", "add", "origin", "git@github.com:acme/widgets.git")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    ctx = Context(
+        config=GitConfig(repos=clones),
+        email="me@example.com",
+        teams=[],
+        prune_days=90,
+        now=NOW,
+        db=db,
+        kv=KvRepository(db, "git"),
+    )
+    plugin = GitPlugin(watching=False)
+    found = plugin.collect(CollectRequest(ctx))
+    repos = [e for e in plugin.entities(EntitiesRequest(ctx, found)) if e.ref.kind == "git.repo"]
+    assert [(e.ref.id, e.attrs["dir"]) for e in repos] == [("acme/widgets", str(clones[0]))]
+    [warning] = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert f"{clones[0]}, {clones[1]} are each a clone of acme/widgets" in warning

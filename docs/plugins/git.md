@@ -16,8 +16,9 @@ It watches each repo's git directory, and each worktree where git tracks files: 
 each directory in the index, on its own, so ignored trees (`node_modules`, `build`,
 `.venv`, wherever they are) aren't watched; on macOS and Windows the worktree, as a tree.
 On Linux each watched directory takes an inotify watch, counted against
-`fs.inotify.max_user_watches`. What it can't watch (over that limit, say) is polled
-instead, as it says in the log: refs and config every 2 seconds by the times of the files
+`fs.inotify.max_user_watches`. What it can't watch (over that limit, say), or a watch
+that stopped on an error until the next refresh watches it anew, is polled instead, as it
+says in the log: refs and config every 2 seconds by the times of the files
 git keeps them in, without running git, and edits every `status_seconds` (30; 0 leaves
 them to `refresh_seconds`) by `git status`. `git status` takes no lock, so it never gets in
 the way of your own git commands; in a very large repo, git's own file watcher makes it
@@ -26,7 +27,8 @@ Watchman) and `git config core.untrackedCache true`.
 
 `[git]` needs `repos`, your main checkouts; their other worktrees are found with
 `git worktree list`, and a listed path that's a worktree of another listed repo is folded
-into it. A branch is yours if a PR of yours comes from it, if it has commits of yours
+into it. Two separate clones of one GitHub repo are warned of: only the first's branches meet
+its PRs, so make the others worktrees of it. A branch is yours if a PR of yours comes from it, if it has commits of yours
 that aren't on the default branch (anywhere in its history, by the repo's `user.email`;
 counted for branches active within `commit_history_days`), or if its name starts with one
 of `my_branch_prefixes`. Without prefixes, a branch with only others' commits (a review

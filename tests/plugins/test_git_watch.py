@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable, Iterator
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import NOW
@@ -221,3 +222,34 @@ def test_ignored_files_dont_refresh_the_repo(tmp_path: Path) -> None:
         )  # git status counts nothing new
     finally:
         plugin.stop_watching()
+
+
+def test_a_watch_that_errors_is_polled_and_watched_anew_at_the_next_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path / "r")
+    real = watch.RustNotify
+    failing = [True]
+
+    class Failing:
+        def __init__(self, *args: Any) -> None:
+            self._real = real(*args)
+
+        def watch(self, *args: Any) -> object:
+            if failing[0]:
+                raise RuntimeError("watcher went away")
+            return self._real.watch(*args)
+
+        def close(self) -> None:
+            self._real.close()
+
+    monkeypatch.setattr(watch, "RustNotify", Failing)
+    watcher = watch.Watcher()
+    try:
+        watcher.sync({repo: repo / ".git"})
+        assert _until(lambda: watcher.repos == set() and watcher.worktrees == set())
+        failing[0] = False
+        watcher.sync({repo: repo / ".git"})
+        assert watcher.repos == {repo / ".git"} and watcher.worktrees == {repo}
+    finally:
+        watcher.stop()

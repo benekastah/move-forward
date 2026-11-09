@@ -103,6 +103,18 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         )
         if not partial:
             ctx.kv.set(LAST_FULL, ctx.now.isoformat())
+        by_name: dict[str, list[str]] = {}
+        for repo in found.repos:
+            if repo.github_repo:
+                by_name.setdefault(repo.github_repo.lower(), []).append(repo.dir)
+        for name, dirs in by_name.items():
+            if len(dirs) > 1:
+                ctx.log.warning(
+                    "%s are each a clone of %s: only the first's branches meet its PRs; make the"
+                    " others worktrees of it (git worktree add)",
+                    ", ".join(dirs),
+                    name,
+                )
         return found
 
     def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
@@ -208,12 +220,15 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         return LocalRepository(ctx.db).load()
 
     def entities(self, req: EntitiesRequest[GitConfig, LocalSnapshot]) -> list[Entity]:
-        """A `repo` per checkout on GitHub, and a `branch` per local branch."""
+        """A `repo` per GitHub repo checked out (the first checkout of it, when two clones are,
+        which `collect` warns of), and a `branch` per local branch."""
         snapshot = req.snapshot
         entities: list[Entity] = []
+        published: set[str] = set()
         for repo in snapshot.repos if snapshot else []:
             repo_ref = Ref(kind=REPO, id=repo.github_repo) if repo.github_repo else None
-            if repo_ref:
+            if repo_ref and repo_ref.id.lower() not in published:
+                published.add(repo_ref.id.lower())
                 entities.append(
                     Entity(
                         ref=repo_ref,
