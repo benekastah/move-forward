@@ -229,11 +229,13 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         which `collect` warns of), and a `branch` per local branch."""
         snapshot = req.snapshot
         entities: list[Entity] = []
-        published: set[str] = set()
+        published: dict[str, Ref] = {}  # by the name casefolded: GitHub's names ignore case
         for repo in snapshot.repos if snapshot else []:
-            repo_ref = Ref(kind=REPO, id=repo.github_repo) if repo.github_repo else None
-            if repo_ref and repo_ref.id.casefold() not in published:  # GitHub's names ignore case
-                published.add(repo_ref.id.casefold())
+            name = repo.github_repo
+            # A later clone's branches point at the first's repo, the one published.
+            repo_ref = published.get(name.casefold()) if name else None
+            if name and repo_ref is None:
+                repo_ref = published[name.casefold()] = Ref(kind=REPO, id=name)
                 entities.append(
                     Entity(
                         ref=repo_ref,

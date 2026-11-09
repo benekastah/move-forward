@@ -231,6 +231,10 @@ def test_two_clones_of_one_github_repo_are_warned_of(
     found = plugin.collect(CollectRequest(ctx))
     repos = [e for e in plugin.entities(EntitiesRequest(ctx, found)) if e.ref.kind == "git.repo"]
     assert [(e.ref.id, e.attrs["dir"]) for e in repos] == [("Acme/widgets", str(clones[0]))]
+    branches = [
+        e for e in plugin.entities(EntitiesRequest(ctx, found)) if e.ref.kind == "git.branch"
+    ]
+    assert {r.id for b in branches for r in b.refs} == {"Acme/widgets"}  # the one published
     plugin.collect(CollectRequest(ctx))  # warned of once a run, not every collect
     [warning] = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
     assert f"{clones[0]}, {clones[1]} are each a clone of Acme/widgets" in warning
