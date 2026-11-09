@@ -6,7 +6,7 @@ import threading
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPResponse
-from http.server import ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, ClassVar
 from urllib.parse import quote, urlencode
@@ -148,6 +148,33 @@ def test_dashboard_page_renders_panels_and_ping_links(client: HTTPConnection) ->
     assert "Needs a reviewer" in body
     assert f"as GitHub: {ME}" in body
     assert "/slack/ping?pr=" + quote(pr(1).url, safe="") in body
+
+
+@pytest.mark.parametrize("error", [BrokenPipeError, ConnectionResetError, ConnectionAbortedError])
+def test_a_browser_disconnect_ends_the_connection_quietly(
+    app: server.App, monkeypatch: pytest.MonkeyPatch, error: type[ConnectionError]
+) -> None:
+    def disconnected(_self: BaseHTTPRequestHandler) -> None:
+        raise error("browser closed the connection")
+
+    monkeypatch.setattr(BaseHTTPRequestHandler, "handle_one_request", disconnected)
+    handler_type = server.make_handler(app)
+    handler = handler_type.__new__(handler_type)
+    handler.handle()
+    assert handler.close_connection
+
+
+def test_other_request_errors_still_surface(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failed(_self: BaseHTTPRequestHandler) -> None:
+        raise OSError("unexpected server failure")
+
+    monkeypatch.setattr(BaseHTTPRequestHandler, "handle_one_request", failed)
+    handler_type = server.make_handler(app)
+    handler = handler_type.__new__(handler_type)
+    with pytest.raises(OSError, match="unexpected server failure"):
+        handler.handle()
 
 
 def test_stylesheet_and_404(client: HTTPConnection) -> None:

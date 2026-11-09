@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Canceled browser requests no longer print tracebacks
+
+Closing a tab or canceling a page load while the server answers no longer prints a
+broken-pipe or connection-reset traceback. Disconnects are logged only with `-v`;
+other request failures still surface. Run `mfd restart` to load the fix in a running
+server, unless `mfd serve --reload` has already picked it up. No config change is needed.
+
 ### No more HTTPS mode
 
 The dashboard serves plain HTTP on localhost only. A config that sets `https` (true or false)

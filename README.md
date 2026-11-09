@@ -134,6 +134,10 @@ Plugins add commands of their own, `mfd <plugin> ...`: see
 [notes](docs/plugins/notes.md#commands), [slack](docs/plugins/slack.md#commands) and
 [github](docs/plugins/github.md#commands).
 
+Closing a tab or canceling a page load can disconnect it while the server answers.
+`mfd serve` closes that connection without a traceback; `-v` logs the disconnect at
+debug level. Other request errors still report their failures.
+
 ## Panels
 
 The page has **Act now** on top: the best next actions across every tool, at

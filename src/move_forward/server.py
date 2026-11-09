@@ -499,6 +499,15 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
         timeout = REQUEST_TIMEOUT_SECONDS
         _notice_taken = False
 
+        def handle(self) -> None:
+            """A browser can cancel any request, including while headers or a body are
+            being written. End that connection quietly; other server errors still surface."""
+            try:
+                super().handle()
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                self.close_connection = True
+                log.debug("browser disconnected during a request")
+
         def end_headers(self) -> None:
             """Every answer, redirects and errors included, forbids being framed by another
             page, which would let it overlay the dashboard's buttons (clickjacking)."""
