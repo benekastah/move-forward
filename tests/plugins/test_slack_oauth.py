@@ -13,6 +13,7 @@ from conftest import NOW
 
 from move_forward.db import Database
 from move_forward.graph import Graph
+from move_forward.https import RequestError
 from move_forward.plugin import ActionError, ActionRequest, Context, PageRequest, Response
 from move_forward.plugins.slack import account, client, oauth, scopes
 from move_forward.plugins.slack.config import SlackConfig
@@ -183,6 +184,18 @@ def test_the_token_is_refreshed_before_it_runs_out_and_lost_when_slack_refuses(
     assert oauth.token(_ctx(db, 24 * 60)) is None
     assert oauth.connection(_ctx(db)) is None and secrets.stored == {}
     assert "invalid_refresh_token" in (_ctx(db).kv.get(oauth.LOST) or "")
+
+
+def test_a_refresh_that_cant_reach_slack_keeps_the_token_while_it_lasts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secrets, slack, db = _connected(monkeypatch)
+    offline = RequestError("https://slack.com/api/oauth.v2.access", "no network")
+    slack.answers.extend([offline, offline])
+    assert oauth.token(_ctx(db, 12 * 60 - 5)) == "xoxe.xoxp-1"  # five minutes left
+    assert oauth.token(_ctx(db, 12 * 60 + 5)) is None  # run out
+    assert oauth.connection(_ctx(db)) is not None  # kept, to refresh once back online
+    assert secrets.stored[f"{SERVICE}-refresh"] == "xoxe-1-r1"
 
 
 def test_without_the_app_the_token_set_by_hand_is_used(monkeypatch: pytest.MonkeyPatch) -> None:

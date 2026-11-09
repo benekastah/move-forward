@@ -1,10 +1,9 @@
 """Where review pings go, viewed and edited: the `/slack/contacts` page, its buttons, and
 what `mfd slack` shares with them."""
 
-import http.client
 import re
 
-from ...api import Action, ActionError, ActionRequest, Context, Graph, Model, html
+from ...api import Action, ActionError, ActionRequest, Context, Graph, Model, html, http
 from ...api.kinds import PERSON
 from . import client, oauth, scopes
 from .config import SlackConfig
@@ -228,8 +227,8 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
             continue
         try:
             slack_id = client.lookup_by_email(api_token, email)
-        # Slack's refusal, no network (urllib's errors are OSErrors), a cut or garbled answer.
-        except (client.SlackError, OSError, http.client.HTTPException, ValueError) as e:
+        # Slack's refusal, no network or a cut answer, or one that isn't JSON.
+        except (client.SlackError, http.RequestError, ValueError) as e:
             missing = isinstance(e, client.SlackError) and e.error == "missing_scope"
             ctx.kv.set(
                 LOOKUPS_FAILED, f"{e}{': the token needs users:read.email' if missing else ''}"

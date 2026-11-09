@@ -194,8 +194,9 @@ Confluence, Notion, Figma). In order:
    size), and who's waiting as people (`person` refs) rather than names, so their contact
    type and availability count.
 6. **An HTTP toolkit in `api`.** Most of those tools have no CLI, and there are no new
-   dependencies, so each plugin would write its own JSON requests, paging, retries with
-   backoff, rate-limit waits and timeouts over `api.http.opener`. Do it once, with OAuth's
+   dependencies, so each plugin would write its own paging, retries with backoff and
+   rate-limit waits over `api.http.request` (which sends one request, with its timeout,
+   and raises one `RequestError` when there's no answer). Do it once, with OAuth's
    token refresh (slack does its own today) beside `sign_in_pages`, and API tokens through
    `api.keychain` as now.
 7. **Richer buttons.** Several fields on one form (today one text field and one drop-down),

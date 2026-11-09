@@ -1,10 +1,7 @@
 """Jira collector: my open issues, through the Jira Cloud REST API."""
 
 import base64
-import json
 import re
-import urllib.error
-import urllib.request
 from collections.abc import Collection
 from datetime import date, datetime
 from http import HTTPStatus
@@ -200,20 +197,15 @@ def _request(
     path: str,
     body: dict[str, object] | None = None,
 ) -> bytes:
-    """A GET of `path`, or a POST of `body` to it, answered with Jira's response."""
-    url = config.site.rstrip("/") + path
-    http.require_https(url, "the Jira token")
-    headers = {"Authorization": _basic_auth(email, api_token), "Accept": "application/json"}
-    if body is not None:
-        headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode() if body is not None else None,
-        headers=headers,
-        method="POST" if body is not None else "GET",
+    """A GET of `path`, or a POST of `body` to it, answered with Jira's response; raises
+    `http.RequestError` when Jira can't be reached or answers with an error status."""
+    return http.request(
+        config.site.rstrip("/") + path,
+        secret_name="the Jira token",
+        headers={"Authorization": _basic_auth(email, api_token), "Accept": "application/json"},
+        json=body,
+        timeout=60,
     )
-    with http.opener.open(request, timeout=60) as response:
-        return response.read()
 
 
 def _basic_auth(email: str, api_token: str) -> str:
@@ -226,8 +218,8 @@ def verify_token(config: JiraConfig, email: str, api_token: str) -> None:
     can't tell a bad token from no tickets."""
     try:
         _request(config, email, api_token, MYSELF_PATH)
-    except urllib.error.HTTPError as e:
-        if e.code == HTTPStatus.UNAUTHORIZED:
+    except http.RequestError as e:
+        if e.status == HTTPStatus.UNAUTHORIZED:
             raise SourceError(
                 f"Jira rejected the API token for {email} (HTTP 401); it may have expired or "
                 "been revoked: make a new one and run `mfd token set jira`"
@@ -295,10 +287,10 @@ def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> 
         return []
     try:
         return search(config, email, f"key in ({', '.join(keys)})", api_token)
-    except urllib.error.HTTPError as e:
+    except http.RequestError as e:
         # Jira refuses a whole `key in` search naming one ticket it doesn't know (mistyped,
         # deleted, or in a project I can't see): ask key by key, and leave those out.
-        if e.code != HTTPStatus.BAD_REQUEST:
+        if e.status != HTTPStatus.BAD_REQUEST:
             raise
         if len(keys) == 1:
             return []

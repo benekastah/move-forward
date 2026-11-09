@@ -15,6 +15,11 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **One HTTP request**: `api.http.request(url, *, secret_name, headers, json, form, method,
+  timeout)` sends a request carrying a secret (https only, no redirects, through
+  `api.http.opener`) with a JSON or form body, and returns the answer's body. When there's
+  no answer (no network, a timeout, a cut or garbled response) or an error status, it raises
+  `api.http.RequestError`, whose `status` is the HTTP status, or None without one.
 - **The dashboard's URL**: `Context.dashboard_url` is always `http://localhost:<port>`, as the
   dashboard no longer serves HTTPS.
 - **Who may hide by text**: `Entity.mentions_hide` (True by default) says whether a unit of

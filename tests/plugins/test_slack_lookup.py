@@ -2,7 +2,6 @@
 
 import io
 import json
-import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import replace
@@ -12,6 +11,7 @@ import pytest
 from conftest import NOW, Reviewer, pr, snapshot, stored
 
 from move_forward import https
+from move_forward.https import RequestError
 from move_forward.plugin import Context, PageRequest, PruneRequest
 from move_forward.plugins.slack import account, client, contacts, oauth
 from move_forward.plugins.slack.config import SlackConfig
@@ -85,7 +85,7 @@ def test_requested_reviewers_are_looked_up_once_each(monkeypatch: pytest.MonkeyP
             client.SlackError("users.lookupByEmail", "missing_scope"),
             "said missing_scope: the token needs users:read.email",
         ),
-        (urllib.error.URLError("no network"), "no network"),
+        (RequestError("https://slack.com/api/users.lookupByEmail", "no network"), "no network"),
     ],
 )
 def test_a_lookup_that_fails_is_said_on_slacks_page_until_the_next_refresh(
