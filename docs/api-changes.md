@@ -37,6 +37,9 @@ Fewer things to know: what no plugin used is gone.
   `Changed(False)`.
 - **`init_suggested()` is False by default**: `mfd init` suggests a plugin only when it
   overrides it to say True.
+- **`api.http` is `request` and `RequestError`**: `api.http.opener` and
+  `api.http.require_https` have left `api`. Send a request with `api.http.request`, which
+  checks for HTTPS and refuses redirects itself.
 
 ## Version 1
 

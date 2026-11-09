@@ -38,8 +38,8 @@ A plugin uses core only through `move_forward.api` (relatively, `from ...api imp
 Plugin, Context, Graph`): everything a plugin may use is there, and core's own modules may
 change without notice. Its submodules group the rest: `api.html` (`page`, `e` to escape,
 `shown` to drop hidden characters, `buttons`, `linkable`), `api.shell` (`run`, `git`,
-`git_common_dir`, `CommandError`), `api.http` (`request`, `RequestError`, `opener`,
-`require_https`), `api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`,
+`git_common_dir`, `CommandError`), `api.http` (`request`, `RequestError`),
+`api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`,
 `branch_parts`), `api.tags` (`handle`) and `api.keychain` (`token`, `read`, `write`,
 `delete`). Ruff refuses any other core import in a plugin, and
 `tests/test_api.py` checks it too.
