@@ -282,7 +282,7 @@ class _PrView(Model):
 
 
 class _BranchView(Model):
-    """What notes reads of a `git.branch`; a branch only git-stack still tracks has
+    """What notes reads of a `git.branch`; a branch only git stack still tracks has
     neither."""
 
     id: str

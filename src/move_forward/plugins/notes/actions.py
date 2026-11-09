@@ -42,13 +42,13 @@ class _BranchView(Model):
 
     id: str
     repo_dir: str | None = None
-    """None for a branch only git-stack still tracks."""
+    """None for a branch only git stack still tracks."""
     name: str | None = None
     sha: str | None = None
 
 
 class _StackBranchView(Model):
-    """What notes reads of a `git_stack.stack_branch`: what git-stack acts on with it."""
+    """What notes reads of a `git_stack.stack_branch`: what git stack acts on with it."""
 
     stack: list[str]
 
@@ -70,8 +70,8 @@ def _repo(graph: Graph, repo_dir: str) -> Path:
 
 
 def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
-    """The branch's whole stack as git-stack sees it (`git_stack.stack_branch`'s `stack`): its
-    stack, and the other stacks in its group, since git-stack's `restack`, `sync` and `push`
+    """The branch's whole stack as git stack sees it (`git_stack.stack_branch`'s `stack`): its
+    stack, and the other stacks in its group, since git stack's `restack`, `sync` and `push`
     act on all of them; just the branch when it isn't in a stack (or git_stack isn't on).
     Only branches git still has are iced."""
     here = _branches(graph, repo)

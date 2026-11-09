@@ -40,7 +40,7 @@ def run(
     encoding: str = "utf-8",
 ) -> str:
     """Run a command, with `input` on its stdin, and return its stdout, read as `encoding`:
-    UTF-8, which git, gh and git-stack write; a Windows tool of its own (`icacls`) writes in
+    UTF-8, which git, gh and git stack write; a Windows tool of its own (`icacls`) writes in
     the system's OEM code page, `"oem"`.
 
     Raises CommandError if it exits non-zero, or if `stop` was called.

@@ -11,7 +11,7 @@ change to what a plugin publishes or reads, to its item actions or to its `requi
 updates this file in the same commit.
 
 git and git_stack both nominate merged branches for Act now, each those it can clean up: git leaves
-the ones git-stack tracks to git_stack's Clean.
+the ones git stack tracks to git_stack's Clean.
 
 Core adds importance choices to entity items and their individual todo parts (but not to
 items about what hides things), and Snooze and Dismiss to every item with a task. Plugins can group their buttons with those of other plugins: notes' Put on ice joins git's

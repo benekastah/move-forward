@@ -99,7 +99,7 @@ repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are foun
 # commit_history_days = 180
 # github_hosts = ["github.com"]           # remote hosts that are GitHub: an Enterprise server, ~/.ssh/config aliases
 
-[git_stack]                           # stacks from git-stack, in [git]'s repos
+[git_stack]                           # stacks from git stack, in [git]'s repos
 # refresh_seconds = 1800                 # how often it refreshes regardless of git's changes
 
 [slack]

@@ -88,7 +88,7 @@ is what's left to build.
   changes a plugin. If a plugin needs something new from core (a hook, a
   `Context` field, a graph method), land that first, on its own, with its own
   tests, and stack the plugin PR on it (`git stack branch`, from
-  [git-stack](https://github.com/benekastah/git-stack/), which keeps stacked branches and
+  [git stack](https://github.com/benekastah/git-stack/), which keeps stacked branches and
   their PRs in order).
 - **Small enough to review well.** One reviewer reads a PR whole, and it reads a small one
   better: split a large change into a stack of PRs that each do one step and pass `dev.py
@@ -183,6 +183,10 @@ is what's left to build.
   telling me to do something comes with the button, where the dashboard can do it.
   What doesn't yet is in `docs/roadmap.md`. When adding a button, look at every surface
   the item appears on.
+- **Name a tool as its users do.** A plugin's title is its tool's name ("GitHub", "Git", "Git
+  Stack"); a command shown to the user is written as it's typed (`git stack restack`); in prose
+  it's lower-case words ("a branch git stack tracks"). The plugin's own name stays its config
+  section's (`git_stack`).
 - **A class's variables come first.** Its class variables (a plugin's `name`,
   `kinds`, `change_check_seconds` and the like) go at the top, then `__init__`, which
   sets every instance variable, then the methods. Don't define a class variable between

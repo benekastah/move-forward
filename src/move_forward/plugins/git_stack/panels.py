@@ -1,4 +1,4 @@
-"""The git-stack plugin's panel and entities.
+"""The git_stack plugin's panel and entities.
 
 Pure functions of the snapshot and the graph; no I/O. A branch's PR is the `pull_request`
 the graph relates to its `git.branch` (github relates them).
@@ -30,7 +30,7 @@ def stack_branch_ref(repo_dir: str, branch: str) -> Ref:
 
 
 class StackBranchView(Model):
-    """A `stack_branch`, git_stack's own: a branch git-stack tracks."""
+    """A `stack_branch`, git_stack's own: a branch git stack tracks."""
 
     id: str
     repo_dir: str
@@ -63,8 +63,8 @@ def repo_dirs(graph: Graph) -> list[str]:
 
 
 def stack_of(branches: list[StackBranch], branch: str) -> list[str]:
-    """The names of what git-stack acts on with `branch`: its stack, and the other stacks in
-    its group, since git-stack's `restack`, `sync` and `push` act on all of them. Each stack
+    """The names of what git stack acts on with `branch`: its stack, and the other stacks in
+    its group, since git stack's `restack`, `sync` and `push` act on all of them. Each stack
     bottom first, the branch's own first of all; just the branch when it isn't tracked."""
     parents = {b.name: b.parent for b in branches if b.parent is not None}
     if branch not in parents:
@@ -96,7 +96,7 @@ def stack_of(branches: list[StackBranch], branch: str) -> list[str]:
 
 def entities(snapshot: GitStackSnapshot | None) -> list[Entity]:
     """A `git_stack.stack_branch` per tracked branch, pointing at its `git.branch`, which git
-    may have deleted, with the stack and group git-stack acts on with it."""
+    may have deleted, with the stack and group git stack acts on with it."""
     return [
         Entity(
             ref=stack_branch_ref(repo.dir, b.name),
@@ -214,7 +214,7 @@ class Builder:
             key="stacks",
             priority=Band.STACKS_NO_PR,
             title="Stacks",
-            description="git-stack branches that need a restack, were merged, or have no PR.",
+            description="git stack branches that need a restack, were merged, or have no PR.",
             items=items,
             actions=actions,
         )
@@ -222,7 +222,7 @@ class Builder:
 
 def untrack_iced_action(item: Item, graph: Graph) -> Action | None:
     """An Untrack button for an item about what hides its branches, i.e. notes' On ice item,
-    when git-stack still tracks some of them. A `git_stack.stack_branch`'s id is its branch's."""
+    when git stack still tracks some of them. A `git_stack.stack_branch`'s id is its branch's."""
     if not any(graph.hides(ref.kind) for ref in item.subjects):
         return None
     tracked = [
@@ -237,7 +237,7 @@ def untrack_iced_action(item: Item, graph: Graph) -> Action | None:
         name="git_stack/untrack",
         label="Untrack",
         fields={"targets": "\n".join(b.id for b in tracked)},
-        confirm="Stop git-stack tracking "
+        confirm="Stop git stack tracking "
         + ", ".join(b.name for b in tracked)
         + "? The branches themselves are left alone.",
     )

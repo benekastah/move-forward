@@ -5,8 +5,8 @@ from .models import GitStackSnapshot, StackBranch
 from .panels import stack_branch_ref
 
 KINDS = {
-    "needs_restack": "a git-stack branch needs a restack",
-    "merged": "a git-stack branch was merged: `git stack clean` can remove it",
+    "needs_restack": "a git stack branch needs a restack",
+    "merged": "a git stack branch was merged: `git stack clean` can remove it",
 }
 """The kinds, with what each says, for the settings page."""
 NEEDS_RESTACK = "needs-restack"

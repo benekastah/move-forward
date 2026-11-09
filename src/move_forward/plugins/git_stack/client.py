@@ -1,4 +1,4 @@
-"""Reads git-stack's stacks with `git stack info`."""
+"""Reads git stack's stacks with `git stack info`."""
 
 import json
 from concurrent.futures import ThreadPoolExecutor

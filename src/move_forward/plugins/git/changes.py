@@ -1,6 +1,6 @@
 """Telling cheaply that a repository moved, for `GitPlugin.changed`, in the repos it can't
 watch (see `watch`): a commit, a checkout, a branch made or deleted, a rebase, a push or a
-fetch, or a change to the config (an upstream set, a branch git-stack tracks). They all
+fetch, or a change to the config (an upstream set, a branch git stack tracks). They all
 rewrite files git keeps its refs or config in, so the times, sizes and identities of those
 files say so, without running git.
 
@@ -37,7 +37,7 @@ def common_dir(repo: Path) -> Path | None:
 def _ref_files(common: Path) -> list[Path]:
     """The files whose changes mean the repository moved: HEAD, each worktree's HEAD, the
     packed refs, every loose ref (branches, remote branches, tags, the stash), and the config
-    (where branches' upstreams are set, and git-stack keeps its stacks)."""
+    (where branches' upstreams are set, and git stack keeps its stacks)."""
     return [
         common / "HEAD",
         common / "packed-refs",

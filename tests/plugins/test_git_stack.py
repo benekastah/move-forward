@@ -1,4 +1,4 @@
-"""The git-stack plugin: its Stacks panel, the stack entities it adds to git's branches, and
+"""The git_stack plugin: its Stacks panel, the stack entities it adds to git's branches, and
 `git stack clean`."""
 
 import json
@@ -99,7 +99,7 @@ def test_tracked_branches_are_stack_branches_pointing_at_gits() -> None:
         stacks=stacks(
             StackBranch(name="main"),
             StackBranch(name="me/top", parent="main", status="needs-restack", group="g"),
-            StackBranch(name="me/gone", parent="main"),  # git deleted it; git-stack tracks it
+            StackBranch(name="me/gone", parent="main"),  # git deleted it; git stack tracks it
         ),
     )
     graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))

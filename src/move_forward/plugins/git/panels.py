@@ -15,7 +15,7 @@ from .models import Branch, LocalRepo, LocalSnapshot
 
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
-"""git_stack's kind for a branch git-stack tracks."""
+"""git_stack's kind for a branch git stack tracks."""
 ICED = "notes.iced"
 
 
@@ -51,7 +51,7 @@ class _PrView(Model):
 
 
 class _StackBranchView(Model):
-    """What git reads of a `git_stack.stack_branch`: which branch, and whether git-stack sees
+    """What git reads of a `git_stack.stack_branch`: which branch, and whether git stack sees
     it merged."""
 
     repo_dir: str
@@ -70,7 +70,7 @@ class Builder:
         self.stacked: dict[tuple[str, str], _StackBranchView] = {
             (b.repo_dir, b.name): b for b in graph.view(STACK_BRANCH, _StackBranchView)
         }
-        """Branches git-stack tracks, by checkout and name."""
+        """Branches git stack tracks, by checkout and name."""
 
     def _prs_from(self, repo_dir: str, name: str) -> list[_PrView]:
         """The PRs from the branch, mine or not: those the graph relates to it (github does,
@@ -97,13 +97,13 @@ class Builder:
         return branch.my_commits is None
 
     def _has_my_work(self, repo: LocalRepo, branch: Branch) -> bool:
-        """Whether Local work shows the branch's unpushed commits: it's mine, or git-stack
+        """Whether Local work shows the branch's unpushed commits: it's mine, or git stack
         tracks it (stacks are built on my own branches)."""
         return (repo.dir, branch.name) in self.stacked or self._is_my_branch(repo.dir, branch)
 
     def _stack_cleans(self, repo: LocalRepo, branch: Branch) -> bool:
-        """Whether git-stack sees the branch merged: git_stack's Clean deletes it and untracks
-        it too, where `git branch -D` would leave git-stack tracking a branch that's gone."""
+        """Whether git stack sees the branch merged: git_stack's Clean deletes it and untracks
+        it too, where `git branch -D` would leave git stack tracking a branch that's gone."""
         stacked = self.stacked.get((repo.dir, branch.name))
         return stacked is not None and stacked.stack_status == "merged"
 
@@ -223,7 +223,7 @@ class Builder:
         for repo in self.local.repos if self.local else []:
             for b in repo.branches:
                 # Never the default branch, even when a PR from my fork's merged; nor one
-                # git-stack's Clean takes, which untracks it as it deletes it.
+                # git stack's Clean takes, which untracks it as it deletes it.
                 if b.name == repo.default_branch or self._stack_cleans(repo, b):
                     continue
                 merged = self._pr(repo.dir, b.name, "merged")
