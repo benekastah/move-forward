@@ -242,11 +242,15 @@ def test_delete_refuses_a_branch_moved_since_the_page_showed_it(config: Config, 
 def test_pull_of_a_branch_tracking_a_local_one_takes_its_pushed_copy(
     config: Config, repo: Path, tmp_path: Path
 ) -> None:
+    fork = tmp_path / "fork.git"
+    _init(fork, bare=True)
+    git(repo, "remote", "add", "fork", str(fork))
+    git(repo, "config", "remote.pushDefault", "fork")  # Push sends it to fork, not origin
     git(repo, "branch", "-q", "--track", "feat", "main")
     run("git/push_branch", config, {"repo": str(repo), "branch": "feat"})
-    other = _clone(tmp_path / "origin.git", tmp_path / "other", "feat")
+    other = _clone(fork, tmp_path / "other", "feat")
     _commit(other, "theirs.txt")
-    git(other, "push", "-q", "origin", "feat")
+    git(other, "push", "-q", "origin", "feat")  # the clone's origin is the fork
     main_before = git(repo, "rev-parse", "main")
     assert run("git/pull_branch", config, {"repo": str(repo), "branch": "feat"}) == "pulled feat"
     assert git(repo, "rev-parse", "feat") == git(other, "rev-parse", "feat")
@@ -260,6 +264,11 @@ def test_delete_goes_through_for_a_branch_still_at_the_commit_shown_whatever_tag
     git(repo, "tag", "done", "wip")  # a tag of the same name, elsewhere
     assert run("git/delete_branch", config, {"repo": str(repo), "branch": "done", "sha": shown})
     assert git(repo, "branch", "--list", "done") == ""
+
+
+def test_delete_all_takes_a_branch_still_at_its_commit_and_one_given_none(
+    config: Config, repo: Path
+) -> None:
     git(repo, "branch", "-q", "again", "main")
     again = git(repo, "rev-parse", "again").strip()
     git(repo, "branch", "-q", "plain", "main")
@@ -367,6 +376,7 @@ def test_an_iced_branch_with_commits_since_it_was_iced_isnt_deleted(
     git(repo, "switch", "-q", "done")
     _commit(repo, "later.txt")
     git(repo, "switch", "-q", "main")
+    git(repo, "tag", "done", "done@{1}")  # a tag at the commit it was iced at answers nothing
     with pytest.raises(ActionError, match="commits since it was iced"):
         run("git/delete_branch", config, {"repo": str(repo), "branch": "done"})
     assert git(repo, "branch", "--list", "done").strip() == "done"

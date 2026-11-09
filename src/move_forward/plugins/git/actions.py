@@ -222,7 +222,10 @@ def pull_branch(req: ActionRequest[GitConfig]) -> str:
         remote = client.push_remote(repo, branch) or ""
         upstream_ref = f"refs/remotes/{remote}/{branch}"
         if not remote:
-            raise ActionError(f"{branch} tracks a local branch, and has no remote to pull from")
+            raise ActionError(
+                f"{branch} tracks a local branch, and {repo} has no remote to pull it from, or"
+                " several: set remote.pushDefault to say which"
+            )
     try:
         git(repo, "fetch", "--quiet", remote)
     except CommandError as e:
@@ -231,7 +234,12 @@ def pull_branch(req: ActionRequest[GitConfig]) -> str:
         upstream = git(repo, "rev-parse", "--verify", upstream_ref).strip()
         here = git(repo, "rev-parse", "--verify", f"refs/heads/{branch}").strip()
     except CommandError as e:
-        raise ActionError(f"{branch} has no upstream to pull from") from e
+        missing = (
+            f"no copy on {remote} to pull"
+            if upstream_ref.startswith("refs/remotes/")
+            else "no upstream to pull from"
+        )
+        raise ActionError(f"{branch} has {missing}") from e
     if here == upstream:
         return f"{branch} is up to date"
     try:

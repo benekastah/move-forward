@@ -87,7 +87,7 @@ git nominates the branches Cleanup lists, quick to delete; those to check first 
 
 | Path | Fields | Does |
 | --- | --- | --- |
-| `/actions/git/pull_branch` | `repo`, `branch` | Fetches its upstream's remote and fast-forwards the branch to its upstream, checked out or not; refused when it has commits its upstream doesn't, or its checkout has uncommitted changes. Never merges or forces. |
+| `/actions/git/pull_branch` | `repo`, `branch` | Fetches its upstream's remote and fast-forwards the branch to its upstream (for one tracking a local branch, its copy where Push sends it), checked out or not; refused when it has commits its upstream doesn't, or its checkout has uncommitted changes. Never merges or forces. |
 | `/actions/git/push_branch` | `repo`, `branch` | `git push`, where git would push it: a branch with an upstream to its push remote; one without to its `pushRemote`, `remote.pushDefault`, its remote or the only remote, setting the upstream (refused when there are several and nothing says which). One tracking a local branch (`--track main`) is pushed to that remote under its own name, never into the local branch, and is counted against that copy once it's there. Never forces. |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`; the worktree must be the repo's. |
 | `/actions/git/delete_branch` | `repo`, `branch`, optional `sha` | `git branch -D`. Refused for a checked-out branch, an iced one with commits since it was iced, or one no longer at `sha` (the commit the page showed). |
