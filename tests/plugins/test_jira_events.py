@@ -1,7 +1,6 @@
-from datetime import timedelta
-from typing import cast
-
 """What Jira notifications say, from two snapshots and the graph."""
+
+from typing import cast
 
 from conftest import NOW, issue, pr, snapshot, stored
 
@@ -13,9 +12,8 @@ from move_forward.plugin import GraphEventsRequest
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.changes import KINDS, changes
 from move_forward.plugins.jira.config import JiraConfig
-from move_forward.plugins.jira.models import JiraComment, JiraIssue, JiraSnapshot
+from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
-from move_forward.plugins.jira.repository import IssueRepository
 
 CONFIG = JiraConfig(site="https://jira")
 
@@ -25,29 +23,13 @@ def _kinds(before: list[JiraIssue], after: list[JiraIssue]) -> list[tuple[str, s
     return [(e.kind, e.text) for e in events]
 
 
-def _comment(id: str, author: str = "Alice", **fields: bool) -> JiraComment:
-    """A comment made `id` minutes after NOW: later ones are newer."""
-    return JiraComment(id=id, author=author, created=NOW + timedelta(minutes=int(id)), **fields)
-
-
 def test_every_kind_the_plugin_offers_is_listed() -> None:
     assert JiraPlugin.notification_kinds == KINDS
 
 
 def test_a_new_ticket_is_assigned_and_says_nothing_else() -> None:
-    new = issue("APP-2", priority="High", comments=[_comment("1")])
+    new = issue("APP-2", priority="High")
     assert _kinds([issue()], [issue(), new]) == [("assigned", "assigned to you")]
-
-
-def test_new_comments_are_said_but_not_my_own_or_old_ones() -> None:
-    old = issue(comments=[_comment("1")])
-    new = issue(comments=[_comment("1"), _comment("2", "Bob"), _comment("3", "Me", mine=True)])
-    assert _kinds([old], [new]) == [("comment_added", "Bob commented")]
-
-
-def test_a_mention_is_said_as_a_mention_not_a_comment() -> None:
-    new = issue(comments=[_comment("1", "Bob", mentions_me=True)])
-    assert _kinds([issue()], [new]) == [("mentioned", "Bob mentioned you")]
 
 
 def test_a_raised_priority_is_said_but_a_lowered_or_unknown_one_is_not() -> None:
@@ -64,14 +46,6 @@ def test_the_last_blocker_finishing_is_said() -> None:
         ("unblocked", "no longer blocked")
     ]
     assert _kinds([issue(open_blockers=["APP-9", "APP-8"])], [issue(open_blockers=["APP-8"])]) == []
-
-
-def test_comments_are_kept_with_the_snapshot() -> None:
-    db = stored(jira=JiraSnapshot(issues=[]))[1]
-    store = IssueRepository(db)
-    with_comments = JiraSnapshot(issues=[issue(comments=[_comment("1", mentions_me=True)])])
-    store.replace(with_comments)
-    assert store.load() == with_comments
 
 
 class _Refreshes:
@@ -111,9 +85,3 @@ def test_a_ticket_already_closeable_the_first_time_is_not_said() -> None:
     merged = snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)])
     pair = stored(github=merged, jira=tickets)
     assert _Refreshes(pair).closeable() == []
-
-
-def test_an_older_comment_back_in_the_window_is_not_new() -> None:
-    old = issue(comments=[_comment(str(i)) for i in range(2, 12)])  # the newest ten
-    new = issue(comments=[_comment("1"), *(_comment(str(i)) for i in range(2, 11))])  # 11 gone
-    assert _kinds([old], [new]) == []

@@ -101,16 +101,22 @@ def test_a_plugin_failing_long_enough_is_said_once_until_it_works_again() -> Non
     db = Database(":memory:")
     config = NotificationsConfig(failing_minutes=15)
     _failing(db, "boom")
-    assert notifications.dashboard_events(db, config, NOW) == []
+    assert notifications.dashboard_events(db, config, NOW, ["github"]) == []
     later = NOW + timedelta(minutes=16)
-    [event] = notifications.dashboard_events(db, config, later)
+    [event] = notifications.dashboard_events(db, config, later, ["github"])
     assert event.kind == "source_failing" and "boom" in event.text
-    assert notifications.dashboard_events(db, config, later + timedelta(minutes=5)) == []
+    assert (
+        notifications.dashboard_events(db, config, later + timedelta(minutes=5), ["github"]) == []
+    )
     _failing(db, None)
-    assert notifications.dashboard_events(db, config, later + timedelta(minutes=6)) == []
+    assert (
+        notifications.dashboard_events(db, config, later + timedelta(minutes=6), ["github"]) == []
+    )
     _failing(db, "again")
-    assert notifications.dashboard_events(db, config, later + timedelta(minutes=7)) == []
-    assert notifications.dashboard_events(db, config, later + timedelta(minutes=30))
+    assert (
+        notifications.dashboard_events(db, config, later + timedelta(minutes=7), ["github"]) == []
+    )
+    assert notifications.dashboard_events(db, config, later + timedelta(minutes=30), ["github"])
 
 
 class _Git(GitPlugin):
@@ -194,11 +200,12 @@ def test_the_dashboards_own_events_are_stored_when_subscribed(tmp_path: Path) ->
     )
     db = Database(":memory:")
     registry.migrate(config, db)
-    SnapshotRepository(db).save_error("github", NOW, "boom")
+    # A part of notes (always on), which the refresh doesn't overwrite.
+    SnapshotRepository(db).save_error("notes.part", NOW, "boom")
     refresh.refresh(config, db, NOW)
     refresh.refresh(config, db, NOW + timedelta(minutes=2))
     [n] = NotificationRepository(db).take(NOW + timedelta(minutes=2), KEEP)
-    assert n.tag == "dashboard:source:github"
+    assert n.tag == "dashboard:source:notes.part"
 
 
 @pytest.mark.usefixtures("git")
@@ -227,3 +234,19 @@ def test_a_notification_shows_a_strangers_title_without_hidden_characters() -> N
     repo.add("github", [event], NOW)
     [told] = repo.take(NOW, KEEP)
     assert (told.title, told.body) == ("Update fdp.exe", "asked")
+
+
+def test_only_enabled_plugins_runs_are_sources() -> None:
+    """A plugin taken out of the config, or removed, leaves its last run behind: it's no
+    source any more, and its old failure says nothing."""
+    db = Database(":memory:")
+    repo = SnapshotRepository(db)
+    repo.save_fetched("github", NOW)
+    repo.save_fetched("github.derived", NOW)  # a part of github's
+    repo.save_error("vcard", NOW, "gone")
+    repo.save_fetched("gitXstack.part", NOW)  # not git_stack's: `_` is no wildcard here
+    repo.save_fetched("GitHub.derived", NOW)  # nor github's: names are compared exactly
+    assert sorted(repo.of(["github", "git_stack"])) == ["github", "github.derived"]
+    config = NotificationsConfig(failing_minutes=15)
+    later = NOW + timedelta(minutes=16)
+    assert notifications.dashboard_events(db, config, later, ["github"]) == []

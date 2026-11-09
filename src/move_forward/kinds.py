@@ -30,8 +30,7 @@ TAG = "tag"
 family by its name."""
 
 REVIEW = "review"
-"""The task (`Signals.task`) of reviewing a pull request, whoever publishes it: `mfd snooze`
-snoozes it."""
+"""The task (`Signals.task`) of reviewing a pull request, whoever publishes it."""
 
 _OWN_KIND = re.compile(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*")
 
@@ -165,8 +164,8 @@ class Family:
     """Whether an id fits the family: ids are unique whoever publishes them, so two tools'
     `OPS-12` (or two people's `alice`) are never taken for one."""
     fetched: type[KindModel] | None = None
-    """What its entities fetched on demand carry (`KindSpec.fetched_attrs`), when they can
-    be."""
+    """What its entities fetched on demand (`Plugin.fetch`) carry, whoever publishes them,
+    when they can be."""
 
 
 CORE_FAMILIES = (

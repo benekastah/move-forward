@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from . import localtime
 from .act_now import OPENED_FIELD
 from .page import Action, Badge, Group, Item, Link, Panel, SourceStatus, age
-from .panels import ACT_NOW, FOCUS_ALL, Dashboard
+from .panels import ACT_NOW, Dashboard
 from .text import shown
 
 PAGE_RELOAD_SECONDS = 60
@@ -744,6 +744,8 @@ def focus_url(category: str, index: int) -> str:
 
 
 def _focus_category(dashboard: Dashboard, key: str, title: str, cls: str) -> str:
+    """A row of focus mode's first page: the category's title, linked when it has items,
+    and how many."""
     count = len(dashboard.focus_items(key) or [])
     if not count:
         return f"<li class='{cls} empty'><span>{_e(title)}</span><span class='count'>0</span></li>"
@@ -754,10 +756,15 @@ def _focus_category(dashboard: Dashboard, key: str, title: str, cls: str) -> str
 
 
 def focus_categories_page(dashboard: Dashboard) -> str:
-    """Focus mode's first page: "All", then each group with its panels, each with a count."""
-    rows = [_focus_category(dashboard, FOCUS_ALL, "All", "category")]
+    """Focus mode's first page: Act now and its panels, then each group's title with its
+    panels, each to walk with a count."""
+    rows: list[str] = []
     for group in dashboard.groups:
-        rows.append(_focus_category(dashboard, group.key, group.title, "category"))
+        rows.append(
+            _focus_category(dashboard, group.key, group.title, "category")
+            if group.key == ACT_NOW
+            else f"<li class='category heading'><span>{_e(group.title)}</span></li>"
+        )
         rows.extend(
             _focus_category(dashboard, panel.key, panel.title, "category sub")
             for key in group.panel_keys

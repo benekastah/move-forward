@@ -9,6 +9,35 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Version 2
+
+Fewer things to know: what no plugin used is gone.
+
+- **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
+  return the snapshot, and core calls each once per refresh.
+- **Collecting after the graph** is implementing `collect_after`: `collects_after_graph` is a
+  property saying whether the plugin does, no longer a class variable to set. Such a plugin
+  is refreshed on its own schedule, no longer with the plugins it `requires`; to refresh
+  soon after they change, it `watches` them.
+- **No `ctx.data_dir`**: `Context` loses `data_dir` and `data_root`. A plugin keeps what it
+  needs in its tables or `ctx.kv`.
+- **No `KindSpec.fetched_attrs`**: a fetched entity's attributes fit its family's fetched
+  model, or else its kind's own attributes.
+- **Timeouts are core's**: the class variables `collect_timeout_seconds` and
+  `subjects_timeout_seconds` are gone. `collect` (and `collect_after`) has five minutes, and
+  `refresh_subjects` a minute, for every plugin.
+- **`KindSpec.linking` is a `bool`**: `linking=True` where it was `linking=None`. A pattern
+  for its ids comes only from `linking_patterns`, which by default gives none: a kind that
+  gave `linking` a pattern string sets `linking=True` and returns the pattern from
+  `linking_patterns` (`{kind: pattern}`), or its ids are never found in text.
+- **Two hooks no plugin overrode are gone**: `refresh_seconds(ctx)` (a plugin refreshes on
+  its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
+  place under other names overrides `tokens(config)`, returning `{"": settings}`).
+- **`changed` returns a `Changed`**, never a bare bool: `Changed(True, "why")` or
+  `Changed(False)`.
+- **`init_suggested()` is False by default**: `mfd init` suggests a plugin only when it
+  overrides it to say True.
+
 ## Version 1
 
 The first version. While the built-ins are its only plugins, changes go into it without
@@ -24,6 +53,9 @@ catch up.
   `api.http.opener`) with a JSON or form body, and returns the answer's body. When there's
   no answer (no network, a timeout, a cut or garbled response) or an error status, it raises
   `api.http.RequestError`, whose `status` is the HTTP status, or None without one.
+- **A checkout's git directory**: `api.shell.git_common_dir(repo)` is the directory holding a
+  checkout's refs and config (its `.git`, or a linked worktree's main repository's), read
+  from the files without running git; None when `repo` isn't a checkout.
 - **The dashboard's URL**: `Context.dashboard_url` is always `http://localhost:<port>`, as the
   dashboard no longer serves HTTPS.
 - **Who may hide by text**: `Entity.mentions_hide` (True by default) says whether a unit of
@@ -129,7 +161,7 @@ catch up.
   collapsible section; `children_open` sets its initial state and `children_title` names it.
 - **Importance order**: `Panel.sort_by_importance` sorts its items first by user-assigned
   importance on their subjects (or `Signals.importance`), then by `Item.rank`.
-- **Importance choices**: core adds its three priority buttons to every item with a subject,
+- **Importance choices**: core adds its priority buttons (Important, Critical) to every item with a subject,
   including focus-mode parts, targeting the first subject, unless that's a kind that `hides`. `Action`s with the same
   `group` render as one button group, even when other actions separate them;
   `Action.selected` highlights a choice and `Action.icon`

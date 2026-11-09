@@ -39,7 +39,6 @@ from .plugin import (
     ActNowRequest,
     AfterCollectRequest,
     CollectAfterRequest,
-    Collected,
     CollectRequest,
     EventsRequest,
     GraphEventsRequest,
@@ -72,8 +71,13 @@ from .shell import CommandError
 
 log = logging.getLogger(__name__)
 
-MAX_PIECES = 50
-"""How many times one refresh collects a plugin that keeps saying it has more."""
+COLLECT_TIMEOUT_SECONDS = 300
+"""How long a plugin's `collect` (or `collect_after`) may take. Past it, the refresh records
+the plugin as failed and goes on; the plugin is left out of refreshes until its collect
+returns (a thread can't be stopped)."""
+SUBJECTS_TIMEOUT_SECONDS = 60
+"""How long a plugin's `refresh_subjects` may take before core refreshes the plugin
+instead."""
 
 _collecting: set[str] = set()
 """The plugins whose `collect` is still running, maybe past its timeout: a thread can't be
@@ -126,26 +130,16 @@ def _collect_all(
     db: Database,
     plugins: list[Enabled],
     now: datetime,
-    collect: Callable[[Enabled], BaseModel | Collected[BaseModel]],
+    collect: Callable[[Enabled], BaseModel],
     subscribed: set[str],
     previous: Graph,
-) -> set[str]:
+) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
     plugin's `store`. `subscribed` are the kinds I want events of (see `notifications`).
-    Each plugin has its `collect_timeout_seconds`: one that takes longer is recorded as
+    Each plugin has `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as
     failed, and the refresh goes on without it; one still running from an earlier refresh
-    is left out. Returns the plugins that have more to collect (`Collected.more`)."""
+    is left out."""
     started = time.monotonic()
-    more: set[str] = set()
-
-    def piece(e: Enabled) -> BaseModel:
-        result = collect(e)
-        if isinstance(result, Collected):
-            if result.more:
-                more.add(e.name)
-            return result.snapshot
-        return result
-
     pool = ThreadPoolExecutor(max_workers=max(1, len(plugins)))
     running: list[tuple[Enabled, Future[None]]] = []
     for e in plugins:
@@ -161,7 +155,7 @@ def _collect_all(
                     db,
                     e.name,
                     now,
-                    lambda: piece(e),
+                    lambda: collect(e),
                     lambda snapshot: _store(e, snapshot, subscribed, now, previous),
                 )
             finally:
@@ -170,15 +164,13 @@ def _collect_all(
 
         running.append((e, pool.submit(run)))
     for e, future in running:
-        limit = e.plugin.collect_timeout_seconds
+        limit = COLLECT_TIMEOUT_SECONDS
         try:
             future.result(timeout=max(0.0, started + limit - time.monotonic()))
         except FutureTimeout:
             log.warning("%s: collect timed out after %ss", e.name, limit)
             SnapshotRepository(db).save_error(e.name, now, f"timed out after {limit}s")
-            more.discard(e.name)
     pool.shutdown(wait=False)
-    return more
 
 
 def _wants(e: Enabled, subscribed: set[str]) -> bool:
@@ -189,49 +181,32 @@ def _wants(e: Enabled, subscribed: set[str]) -> bool:
 
 
 def refresh_seconds(e: Enabled) -> int | None:
-    """How often a plugin refreshes on its own (`Plugin.refresh_seconds`); None for one that
-    doesn't collect, or doesn't refresh on its own."""
+    """How often a plugin refreshes on its own: its section's `refresh_seconds`; None for one
+    that doesn't collect, or has no such setting."""
     if not e.plugin.collects:
         return None
-    return call(e.name, "refresh_seconds", lambda: e.plugin.refresh_seconds(e.ctx), None)
+    seconds: object = getattr(e.ctx.config, "refresh_seconds", None)
+    return seconds if isinstance(seconds, int) else None
 
 
 def to_collect(
     plugins: list[Enabled], only: set[str] | None = None
 ) -> tuple[list[Enabled], list[Enabled]]:
     """What a refresh of `only` (None: every plugin) collects: first the plugins that collect
-    on their own, then those that collect after the graph, including any whose `requires`
-    are among the first, unless it `watches` them too: then its `changed` decides, right
-    after they refresh."""
-    collecting = [e for e in plugins if e.plugin.collects]
-    first = [
-        e
-        for e in collecting
-        if not e.plugin.collects_after_graph and (only is None or e.name in only)
-    ]
-    names = {e.name for e in first}
-    after = [
-        e
-        for e in collecting
-        if e.plugin.collects_after_graph
-        and (
-            only is None
-            or e.name in only
-            or names.intersection(set(e.plugin.requires) - set(e.plugin.watches))
-        )
-    ]
+    on their own, then those that collect after the graph."""
+    due = [e for e in plugins if e.plugin.collects and (only is None or e.name in only)]
+    first = [e for e in due if not e.plugin.collects_after_graph]
+    after = [e for e in due if e.plugin.collects_after_graph]
     return first, after
 
 
 def refresh(
     config: Config, db: Database, now: datetime | None = None, only: set[str] | None = None
 ) -> None:
-    """Refresh every plugin, or `only` those (and the plugins that collect after them, e.g.
-    git_stack after git). Each plugin fails on its own. A plugin with more to collect
-    (`Collected.more`) is collected again, piece by piece, up to `MAX_PIECES` times. After
-    collecting, the graph is built again, the plugins' events found against what held
-    before, the daily prune runs if due, and `after_collect` runs for the plugins collected
-    and those that collect nothing (they work from the others' data)."""
+    """Refresh every plugin, or `only` those. Each plugin fails on its own. After collecting,
+    the graph is built again, the plugins' events found against what held before, the daily
+    prune runs if due, and `after_collect` runs for the plugins collected and those that
+    collect nothing (they work from the others' data)."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     previous, previous_snapshots = stored_graph(db, plugins)
@@ -239,32 +214,28 @@ def refresh(
     collected = {e.name for e in first + after}
     subscribed = set(config.notifications.subscribe)
 
-    def in_pieces(
-        due: list[Enabled], collect: Callable[[Enabled], BaseModel | Collected[BaseModel]]
-    ) -> None:
-        more = _collect_all(db, due, now, collect, subscribed, previous)
-        for _ in range(MAX_PIECES - 1):
-            if not more or shell.stopping():
-                return
-            more = _collect_all(
-                db, [e for e in due if e.name in more], now, collect, subscribed, previous
-            )
-        if more:
-            log.warning("%s: still more to collect after %s pieces", ", ".join(more), MAX_PIECES)
-
-    in_pieces(first, lambda e: e.plugin.collect(CollectRequest(e.ctx)))
+    _collect_all(
+        db, first, now, lambda e: e.plugin.collect(CollectRequest(e.ctx)), subscribed, previous
+    )
     if shell.stopping():
         return
     graph, _ = stored_graph(db, plugins)
     if after:
-        in_pieces(after, lambda e: e.plugin.collect_after(CollectAfterRequest(e.ctx, graph)))
+        _collect_all(
+            db,
+            after,
+            now,
+            lambda e: e.plugin.collect_after(CollectAfterRequest(e.ctx, graph)),
+            subscribed,
+            previous,
+        )
         if shell.stopping():
             return
         graph, _ = stored_graph(db, plugins)
     _identify_kept(db, graph)
     snapshots = {e.name: e.snapshot() for e in plugins}
     _graph_events(plugins, graph, snapshots, previous, previous_snapshots, subscribed, now)
-    _dashboard_events(config, db, subscribed, now)
+    _dashboard_events(config, db, plugins, subscribed, now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
         if e.name not in collected and e.plugin.collects:
@@ -328,7 +299,7 @@ def refresh_subjects(
 
 
 def _subjects(e: Enabled, refs: list[Ref]) -> Subjects[BaseModel] | None:
-    """The plugin's `refresh_subjects`, within its `subjects_timeout_seconds`; None when it
+    """The plugin's `refresh_subjects`, within `SUBJECTS_TIMEOUT_SECONDS`; None when it
     can't, fails or takes longer (the thread is left to finish, as a collect's is)."""
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"subjects-{e.name}")
     future = pool.submit(
@@ -336,7 +307,7 @@ def _subjects(e: Enabled, refs: list[Ref]) -> Subjects[BaseModel] | None:
     )
     pool.shutdown(wait=False)
     try:
-        return future.result(timeout=e.plugin.subjects_timeout_seconds)
+        return future.result(timeout=SUBJECTS_TIMEOUT_SECONDS)
     except FutureTimeout:
         log.warning("%s: refreshing %s subject(s) took too long", e.name, len(refs))
     except Exception:
@@ -367,7 +338,13 @@ def _graph_events(
             log.exception("%s: finding events from the graph failed", e.name)
 
 
-def _dashboard_events(config: Config, db: Database, subscribed: set[str], now: datetime) -> None:
+def _dashboard_events(
+    config: Config,
+    db: Database,
+    plugins: list[Enabled],
+    subscribed: set[str],
+    now: datetime,
+) -> None:
     """Store the events about the dashboard itself, those I've subscribed to."""
     wanted = {k for k in notifications.DASHBOARD_KINDS if k in subscribed}
     if not wanted:
@@ -375,7 +352,9 @@ def _dashboard_events(config: Config, db: Database, subscribed: set[str], now: d
     try:
         events = [
             e
-            for e in notifications.dashboard_events(db, config.notifications, now)
+            for e in notifications.dashboard_events(
+                db, config.notifications, now, [p.name for p in plugins]
+            )
             if notifications.qualified(notifications.DASHBOARD, e.kind) in wanted
         ]
         NotificationRepository(db).add(notifications.DASHBOARD, events, now)
@@ -464,7 +443,7 @@ def build_dashboard(
     ]
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)
-        for source, row in SnapshotRepository(db).all().items()
+        for source, row in SnapshotRepository(db).of([e.name for e in plugins]).items()
     }
 
     def nothing(req: ItemActionsRequest[Any]) -> ItemAdditions:
@@ -590,8 +569,8 @@ _MEMBERS = TypeAdapter(
 
 
 def _set_priority(db: Database, fields: dict[str, str], now: datetime) -> ActionResult:
-    """The priority buttons on items: set the priority (`level`, 0 to 2) of the entity, or
-    clear it when there's no level."""
+    """The priority buttons on items: set the priority (`level`, 1 important or 2 critical)
+    of the entity, or clear it when there's no level."""
     ref = Ref(kind=fields["kind"], id=fields["id"])
     priorities = PriorityRepository(db)
     if "level" not in fields:
@@ -633,6 +612,41 @@ def _tag(db: Database, action: str, fields: dict[str, str], now: datetime) -> Ac
     return ActionResult(f"tagged #{tag}" if repo.add(ref, tag, now) else f"already #{tag}")
 
 
+def _members(fields: dict[str, str]) -> list[tuple[str, str, str, str]]:
+    """The item an Act now button's `fields` name, and those shown with it (`also`), as kind,
+    id, task and fingerprint."""
+    try:
+        members = [(fields["kind"], fields["id"], fields["task"], fields["fingerprint"])]
+        members += _MEMBERS.validate_json(fields.get("also") or "[]")
+    except KeyError as err:
+        raise ActionError(f"missing field {err}") from err
+    except ValidationError as err:
+        raise ActionError("malformed `also`") from err
+    return members
+
+
+def snooze_item(
+    config: act_now.ActNowConfig,
+    db: Database,
+    fields: dict[str, str],
+    now: datetime,
+    duration: timedelta | None = None,
+) -> datetime:
+    """Snooze the item a Snooze button's `fields` name, and those shown with it, until each
+    changes (its fingerprint) or `duration` passes (by default as long as `config` says for
+    its kind of subject): the Snooze button, and `mfd snooze`. When the item's snooze ends."""
+    feedback = FeedbackRepository(db)
+    end: datetime | None = None
+    for kind, id, task, fingerprint in _members(fields):
+        until = now + duration if duration else config.snooze_until(kind, now)
+        feedback.say(
+            (kind, id, task), Feedback(action="snooze", fingerprint=fingerprint, until=until), now
+        )
+        end = end or until  # the item's own: `_members` gives it first
+    assert end is not None, "a Snooze button always names its own item"
+    return end
+
+
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
@@ -656,13 +670,7 @@ def _act_now_action(
             return ActionResult(f"{who}: type cleared" if kept else f"{who} had no type")
         except KeyError as err:
             raise ActionError(f"missing field {err}") from err
-    try:
-        members = [(fields["kind"], fields["id"], fields["task"], fields["fingerprint"])]
-        members += _MEMBERS.validate_json(fields.get("also") or "[]")
-    except KeyError as err:
-        raise ActionError(f"missing field {err}") from err
-    except ValidationError as err:
-        raise ActionError("malformed `also`") from err
+    members = _members(fields)
     feedback = FeedbackRepository(db)
     if action == "opened":
         # What I did elsewhere isn't a choice to keep: it never replaces a pin or a snooze.
@@ -684,21 +692,16 @@ def _act_now_action(
             feedback.bring_back(kind, id, task, now)
         return ActionResult("back")
     if action == "snooze":
-        said = [
-            Feedback(action="snooze", fingerprint=f, until=config.snooze_until(kind, now))
-            for kind, _, _, f in members
-        ]
-        until = localtime.day(said[0].until or now)
+        until = localtime.day(snooze_item(config, db, fields, now))
         tomorrow = localtime.day(now) + timedelta(days=1)
-        result = "snoozed until " + ("tomorrow" if until == tomorrow else until.isoformat())
-    elif action in ("dismiss", "pin"):
-        said = [Feedback(action=action, fingerprint=f) for *_, f in members]
-        result = "dismissed" if action == "dismiss" else "pinned"
-    else:
+        return ActionResult(
+            "snoozed until " + ("tomorrow" if until == tomorrow else until.isoformat())
+        )
+    if action not in ("dismiss", "pin"):
         raise ActionError(f"unknown action {act_now.ACTIONS}/{action}")
-    for (kind, id, task, _), one in zip(members, said, strict=True):
-        feedback.say((kind, id, task), one, now)
-    return ActionResult(result)
+    for kind, id, task, f in members:
+        feedback.say((kind, id, task), Feedback(action=action, fingerprint=f), now)
+    return ActionResult("dismissed" if action == "dismiss" else "pinned")
 
 
 def _known_action(plugins: list[Enabled]) -> panels.KnownAction:

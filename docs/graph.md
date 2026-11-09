@@ -46,7 +46,7 @@ flowchart LR
     stack_branch["git_stack.stack_branch"] -->|tracks| branch
     ice["notes.iced"] -->|hides| branch
     ice -->|hides| pr
-    thread["mail.thread"] -->|from| person["person<br/>(github, mail, vcard)"]
+    thread["mail.thread"] -->|from| person["person<br/>(github, mail)"]
     thread -->|mentions| ticket
     tag["tag<br/>(core)"] -->|carried by| pr
     thread -->|names| tag
@@ -150,19 +150,19 @@ them when two trackers share a key; a match no entity has yet becomes a ref with
 plugin's `url_for` gives it (a ticket's URL, from its key), else with that text as its id.
 
 Some kinds stand for a unit of work and link what's about it. A plugin declares them with
-`KindSpec(..., linking=...)`, giving the pattern of its ids, or None (its `linking_patterns` hook can narrow
-a pattern from what it has seen, as jira does to the project keys it knows):
+`KindSpec(..., linking=True)`, and gives the pattern of its ids, if text can name them, in its
+`linking_patterns` hook (from what it has seen, as jira does with the project keys it knows):
 
 ```python
 class JiraPlugin(Plugin[JiraConfig]):
-    kinds = {TICKET: KindSpec(JiraTicket, linking=None)}
+    kinds = {TICKET: KindSpec(JiraTicket, linking=True)}
 
     def linking_patterns(self, req):  # keys of the projects my tickets have been in
         return {TICKET: key_pattern(IssueRepository(req.ctx.db).projects())}
 
 
 class NotesPlugin(Plugin[NotesConfig]):
-    kinds = {"notes.entry": KindSpec(EntryAttrs, linking=None)}  # it points at what it links
+    kinds = {"notes.entry": KindSpec(EntryAttrs, linking=True)}  # it points at what it links
 ```
 
 Core adds a kind of its own, `tag` (see `move_forward.tags`): one per `#tag` in an entity's

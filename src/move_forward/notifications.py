@@ -11,6 +11,7 @@ notification.
 """
 
 import logging
+from collections.abc import Collection
 from datetime import datetime, timedelta
 
 from pydantic import Field
@@ -159,20 +160,18 @@ def available(plugin_kinds: dict[str, dict[str, str]]) -> dict[str, str]:
     return found
 
 
-def unknown(subscribed: list[str], known: set[str]) -> list[str]:
-    """The subscribed kinds that aren't any."""
-    return [kind for kind in subscribed if kind not in known]
-
-
 _SOURCE_STATE = "failing:"
 
 
-def dashboard_events(db: Database, config: NotificationsConfig, now: datetime) -> list[Event]:
-    """What core itself has to say: a plugin whose fetch has failed for `failing_minutes`,
-    once, until it works again. What was said is kept in core's kv."""
+def dashboard_events(
+    db: Database, config: NotificationsConfig, now: datetime, plugins: Collection[str]
+) -> list[Event]:
+    """What core itself has to say: a plugin of `plugins` (those enabled) whose fetch has
+    failed for `failing_minutes`, once, until it works again. What was said is kept in core's
+    kv."""
     kv = KvRepository(db, CORE)
     events: list[Event] = []
-    for source, status in SnapshotRepository(db).all().items():
+    for source, status in SnapshotRepository(db).of(plugins).items():
         key = f"{_SOURCE_STATE}{source}"
         if status.error is None:
             if kv.get(key) is not None:

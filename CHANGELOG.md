@@ -5,6 +5,55 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Focus mode walks Act now or one panel
+
+Focus mode no longer has All or a walk of a plugin's group: `/focus?cat=all` and
+`/focus?cat=<plugin>` (e.g. `cat=github`) now answer `404`. Link to `/focus?cat=act` for Act now,
+or to a panel's walk, `/focus?cat=<plugin>.<panel>` (e.g. `cat=notes.todos`), which are
+unchanged. The list at `/focus` shows each group's title without a link.
+
+### `mfd snooze` takes any entity, as the Snooze button does
+
+`mfd snooze <entity> [7d|12h] [--kind K] [--task T]` names what to snooze as `mfd priority` and
+`mfd unsnooze` do (a PR's URL still works), and snoozes the items about it that have a Snooze
+button, in Act now or a panel, the way the button does: each comes back when it changes (a PR's
+review, when its head commit moves, as before) or when the time is up. Without a time, the
+snooze lasts `[act_now] snooze_days` for the entity's kind, as the button's does. For one of
+its tasks only, add `--task`, e.g. `--task review`. It exits 1, saying so, when nothing about
+the entity has a Snooze button (already snoozed, or not shown), where it used to need a PR the
+dashboard knew. It prints "snoozed N item(s) until …, or until each changes".
+
+### No "Not important" priority
+
+A priority is now important (1) or critical (2). `mfd priority <entity> 0` and
+`POST /actions/act_now/priority` with `level` 0 are refused, and the Not important button (❕) is
+gone. Priorities already set to 0 are deleted when the dashboard next starts. To set work
+aside, snooze, dismiss or put it on ice instead; a script that set 0 should do one of those.
+
+### No more vcard plugin
+
+The vcard plugin, which read an address book's vCard files, is gone. A config with a `[vcard]`
+section is refused when it loads: delete the section. Say who matters with contact types
+instead of its `group_importance` and `group_types`: Set type on an item about them, or
+`mfd contact <address|@domain> <type>` (see the README's People). Its tables (`vcard_*`) stay
+in an existing database, read by nothing; they're harmless, and can be dropped by hand.
+
+### Jira no longer tells of comments and mentions
+
+The `jira.comment_added` and `jira.mentioned` notification kinds are gone: Jira already tells
+of both itself, through Slack. A config that still subscribes to either is refused when it
+loads: take it out of `[notifications] subscribe`.
+
+### `mfd slack contacts` is now `mfd slack destinations`
+
+It clashed with `mfd contacts`, which prints contact types. Its output and `--json` are
+unchanged: call `mfd slack destinations` instead.
+
+### `[jira.teams]` is gone
+
+Jira never used it. A config that still has a `[jira.teams]` table is refused when it loads:
+delete the table.
+
 ### Canceled browser requests no longer print tracebacks
 
 Closing a tab or canceling a page load while the server answers no longer prints a
@@ -50,12 +99,6 @@ lists the names there are. Nothing to change for one token per plugin.
 A config whose sections name the same `keychain_service` is now refused when it loads, as
 storing one token (`mfd token set`, Slack's Connect) would replace the other's. Give each
 section its own.
-
-### vCard address books
-
-A `[vcard]` section (`paths`, `group_importance`, `group_types`, `refresh_seconds`) reads an
-address book's vCard files, and ranks the people in its groups. Nothing to change unless you add
-it.
 
 ### Merge when ready
 

@@ -155,10 +155,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     cli_help = "see and set where review pings go, or import them from the skill's markdown"
     sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK})
 
-    def init_suggested(self) -> bool:
-        """Only when asked for: it needs a site (jira) or workspace (slack) to be useful."""
-        return False
-
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 

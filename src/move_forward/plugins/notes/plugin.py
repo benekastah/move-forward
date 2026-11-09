@@ -61,7 +61,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         # Done entries and todos aren't published: one that's gone is done.
-        ENTRY: KindSpec(EntryAttrs, linking=None, gone_means_done=True, resolvable=True),
+        ENTRY: KindSpec(EntryAttrs, linking=True, gone_means_done=True, resolvable=True),
         ICED: KindSpec(IcedAttrs, hides=True),
         TODO: KindSpec(TodoAttrs, gone_means_done=True),
     }

@@ -131,6 +131,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         self._poll_failed: str | None = None
         """Why the last poll of the notifications failed, warned of once while it lasts."""
 
+    def init_suggested(self) -> bool:
+        """Always: init guesses its org from the checkout it runs in."""
+        return True
+
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 
@@ -216,7 +220,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         ctx, snapshot = req.ctx, req.snapshot
         PrRepository(ctx.db).replace(snapshot)
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
         refresh of git, which it watches), or I have a notification about something my
         searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed is

@@ -1,12 +1,7 @@
-"""What a plugin's context gives it: its name, a logger, a directory of its own, and kv."""
+"""What a plugin's context gives it: its name, a logger, and kv."""
 
-import sys
-from pathlib import Path
-
-import pytest
 from conftest import NOW
 
-from move_forward import private
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import Model
@@ -33,39 +28,10 @@ def test_kv_keeps_json_deletes_and_lists_keys() -> None:
     assert kv.get("prs") is None and KvRepository(db, "git").keys() == []  # namespaced
 
 
-def test_a_plugins_context_has_its_name_logger_and_own_directory(tmp_path: Path) -> None:
-    config = Config.model_validate(
-        {
-            "email": "me@x",
-            "db_path": (tmp_path / "d.db").as_posix(),
-            "github": {"org": "acme"},
-        }
-    )
+def test_a_plugins_context_has_its_name_and_logger() -> None:
+    config = Config.model_validate({"email": "me@x", "github": {"org": "acme"}})
     db = Database(":memory:")
     migrate(config, db)
     github = next(e for e in enabled(config, db, NOW) if e.name == "github")
     assert github.ctx.name == "github"
     assert github.ctx.log.name == "move_forward.plugins.github"
-    directory = github.ctx.data_dir
-    assert directory == tmp_path / "plugins" / "github" and directory.is_dir()
-    if sys.platform != "win32":  # Windows' access lists are private.py's own test
-        assert private.is_private(directory)
-    assert github.ctx.data_dir == directory  # made once
-
-
-def test_a_context_without_a_place_for_files_says_so() -> None:
-    config = Config.model_validate({"email": "me@x", "github": {"org": "acme"}})
-    db = Database(":memory:")
-    migrate(config, db)
-    ctx = next(e for e in enabled(config, db, NOW) if e.name == "github").ctx
-    bare = type(ctx)(
-        config=ctx.config,
-        email=ctx.email,
-        teams=[],
-        prune_days=90,
-        now=NOW,
-        db=db,
-        kv=ctx.kv,
-    )
-    with pytest.raises(RuntimeError, match="no data directory"):
-        _ = bare.data_dir

@@ -1,8 +1,9 @@
 """`[jira]`."""
 
+from typing import cast
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from ...api import Strict
 
@@ -70,9 +71,13 @@ class JiraConfig(Strict):
     """Issue types (lower-case substrings) that count as incidents in "What next"."""
     bug_types: list[str] = Field(default_factory=lambda: list(DEFAULT_BUG_TYPES))
     """Issue types (lower-case substrings) that count as bugs in "What next"."""
-    teams: dict[str, str] = Field(default_factory=dict)
-    """A team's id in Jira's team field, by its name in the top-level `teams`; unused for
-    now, kept for ticket creation."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_teams(cls, data: object) -> object:
+        if isinstance(data, dict) and "teams" in cast(dict[str, object], data):
+            raise ValueError("`[jira.teams]` is gone; jira never used it: delete the table")
+        return cast(object, data)
 
     @field_validator("site")
     @classmethod

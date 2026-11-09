@@ -76,11 +76,10 @@ class KindSpec:
 
     attrs: type[KindModel]
     """The model its entities' `attrs` must fit."""
-    linking: str | None | Literal[False] = False
-    """Whether it links what it's about (see `Graph.related`): False if not; else the pattern
-    of its ids, for finding them in other entities' `mentions` (`Plugin.linking_patterns`
-    can narrow it as the plugin learns), or None when its entities point at what they link
-    themselves."""
+    linking: bool = False
+    """Whether it links what it's about (see `Graph.related`). The pattern of its ids, for
+    finding them in other entities' `mentions`, comes from `Plugin.linking_patterns`; without
+    one, its entities point at what they link themselves."""
     hides: bool = False
     """Whether its entities hide what they point at (notes' ice); see `Graph.hidden`."""
     fetchable: bool = False
@@ -95,10 +94,6 @@ class KindSpec:
     """Whether a `#tag` in its entities' text, their title or `mentions` (a PR's body, out of its
     code), puts the tag on them (see `tags`). False where anyone can write it, as mail's
     senders write its subjects: their text still names tags."""
-    fetched_attrs: type[KindModel] | None = None
-    """The model the `attrs` of its entities `Plugin.fetch` returns must fit. None: its
-    family's (`kinds.Family.fetched`: what the prune reads, whoever publishes), else any of
-    `attrs`' fields, each optional."""
 
 
 def _no_url(kind: str, id: str) -> str | None:

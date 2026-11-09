@@ -1,7 +1,7 @@
 # Writing a plugin
 
-Every tool the dashboard knows about is a plugin: github, git, git_stack, jira, mail, slack,
-vcard and notes are all built this way, in `src/move_forward/plugins/<name>/`. Core knows no tool. It
+Every tool the dashboard knows about is a plugin: github, git, git_stack, jira, mail, slack
+and notes are all built this way, in `src/move_forward/plugins/<name>/`. Core knows no tool. It
 loads the config, enables the plugins whose section is there, runs their collectors, builds
 the [entity graph](graph.md) from what they publish, and renders their panels.
 
@@ -37,9 +37,11 @@ What it needs from another goes through the graph.
 A plugin uses core only through `move_forward.api` (relatively, `from ...api import
 Plugin, Context, Graph`): everything a plugin may use is there, and core's own modules may
 change without notice. Its submodules group the rest: `api.html` (`page`, `e` to escape,
-`shown` to drop hidden characters, `buttons`, `linkable`), `api.shell` (`run`, `git`, `CommandError`), `api.http`
-(`request`, `RequestError`, `opener`, `require_https`), `api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`, `branch_parts`), `api.tags` (`handle`) and `api.keychain`
-(`token`, `read`, `write`, `delete`). Ruff refuses any other core import in a plugin, and
+`shown` to drop hidden characters, `buttons`, `linkable`), `api.shell` (`run`, `git`,
+`git_common_dir`, `CommandError`), `api.http` (`request`, `RequestError`, `opener`,
+`require_https`), `api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`,
+`branch_parts`), `api.tags` (`handle`) and `api.keychain` (`token`, `read`, `write`,
+`delete`). Ruff refuses any other core import in a plugin, and
 `tests/test_api.py` checks it too.
 
 ## Versions
@@ -91,8 +93,8 @@ class LinearConfig(Strict):
   `init_template`), and `mfd init --example` (`cli.py`). A plugin from another package can't
   add to those pages or that example: its model, its own docs, and its `init_template` and
   `init_example` are where its keys appear.
-- `mfd init` asks which plugins to set up (offering those whose `init_suggested()` is
-  true), then each chosen one's `init_questions(ask, setup)`, which returns its section's
+- `mfd init` asks which plugins to set up (offering by default those whose
+  `init_suggested()` is true; it's false unless a plugin overrides it), then each chosen one's `init_questions(ask, setup)`, which returns its section's
   values. `setup` has my email, where init runs and the teams found so far; a plugin that
   sets the teams (github does) says so with `init_finds_teams`, and otherwise core asks
   for them by name before any plugin's questions. Init refuses a plugin chosen without the
@@ -108,8 +110,8 @@ class LinearConfig(Strict):
 - Secrets never go in the config. Give the section `token_env` and `keychain_service`, as
   jira and slack do, and read the token with `keychain.token(config, email)`: then
   `mfd token set <plugin>` stores it and `mfd token check` finds it; `token_help` is `mfd
-  init`'s next step for it, saying where to get one (a section that keeps
-  them under other names overrides `token_settings(config)`, returning an
+  init`'s next step for it, saying where to get one (a section that keeps them under other
+  names overrides `tokens(config)`, returning `{"": settings}`, where `settings` is an
   `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
   (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading
   several accounts, each with its own token, names them all in `tokens(config)`, and `mfd
@@ -152,43 +154,36 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - Every hook gets `ctx`, the plugin's context: its section (`ctx.config`), `ctx.name`,
   `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, its database (`ctx.db`) and key/value
   state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
-  a logger named for it (`ctx.log`), and `ctx.data_dir`, a private directory of its own for
-  files, made on first use beside the database.
+  and a logger named for it (`ctx.log`).
 
 - A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it
-  that often, on its own schedule. One scheduled some other way overrides
-  `refresh_seconds(ctx)`.
+  that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
   request answered "not modified", another plugin's entities in the graph) sets
   `change_check_seconds` and implements `changed(req)`: the server asks that often, and
-  refreshes the plugin as soon as it says True, or `Changed(True, reason)`, whose reason
-  goes into the log line. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
+  refreshes the plugin as soon as it says `Changed(True, reason)`, whose reason goes into
+  the log line. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
   the server asks once more and ignores the answer, so what the refresh did itself isn't
   taken for a change. With `changed`, `refresh_seconds` can be long. A `changed` that
   reads another plugin's entities from the graph names that plugin in `watches`: the
   server asks it right after each refresh of that plugin (github watches git, to see my
-  PRs' branches move), whether or not it also has `change_check_seconds`. A plugin that
-  collects after the graph is refreshed with the plugins it `requires`, unless it watches
-  them too: then only when its `changed` says so, with its own `refresh_seconds` as the
-  backstop.
+  PRs' branches move), whether or not it also has `change_check_seconds`.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with
-  what it stored last. It has `collect_timeout_seconds` (300) to finish: past that, the
+  what it stored last. It has five minutes to finish: past that, the
   refresh records it as timed out and goes on, and leaves it out of later refreshes until
   its collect returns (a thread can't be stopped). Set a timeout on whatever it calls, too.
-  With more to fetch than fits, return `Collected(snapshot, more=True)` and keep your
-  place in `ctx.kv`: core stores that piece and calls `collect` again in the same refresh,
-  each piece with the timeout to itself.
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
   for every page, with the database held so no refresh stores between its queries (so it
   mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
 - `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
   the page's footer, which lists each plugin's.
-- A plugin that needs other plugins' entities to know what to fetch sets
-  `collects_after_graph = True` and implements `collect_after(req)` instead (see
-  git_stack).
+- A plugin that needs other plugins' entities to know what to fetch implements
+  `collect_after(req)` instead of `collect` (see git_stack): it runs once the others have
+  stored their snapshots, with the graph. It's refreshed on its own schedule, not with the
+  plugins it reads; to refresh soon after they change, it `watches` them.
 - `notification_kinds` and `events(req)` make browser notifications: when the user has
   subscribed to one of the kinds (`<plugin>.<kind>`), `events` gets the last good
   snapshot (`req.before`), the one just collected (`req.after`) and the graph from before
@@ -245,7 +240,7 @@ class IssueAttrs(KindModel):
 
 class LinearPlugin(...):
     kinds: ClassVar[dict[str, KindSpec]] = {
-        ISSUE: KindSpec(IssueAttrs, linking=None, fetchable=True, resolvable=True)
+        ISSUE: KindSpec(IssueAttrs, linking=True, fetchable=True, resolvable=True)
     }
 
     def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
@@ -294,9 +289,9 @@ class LinearPlugin(...):
   which a tool that knows it (a CRM) sets in `contact_type`, or by an `importance` it states
   outright (a VIP, a starred contact). Don't do either yourself.
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
-  declared `linking`, so the graph relates what's about it. Give it the pattern of its ids
-  (`KindSpec(..., linking=r"...")`, or None and narrow it from what the plugin has seen)
-  and other plugins' entities point at it from the text they mention:
+  declared `linking` (`KindSpec(..., linking=True)`), so the graph relates what's about it.
+  Give the pattern of its ids in `linking_patterns` (from what the plugin has seen, if need
+  be) and other plugins' entities point at it from the text they mention:
 
   ```python
   def linking_patterns(self, req: LinkingRequest[LinearConfig]) -> dict[str, str | None]:
@@ -326,8 +321,8 @@ class LinearPlugin(...):
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
   graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune.
-  Each must say its `lifecycle`, and its attributes fit `KindSpec.fetched_attrs` (a
-  family's are core's: `PullRequestFetched`, `TicketFetched`), else any of the kind's own.
+  Each must say its `lifecycle`, and its attributes fit its family's fetched model (core's
+  `PullRequestFetched`, `TicketFetched`), else any of the kind's own.
 - A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
 - **Relations.** What only your plugin knows links one of its entities to another's (a PR
   to its local branch) goes in `relate(req)`, as `(mine, theirs)` pairs; see
@@ -449,7 +444,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   and returns `Subjects(snapshot, updated)`, the snapshot with them folded in, which core
   keeps as a refresh's would (events too). It's what an action's `touched` refs, a tab
   coming back to focus and `mfd refresh --subject` use; returning None (the default), or
-  failing or taking longer than `subjects_timeout_seconds`, refreshes the plugin whole
+  failing or taking longer than a minute, refreshes the plugin whole
   instead. github fetches the PRs in one request.
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, req.ctx.kept(key))` and implement `kept_item`.

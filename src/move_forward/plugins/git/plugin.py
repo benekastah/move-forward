@@ -8,6 +8,7 @@ from ...api import (
     API_VERSION,
     ActionHandler,
     Asker,
+    Changed,
     ChangedRequest,
     CollectRequest,
     Context,
@@ -28,7 +29,7 @@ from ...api import (
     StoreRequest,
     attrs,
 )
-from ...api.shell import CommandError
+from ...api.shell import CommandError, git_common_dir
 from . import actions, changes, client, events, watch
 from .config import GitConfig
 from .kinds import BranchAttrs, RepoAttrs
@@ -73,6 +74,10 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         by, by its resolved path, as the watcher has it."""
         self._clones_warned: set[tuple[str, ...]] = set()
         """The clones of one GitHub repo already warned of, so each is warned of once a run."""
+
+    def init_suggested(self) -> bool:
+        """Always: init guesses its repo from the checkout it runs in."""
+        return True
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
@@ -154,14 +159,14 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         assert self._watcher is not None
         worktrees: dict[Path, Path] = {}
         for repo in snapshot.repos:
-            if (common := changes.common_dir(Path(repo.dir))) is None:
+            if (common := git_common_dir(Path(repo.dir))) is None:
                 continue
             self._ids[common.resolve()] = str(common)
             for wt in repo.worktrees:
                 worktrees[Path(wt.path).resolve()] = common.resolve()
         self._watcher.sync(worktrees)
 
-    def changed(self, req: ChangedRequest[GitConfig]) -> bool:
+    def changed(self, req: ChangedRequest[GitConfig]) -> Changed:
         """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a
         worktree's uncommitted edits changed. Watched repos say so as it happens (see
         `watch`); the rest are polled, their refs by their files' times (see `changes`) and
@@ -176,7 +181,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         moved = {self._ids[c] for c in moved_now if c in self._ids}
 
         before = ctx.kv.get_json(FINGERPRINTS, dict[str, str])
-        polled = [repo for repo in ctx.config.repos if str(changes.common_dir(repo)) not in watched]
+        polled = [repo for repo in ctx.config.repos if str(git_common_dir(repo)) not in watched]
         now = changes.fingerprints(polled)
         now.update({k: v for k, v in (before or {}).items() if k in watched})
         if now != before:
@@ -190,7 +195,10 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             ctx.kv.set_json(MOVED, sorted(pending))
         # Pending until `collect` takes them: what's seen in the check core makes right after
         # a refresh (whose answer it ignores) still asks for a refresh at the next one.
-        return bool(pending) or (before is not None and set(before) != set(now))
+        return Changed(
+            bool(pending) or (before is not None and set(before) != set(now)),
+            "a repo moved or was edited",
+        )
 
     def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:
         """The repos (common git directories) with a worktree whose uncommitted edits differ
@@ -217,7 +225,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 except CommandError:  # gone since; the next read finds out
                     continue
                 if status != (wt.modified, wt.untracked):
-                    found.add(str(changes.common_dir(Path(repo.dir))))
+                    found.add(str(git_common_dir(Path(repo.dir))))
         return found
 
     def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:

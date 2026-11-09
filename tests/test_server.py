@@ -330,11 +330,12 @@ def test_refresh_can_be_asked_for_one_plugin(client: HTTPConnection, app: server
 
 def test_focus_pages(client: HTTPConnection) -> None:
     body = get(client, "/focus").read().decode()
-    assert "What to focus on?" in body and "href='/focus?cat=all&amp;i=0'" in body
-    body = get(client, "/focus?cat=all&i=0").read().decode()
+    assert "What to focus on?" in body and "href='/focus?cat=act&amp;i=0'" in body
+    body = get(client, "/focus?cat=act&i=0").read().decode()
     assert "class='focus-position'>1 of " in body and pr(1).title in body
-    assert get(client, "/focus?cat=all&i=x").status == 200
+    assert get(client, "/focus?cat=act&i=x").status == 200
     assert get(client, "/focus?cat=nope").status == 404
+    assert get(client, "/focus?cat=all").status == 404
 
 
 def test_actions_from_a_focus_page_redirect_back_to_it(
@@ -344,8 +345,8 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
         return "did it"
 
     monkeypatch.setattr(server, "perform_action", _results(fake_run))
-    response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dall%26i%3D0", {})
-    assert (response.getheader("Location"), notice_of(response)) == ("/focus?cat=all&i=0", "did it")
+    response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dact%26i%3D0", {})
+    assert (response.getheader("Location"), notice_of(response)) == ("/focus?cat=act&i=0", "did it")
     # Only local paths; anything else goes to the dashboard.
     response = post(client, "/actions/x?back=//evil.example", {})
     assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
@@ -566,9 +567,9 @@ def test_browsers_are_sent_to_the_dashboards_own_host_but_scripts_are_served_whe
 ) -> None:
     canonical = f"http://{auth.HOST}:{client.port}"
     for host in (f"localhost:{client.port}", f"127.0.0.1:{client.port}"):
-        response = get(client, "/focus?cat=all&i=2", {"Host": host})
+        response = get(client, "/focus?cat=act&i=2", {"Host": host})
         assert response.status == 302
-        assert response.getheader("Location") == f"{canonical}/focus?cat=all&i=2"
+        assert response.getheader("Location") == f"{canonical}/focus?cat=act&i=2"
         response.read()
         response = get(client, "//evil.example/x", {"Host": host})
         assert response.getheader("Location", "").startswith(f"{canonical}/")
@@ -676,12 +677,13 @@ class _GitHubWithChecks(GitHubPlugin):
 
     change_check_seconds: ClassVar[int | None] = 60
     answers: ClassVar[list[bool | Changed | Exception]] = []
+    """Each a `Changed`, or a bare bool for one without a reason."""
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return answer
+        return answer if isinstance(answer, Changed) else Changed(answer)
 
 
 def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
@@ -716,6 +718,30 @@ def test_why_a_plugin_changed_is_logged(
         assert app.check_for_changes(1000.0) == {"github"}
         assert app.check_for_changes(1060.0) == set()  # said no, whatever its reason
     assert "changed: github (2 PRs notified); refreshing" in caplog.messages
+
+
+class _SlackChanging(SlackPlugin):
+    change_check_seconds: ClassVar[int | None] = 60
+
+    def changed(self, req: ChangedRequest[SlackConfig]) -> Changed:
+        return Changed(True, "a message")
+
+
+class _GitHubAnsweringBadly(GitHubPlugin):
+    change_check_seconds: ClassVar[int | None] = 60
+
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
+        return True  # pyright: ignore[reportReturnType]  # not a Changed
+
+
+def test_a_malformed_change_check_is_a_failed_one(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Skipped, as a check that raises is, while the others' changes still count."""
+    # Slack is checked after github (by name), so its change counts only if the round goes on.
+    swap = {"github": _GitHubAnsweringBadly(), "slack": _SlackChanging()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    assert app.check_for_changes(1000.0) == {"slack"}
 
 
 class _GitHubWatchingGit(_GitHubWithChecks):

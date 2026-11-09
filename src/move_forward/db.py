@@ -286,6 +286,12 @@ CREATE TABLE tags (                    -- kept: the #tags I put on entities, unt
 """
 """Tags I set on entities, besides those in their text (see `tags`)."""
 
+_V16_NO_UNIMPORTANT_PRIORITY = """
+DELETE FROM priorities WHERE level = 0;
+"""
+"""A priority is important (1) or critical (2): "not important" (0) is gone, and Snooze,
+Dismiss or ice set work aside instead."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -302,6 +308,7 @@ CORE_MIGRATIONS = [
     Migration("0013_opened", _V13_OPENED),
     Migration("0014_contacts", _V14_CONTACTS),
     Migration("0015_tags", _V15_TAGS),
+    Migration("0016_no_unimportant_priority", _V16_NO_UNIMPORTANT_PRIORITY),
 ]
 
 _SCHEMA_VERSIONS = """

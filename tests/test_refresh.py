@@ -18,15 +18,14 @@ from move_forward.plugin import (
     ActionError,
     AfterCollectRequest,
     CollectAfterRequest,
-    Collected,
     CollectRequest,
-    Context,
     LoadRequest,
     StoreRequest,
 )
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
+from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -46,7 +45,6 @@ class _Git(GitPlugin):
 class _JiraAfterGit(JiraPlugin):
     """Fetches an issue per repo git found, and remembers what after_collect saw."""
 
-    collects_after_graph: ClassVar[bool] = True
     seen_by_after_collect: ClassVar[list[str]] = []
 
     def collect_after(self, req: CollectAfterRequest[JiraConfig]) -> JiraSnapshot:
@@ -224,7 +222,12 @@ def test_feedback_that_is_over_or_old_is_pruned() -> None:
     assert list(feedback.all()) == [("pull_request", "3", "")]
 
 
-def test_refreshing_some_plugins_brings_the_ones_built_on_them_along(
+def test_a_plugin_collects_after_the_graph_when_it_implements_collect_after() -> None:
+    assert GitStackPlugin().collects_after_graph
+    assert not GitPlugin().collects_after_graph
+
+
+def test_refreshing_some_plugins_refreshes_only_those(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
@@ -235,7 +238,6 @@ def test_refreshing_some_plugins_brings_the_ones_built_on_them_along(
             return local_snapshot()
 
     class JiraOnGit(JiraPlugin):
-        collects_after_graph: ClassVar[bool] = True
         requires: ClassVar[list[str]] = ["git"]
 
         def collect_after(self, req: CollectAfterRequest[JiraConfig]) -> JiraSnapshot:
@@ -266,7 +268,10 @@ def test_refreshing_some_plugins_brings_the_ones_built_on_them_along(
     db = Database(":memory:")
     registry.migrate(config, db)
     refresh.refresh(config, db, NOW, {"git"})
-    assert calls == ["git", "jira", "jira after"]  # jira is built on git; github isn't due
+    assert calls == ["git"]  # jira is built on git, but refreshes on its own
+    calls.clear()
+    refresh.refresh(config, db, NOW, {"jira"})
+    assert calls == ["jira", "jira after"]
     calls.clear()
     refresh.refresh(config, db, NOW, {"github"})
     assert calls == ["github", "github after"]
@@ -279,40 +284,6 @@ def test_each_plugin_refreshes_on_its_own_setting() -> None:
     plugins = registry.enabled(config, Database(":memory:"), NOW)
     seconds = {e.name: refresh.refresh_seconds(e) for e in plugins}
     assert seconds == {"github": 300, "git": 30, "notes": None}
-
-
-def test_a_plugin_watching_what_it_requires_isnt_refreshed_with_it_but_on_its_own(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    class Git(GitPlugin):
-        def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
-            calls.append("git")
-            return local_snapshot()
-
-    class JiraWatchingGit(JiraPlugin):
-        collects_after_graph: ClassVar[bool] = True
-        requires: ClassVar[list[str]] = ["git"]
-        watches: ClassVar[list[str]] = ["git"]
-
-        def collect_after(self, req: CollectAfterRequest[JiraConfig]) -> JiraSnapshot:
-            calls.append("jira")
-            return JiraSnapshot(issues=[])
-
-    swap = {"git": Git(), "jira": JiraWatchingGit()}
-    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    config = Config.model_validate(
-        {"email": "me@x", "git": {"repos": []}, "jira": {"site": "https://j"}}
-    )
-    db = Database(":memory:")
-    registry.migrate(config, db)
-    refresh.refresh(config, db, NOW, {"git"})
-    assert calls == ["git"]  # its change check decides, not the refresh
-    refresh.refresh(config, db, NOW, {"jira"})
-    assert calls == ["git", "jira"]
-    seconds = {e.name: refresh.refresh_seconds(e) for e in registry.enabled(config, db, NOW)}
-    assert seconds["jira"] == 900  # collecting after the graph, on its own setting
 
 
 def test_an_item_opened_elsewhere_is_dimmed_in_its_place_until_it_changes() -> None:
@@ -390,41 +361,8 @@ def test_graph_events_compare_with_what_was_stored_before_the_refresh(
     assert NotificationRepository(db).take(NOW, timedelta(hours=1)) == []  # said once
 
 
-def test_a_plugin_with_more_to_collect_is_collected_again_in_one_refresh(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pieces: list[int] = []
-
-    def in_pieces(self: GitPlugin, req: CollectRequest[GitConfig]) -> Collected[LocalSnapshot]:
-        pieces.append(len(pieces))
-        return Collected(local_snapshot(), more=len(pieces) < 3)
-
-    monkeypatch.setattr(_Git, "collect", in_pieces)  # this module's git
-    config = Config.model_validate({"email": "me@x", "git": {"repos": []}})
-    db = Database(":memory:")
-    registry.migrate(config, db)
-    refresh.refresh(config, db, NOW)
-    assert pieces == [0, 1, 2]
-    assert SnapshotRepository(db).all()["git"].error is None
-
-
 def test_the_known_actions_are_the_enabled_plugins_declared_ones() -> None:
     config, db = stored()
     known = refresh._known_action(registry.enabled(config, db, NOW))  # pyright: ignore[reportPrivateUsage]
     assert known("notes/todo_done") and known("git/push_branch")
     assert not known("notes/nope") and not known("jira/transition")  # jira isn't on
-
-
-class _GitPolling(GitPlugin):
-    """git, scheduled by a setting of another name."""
-
-    def refresh_seconds(self, ctx: Context[GitConfig]) -> int | None:
-        return 45
-
-
-def test_a_plugin_says_its_own_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
-    swap = {"git": _GitPolling()}
-    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    config = Config.model_validate({"email": "me@x", "git": {"repos": []}})
-    plugins = registry.enabled(config, Database(":memory:"), NOW)
-    assert {e.name: refresh.refresh_seconds(e) for e in plugins} == {"git": 45, "notes": None}

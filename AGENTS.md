@@ -4,8 +4,8 @@ Notes for agents (and people) changing this repo. The README says what the
 dashboard does; `docs/entities.md` is the contract between plugins,
 `docs/graph.md` explains the graph they go through, `docs/plugins.md`
 draws how the plugins use each other's entities, and `docs/writing-a-plugin.md`
-walks through making one; `docs/roadmap.md`
-is what's left to build.
+walks through making one; `docs/review.md` says how PRs and the whole code
+are reviewed; `docs/roadmap.md` is what's left to build.
 
 ## Shape of the code
 
@@ -36,7 +36,7 @@ is what's left to build.
   another plugin's entities with `graph.view(kind, View)`, through its own
   small model of the fields it uses, not `attrs.get`. A kind that stands for a
   unit of work (a ticket, a work entry) is declared `linking` (with
-  `linking_patterns` narrowing its id pattern from the plugin's data); an entity
+  `linking_patterns` giving its id pattern from the plugin's data); an entity
   that may name one publishes the text in `mentions` (with `mentions_hide=False` where someone
   else wrote it, so what it names can't hide it) rather than refs to
   another plugin's kind. Core adds `tag`s (`tags.py`): what carries one points at it, but
@@ -48,10 +48,9 @@ is what's left to build.
   plugin last fetched, and why it failed.
 - Every plugin hook that runs with the plugin's context takes one request object
   (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
-  breaking its overrides; `refresh_seconds(ctx)` is the one that takes its context bare. Those
-  called before there's a context take what they need: `init_suggested()` and
-  `init_questions(ask, setup)` (`mfd init`), `token_settings(config)` and `tokens(config)`
-  (`mfd token`, and loading the config), `cli(parser)`, `pages()` and `actions()`.
+  breaking its overrides. Those called before there's a context take what they need:
+  `init_suggested()` and `init_questions(ask, setup)` (`mfd init`), `tokens(config)` (`mfd
+  token`, and loading the config), `cli(parser)`, `pages()` and `actions()`.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.
@@ -125,7 +124,8 @@ is what's left to build.
   the README (core's) or the plugin's page in `docs/plugins/`, `mfd init`'s rendered config (as a commented default:
   core's in `init.py`, a plugin's in its `setup.py`) and `mfd init --example` (`cli.py`). Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
-  `MOVED_SETTINGS` in `config.py`).
+  `MOVED_SETTINGS` in `config.py`), and a removed plugin's section says it's gone
+  (`REMOVED_PLUGINS`).
 - **Migrations are append-only.** Core and each plugin own a list of named
   `Migration`s (SQL, or a Python function for a data fix), applied in order and
   kept by name in the `migrations` ledger. Never edit, rename or reorder one
@@ -210,94 +210,7 @@ python3 dev.py coverage  # optional: what the tests don't run
 It must pass on a PR's last commit: PRs are squash-merged, so that's what reaches `main`.
 Commit in small, logical steps with messages that say why, not just what.
 
-## Reviewing a PR
+## Reviewing
 
-Every PR is reviewed before it merges, drafts included, by one fresh agent with no context
-but the PR: not a fork of the session that wrote it, so it judges what the code says rather
-than what was meant. One reviewer is enough for a PR, as PRs are kept small; reviewing the
-whole code takes several (see [A full review](#a-full-review)).
-
-- **The reviewer** reads the diff against the PR's base, its commit messages and this file,
-  and changes nothing. It looks for, most important first: bugs (inputs or state that give a
-  wrong result or a crash); surprises, and what the change makes inconsistent outside
-  itself; tests that are missing, can't fail without the change, or enshrine a wrong
-  behavior; docs, docstrings and comments that are missing or untrue (or only describe
-  what the code used to do); dead code; readability; security. It checks each finding
-  against the code before reporting it, and gives it a severity (bug, should-fix, minor),
-  a failure scenario and a fix.
-- **It posts one GitHub review of type COMMENT**, never approving or requesting changes,
-  saying who wrote it (an AI agent) in its first line. Its findings are numbered in one
-  sequence, those in the body first. Each is an inline comment on the line it's about,
-  starting with its number and severity; one with no line in the diff (something missing,
-  unchanged code) goes in the review's body. The JSON goes in a temporary directory, never
-  the repo, where a commit could pick it up:
-
-  ```sh
-  gh pr view N --json headRefOid -q .headRefOid   # the head GitHub has, not a local one
-  gh api repos/{owner}/{repo}/pulls/N/reviews --method POST --input "$TMP/review.json"
-  # {"commit_id": "<that sha>", "event": "COMMENT", "body": "...",
-  #  "comments": [{"path": "src/...", "line": 42, "side": "RIGHT", "body": "..."}]}
-  ```
-
-  GitHub rejects an inline comment on a line outside the diff.
-- **The PR's author** (the agent that wrote it and started the reviewer) then decides what
-  to fix, fixes it, and pushes. Then it answers every finding, none skipped: inline ones in
-  their own thread, the body's in one PR comment, by the review's numbers. Each answer
-  says who wrote it (an AI agent) as the review does, since it's posted from a person's
-  account; whether it was fixed and why, or why not (a finding that's wrong, out of scope,
-  or not worth its cost says which); and for a fix, the commit that made it, as GitHub
-  links it (its short hash). Push before answering, so the commits are there to link.
-
-  ```sh
-  gh api repos/{owner}/{repo}/pulls/N/reviews/REVIEW_ID/comments --jq '.[] | {id, body}'
-  gh api repos/{owner}/{repo}/pulls/N/comments/ID/replies -f body=...
-  ```
-- **Fixes are reviewed too**, unless all they change is wording (docs, comments, messages):
-  a fresh reviewer, the same way, on what changed since the reviewed head
-  (`<reviewed sha>..HEAD`), so a fix can't bring in a bug no one looked at.
-- A PR merges once its reviews are answered and CI passes, in stack order, squashed into
-  one commit; `git stack sync` then drops its commits from the branches above.
-
-## A full review
-
-A review of the whole code, rather than of one PR, after a run of merges or when asked: several
-fresh agents at once (each started anew, not a fork of the session that starts them), each with
-no context but the code at one commit of `main` and its part, so none reviews what it was told
-to expect, and each reads all of its part.
-
-- **The parts**, each with the prefix its findings are numbered by:
-  - **every plugin** (its name: `mail`, `github`): `src/move_forward/plugins/<name>/`, its tests
-    in `tests/plugins/` and its page in `docs/plugins/`: its bugs, what it publishes against
-    `docs/entities.md`, its config keys in their four places, its use of `move_forward.api`
-    alone;
-  - **core** (`core`): `src/move_forward/` but the plugins, and core's tests (`tests/` but
-    `tests/plugins/`): the graph, Act now, panels, rendering, the server and the CLI;
-  - **the database and migrations** (`db`): every migration, core's and the plugins'
-    (append-only, prefixed, not depending on another plugin's), what's kept or fetched, pruning,
-    rekeying, SQL that filters in SQL, and data a crash or a concurrent refresh could leave half
-    written;
-  - **what cuts across** (`cross`): what one change made inconsistent elsewhere, the same item
-    offering the same wherever it's shown, security (the token, sign-in pages, what a sender or
-    another tool controls), Linux, macOS and Windows, the plugin API's contract, and the
-    tooling (`dev.py`, `pyproject.toml`, `.github/workflows/`, `git_hooks/`);
-  - **the docs** (`docs`): the README, `docs/`, AGENTS.md, CHANGELOG and docstrings against
-    what the code does, and dead or stale text.
-- **The author** (the agent running the review) opens the issue first, saying who wrote it (an
-  AI agent), and starts the reviewers, giving each only the issue's number, the commit's sha,
-  its part and its prefix. Files go in a temporary directory, never the repo:
-
-  ```sh
-  gh issue create --title "Full review of <short sha>" --body-file "$TMP/issue.md"
-  gh issue comment N --body-file "$TMP/<prefix>.md"   # each reviewer, markdown
-  ```
-- **Each reviewer** reads the code at the commit (`git show <sha>:<path>`, a detached worktree),
-  changes nothing, and checks each finding against the code, running it where it can, before
-  reporting it, with its severity (bug, should-fix, minor), file and line, a failure scenario
-  and a fix, as a PR's reviewer does. It posts one comment, saying who wrote it (an AI agent)
-  and which part it reviewed, its findings numbered with its prefix (`core 3`, `mail 2`); one
-  over GitHub's 65,536 characters goes in several comments, numbered on.
-- **The author** then fixes what it decides to, in PRs as usual: one kind of change each,
-  reviewed as any PR, naming the findings they fix. It answers every finding in one comment on
-  the issue, saying who wrote it (an AI agent), by the finding's name: fixed, with the PR; not,
-  and why; or the same as another (`same as db 2`), since parts overlap. The issue closes once
-  every finding is answered and its fixes merged.
+Every PR is reviewed before it merges, by a fresh agent, and the whole code is reviewed
+by several after a run of merges: see [docs/review.md](docs/review.md) for how.

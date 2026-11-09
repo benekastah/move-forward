@@ -1,14 +1,17 @@
-"""Snoozing a review from the command line, as Act now's Snooze button does."""
+"""Snoozing from the command line, as the Snooze button does."""
 
 import re
-from datetime import datetime, timedelta
+from collections.abc import Iterator
+from datetime import timedelta
 
-from .act_now import ActNowConfig, Feedback
-from .graph import Graph
-from .kinds import PULL_REQUEST, REVIEW
-from .repositories import FeedbackRepository
+from .act_now import ACTIONS
+from .graph import Ref
+from .page import Item
+from .panels import Dashboard
 
 _DURATION = re.compile(r"(\d+)([dh])")
+SNOOZE = f"{ACTIONS}/snooze"
+"""The Snooze button's action."""
 
 
 def parse_duration(text: str) -> timedelta:
@@ -20,23 +23,25 @@ def parse_duration(text: str) -> timedelta:
     return timedelta(days=amount) if match[2] == "d" else timedelta(hours=amount)
 
 
-def snooze_review(
-    feedback: FeedbackRepository,
-    graph: Graph,
-    config: ActNowConfig,
-    url: str,
-    now: datetime,
-    duration: timedelta | None = None,
-) -> datetime:
-    """Snooze the review of PR `url` until its head commit moves or `duration` passes (by
-    default as long as `config` says for PRs); when the snooze ends. Raises LookupError when
-    the PR isn't one github knows."""
-    pr = graph.get(PULL_REQUEST, url)
-    head = str(pr.attrs.get("head_oid") or "") if pr else ""
-    if not head:
-        raise LookupError(f"{url} isn't a PR the dashboard knows; run `mfd refresh`")
-    until = now + duration if duration else config.snooze_until(PULL_REQUEST, now)
-    feedback.say(
-        (PULL_REQUEST, url, REVIEW), Feedback(action="snooze", fingerprint=head, until=until), now
-    )
-    return until
+def _items(items: list[Item]) -> Iterator[Item]:
+    for item in items:
+        yield item
+        yield from _items(item.parts)
+
+
+def snooze_buttons(dashboard: Dashboard, ref: Ref, task: str | None = None) -> list[dict[str, str]]:
+    """The fields of the Snooze buttons on the items about `ref` (their main subject), in Act
+    now and in the panels, parts included; only `task`'s, given one. Run as the button runs
+    them (`refresh.snooze_item`), they snooze what the buttons would, until it changes."""
+    found: list[dict[str, str]] = []
+    for item in _items([item for panel in dashboard.panels for item in panel.items]):
+        for action in item.actions:
+            fields = action.fields
+            if (
+                action.name == SNOOZE
+                and (fields.get("kind"), fields.get("id")) == (ref.kind, ref.id)
+                and task in (None, fields.get("task"))
+                and fields not in found
+            ):
+                found.append(fields)
+    return found

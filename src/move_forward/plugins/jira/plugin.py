@@ -13,6 +13,7 @@ from ...api import (
     Asker,
     Badge,
     Band,
+    Changed,
     ChangedRequest,
     CollectRequest,
     EntitiesRequest,
@@ -407,19 +408,14 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     init_example = EXAMPLE
     config_model = JiraConfig
     api_version = API_VERSION
-    teams_field = "teams"
     snapshot_model = JiraSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
-        TICKET: KindSpec(JiraTicket, linking=None, fetchable=True, resolvable=True)
+        TICKET: KindSpec(JiraTicket, linking=True, fetchable=True, resolvable=True)
     }
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
     change_check_seconds: ClassVar[int | None] = 60
-
-    def init_suggested(self) -> bool:
-        """Only when asked for: it needs a site (jira) or workspace (slack) to be useful."""
-        return False
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
@@ -451,7 +447,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         ctx, snapshot = req.ctx, req.snapshot
         IssueRepository(ctx.db).replace(snapshot)
 
-    def changed(self, req: ChangedRequest[JiraConfig]) -> bool:
+    def changed(self, req: ChangedRequest[JiraConfig]) -> Changed:
         """Whether a ticket of mine was updated since the last look (and a minute before
         it, as Jira counts in whole minutes): a one-result search."""
         ctx = req.ctx
@@ -462,7 +458,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             minutes = math.ceil(seconds / 60) + 1
             found = client.updated_within(ctx.config, ctx.email, minutes)
         ctx.kv.set(CHECKED, ctx.now.isoformat())
-        return found
+        return Changed(found, "a ticket of mine was updated")
 
     def load(self, req: LoadRequest[JiraConfig]) -> JiraSnapshot | None:
         ctx = req.ctx

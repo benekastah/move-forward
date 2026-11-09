@@ -29,7 +29,7 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
     declared: dict[str, tuple[str, str | None]] = {TAG: ("core", None)}
     for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():
-            marker = "linking" if spec.linking is not False else "hiding" if spec.hides else None
+            marker = "linking" if spec.linking else "hiding" if spec.hides else None
             declared.setdefault(kind, (plugin.name, marker))  # a family's first publisher
     assert documented == declared
 
@@ -62,6 +62,6 @@ def test_the_fetched_table_names_every_fetchable_kind_and_what_it_carries() -> N
             if not spec.fetchable:
                 continue
             family = FAMILIES.get(kind)
-            model = spec.fetched_attrs or (family.fetched if family else None)
+            model = family.fetched if family else None
             fetchable[kind] = set(model.model_fields) if model else set()
     assert documented == fetchable

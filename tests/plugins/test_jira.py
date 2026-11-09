@@ -98,7 +98,7 @@ def test_other_configured_links_also_mean_blocked_by() -> None:
     }
     parsed = jira.RawIssue.model_validate(raw)
     assert jira.to_issue(parsed, "https://j").open_blockers == []
-    assert jira.to_issue(parsed, "https://j", None, ["depends on"]).open_blockers == ["X-2"]
+    assert jira.to_issue(parsed, "https://j", ["depends on"]).open_blockers == ["X-2"]
 
 
 def test_minimal_issue() -> None:
@@ -175,6 +175,22 @@ def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
     repo.replace(JiraSnapshot(issues=[due]))
     assert repo.load() == JiraSnapshot(issues=[due])
     assert db.query("SELECT * FROM jira_issue_labels") == []  # gone with their tickets
+
+
+def test_the_comments_table_kept_before_is_dropped() -> None:
+    db = Database(":memory:")
+    db.migrate("jira", MIGRATIONS[:4])
+    issue = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
+    IssueRepository(db).replace(JiraSnapshot(issues=[issue]))
+    db.execute(  # a comment, as the table held them
+        "INSERT INTO jira_issue_comments VALUES (?, 0, '1', 'Alice', '2026-11-01T00:00:00+00:00',"
+        " 0, 1)",
+        (issue.key,),
+    )
+    db.migrate("jira", MIGRATIONS)
+    tables = db.query("SELECT name FROM sqlite_master WHERE name = 'jira_issue_comments'")
+    assert tables == []
+    assert IssueRepository(db).load() == JiraSnapshot(issues=[issue])
 
 
 def test_a_ticket_a_search_found_twice_is_kept_once() -> None:
@@ -379,52 +395,6 @@ def test_a_transition_that_fails_says_whether_jira_refused_or_wasnt_reached(
         actions.transition(request)
 
 
-def _comment_json(id: str, account: str, body: object) -> dict[str, object]:
-    return {
-        "id": id,
-        "author": {"accountId": account, "displayName": f"User {account}"},
-        "created": "2026-10-20T10:00:00.000+0000",
-        "body": body,
-    }
-
-
-def test_comments_tell_mine_from_others_and_find_mentions_of_me() -> None:
-    mention = {
-        "type": "doc",
-        "content": [
-            {
-                "type": "paragraph",
-                "content": [{"type": "mention", "attrs": {"id": "me-id", "text": "@me"}}],
-            }
-        ],
-    }
-    other_mention = {"type": "mention", "attrs": {"id": "someone-else"}}
-    fields = dict(cast(dict[str, object], RAW["fields"]))
-    fields["comment"] = {
-        "comments": [
-            _comment_json("1", "me-id", "mine"),
-            _comment_json("2", "bob", mention),
-            _comment_json("3", "bob", other_mention),
-        ]
-    }
-    raw = jira.RawIssue.model_validate({**RAW, "fields": fields})
-    issue = jira.to_issue(raw, "https://jira", "me-id")
-    assert [(c.id, c.mine, c.mentions_me) for c in issue.comments] == [
-        ("1", True, False),
-        ("2", False, True),
-        ("3", False, False),
-    ]
-    assert jira.to_issue(raw, "https://jira").comments[0].mine is False  # account unknown
-
-
-def test_only_the_latest_comments_are_kept() -> None:
-    fields = dict(cast(dict[str, object], RAW["fields"]))
-    fields["comment"] = {"comments": [_comment_json(str(n), "bob", "x") for n in range(30)]}
-    raw = jira.RawIssue.model_validate({**RAW, "fields": fields})
-    kept = jira.to_issue(raw, "https://jira").comments
-    assert [c.id for c in kept] == [str(n) for n in range(20, 30)]
-
-
 def test_a_ticket_done_without_a_resolution_is_resolved_when_it_moved_to_done() -> None:
     raw = json.loads(json.dumps(RAW))
     fields = raw["fields"]
@@ -476,3 +446,26 @@ def test_a_search_reads_every_page_by_its_token(monkeypatch: pytest.MonkeyPatch)
     assert [b.get("nextPageToken") for b in sent] == [None, "p2", "p3"]
     # The empty first page asked whether the token works: Jira answers a bad one with nothing.
     assert asked.count(jira.MYSELF_PATH) == 1
+
+
+def test_collecting_asks_only_the_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    asked: list[str] = []
+    sent: list[dict[str, object]] = []
+
+    def fake_request(
+        config: JiraConfig, email: str, api_token: str, path: str, body: object = None
+    ) -> bytes:
+        asked.append(path)
+        assert isinstance(body, dict)
+        sent.append(cast(dict[str, object], body))
+        return json.dumps({"issues": [RAW]}).encode()
+
+    def fake_token(_config: JiraConfig, _email: str) -> str:
+        return "t"
+
+    monkeypatch.setattr(jira, "token", fake_token)
+    monkeypatch.setattr(jira, "_request", fake_request)
+    snapshot = jira.collect(JiraConfig(site="https://j"), "me@x")
+    assert [i.key for i in snapshot.issues] == ["APP-1"]
+    assert asked == [jira.SEARCH_PATH]  # not `/myself`: a found ticket shows the token works
+    assert "comment" not in cast(list[str], sent[0]["fields"])

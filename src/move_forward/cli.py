@@ -7,6 +7,8 @@ import io
 import json
 import logging
 import os
+import shlex
+import subprocess
 import sys
 import webbrowser
 from datetime import UTC, datetime
@@ -31,7 +33,7 @@ from .db import Database
 from .graph import Ref
 from .kinds import label
 from .plugin import CliHandler, CliRequest
-from .refresh import build_dashboard, refresh, refresh_subjects, stored_graph
+from .refresh import build_dashboard, refresh, refresh_subjects, snooze_item, stored_graph
 from .registry import enabled, enabled_names, migrate
 from .repositories import (
     ContactRepository,
@@ -135,12 +137,6 @@ my-team = "#team-my-team"
 ## host = "imap.work.example"
 ## username = "me@work.example"         # its password: `mfd token set mail.work`
 
-# [vcard]                               # an address book's people, from vCard files
-# paths = ["~/.contacts"]               # vCard files, or directories of them (vdirsyncer's)
-# refresh_seconds = 3600
-# group_importance = {Family = 2}       # how much a group's people matter (0-2)
-# group_types = {Clients = "customer"}  # what a group's people are to me
-
 # [jira]
 # site = "https://example.atlassian.net"
 # refresh_seconds = 900
@@ -157,8 +153,6 @@ my-team = "#team-my-team"
 # priorities = ["Lowest", "Low", "Medium", "High", "Highest"]  # Jira's priority names, lowest first
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
-## [jira.teams]                         # a team's id in Jira's team field, by its name in teams (unused for now)
-## my-team = "10042"
 
 # [people]                              # what people are to me
 # contact_types = { customer = 1, partner = 1, vendor = 0 }  # the types offered, each with the importance it gives (0 to 2)
@@ -222,20 +216,28 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     commands.add_parser("dump", help="print the dashboard as JSON from what is stored")
     snooze_parser = commands.add_parser(
-        "snooze", help="snooze a PR's review until it changes (or the time given is up)"
+        "snooze",
+        help="snooze the items about an entity, as the Snooze button does, until each changes"
+        " (or the time is up)",
     )
-    snooze_parser.add_argument("url", help="the PR's URL")
     snooze_parser.add_argument(
-        "duration", nargs="?", help="e.g. 7d or 12h; default: [act_now] snooze_days for PRs"
+        "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
     )
+    snooze_parser.add_argument(
+        "duration",
+        nargs="?",
+        help="e.g. 7d or 12h; default: as the button, [act_now] snooze_days for its kind",
+    )
+    snooze_parser.add_argument("--kind", help="the entity's kind, e.g. notes.todo")
+    snooze_parser.add_argument("--task", help="only this task of its, e.g. review")
     priority_parser = commands.add_parser(
         "priority",
-        help="set how much an entity matters: 0 not important, 1 important, 2 critical, or clear",
+        help="set how much an entity matters: 1 important, 2 critical, or clear",
     )
     priority_parser.add_argument(
         "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
     )
-    priority_parser.add_argument("level", choices=["0", "1", "2", "clear"])
+    priority_parser.add_argument("level", choices=["1", "2", "clear"])
     priority_parser.add_argument("--kind", help="the entity's kind, e.g. notes.todo")
     tag_parser = commands.add_parser(
         "tag", help="put a #tag on an entity, or take one I put there off"
@@ -358,6 +360,15 @@ def _open_signed_in(token: str, port: int) -> int:
     return 0
 
 
+def command_line(words: list[str]) -> str:
+    """`words` as a command to paste into this system's shell, each argument kept whole
+    whatever it holds (an entry's id is its title): quoted for a POSIX shell, or on Windows
+    as its programs split their command line, though cmd and PowerShell still read their own
+    characters inside it (cmd's `&` and `%`; PowerShell's `$` and backtick, and it doesn't
+    take a backslash before a quote as escaping it)."""
+    return subprocess.list2cmdline(words) if sys.platform == "win32" else shlex.join(words)
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         # Printed as UTF-8, redirected or not: Windows' default is its code page, which can't
@@ -437,17 +448,28 @@ def main(argv: list[str] | None = None) -> int:
         print(build_dashboard(config, db).model_dump_json(indent=2))
         return 0
     if args.command == "snooze":
+        now = datetime.now(UTC)
         try:
             duration = snooze.parse_duration(args.duration) if args.duration else None
-            plugins = enabled(config, db, datetime.now(UTC))
-            graph, _ = stored_graph(db, plugins)
-            until = snooze.snooze_review(
-                FeedbackRepository(db), graph, config.act_now, args.url, datetime.now(UTC), duration
-            )
+            graph, _ = stored_graph(db, enabled(config, db, now))
+            ref = priority.resolve(graph, args.entity, args.kind)
         except (ValueError, LookupError) as err:
             print(err, file=sys.stderr)
             return 1
-        print(f"snoozed until {localtime.local(until):%Y-%m-%d %H:%M}, or until the PR changes")
+        buttons = snooze.snooze_buttons(build_dashboard(config, db, now), ref, args.task)
+        if not buttons:
+            words = ["mfd", "unsnooze", ref.id, "--kind", ref.kind]
+            words += ["--task", args.task] if args.task else []
+            again = command_line(words)
+            print(
+                f"nothing about {ref.id} is shown with a Snooze button: it may be snoozed or"
+                f" dismissed already (`{again}` first), or not shown at all",
+                file=sys.stderr,
+            )
+            return 1
+        ends = [snooze_item(config.act_now, db, f, now, duration) for f in buttons]
+        until = f"{localtime.local(max(ends)):%Y-%m-%d %H:%M}"
+        print(f"snoozed {len(buttons)} item(s) until {until}, or until each changes")
         return 0
     if args.command == "priority":
         graph, _ = stored_graph(db, enabled(config, db, datetime.now(UTC)))

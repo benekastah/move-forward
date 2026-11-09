@@ -94,7 +94,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 
 | Command | Does |
 | --- | --- |
-| `mfd slack contacts [--json]` | Where people's and teams' pings go, and whether each was imported, set by hand or looked up by email. |
+| `mfd slack destinations [--json]` | Where people's and teams' pings go, and whether each was imported, set by hand or looked up by email. |
 | `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
 | `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel. |
 | `mfd slack import <dir>` | Read people's Slack ids and teams' channels from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read. |

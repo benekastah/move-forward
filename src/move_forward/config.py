@@ -36,6 +36,22 @@ MOVED_SETTINGS = {
 }
 """Top-level settings that moved into a plugin's section, to say so instead of just "extra
 input"."""
+REMOVED_PLUGINS = {
+    "vcard": (
+        "the [vcard] plugin was removed: delete the section; contact types (Set type, or"
+        " `mfd contact <address|@domain> <type>`) say who matters"
+    ),
+}
+"""Built-in plugins that are gone, by name, and what to say to a config still naming one,
+instead of "no plugin is named". An installed plugin of that name is read as any other."""
+
+GONE_NOTIFICATIONS = {
+    "dashboard.certificate_ending": "with HTTPS mode",
+    "jira.comment_added": "(Jira tells of comments itself, e.g. through Slack)",
+    "jira.mentioned": "(Jira tells of mentions itself, e.g. through Slack)",
+}
+"""Notification kinds that no longer exist, with why, to say so to a config still subscribed
+to one instead of just "no such kind"."""
 
 
 class Config(Strict):
@@ -152,7 +168,8 @@ class Config(Strict):
             moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")
         plugins = [p.name for p in registry.PLUGINS]
         moved += [
-            f"no plugin is named [{key}]; the plugins are {', '.join(plugins)}"
+            REMOVED_PLUGINS.get(key)
+            or f"no plugin is named [{key}]; the plugins are {', '.join(plugins)}"
             for key in map(str, settings)
             if isinstance(settings[key], dict)
             and key not in cls.model_fields
@@ -183,13 +200,17 @@ class Config(Strict):
 
     @model_validator(mode="after")
     def _known_notifications(self) -> "Config":
-        """`[notifications] subscribe` names only kinds that exist; the one HTTPS mode had says
-        it's gone, not that it's misspelled."""
+        """`[notifications] subscribe` names only kinds that exist; one in `GONE_NOTIFICATIONS`
+        says it's gone, and why, not that it's misspelled."""
         known = registry.notification_kinds()
-        if "dashboard.certificate_ending" in self.notifications.subscribe:
+        gone = [kind for kind in self.notifications.subscribe if kind in GONE_NOTIFICATIONS]
+        if gone:
             raise ValueError(
-                "[notifications] subscribe has dashboard.certificate_ending, which is gone with"
-                " HTTPS mode: take it out"
+                "; ".join(
+                    f"[notifications] subscribe has {kind}, which is gone {GONE_NOTIFICATIONS[kind]}:"
+                    " take it out"
+                    for kind in gone
+                )
             )
         bad = [kind for kind in self.notifications.subscribe if kind not in known]
         if bad:
