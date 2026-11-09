@@ -3,9 +3,9 @@
 Follows GitHub's rules: the last matching line wins, patterns behave like .gitignore
 (a leading or inner `/` anchors to the repo root, `*` stays within a path segment, `**` as
 a whole segment crosses segments, a `**/` one matching no directory too, and is a `*`
-inside one), and a pattern that
-names a directory owns everything below it, but one ending in a bare `*`, which GitHub reads
-as what's directly there: `docs/*` owns `docs/a.md`, not `docs/sub/b.md`.
+inside one), and a pattern that names a directory owns everything below it, but one ending
+in a bare `*`, which GitHub reads as what's directly there: `docs/*` owns `docs/a.md`, not
+`docs/sub/b.md`.
 """
 
 import re
