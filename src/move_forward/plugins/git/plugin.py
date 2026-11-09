@@ -71,6 +71,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         self._ids: dict[Path, str] = {}
         """Each watched repo's id, the common git directory `changes` and `collect` name it
         by, by its resolved path, as the watcher has it."""
+        self._clones_warned: set[tuple[str, ...]] = set()
+        """The clones of one GitHub repo already warned of, so each is warned of once a run."""
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
@@ -103,6 +105,21 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         )
         if not partial:
             ctx.kv.set(LAST_FULL, ctx.now.isoformat())
+        by_name: dict[str, tuple[str, list[str]]] = {}  # GitHub's names ignore case
+        for repo in found.repos:
+            if repo.github_repo:
+                by_name.setdefault(repo.github_repo.casefold(), (repo.github_repo, []))[1].append(
+                    repo.dir
+                )
+        for name, dirs in by_name.values():
+            if len(dirs) > 1 and tuple(dirs) not in self._clones_warned:
+                self._clones_warned.add(tuple(dirs))
+                ctx.log.warning(
+                    "%s are each a clone of %s: only the first's branches meet its PRs; make the"
+                    " others worktrees of it (git worktree add)",
+                    ", ".join(dirs),
+                    name,
+                )
         return found
 
     def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
@@ -208,12 +225,17 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         return LocalRepository(ctx.db).load()
 
     def entities(self, req: EntitiesRequest[GitConfig, LocalSnapshot]) -> list[Entity]:
-        """A `repo` per checkout on GitHub, and a `branch` per local branch."""
+        """A `repo` per GitHub repo checked out (the first checkout of it, when two clones are,
+        which `collect` warns of), and a `branch` per local branch."""
         snapshot = req.snapshot
         entities: list[Entity] = []
+        published: dict[str, Ref] = {}  # by the name casefolded: GitHub's names ignore case
         for repo in snapshot.repos if snapshot else []:
-            repo_ref = Ref(kind=REPO, id=repo.github_repo) if repo.github_repo else None
-            if repo_ref:
+            name = repo.github_repo
+            # A later clone's branches point at the first's repo, the one published.
+            repo_ref = published.get(name.casefold()) if name else None
+            if name and repo_ref is None:
+                repo_ref = published[name.casefold()] = Ref(kind=REPO, id=name)
                 entities.append(
                     Entity(
                         ref=repo_ref,
