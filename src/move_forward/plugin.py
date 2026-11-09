@@ -230,15 +230,6 @@ class CollectAfterRequest[C: BaseModel]:
 
 
 @dataclass(frozen=True)
-class Collected[S: BaseModel]:
-    """What `collect` returns when it did part of the work: core stores `snapshot` and runs
-    `collect` again right after the other due plugins, until `more` is False."""
-
-    snapshot: S
-    more: bool = False
-
-
-@dataclass(frozen=True)
 class StoreRequest[C: BaseModel, S: BaseModel]:
     ctx: Context[C]
     snapshot: S
@@ -344,7 +335,7 @@ PageHandler = Callable[[PageRequest[Any]], str | Response | None]
 """Renders a page, as HTML or a `Response`; None means not found."""
 CliHandler = Callable[[CliRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
-API_VERSION = 1
+API_VERSION = 2
 """The version of `move_forward.api` this dashboard offers. A change that would break a
 plugin built against it (a hook's request losing a field, a name leaving `api`) raises it;
 see `docs/api-changes.md`."""
@@ -509,11 +500,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Refresh
 
-    def collect(self, req: CollectRequest[C]) -> "S | Collected[S]":
+    def collect(self, req: CollectRequest[C]) -> S:
         """Fetch the plugin's snapshot. Runs in parallel with other plugins' and may raise;
-        the error is shown and the last good snapshot kept. It has `collect_timeout_seconds`;
-        with more to do than fits, return `Collected(snapshot, more=True)` and keep your
-        place in `ctx.kv`: core stores the piece and calls `collect` again."""
+        the error is shown and the last good snapshot kept. It has `collect_timeout_seconds`."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
     def store(self, req: StoreRequest[C, S]) -> None:
@@ -544,7 +533,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         (`previous_graph`, `previous_snapshot`), and say what became true."""
         return []
 
-    def collect_after(self, req: CollectAfterRequest[C]) -> "S | Collected[S]":
+    def collect_after(self, req: CollectAfterRequest[C]) -> S:
         """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
         repos git found. Runs once their snapshots are stored, in parallel with other
         `collect_after`s, and fails like `collect`."""

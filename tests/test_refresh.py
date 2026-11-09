@@ -18,7 +18,6 @@ from move_forward.plugin import (
     ActionError,
     AfterCollectRequest,
     CollectAfterRequest,
-    Collected,
     CollectRequest,
     Context,
     LoadRequest,
@@ -388,24 +387,6 @@ def test_graph_events_compare_with_what_was_stored_before_the_refresh(
     assert [n.title for n in told] == ["me/done: PR merged 1d ago"]
     refresh.refresh(config, db, NOW)
     assert NotificationRepository(db).take(NOW, timedelta(hours=1)) == []  # said once
-
-
-def test_a_plugin_with_more_to_collect_is_collected_again_in_one_refresh(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pieces: list[int] = []
-
-    def in_pieces(self: GitPlugin, req: CollectRequest[GitConfig]) -> Collected[LocalSnapshot]:
-        pieces.append(len(pieces))
-        return Collected(local_snapshot(), more=len(pieces) < 3)
-
-    monkeypatch.setattr(_Git, "collect", in_pieces)  # this module's git
-    config = Config.model_validate({"email": "me@x", "git": {"repos": []}})
-    db = Database(":memory:")
-    registry.migrate(config, db)
-    refresh.refresh(config, db, NOW)
-    assert pieces == [0, 1, 2]
-    assert SnapshotRepository(db).all()["git"].error is None
 
 
 def test_the_known_actions_are_the_enabled_plugins_declared_ones() -> None:

@@ -9,6 +9,13 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Version 2
+
+Fewer things to know: what no plugin used is gone.
+
+- **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
+  return the snapshot, and core calls each once per refresh.
+
 ## Version 1
 
 The first version. While the built-ins are its only plugins, changes go into it without

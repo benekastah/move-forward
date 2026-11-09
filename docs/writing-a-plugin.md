@@ -177,9 +177,6 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   what it stored last. It has `collect_timeout_seconds` (300) to finish: past that, the
   refresh records it as timed out and goes on, and leaves it out of later refreshes until
   its collect returns (a thread can't be stopped). Set a timeout on whatever it calls, too.
-  With more to fetch than fits, return `Collected(snapshot, more=True)` and keep your
-  place in `ctx.kv`: core stores that piece and calls `collect` again in the same refresh,
-  each piece with the timeout to itself.
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
   for every page, with the database held so no refresh stores between its queries (so it
   mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
