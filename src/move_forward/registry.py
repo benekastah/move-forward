@@ -280,13 +280,13 @@ def unmet_requirements(config: "Config") -> list[str]:
 
 
 def shared_token_services(config: "Config") -> list[str]:
-    """The keychain services more than one enabled plugin keeps its token under, each with
-    who, e.g. "[jira] and [slack] keep their tokens under 'shared'": storing one token would
-    replace the other's."""
-    names = set(enabled_names(config))
+    """The keychain services more than one enabled plugin keeps its token under (as
+    `token_settings` says), each with who, e.g. "[jira] and [slack] keep their tokens under
+    'shared'": storing one token would replace the other's. Services a plugin derives from its
+    own (Slack's `-refresh`) aren't counted."""
     by_service: dict[str, list[str]] = {}
     for plugin in PLUGINS:
-        section = config.section(plugin.name) if plugin.name in names else None
+        section = config.section(plugin.name)
         if section is not None and (settings := plugin.token_settings(section)) is not None:
             by_service.setdefault(settings.keychain_service, []).append(f"[{plugin.name}]")
     return [

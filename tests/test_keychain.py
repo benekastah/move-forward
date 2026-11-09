@@ -227,3 +227,24 @@ def test_a_config_keeping_two_tokens_in_one_place_is_refused(tmp_path: Path) -> 
         ValidationError, match=r"\[jira\] and \[slack\] keep their tokens under 'shared'"
     ):
         config_module.load(config)
+
+
+class _GitHubKeepingJirasService(GitHubPlugin):
+    def token_settings(self, config: GitHubConfig) -> keychain.TokenSettings | None:
+        return _JiraService()
+
+
+class _JiraService:
+    token_env: str = "GITHUB_PAT"
+    keychain_service: str = "move-forward-jira"
+
+
+def test_a_plugins_token_settings_count_where_it_keeps_its_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    swap = {"github": _GitHubKeepingJirasService()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    config = _config(tmp_path)
+    config.write_text(config.read_text() + '[github]\norg = "acme"\n')
+    with pytest.raises(ValidationError, match=r"\[github\] and \[jira\] keep their tokens"):
+        config_module.load(config)
