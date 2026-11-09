@@ -8,7 +8,6 @@ import pytest
 from move_forward.db import Database
 from move_forward.plugins.notes.models import (
     Condition,
-    Declined,
     Entry,
     Ice,
     IcedItem,
@@ -103,7 +102,6 @@ def test_replace_all_keeps_everything_an_import_read(notes: NotesRepository) -> 
             Todo(id=0, text="x", done_on=DAY),
         ],
         conditions=[Condition(pr=PR.ref, text="after PR 2")],
-        declined=[Declined(on=DAY, text="don't nudge")],
         lines=["- Odd: kept as is"],
         links=[PR],
     )
@@ -184,7 +182,7 @@ def test_an_import_replaces_stacks_on_ice_but_not_what_was_iced_on_its_own(
     assert [i.title for i in notes.ices()] == ["APP-1 Fix", "me/b"]
 
 
-def test_check_ins_written_as_declines_move_into_their_fields() -> None:
+def test_check_ins_written_as_declines_are_remembered_by_their_keys() -> None:
     db = Database(":memory:")
     db.migrate("notes", MIGRATIONS[:2])  # before check-ins were fields
     db.execute("INSERT INTO notes_entries (id, title) VALUES (1, 'APP-1 Fix it')")
@@ -198,9 +196,67 @@ def test_check_ins_written_as_declines_move_into_their_fields() -> None:
     ):
         db.execute("INSERT INTO notes_declined VALUES (1, ?, ?, ?)", (position, on, text))
     db.migrate("notes", MIGRATIONS)
-    [entry] = NotesRepository(db).entries()
-    assert (entry.checked_on, entry.asked_done_on) == (date(2026, 10, 5), date(2026, 10, 3))
-    assert entry.declined == [Declined(on=date(2026, 10, 4), text="not today")]
+    notes = NotesRepository(db)
+    assert notes.recall("checked:APP-1 Fix it") == date(2026, 10, 5)
+    assert notes.recall("asked-done:APP-1 Fix it") == date(2026, 10, 3)
+    assert notes.recall("decline:APP-1 Fix it:not today") == date(2026, 10, 4)
+
+
+def test_the_bookkeeping_commands_rows_are_remembered_under_their_keys() -> None:
+    """What `decline`, `checked`, `asked-done`, `offered` and `asked` kept is copied into
+    `notes_remembered` under the keys their CHANGELOG mapping gives, and their tables go."""
+    db = Database(":memory:")
+    names = [m.name for m in MIGRATIONS]
+    db.migrate("notes", MIGRATIONS[: names.index("0009_remembered")])
+    db.execute(
+        "INSERT INTO notes_entries (id, title, checked_on, asked_done_on)"
+        " VALUES (1, 'APP-1 Fix it', '2026-10-05', '2026-10-03'), (2, 'Chores', NULL, NULL)"
+    )
+    for position, (on, text) in enumerate(
+        [("2026-10-01", "nudge"), ("2026-10-04", "nudge"), ("2026-10-02", "fresh review")]
+    ):
+        db.execute("INSERT INTO notes_declined VALUES (1, ?, ?, ?)", (position, on, text))
+    pr = "https://github.com/acme/w/pull/1"
+    db.execute(
+        "INSERT INTO notes_offers VALUES (?, 'nudge', '2026-10-06T23:30:00+00:00'),"
+        " (?, 'fresh-review', '2026-10-07T08:00:00+00:00')",
+        (pr, pr),
+    )
+    db.execute(
+        "INSERT INTO kv VALUES ('notes', 'last_asked_ice', '2026-10-08'),"
+        " ('notes', 'last_asked_standup', '2026-10-09'), ('notes', 'other', 'kept'),"
+        " ('core', 'last_asked_ice', 'not notes')"
+    )
+    db.migrate("notes", MIGRATIONS)
+    notes = NotesRepository(db)
+    found = {r["key"]: r["on_date"] for r in db.query("SELECT * FROM notes_remembered")}
+    assert found == {
+        "decline:APP-1 Fix it:nudge": "2026-10-04",  # the latest
+        "decline:APP-1 Fix it:fresh review": "2026-10-02",
+        "checked:APP-1 Fix it": "2026-10-05",
+        "asked-done:APP-1 Fix it": "2026-10-03",
+        f"offered:{pr}:nudge": "2026-10-06",  # the local day (UTC, in tests)
+        f"offered:{pr}:fresh-review": "2026-10-07",
+        "asked:ice": "2026-10-08",
+        "asked:standup": "2026-10-09",
+    }
+    assert notes.recall("asked:ice") == date(2026, 10, 8)
+    tables = {r["name"] for r in db.query("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    assert not tables & {"notes_declined", "notes_offers"}
+    kv = {(r["plugin"], r["key"]) for r in db.query("SELECT plugin, key FROM kv")}
+    assert ("notes", "other") in kv and ("core", "last_asked_ice") in kv
+    assert not {("notes", "last_asked_ice"), ("notes", "last_asked_standup")} & kv
+
+
+def test_remember_replaces_the_day_and_recall_gives_it_by_key() -> None:
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS)
+    notes = NotesRepository(db)
+    assert notes.recall("asked:ice") is None
+    notes.remember("asked:ice", date(2026, 10, 30))
+    notes.remember("asked:ice", date(2026, 10, 1))  # what I said last, even if earlier
+    notes.remember("asked:standup", DAY)
+    assert notes.recall("asked:ice") == date(2026, 10, 1)
 
 
 def test_conditions_kept_before_they_named_their_pr_are_given_one_once() -> None:

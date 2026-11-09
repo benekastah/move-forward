@@ -14,10 +14,7 @@ from pathlib import Path
 from ...api.ids import branch_id
 from ...api.kinds import PULL_REQUEST as PR
 from .models import (
-    CHECK_IN_TEXTS,
-    CheckIn,
     Condition,
-    Declined,
     Entry,
     Ice,
     IcedItem,
@@ -39,7 +36,7 @@ BRANCH = "git.branch"
 PR_URL_RE = re.compile(r"https://[\w.-]+(?::\d+)?/[\w.-]+/[\w.-]+/pull/\d+")
 """A pull request's URL, on github.com or a GitHub Enterprise Server."""
 _FIELD_RE = re.compile(r"^- ([^:]+?):\s*(.*)$")
-_DATED_RE = re.compile(r"^(Done|Declined) (\d{4}-\d{2}-\d{2})$")
+_DONE_RE = re.compile(r"^Done (\d{4}-\d{2}-\d{2})$")
 _CHILD_RE = re.compile(r"^\s+- (.*)$")
 _SIZE_RE = re.compile(r"^\[(quick|big)\]\s*", re.IGNORECASE)
 _ICE_HEADING_RE = re.compile(r"^(\S+)\s+\((.+)\)$")
@@ -114,9 +111,6 @@ def _entry(title: str, lines: list[str]) -> Entry:
     todos: list[Todo] = []
     conditions: list[str] = []
     """As written, for the whole entry; `attach_conditions` gives each its PR."""
-    declined: list[Declined] = []
-    check_ins: dict[CheckIn, date] = {}
-    """The latest of each check-in, which the skill wrote as `Declined <date>: Checked`."""
     kept: list[str] = []
     block: str | None = None
     """The field whose `  - ` children the next lines may be: "todos", "conditions" or "kept"."""
@@ -136,14 +130,8 @@ def _entry(title: str, lines: list[str]) -> Entry:
                 kept.append(line)
             continue
         key, value = field.group(1).strip(), field.group(2).strip()
-        dated = _DATED_RE.match(key)
-        on = date.fromisoformat(dated.group(2)) if dated else None
-        if dated and on and dated.group(1) == "Done":
-            todos.append(_todo(value, done_on=on))
-        elif dated and on and (which := CHECK_IN_TEXTS.get(value)):
-            check_ins[which] = max(on, check_ins.get(which, on))
-        elif dated and on:
-            declined.append(Declined(on=on, text=value))
+        if done := _DONE_RE.match(key):
+            todos.append(_todo(value, done_on=date.fromisoformat(done.group(1))))
         elif key == "Left to do" and not value:
             block = "todos"
         elif key == "Merge conditions":
@@ -170,11 +158,8 @@ def _entry(title: str, lines: list[str]) -> Entry:
         where=known.get("Where"),
         blocked_on=known.get("Blocked on"),
         updated_on=_date(known.get("Updated", "")),
-        checked_on=check_ins.get("checked"),
-        asked_done_on=check_ins.get("asked_done"),
         todos=todos,
         conditions=attached,
-        declined=declined,
         lines=kept + unattached,
         links=links,
     )
@@ -270,10 +255,6 @@ def entry_markdown(entry: Entry) -> str:
     if entry.conditions:
         lines.append("- Merge conditions:")
         lines += [f"  - {c.pr}: {c.text}" for c in entry.conditions]
-    lines += [f"- Declined {d.on.isoformat()}: {d.text}" for d in entry.declined]
-    for text, on in (("Checked", entry.checked_on), ("Asked-done", entry.asked_done_on)):
-        if on is not None:  # as the skill wrote them
-            lines.append(f"- Declined {on.isoformat()}: {text}")
     lines += entry.lines
     if entry.updated_on is not None:
         lines.append(f"- Updated: {entry.updated_on.isoformat()}")

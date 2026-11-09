@@ -5,22 +5,9 @@ from collections import defaultdict
 from collections.abc import Callable, Collection
 from datetime import date, datetime
 
-from ...api import Database, Migration, Ref
+from ...api import Database, Migration, Ref, localtime
 from .markdown import BRANCH, attach_conditions
-from .models import (
-    CheckIn,
-    Condition,
-    Declined,
-    Entry,
-    Ice,
-    IcedItem,
-    Link,
-    Offer,
-    OfferKind,
-    Section,
-    Size,
-    Todo,
-)
+from .models import Condition, Entry, Ice, IcedItem, Link, Section, Size, Todo
 
 
 def _attach_old_conditions(conn: sqlite3.Connection) -> None:
@@ -54,6 +41,48 @@ def _attach_old_conditions(conn: sqlite3.Connection) -> None:
                 " WHERE entry_id = ?), ?)",
                 (entry_id, entry_id, line),
             )
+
+
+def _remember_bookkeeping(conn: sqlite3.Connection) -> None:
+    """Copy what the skill's bookkeeping commands kept (`decline`, `checked`, `asked-done`,
+    `offered`, `asked`) into `notes_remembered`, under the keys `mfd notes remember` takes for
+    them: the command, then its arguments, joined by `:`, an entry by its title. An offer's
+    time is kept as its local day. The latest day wins where two rows make one key."""
+    found: list[tuple[str, str]] = [
+        (f"decline:{row['title']}:{row['text']}", row["on_date"])
+        for row in conn.execute(
+            "SELECT title, text, MAX(on_date) AS on_date FROM notes_declined"
+            " JOIN notes_entries ON notes_entries.id = entry_id GROUP BY entry_id, text"
+        )
+    ]
+    for command, column in (("checked", "checked_on"), ("asked-done", "asked_done_on")):
+        found += [
+            (f"{command}:{row['title']}", row[column])
+            for row in conn.execute(
+                f"SELECT title, {column} FROM notes_entries WHERE {column} IS NOT NULL"
+            )
+        ]
+    found += [
+        (
+            f"offered:{row['pr']}:{row['kind']}",
+            localtime.day(datetime.fromisoformat(row["offered_at"])).isoformat(),
+        )
+        for row in conn.execute("SELECT pr, kind, offered_at FROM notes_offers")
+    ]
+    # `mfd notes asked` kept its days in core's kv, as the notes' `last_asked_<question>`.
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'kv'").fetchone():
+        asked = "plugin = 'notes' AND key LIKE 'last!_asked!_%' ESCAPE '!'"
+        found += [
+            (f"asked:{row['key'].removeprefix('last_asked_')}", row["value"])
+            for row in conn.execute(f"SELECT key, value FROM kv WHERE {asked}")
+            if row["value"]
+        ]
+        conn.execute(f"DELETE FROM kv WHERE {asked}")
+    conn.executemany(
+        "INSERT INTO notes_remembered VALUES (?, ?)"
+        " ON CONFLICT (key) DO UPDATE SET on_date = MAX(on_date, excluded.on_date)",
+        found,
+    )
 
 
 MIGRATIONS = [
@@ -217,6 +246,26 @@ MIGRATIONS = [
     ),
     # Conditions from before conditions named their PR are given theirs, once.
     Migration("0008_old_conditions_given_prs", _attach_old_conditions),
+    Migration(
+        "0009_remembered",
+        """
+    CREATE TABLE notes_remembered (    -- kept: the day something the skill remembers last
+        key TEXT PRIMARY KEY,          -- happened, by its key (`mfd notes remember`); pruned
+        on_date TEXT NOT NULL          -- after prune_days
+    );
+    """,
+    ),
+    Migration("0010_bookkeeping_remembered", _remember_bookkeeping),
+    # What 0010 copied into notes_remembered. Entries' two columns stay, emptied: dropping a
+    # column needs SQLite 3.35, newer than some systems' Python has.
+    Migration(
+        "0011_drop_bookkeeping",
+        """
+    DROP TABLE notes_declined;
+    DROP TABLE notes_offers;
+    UPDATE notes_entries SET checked_on = NULL, asked_done_on = NULL;
+    """,
+    ),
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
 only the notes know what's in them."""
@@ -270,11 +319,6 @@ class NotesRepository:
         conditions: defaultdict[int, list[Condition]] = defaultdict(list)
         for row in db.query("SELECT * FROM notes_conditions ORDER BY entry_id, position"):
             conditions[row["entry_id"]].append(Condition(pr=row["pr"], text=row["text"]))
-        declined: defaultdict[int, list[Declined]] = defaultdict(list)
-        for row in db.query("SELECT * FROM notes_declined ORDER BY entry_id, position"):
-            declined[row["entry_id"]].append(
-                Declined(on=date.fromisoformat(row["on_date"]), text=row["text"])
-            )
         lines: defaultdict[int, list[str]] = defaultdict(list)
         for row in db.query("SELECT * FROM notes_entry_lines ORDER BY entry_id, position"):
             lines[row["entry_id"]].append(row["text"])
@@ -286,11 +330,8 @@ class NotesRepository:
                 where=row["location"],
                 blocked_on=row["blocked_on"],
                 updated_on=_date(row["updated_on"]),
-                checked_on=_date(row["checked_on"]),
-                asked_done_on=_date(row["asked_done_on"]),
                 todos=todos[row["id"]],
                 conditions=conditions[row["id"]],
-                declined=declined[row["id"]],
                 lines=lines[row["id"]],
                 links=links[row["id"]],
             )
@@ -368,43 +409,23 @@ class NotesRepository:
             )
         return entry_id
 
-    def set_check_in(self, entry_id: int, which: CheckIn, on: date) -> None:
-        """Record that the skill checked in on the entry (`checked`), or asked whether it's
-        done (`asked_done`), on `on`."""
-        column = {"checked": "checked_on", "asked_done": "asked_done_on"}[which]
+    def remember(self, key: str, on: date) -> None:
+        """Record that what `key` names happened on `on`, replacing the day before."""
         self._db.execute(
-            f"UPDATE notes_entries SET {column} = ? WHERE id = ?", (on.isoformat(), entry_id)
+            "INSERT OR REPLACE INTO notes_remembered VALUES (?, ?)", (key, on.isoformat())
         )
 
-    def offered(self, pr: str, kind: OfferKind, at: datetime) -> None:
-        """Record that the skill offered `kind` about `pr` at `at`, replacing the time before."""
-        self._db.execute(
-            "INSERT OR REPLACE INTO notes_offers VALUES (?, ?, ?)", (pr, kind, at.isoformat())
-        )
+    def recall(self, key: str) -> date | None:
+        """The day `remember` last recorded for `key`; None when it never did (or the prune
+        forgot it)."""
+        rows = self._db.query("SELECT on_date FROM notes_remembered WHERE key = ?", (key,))
+        return date.fromisoformat(rows[0]["on_date"]) if rows else None
 
-    def offers(self, pr: str | None = None) -> list[Offer]:
-        """What the skill last offered about each PR, or about `pr`; newest first."""
-        where, params = ("WHERE pr = ?", (pr,)) if pr else ("", ())
-        rows = self._db.query(
-            f"SELECT * FROM notes_offers {where} ORDER BY offered_at DESC, pr, kind", params
-        )
-        return [
-            Offer(pr=r["pr"], kind=r["kind"], offered_at=datetime.fromisoformat(r["offered_at"]))
-            for r in rows
-        ]
-
-    def forget_offers_before(self, cutoff: datetime) -> int:
-        """Delete offers last made before `cutoff`; how many went."""
+    def forget_remembered_by(self, day: date) -> int:
+        """Forget what was remembered as happening on or before `day`; how many went."""
         with self._db.transaction() as conn:
             return conn.execute(
-                "DELETE FROM notes_offers WHERE offered_at < ?", (cutoff.isoformat(),)
-            ).rowcount
-
-    def forget_declines_by(self, day: date) -> int:
-        """Delete declines made on or before `day`; how many went."""
-        with self._db.transaction() as conn:
-            return conn.execute(
-                "DELETE FROM notes_declined WHERE on_date <= ?", (day.isoformat(),)
+                "DELETE FROM notes_remembered WHERE on_date <= ?", (day.isoformat(),)
             ).rowcount
 
     def set_status(self, entry_id: int, status: str | None) -> None:
@@ -449,15 +470,6 @@ class NotesRepository:
             params += (pr,)
         with self._db.transaction() as conn:
             return conn.execute(query, params).rowcount > 0
-
-    def add_declined(self, entry_id: int, on: date, text: str) -> None:
-        """Record that `text` was offered for the entry and turned down on `on`."""
-        self._db.execute(
-            "INSERT INTO notes_declined VALUES (?,"
-            " (SELECT COALESCE(MAX(position), -1) + 1 FROM notes_declined WHERE entry_id = ?),"
-            " ?, ?)",
-            (entry_id, entry_id, on.isoformat(), text),
-        )
 
     def delete_entry(self, entry_id: int) -> None:
         """Forget an entry, with its todos and everything else it holds."""
@@ -620,16 +632,14 @@ class NotesRepository:
             )
             for entry in entries:
                 cursor = conn.execute(
-                    "INSERT INTO notes_entries (title, status, location, blocked_on, updated_on,"
-                    " checked_on, asked_done_on) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO notes_entries (title, status, location, blocked_on, updated_on)"
+                    " VALUES (?, ?, ?, ?, ?)",
                     (
                         entry.title,
                         entry.status,
                         entry.where,
                         entry.blocked_on,
                         _iso(entry.updated_on),
-                        _iso(entry.checked_on),
-                        _iso(entry.asked_done_on),
                     ),
                 )
                 entry_id = cursor.lastrowid
@@ -644,10 +654,6 @@ class NotesRepository:
                 conn.executemany(
                     "INSERT INTO notes_conditions (entry_id, position, text, pr) VALUES (?, ?, ?, ?)",
                     [(entry_id, i, c.text, c.pr) for i, c in enumerate(entry.conditions)],
-                )
-                conn.executemany(
-                    "INSERT INTO notes_declined VALUES (?, ?, ?, ?)",
-                    [(entry_id, i, d.on.isoformat(), d.text) for i, d in enumerate(entry.declined)],
                 )
                 for position, todo in enumerate(entry.todos):
                     cursor = conn.execute(

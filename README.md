@@ -375,7 +375,7 @@ entry goes when every PR it names was merged or closed and every ticket in
 its title resolved that long ago and it has no open todos (an entry with
 neither is cleared `prune_days` after it last changed), a PR, ticket or
 entry on ice comes off it once its work is over the same way (a stack stays
-until it's reopened), the notes' offers and declines that old are forgotten,
+until it's reopened), what the notes remembered (`mfd notes remember`) as happening that long ago is forgotten,
 pings that old leave the database, and so do Act now's
 snoozes once over, and its dismissals and pins that old. A priority set on work that's since
 finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. Reviewer email and Slack id

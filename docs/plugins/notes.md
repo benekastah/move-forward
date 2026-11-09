@@ -104,15 +104,30 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes todo done\|undone\|delete <id>` | Tick a todo off, reopen it, or drop it without recording it as done. |
 | `mfd notes todo link <id> <PR URL or ticket key>` | Link a todo to a PR or ticket. |
 | `mfd notes condition add <entry> <text> --pr <URL>` / `remove <entry> <text> [--pr <URL>]` | Add a merge condition holding one of the entry's PRs, or remove one (from that PR, or from every PR it holds). Conditions kept before each named its PR, and those the import reads, are given one: the PR their text names, else each of the entry's PRs; one with no PR to hold becomes a line of its entry, `- Merge condition: …`, to add again with `--pr`. |
-| `mfd notes decline <entry> <text>` | Record that something offered for an entry (a nudge, say) was turned down today. The daily prune drops those older than `prune_days`. |
-| `mfd notes checked <entry> [--on DATE]` | Record that the skill checked in on an entry (today by default); kept as its `checked_on`. |
-| `mfd notes asked-done <entry> [--on DATE]` | Record that the skill asked whether an entry is done; kept as its `asked_done_on`. |
-| `mfd notes offered <pr URL> nudge\|fresh-review` | Record that the skill offered to nudge a PR's reviewers, or a fresh review of a PR that changed since its reviewer's review; kept with the time, replacing the last one of that kind. The daily prune forgets those older than `prune_days`. |
-| `mfd notes offers [--pr URL]` | When the skill last offered each kind on each PR, newest first. |
-| `mfd notes asked <question> [--on DATE]` | Record that the skill asked a once-a-day question (e.g. `ice`, whether anything should go on ice) today. `ice`'s date is also `on-ice.md`'s `Last asked`, which import and export read and write. |
-| `mfd notes last-asked <question>` | When the skill last asked it, or `never`. |
+| `mfd notes remember <key> [--on DATE]` | Record that what `<key>` names happened, today (or on `DATE`, `YYYY-MM-DD`), replacing the day kept before. A key is any text the skill chooses; see the keys below. The daily prune forgets a day `prune_days` old. |
+| `mfd notes recall <key>` | The day `remember` last recorded for `<key>`, `YYYY-MM-DD`, or an empty line when it never did (or the prune forgot it); with `--json`, `{"key": …, "on": "YYYY-MM-DD" or null}`. |
 | `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its stack and group in git stack, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
 | `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database, refused when it has neither. Lines it doesn't understand are kept with their entry. Refuses to replace notes already there without `--replace` (anything read replaces them all, even a preamble alone), which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |
 | `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. `on-ice.md` holds only stacks: PRs, tickets and entries on ice stay in the database. |
+
+### Keys to remember by
+
+`remember` and `recall` are memory for the skill: the page never reads them. A key is the
+thing that happened and what it's about, joined by `:`, an entry by its title (titles are
+unique, and survive an import, which gives entries new ids). The skill's keys, and the
+commands they replaced:
+
+| Key | Remembers | Replaces |
+| --- | --- | --- |
+| `checked:<entry title>` | the skill checked in on the entry | `mfd notes checked <entry> [--on D]`, and the entry's `checked_on` |
+| `asked-done:<entry title>` | it asked whether the entry is done | `mfd notes asked-done <entry> [--on D]`, and `asked_done_on` |
+| `decline:<entry title>:<what>` | what it offered for the entry was turned down; recall it to see whether that was today | `mfd notes decline <entry> <what>`, and the entry's `declined` list |
+| `offered:<PR URL>:nudge`, `offered:<PR URL>:fresh-review` | it offered to nudge the PR's reviewers, or a fresh review of it | `mfd notes offered <PR URL> nudge\|fresh-review`; `mfd notes offers --pr <URL>` is a `recall` of each |
+| `asked:<question>` | it asked a once-a-day question, e.g. `asked:ice` (whether anything should go on ice) | `mfd notes asked <question> [--on D]` and `last-asked <question>` |
+
+`asked:ice` is also `on-ice.md`'s `Last asked`, which `import` remembers and `export` writes.
+An offer is remembered by its day, not its time. The import keeps a `- Declined <date>: …`
+line (as the skill wrote declines and check-ins) as a line of its entry, as written, and
+remembers nothing of it.

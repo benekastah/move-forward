@@ -7,7 +7,6 @@ dashboard's buttons (`actions`), so both check the same things.
 
 import argparse
 import json
-import re
 import sys
 from collections.abc import Callable
 from datetime import date
@@ -21,17 +20,16 @@ from ...api import (
     CliRequest,
     Context,
     Graph,
-    localtime,
 )
 from ...api.kinds import TICKET
 from . import actions, markdown, panels
 from .config import NotesConfig
-from .models import CheckIn, Condition, Entry, Ice, Size, Todo
+from .models import Condition, Entry, Ice, Size, Todo
 from .repository import NotesRepository
 
-LAST_ASKED_ICE = "last_asked_ice"
-"""The kv key of when the skill last asked about what's on ice; `mfd notes asked ice` sets
-it, and the import reads it from `on-ice.md`."""
+ASKED_ICE = "asked:ice"
+"""The key `mfd notes remember` keeps when the skill last asked about what's on ice under:
+`on-ice.md`'s `Last asked`, which the import reads and the export writes."""
 
 
 def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> str:
@@ -56,7 +54,7 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
     if entries or ices or sections:
         repo.replace_all(entries, ices, sections)
     if last_asked:
-        ctx.kv.set(LAST_ASKED_ICE, last_asked.isoformat())
+        repo.remember(ASKED_ICE, last_asked)
     return (
         f"imported {len(entries)} entries, {sum(len(e.todos) for e in entries)} todos"
         f" and {len(ices)} stacks on ice"
@@ -73,13 +71,9 @@ def export_notes(ctx: Context[NotesConfig], notes_dir: Path, force: bool) -> str
     notes_dir.mkdir(parents=True, exist_ok=True)
     entries = repo.entries()
     targets[0].write_text(markdown.write_work_notes(entries, repo.sections()), encoding="utf-8")
-    last_asked = ctx.kv.get(LAST_ASKED_ICE)
     ices = repo.ices()
     stacks = [i for i in ices if all(item.kind == markdown.BRANCH for item in i.items)]
-    targets[1].write_text(
-        markdown.write_on_ice(stacks, date.fromisoformat(last_asked) if last_asked else None),
-        encoding="utf-8",
-    )
+    targets[1].write_text(markdown.write_on_ice(stacks, repo.recall(ASKED_ICE)), encoding="utf-8")
     left_out = len(ices) - len(stacks)
     return f"wrote {len(entries)} entries and {len(stacks)} stacks on ice to {notes_dir}" + (
         f"; on-ice.md holds only stacks, so {left_out} other thing(s) on ice stay in the"
@@ -139,9 +133,6 @@ def _entry_text(entry: Entry) -> str:
         lines.append(f"  where: {entry.where}")
     lines += [f"  about: {link.ref}" for link in entry.links]
     lines += [f"  merge condition on {c.pr}: {c.text}" for c in entry.conditions]
-    lines += [f"  declined {d.on}: {d.text}" for d in entry.declined]
-    lines += [f"  checked in: {entry.checked_on}"] if entry.checked_on else []
-    lines += [f"  asked if done: {entry.asked_done_on}"] if entry.asked_done_on else []
     lines += [_todo_line(todo) for todo in entry.todos]
     return "\n".join(lines)
 
@@ -279,62 +270,25 @@ def cmd_condition(req: CliRequest[NotesConfig]) -> Result:
     return Result(f"{entry.title}: {args.condition_command} merge condition")
 
 
-def cmd_decline(req: CliRequest[NotesConfig]) -> Result:
-    ctx, graph, args = req.ctx, req.graph, req.args
-    notes = NotesRepository(ctx.db)
-    entry = find_entry(notes.entries(), args.entry, graph)
-    notes.add_declined(entry.id, ctx.today, args.text.strip())
-    return Result(f"{entry.title}: declined for today")
-
-
-def _check_in(which: CheckIn, said: str) -> Command:
-    def cmd(req: CliRequest[NotesConfig]) -> Result:
-        ctx, graph, args = req.ctx, req.graph, req.args
-        notes = NotesRepository(ctx.db)
-        entry = find_entry(notes.entries(), args.entry, graph)
-        on = date.fromisoformat(args.on) if args.on else ctx.today
-        notes.set_check_in(entry.id, which, on)
-        return Result(f"{entry.title}: {said} {on}")
-
-    return cmd
-
-
-def cmd_offered(req: CliRequest[NotesConfig]) -> Result:
+def cmd_remember(req: CliRequest[NotesConfig]) -> Result:
     ctx, args = req.ctx, req.args
-    NotesRepository(ctx.db).offered(args.pr, args.kind, ctx.now)
-    return Result(f"offered a {args.kind} on {args.pr}")
-
-
-def cmd_offers(req: CliRequest[NotesConfig]) -> Result:
-    ctx, args = req.ctx, req.args
-    found = NotesRepository(ctx.db).offers(args.pr)
-    text = "\n".join(
-        f"{localtime.local(o.offered_at):%Y-%m-%d %H:%M}  {o.kind}  {o.pr}" for o in found
-    )
-    return Result(text, [o.model_dump(mode="json") for o in found])
-
-
-QUESTION_RE = re.compile(r"^[a-z][a-z0-9-]*$")
-"""A question's name, e.g. `ice`: what `mfd notes asked` records."""
-
-
-def _asked_key(question: str) -> str:
-    if not QUESTION_RE.match(question):
-        raise ValueError(f"{question!r}: name a question with lower-case letters, digits and -")
-    return f"last_asked_{question}"  # `ice`'s is LAST_ASKED_ICE, which the import sets
-
-
-def cmd_asked(req: CliRequest[NotesConfig]) -> Result:
-    ctx, args = req.ctx, req.args
+    key = _key(args.key)
     on = date.fromisoformat(args.on) if args.on else ctx.today
-    ctx.kv.set(_asked_key(args.question), on.isoformat())
-    return Result(f"asked {args.question} on {on}")
+    NotesRepository(ctx.db).remember(key, on)
+    return Result(f"remembered {key} on {on}", {"key": key, "on": on.isoformat()})
 
 
-def cmd_last_asked(req: CliRequest[NotesConfig]) -> Result:
+def cmd_recall(req: CliRequest[NotesConfig]) -> Result:
     ctx, args = req.ctx, req.args
-    on = ctx.kv.get(_asked_key(args.question)) or None
-    return Result(on or "never", {"question": args.question, "asked_on": on})
+    key = _key(args.key)
+    on = NotesRepository(ctx.db).recall(key)
+    return Result(on.isoformat() if on else "", {"key": key, "on": on.isoformat() if on else None})
+
+
+def _key(key: str) -> str:
+    if not key.strip():
+        raise ValueError("the key is empty")
+    return key
 
 
 def cmd_ice(req: CliRequest[NotesConfig]) -> Result:
@@ -374,13 +328,8 @@ def _commands() -> dict[str, Command]:
         "link": cmd_link,
         "todo": cmd_todo,
         "condition": cmd_condition,
-        "decline": cmd_decline,
-        "offered": cmd_offered,
-        "offers": cmd_offers,
-        "asked": cmd_asked,
-        "last-asked": cmd_last_asked,
-        "checked": _check_in("checked", "checked in"),
-        "asked-done": _check_in("asked_done", "asked if done"),
+        "remember": cmd_remember,
+        "recall": cmd_recall,
         "ice": cmd_ice,
         "thaw": cmd_thaw,
         "import": cmd_import,
@@ -438,26 +387,10 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     condition.add_argument(
         "--pr", help="the PR it holds, by URL (needed to add; to remove, default every PR's)"
     )
-    decline = add("decline", "record that something offered for an entry was turned down today")
-    decline.add_argument("entry")
-    decline.add_argument("text")
-    offered = add("offered", "record that the skill offered a nudge or a fresh review on a PR")
-    offered.add_argument("pr", help="the PR's URL")
-    offered.add_argument("kind", choices=["nudge", "fresh-review"])
-    add("offers", "when the skill last offered each kind on each PR").add_argument(
-        "--pr", help="just this PR's"
-    )
-    asked = add("asked", "record that the skill asked a once-a-day question, e.g. ice")
-    asked.add_argument("question")
-    asked.add_argument("--on", help="the day, YYYY-MM-DD (default: today)")
-    add("last-asked", "when the skill last asked a question").add_argument("question")
-    for name, help in (
-        ("checked", "record that the skill checked in on an entry"),
-        ("asked-done", "record that the skill asked whether an entry is done"),
-    ):
-        check_in = add(name, help)
-        check_in.add_argument("entry")
-        check_in.add_argument("--on", help="the day, YYYY-MM-DD (default: today)")
+    remember = add("remember", "record that something happened, by a key of the skill's")
+    remember.add_argument("key", help="what happened, e.g. checked:<entry title>")
+    remember.add_argument("--on", help="the day, YYYY-MM-DD (default: today)")
+    add("recall", "the day `remember` last recorded for a key, or nothing").add_argument("key")
     ice = add(
         "ice",
         "put a branch (with its stack in git stack), a PR, a ticket or a work entry on ice"

@@ -5,6 +5,32 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### `mfd notes remember` and `recall` replace the skill's bookkeeping commands
+
+`mfd notes decline`, `checked`, `asked-done`, `offered`, `offers`, `asked` and `last-asked`
+are gone. `mfd notes remember <key> [--on YYYY-MM-DD]` records the day something happened
+(today by default), and `mfd notes recall <key>` prints that day, or an empty line when
+there's none (`--json`: `{"key": …, "on": "YYYY-MM-DD" or null}`). What the old commands
+kept is copied over under these keys, an entry named by its title:
+
+| Was | Now |
+| --- | --- |
+| `mfd notes checked <entry> [--on D]` | `mfd notes remember "checked:<entry title>" [--on D]` |
+| `mfd notes asked-done <entry> [--on D]` | `mfd notes remember "asked-done:<entry title>" [--on D]` |
+| `mfd notes decline <entry> <text>` | `mfd notes remember "decline:<entry title>:<text>"`; turned down today when `recall` gives today |
+| `mfd notes offered <PR URL> <kind>` | `mfd notes remember "offered:<PR URL>:<kind>"` (`nudge`, `fresh-review`) |
+| `mfd notes offers --pr <URL>` | `mfd notes recall "offered:<URL>:nudge"`, and `…:fresh-review` |
+| `mfd notes asked <question> [--on D]` | `mfd notes remember "asked:<question>" [--on D]` |
+| `mfd notes last-asked <question>` | `mfd notes recall "asked:<question>"` (empty, not `never`, when it wasn't) |
+
+An entry was named by its id, title, PR or ticket; a key names it by its title, which
+`mfd notes show <entry> --json` gives. An offer is now kept by its day rather than its time.
+`mfd notes offers` without `--pr` has no replacement: recall the PRs you're about to offer on.
+The entries in `mfd notes list --json` and `show --json` no longer have `checked_on`,
+`asked_done_on` or `declined`, and `show` no longer prints them: recall their keys instead.
+An import keeps a work-notes `- Declined <date>: …` line as a line of its entry. Change the
+work-notes skill to use the new commands.
+
 ### Each mail account says its own mailbox
 
 A `[mail.<name>]` account no longer takes what it leaves out from `[mail]`: each says its own

@@ -35,10 +35,10 @@ def test_an_entry_is_read_field_by_field() -> None:
     ]
     # The PR a condition names is the one it holds (the skill's convention).
     assert entry.conditions == [Condition(pr=PR_13, text=f"don't merge until {PR_13} is merged")]
-    assert [(d.on, d.text) for d in entry.declined] == [
-        (date(2026, 10, 29), "don't nudge today"),
-        (date(2026, 10, 28), "skip the review"),
-    ]
+    assert entry.lines == [
+        "- Declined 2026-10-29: don't nudge today",
+        "- Declined 2026-10-28: skip the review",
+    ]  # kept as written: `mfd notes remember` is what the skill remembers by
     assert entry.links == [
         Link(kind="pull_request", ref=PR_12),
         Link(kind="pull_request", ref=PR_13),
@@ -117,6 +117,7 @@ def test_mfd_notes_import_then_export(
         "APP-1 Fix the widget",
         "Thing without ticket (inferred)",
     ]
+    assert NotesRepository(db).recall("asked:ice") == date(2026, 10, 30)  # its Last asked
 
     assert cli.main(["-c", str(config), "notes", "import", str(notes_dir)]) == 1
     assert "--replace" in capsys.readouterr().err
@@ -146,17 +147,14 @@ def test_a_branch_in_two_stacks_on_ice_imports_with_the_first(tmp_path: Path) ->
     assert stored["me/bottom"] == ["me/bottom", "me/top"] and stored["me/again"] == ["me/new"]
 
 
-def test_check_ins_the_skill_wrote_as_declines_are_read_into_their_fields() -> None:
+def test_declines_and_check_ins_the_skill_wrote_are_kept_as_written() -> None:
     text = (
         "# Work notes\n\n## APP-3 Thing\n- Declined 2026-10-01: Checked\n"
-        "- Declined 2026-10-02: Checked\n- Declined 2026-10-02: Asked-done\n"
-        "- Declined 2026-10-02: nudging\n"
+        "- Declined 2026-10-02: Asked-done\n- Declined 2026-10-02: nudging\n"
     )
     [entry], sections = markdown.read_work_notes(text)
-    assert (entry.checked_on, entry.asked_done_on) == (date(2026, 10, 2), date(2026, 10, 2))
-    assert [d.text for d in entry.declined] == ["nudging"]
-    again, _ = markdown.read_work_notes(markdown.write_work_notes([entry], sections))
-    assert again == [entry]  # written back as the skill wrote them, and read the same
+    assert entry.lines == text.splitlines()[3:]
+    assert markdown.write_work_notes([entry], sections) == text
 
 
 def test_conditions_are_given_their_pr_when_read() -> None:

@@ -98,7 +98,7 @@ def test_entries_are_found_by_id_title_pr_or_ticket(run: Run) -> None:
     assert run("show", "nope")[2] == "mfd notes show: no entry 'nope'\n"
 
 
-def test_set_link_conditions_and_decline(run: Run, config: Path) -> None:
+def test_set_link_and_conditions(run: Run, config: Path) -> None:
     run("add-entry", "APP-1 Fix")
     assert run("set", "APP-1", "status", "in review")[1] == "APP-1 Fix: status is now in review\n"
     run("set", "APP-1", "blocked-on", "design review")
@@ -114,15 +114,11 @@ def test_set_link_conditions_and_decline(run: Run, config: Path) -> None:
     run("condition", "add", "APP-1", "ask Sam", "--pr", PR)
     assert run("condition", "remove", "APP-1", "ask Sam")[0] == 0
     assert run("condition", "remove", "APP-1", "ask Sam")[0] == 1
-    run("decline", "APP-1", "nudge the reviewers")
 
     [entry] = NotesRepository(_db(config)).entries()
     assert (entry.status, entry.blocked_on) == ("in review", "design review")
     assert entry.where == "engineering, branch me/app-1"
     assert entry.conditions == [Condition(pr=PR, text="wait for the release")]
-    assert [(d.text, d.on) for d in entry.declined] == [
-        ("nudge the reviewers", datetime.now(UTC).date())
-    ]
     assert [link.ref for link in entry.links] == [PR]
     assert entry.updated_on == datetime.now(UTC).date()
 
@@ -191,39 +187,23 @@ def test_ice_a_work_entry_by_kind_and_id(run: Run) -> None:
     assert "APP-1 Fix" in run("ices")[1]
 
 
-def test_check_ins_are_dates_on_the_entry(run: Run) -> None:
-    run("add-entry", "APP-1 Fix the widget")
-    assert run("checked", "APP-1", "--on", "2026-10-29")[1] == (
-        "APP-1 Fix the widget: checked in 2026-10-29\n"
-    )
-    assert run("asked-done", "APP-1")[0] == 0  # today
-    [entry] = _json(run, "list")
-    assert entry["checked_on"] == "2026-10-29" and entry["asked_done_on"] is not None
-    assert entry["declined"] == []  # not the declines they used to be written as
-    assert "checked in: 2026-10-29" in run("show", "APP-1")[1]
-    assert run("checked", "APP-1", "--on", "someday")[0] == 1
+def test_remember_keeps_the_day_by_key_and_recall_gives_it(run: Run) -> None:
+    key = "checked:APP-1 Fix the widget"
+    assert run("recall", key)[1] == "\n"  # never
+    assert _json(run, "recall", key) == {"key": key, "on": None}
+    assert run("remember", key, "--on", "2026-10-29")[1] == f"remembered {key} on 2026-10-29\n"
+    assert run("recall", key)[1] == "2026-10-29\n"
+    assert run("remember", key)[0] == 0  # again, today: replaces the day
+    assert _json(run, "recall", key) == {"key": key, "on": datetime.now(UTC).date().isoformat()}
+    assert run("recall", "checked:APP-2")[1] == "\n"  # each key apart
+    assert run("remember", key, "--on", "someday")[0] == 1
+    assert run("remember", " ")[0] == 1
 
 
-def test_offers_on_a_pr_are_kept_with_when_each_kind_was_last_made(run: Run) -> None:
-    other = "https://github.com/acme/widgets/pull/6"
-    assert run("offered", PR, "nudge")[0] == 0
-    assert run("offered", PR, "fresh-review")[0] == 0
-    assert run("offered", other, "nudge")[0] == 0
-    assert run("offered", PR, "nudge")[0] == 0  # again: replaces the time, still one
-    offers = _json(run, "offers", "--pr", PR)
-    assert sorted(o["kind"] for o in offers) == ["fresh-review", "nudge"]
-    assert len(_json(run, "offers")) == 3
-    with pytest.raises(SystemExit):  # not a kind: argparse says so and exits
-        run("offered", PR, "merge")
-
-
-def test_once_a_day_questions_are_kept_by_name(run: Run, tmp_path: Path) -> None:
-    assert _json(run, "last-asked", "ice") == {"question": "ice", "asked_on": None}
-    assert run("asked", "ice", "--on", "2026-10-30")[0] == 0
-    assert run("last-asked", "ice")[1] == "2026-10-30\n"
-    assert run("asked", "Bad Name")[0] == 1
-    assert run("export", str(tmp_path / "out"))[0] == 0  # the import's and export's key too
-    assert "Last asked: 2026-10-30" in (tmp_path / "out" / "on-ice.md").read_text()
+def test_asked_ice_is_on_ice_mds_last_asked(run: Run, tmp_path: Path) -> None:
+    assert run("remember", "asked:ice", "--on", "2026-10-30")[0] == 0
+    assert run("export", str(tmp_path / "out"))[0] == 0
+    assert "Last asked: 2026-10-30" in (tmp_path / "out" / "on-ice.md").read_text("utf-8")
 
 
 def test_todo_add_takes_a_leading_size_unless_size_says(run: Run, config: Path) -> None:
