@@ -11,7 +11,7 @@ The vcard plugin, which read an address book's vCard files, is gone. A config wi
 section is refused when it loads: delete the section. Say who matters with contact types
 instead of its `group_importance` and `group_types`: Set type on an item about them, or
 `mfd contact <address|@domain> <type>` (see the README's People). Its tables (`vcard_*`) stay
-in an existing database, unread; they're harmless, and can be dropped by hand.
+in an existing database, read by nothing; they're harmless, and can be dropped by hand.
 
 ### Jira no longer tells of comments and mentions
 

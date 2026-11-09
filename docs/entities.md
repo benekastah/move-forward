@@ -145,6 +145,9 @@ points at a person is about them, so core ranks and badges its items by their co
 | `contact_type` | string or null | what they are to me, when the tool knows, e.g. `customer`; one I set beats it |
 | `importance` | 0, 1, 2 or null | how much they matter to me, when the tool knows (a CRM's VIP, a starred contact); the highest of it and their type's counts, but a type I set on their address wins |
 
+No built-in plugin gives a person a `contact_type` or an `importance` yet: today both come
+from what I set (see the README's People).
+
 A person points at the `organisation`s they're at.
 
 ### `organisation`

@@ -208,7 +208,7 @@ for that address or for everyone at its domain (not for a domain anyone can have
 like gmail.com). Once one is set, a Clear type button goes with it, asking first; one set on a
 domain says so, as it clears everyone there. A type I set beats one a tool gives, and one on an
 address beats one on its domain. A tool can also say outright how much someone matters (a CRM's
-VIP, a starred contact), badged "VIP" when it's above their type's; a type I set on their
+VIP, a starred contact; no built-in plugin does yet), badged "VIP" when it's above their type's; a type I set on their
 address still wins, one on their domain doesn't. Someone a tool says works at an organisation
 (a CRM's account) takes its type when nothing else gives them one, and its importance as a
 tool's on them, badged "key account" when it's the highest; an item about the organisation

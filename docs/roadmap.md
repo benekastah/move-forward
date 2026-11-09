@@ -259,7 +259,8 @@ set of tables, pages and actions, and settles what two of them both see the way 
     user, whose sign-in lasts about a week while the app is in testing; one project and
     sign-in could serve both.
   - **Apple Contacts** through iCloud's CardDAV, with an app-specific password, from any
-    system (CardDAV gives vCards: vcard's parser, in its history, reads them); or on macOS
+    system (CardDAV gives vCards: vcard's parser reads them, `git show
+    38b2bb7:src/move_forward/plugins/vcard/client.py`); or on macOS
     through the Contacts framework, without a password but on that one system, and reached
     from Python only through a new dependency (PyObjC) or a helper outside it.
 
