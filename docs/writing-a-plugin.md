@@ -221,6 +221,11 @@ The rules:
   `collect` brought back and is replaced wholesale by `store`. A kept table holds what
   only the dashboard knows (notes, pings sent, projects seen); it survives refreshes, and
   `prune` clears what's finished.
+- **A cache of lookups** (a login's email, found once and kept) is a kept table of a key, a
+  value, a `source` and a `looked_up_at`, which `api.LookupCache(db, table, key, value)`
+  reads and writes: a value set by hand (`BY_HAND`) wins over an import's (`IMPORTED`),
+  which wins over a lookup's (`LOOKED_UP`), and `forget_misses_before(cutoff)`, from
+  `prune`, lets lookups that found nothing be tried again. Its docstring has the table.
 - **Order-independent.** A plugin can be enabled before or after any other, so its
   migrations touch only its own tables.
 

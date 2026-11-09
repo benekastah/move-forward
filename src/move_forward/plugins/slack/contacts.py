@@ -4,6 +4,9 @@ what `mfd slack` shares with them."""
 import re
 
 from ...api import (
+    BY_HAND,
+    IMPORTED,
+    LOOKED_UP,
     Action,
     ActionError,
     ActionRequest,
@@ -18,7 +21,7 @@ from ...api.kinds import PERSON
 from . import client
 from .config import SlackConfig
 from .pings import my_open_prs
-from .repository import DASHBOARD, IMPORTED, LOOKED_UP, SlackRepository
+from .repository import SlackRepository
 
 CONTACTS = "contacts"
 """Where pings go, the page: `/slack/contacts`."""
@@ -145,7 +148,7 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
 
     def how(target: str) -> str:
         source = sources.get(target)
-        return {DASHBOARD: "set by hand", IMPORTED: "imported", LOOKED_UP: "looked up"}.get(
+        return {BY_HAND: "set by hand", IMPORTED: "imported", LOOKED_UP: "looked up"}.get(
             source or "", "not known"
         )
 

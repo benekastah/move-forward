@@ -2,15 +2,9 @@
 commit authors to reviewers to suggest."""
 
 from datetime import datetime
-from typing import Literal
 
-from ...api import Database, cell, tables
+from ...api import Database, LookupCache, cell, tables
 
-Source = Literal["import", "lookup"]
-IMPORTED: Source = "import"
-"""From `reviewer-map.md` with `mfd github import`; wins over a lookup."""
-LOOKED_UP: Source = "lookup"
-"""Found in the person's commits; never overwrites an imported email."""
 REVIEWER_MAP_FILE = "reviewer-map.md"
 
 
@@ -24,37 +18,26 @@ def read_reviewer_map(text: str) -> dict[str, str]:
 
 
 class PeopleRepository:
+    """Logins' commit emails: imported from the reviewer map (`mfd github import`), or looked
+    up in the person's commits; an import wins over a lookup, which never overwrites."""
+
     def __init__(self, db: Database):
-        self._db = db
+        self._people = LookupCache(db, "github_people", "login", "email")
 
     def emails(self) -> dict[str, str | None]:
         """Every known login's email; None where a lookup found none."""
-        return {row["login"]: row["email"] for row in self._db.query("SELECT * FROM github_people")}
+        return self._people.values()
 
     def save_looked_up(self, login: str, email: str | None, now: datetime) -> None:
         """Remember what a lookup found (or that it found nothing), unless the login is known."""
-        self._db.execute(
-            "INSERT OR IGNORE INTO github_people (login, email, source, looked_up_at)"
-            " VALUES (?, ?, ?, ?)",
-            (login, email, LOOKED_UP, now.isoformat()),
-        )
+        self._people.save_looked_up(login, email, now)
 
     def forget_misses_before(self, cutoff: datetime) -> int:
         """Forget lookups that found no email before `cutoff`, so they're tried again (the
         person may have committed with a work email since); how many. Emails found stay:
         people outlast the PRs they were found for, and suggestions need them."""
-        with self._db.transaction() as conn:
-            return conn.execute(
-                "DELETE FROM github_people WHERE source = ? AND email IS NULL"
-                " AND (looked_up_at IS NULL OR looked_up_at < ?)",
-                (LOOKED_UP, cutoff.isoformat()),
-            ).rowcount
+        return self._people.forget_misses_before(cutoff)
 
     def replace_imported(self, emails: dict[str, str]) -> None:
         """Replace what an earlier import read with these, over any lookup of the same login."""
-        with self._db.transaction() as conn:
-            conn.execute("DELETE FROM github_people WHERE source = ?", (IMPORTED,))
-            conn.executemany(
-                "INSERT OR REPLACE INTO github_people (login, email, source) VALUES (?, ?, ?)",
-                [(login, email, IMPORTED) for login, email in emails.items()],
-            )
+        self._people.replace_imported(emails)
