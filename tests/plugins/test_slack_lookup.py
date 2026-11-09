@@ -11,8 +11,8 @@ import pytest
 from conftest import NOW, Reviewer, pr, snapshot, stored
 
 from move_forward import https
-from move_forward.plugin import Context, PruneRequest
-from move_forward.plugins.slack import client, contacts, oauth
+from move_forward.plugin import Context, PageRequest, PruneRequest
+from move_forward.plugins.slack import account, client, contacts, oauth
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.models import Contact
 from move_forward.plugins.slack.repository import SlackRepository
@@ -75,6 +75,36 @@ def test_requested_reviewers_are_looked_up_once_each(monkeypatch: pytest.MonkeyP
     repo.set_contact("alice", "U000000")
     repo.replace_imported([Contact(login="alice", slack_id="U999999")], [], [])
     assert repo.contacts()["alice"].slack_id == "U000000"
+
+
+def test_a_lookup_that_fails_is_said_on_slacks_page_until_one_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failing = [True]
+
+    def lookup(api_token: str, email: str) -> str | None:
+        if failing[0]:
+            raise client.SlackError("users.lookupByEmail", "missing_scope")
+        return "U111111"
+
+    monkeypatch.setattr(oauth, "token", _token("xoxb-test"))
+    monkeypatch.setattr(client, "lookup_by_email", lookup)
+    config, db = stored(
+        github=snapshot(mine=[pr(1, requested_users=["alice"])]),
+        users={"alice": Reviewer(login="alice", email="a@x")},
+    )
+    plugins = enabled(config, db, NOW)
+    graph, _ = stored_graph(db, plugins)
+    [slack] = [e for e in plugins if e.name == "slack"]
+
+    def page() -> str:
+        return account.page(PageRequest(slack.ctx, graph, {}, "/slack"))
+
+    assert contacts.look_up_requested(slack.ctx, graph) == []  # no refresh's traceback
+    assert "Slack&#x27;s users.lookupByEmail said missing_scope" in page()
+    failing[0] = False
+    assert contacts.look_up_requested(slack.ctx, graph) == ["alice"]
+    assert "failed" not in page()
 
 
 def test_without_a_token_nothing_is_looked_up(monkeypatch: pytest.MonkeyPatch) -> None:

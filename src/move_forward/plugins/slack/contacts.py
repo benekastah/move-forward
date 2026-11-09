@@ -198,11 +198,17 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
     return html.page("Where pings go", "slack contacts", body)
 
 
+LOOKUPS_FAILED = "lookups_failed"
+"""The kv key of why looking up Slack ids by email last failed, for Slack's page."""
+
+
 def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
     """Find, through Slack's API, the Slack ids of people my open PRs ask to review whom
     nothing names a Slack id for, by the email github knows for them. Each is looked up once:
     a miss is remembered too. Returns whom it found. Without a token, or with the app
-    connected without the scopes, does nothing."""
+    connected without the scopes, does nothing. A lookup that fails (a token without
+    `users:read.email`, a rate limit, no network) stops this refresh's, and why is kept for
+    Slack's page (`LOOKUPS_FAILED`) until one works."""
     found_connection = oauth.connection(ctx)
     if found_connection and scopes.missing("lookups", found_connection.scopes):
         return []
@@ -218,7 +224,12 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
         email = next((p.email for p in people if p.email), None)
         if email is None:
             continue
-        slack_id = client.lookup_by_email(api_token, email)
+        try:
+            slack_id = client.lookup_by_email(api_token, email)
+        except (client.SlackError, OSError) as e:  # OSError: urllib's errors are its
+            ctx.kv.set(LOOKUPS_FAILED, str(e))
+            return found
+        ctx.kv.delete(LOOKUPS_FAILED)
         slack.save_looked_up(login, slack_id, ctx.now)
         if slack_id:
             found.append(login)

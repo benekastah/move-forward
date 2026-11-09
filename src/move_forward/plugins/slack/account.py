@@ -6,6 +6,7 @@ from importlib import resources
 from ...api import Action, ActionError, ActionRequest, Context, PageRequest, Response, html
 from . import oauth, scopes
 from .config import SlackConfig
+from .contacts import LOOKUPS_FAILED
 
 SLACK_PATH = "/slack"
 MANIFEST = "manifest.json"
@@ -51,6 +52,11 @@ def page(req: PageRequest[SlackConfig]) -> str:
     lost = ctx.kv.get(oauth.LOST)
     notice = query.get("notice", [""])[0]
     parts = [f"<p class='notice'>{e(notice)}</p>"] if notice else []
+    if failed := ctx.kv.get(LOOKUPS_FAILED):
+        parts.append(
+            f"<p class='notice warn'>Looking up reviewers' Slack ids by email failed: {e(failed)}."
+            " The token needs users:read.email.</p>"
+        )
     if found is not None:
         missing = {f: m for f in scopes.FEATURE_SCOPES if (m := scopes.missing(f, found.scopes))}
         lacking = "".join(
