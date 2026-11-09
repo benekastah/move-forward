@@ -172,6 +172,11 @@ def push_branch(req: ActionRequest[GitConfig]) -> str:
         has_upstream = False
     if has_upstream:
         remote, ref = client.push_target(repo, branch)
+        if not remote:
+            raise ActionError(
+                f"{branch} tracks a local branch, and {repo} has no remote to push to, or several:"
+                " set remote.pushDefault to say which"
+            )
         git(repo, "push", remote, f"refs/heads/{branch}:{ref}")
     else:
         remote = client.push_remote(repo, branch)

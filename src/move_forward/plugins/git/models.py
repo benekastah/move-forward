@@ -27,7 +27,8 @@ class Branch(Model):
     """The upstream was deleted."""
     committed_at: datetime
     ahead_of_default: int | None = None
-    """Commits not on the default branch; only computed for recent branches with no upstream."""
+    """Commits not on the default branch; only computed for branches whose upstream is gone,
+    and recent ones with none."""
     my_commits: int | None = None
     """My commits on it that aren't on the default branch, anywhere in its history, not just
     its tip; only counted for recent branches, None for the rest."""

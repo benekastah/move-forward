@@ -9,6 +9,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.plugin import KEPT, ActionError, SourceError
+from move_forward.plugins.git import client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.repository import LocalRepository
@@ -194,6 +195,39 @@ def test_push_goes_where_git_would_with_remotes_not_called_origin(
     run("git/push_branch", config, push)
     assert git(fork, "rev-parse", "wip") == git(repo, "rev-parse", "wip")
     assert git(repo, "rev-parse", "upstream/wip") != git(repo, "rev-parse", "wip")
+
+
+def test_push_of_a_branch_tracking_a_local_one_goes_to_the_remote_not_into_it(
+    config: Config, repo: Path
+) -> None:
+    git(repo, "branch", "-q", "--track", "feat", "main")  # its upstream is local main
+    git(repo, "switch", "-q", "feat")
+    _commit(repo, "c.txt")
+    git(repo, "switch", "-q", "main")
+    main_before = git(repo, "rev-parse", "main")
+    assert run("git/push_branch", config, {"repo": str(repo), "branch": "feat"}) == "pushed feat"
+    assert git(repo, "rev-parse", "main") == main_before  # main didn't move
+    assert git(repo, "rev-parse", "origin/feat") == git(repo, "rev-parse", "feat")
+    [feat] = [
+        b
+        for b in client.collect_repo(repo, "me@x", datetime.now(UTC), 30, []).branches
+        if b.name == "feat"
+    ]
+    assert (feat.upstream, feat.ahead) == (None, 0)  # not "unpushed" against a local branch
+
+
+def test_a_branch_whose_upstream_is_gone_counts_what_isnt_on_the_default_branch(
+    repo: Path,
+) -> None:
+    git(repo, "push", "-q", "-u", "origin", "wip")
+    git(repo, "push", "-q", "origin", "--delete", "wip")
+    git(repo, "fetch", "-q", "--prune")
+    [wip] = [
+        b
+        for b in client.collect_repo(repo, "me@x", datetime.now(UTC), 30, []).branches
+        if b.name == "wip"
+    ]
+    assert (wip.gone, wip.ahead_of_default) == (True, 1)
 
 
 def test_wip_commit_takes_tracked_files_only(config: Config, repo: Path) -> None:

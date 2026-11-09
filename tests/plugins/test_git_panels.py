@@ -116,13 +116,16 @@ def test_a_renamed_branch_keeps_its_pr_by_its_upstream_name_or_its_commit() -> N
     assert items["me/unrelated: 1 commits, never pushed"].badges == ["no PR"]
 
 
+MERGED_TIP = "a" * 40
+"""The head commit `pr` gives a PR: what a branch whose PR merged points at."""
+
+
 def test_cleanup_lists_merged_and_gone_branches() -> None:
     merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
     local = local_snapshot(
         branches=[
-            local_branch("me/done", upstream="origin/me/done", gone=True),
-            local_branch("me/gone", upstream="origin/me/gone", gone=True),
-            local_branch("me/gone-but-ahead", upstream="origin/x", gone=True, ahead=1),
+            local_branch("me/done", upstream="origin/me/done", gone=True, sha=MERGED_TIP),
+            local_branch("me/gone", upstream="origin/me/gone", gone=True, ahead_of_default=0),
             local_branch("me/live", upstream="origin/me/live"),
         ]
     )
@@ -230,7 +233,9 @@ def test_git_keeps_its_snapshot_in_its_tables() -> None:
 
 def test_a_merged_branch_still_here_is_nominated_to_delete() -> None:
     merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
-    local = local_snapshot(branches=[local_branch("me/done", upstream="origin/me/done")])
+    local = local_snapshot(
+        branches=[local_branch("me/done", upstream="origin/me/done", sha=MERGED_TIP)]
+    )
     act = build(github=snapshot(merged_recent=[merged]), local=local).act_now()
     assert [(i.title, i.details[0]) for i in act] == [
         ("Delete the branch: me/done: PR merged 1d ago", "why: quick")
@@ -336,3 +341,30 @@ def test_a_gone_branch_has_a_subject_so_deleting_it_can_hide_its_act_now_item() 
     act = panel(dashboard, "act.git")
     delete = next(a for a in act.items[0].actions if a.name == "git/delete_branch")
     assert "opened" in delete.fields
+
+
+def test_a_branch_with_work_not_merged_is_listed_to_check_not_to_delete_with_the_rest() -> None:
+    merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
+    mine = pr(3, state="MERGED", merged_at=NOW - timedelta(days=1), head="main")  # my fork's
+    local = local_snapshot(
+        branches=[
+            local_branch("main"),
+            local_branch("me/done", upstream="origin/me/done", sha="b" * 40),  # committed since
+            local_branch("me/gone", upstream="origin/me/gone", gone=True, ahead_of_default=2),
+        ]
+    )
+    dashboard = build(github=snapshot(merged_recent=[merged, mine]), local=local)
+    cleanup = panel(dashboard, "git.cleanup")
+    assert [(i.title, i.badges) for i in cleanup.items] == [
+        ("me/done: PR merged 1d ago", ["check first"]),
+        ("me/gone: upstream gone", ["check first"]),
+    ]
+    assert "commits its merged PR didn't have" in (cleanup.items[0].subtitle or "")
+    confirms = [
+        a.confirm for i in cleanup.items for a in i.actions if a.name == "git/delete_branch"
+    ]
+    assert all(c and "they're lost with it" in c for c in confirms)
+    assert "2 of its commits aren't on main" in (confirms[1] or "")
+    assert cleanup.actions == []  # Delete all takes only what's safe to lose
+    act = dashboard.act_now()
+    assert all("quick" not in i.details for i in act)
