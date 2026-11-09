@@ -412,12 +412,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The field of the plugin's section mapping each top-level team to what the tool calls
     it (`teams`, e.g. `[github.teams]`), so the config can check it names only teams it has;
     None for a plugin without one."""
-    subjects_timeout_seconds: ClassVar[int] = 60
-    """How long `refresh_subjects` may take before core refreshes the plugin instead."""
-    collect_timeout_seconds: ClassVar[int] = 300
-    """How long `collect` (or `collect_after`) may take. Past it, the refresh records the
-    plugin as failed and goes on; the plugin is left out of refreshes until its collect
-    returns (a thread can't be stopped)."""
     notification_kinds: ClassVar[dict[str, str]] = {}
     """The events the plugin's `events` makes, by kind, each with what it says, for the
     settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
@@ -490,7 +484,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def collect(self, req: CollectRequest[C]) -> S:
         """Fetch the plugin's snapshot. Runs in parallel with other plugins' and may raise;
-        the error is shown and the last good snapshot kept. It has `collect_timeout_seconds`."""
+        the error is shown and the last good snapshot kept. It has five minutes
+        (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
+        failed and goes on, and leaves it out of refreshes until its collect returns (a thread
+        can't be stopped)."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
     def store(self, req: StoreRequest[C, S]) -> None:
@@ -551,7 +548,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         keeps the result as a refresh would, events and all, but it doesn't count as the
         plugin's refresh (`fetched_at` stays). None, by default, when the plugin can't:
         core refreshes the whole plugin instead, as it does when this fails or takes longer
-        than `subjects_timeout_seconds`."""
+        than a minute (`refresh.SUBJECTS_TIMEOUT_SECONDS`)."""
         return None
 
     def relate(self, req: RelateRequest[C]) -> list[tuple[Ref, Ref]]:

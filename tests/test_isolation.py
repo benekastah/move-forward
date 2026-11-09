@@ -101,7 +101,7 @@ def test_a_collect_past_its_timeout_fails_alone_and_isnt_run_again_until_it_retu
         return local_snapshot()
 
     monkeypatch.setattr(GitHubPlugin, "collect", stuck)
-    monkeypatch.setattr(GitHubPlugin, "collect_timeout_seconds", 0.1)
+    monkeypatch.setattr(refresh, "COLLECT_TIMEOUT_SECONDS", 0.1)
     monkeypatch.setattr(GitPlugin, "collect", quick)
     try:
         refresh.refresh(config, db, NOW)

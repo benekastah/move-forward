@@ -71,6 +71,14 @@ from .shell import CommandError
 
 log = logging.getLogger(__name__)
 
+COLLECT_TIMEOUT_SECONDS = 300
+"""How long a plugin's `collect` (or `collect_after`) may take. Past it, the refresh records
+the plugin as failed and goes on; the plugin is left out of refreshes until its collect
+returns (a thread can't be stopped)."""
+SUBJECTS_TIMEOUT_SECONDS = 60
+"""How long a plugin's `refresh_subjects` may take before core refreshes the plugin
+instead."""
+
 _collecting: set[str] = set()
 """The plugins whose `collect` is still running, maybe past its timeout: a thread can't be
 stopped, so the next refresh leaves the plugin out until it returns."""
@@ -128,7 +136,7 @@ def _collect_all(
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
     plugin's `store`. `subscribed` are the kinds I want events of (see `notifications`).
-    Each plugin has its `collect_timeout_seconds`: one that takes longer is recorded as
+    Each plugin has `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as
     failed, and the refresh goes on without it; one still running from an earlier refresh
     is left out."""
     started = time.monotonic()
@@ -156,7 +164,7 @@ def _collect_all(
 
         running.append((e, pool.submit(run)))
     for e, future in running:
-        limit = e.plugin.collect_timeout_seconds
+        limit = COLLECT_TIMEOUT_SECONDS
         try:
             future.result(timeout=max(0.0, started + limit - time.monotonic()))
         except FutureTimeout:
@@ -290,7 +298,7 @@ def refresh_subjects(
 
 
 def _subjects(e: Enabled, refs: list[Ref]) -> Subjects[BaseModel] | None:
-    """The plugin's `refresh_subjects`, within its `subjects_timeout_seconds`; None when it
+    """The plugin's `refresh_subjects`, within `SUBJECTS_TIMEOUT_SECONDS`; None when it
     can't, fails or takes longer (the thread is left to finish, as a collect's is)."""
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"subjects-{e.name}")
     future = pool.submit(
@@ -298,7 +306,7 @@ def _subjects(e: Enabled, refs: list[Ref]) -> Subjects[BaseModel] | None:
     )
     pool.shutdown(wait=False)
     try:
-        return future.result(timeout=e.plugin.subjects_timeout_seconds)
+        return future.result(timeout=SUBJECTS_TIMEOUT_SECONDS)
     except FutureTimeout:
         log.warning("%s: refreshing %s subject(s) took too long", e.name, len(refs))
     except Exception:

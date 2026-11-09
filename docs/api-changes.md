@@ -23,6 +23,9 @@ Fewer things to know: what no plugin used is gone.
   needs in its tables or `ctx.kv`.
 - **No `KindSpec.fetched_attrs`**: a fetched entity's attributes fit its family's fetched
   model, or else its kind's own attributes.
+- **Timeouts are core's**: the class variables `collect_timeout_seconds` and
+  `subjects_timeout_seconds` are gone. `collect` (and `collect_after`) has five minutes, and
+  `refresh_subjects` a minute, for every plugin.
 
 ## Version 1
 

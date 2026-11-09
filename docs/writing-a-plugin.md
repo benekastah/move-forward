@@ -170,7 +170,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with
-  what it stored last. It has `collect_timeout_seconds` (300) to finish: past that, the
+  what it stored last. It has five minutes to finish: past that, the
   refresh records it as timed out and goes on, and leaves it out of later refreshes until
   its collect returns (a thread can't be stopped). Set a timeout on whatever it calls, too.
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
@@ -442,7 +442,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   and returns `Subjects(snapshot, updated)`, the snapshot with them folded in, which core
   keeps as a refresh's would (events too). It's what an action's `touched` refs, a tab
   coming back to focus and `mfd refresh --subject` use; returning None (the default), or
-  failing or taking longer than `subjects_timeout_seconds`, refreshes the plugin whole
+  failing or taking longer than a minute, refreshes the plugin whole
   instead. github fetches the PRs in one request.
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, req.ctx.kept(key))` and implement `kept_item`.
