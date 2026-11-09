@@ -28,6 +28,9 @@ Fewer things to know: what no plugin used is gone.
   `refresh_subjects` a minute, for every plugin.
 - **`KindSpec.linking` is a `bool`**: `linking=True` where it was `linking=None`. A pattern
   for its ids comes only from `linking_patterns`, which by default gives none.
+- **Two hooks no plugin overrode are gone**: `refresh_seconds(ctx)` (a plugin refreshes on
+  its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
+  place under other names overrides `tokens(config)`, returning `{"": settings}`).
 
 ## Version 1
 

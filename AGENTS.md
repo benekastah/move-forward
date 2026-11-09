@@ -48,10 +48,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   plugin last fetched, and why it failed.
 - Every plugin hook that runs with the plugin's context takes one request object
   (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
-  breaking its overrides; `refresh_seconds(ctx)` is the one that takes its context bare. Those
-  called before there's a context take what they need: `init_suggested()` and
-  `init_questions(ask, setup)` (`mfd init`), `token_settings(config)` and `tokens(config)`
-  (`mfd token`, and loading the config), `cli(parser)`, `pages()` and `actions()`.
+  breaking its overrides. Those called before there's a context take what they need:
+  `init_suggested()` and `init_questions(ask, setup)` (`mfd init`), `tokens(config)` (`mfd
+  token`, and loading the config), `cli(parser)`, `pages()` and `actions()`.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.

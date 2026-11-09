@@ -19,7 +19,6 @@ from move_forward.plugin import (
     AfterCollectRequest,
     CollectAfterRequest,
     CollectRequest,
-    Context,
     LoadRequest,
     StoreRequest,
 )
@@ -367,18 +366,3 @@ def test_the_known_actions_are_the_enabled_plugins_declared_ones() -> None:
     known = refresh._known_action(registry.enabled(config, db, NOW))  # pyright: ignore[reportPrivateUsage]
     assert known("notes/todo_done") and known("git/push_branch")
     assert not known("notes/nope") and not known("jira/transition")  # jira isn't on
-
-
-class _GitPolling(GitPlugin):
-    """git, scheduled by a setting of another name."""
-
-    def refresh_seconds(self, ctx: Context[GitConfig]) -> int | None:
-        return 45
-
-
-def test_a_plugin_says_its_own_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
-    swap = {"git": _GitPolling()}
-    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    config = Config.model_validate({"email": "me@x", "git": {"repos": []}})
-    plugins = registry.enabled(config, Database(":memory:"), NOW)
-    assert {e.name: refresh.refresh_seconds(e) for e in plugins} == {"git": 45, "notes": None}

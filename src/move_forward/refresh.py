@@ -181,11 +181,12 @@ def _wants(e: Enabled, subscribed: set[str]) -> bool:
 
 
 def refresh_seconds(e: Enabled) -> int | None:
-    """How often a plugin refreshes on its own (`Plugin.refresh_seconds`); None for one that
-    doesn't collect, or doesn't refresh on its own."""
+    """How often a plugin refreshes on its own: its section's `refresh_seconds`; None for one
+    that doesn't collect, or has no such setting."""
     if not e.plugin.collects:
         return None
-    return call(e.name, "refresh_seconds", lambda: e.plugin.refresh_seconds(e.ctx), None)
+    seconds: object = getattr(e.ctx.config, "refresh_seconds", None)
+    return seconds if isinstance(seconds, int) else None
 
 
 def to_collect(

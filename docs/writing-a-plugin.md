@@ -109,7 +109,7 @@ class LinearConfig(Strict):
   jira and slack do, and read the token with `keychain.token(config, email)`: then
   `mfd token set <plugin>` stores it and `mfd token check` finds it; `token_help` is `mfd
   init`'s next step for it, saying where to get one (a section that keeps
-  them under other names overrides `token_settings(config)`, returning an
+  them under other names overrides `tokens(config)`, returning `{"": settings}`, an
   `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
   (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading
   several accounts, each with its own token, names them all in `tokens(config)`, and `mfd
@@ -155,8 +155,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 
 - A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it
-  that often, on its own schedule. One scheduled some other way overrides
-  `refresh_seconds(ctx)`.
+  that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
   request answered "not modified", another plugin's entities in the graph) sets
   `change_check_seconds` and implements `changed(req)`: the server asks that often, and

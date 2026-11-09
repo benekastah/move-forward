@@ -443,8 +443,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     locked_settings: ClassVar[frozenset[str]] = frozenset()
     """Its settings the settings page shows but won't change, as they say where a credential
     goes (a site, a host) or what runs where. Its token's `token_env` and `keychain_service`
-    are locked without naming them; settings its `token_settings` reads a token's place from
-    under other names, or builds it from, it names here."""
+    are locked without naming them; settings its `tokens` reads a token's place from under
+    other names, or builds it from, it names here."""
     token_help: ClassVar[str] = ""
     """`mfd init`'s next step for its token(s), in place of the plain "`mfd token set <name>`
     stores its token": where to get one, or another way in (signing in in the browser)."""
@@ -461,24 +461,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
         implements `collect_after`."""
         return any("collect_after" in vars(c) for c in type(self).__mro__ if c is not Plugin)
 
-    def refresh_seconds(self, ctx: Context[C]) -> int | None:
-        """How often the plugin refreshes on its own, in seconds; None for never. By default
-        its section's `refresh_seconds`, when it has one."""
-        seconds: object = getattr(ctx.config, "refresh_seconds", None)
-        return seconds if isinstance(seconds, int) else None
-
-    def token_settings(self, config: C) -> TokenSettings | None:
-        """Where the plugin's API token is, for `mfd token`: by default its section, when that
-        has `token_env` and `keychain_service`; None for a plugin with no token."""
-        return config if isinstance(config, TokenSettings) else None
-
     def tokens(self, config: C) -> dict[str, TokenSettings]:
-        """Every token the plugin keeps, for `mfd token`, by name: `""` for its own (by default
-        `token_settings`'s), and one per account for a plugin reading several (several
-        mailboxes, say), stored as `<plugin>.<name>`. Each needs a `keychain_service` of its own:
-        the config is refused when two tokens share one."""
-        own = self.token_settings(config)
-        return {"": own} if own is not None else {}
+        """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
+        account for a plugin reading several (several mailboxes, say), stored as
+        `<plugin>.<name>`. By default its section is its own token's place, when that has
+        `token_env` and `keychain_service`. Each needs a `keychain_service` of its own: the
+        config is refused when two tokens share one."""
+        return {"": config} if isinstance(config, TokenSettings) else {}
 
     # Refresh
 
