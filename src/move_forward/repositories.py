@@ -59,13 +59,15 @@ class SnapshotRepository:
         if not names:
             return {}
         marks = ", ".join("?" * len(names))
-        # A part's source is `<plugin>.<part>`; `_` is a wildcard in LIKE, so it's escaped.
-        parts = " OR ".join("source LIKE ? ESCAPE '\\'" for _ in names)
-        prefixes = [n.replace("_", "\\_") + ".%" for n in names]
+        # A part's source is `<plugin>.<part>`: its plugin is what comes before the first `.`,
+        # compared exactly (LIKE would ignore case and need `_` escaped).
+        plugin = (
+            "CASE WHEN instr(source, '.') > 0 THEN substr(source, 1, instr(source, '.') - 1) END"
+        )
         return self._rows(
             self._db.query(
-                f"SELECT * FROM snapshots WHERE source IN ({marks}) OR {parts}",
-                (*names, *prefixes),
+                f"SELECT * FROM snapshots WHERE source IN ({marks}) OR {plugin} IN ({marks})",
+                (*names, *names),
             )
         )
 

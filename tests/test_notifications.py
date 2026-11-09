@@ -234,7 +234,8 @@ def test_only_enabled_plugins_runs_are_sources() -> None:
     repo.save_fetched("github", NOW)
     repo.save_fetched("github.derived", NOW)  # a part of github's
     repo.save_error("vcard", NOW, "gone")
-    repo.save_fetched("git_stacks", NOW)  # not a part of git_stack: `_` matches one character
+    repo.save_fetched("gitXstack.part", NOW)  # not git_stack's: `_` is no wildcard here
+    repo.save_fetched("GitHub.derived", NOW)  # nor github's: names are compared exactly
     assert sorted(repo.of(["github", "git_stack"])) == ["github", "github.derived"]
     config = NotificationsConfig(failing_minutes=15)
     later = NOW + timedelta(minutes=16)

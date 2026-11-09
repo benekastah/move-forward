@@ -8,7 +8,8 @@ from move_forward import page, panels, render
 from move_forward.graph import Ref
 from move_forward.page import Identity
 from move_forward.plugins.notes.repository import NotesRepository
-from move_forward.refresh import kept_item
+from move_forward.refresh import build_dashboard, kept_item
+from move_forward.repositories import SnapshotRepository
 
 
 def _dashboard() -> panels.Dashboard:
@@ -555,3 +556,11 @@ def test_a_buttons_choices_are_a_drop_down_beside_its_field() -> None:
 def test_a_focused_drop_down_holds_off_reloads_and_arrow_keys() -> None:
     assert "closest('input, textarea, select')" in render.RELOAD_SCRIPT
     assert "closest('input, textarea, select')" in render.FOCUS_KEYS_SCRIPT
+
+
+def test_a_removed_plugins_last_run_is_no_source_of_the_page() -> None:
+    """vcard's, say, left in core's table once its section was taken out."""
+    config, db = stored(github=snapshot(mine=[pr(1)]))
+    SnapshotRepository(db).save_error("vcard", NOW, "gone")
+    built = build_dashboard(config, db, NOW)
+    assert "github" in built.sources and "vcard" not in built.sources
