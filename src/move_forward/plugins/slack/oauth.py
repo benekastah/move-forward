@@ -246,10 +246,7 @@ def token(ctx: Context[SlackConfig]) -> str | None:
         found = connection(ctx)
         if found is None:
             return keychain.token(ctx.config, ctx.email)
-        # A connection made before the app had its own entry kept its token in the hand one's.
-        access = keychain.read(app_service(ctx.config), ctx.email) or keychain.read(
-            ctx.config.keychain_service, ctx.email
-        )
+        access = _app_token(ctx)
         if found.expires_at is None or ctx.now < found.expires_at - REFRESH_AHEAD:
             return access
         refresh = keychain.read(refresh_service(ctx.config), ctx.email)
@@ -285,6 +282,17 @@ def token(ctx: Context[SlackConfig]) -> str | None:
         return tokens.access_token
 
 
+def _app_token(ctx: Context[SlackConfig]) -> str | None:
+    """The app's access token. A connection made before the app had an entry of its own kept
+    it in the hand one's: moved to the app's, once, so revoking and forgetting find it."""
+    access = keychain.read(app_service(ctx.config), ctx.email)
+    if access is None and (legacy := keychain.read(ctx.config.keychain_service, ctx.email)):
+        keychain.write(app_service(ctx.config), ctx.email, legacy)
+        keychain.delete(ctx.config.keychain_service, ctx.email)
+        return legacy
+    return access
+
+
 def _lose(ctx: Context[SlackConfig], why: str) -> None:
     """Forget the connection, keeping why for slack's page. Its tokens are deleted if the
     secret store lets them be: they're of no use now either way."""
@@ -304,8 +312,8 @@ def forget(ctx: Context[SlackConfig]) -> None:
 
 def disconnect(ctx: Context[SlackConfig]) -> None:
     """Sign out: revoke the token with Slack (if it still works), then forget it."""
-    access = keychain.read(app_service(ctx.config), ctx.email)
-    if access and connection(ctx) is not None:
+    access = _app_token(ctx) if connection(ctx) is not None else None
+    if access:
         # Gone already, or offline: forgetting it is what matters here.
         with contextlib.suppress(client.SlackError, urllib.error.URLError):
             client.call("auth.revoke", access, {})

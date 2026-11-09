@@ -279,3 +279,14 @@ def test_a_sign_in_state_that_isnt_ascii_is_turned_away_not_a_crash() -> None:
     _started(db)
     with pytest.raises(oauth.SignInError, match="isn't the sign-in"):
         oauth.finish(_ctx(db, 1), {"code": ["c"], "state": ["été"]})
+
+
+def test_a_connection_made_before_the_apps_entry_is_revoked_and_its_token_moved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secrets, slack, db = _connected(monkeypatch)
+    secrets.stored[SERVICE] = secrets.stored.pop(f"{SERVICE}-app")  # where it used to be kept
+    slack.answers.append({"ok": True, "revoked": True})
+    oauth.disconnect(_ctx(db))
+    assert slack.asked == [("auth.revoke", "xoxe.xoxp-1", {})]
+    assert secrets.stored == {}

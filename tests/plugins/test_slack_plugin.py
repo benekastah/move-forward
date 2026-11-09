@@ -1,6 +1,9 @@
 """The Slack plugin: who to ping about my PRs, the Nudge panel, the Ping link and page."""
 
+import html as html_module
+import re
 from datetime import timedelta
+from urllib.parse import parse_qs, urlencode
 
 import pytest
 from conftest import (
@@ -19,7 +22,7 @@ from conftest import (
     titles,
 )
 
-from move_forward import render
+from move_forward import render, server
 from move_forward.graph import Graph
 from move_forward.plugin import Context, PruneRequest
 from move_forward.plugins.github.models import Check
@@ -146,7 +149,10 @@ def test_ping_page_has_a_form_per_target() -> None:
     candidate = pr(1, title="Fix <it>", requested_users=["alice"], requested_teams=["web"])
     ping = pings(github=snapshot(mine=[candidate]))[candidate.url]
     html = ping_page(ping, NOW)
-    assert html.count("action='/actions/slack/mark_sent?back=/slack/ping?pr=") == 2  # back here
+    [action] = set(re.findall(r"action='(/actions/slack/mark_sent\?[^']*)'", html))
+    query = html_module.unescape(action).partition("?")[2]
+    assert html.count(action) == 2
+    assert server._back_to_page(query) == f"/slack/ping?{urlencode({'pr': candidate.url})}"  # pyright: ignore[reportPrivateUsage]
     assert "name='target' value='user:alice'" in html and "Fix &lt;it&gt;" in html
     assert render.e(DEFAULT_PING_FIRST.format(url=candidate.url)) in html
     assert "data-reload" not in html
@@ -331,5 +337,25 @@ def test_a_teams_channel_set_in_the_config_isnt_the_maps_old_channel() -> None:
 
 @pytest.mark.parametrize("message", ["Ping {pr}", "Look {", "{0}"])
 def test_a_first_ping_that_names_more_than_its_url_is_refused(message: str) -> None:
+    with pytest.raises(ValueError, match="can name only"):
+        SlackConfig(ping_first=message)
+
+
+def test_the_ping_page_comes_back_to_itself_whatever_the_pr_url_holds_and_says_what_happened() -> (
+    None
+):
+    candidate = pr(1, requested_users=["alice"]).model_copy(
+        update={"url": "https://github.com/acme/r+x/pull/1"}
+    )
+    ping = pings(github=snapshot(mine=[candidate]))[candidate.url]
+    html = ping_page(ping, NOW, "marked as sent")
+    [action] = set(re.findall(r"action='(/actions/slack/mark_sent\?[^']*)'", html))
+    back = server._back_to_page(html_module.unescape(action).partition("?")[2])  # pyright: ignore[reportPrivateUsage]
+    assert parse_qs(back.partition("?")[2])["pr"] == [candidate.url]
+    assert "<p class='notice'>marked as sent</p>" in html
+
+
+@pytest.mark.parametrize("message", ["Ping {url.foo}", "Ping {url[0]}"])
+def test_a_first_ping_reaching_into_its_url_is_refused(message: str) -> None:
     with pytest.raises(ValueError, match="can name only"):
         SlackConfig(ping_first=message)

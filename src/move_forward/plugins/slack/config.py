@@ -1,5 +1,7 @@
 """`[slack]`."""
 
+from string import Formatter
+
 from pydantic import Field, field_validator
 
 from ...api import Strict
@@ -23,7 +25,8 @@ class SlackConfig(Strict):
     """The first review reminder; `{url}` is the PR, and a brace of its own is written `{{` or
     `}}`."""
     ping_follow_up: str = DEFAULT_PING_FOLLOW_UP
-    """The reminder once a reviewer has been pinged about the PR."""
+    """The reminder once a reviewer has been pinged about the PR, as written: nothing in it is
+    filled in, and a brace is a brace."""
     teams: dict[str, str] = Field(default_factory=dict)
     """Where review pings to a team go, e.g. `#team-a`, by its name in the top-level `teams`.
     Overrides the reviewer map."""
@@ -63,10 +66,11 @@ class SlackConfig(Strict):
     @classmethod
     def _ping_first(cls, value: str) -> str:
         try:
-            value.format(url="")
-        except (KeyError, IndexError, ValueError) as e:
+            fields = [field for _, field, _, _ in Formatter().parse(value) if field is not None]
+        except ValueError as e:  # a lone brace
+            fields = [f"({e})"]
+        if any(field != "url" for field in fields):
             raise ValueError(
                 f"{value!r} can name only {{url}}, and a brace of its own is written {{{{ or }}}}"
-                f" ({e!r})"
-            ) from e
+            )
         return value
