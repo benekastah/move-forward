@@ -115,11 +115,9 @@ def test_a_lookup_that_fails_is_said_on_slacks_page_until_the_next_refresh(
     shown = page()
     assert said in shown
     assert ("token needs" in shown) == ("token needs" in said)  # only for a missing scope
-    failing[0] = False
-    assert contacts.look_up_requested(slack.ctx, graph) == ["alice"]
-    assert "failed" not in page()
-    failing[0] = True
-    assert contacts.look_up_requested(slack.ctx, graph) == []  # nobody left to look up
+    # Reconnected with the scope, say, but nobody left to look up: the notice still goes.
+    SlackRepository(db).save_looked_up("alice", None, NOW)
+    assert contacts.look_up_requested(slack.ctx, graph) == []
     assert "failed" not in page()
 
 
