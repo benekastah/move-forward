@@ -597,4 +597,7 @@ def test_shown_keeps_right_to_left_letters() -> None:
         "می\u200cخواهم",
     ):  # Hebrew, Arabic, Persian with ZWNJ
         assert render.shown(text) == text
-    assert render.shown("a\u00adb\u2060c\ufeffd\U000e0041e") == "a b c d e"  # hidden: each a space
+    # Hidden characters inside a word go without a trace; a flag's tag characters stay.
+    assert render.shown("Ko\u00adoper\u2060ation\ufeff") == "Kooperation"
+    england = "\U0001f3f4\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f"
+    assert render.shown(england) == england

@@ -11,6 +11,14 @@ from typing import IO
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 
+def _shown_url(url: str) -> str:
+    """`url` as an error may say it: without its query or userinfo, where a tool's API might
+    take a key, so a failure never writes one to the log, the page or a notification."""
+    parts = urlsplit(url)
+    host = parts.netloc.rpartition("@")[2]  # its port and an IPv6 address's brackets too
+    return urlunsplit((parts.scheme, host, parts.path, "", ""))
+
+
 class _NoRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(
         self,
@@ -21,7 +29,9 @@ class _NoRedirects(urllib.request.HTTPRedirectHandler):
         headers: Message,
         newurl: str,
     ) -> urllib.request.Request | None:
-        raise RuntimeError(f"{req.full_url} redirected to {newurl}; not following it")
+        raise RuntimeError(
+            f"{_shown_url(req.full_url)} redirected to {_shown_url(newurl)}; not following it"
+        )
 
 
 opener = urllib.request.build_opener(_NoRedirects)
@@ -31,14 +41,7 @@ opener = urllib.request.build_opener(_NoRedirects)
 def require_https(url: str, secret: str) -> None:
     """Refuse to send `secret` (e.g. "the Jira token") anywhere but https."""
     if urlsplit(url).scheme != "https":
-        raise RuntimeError(f"not sending {secret} to {url}: it isn't https")
-
-
-def _shown_url(url: str) -> str:
-    """`url` as an error may say it: without its query or userinfo, where a tool's API might
-    take a key, so a failure never writes one to the log, the page or a notification."""
-    parts = urlsplit(url)
-    return urlunsplit((parts.scheme, parts.hostname or "", parts.path, "", ""))
+        raise RuntimeError(f"not sending {secret} to {_shown_url(url)}: it isn't https")
 
 
 class RequestError(Exception):

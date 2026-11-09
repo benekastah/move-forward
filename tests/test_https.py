@@ -107,9 +107,10 @@ def test_no_answer_is_one_error_without_a_status(
 
 
 def test_a_secret_in_a_urls_query_or_userinfo_never_reaches_the_message() -> None:
-    error = RequestError("https://user:pw@api.example/v1/x?key=secret", "Unauthorized", 401)
+    error = RequestError("https://user:pw@api.example:8443/v1/x?key=secret", "Unauthorized", 401)
     assert "secret" not in str(error) and "pw" not in str(error)
-    assert str(error) == "https://api.example/v1/x answered HTTP 401 Unauthorized"
+    assert str(error) == "https://api.example:8443/v1/x answered HTTP 401 Unauthorized"
+    assert "[::1]:8443" in str(RequestError("https://[::1]:8443/x", "refused"))
 
 
 def test_a_redirect_is_refused_not_followed() -> None:
@@ -118,3 +119,8 @@ def test_a_redirect_is_refused_not_followed() -> None:
         https._NoRedirects().redirect_request(  # pyright: ignore[reportPrivateUsage]
             request, io.BytesIO(), 302, "Found", Message(), "https://evil.example/"
         )
+
+
+def test_requests_go_through_an_opener_that_refuses_redirects() -> None:
+    handlers: list[object] = getattr(https.opener, "handlers")  # noqa: B009  # not in the stubs
+    assert any(isinstance(h, https._NoRedirects) for h in handlers)  # pyright: ignore[reportPrivateUsage]

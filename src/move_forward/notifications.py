@@ -17,9 +17,9 @@ from pydantic import Field
 
 from .db import CORE, Database
 from .domain import Model
-from .render import shown
 from .repositories import KvRepository, SnapshotRepository
 from .strict import Strict
+from .text import shown
 
 log = logging.getLogger(__name__)
 
