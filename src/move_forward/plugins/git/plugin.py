@@ -51,7 +51,7 @@ LAST_STATUS = "last_status_check"
 
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     name = "git"
-    title = "Local"
+    title = "Git"
     init_template = TEMPLATE
     config_model = GitConfig
     api_version = API_VERSION
