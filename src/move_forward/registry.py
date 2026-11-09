@@ -152,9 +152,9 @@ _CORE_FAMILY_NAMES = {family.name for family in CORE_FAMILIES}
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     """Raise unless every plugin is built against this dashboard's `API_VERSION`, and its
     name is its own and fit to be one: lower-case, not two plugins', none of core's
-    (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`). A plugin's kinds are named for it
-    (`git.branch`), or for a family, core's or one it declares (`Plugin.families`), whose model
-    they must extend."""
+    (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`).
+    A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
+    declares (`Plugin.families`), whose model they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")

@@ -6,6 +6,7 @@ or Python for a data fix SQL can't say. Which have run is kept by name in the
 never edited, renamed or reordered.
 """
 
+import functools
 import logging
 import os
 import re
@@ -371,9 +372,9 @@ class Database:
         migration that rebuilds a referenced table copies it under a new name and renames,
         rather than dropping the original first.
 
-        Returns how many it ran (not those another process did). Fails, running nothing, when the ledger's names aren't the
-        first of `migrations`, in order: one was renamed or reordered, or the database was
-        used by a newer version of the dashboard.
+        Returns how many it ran (not those another process did). Fails, running nothing, when
+        the ledger's names aren't the first of `migrations`, in order: one was renamed or
+        reordered, or the database was used by a newer version of the dashboard.
         """
         if not OWNER_RE.match(owner):
             raise ValueError(f"bad migrations owner {owner!r}")
@@ -542,8 +543,12 @@ class Database:
             conn.execute(sql, params)
 
 
-def core_objects() -> set[str]:
+@functools.cache
+def core_objects() -> frozenset[str]:
     """The tables, indexes, views and triggers core makes, as a fresh database has them."""
     db = Database(":memory:")
-    rows = db.query("SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")
-    return {row["name"] for row in rows}
+    try:
+        with db._lock:  # pyright: ignore[reportPrivateUsage]
+            return frozenset(db._objects())  # pyright: ignore[reportPrivateUsage]
+    finally:
+        db._conn.close()  # pyright: ignore[reportPrivateUsage]
