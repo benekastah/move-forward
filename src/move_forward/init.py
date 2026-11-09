@@ -24,7 +24,6 @@ OPTIONAL_SETTINGS = """\
 # Optional settings, with their defaults. Uncomment to change.
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # db_backups = 10                        # copies kept in backups/, taken before migrations
-# refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                        # clear work finished this long ago from the notes
 """
 OPTIONAL_ACT_NOW_SETTINGS = """\

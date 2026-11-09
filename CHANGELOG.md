@@ -5,6 +5,15 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### A page load no longer refreshes
+
+`refresh_on_load_seconds` is gone, and with it the refresh a page load asked for of every
+plugin whose data was older than that (60 seconds by default). Each plugin still refreshes on
+its own `refresh_seconds`, and sooner when its tool has something new; the Refresh buttons
+and an item's ↻ refresh now. A config that still sets `refresh_on_load_seconds` is refused,
+saying it's gone: delete the line. A script that loaded `/` to make the dashboard refresh
+should `POST /refresh` instead, or run `mfd refresh`.
+
 ### One key for how far back commits count
 
 `[github] reviewer_history_days` is gone: reviewer suggestions now count commits as far back

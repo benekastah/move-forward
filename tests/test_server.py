@@ -270,20 +270,6 @@ def test_invalid_ping_form_is_rejected(client: HTTPConnection, app: server.App) 
     assert SlackRepository(app.db).pings() == []
 
 
-def test_page_load_refreshes_stale_data_in_the_background(
-    client: HTTPConnection, app: server.App, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Seconds since boot: a machine that just started has a small monotonic clock.
-    monkeypatch.setattr(server.time, "monotonic", lambda: 5.0)
-    get(client, "/").read()
-    assert app._wake.is_set()  # pyright: ignore[reportPrivateUsage]
-    app.refresh_now()
-    app._wake.clear()  # pyright: ignore[reportPrivateUsage]
-    body = get(client, "/").read().decode()
-    assert not app._wake.is_set()  # pyright: ignore[reportPrivateUsage]
-    assert "data-reload='60'" in body
-
-
 def test_actions_run_and_redirect_with_a_notice(
     client: HTTPConnection, app: server.App, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -654,9 +640,7 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
 ) -> None:
     clock = [1000.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
-    app.config = app.config.with_section("git", GitConfig(repos=[], refresh_seconds=60)).model_copy(
-        update={"refresh_on_load_seconds": 120}
-    )
+    app.config = app.config.with_section("git", GitConfig(repos=[], refresh_seconds=60))
     migrate(app.config, app.db)  # git's tables, as `mfd serve` makes them
     assert app.intervals() == {"github": 300, "git": 60}
     assert app.due() == {"github", "git"}  # never refreshed
@@ -668,8 +652,16 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
     assert app.due() == {"git", "github"}
     app.refresh_now({"git"})
     assert app.due() == {"github"}
-    app.refresh_if_stale()  # github's data is 301s old, over refresh_on_load_seconds
-    assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_page_load_asks_for_no_refresh(app: server.App, monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = [1000.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    app.refresh_now()
+    clock[0] += 299  # minutes since github's refresh, before it's due again
+    app.dashboard_page()
+    app.focus_page("", 0)
+    assert app._pending == set()  # pyright: ignore[reportPrivateUsage]
 
 
 class _GitHubWithChecks(GitHubPlugin):

@@ -23,7 +23,6 @@ BASE_DIR = Path("~/.config/move-forward")
 DEFAULT_CONFIG_PATH = (BASE_DIR / "config.toml").expanduser()
 DEFAULT_DB_PATH = Path("~/.local/share/move-forward/dashboard.db")
 DEFAULT_PORT = 8765
-DEFAULT_REFRESH_ON_LOAD_SECONDS = 60
 DEFAULT_PRUNE_DAYS = 90
 
 MOVED_SETTINGS = {
@@ -88,9 +87,6 @@ class Config(Strict):
     migrations change the database; the oldest go first. 0 takes none."""
     port: int = DEFAULT_PORT
     """The localhost port `mfd serve` listens on."""
-    refresh_on_load_seconds: int = DEFAULT_REFRESH_ON_LOAD_SECONDS
-    """A page load asks each plugin whose last refresh began longer ago than this to refresh,
-    in the background."""
     prune_days: int = DEFAULT_PRUNE_DAYS
     """Work finished this long ago (merged PRs, closed tickets, done todos) is cleared from
     the notes by a daily job, as are pings, Act now's dismissals and pins, and lookups that
@@ -176,6 +172,12 @@ class Config(Strict):
             moved.append(
                 "`https` is gone; the dashboard serves plain HTTP on localhost only: delete the"
                 " line"
+            )
+        if "refresh_on_load_seconds" in settings:
+            moved.append(
+                "`refresh_on_load_seconds` is gone; a page load no longer refreshes: each plugin"
+                " refreshes on its own schedule, sooner when its tool has something new, and ↻"
+                " and Refresh refresh now: delete the line"
             )
         if "refresh_seconds" in settings:
             moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")

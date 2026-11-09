@@ -39,12 +39,12 @@ example without asking; `--force` replaces an existing file.
 
 The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
-`db_path`, `db_backups`, `refresh_on_load_seconds` (a page load refreshes
-plugins whose data is older than this) and `prune_days`. Each plugin that
+`db_path`, `db_backups` and `prune_days`. Each plugin that
 fetches refreshes on its own schedule, the `refresh_seconds` in its section
 (git every minute, github every 5, jira every 15, by default), and sooner when
 its plugin can tell cheaply that its tool has something new (each plugin's page
-says how). Everything about a tool is
+says how). Loading the page refreshes nothing: the Refresh buttons (a plugin's, or the
+header's) and an item's ↻ do. Everything about a tool is
 in that tool's plugin section; see [Plugins](#plugins).
 
 `[people]` says what the kinds of people I deal with mean: `contact_types` (`{ customer = 1,
