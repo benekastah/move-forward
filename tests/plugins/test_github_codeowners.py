@@ -40,6 +40,22 @@ def test_catch_all_and_escaped_brackets() -> None:
     assert owners("client/pages/[id]/page.tsx") == (("@org/web",), False)
 
 
+def test_only_a_bare_star_ends_ownership_below_and_globstars_are_whole_segments() -> None:
+    rules = codeowners.CodeOwners(
+        "docs/* @docs\n**/logs @logs\napps/**/build/ @build\n/packages/*-ui @ui\nfoo**/bar @x\n"
+    )
+    assert rules.owners("docs/getting-started.md") == (("@docs",), False)
+    assert rules.owners("docs/build-app/troubleshooting.md") == ((), False)  # GitHub's example
+    assert rules.owners("logs/x.log") == (("@logs",), False)
+    assert rules.owners("deploy/logs/x.log") == (("@logs",), False)
+    assert rules.owners("apps/build/out.js") == (("@build",), False)
+    assert rules.owners("apps/web/build/out.js") == (("@build",), False)
+    assert rules.owners("packages/web-ui/src/a.ts") == (("@ui",), False)  # not a bare `*`
+    assert rules.owners("foobar") == ((), False)  # `**/` only as a whole segment
+    assert rules.owners("foo-x/bar") == (("@x",), False)
+    assert rules.owners("foo/a/b/bar") == ((), False)  # `foo**` is `foo*`, in one segment
+
+
 def test_required_needs_the_configured_marker() -> None:
     assert codeowners.CodeOwners(FILE).owners("app/api/x") == (("@org/api",), False)
     assert codeowners.CodeOwners(FILE, "#!must").owners("app/api/x") == (("@org/api",), False)

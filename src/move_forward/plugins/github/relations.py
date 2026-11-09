@@ -39,11 +39,12 @@ def relations(graph: Graph, kind: str) -> list[tuple[Ref, Ref]]:
     """Each pull request (of `kind`, github's own) related to the local branches it comes
     from, in the checkout of its repo: the branch of its head's name; else, for a branch
     renamed since it was pushed, the one whose upstream has that name; else, for one of
-    mine, a branch at the commit its head is at."""
-    github_repo = {r.dir: r.id for r in graph.view(REPO, _Repo)}
+    mine, a branch at the commit its head is at. Repos match whatever case the remote names
+    one in, as GitHub's names ignore case."""
+    github_repo = {r.dir: r.id.lower() for r in graph.view(REPO, _Repo)}
     prs: dict[str, list[_Pr]] = {}
     for pr in graph.view(kind, _Pr):
-        prs.setdefault(pr.repo, []).append(pr)
+        prs.setdefault(pr.repo.lower(), []).append(pr)
     found: list[tuple[Ref, Ref]] = []
     for branch in graph.view(BRANCH, _Branch):
         here = prs.get(github_repo.get(branch.repo_dir, ""), [])

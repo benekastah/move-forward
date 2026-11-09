@@ -976,14 +976,17 @@ def test_conflicts_skip_drafts_and_a_stacked_pr_is_told_to_restack() -> None:
     stacked = pr(2, head="me/top", base="me/base", mergeable="CONFLICTING")
     draft = pr(3, mergeable="CONFLICTING", is_draft=True)
     plain = pr(4, mergeable="CONFLICTING")
-    built = build(github=snapshot(mine=[base, stacked, draft, plain]))
+    elsewhere = pr(5, base="me/base", mergeable="CONFLICTING", repo="acme/other")
+    built = build(github=snapshot(mine=[base, stacked, draft, plain, elsewhere]))
     items = {i.title: i for i in panel(built, "github.conflicts").items}
-    assert set(items) == {"PR 2", "PR 4"}
+    assert set(items) == {"PR 2", "PR 4", "PR 5"}
+    assert items["PR 5"].signals is None  # a branch of that name in another repo isn't mine
     assert items["PR 2"].details[0] == "stacked on me/base: restack (git stack sync)"
     assert items["PR 2"].signals and items["PR 2"].signals.verb == "Restack the stack"
     assert items["PR 4"].signals is None  # Resolve conflicts, from the panel
     assert sorted(i.title for i in built.act_now()) == [
         "Resolve conflicts: PR 4",
+        "Resolve conflicts: PR 5",
         "Restack the stack: PR 2",
     ]
 

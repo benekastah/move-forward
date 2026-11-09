@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from conftest import pr, snapshot
+
 from move_forward.plugins.github import codeowners, derive
 from move_forward.shell import git
 
@@ -70,3 +72,15 @@ def test_suggest_reviewers_counts_recent_committers_with_known_logins(tmp_path: 
     }
     suggestions = derive.suggest_reviewers(local, ["api/new.py"], 30, emails, exclude={"me"})
     assert [(s.login, s.commits) for s in suggestions] == [("alice", 2), ("bob", 1)]
+
+
+def test_a_checkout_scores_its_prs_whatever_case_its_remote_names_the_repo_in(
+    tmp_path: Path,
+) -> None:
+    checkout = derive.Checkout(
+        github_repo="Acme/Widgets", dir=str(tmp_path), default_branch="main", my_dirs=["api"]
+    )
+    asked = pr(7, author="alice", files=["api/v1/a.py", "web/b.ts"])
+    assert asked.repo == "acme/widgets"
+    found = derive.collect(snapshot(team_requests=[asked]), [checkout], {}, "acme", ["core"], 90)
+    assert found.team_scores[asked.url].my_files == 1  # in a dir I work in, below it

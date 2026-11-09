@@ -1,8 +1,11 @@
 """CODEOWNERS matching: which owners GitHub assigns to a path.
 
 Follows GitHub's rules: the last matching line wins, patterns behave like .gitignore
-(a leading or inner `/` anchors to the repo root, `*` stays within a path segment, `**`
-crosses segments), and a pattern that names a directory owns everything below it.
+(a leading or inner `/` anchors to the repo root, `*` stays within a path segment, `**` as
+a whole segment crosses segments (and a `**/` one also matches no directory), while a `**`
+within a segment, like `foo**`, is just a `*`), and a pattern that names a directory owns
+everything below it, but one ending in a bare `*`, which GitHub reads as what's directly
+there: `docs/*` owns `docs/a.md`, not `docs/sub/b.md`.
 """
 
 import re
@@ -30,8 +33,14 @@ def _glob_to_regex(pattern: str) -> str:
             out.append(re.escape(pattern[i + 1]))
             i += 2
             continue
+        if pattern.startswith("**/", i) and (i == 0 or pattern[i - 1] == "/"):
+            out.append("(.*/)?")
+            i += 3
+            continue
         if pattern.startswith("**", i):
-            out.append(".*")
+            # A whole last segment (`docs/**`, or `**` alone); a `**/` one was taken above.
+            whole = (i == 0 or pattern[i - 1] == "/") and i + 2 == len(pattern)
+            out.append(".*" if whole else "[^/]*")
             i += 2
             continue
         if char == "*":
@@ -86,11 +95,13 @@ class CodeOwners:
             return
         regex = _glob_to_regex(body)
         prefix_part = _GLOB_CHARS.split(body, maxsplit=1)[0].replace("\\", "")
+        names_a_directory = pattern.endswith("/") or body.split("/")[-1] != "*"
+        below = "(/.*)?" if names_a_directory else ""
         if anchored:
-            compiled = re.compile(f"^{regex}(/.*)?$")
+            compiled = re.compile(f"^{regex}{below}$")
             prefix = prefix_part
         else:
-            compiled = re.compile(f"^(.*/)?{regex}(/.*)?$")
+            compiled = re.compile(f"^(.*/)?{regex}{below}$")
             prefix = ""
         self._globs.append((prefix, compiled, rule))
 
