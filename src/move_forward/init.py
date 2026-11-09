@@ -92,16 +92,11 @@ def offered() -> list[Plugin[Any, Any]]:
     return [p for p in registry.PLUGINS if not p.always_on]
 
 
-def _toml_value(value: object) -> str:
-    """TOML for a string, int, or list of strings."""
-    return tomledit.value(value)
-
-
 def _table(name: str, values: dict[str, object], optional: str = "") -> str:
     """A section: its keys, its optional settings commented out, then its own tables (a dict
     value, e.g. `teams` for `[slack.teams]`)."""
     body = "".join(
-        f"{k} = {_toml_value(v)}\n" for k, v in values.items() if not isinstance(v, dict)
+        f"{k} = {tomledit.value(v)}\n" for k, v in values.items() if not isinstance(v, dict)
     )
     text = f"\n[{name}]\n{body}{optional}"
     for key, table in values.items():
@@ -127,7 +122,7 @@ def render_config(
     chosen ones' with their `sections` values and the others commented out, each with its
     optional settings as comments."""
     lines = ["# move-forward configuration. Paths may start with ~.", ""]
-    lines += [f"{key} = {_toml_value(value)}" for key, value in answers.items()]
+    lines += [f"{key} = {tomledit.value(value)}" for key, value in answers.items()]
     text = "\n".join(lines) + "\n" + OPTIONAL_SETTINGS
     for plugin in offered():
         if plugin.name in sections:

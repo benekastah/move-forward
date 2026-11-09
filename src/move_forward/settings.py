@@ -196,7 +196,7 @@ def save(path: Path, config: Config, form: dict[str, str]) -> str:
         changes[(NOTIFICATIONS, SUBSCRIBE)] = subscribed
     if not changes:
         return "nothing changed"
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")  # a BOM, as `config.load` takes; written without
     for (section, key), new in changes.items():
         if key.startswith(f"{WEIGHTS}."):
             text = tomledit.set_key(text, section, WEIGHTS, weights)

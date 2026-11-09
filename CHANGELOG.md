@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Text in UTF-8 everywhere
+
+`mfd` prints UTF-8 even when its output is redirected (on Windows it used the code page, and
+failed on an emoji), and a config file saved with a byte-order mark loads. A script on Windows
+reading `mfd`'s plain text output should read it as UTF-8; `--json` is unchanged.
+
 ### Several mailboxes
 
 Each sub-table of `[mail]` (`[mail.home]`, `[mail.work]`) is a mailbox of its own, taking from

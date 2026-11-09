@@ -8,6 +8,7 @@ import sys
 import tomllib
 from pathlib import Path
 
+from move_forward import config as config_module
 from move_forward import tomledit
 from move_forward.plugins.github import codeowners
 from move_forward.shell import run
@@ -78,3 +79,9 @@ def test_a_file_written_by_hand_is_read_with_its_bom_and_a_stray_byte(tmp_path: 
 def test_del_is_written_as_toml_that_reads_back() -> None:
     text = tomledit.set_key("[slack]\n", "slack", "ping_first", "a\x7fb")
     assert tomllib.loads(text)["slack"]["ping_first"] == "a\x7fb"
+
+
+def test_a_config_saved_with_a_bom_loads(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_bytes('﻿email = "josé@x"\n'.encode())
+    assert config_module.load(path).email == "josé@x"
