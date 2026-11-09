@@ -1,5 +1,6 @@
 """The notes plugin's tables, through its repository."""
 
+import threading
 from datetime import date
 
 import pytest
@@ -221,3 +222,26 @@ def test_conditions_kept_before_they_named_their_pr_are_given_one_once() -> None
     ]
     assert second.conditions == [] and second.lines == ["- Merge condition: ask Sam"]
     assert NotesRepository(db).entries() == [first, second]  # once
+
+
+def test_rekeying_asks_for_new_ids_outside_its_transaction() -> None:
+    """What gives the new ids asks plugins (their `url_for`), which may use the database."""
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS)
+    notes = NotesRepository(db)
+    entry = notes.add_entry("e", DAY, links=[Link(kind="jira.issue", ref="APP-1")])
+
+    def identify(kind: str, ref: str) -> str:
+        # A plugin's url_for waiting on another thread that reads the database, say.
+        reader = threading.Thread(target=db.query, args=("SELECT 1",))
+        reader.start()
+        reader.join(timeout=2)
+        assert not reader.is_alive(), "identify ran holding the database"
+        return f"https://acme.atlassian.net/browse/{ref}" if ref == "APP-1" else ref
+
+    assert notes.rekey(["jira.issue"], identify) == 1
+    [read] = notes.entries()
+    assert (read.id, [link.ref for link in read.links]) == (
+        entry,
+        ["https://acme.atlassian.net/browse/APP-1"],
+    )

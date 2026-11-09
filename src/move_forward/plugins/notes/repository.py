@@ -528,34 +528,31 @@ class NotesRepository:
     def rekey(self, kinds: Collection[str], identify: Callable[[str, str], str]) -> int:
         """Give the links and what's on ice of `kinds` the ids `identify` says their entities
         have now (`Graph.identify`: a ticket kept by its key gets its URL); where the new
-        id is there already, the old row goes. How many ids changed."""
+        id is there already, the old row goes. How many ids changed. `identify` runs before
+        the transaction, not in it: it asks plugins (`url_for`), which may use the database."""
         marks = ", ".join("?" * len(kinds))
         tables = [
             ("notes_links", "ref"),
             ("notes_todo_links", "ref"),
             ("notes_iced", "ref_id"),
         ]
-        moved = 0
+        moves = [
+            (table, column, row["kind"], row["id"], new)
+            for table, column in tables
+            for row in self._db.query(
+                f"SELECT DISTINCT kind, {column} AS id FROM {table} WHERE kind IN ({marks})",
+                (*kinds,),
+            )
+            if (new := identify(row["kind"], row["id"])) != row["id"]
+        ]
         with self._db.transaction() as conn:
-            for table, column in tables:
-                rows = conn.execute(
-                    f"SELECT DISTINCT kind, {column} AS id FROM {table} WHERE kind IN ({marks})",
-                    (*kinds,),
-                ).fetchall()
-                for row in rows:
-                    new = identify(row["kind"], row["id"])
-                    if new == row["id"]:
-                        continue
-                    conn.execute(
-                        f"UPDATE OR IGNORE {table} SET {column} = ? WHERE kind = ? AND {column} = ?",
-                        (new, row["kind"], row["id"]),
-                    )
-                    conn.execute(
-                        f"DELETE FROM {table} WHERE kind = ? AND {column} = ?",
-                        (row["kind"], row["id"]),
-                    )
-                    moved += 1
-        return moved
+            for table, column, kind, old, new in moves:
+                conn.execute(
+                    f"UPDATE OR IGNORE {table} SET {column} = ? WHERE kind = ? AND {column} = ?",
+                    (new, kind, old),
+                )
+                conn.execute(f"DELETE FROM {table} WHERE kind = ? AND {column} = ?", (kind, old))
+        return len(moves)
 
     def replace_covers(self, ice_ids: list[int], covers: dict[int, list[Ref]]) -> None:
         """Replace what the acts of icing `ice_ids` hide besides their own items. Others' are
