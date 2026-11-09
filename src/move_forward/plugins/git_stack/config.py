@@ -12,5 +12,5 @@ class GitStackConfig(Strict):
 
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
     """How often it refreshes regardless. It also refreshes as soon as git's branches or
-    git-stack's own record of the stacks move, which it checks after every refresh of
+    git stack's own record of the stacks move, which it checks after every refresh of
     git."""

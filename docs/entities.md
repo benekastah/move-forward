@@ -197,15 +197,15 @@ importance as a tool's on the person would, which only a type I set on their add
 
 ### `git_stack.stack_branch`
 
-A branch git-stack tracks, including one git no longer has.
+A branch git stack tracks, including one git no longer has.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `repo_dir`, `name` | string | its checkout and name, as `git.branch` has them |
 | `stack_parent` | string | the branch it's built on |
-| `stack_status` | string or null | git-stack's status, e.g. `up-to-date`, `needs-restack`, `merged` |
-| `stack_group` | string or null | on a stack's bottom branch, the group its stack is in when the group has other stacks; git-stack's `restack`, `sync` and `push` act on the whole group |
-| `stack` | list of strings | what git-stack acts on with it, by `git.branch` id: its stack, then the other stacks in its group, each bottom first, its own first of all |
+| `stack_status` | string or null | git stack's status, e.g. `up-to-date`, `needs-restack`, `merged` |
+| `stack_group` | string or null | on a stack's bottom branch, the group its stack is in when the group has other stacks; git stack's `restack`, `sync` and `push` act on the whole group |
+| `stack` | list of strings | what git stack acts on with it, by `git.branch` id: its stack, then the other stacks in its group, each bottom first, its own first of all |
 
 ### `ticket`
 

@@ -1,4 +1,4 @@
-"""The git_stack plugin's table: the branches git-stack tracks, as `git stack info` last said."""
+"""The git_stack plugin's table: the branches git stack tracks, as `git stack info` last said."""
 
 from collections import defaultdict
 

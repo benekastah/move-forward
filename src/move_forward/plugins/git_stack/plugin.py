@@ -1,4 +1,4 @@
-"""The git-stack plugin."""
+"""The git_stack plugin."""
 
 import shutil
 from pathlib import Path
@@ -39,7 +39,7 @@ FINGERPRINT = "stacks_fingerprint"
 
 class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     name = "git_stack"
-    title = "git-stack"
+    title = "Git Stack"
     config_model = GitStackConfig
     api_version = API_VERSION
     init_template = TEMPLATE
@@ -52,7 +52,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 
     def init_suggested(self) -> bool:
-        """Only when git-stack is installed, i.e. `git stack` would run."""
+        """Only when git stack is installed, i.e. `git stack` would run."""
         return shutil.which("git-stack") is not None
 
     def collect_after(self, req: CollectAfterRequest[GitStackConfig]) -> GitStackSnapshot:

@@ -1,8 +1,8 @@
-"""Telling cheaply that git-stack's stacks may have moved, for `GitStackPlugin.changed`.
+"""Telling cheaply that git stack's stacks may have moved, for `GitStackPlugin.changed`.
 
 Asked right after each refresh of git, which it watches. Two things move a stack: its
 branches (a commit, a rebase, a push or fetch), which git's `git.branch` entities show; and
-git-stack's own record of each branch's parent, base and group, which it keeps in the
+git stack's own record of each branch's parent, base and group, which it keeps in the
 repository's `.git/config` (`branch.<name>.stack*`), so tracking, untracking or grouping
 changes only that file.
 """

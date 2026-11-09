@@ -43,7 +43,7 @@ names are related through it.
 
 notes adds an Add todo field to every item about one of my open PRs or a ticket (the todo
 goes to the entry covering it, or creates one), and Put on ice to every item about a local
-branch (with its git-stack stack and group), one of my open PRs, a ticket or a work entry.
+branch (with its stack and group in git stack), one of my open PRs, a ticket or a work entry.
 Put on ice has an ice icon with its label in the title. It joins git's Delete button
 in a group when both are offered, and joins Snooze, Dismiss and Pin on Act now items.
 
@@ -82,7 +82,7 @@ are done it's badged as probably done, which brings it back if it was snoozed or
 | `/actions/notes/todo_undone` | `todo` | Reopens a done todo. |
 | `/actions/notes/todo_delete` | `todo` | Drops the todo without recording it. |
 | `/actions/notes/todo_link` | `todo`, `input` (Jira key or PR URL) | Links the todo to the ticket or PR; a key in a project jira hasn't seen yet is looked up in Jira. |
-| `/actions/notes/ice` | `repo`, `branch`, optional `note` | Puts the branch on ice, with the rest of its stack and the other stacks in its git-stack group when git_stack knows them (git-stack's `restack`, `sync` and `push` act on the whole group), recording each branch's commit. |
+| `/actions/notes/ice` | `repo`, `branch`, optional `note` | Puts the branch on ice, with the rest of its stack and the other stacks in its git stack group when git_stack knows them (git stack's `restack`, `sync` and `push` act on the whole group), recording each branch's commit. |
 | `/actions/notes/ice_item` | `kind` (`pull_request`, `ticket` or `notes.entry`), `id`, optional `note` | Puts the PR, ticket or work entry on ice, with what it links. |
 | `/actions/notes/ice_note` | `ice` (its id), `input` | Says why it's on ice, in place of what's said now. |
 | `/actions/notes/thaw` | `ice` (its id, as the On ice panel's buttons have it) | Takes what's on ice off it. |
@@ -111,7 +111,7 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes offers [--pr URL]` | When the skill last offered each kind on each PR, newest first. |
 | `mfd notes asked <question> [--on DATE]` | Record that the skill asked a once-a-day question (e.g. `ice`, whether anything should go on ice) today. `ice`'s date is also `on-ice.md`'s `Last asked`, which import and export read and write. |
 | `mfd notes last-asked <question>` | When the skill last asked it, or `never`. |
-| `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack and group, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
+| `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its stack and group in git stack, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
 | `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database, refused when it has neither. Lines it doesn't understand are kept with their entry. Refuses to replace notes already there without `--replace` (anything read replaces them all, even a preamble alone), which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |

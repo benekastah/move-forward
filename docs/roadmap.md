@@ -288,7 +288,7 @@ CI passes on Windows, but these need trying by hand: `py dev.py install` (the PA
 change, the `mfd.cmd` shim, the hooks through `py -3`); `mfd cert --trust` with
 `https = true`, then Edge, Chrome and Firefox (which should read the Windows store);
 `mfd serve` replacing its server on a config change, and ctrl-c stopping it;
-`mfd token set` with Credential Manager; Slack's Connect; git-stack itself; git watching its
+`mfd token set` with Credential Manager; Slack's Connect; git stack itself; git watching its
 repos while you work (the watcher holds handles on the watched directories, and Windows can
 refuse to delete or rename a directory with handles open in it: `git worktree remove`, a
 checkout that deletes a top-level directory, renaming a repo's folder); and repo paths

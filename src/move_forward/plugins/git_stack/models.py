@@ -1,4 +1,4 @@
-"""The git_stack plugin's data: the branches git-stack tracks."""
+"""The git_stack plugin's data: the branches git stack tracks."""
 
 from ...api import Model
 
@@ -15,7 +15,7 @@ class StackBranch(Model):
 class StackRepo(Model):
     dir: str
     branches: list[StackBranch]
-    """Every branch git-stack tracks in the repo, and the roots they're on."""
+    """Every branch git stack tracks in the repo, and the roots they're on."""
 
 
 class GitStackSnapshot(Model):

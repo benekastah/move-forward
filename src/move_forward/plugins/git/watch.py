@@ -54,7 +54,7 @@ def _within(path: Path, root: Path) -> Path | None:
 def moves_repo(relative: Path) -> bool:
     """Whether a change at `relative`, a path in a common git directory, moves the repo:
     `HEAD`, `packed-refs`, anything under `refs/`, a linked worktree's `HEAD` (one added
-    `--detach`ed moves no ref), or `config` (where branches' upstreams are set, and git-stack
+    `--detach`ed moves no ref), or `config` (where branches' upstreams are set, and git stack
     keeps its stacks). On Linux, a new worktree's directory too: there a new directory is
     watched only once it's seen, and `git worktree add` writes its `HEAD` at once, on a busy
     machine before the watch is there. Not elsewhere, where a whole tree is watched and a

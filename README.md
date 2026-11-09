@@ -2,7 +2,7 @@
 
 A local dashboard of everything in flight: my PRs and what they're waiting on,
 reviews asked of me, PRs my team should look at, local branches with
-unpushed or uncommitted work, git-stack health, todos and merge conditions
+unpushed or uncommitted work, git stack health, todos and merge conditions
 from my work notes, and my Jira tickets. No AI involved:
 everything is worked out from GitHub, git, Jira and the notes.
 
@@ -107,7 +107,7 @@ Each plugin's page has its config, setup, panels, commands and buttons:
 | --- | --- | --- |
 | [github](docs/plugins/github.md) | `[github]` | my PRs, review requests and my teams' PRs (with `gh`) |
 | [git](docs/plugins/git.md) | `[git]` | each repo's worktrees and branches |
-| [git_stack](docs/plugins/git_stack.md) | `[git_stack]`, needs `[git]` | stacks from git-stack, in git's repos |
+| [git_stack](docs/plugins/git_stack.md) | `[git_stack]`, needs `[git]` | stacks from git stack, in git's repos |
 | [jira](docs/plugins/jira.md) | `[jira]` | my open tickets |
 | [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages; connects to the workspace's Slack app |
 | [mail](docs/plugins/mail.md) | `[mail]` | unread and flagged mail over IMAP, by subject and sender, the people who matter first |

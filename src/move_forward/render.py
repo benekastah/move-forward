@@ -664,7 +664,7 @@ def _status_of(key: str, sources: dict[str, SourceStatus]) -> SourceStatus | Non
 def _group(
     group: Group, dashboard: Dashboard, refreshing: AbstractSet[str], spot: Spot | None = None
 ) -> str:
-    """A group section; panel keys the dashboard left out (e.g. Stacks without git-stack) are
+    """A group section; panel keys the dashboard left out (e.g. Stacks without git stack) are
     skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click."""
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
     count = sum(_live(panel) for panel in panels)

@@ -1,19 +1,19 @@
 # git_stack
 
-Stacks of branches from [git-stack](https://github.com/benekastah/git-stack), in `[git]`'s
+Stacks of branches from [git stack](https://github.com/benekastah/git-stack), in `[git]`'s
 repos. Enabled by a `[git_stack]` section, which needs `[git]`.
 
 ## Config
 
-`[git_stack]` turns it on. `mfd init` adds it when git-stack is installed; add it by hand
+`[git_stack]` turns it on. `mfd init` adds it when git stack is installed; add it by hand
 to an older config. `refresh_seconds` (1800) is how often it refreshes regardless, a backstop. It
 watches git, which sees a change to `.git/config` as well as to branches: after each refresh of git it compares git's branches in its repos, and each
-repo's `.git/config` (where git-stack records each branch's parent, base and group), with
-what it saw last, and runs `git stack info` again only when they moved. Its buttons need a git-stack whose commands take `--json`.
+repo's `.git/config` (where git stack records each branch's parent, base and group), with
+what it saw last, and runs `git stack info` again only when they moved. Its buttons need a git stack whose commands take `--json`.
 
 ## Publishes
 
-`git_stack.stack_branch` for each branch git-stack tracks, pointing at `git.branch` (which git may
+`git_stack.stack_branch` for each branch git stack tracks, pointing at `git.branch` (which git may
 have deleted), with its parent, status and, on a stack's bottom branch, its group; see
 [entities.md](../entities.md).
 
@@ -35,12 +35,12 @@ A merged branch has a Clean button of its own too, the same as its repo's.
 
 ## Act now
 
-git_stack nominates the branches git-stack sees merged, quick to clean up: one per repo, since
+git_stack nominates the branches git stack sees merged, quick to clean up: one per repo, since
 its Clean cleans them all, saying how many more there are.
 
 ## Other plugins' items
 
-On notes' On ice panel, git_stack adds Untrack to a stack while git-stack tracks its
+On notes' On ice panel, git_stack adds Untrack to a stack while git stack tracks its
 branches.
 
 ## Buttons
@@ -48,7 +48,7 @@ branches.
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/actions/git_stack/untrack` | `targets` (lines of `<repo dir>\t<branch>`) | `git stack untrack --json` for each repo's, saying which branches still stacked on them now start their own stacks. |
-| `/actions/git_stack/stack_restack` | `repo`, `branch` (a branch git-stack tracks there) | `git stack restack <branch> --json`, with a confirm: rebases its stack onto their parents locally, pushing nothing; on a conflict it stops with the conflicting branch of the stack checked out in the repo's checkout and a rebase in progress, and says where; a branch it skips (checked out in another worktree) it names. Offered on Stacks' `needs-restack` items. |
+| `/actions/git_stack/stack_restack` | `repo`, `branch` (a branch git stack tracks there) | `git stack restack <branch> --json`, with a confirm: rebases its stack onto their parents locally, pushing nothing; on a conflict it stops with the conflicting branch of the stack checked out in the repo's checkout and a rebase in progress, and says where; a branch it skips (checked out in another worktree) it names. Offered on Stacks' `needs-restack` items. |
 | `/actions/git_stack/stack_clean` | `repo` | `git stack clean -d local --json`, saying which branches it deleted, which it untracked but kept, and its warnings, or, when it fails, what it did first. |
 
 ## Notifications

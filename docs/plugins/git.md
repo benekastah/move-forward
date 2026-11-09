@@ -9,7 +9,7 @@ Enabled by a `[git]` section.
 it refreshes within seconds of a change: it watches each repo (with watchfiles: inotify
 on Linux, FSEvents on macOS, `ReadDirectoryChangesW` on Windows), so a commit, checkout,
 new or deleted branch, rebase, push or fetch, a change to its config (an upstream set,
-git-stack tracking a branch), staging, or an edit that changes what `git status` counts,
+git stack tracking a branch), staging, or an edit that changes what `git status` counts,
 refreshes the repo it happened in, reading only that one.
 
 It watches each repo's git directory, and each worktree where git tracks files: on Linux
@@ -33,7 +33,7 @@ that aren't on the default branch (anywhere in its history, by the repo's `user.
 counted for branches active within `commit_history_days`), or if its name starts with one
 of `my_branch_prefixes`. Without prefixes, a branch with only others' commits (a review
 checkout) isn't yours, and an older one that wasn't counted is. Local work also shows
-the unpushed commits of any branch git-stack tracks (with the git_stack plugin), since
+the unpushed commits of any branch git stack tracks (with the git_stack plugin), since
 stacks are built on your own branches. `ignored_worktree_globs`
 leaves worktrees out, and `commit_history_days` says how far back
 your commits (by the repo's `user.email`) count towards the directories you work in. A
@@ -77,7 +77,7 @@ see [entities.md](../entities.md).
   warning that the commits go with it: one whose PR merged but that points at another commit
   than the one that merged, and one whose remote is gone with commits not on the default branch
   (or where that isn't known). Delete and Delete all are refused for a branch that moved since
-  the page showed it. A branch git-stack sees merged is left to git_stack's Clean, which untracks it
+  the page showed it. A branch git stack sees merged is left to git_stack's Clean, which untracks it
   as it deletes it. Delete is a 🗑️ icon, its label in its title; when notes also offers
   Put on ice, the two appear as one group. Delete still asks for confirmation.
 

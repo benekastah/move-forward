@@ -460,7 +460,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
         check_in.add_argument("--on", help="the day, YYYY-MM-DD (default: today)")
     ice = add(
         "ice",
-        "put a branch (with its git-stack stack), a PR, a ticket or a work entry on ice"
+        "put a branch (with its stack in git stack), a PR, a ticket or a work entry on ice"
         " (needs a refresh first)",
     )
     what = ice.add_mutually_exclusive_group(required=True)

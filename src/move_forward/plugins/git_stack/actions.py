@@ -1,4 +1,4 @@
-"""The git-stack plugin's buttons: `git stack clean` and `restack`, and untracking iced
+"""The git_stack plugin's buttons: `git stack clean` and `restack`, and untracking iced
 branches.
 
 The repo must be one git has branches in, i.e. one of `[git] repos`.
@@ -139,7 +139,7 @@ def stack_restack(req: ActionRequest[GitStackConfig]) -> str:
     target = f"{req.field('repo')}\t{req.field('branch')}"
     tracked = graph.view_one(STACK_BRANCH, target, StackBranchView)
     if tracked is None:
-        raise ActionError(f"git-stack doesn't track {target!r} in one of git's checkouts")
+        raise ActionError(f"git stack doesn't track {target!r} in one of git's checkouts")
     if tracked.repo_dir not in repo_dirs(graph):
         raise ActionError(f"{tracked.repo_dir} is not a configured repo")
     try:
@@ -159,7 +159,7 @@ def stack_restack(req: ActionRequest[GitStackConfig]) -> str:
 
 def untrack(req: ActionRequest[GitStackConfig]) -> str:
     """`git stack untrack --json` the `<repo>\t<branch>` lines of `targets`, repo by repo.
-    Each must be a branch git-stack tracks: `git stack untrack` takes globs too, and they'd
+    Each must be a branch git stack tracks: `git stack untrack` takes globs too, and they'd
     match more."""
     graph, fields = req.graph, req.fields
     by_repo: dict[str, list[str]] = {}
@@ -168,7 +168,7 @@ def untrack(req: ActionRequest[GitStackConfig]) -> str:
             continue
         tracked = graph.view_one(STACK_BRANCH, target, StackBranchView)
         if tracked is None:
-            raise ActionError(f"git-stack doesn't track {target!r} in one of git's checkouts")
+            raise ActionError(f"git stack doesn't track {target!r} in one of git's checkouts")
         by_repo.setdefault(tracked.repo_dir, []).append(tracked.name)
     if not by_repo:
         raise ActionError("no branches to untrack")

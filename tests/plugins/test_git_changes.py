@@ -63,7 +63,7 @@ def test_commits_checkouts_branches_and_config_change_the_fingerprint_but_status
     assert moved()
     git(tmp_path / "wt", "commit", "-q", "--allow-empty", "-m", "in the worktree")
     assert moved()
-    git(repo, "config", "branch.feature.stackParent", "main")  # as git-stack tracks it
+    git(repo, "config", "branch.feature.stackParent", "main")  # as git stack tracks it
     assert moved()
 
 
