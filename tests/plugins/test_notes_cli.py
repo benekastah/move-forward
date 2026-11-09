@@ -258,7 +258,7 @@ def test_an_import_from_a_directory_without_the_notes_says_so(run: Run, tmp_path
 
 @pytest.mark.parametrize(
     ("title", "said"),
-    [("", "needs a title"), ("Two\nlines", "one line"), ("Reviews requested of me", "section")],
+    [("", "is empty"), ("Two\nlines", "one line"), ("Reviews requested of me", "section")],
 )
 def test_add_entry_takes_only_titles_the_notes_read_back(run: Run, title: str, said: str) -> None:
     code, _, err = run("add-entry", title)

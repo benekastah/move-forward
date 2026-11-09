@@ -299,7 +299,7 @@ def entry_title(text: str) -> str:
     would read it back as something else: a line break (any `splitlines` takes) splits its
     heading, and a title of a section of its own is that section."""
     if not text.strip():
-        raise ActionError("an entry needs a title")
+        raise ActionError("an entry's title is empty")
     if len(text.splitlines()) > 1:
         raise ActionError("an entry's title is one line")
     if text.casefold() == REVIEWS_SECTION.casefold():
