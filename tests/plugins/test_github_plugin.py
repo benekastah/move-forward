@@ -11,7 +11,7 @@ from conftest import ME, NOW, pr, snapshot
 from legacy import save_json_snapshot
 
 from move_forward.db import Database
-from move_forward.graph import Graph
+from move_forward.graph import Graph, Ref
 from move_forward.page import Identity
 from move_forward.plugin import (
     CollectRequest,
@@ -21,6 +21,7 @@ from move_forward.plugin import (
     IdentityRequest,
     PruneRequest,
     StoreRequest,
+    SubjectsRequest,
 )
 from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
@@ -380,6 +381,46 @@ def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     found = GitHubPlugin().collect(CollectRequest(ctx))
     assert found.team_members == ["ann"]  # mine, not acme/x's
+
+
+def test_refreshing_subjects_fetches_those_prs_into_their_lists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked: list[list[client.PrId]] = []
+
+    def fetch_prs(host: str, ids: list[client.PrId]) -> list[PullRequest]:
+        asked.append(ids)
+        return [pr(1, title="Renamed"), pr(3, author="alice", requested_users=[ME])]
+
+    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
+    ctx = _context()
+    stored = snapshot(mine=[pr(1), pr(2)])
+    refs = [Ref(kind="pull_request", id=pr(n).url) for n in (1, 3, 4)]  # 4: gone
+    found = GitHubPlugin().refresh_subjects(SubjectsRequest(ctx, refs, stored))
+    assert found is not None
+    assert asked == [[client.PrId(repo="acme/widgets", number=n) for n in (1, 3, 4)]]
+    assert [(p.number, p.title) for p in found.snapshot.mine] == [(1, "Renamed"), (2, "PR 2")]
+    assert [p.number for p in found.snapshot.direct_requests] == [3]
+    assert found.updated == refs[:2]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.example.com/acme/widgets/pull/1",  # another host
+        "https://github.com/acme/widgets/issues/1",
+        "https://github.com/acme/widgets/pull/x",
+    ],
+)
+def test_refreshing_what_isnt_one_of_the_hosts_prs_falls_back_to_a_refresh(url: str) -> None:
+    ref = Ref(kind="pull_request", id=url)
+    plugin = GitHubPlugin()
+    assert plugin.refresh_subjects(SubjectsRequest(_context(), [ref], snapshot())) is None
+
+
+def test_refreshing_subjects_before_a_first_refresh_waits_for_it() -> None:
+    ref = Ref(kind="pull_request", id=pr(1).url)
+    assert GitHubPlugin().refresh_subjects(SubjectsRequest(_context(), [ref], None)) is None
 
 
 def test_the_daily_prune_looks_up_old_misses_again() -> None:

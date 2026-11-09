@@ -383,6 +383,7 @@ class Builder:
             ]
             if reasons:
                 item = pr_item(self.now, pr, details=reasons, rank=-pr.updated_at.timestamp())
+                item = self._with_rerun(item, pr) if ci else item
                 fixing.append(self._with_reviewer_field(item, pr) if assignment else item)
             elif not approved(pr) and (
                 review_required(pr) or pr.requested_users or pr.requested_teams
@@ -512,10 +513,7 @@ class Builder:
                     )
             if details:
                 item = pr_item(self.now, pr, details=details, links=links, rank=len(failing))
-                if failed_runs(self.config.host, pr, self.config.policy_checks):
-                    rerun = Action(name=RERUN_FAILED, label="Rerun failed", fields={"pr": pr.url})
-                    item = item.model_copy(update={"actions": [*item.actions, rerun]})
-                items.append(item)
+                items.append(self._with_rerun(item, pr))
         return Panel(
             key="ci_failures",
             priority=Band.CI,
@@ -833,6 +831,13 @@ class Builder:
             " from before it stop counting as unanswered, as with any push.",
         )
         return item.model_copy(update={"actions": [*item.actions, update]})
+
+    def _with_rerun(self, item: Item, pr: PullRequest) -> Item:
+        """The PR's item with Rerun failed, when it has a failed Actions run that's over."""
+        if not failed_runs(self.config.host, pr, self.config.policy_checks):
+            return item
+        rerun = Action(name=RERUN_FAILED, label="Rerun failed", fields={"pr": pr.url})
+        return item.model_copy(update={"actions": [*item.actions, rerun]})
 
     # Picking reviewers
 

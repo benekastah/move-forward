@@ -137,13 +137,16 @@ def collect(
         )
         for pr in asked.values()
     }
+    # Every PR of mine can want a reviewer picked: Needs a reviewer's and the reviewer fields.
     suggestions = {
         pr.url: suggest_reviewers(
-            repos[pr.repo.lower()], pr.files, commit_history_days, emails, {github.login}
+            repos[pr.repo.lower()],
+            pr.files,
+            commit_history_days,
+            emails,
+            {github.login, *pr.requested_users},
         )
         for pr in github.mine
         if pr.repo.lower() in repos
-        and set(teams).intersection(pr.requested_teams)
-        and not pr.requested_users
     }
     return DerivedSnapshot(suggestions=suggestions, team_scores=scores)

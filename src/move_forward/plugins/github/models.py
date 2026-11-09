@@ -162,6 +162,7 @@ class TeamPrScore(Model):
 
 class DerivedSnapshot(Model):
     suggestions: dict[str, list[ReviewerSuggestion]] = Field(default_factory=dict)
-    """Reviewer suggestions keyed by PR URL, for my PRs waiting on my team."""
+    """Reviewer suggestions keyed by PR URL, for my open PRs in a checkout: recent committers
+    to what it changes, but me and those already asked."""
     team_scores: dict[str, TeamPrScore] = Field(default_factory=dict)
     """Keyed by PR URL, for PRs requesting my team's review."""
