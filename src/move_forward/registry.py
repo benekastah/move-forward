@@ -10,7 +10,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import entry_points
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
@@ -355,7 +354,6 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
             kv=KvRepository(db, plugin.name),
             dashboard_url=f"http://localhost:{config.port}",
             name=plugin.name,
-            data_root=Path(config.db_path).parent,
         )
         result.append(Enabled(plugin, ctx))
     return result

@@ -13,12 +13,11 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
-from . import localtime, private, shell
+from . import localtime, shell
 from .act_now import DUE_HORIZON
 from .asking import Asker, InitSetup
 from .db import Database, Migration
@@ -64,25 +63,11 @@ class Context[C: BaseModel]:
     machine; the dashboard sends it on to `mfd.localhost`, where its sign-in cookie is."""
     name: str = ""
     """The plugin's name, as `Plugin.name`."""
-    data_root: Path | None = None
-    """Where plugins' files go (see `data_dir`): beside the database."""
 
     @property
     def log(self) -> logging.Logger:
         """The plugin's logger, `move_forward.plugins.<name>`, so its lines say whose they are."""
         return logging.getLogger(f"move_forward.plugins.{self.name}")
-
-    @property
-    def data_dir(self) -> Path:
-        """A directory of the plugin's own, for files it keeps (a cache, a clone): made on
-        first use, private to me like the database beside it."""
-        if self.data_root is None or not self.name:
-            raise RuntimeError("this context has no data directory")
-        path = self.data_root / "plugins" / self.name
-        if not path.is_dir():
-            path.mkdir(parents=True)
-            private.make_private(path)
-        return path
 
     @property
     def today(self) -> date:

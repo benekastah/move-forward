@@ -19,6 +19,8 @@ Fewer things to know: what no plugin used is gone.
   property saying whether the plugin does, no longer a class variable to set. Such a plugin
   is refreshed on its own schedule, no longer with the plugins it `requires`; to refresh
   soon after they change, it `watches` them.
+- **No `ctx.data_dir`**: `Context` loses `data_dir` and `data_root`. A plugin keeps what it
+  needs in its tables or `ctx.kv`.
 
 ## Version 1
 

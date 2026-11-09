@@ -151,8 +151,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - Every hook gets `ctx`, the plugin's context: its section (`ctx.config`), `ctx.name`,
   `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, its database (`ctx.db`) and key/value
   state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
-  a logger named for it (`ctx.log`), and `ctx.data_dir`, a private directory of its own for
-  files, made on first use beside the database.
+  and a logger named for it (`ctx.log`).
 
 - A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it
