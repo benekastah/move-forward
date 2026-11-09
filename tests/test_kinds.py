@@ -7,11 +7,11 @@ import pytest
 from conftest import NOW, issue, pr, snapshot, stored
 from pydantic import ValidationError
 
-from move_forward import registry
+from move_forward import kinds, registry
 from move_forward.domain import KindModel, Model
 from move_forward.graph import Entity, Graph, KindSpec, Ref, attrs
 from move_forward.ids import branch_id, branch_parts
-from move_forward.kinds import PULL_REQUEST, TICKET, PullRequest, Ticket
+from move_forward.kinds import PERSON, PULL_REQUEST, TICKET, PullRequest, Ticket
 from move_forward.plugin import API_VERSION, EntitiesRequest, Plugin
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
@@ -67,6 +67,17 @@ def test_a_kinds_attributes_are_strict() -> None:
                 "requested_user": ["alice"],  # misspelt: published nothing before
             }
         )
+
+
+def test_core_leaves_organisations_to_a_plugin_that_declares_them() -> None:
+    class Account(KindModel):
+        handle: str
+        tier: str
+
+    assert {f.name for f in kinds.CORE_FAMILIES} == {PULL_REQUEST, TICKET, PERSON}
+    organisation = kinds.Family("organisation", "account", Account, kinds.is_host_login)
+    with kinds.declaring("crm", [organisation], keep=False):
+        assert kinds.FAMILIES["organisation"] is organisation
 
 
 def test_the_built_in_kinds_extend_their_families() -> None:

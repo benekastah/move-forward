@@ -28,8 +28,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   model of its attributes, which the graph checks its entities against, and its flags
   (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `tags_from_text`). An entity says
   whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
-  states. What more than one tool may represent (a pull request, a ticket, a person, an
-  organisation) is a family (`api.kinds.Family`): core declares those four, and a plugin (or a package several
+  states. What more than one tool may represent (a pull request, a ticket, a person) is a
+  family (`api.kinds.Family`): core declares those three, and a plugin (or a package several
   share) declares others in `families`. A plugin's kind of a family extends its model, and
   its ids follow the family's rule (a URL; `<host>/<login>` for a person), so they're
   unique whoever publishes them. A consumer reads
@@ -68,7 +68,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   `prepare_item_actions`. Core adds its own to items: the importance choices on
   every item about an entity (but what `hides`), with Clear priority once one's set; Snooze
   and Dismiss on every item with a task, wherever it's shown, and Pin in Act now; on an item
-  about a person or an organisation (`people.py`) their contact type, and Set type for a
+  about a person (`people.py`) their contact type, and Set type for a
   person with an address; and on every item about an
   entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag I put on it
   (`tags.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,

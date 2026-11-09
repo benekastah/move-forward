@@ -273,7 +273,7 @@ class LinearPlugin(...):
   `tests/test_entities_doc.py` fails until you do. [plugins.md](plugins.md) draws who
   publishes and reads what.
 - **Families.** A kind that more than one tool could publish (a pull request, a ticket, a
-  person, an organisation) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
+  person) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
   extend its model (`class LinearIssue(Ticket)`), setting `handle` to how your tool shows
   it, and give each entity an id by the family's rule (`api.kinds.FAMILIES[...].id_rule`;
   [entities.md](entities.md#families) lists them), so it's unique across tools. Its refs
@@ -292,8 +292,7 @@ class LinearPlugin(...):
 - **People.** A tool that knows who something is about publishes them as `person`s, with an
   `email` if it has one, and points the entity at them. Core then joins them with the same
   person in other tools (`graph.same_person`), and ranks and badges their items by contact type,
-  which a tool that knows it (a CRM) sets in `contact_type`, or by an `importance` it states
-  outright (a VIP, a starred contact). Don't do either yourself.
+  which a tool that knows it (a CRM) sets in `contact_type`. Don't do either yourself.
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
   declared `linking` (`KindSpec(..., linking=True)`), so the graph relates what's about it.
   Give the pattern of its ids in `linking_patterns` (from what the plugin has seen, if need
