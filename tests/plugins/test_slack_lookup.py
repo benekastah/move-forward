@@ -76,7 +76,7 @@ def test_requested_reviewers_are_looked_up_once_each(monkeypatch: pytest.MonkeyP
         ),
         (
             client.SlackError("users.lookupByEmail", "token_expired"),
-            "said token_expired: give slack a token that works, with `mfd token set slack`",
+            "said token_expired: give slack a token that works: set $SLACK_API_TOKEN, or `mfd token set slack`",
         ),
         (RequestError("https://slack.com/api/users.lookupByEmail", "no network"), "no network"),
     ],

@@ -28,7 +28,14 @@ CHANNEL_ID_RE = re.compile(r"^[CG][A-Z0-9]{6,}$")
 CHANNEL_NAME_RE = re.compile(r"^#[\w-]+$")
 LOOKUPS_FAILED = "lookups_failed"
 """The kv key of why looking up Slack ids by email last failed, for the contacts page."""
-BAD_TOKEN = {"invalid_auth", "not_authed", "token_expired", "token_revoked", "account_inactive"}
+BAD_TOKEN = {
+    "invalid_auth",
+    "not_authed",
+    "token_expired",
+    "token_revoked",
+    "account_inactive",
+    "not_allowed_token_type",
+}
 """Slack's refusals of the token itself, rather than of one lookup."""
 
 
@@ -221,15 +228,15 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
     return html.page("Where pings go", "where pings go", body)
 
 
-def _hint(failure: Exception) -> str:
+def _hint(failure: Exception, token_env: str) -> str:
     """What to do about a lookup Slack refused for its token, after the refusal: give it the
-    scope it lacks, or a token that works."""
+    scope it lacks, or a token that works (where slack reads one: `token_env` first)."""
     if not isinstance(failure, client.SlackError):
         return ""
     if failure.error == "missing_scope":
         return ": the token needs users:read.email"
     if failure.error in BAD_TOKEN:
-        return ": give slack a token that works, with `mfd token set slack`"
+        return f": give slack a token that works: set ${token_env}, or `mfd token set slack`"
     return ""
 
 
@@ -258,7 +265,7 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
             slack_id = client.lookup_by_email(api_token, email)
         # Slack's refusal, no network or a cut answer, or one that isn't JSON.
         except (client.SlackError, http.RequestError, ValueError) as e:
-            ctx.kv.set(LOOKUPS_FAILED, f"{e}{_hint(e)}")
+            ctx.kv.set(LOOKUPS_FAILED, f"{e}{_hint(e, ctx.config.token_env)}")
             return found
         slack.save_looked_up(login, slack_id, ctx.now)
         if slack_id:
