@@ -109,8 +109,8 @@ class LinearConfig(Strict):
   jira and slack do, and read the token with `keychain.token(config, email)`: then
   `mfd token set <plugin>` stores it and `mfd token check` finds it; `token_help` is `mfd
   init`'s next step for it, saying where to get one (a section that keeps
-  them under other names overrides `tokens(config)`, returning `{"": settings}`, an
-  `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
+  them under other names overrides `tokens(config)`, returning `{"": settings}`, where
+  `settings` is an `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
   (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading
   several accounts, each with its own token, names them all in `tokens(config)`, and `mfd
   token set <plugin>.<account>` stores one. Anything sent with a

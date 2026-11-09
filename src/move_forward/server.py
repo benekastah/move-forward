@@ -227,12 +227,12 @@ class App:
         """Why `e.plugin.changed` says its tool has something new ("" when it doesn't say);
         None when it hasn't, or the check fails: logged at debug, since the plugin's refresh
         shows the error, and tried again next time."""
-        try:
+        try:  # reading the answer too: a plugin of an older API may give a bare bool
             answer = e.plugin.changed(ChangedRequest(e.ctx, graph))
+            return answer.reason if answer.changed else None
         except Exception:
             log.debug("%s: change check failed", e.name, exc_info=True)
             return None
-        return answer.reason if answer.changed else None
 
     def check_for_changes(self, now: float | None = None) -> set[str]:
         """Ask each plugin whose `change_check_seconds` have passed whether it `changed`,

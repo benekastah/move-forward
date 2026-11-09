@@ -27,7 +27,9 @@ Fewer things to know: what no plugin used is gone.
   `subjects_timeout_seconds` are gone. `collect` (and `collect_after`) has five minutes, and
   `refresh_subjects` a minute, for every plugin.
 - **`KindSpec.linking` is a `bool`**: `linking=True` where it was `linking=None`. A pattern
-  for its ids comes only from `linking_patterns`, which by default gives none.
+  for its ids comes only from `linking_patterns`, which by default gives none: a kind that
+  gave `linking` a pattern string sets `linking=True` and returns the pattern from
+  `linking_patterns` (`{kind: pattern}`), or its ids are never found in text.
 - **Two hooks no plugin overrode are gone**: `refresh_seconds(ctx)` (a plugin refreshes on
   its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
   place under other names overrides `tokens(config)`, returning `{"": settings}`).

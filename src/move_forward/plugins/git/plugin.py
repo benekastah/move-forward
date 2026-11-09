@@ -196,7 +196,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         # Pending until `collect` takes them: what's seen in the check core makes right after
         # a refresh (whose answer it ignores) still asks for a refresh at the next one.
         return Changed(
-            bool(pending) or (before is not None and set(before) != set(now)), "a repo moved"
+            bool(pending) or (before is not None and set(before) != set(now)),
+            "a repo moved or was edited",
         )
 
     def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:
