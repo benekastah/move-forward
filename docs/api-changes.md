@@ -54,11 +54,11 @@ for themselves (a token, a request, an example config) is core's.
   token, with `token_env` and `keychain_service`, defaulting to the class's
   `default_token_env` and `default_keychain_service`.
 - **Text as shown**: `api.html.shown(text)` drops what could make text a stranger wrote read
-  as something else (bidi controls, the zero-width space and no-break space, the word
-  joiner, the soft hyphen, Hangul fillers, tag characters outside a flag; not ZWJ and ZWNJ),
-  turns control characters into spaces, and collapses its whitespace. Core shows every
-  item's title, subtitle, details, badges and links' text through it; use it for such text
-  on a plugin's own pages.
+  as something else (bidi controls, the zero-width space and zero-width no-break space, the
+  word joiner, the soft hyphen, Hangul fillers, tag characters outside a flag; not ZWJ and
+  ZWNJ), turns control characters into spaces, and collapses its whitespace. Core shows
+  every item's title, subtitle, details, badges and links' text through it; use it for such
+  text on a plugin's own pages.
 - **One HTTP request**: `api.http.request(url, *, secret_name, headers, json, form, method,
   timeout)` sends a request carrying a secret (https only, no redirects) with a JSON or form
   body, and returns the answer's body. When there's no answer (no network, a timeout, a cut

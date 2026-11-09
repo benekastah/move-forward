@@ -23,8 +23,8 @@ _HIDDEN = {
     )
 }
 """Characters that change how text reads, or hide it, without showing: bidi controls, the
-zero-width space and no-break space, the word joiner, the soft hyphen and Hangul fillers. Kept:
-ZWJ and ZWNJ, which emoji and scripts (Persian, Indic) need."""
+zero-width space and zero-width no-break space, the word joiner, the soft hyphen and Hangul
+fillers. Kept: ZWJ and ZWNJ, which emoji and scripts (Persian, Indic) need."""
 
 _CODE = r"[\U000E0030-\U000E0039\U000E0061-\U000E007A]{2,6}"  # tag digits and lower-case letters
 _TAGS = re.compile(rf"(\U0001F3F4{_CODE}\U000E007F)|[\U000E0000-\U000E007F]")

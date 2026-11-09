@@ -399,7 +399,7 @@ def test_a_section_keeping_a_token_must_say_where_by_default(missing: str) -> No
     defaults = {"default_token_env": "HALF_TOKEN", "default_keychain_service": "half"}
     del defaults[missing]
     with pytest.raises(TypeError, match=f"_Half must set {missing}"):
-        type("_Half", (keychain.TokenFields,), {"__annotations__": {}, **defaults})
+        type("_Half", (keychain.TokenFields,), defaults)
 
 
 def test_the_context_core_gives_holds_the_plugins_tokens(
