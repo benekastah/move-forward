@@ -64,7 +64,8 @@ count as tickets, so `UTF-8` doesn't. See [entities.md](../entities.md).
 - **Rollouts**: tickets in a `status_rollout` status, each with its PRs as links saying where
   each is ("ready to merge #123", "draft #124", "merged #120"): "Advance the rollout" while some are
   open (low urgency, raised when one is ready to merge), "Finish the rollout" with a Move to Closed
-  button once all have merged.
+  button once all have merged, and Move to In Progress or to Closed once all were closed
+  without merging.
 - **What next**: my tickets (with their due dates), incidents (by escalation label, if configured), then bugs,
   then unblocked work.
 

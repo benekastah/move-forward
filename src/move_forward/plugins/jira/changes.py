@@ -8,7 +8,7 @@ only ever says it was assigned.
 from ...api import Event, anchor
 from ...api.kinds import TICKET
 from .config import JiraConfig
-from .models import JiraIssue, JiraSnapshot
+from .models import MAX_COMMENTS, JiraIssue, JiraSnapshot
 
 KINDS = {
     "assigned": "a ticket is assigned to me",
@@ -46,8 +46,12 @@ def _raised(config: JiraConfig, before: JiraIssue, after: JiraIssue) -> bool:
 def _changed(config: JiraConfig, old: JiraIssue, issue: JiraIssue) -> list[Event]:
     found: list[Event] = []
     seen = {c.id for c in old.comments}
+    # Only the newest `MAX_COMMENTS` are kept: once the window was full, one older than all of
+    # those, back in it because a newer one was deleted, isn't new.
+    full = len(old.comments) >= MAX_COMMENTS
+    oldest = min((c.created for c in old.comments), default=None) if full else None
     for comment in issue.comments:
-        if comment.id in seen or comment.mine:
+        if comment.id in seen or comment.mine or (oldest and comment.created < oldest):
             continue
         if comment.mentions_me:
             found.append(_event(issue, "mentioned", f"{comment.author} mentioned you"))

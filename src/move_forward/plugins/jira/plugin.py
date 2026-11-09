@@ -79,7 +79,9 @@ def escalation(issue: JiraIssue, label_prefix: str, levels: list[str]) -> int:
 def priority_level(issue: JiraIssue, priorities: list[str]) -> int:
     """An issue's priority as its 1-based position in `priorities` (lowest first); 0 when it
     has none or one that isn't listed."""
-    return priorities.index(issue.priority) + 1 if issue.priority in priorities else 0
+    order = [p.casefold() for p in priorities]  # as `priority_raised` reads them
+    name = (issue.priority or "").casefold()
+    return order.index(name) + 1 if name in order else 0
 
 
 def _first(names: list[str]) -> str:
@@ -132,6 +134,35 @@ def _state_link(pr: _PrView) -> Link:
     return Link(text=f"{pr.progress or pr.state} {pr.handle}", url=pr.url or pr.id)
 
 
+def _abandoned_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) -> Item:
+    """The item for a ticket in rollout whose PRs were all closed without merging: back to
+    work, as nothing of it is out."""
+    return Item(
+        title=f"{issue.key} {issue.summary}",
+        url=issue.url,
+        subtitle=f"{issue.status}: all PRs closed without merging",
+        details=["nothing of it merged: back to work, or close it"],
+        links=[_state_link(p) for p in prs],
+        subjects=[ticket_ref(issue)],
+        actions=[
+            Action(
+                name="jira/transition",
+                label=f"Move to {targets[0]}",
+                fields={"key": issue.key, "to": targets[0]}
+                | ({"also": "\n".join(targets[1:])} if targets[1:] else {}),
+            )
+            for targets in (config.status_in_progress, config.status_closed)
+            if targets
+        ],
+        signals=Signals(
+            verb="Take the rollout back",
+            task="take_the_rollout_back",
+            importance=-1,
+            effort="minutes",
+        ),
+    )
+
+
 def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) -> Item:
     """The low-urgency item for a ticket in rollout whose PRs have all merged: close it once
     monitoring is done."""
@@ -160,7 +191,8 @@ def _finish_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) ->
 
 
 def rollouts(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
-    """Tickets in a rollout status, with where each of their PRs is."""
+    """Tickets in a rollout status, with where each of their PRs is: moving on while one is
+    open, to close once they've all merged, back to work once they've all closed unmerged."""
     items: list[Item] = []
     for issue in snapshot.issues:
         if not in_status(issue, config.status_rollout):
@@ -170,6 +202,8 @@ def rollouts(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
             items.append(_advance_rollout(issue, prs))
         elif any(p.state == "merged" for p in prs):
             items.append(_finish_rollout(config, issue, prs))
+        elif prs:  # every one closed without merging: the rollout has nothing to roll out
+            items.append(_abandoned_rollout(config, issue, prs))
     return Panel(
         key="rollouts",
         priority=Band.TRANSITIONS + 1,  # after the transitions
@@ -262,9 +296,9 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
     )
 
 
-def end_of(day: date, now: datetime) -> datetime:
-    """When a due date runs out: the end of that day where I am."""
-    return datetime.combine(day + timedelta(days=1), time(), localtime.local(now).tzinfo)
+def end_of(day: date) -> datetime:
+    """When a due date runs out: the end of that day where I am, at that day's offset."""
+    return localtime.at(day + timedelta(days=1), time())
 
 
 def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Panel:
@@ -315,7 +349,11 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
             Item(
                 title=f"{issue.key} {issue.summary}",
                 url=issue.url,
-                subtitle=f"{issue.status} · {issue.priority or ''} · {age(now, issue.created)} old",
+                subtitle=" · ".join(
+                    part
+                    for part in (issue.status, issue.priority, f"{age(now, issue.created)} old")
+                    if part
+                ),
                 badges=badges,
                 rank=rank,
                 subjects=[ticket_ref(issue)],
@@ -326,7 +364,7 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                     verb=verb,
                     task=task,
                     importance=importance,
-                    due=end_of(issue.due, now) if issue.due else None,
+                    due=end_of(issue.due) if issue.due else None,
                     blocked=blocked,
                     touched=issue.updated,
                 ),
@@ -360,6 +398,10 @@ def _closing(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> set[st
 
 class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     name = "jira"
+    token_help: ClassVar[str] = (
+        "create an API token at https://id.atlassian.com/manage-profile/security/api-tokens,"
+        " then store it with `mfd token set jira` (or export it as JIRA_API_TOKEN)"
+    )
     title = "Jira"
     init_template = TEMPLATE
     init_example = EXAMPLE
@@ -473,7 +515,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 title=f"{i.key} {i.summary}",
                 url=i.url,
                 state=i.status,
-                lifecycle="done" if i.resolved else "open",
+                lifecycle="done" if i.status_category == "done" else "open",
                 attrs={"resolved_at": i.resolved.isoformat() if i.resolved else None},
             )
             for i in found

@@ -1,8 +1,10 @@
 """The Jira plugin's panels, built as core builds the page: alone through
 `move_forward.testing`'s `Harness`, and with github's PRs through `conftest`."""
 
-from datetime import timedelta
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
+import pytest
 from conftest import (
     NOW,
     approved_review,
@@ -16,9 +18,10 @@ from conftest import (
     titles,
 )
 
-from move_forward import refresh
+from move_forward import localtime, refresh
 from move_forward.act_now import ActNowConfig
 from move_forward.page import Badge
+from move_forward.plugins.jira import plugin as jira_plugin
 from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.refresh import build_dashboard
@@ -315,3 +318,35 @@ def test_a_tickets_labels_are_its_tags_except_escalation_labels() -> None:
     unprefixed = _jira([issue("APP-1", labels=["Garbage Day", "esc-sev1"])])
     [ticket] = unprefixed.entities()
     assert ticket.tags == ["Garbage Day", "esc-sev1"]  # no prefix: every label is a tag
+
+
+def test_a_rollout_whose_prs_all_closed_unmerged_goes_back_to_work() -> None:
+    closed = pr(1, state="CLOSED")
+    dashboard = build(
+        github=snapshot(closed_recent=[closed]),
+        jira=JiraSnapshot(issues=[issue("APP-1", status="Rollout")]),
+    )
+    [item] = panel(dashboard, "jira.rollouts").items
+    assert item.subtitle == "Rollout: all PRs closed without merging"
+    assert [a.fields["to"] for a in item.actions if a.name == "jira/transition"] == [
+        "In Progress",
+        "Closed",
+    ]
+    assert "Take the rollout back: APP-1 Do the thing" in [i.title for i in dashboard.act_now()]
+
+
+def test_priorities_rank_whatever_their_case_and_a_ticket_without_one_has_no_empty_slot() -> None:
+    dashboard = build(
+        jira=JiraSnapshot(issues=[issue("APP-1", priority="highest"), issue("APP-2")]),
+    )
+    items = {i.title.split()[0]: i for i in panel(dashboard, "jira.jira_next").items}
+    assert items["APP-2"].subtitle == "In Progress · 10d old"
+    assert jira_plugin.priority_level(issue(priority="highest"), ["Low", "Highest"]) == 2
+
+
+def test_a_due_date_across_a_clock_change_ends_at_that_days_midnight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(localtime, "zone", ZoneInfo("America/New_York"))
+    ends = jira_plugin.end_of(date(2026, 10, 31))  # clocks go back the night after
+    assert ends.astimezone(UTC) == datetime(2026, 11, 1, 4, tzinfo=UTC)
