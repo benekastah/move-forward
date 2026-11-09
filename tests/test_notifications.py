@@ -217,3 +217,13 @@ def test_only_the_subscribed_kinds_of_a_plugin_are_stored(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(_Git, "events", both)
     assert [n.tag for n in _run(["git.changed"]).take(NOW, KEEP)] == ["git:a"]
+
+
+def test_a_notification_shows_a_strangers_title_without_hidden_characters() -> None:
+    repo = NotificationRepository(Database(":memory:"))
+    event = Event(
+        kind="review_requested_me", thing="pr:1", title="Update \u202efdp.exe", text="asked\u200b"
+    )
+    repo.add("github", [event], NOW)
+    [told] = repo.take(NOW, KEEP)
+    assert (told.title, told.body) == ("Update fdp.exe", "asked")

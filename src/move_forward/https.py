@@ -8,7 +8,7 @@ import urllib.request
 from collections.abc import Mapping
 from email.message import Message
 from typing import IO
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 
 class _NoRedirects(urllib.request.HTTPRedirectHandler):
@@ -34,15 +34,25 @@ def require_https(url: str, secret: str) -> None:
         raise RuntimeError(f"not sending {secret} to {url}: it isn't https")
 
 
+def _shown_url(url: str) -> str:
+    """`url` as an error may say it: without its query or userinfo, where a tool's API might
+    take a key, so a failure never writes one to the log, the page or a notification."""
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.hostname or "", parts.path, "", ""))
+
+
 class RequestError(Exception):
     """A request that got no answer, or an HTTP error status for one: no network, a refused
-    or cut connection, a timeout, a garbled response, or the tool's 4xx or 5xx."""
+    or cut connection, a timeout, a garbled response, or the tool's 4xx or 5xx. Its message
+    names the URL without its query or userinfo; a secret goes in a header or the body, never
+    the URL."""
 
     def __init__(self, url: str, reason: str, status: int | None = None):
+        shown = _shown_url(url)
         super().__init__(
-            f"{url} answered HTTP {status} {reason}".rstrip()
+            f"{shown} answered HTTP {status} {reason}".rstrip()
             if status is not None
-            else f"couldn't reach {url}: {reason}"
+            else f"couldn't reach {shown}: {reason}"
         )
         self.url = url
         self.reason = reason

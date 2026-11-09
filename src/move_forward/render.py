@@ -266,10 +266,27 @@ LOGO = "<a href='/' class='logo'><img src='/logo.svg' alt=''> Move forward</a>"
 
 
 _HIDDEN = {
-    chr(c) for c in (0x061C, 0x200B, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A))
+    chr(c)
+    for c in (
+        0x00AD,  # soft hyphen
+        0x061C,
+        0x115F,  # Hangul fillers, which show as nothing
+        0x1160,
+        0x200B,
+        0x200E,
+        0x200F,
+        *range(0x202A, 0x202F),
+        0x2060,  # word joiner
+        *range(0x2066, 0x206A),
+        0x3164,
+        0xFEFF,  # zero-width no-break space
+        0xFFA0,
+        *range(0xE0000, 0xE0080),  # tag characters
+    )
 }
-"""Characters that change how text reads without showing: bidi controls, and the zero-width
-space. Other format characters (ZWJ, ZWNJ) are kept: emoji and scripts need them."""
+"""Characters that change how text reads, or hide it, without showing: bidi controls, the
+zero-width space and no-break space, the word joiner, the soft hyphen, Hangul fillers and tag
+characters. ZWJ and ZWNJ are kept: emoji and scripts (Persian, Indic) need them."""
 
 
 def shown(text: str) -> str:

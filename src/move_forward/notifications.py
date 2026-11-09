@@ -17,6 +17,7 @@ from pydantic import Field
 
 from .db import CORE, Database
 from .domain import Model
+from .render import shown
 from .repositories import KvRepository, SnapshotRepository
 from .strict import Strict
 
@@ -138,8 +139,8 @@ class NotificationRepository:
 
 def _notification(thing: str, events: list[tuple[str, str, str]]) -> Notification:
     """One thing's events as a notification: its title, and what happened, in order."""
-    title = events[0][0]
-    texts = list(dict.fromkeys(text for _, text, _ in events))
+    title = shown(events[0][0])  # a PR's or ticket's title: what a stranger wrote
+    texts = list(dict.fromkeys(shown(text) for _, text, _ in events))
     anchor = next((a for *_, a in reversed(events) if a), "")
     return Notification(
         title=title[:MAX_TEXT],

@@ -114,7 +114,8 @@ class LinearConfig(Strict):
   (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading
   several accounts, each with its own token, names them all in `tokens(config)`, and `mfd
   token set <plugin>.<account>` stores one. Anything sent with a
-  token must go over HTTPS: send it with `api.http.request`, which checks.
+  token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
+  the body, never the URL (its errors name the URL, without its query).
 - A section mapping the top-level teams to the tool's names for them (github's
   `[github.teams]`) names that field in `teams_field`, so the config refuses a team it
   doesn't have.

@@ -588,3 +588,13 @@ def test_a_buttons_choices_are_a_drop_down_beside_its_field() -> None:
 def test_a_focused_drop_down_holds_off_reloads_and_arrow_keys() -> None:
     assert "closest('input, textarea, select')" in render.RELOAD_SCRIPT
     assert "closest('input, textarea, select')" in render.FOCUS_KEYS_SCRIPT
+
+
+def test_shown_keeps_right_to_left_letters() -> None:
+    for text in (
+        "שלום עולם",
+        "مرحبا بالعالم",
+        "می\u200cخواهم",
+    ):  # Hebrew, Arabic, Persian with ZWNJ
+        assert render.shown(text) == text
+    assert render.shown("a\u00adb\u2060c\ufeffd\U000e0041e") == "a b c d e"  # hidden: each a space
