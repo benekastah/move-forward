@@ -724,7 +724,7 @@ class _SlackChanging(SlackPlugin):
     change_check_seconds: ClassVar[int | None] = 60
 
     def changed(self, req: ChangedRequest[SlackConfig]) -> Changed:
-        return Changed(True, "a commit")
+        return Changed(True, "a message")
 
 
 class _GitHubAnsweringBadly(GitHubPlugin):
@@ -741,8 +741,6 @@ def test_a_malformed_change_check_is_a_failed_one(
     # Slack is checked after github (by name), so its change counts only if the round goes on.
     swap = {"github": _GitHubAnsweringBadly(), "slack": _SlackChanging()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    app.config = app.config.with_section("slack", SlackConfig())
-    migrate(app.config, app.db)
     assert app.check_for_changes(1000.0) == {"slack"}
 
 
