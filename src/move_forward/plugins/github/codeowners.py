@@ -2,7 +2,9 @@
 
 Follows GitHub's rules: the last matching line wins, patterns behave like .gitignore
 (a leading or inner `/` anchors to the repo root, `*` stays within a path segment, `**`
-crosses segments), and a pattern that names a directory owns everything below it.
+crosses segments, and `**/` matches no directory too), and a pattern that names a directory
+owns everything below it. One whose last segment has a wildcard names only what it matches:
+`docs/*` owns `docs/a.md`, not `docs/sub/b.md`.
 """
 
 import re
@@ -29,6 +31,10 @@ def _glob_to_regex(pattern: str) -> str:
         if char == "\\" and i + 1 < len(pattern):
             out.append(re.escape(pattern[i + 1]))
             i += 2
+            continue
+        if pattern.startswith("**/", i):
+            out.append("(.*/)?")
+            i += 3
             continue
         if pattern.startswith("**", i):
             out.append(".*")
@@ -86,11 +92,13 @@ class CodeOwners:
             return
         regex = _glob_to_regex(body)
         prefix_part = _GLOB_CHARS.split(body, maxsplit=1)[0].replace("\\", "")
+        names_a_directory = pattern.endswith("/") or not _GLOB_CHARS.search(body.split("/")[-1])
+        below = "(/.*)?" if names_a_directory else ""
         if anchored:
-            compiled = re.compile(f"^{regex}(/.*)?$")
+            compiled = re.compile(f"^{regex}{below}$")
             prefix = prefix_part
         else:
-            compiled = re.compile(f"^(.*/)?{regex}(/.*)?$")
+            compiled = re.compile(f"^(.*/)?{regex}{below}$")
             prefix = ""
         self._globs.append((prefix, compiled, rule))
 

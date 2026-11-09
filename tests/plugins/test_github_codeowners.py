@@ -40,6 +40,18 @@ def test_catch_all_and_escaped_brackets() -> None:
     assert owners("client/pages/[id]/page.tsx") == (("@org/web",), False)
 
 
+def test_a_wildcard_last_names_only_what_it_matches_and_a_leading_globstar_matches_the_root() -> (
+    None
+):
+    rules = codeowners.CodeOwners("docs/* @docs\n**/logs @logs\napps/**/build/ @build\n")
+    assert rules.owners("docs/getting-started.md") == (("@docs",), False)
+    assert rules.owners("docs/build-app/troubleshooting.md") == ((), False)  # GitHub's example
+    assert rules.owners("logs/x.log") == (("@logs",), False)
+    assert rules.owners("deploy/logs/x.log") == (("@logs",), False)
+    assert rules.owners("apps/build/out.js") == (("@build",), False)
+    assert rules.owners("apps/web/build/out.js") == (("@build",), False)
+
+
 def test_required_needs_the_configured_marker() -> None:
     assert codeowners.CodeOwners(FILE).owners("app/api/x") == (("@org/api",), False)
     assert codeowners.CodeOwners(FILE, "#!must").owners("app/api/x") == (("@org/api",), False)

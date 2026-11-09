@@ -65,3 +65,11 @@ def test_the_branch_sees_its_pr_and_the_pr_its_branch() -> None:
     )
     branches = graph.related(Ref(kind=PR_KIND, id=pr(1).url), BRANCH)
     assert [b.ref.id for b in branches] == [f"{WIDGETS}\tme/APP-1-branch"]
+
+
+def test_a_checkout_relates_whatever_case_its_remote_names_the_repo_in() -> None:
+    widgets = local_snapshot(branches=[local_branch("me/APP-1-branch")]).repos[0]
+    cased = widgets.model_copy(update={"github_repo": "Acme/Widgets"})
+    graph = _graph(snapshot(mine=[pr(1)]), LocalSnapshot(repos=[cased]))
+    assert pr(1).repo == "acme/widgets"
+    assert _from(graph, "me/APP-1-branch") == [pr(1).url]

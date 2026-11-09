@@ -549,13 +549,14 @@ class Builder:
 
     def conflicts(self) -> Panel:
         items: list[Item] = []
-        my_heads = {pr.head for pr in self.mine}
+        my_heads = {(pr.repo.lower(), pr.head) for pr in self.mine}
         for pr in self.mine:
             if pr.is_draft or not has_conflicts(pr):
                 continue
             details = [f"mergeable: {pr.mergeable}, state: {pr.merge_state}"]
             signals = None
-            if pr.base in my_heads:  # stacked on another of my branches: restacking fixes it
+            # Stacked on another of my branches: restacking fixes it.
+            if (pr.repo.lower(), pr.base) in my_heads:
                 details.insert(0, f"stacked on {pr.base}: restack (git stack sync)")
                 signals = Signals(
                     verb="Restack the stack", task="restack_the_stack", effort="minutes"

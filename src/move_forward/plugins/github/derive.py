@@ -2,7 +2,7 @@
 
 from collections import Counter
 from collections.abc import Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from pydantic import Field
 
@@ -28,7 +28,7 @@ class Checkout(Model):
 
 
 def _in_my_dirs(path: str, my_dirs: list[str]) -> bool:
-    directory = str(Path(path).parent)
+    directory = str(PurePosixPath(path).parent)  # git's and GitHub's paths, on every system
     return any(directory == d or directory.startswith(d + "/") for d in my_dirs if d != ".")
 
 
@@ -77,7 +77,7 @@ def suggest_reviewers(
     Only authors whose email is known (so they map to a GitHub login) are suggested;
     `emails` are by login.
     """
-    dirs = sorted({str(Path(path).parent) for path in files}) or ["."]
+    dirs = sorted({str(PurePosixPath(path).parent) for path in files}) or ["."]
     if not repo.default_refs:
         return []
     try:
@@ -114,8 +114,9 @@ def collect(
     commit_history_days: int,
     required_owner_marker: str = "",
 ) -> DerivedSnapshot:
-    """`teams` are slugs, as PRs' requested teams have them."""
-    repos = {r.github_repo: r for r in checkouts}
+    """`teams` are slugs, as PRs' requested teams have them. A checkout's repo is matched to a
+    PR's whatever case the remote names it in, as GitHub's names ignore case."""
+    repos = {r.github_repo.lower(): r for r in checkouts}
     owners = {
         name: codeowners.load(Path(r.dir), required_owner_marker) for name, r in repos.items()
     }
@@ -128,9 +129,9 @@ def collect(
     scores = {
         pr.url: team_score(
             pr.files,
-            owners.get(pr.repo),
+            owners.get(pr.repo.lower()),
             team_handles,
-            repos[pr.repo].my_dirs if pr.repo in repos else [],
+            repos[pr.repo.lower()].my_dirs if pr.repo.lower() in repos else [],
             pr.file_lines,
             f"@{github.login}",
         )
@@ -138,10 +139,10 @@ def collect(
     }
     suggestions = {
         pr.url: suggest_reviewers(
-            repos[pr.repo], pr.files, commit_history_days, emails, {github.login}
+            repos[pr.repo.lower()], pr.files, commit_history_days, emails, {github.login}
         )
         for pr in github.mine
-        if pr.repo in repos
+        if pr.repo.lower() in repos
         and set(teams).intersection(pr.requested_teams)
         and not pr.requested_users
     }
