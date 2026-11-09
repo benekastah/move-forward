@@ -198,8 +198,8 @@ class MailConfig(Strict):
         ):
             # They're for [mail]'s host: an account on another keeps to its own.
             raise ValueError(
-                "[mail] sets auth_servers, but no account is on [mail]'s host to take them: set"
-                " them in the accounts they're for"
+                "[mail] sets auth_servers, but no account takes them (each is on another host,"
+                " or sets its own): set them in the accounts they're for"
             )
         if self.accounts and self.username:
             # Its own mailbox would stop being read, unnoticed, once accounts come.

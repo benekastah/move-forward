@@ -434,6 +434,16 @@ def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, 
     section = _example_section(plugin)
     if section is None:
         return  # no section to give (notes: always on)
+    _check_uncommented(plugin, section)
+    if "\n##" in f"\n{plugin.init_template}":
+        # And `mfd init`'s copy of the alternative, with its required keys as in the example.
+        written = f"[{plugin.name}]\n{plugin.init_example}{plugin.init_template}"
+        _check_uncommented(plugin, written.splitlines())
+
+
+def _check_uncommented(plugin: Plugin[Any, Any], section: list[str]) -> None:
+    """`section`, a plugin's commented config, uncommented, is a config the plugin takes, and
+    so is what's behind `##` instead (see the test above)."""
     base = [line.removeprefix("# ") for line in section if not line.startswith("##")]
     plugin.config_model.model_validate(tomllib.loads("\n".join(base))[plugin.name])
     instead = [line.removeprefix("## ") for line in section if line.startswith("## ")]

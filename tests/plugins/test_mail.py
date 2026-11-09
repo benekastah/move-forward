@@ -1044,8 +1044,12 @@ def test_each_sub_table_is_an_account_taking_from_mail_what_it_leaves_out() -> N
         ({"work": {"host": "imap.work.example"}}, r"\[mail.work\] needs a host and a username"),
         ({**SECTION, "work": WORK}, r"\[mail\] has accounts, so its username names no mailbox"),
         ({**SHARED, "Work": WORK}, "lower-case letters"),
-        ({"auth_servers": ["mx.example.com"], "work": WORK}, "no account is on"),
-        ({**SHARED, "auth_servers": ["mx.google.com"], "work": WORK}, "no account is on"),
+        ({"auth_servers": ["mx.example.com"], "work": WORK}, "no account takes them"),
+        ({**SHARED, "auth_servers": ["mx.google.com"], "work": WORK}, "no account takes them"),
+        (
+            {**SHARED, "auth_servers": ["x"], "home": {**HOME, "auth_servers": ["y"]}},
+            "no account takes them",
+        ),
         ({**SHARED, "work": {**WORK, "since_days": 3}}, "since_days"),  # [mail]'s alone
     ],
 )
