@@ -40,6 +40,39 @@ def test_only_act_now_is_open_by_default() -> None:
     assert len(re.findall(r"class='group' data-key='\w+' open>", html)) == 1
 
 
+def test_a_pr_title_is_shown_without_its_bidi_override() -> None:
+    # A right-to-left override would draw "Update exe.pdf" for this title.
+    built = dashboard(github=snapshot(mine=[pr(1, title="Update \u202efdp.exe")]))
+    html = render.dashboard_page(built, refreshing=frozenset())
+    assert "Update fdp.exe" in html
+    # Only a button's hidden field (the todo it would add) keeps it: data, never drawn.
+    drawn = re.sub(r"<input type='hidden'[^>]*>", "", html)
+    assert "\u202e" not in drawn
+
+
+def test_every_text_of_an_item_is_shown_without_hidden_characters() -> None:
+    hidden = "\u202e\u2066\u200b\x1b"
+    item = page.Item(
+        title=f"t{hidden}1",
+        subtitle=f"s{hidden}2",
+        details=[f"d{hidden}3"],
+        badges=[f"b{hidden}4", page.Badge(text=f"w{hidden}5", tone="warn")],
+        links=[
+            page.Link(text=f"l{hidden}6", url="https://x/6"),
+            page.Link(text=f"m{hidden}7", url=""),
+        ],
+    )
+    html = render.item_html(item)
+    assert not set(hidden) & set(html)
+    for text in ("t 1", "s 2", "d 3", "b 4", "w 5", "l 6", "m 7"):
+        assert f">{text}<" in html
+
+
+def test_shown_keeps_the_joiners_emoji_and_scripts_need() -> None:
+    family = "\U0001f468\u200d\U0001f469\u200d\U0001f467"  # joined by ZWJs
+    assert render.shown(f" {family}\u200c  x\n") == f"{family}\u200c x"
+
+
 def test_each_plugin_says_when_it_last_refreshed_and_refreshes_on_a_click() -> None:
     built = _dashboard()
     html = render.dashboard_page(built, refreshing=frozenset())
