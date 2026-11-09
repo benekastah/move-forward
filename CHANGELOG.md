@@ -29,7 +29,8 @@ What was dismissed is snoozed until it changes now, and comes back as before.
   each changes".
 - `mfd snoozes` lists snoozes until it changes too, with `until` null; a script reading
   `until` must allow for it. It lists only the snoozes still in force, as the page has them:
-  no longer one whose item has changed since.
+  no longer one whose item has changed since, or is gone from every panel and from Act now (a
+  merged PR, a deleted todo). One whose item is on ice is listed, though the page hides it.
 - In `mfd dump`, an item's `set_aside` is `true` or `false`, where it was `"snooze"`,
   `"dismiss"` or null: test it for truth.
 - Undismiss is Unsnooze.

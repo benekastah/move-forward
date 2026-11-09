@@ -432,8 +432,9 @@ def _plugin_panels(
 
 def snoozed(config: Config, db: Database, now: datetime) -> dict[act_now.FeedbackKey, Feedback]:
     """The snoozes in force, by their item's key, as the page sees them: those whose time
-    isn't up and whose item hasn't changed since (`act_now.set_aside`). One whose item is no
-    longer shown or nominated isn't. Cheap, as `build_dashboard`."""
+    isn't up and whose item hasn't changed since (`act_now.set_aside`). One whose item is in
+    no panel and not nominated isn't. One whose item is on ice still is, though the page hides
+    the item: the snooze holds once it's thawed. Cheap, as `build_dashboard`."""
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
     current = panels.fingerprints(_plugin_panels(config, plugins, graph, snapshots))

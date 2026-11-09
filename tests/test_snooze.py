@@ -9,7 +9,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 import pytest
-from conftest import NOW, entry, pr, snapshot, stored, todo
+from conftest import NOW, entry, issue, pr, snapshot, stored, todo
 
 from move_forward import cli, localtime, refresh, snooze
 from move_forward.act_now import ActNowConfig, Feedback
@@ -17,6 +17,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.plugins.github.models import Check
+from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.repositories import FeedbackRepository
 
 
@@ -190,7 +191,7 @@ def test_mfd_snooze_changed_snoozes_until_the_item_changes(
     assert json.loads(capsys.readouterr().out) == []
 
 
-def test_mfd_snoozes_lists_only_the_snoozes_whose_time_isnt_up(
+def test_mfd_snoozes_lists_only_the_snoozes_whose_time_isnt_up_and_no_pins(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     config = tmp_path / "config.toml"
@@ -198,20 +199,35 @@ def test_mfd_snoozes_lists_only_the_snoozes_whose_time_isnt_up(
     config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
     assert cli.main(["-c", str(config), "snoozes"]) == 0  # creates and migrates the database
     assert json.loads(capsys.readouterr().out) == []
-    for title in ("Chores", "Errands"):
+    for title in ("Chores", "Errands", "Laundry"):
         assert cli.main(["-c", str(config), "notes", "add-entry", title]) == 0
         todo = ["notes", "todo", "add", title, "sweep", "--size", "quick"]
         assert cli.main(["-c", str(config), *todo]) == 0
         assert cli.main(["-c", str(config), "snooze", title, "2d"]) == 0
     feedback = FeedbackRepository(Database(db_path))
     now = datetime.now(UTC)
-    [(key, said)] = [(k, f) for k, f in feedback.all().items() if k[1] == "Errands"]
-    feedback.say(key, said.model_copy(update={"until": now - timedelta(hours=1)}), now)
+    said = {k[1]: (k, f) for k, f in feedback.all().items()}
+    key, errands = said["Errands"]
+    feedback.say(key, errands.model_copy(update={"until": now - timedelta(hours=1)}), now)
+    key, laundry = said["Laundry"]  # pinned since, with the fingerprint the item still has
+    feedback.say(key, laundry.model_copy(update={"action": "pin", "until": None}), now)
     capsys.readouterr()
     assert cli.main(["-c", str(config), "snoozes"]) == 0
     [listed] = json.loads(capsys.readouterr().out)
     assert (listed["kind"], listed["id"]) == ("notes.entry", "Chores")
     assert listed["until"] is not None
+
+
+def test_mfd_snoozes_lists_a_snoozed_item_shown_only_in_a_panel() -> None:
+    config, db = stored(jira=JiraSnapshot(issues=[issue("APP-2")]))
+    shown = refresh.build_dashboard(config, db, NOW)
+    assert shown.act_now() == []  # not due: What next shows it, but Act now doesn't
+    [item] = shown.panel("jira.jira_next").items
+    button = next(a for a in item.actions if a.label == "Snooze")
+    refresh.run_action(config, db, "act_now/snooze", button.fields)
+    [key] = FeedbackRepository(db).all()
+
+    assert list(refresh.snoozed(config, db, NOW)) == [key]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows splits a command line its own way")

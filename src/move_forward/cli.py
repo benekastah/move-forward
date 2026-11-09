@@ -144,8 +144,9 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     unsnooze_parser.add_argument("--task", help="only this task of its, e.g. review")
     commands.add_parser(
         "snoozes",
-        help="print the Act now items snoozed now (not yet over, and unchanged since) as JSON:"
-        " kind, id, task, until (null: until it changes), fingerprint",
+        help="print the Act now items snoozed now (not yet over, and unchanged since), including"
+        " items on ice, which the page hides, as JSON: kind, id, task, until (null: until it"
+        " changes), fingerprint",
     )
     import_parser = commands.add_parser(
         "import",
