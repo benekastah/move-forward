@@ -208,8 +208,7 @@ No plugin publishes an `organisation` yet (`docs/entities.md:154`).
 
 **Options.**
 
-- **(a) S:** make the scales agree (priority 0 means normal, or rename it). **Done:** "Not
-  important" (C2b) is gone, so a priority is 1 or 2 and no longer reads 0 as ranked down.
+- **(a) S:** make the scales agree (priority 0 means normal, or rename it).
 - **(b) M:** remove the organisation handling until a CRM plugin needs it. Nobody loses
   anything today.
 - **(c) M:** drop contact types and set priority on people (a person is never done, so it
@@ -234,8 +233,8 @@ title, badges and details, so the two end under different conditions.
 **Options.**
 
 - **(a) S/M:** fold Dismiss into Snooze, as an "until it changes" length.
-- **(b) S:** drop "Not important"; Dismiss or ice covers it. **Done.**
-- **(c) S:** make `mfd snooze` take any entity and key it as the button does. **Done.**
+- **(b) S:** drop "Not important"; Dismiss or ice covers it.
+- **(c) S:** make `mfd snooze` take any entity and key it as the button does.
 
 Ice earns its keep: it hides across panels, covers linked items and keeps a stack's commits.
 
@@ -327,7 +326,7 @@ About 200 lines of core (`render.py:734-827`, `panels.py:138-195`, the server, a
 `kept`/`kept_item` hook). It's also a third surface under "an item offers the same wherever
 it's shown". The Act now walk-through and the todos split are the useful parts.
 
-**Option (S):** drop its All and per-group walks. **Done:** it walks Act now or one panel.
+**Option (S):** drop its All and per-group walks.
 
 ---
 
@@ -387,6 +386,7 @@ Each config key costs four hand-kept copies (see A4).
    - A4a: build the example from the plugins;
    - A3: tokens, and locked settings in the plugins;
    - D: `[jira.teams]`, the duplicate history keys, `refresh_on_load_seconds`;
+   - C1a: one importance scale;
    - C6b: fix Slack's manifest.
 2. **Structural fixes that stop repeat bugs:**
    - A1: core owns change detection;
@@ -399,7 +399,7 @@ Each config key costs four hand-kept copies (see A4).
    - C5: tags;
    - C6a: Slack OAuth;
    - C1b/c: organisations and contact types;
-   - C2a: Dismiss;
+   - C2: Dismiss and "Not important";
    - D's rarely touched knobs;
    - mail account inheritance;
    - the `mfd notes` bookkeeping commands.
