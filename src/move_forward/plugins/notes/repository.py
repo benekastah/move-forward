@@ -6,7 +6,6 @@ from collections.abc import Callable, Collection
 from datetime import date, datetime
 
 from ...api import Database, Migration, Ref
-from ...api.kinds import PULL_REQUEST as PR
 from .markdown import BRANCH, attach_conditions
 from .models import (
     CheckIn,
@@ -38,8 +37,10 @@ def _attach_old_conditions(conn: sqlite3.Connection) -> None:
         prs = [
             row["ref"]
             for row in conn.execute(
-                "SELECT ref FROM notes_links WHERE entry_id = ? AND kind = ? ORDER BY ref",
-                (entry_id, PR),
+                # The kind as 0007 named it, whatever the live constant becomes.
+                "SELECT ref FROM notes_links WHERE entry_id = ? AND kind = 'pull_request'"
+                " ORDER BY ref",
+                (entry_id,),
             )
         ]
         conditions, lines = attach_conditions(written, prs)
@@ -215,7 +216,7 @@ MIGRATIONS = [
     """,
     ),
     # Conditions from before conditions named their PR are given theirs, once.
-    Migration("0008_condition_prs", _attach_old_conditions),
+    Migration("0008_old_conditions_given_prs", _attach_old_conditions),
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
 only the notes know what's in them."""
