@@ -305,9 +305,10 @@ set of tables, pages and actions, and settles what two of them both see the way 
 
 ### Notes and the skill
 
-- **Move the skill onto the notes' fields.** Check-ins, offers, once-a-day questions and
-  per-PR merge conditions are in the notes now (`mfd notes checked`, `asked-done`,
-  `offered`, `asked`, `condition add --pr`); the skill still keeps them its old way until
+- **Move the skill onto the notes.** Per-PR merge conditions are in the notes now
+  (`condition add --pr`), and check-ins, offers, declines and once-a-day questions are
+  remembered by key (`mfd notes remember` and `recall`, keyed as
+  [plugins/notes.md](plugins/notes.md) says); the skill still keeps them its old way until
   it's changed to use them. Its `reviewer-map.md` is read only through `mfd slack import`
   and `mfd github import`, so it should set Slack ids with `mfd slack contact set` rather
   than editing the map.

@@ -1,6 +1,6 @@
 """The notes plugin's data, as its tables hold it."""
 
-from datetime import date, datetime
+from datetime import date
 from typing import Literal
 
 from pydantic import Field
@@ -8,10 +8,6 @@ from pydantic import Field
 from ...api import Model
 
 Size = Literal["quick", "big"]
-CheckIn = Literal["checked", "asked_done"]
-"""The skill's check-ins on an entry: it checked in on it, or asked whether it's done."""
-CHECK_IN_TEXTS: dict[str, CheckIn] = {"Checked": "checked", "Asked-done": "asked_done"}
-"""The texts the skill wrote these as, `Declined <date>: Checked`, before they were fields."""
 
 
 class Link(Model):
@@ -40,13 +36,6 @@ class Condition(Model):
     text: str
 
 
-class Declined(Model):
-    """Something offered and turned down for the day, e.g. "don't nudge today"."""
-
-    on: date
-    text: str
-
-
 class Entry(Model):
     """A piece of work in the notes: what it is, where, and what's left to do."""
 
@@ -57,14 +46,9 @@ class Entry(Model):
     """Where the work lives, as written, e.g. "engineering <PR URL>"."""
     blocked_on: str | None = None
     updated_on: date | None = None
-    checked_on: date | None = None
-    """When the skill last checked in on it."""
-    asked_done_on: date | None = None
-    """When the skill last asked whether it's done."""
     todos: list[Todo] = Field(default_factory=list)
     conditions: list[Condition] = Field(default_factory=list)
     """What must happen before its PRs merge, each about one PR."""
-    declined: list[Declined] = Field(default_factory=list)
     lines: list[str] = Field(default_factory=list)
     """Lines the notes don't model, kept as written."""
     links: list[Link] = Field(default_factory=list)
@@ -72,20 +56,6 @@ class Entry(Model):
     @property
     def open_todos(self) -> list[Todo]:
         return [t for t in self.todos if t.done_on is None]
-
-
-OfferKind = Literal["nudge", "fresh-review"]
-"""What the skill offers about a PR: a nudge to its reviewers (once a day), or a fresh
-review (once it changed since the reviewer's last review)."""
-
-
-class Offer(Model):
-    """The last time the skill offered something about a PR."""
-
-    pr: str
-    """The PR's URL."""
-    kind: OfferKind
-    offered_at: datetime
 
 
 class IcedItem(Model):

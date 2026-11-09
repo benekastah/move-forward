@@ -38,9 +38,8 @@ NOW = datetime(2026, 11, 7, 12, tzinfo=UTC)
 ME = "me@gmail.com"
 PASSWORD = "app-password"
 SECTION = {"host": "imap.gmail.com", "username": ME, "message_url": GMAIL_MESSAGE_URL}
-SHARED = {"host": "imap.gmail.com", "message_url": GMAIL_MESSAGE_URL}
-"""[mail] with accounts: no username of its own."""
-HOME = {"username": ME}
+HOME = SECTION
+"""An account: complete, as [mail]'s own mailbox is."""
 WORK = {
     "host": "imap.work.example",
     "username": "me@work.example",
@@ -461,7 +460,7 @@ def test_no_password_says_how_to_set_that_mailboxs(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(keychain, "read", nothing_stored)
     monkeypatch.setattr(client, "collect", _collect_nothing)
-    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
     with pytest.raises(
         SourceError, match=r"mfd token set mail\.work`, or set \$MAIL_PASSWORD_WORK"
     ):
@@ -1062,20 +1061,22 @@ def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
     assert forged.signals is not None and forged.signals.importance == 0
 
 
-def test_each_sub_table_is_an_account_taking_from_mail_what_it_leaves_out() -> None:
+def test_each_sub_table_is_an_account_with_its_own_keys_and_mails_for_all_mail() -> None:
     config = MailConfig.model_validate(
-        {**SHARED, "since_days": 7, "home": HOME, "work": {**WORK, "mailbox": "Work"}}
+        {"since_days": 7, "home": HOME, "work": {**WORK, "mailbox": "Work", "port": 1993}}
     )
     home, work = config.mailboxes()
-    assert (home.name, home.host, home.username, home.mailbox) == (
+    assert (home.name, home.host, home.port, home.username, home.mailbox) == (
         "home",
         "imap.gmail.com",
+        993,  # each key's own default
         ME,
         "INBOX",
     )
-    assert (work.name, work.host, work.username, work.mailbox) == (
+    assert (work.name, work.host, work.port, work.username, work.mailbox) == (
         "work",
         "imap.work.example",
+        1993,
         "me@work.example",
         "Work",
     )
@@ -1099,21 +1100,58 @@ def test_each_sub_table_is_an_account_taking_from_mail_what_it_leaves_out() -> N
     ("section", "said"),
     [
         ({"username": ME}, r"\[mail\] needs a host"),
-        ({"work": {"host": "imap.work.example"}}, r"\[mail.work\] needs a host and a username"),
+        ({"work": {"host": "imap.work.example"}}, r"\[mail.work\] needs its own username \["),
+        ({"work": {}}, r"\[mail.work\] needs its own host and username \["),
         ({**SECTION, "work": WORK}, r"\[mail\] has accounts, so its username names no mailbox"),
-        ({**SHARED, "Work": WORK}, "lower-case letters"),
-        ({"auth_servers": ["mx.example.com"], "work": WORK}, "no account takes them"),
-        ({**SHARED, "auth_servers": ["mx.google.com"], "work": WORK}, "no account takes them"),
-        (
-            {**SHARED, "auth_servers": ["x"], "home": {**HOME, "auth_servers": ["y"]}},
-            "no account takes them",
-        ),
-        ({**SHARED, "work": {**WORK, "since_days": 3}}, "since_days"),  # [mail]'s alone
+        ({"Work": WORK}, "lower-case letters"),
+        ({"work": {**WORK, "since_days": 3}}, "since_days"),  # [mail]'s alone
     ],
 )
 def test_a_mailbox_needs_a_host_and_a_username_and_an_account_a_name(
     section: dict[str, object], said: str
 ) -> None:
+    with pytest.raises(ValidationError, match=said):
+        MailConfig.model_validate(section)
+
+
+@pytest.mark.parametrize(
+    ("section", "said"),
+    [
+        (
+            {"host": "imap.gmail.com", "home": {"username": ME}, "work": WORK},
+            r"\[mail.home\] needs its own host, as an account takes nothing from \[mail\]",
+        ),
+        (
+            {"port": 1993, "home": HOME, "work": {**WORK, "port": 993}},
+            r"its `port` is no mailbox's: set `port` in \[mail.home\] if it was theirs",
+        ),
+        (
+            {
+                "message_url": GMAIL_MESSAGE_URL,
+                "home": {"host": "imap.gmail.com", "username": ME},
+                "work": {"host": "imap.work.example", "username": "me@work.example"},
+            },
+            r"set `message_url` in \[mail.home\] and \[mail.work\] if it was theirs",
+        ),
+        (
+            {"auth_servers": ["mx.google.com"], "home": {**HOME, "auth_servers": []}},
+            r"its `auth_servers` is no mailbox's: remove it",
+        ),
+        (
+            {"token_env": "MAIL_PASSWORD", "home": HOME},
+            r"each with its own password, so its `token_env` names none",
+        ),
+        (
+            {"keychain_service": "move-forward-mail", "home": HOME},
+            r"so its `keychain_service` names none: set `keychain_service` in the \[mail.<name>\]",
+        ),
+    ],
+)
+def test_an_account_takes_no_mailbox_key_from_mail_and_says_which_it_needs(
+    section: dict[str, object], said: str
+) -> None:
+    """A config written when accounts took what they left out from `[mail]` is refused rather
+    than read with another server, port or mailbox."""
     with pytest.raises(ValidationError, match=said):
         MailConfig.model_validate(section)
 
@@ -1134,7 +1172,7 @@ def test_every_mailbox_is_read_and_a_message_in_two_is_one(
         return MailSnapshot(messages=[own, both])
 
     monkeypatch.setattr(client, "collect", collect)
-    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
     snapshot = cast(MailSnapshot, harness.plugin.collect(CollectRequest(harness.ctx)))
     assert [(m.subject, m.account, m.flagged) for m in snapshot.messages] == [
         ("For home", "home", False),
@@ -1148,13 +1186,13 @@ def test_a_message_without_a_message_id_is_its_mailboxs_own_conversation(
     imap: Callable[..., FakeImap],
 ) -> None:
     imap([(4, "", headers(message_id=""))])
-    work = MailConfig.model_validate({**SHARED, "work": HOME}).mailboxes()[0]
+    work = MailConfig.model_validate({"work": HOME}).mailboxes()[0]
     [found] = client.collect(work, PASSWORD, ME, NOW).messages
     assert (found.account, found.thread) == ("work", "uid:work:4")
 
 
 def test_a_message_links_by_its_own_mailboxs_template() -> None:
-    config = MailConfig.model_validate({**SHARED, "home": HOME, "work": WORK})
+    config = MailConfig.model_validate({"home": HOME, "work": WORK})
     home = message(1, account="home")
     work = message(2, account="work")
     assert message_url(config, home) == (
@@ -1165,7 +1203,7 @@ def test_a_message_links_by_its_own_mailboxs_template() -> None:
 
 
 def test_two_mailboxes_keep_their_messages_apart_and_say_whose_they_are() -> None:
-    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
     snapshot = MailSnapshot(
         messages=[
             message(1, account="home", labels=["\\Inbox"]),
@@ -1184,7 +1222,7 @@ def test_two_mailboxes_keep_their_messages_apart_and_say_whose_they_are() -> Non
 
 
 def test_an_unverified_message_in_two_mailboxes_is_one_conversation_counted_once() -> None:
-    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
     copies = [message(1, account=a, verified=False) for a in ("home", "work")]
     harness.store(MailSnapshot(messages=[*copies, message(2, account="work", verified=False)]))
     [item] = _items(harness)
@@ -1200,7 +1238,7 @@ def test_a_mailbox_changing_refreshes_it(monkeypatch: pytest.MonkeyPatch) -> Non
         return counts[mailbox.name]
 
     monkeypatch.setattr(client, "status", status)
-    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
     plugin = MailPlugin()
     assert not plugin.changed(ChangedRequest(harness.ctx, harness.graph())).changed
     counts["work"] = "2"
@@ -1256,7 +1294,7 @@ def test_a_copy_in_another_mailbox_adds_whats_about_me_there_once(
         return MailSnapshot(messages=[copy, copy.model_copy(update={"uid": 9}), other])
 
     monkeypatch.setattr(client, "collect", collect)
-    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
     snapshot = cast(MailSnapshot, harness.plugin.collect(CollectRequest(harness.ctx)))
     found = [(m.account, m.uid, m.to_me, m.replies_to_me, m.important) for m in snapshot.messages]
     assert sorted(found) == [
@@ -1266,13 +1304,18 @@ def test_a_copy_in_another_mailbox_adds_whats_about_me_there_once(
     ]
 
 
-def test_an_account_on_its_own_server_trusts_only_its_own_results() -> None:
+def test_each_account_trusts_only_its_own_servers_results() -> None:
     config = MailConfig.model_validate(
-        {**SHARED, "auth_servers": ["mx.google.com"], "home": HOME, "work": WORK}
+        {
+            "home": HOME,
+            "work": WORK,
+            "other": {**WORK, "username": "me@other.example", "auth_servers": ["MX.Work.example"]},
+        }
     )
-    home, work = config.mailboxes()
-    assert home.trusted_auth_servers() == {"mx.google.com"}
+    home, work, other = config.mailboxes()
+    assert home.trusted_auth_servers() == {"mx.google.com"}  # known for Gmail
     assert work.trusted_auth_servers() == set()  # imap.work.example's are unknown
+    assert other.trusted_auth_servers() == {"mx.work.example"}
 
 
 @pytest.mark.parametrize(
@@ -1290,20 +1333,6 @@ def test_a_copy_merges_only_when_both_senders_are_verified(
     first = message(1, account="home", verified=home)
     copy = message(1, account="work", verified=work, flagged=True)
     assert [(m.account, m.flagged) for m in merged([first], [copy])] == found
-
-
-def test_an_account_on_mails_own_host_keeps_mails_auth_servers() -> None:
-    config = MailConfig.model_validate(
-        {
-            "host": "imap.example.com",
-            "auth_servers": ["mx.example.com"],
-            "home": HOME,
-            "work": {"host": "imap.example.com", "username": "me@work.example"},
-        }
-    )
-    assert [m.trusted_auth_servers() for m in config.mailboxes()] == [{"mx.example.com"}] * 2
-    cased = config.model_copy(update={"host": "IMAP.Example.com"})
-    assert [m.trusted_auth_servers() for m in cased.mailboxes()] == [{"mx.example.com"}] * 2
 
 
 def test_gmails_own_labels_make_a_thread_about_nothing() -> None:

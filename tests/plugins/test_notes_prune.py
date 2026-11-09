@@ -151,28 +151,15 @@ def test_what_is_on_ice_goes_when_its_work_is_over_but_stacks_stay() -> None:
     assert [i.title for i in notes.ices()] == [PR + "4", "APP-3", "/src/w\tme/x"]
 
 
-def test_offers_last_made_before_the_cutoff_are_forgotten() -> None:
+def test_what_was_remembered_by_the_cutoff_is_forgotten() -> None:
     db = Database(":memory:")
     db.migrate("notes", MIGRATIONS)
     notes = NotesRepository(db)
-    notes.offered(PR + "1", "nudge", OLD)
-    notes.offered(PR + "1", "fresh-review", RECENT)
-    notes.offered(PR + "2", "nudge", OLD)
+    notes.remember(f"offered:{PR}1:nudge", OLD.date())
+    notes.remember("asked:ice", CUTOFF.date())
+    notes.remember(f"offered:{PR}1:fresh-review", RECENT.date())
     graph, _ = _graph()
-    assert notes_prune.prune(notes, graph, CUTOFF) == ["forgot 2 old offer(s)"]
-    assert [(o.pr, o.kind) for o in notes.offers()] == [(PR + "1", "fresh-review")]
-
-
-def test_declines_made_by_the_cutoff_are_dropped() -> None:
-    db = Database(":memory:")
-    db.migrate("notes", MIGRATIONS)
-    notes = NotesRepository(db)
-    entry = notes.add_entry("APP-5 in progress", NOW.date())
-    notes.add_todo(entry, "keep going")
-    notes.add_declined(entry, OLD.date(), "Ping alice")
-    notes.add_declined(entry, CUTOFF.date(), "Ping bob")
-    notes.add_declined(entry, RECENT.date(), "Ping carol")
-    graph, _ = _graph()
-    assert notes_prune.prune(notes, graph, CUTOFF) == ["dropped 2 old decline(s)"]
-    [kept] = notes.entries()
-    assert [d.text for d in kept.declined] == ["Ping carol"]
+    assert notes_prune.prune(notes, graph, CUTOFF) == ["forgot 2 old remembered thing(s)"]
+    assert notes.recall(f"offered:{PR}1:nudge") is None
+    assert notes.recall("asked:ice") is None
+    assert notes.recall(f"offered:{PR}1:fresh-review") == RECENT.date()

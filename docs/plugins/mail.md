@@ -71,22 +71,24 @@ through the plugin's `/mail/open` page, which sends the browser on to the mail a
 ### Several mailboxes
 
 Each sub-table of `[mail]` is a mailbox of its own, named by it: `[mail.home]` and `[mail.work]`
-read two. What one leaves out, `[mail]` says for every one (`host`, `port`, `username`,
-`mailbox`, `sent_mailbox`, `message_url`, `auth_servers`); `refresh_seconds`, `known_days`,
-`since_days`, `max_messages` and the word lists are `[mail]`'s alone. With accounts, `[mail]` is
-no mailbox itself: it can't have a `username` (move it to an account, `[mail.home]`, and set its
-password with `mfd token set mail.home`). Only an account on `[mail]`'s `host` (whatever its
-case) takes `[mail]`'s `auth_servers`, as which server's results count depends on the server;
-the config is refused when `[mail]` sets them and no account takes them. An account's name
-starts with a letter, then up to 29 lower-case letters, digits and `_`.
+read two. Each is complete: it says its own mailbox's keys, `host` and `username` (both
+needed), `port`, `mailbox`, `sent_mailbox`, `message_url` and `auth_servers`, each with the
+default it has in `[mail]`, and takes none of them from `[mail]`. They're about one server and
+one mailbox, so with accounts `[mail]` is no mailbox itself and says none of them: a config
+where it does is refused, naming the accounts that must say it themselves (or, with `username`,
+saying to move it to an account of its own, `[mail.home]`, and set its password with
+`mfd token set mail.home`). What's about all mail, `refresh_seconds`, `known_days`,
+`since_days`, `max_messages` and the word lists, is `[mail]`'s alone, and an account can't set
+it. An account's name starts with a letter, then up to 29 lower-case letters, digits and `_`.
 
 ```toml
 [mail]
-host = "imap.gmail.com"
-message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"
+known_days = 60
 
 [mail.home]
+host = "imap.gmail.com"
 username = "me@gmail.com"
+message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"
 
 [mail.work]
 host = "imap.work.example"
@@ -96,7 +98,9 @@ message_url = "mid:{message_id}"
 
 Each has its own password, never `[mail]`'s: `mfd token set mail.work` stores it under
 `move-forward-mail-work`, or export `MAIL_PASSWORD_WORK` (or set the account's `token_env` and
-`keychain_service`). A conversation is one item whichever mailboxes have it, linked by the
+`keychain_service`). With accounts, `[mail]`'s own `token_env` or `keychain_service` would name
+no mailbox's password, so a config setting either there is refused: set it in the account it
+was for. A conversation is one item whichever mailboxes have it, linked by the
 mailbox of its latest message, and a message in two (sent to both addresses) counts once, as the
 first mailbox's, flagged, to me, replying to me, from someone I know or important if either copy
 is. Only copies whose sender both servers verified merge, as anyone can write a `From` and a
