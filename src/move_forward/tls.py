@@ -21,6 +21,7 @@ import ipaddress
 import os
 import shutil
 import ssl
+import subprocess
 import sys
 from contextlib import suppress
 from dataclasses import dataclass
@@ -281,9 +282,9 @@ NSS_NICKNAME = "move-forward local CA"
 
 def nss_stores(home: Path | None = None) -> list[Path]:
     """The NSS stores to add the authority to: Chrome's on Linux, and every Firefox
-    profile's but on Windows, where Firefox reads the system's store (from Firefox 120, while
-    its `security.enterprise_roots.enabled` is on), and the `certutil` on the path is Windows'
-    own, not NSS's."""
+    profile's but on Windows, where Firefox reads the system's store while its
+    `security.enterprise_roots.enabled` is on (the default from Firefox 120), and the
+    `certutil` on the path is Windows' own, not NSS's."""
     if sys.platform == "win32":
         return []
     home = home or Path.home()
@@ -323,7 +324,9 @@ def trust(paths: Paths, home: Path | None = None) -> list[str]:
     if command := system_trust_command(paths):
         try:
             run(command)
-        except CommandError as e:  # a prompt refused, say: the browsers' stores still get it
+        # A prompt refused, or left unanswered past the timeout: the browsers' stores still
+        # get it.
+        except (CommandError, subprocess.TimeoutExpired) as e:
             done.append(f"couldn't trust it in the system's store ({e}): import {paths.ca} by hand")
         else:
             done.append("trusted it in the system's store for your user")

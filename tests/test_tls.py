@@ -2,6 +2,7 @@
 
 import json
 import ssl
+import subprocess
 import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -254,8 +255,15 @@ def test_a_store_that_fails_is_said_and_the_others_still_get_it(
     assert trusted == f"trusted it in {profile}"
 
 
+@pytest.mark.parametrize(
+    "failure",
+    [
+        CommandError("security: User canceled the operation."),
+        subprocess.TimeoutExpired(["security"], 120),
+    ],
+)
 def test_a_system_store_that_refuses_still_leaves_the_browsers_stores(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception
 ) -> None:
     paths = tls.Paths(tmp_path / "tls")
     tls.make(paths)
@@ -264,8 +272,8 @@ def test_a_system_store_that_refuses_still_leaves_the_browsers_stores(
     (profile / "abc.default" / "cert9.db").write_text("")
 
     def run(args: list[str]) -> str:
-        if args[0] == "security":  # the password prompt cancelled
-            raise CommandError("security: User canceled the operation.")
+        if args[0] == "security":  # the password prompt cancelled, or left past the timeout
+            raise failure
         return ""
 
     def which(_name: str) -> str:
@@ -275,7 +283,7 @@ def test_a_system_store_that_refuses_still_leaves_the_browsers_stores(
     monkeypatch.setattr(tls.shutil, "which", which)
     monkeypatch.setattr(tls, "run", run)
     refused, trusted = tls.trust(paths, tmp_path / "home")
-    assert refused.startswith("couldn't trust it in the system's store") and "canceled" in refused
+    assert refused.startswith("couldn't trust it in the system's store")
     assert trusted == f"trusted it in {profile / 'abc.default'}"
 
 
