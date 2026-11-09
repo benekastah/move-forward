@@ -27,8 +27,8 @@ Watchman) and `git config core.untrackedCache true`.
 
 `[git]` needs `repos`, your main checkouts; their other worktrees are found with
 `git worktree list`, and a listed path that's a worktree of another listed repo is folded
-into it. Two separate clones of one GitHub repo are warned of: only the first's branches meet
-its PRs, so make the others worktrees of it. A branch is yours if a PR of yours comes from it, if it has commits of yours
+into it. Two separate clones of one GitHub repo are warned of: only the branches of the one
+listed first in `repos` meet its PRs, so make the others worktrees of it. A branch is yours if a PR of yours comes from it, if it has commits of yours
 that aren't on the default branch (anywhere in its history, by the repo's `user.email`;
 counted for branches active within `commit_history_days`), or if its name starts with one
 of `my_branch_prefixes`. Without prefixes, a branch with only others' commits (a review
@@ -55,8 +55,8 @@ GitHub when its host, as the remote URL names it, is one of `github_hosts`
 
 ## Publishes
 
-`git.repo` for each checkout (by its GitHub `owner/name`) and `git.branch` for each local
-branch;
+`git.repo` for each GitHub repo checked out (by its `owner/name`; of two clones of it, the
+one listed first in `repos`) and `git.branch` for each local branch;
 see [entities.md](../entities.md).
 
 ## Panels

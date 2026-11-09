@@ -71,6 +71,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         self._ids: dict[Path, str] = {}
         """Each watched repo's id, the common git directory `changes` and `collect` name it
         by, by its resolved path, as the watcher has it."""
+        self._clones_warned: set[tuple[str, ...]] = set()
+        """The clones of one GitHub repo already warned of, so each is warned of once a run."""
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
@@ -105,10 +107,11 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         by_name: dict[str, list[str]] = {}
         for repo in found.repos:
-            if repo.github_repo:
-                by_name.setdefault(repo.github_repo.lower(), []).append(repo.dir)
+            if repo.github_repo:  # as the graph matches its id: exactly
+                by_name.setdefault(repo.github_repo, []).append(repo.dir)
         for name, dirs in by_name.items():
-            if len(dirs) > 1:
+            if len(dirs) > 1 and tuple(dirs) not in self._clones_warned:
+                self._clones_warned.add(tuple(dirs))
                 ctx.log.warning(
                     "%s are each a clone of %s: only the first's branches meet its PRs; make the"
                     " others worktrees of it (git worktree add)",
@@ -227,8 +230,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         published: set[str] = set()
         for repo in snapshot.repos if snapshot else []:
             repo_ref = Ref(kind=REPO, id=repo.github_repo) if repo.github_repo else None
-            if repo_ref and repo_ref.id.lower() not in published:
-                published.add(repo_ref.id.lower())
+            if repo_ref and repo_ref.id not in published:
+                published.add(repo_ref.id)
                 entities.append(
                     Entity(
                         ref=repo_ref,

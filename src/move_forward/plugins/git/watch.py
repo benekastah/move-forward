@@ -161,6 +161,8 @@ class Watcher:
             self._watches.clear()
 
     def _dead(self, recursive: bool) -> bool:
+        # `_watches` changes under `_sync_lock`, not `_lock`: a read racing a `sync` sees the
+        # watch before or after it, either of which is a fair answer.
         watch = self._watches.get(recursive)
         return watch is not None and watch.dead
 
@@ -174,7 +176,8 @@ class Watcher:
     def worktrees(self) -> set[Path]:
         """The worktrees watched; none while the watch of them is dead, so they're polled."""
         with self._lock:
-            dead = self._dead(False) if PER_DIRECTORY else self._dead(True)
+            # The recursive watch sees every worktree's index; on Linux the other its files.
+            dead = self._dead(True) or (PER_DIRECTORY and self._dead(False))
             return set() if dead else set(self._worktrees)
 
     def sync(self, worktrees: dict[Path, Path]) -> None:

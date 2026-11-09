@@ -224,9 +224,12 @@ def test_ignored_files_dont_refresh_the_repo(tmp_path: Path) -> None:
         plugin.stop_watching()
 
 
+@pytest.mark.parametrize("only_recursive", [False, True])
 def test_a_watch_that_errors_is_polled_and_watched_anew_at_the_next_sync(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, only_recursive: bool
 ) -> None:
+    """Whichever watch dies, the worktrees are polled too: the recursive one (of the git
+    directories) is what sees their indexes."""
     repo = _repo(tmp_path / "r")
     real = watch.RustNotify
     failing = [True]
@@ -234,9 +237,10 @@ def test_a_watch_that_errors_is_polled_and_watched_anew_at_the_next_sync(
     class Failing:
         def __init__(self, *args: Any) -> None:
             self._real = real(*args)
+            self._recursive = bool(args[4])
 
         def watch(self, *args: Any) -> object:
-            if failing[0]:
+            if failing[0] and (self._recursive or not only_recursive):
                 raise RuntimeError("watcher went away")
             return self._real.watch(*args)
 
