@@ -2,6 +2,7 @@
 
 import io
 import json
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import replace
@@ -77,14 +78,24 @@ def test_requested_reviewers_are_looked_up_once_each(monkeypatch: pytest.MonkeyP
     assert repo.contacts()["alice"].slack_id == "U000000"
 
 
-def test_a_lookup_that_fails_is_said_on_slacks_page_until_one_works(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("failure", "said"),
+    [
+        (
+            client.SlackError("users.lookupByEmail", "missing_scope"),
+            "said missing_scope: the token needs users:read.email",
+        ),
+        (urllib.error.URLError("no network"), "no network"),
+    ],
+)
+def test_a_lookup_that_fails_is_said_on_slacks_page_until_the_next_refresh(
+    monkeypatch: pytest.MonkeyPatch, failure: Exception, said: str
 ) -> None:
     failing = [True]
 
     def lookup(api_token: str, email: str) -> str | None:
         if failing[0]:
-            raise client.SlackError("users.lookupByEmail", "missing_scope")
+            raise failure
         return "U111111"
 
     monkeypatch.setattr(oauth, "token", _token("xoxb-test"))
@@ -101,9 +112,14 @@ def test_a_lookup_that_fails_is_said_on_slacks_page_until_one_works(
         return account.page(PageRequest(slack.ctx, graph, {}, "/slack"))
 
     assert contacts.look_up_requested(slack.ctx, graph) == []  # no refresh's traceback
-    assert "Slack&#x27;s users.lookupByEmail said missing_scope" in page()
+    shown = page()
+    assert said in shown
+    assert ("token needs" in shown) == ("token needs" in said)  # only for a missing scope
     failing[0] = False
     assert contacts.look_up_requested(slack.ctx, graph) == ["alice"]
+    assert "failed" not in page()
+    failing[0] = True
+    assert contacts.look_up_requested(slack.ctx, graph) == []  # nobody left to look up
     assert "failed" not in page()
 
 

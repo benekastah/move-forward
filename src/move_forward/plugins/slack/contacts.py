@@ -1,6 +1,7 @@
 """Where review pings go, viewed and edited: the `/slack/contacts` page, its buttons, and
 what `mfd slack` shares with them."""
 
+import http.client
 import re
 
 from ...api import Action, ActionError, ActionRequest, Context, Graph, Model, html
@@ -208,7 +209,8 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
     a miss is remembered too. Returns whom it found. Without a token, or with the app
     connected without the scopes, does nothing. A lookup that fails (a token without
     `users:read.email`, a rate limit, no network) stops this refresh's, and why is kept for
-    Slack's page (`LOOKUPS_FAILED`) until one works."""
+    Slack's page (`LOOKUPS_FAILED`) until the next refresh's."""
+    ctx.kv.delete(LOOKUPS_FAILED)  # said again below if it fails again
     found_connection = oauth.connection(ctx)
     if found_connection and scopes.missing("lookups", found_connection.scopes):
         return []
@@ -226,10 +228,13 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
             continue
         try:
             slack_id = client.lookup_by_email(api_token, email)
-        except (client.SlackError, OSError) as e:  # OSError: urllib's errors are its
-            ctx.kv.set(LOOKUPS_FAILED, str(e))
+        # Slack's refusal, no network (urllib's errors are OSErrors), a cut or garbled answer.
+        except (client.SlackError, OSError, http.client.HTTPException, ValueError) as e:
+            missing = isinstance(e, client.SlackError) and e.error == "missing_scope"
+            ctx.kv.set(
+                LOOKUPS_FAILED, f"{e}{': the token needs users:read.email' if missing else ''}"
+            )
             return found
-        ctx.kv.delete(LOOKUPS_FAILED)
         slack.save_looked_up(login, slack_id, ctx.now)
         if slack_id:
             found.append(login)

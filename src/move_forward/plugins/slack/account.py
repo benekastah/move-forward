@@ -54,8 +54,7 @@ def page(req: PageRequest[SlackConfig]) -> str:
     parts = [f"<p class='notice'>{e(notice)}</p>"] if notice else []
     if failed := ctx.kv.get(LOOKUPS_FAILED):
         parts.append(
-            f"<p class='notice warn'>Looking up reviewers' Slack ids by email failed: {e(failed)}."
-            " The token needs users:read.email.</p>"
+            f"<p class='notice warn'>Looking up reviewers' Slack ids by email failed: {e(failed)}.</p>"
         )
     if found is not None:
         missing = {f: m for f in scopes.FEATURE_SCOPES if (m := scopes.missing(f, found.scopes))}
