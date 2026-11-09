@@ -9,6 +9,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.plugin import KEPT, ActionError, SourceError
+from move_forward.plugins.git import client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.repository import LocalRepository
@@ -196,6 +197,99 @@ def test_push_goes_where_git_would_with_remotes_not_called_origin(
     assert git(repo, "rev-parse", "upstream/wip") != git(repo, "rev-parse", "wip")
 
 
+def test_push_of_a_branch_tracking_a_local_one_goes_to_the_remote_not_into_it(
+    config: Config, repo: Path
+) -> None:
+    git(repo, "branch", "-q", "--track", "feat", "main")  # its upstream is local main
+    git(repo, "switch", "-q", "feat")
+    _commit(repo, "c.txt")
+    git(repo, "switch", "-q", "main")
+    assert _branch(repo, "feat").upstream is None  # not "unpushed" against a local branch
+    main_before = git(repo, "rev-parse", "main")
+    assert run("git/push_branch", config, {"repo": str(repo), "branch": "feat"}) == "pushed feat"
+    assert git(repo, "rev-parse", "main") == main_before  # main didn't move
+    assert git(repo, "rev-parse", "origin/feat") == git(repo, "rev-parse", "feat")
+    pushed = _branch(repo, "feat")
+    assert (pushed.upstream, pushed.ahead) == ("origin/feat", 0)  # counted against its copy
+
+
+def _branch(repo: Path, name: str) -> Branch:
+    """The branch as git's collect reads it."""
+    collected = client.collect_repo(repo, "me@x", datetime.now(UTC), 30, [])
+    return next(b for b in collected.branches if b.name == name)
+
+
+def test_push_of_a_branch_tracking_a_local_one_with_nowhere_to_go_is_refused(
+    config: Config, repo: Path
+) -> None:
+    git(repo, "remote", "remove", "origin")
+    git(repo, "branch", "-q", "--track", "feat", "main")
+    with pytest.raises(ActionError, match="tracks a local branch"):
+        run("git/push_branch", config, {"repo": str(repo), "branch": "feat"})
+
+
+def test_delete_refuses_a_branch_moved_since_the_page_showed_it(config: Config, repo: Path) -> None:
+    shown = git(repo, "rev-parse", "done").strip()
+    git(repo, "switch", "-q", "done")
+    _commit(repo, "after.txt")
+    git(repo, "switch", "-q", "main")
+    with pytest.raises(ActionError, match="moved since the page showed it"):
+        run("git/delete_branch", config, {"repo": str(repo), "branch": "done", "sha": shown})
+    notice = run("git/delete_branches", config, {"targets": f"{repo}\tdone\t{shown}"})
+    assert "moved since" in notice and git(repo, "branch", "--list", "done").strip()
+
+
+def test_pull_of_a_branch_tracking_a_local_one_takes_its_pushed_copy(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    fork = tmp_path / "fork.git"
+    _init(fork, bare=True)
+    git(repo, "remote", "add", "fork", str(fork))
+    git(repo, "config", "remote.pushDefault", "fork")  # Push sends it to fork, not origin
+    git(repo, "branch", "-q", "--track", "feat", "main")
+    run("git/push_branch", config, {"repo": str(repo), "branch": "feat"})
+    other = _clone(fork, tmp_path / "other", "feat")
+    _commit(other, "theirs.txt")
+    git(other, "push", "-q", "origin", "feat")  # the clone's origin is the fork
+    main_before = git(repo, "rev-parse", "main")
+    assert run("git/pull_branch", config, {"repo": str(repo), "branch": "feat"}) == "pulled feat"
+    assert git(repo, "rev-parse", "feat") == git(other, "rev-parse", "feat")
+    assert git(repo, "rev-parse", "main") == main_before
+
+
+def test_delete_goes_through_for_a_branch_still_at_the_commit_shown_whatever_tags_say(
+    config: Config, repo: Path
+) -> None:
+    shown = git(repo, "rev-parse", "done").strip()
+    git(repo, "tag", "done", "wip")  # a tag of the same name, elsewhere
+    assert run("git/delete_branch", config, {"repo": str(repo), "branch": "done", "sha": shown})
+    assert git(repo, "branch", "--list", "done") == ""
+
+
+def test_delete_all_takes_a_branch_still_at_its_commit_and_one_given_none(
+    config: Config, repo: Path
+) -> None:
+    git(repo, "branch", "-q", "again", "main")
+    again = git(repo, "rev-parse", "again").strip()
+    git(repo, "branch", "-q", "plain", "main")
+    lines = f"{repo}\tagain\t{again}\n{repo}\tplain\t"  # an empty column isn't checked
+    assert run("git/delete_branches", config, {"targets": lines}) == "deleted 2 branches"
+
+
+def test_a_branch_whose_upstream_is_gone_counts_what_isnt_on_the_default_branch(
+    repo: Path,
+) -> None:
+    git(repo, "push", "-q", "-u", "origin", "wip")
+    git(repo, "push", "-q", "origin", "--delete", "wip")
+    git(repo, "fetch", "-q", "--prune")
+    [wip] = [
+        b
+        for b in client.collect_repo(repo, "me@x", datetime.now(UTC), 30, []).branches
+        if b.name == "wip"
+    ]
+    assert (wip.gone, wip.ahead_of_default) == (True, 1)
+
+
 def test_wip_commit_takes_tracked_files_only(config: Config, repo: Path) -> None:
     (repo / "a.txt").write_text("changed")
     (repo / "new.txt").write_text("untracked")
@@ -282,6 +376,7 @@ def test_an_iced_branch_with_commits_since_it_was_iced_isnt_deleted(
     git(repo, "switch", "-q", "done")
     _commit(repo, "later.txt")
     git(repo, "switch", "-q", "main")
+    git(repo, "tag", "done", "done@{1}")  # a tag at the commit it was iced at answers nothing
     with pytest.raises(ActionError, match="commits since it was iced"):
         run("git/delete_branch", config, {"repo": str(repo), "branch": "done"})
     assert git(repo, "branch", "--list", "done").strip() == "done"

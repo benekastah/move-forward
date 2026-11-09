@@ -63,7 +63,12 @@ see [entities.md](../entities.md).
   changes in the way.
 - **Cleanup**: local branches whose PR merged or whose remote is gone, with a Delete
   button each and Delete all (`git branch -D`; a branch checked out in a worktree is
-  refused). A branch git-stack sees merged is left to git_stack's Clean, which untracks it
+  refused). The default branch is never listed. A branch with work that may be its only copy
+  is listed "check first", last, saying why, and left out of Delete all and Act now, its Delete
+  warning that the commits go with it: one whose PR merged but that points at another commit
+  than the one that merged, and one whose remote is gone with commits not on the default branch
+  (or where that isn't known). Delete and Delete all are refused for a branch that moved since
+  the page showed it. A branch git-stack sees merged is left to git_stack's Clean, which untracks it
   as it deletes it. Delete is a 🗑️ icon, its label in its title; when notes also offers
   Put on ice, the two appear as one group. Delete still asks for confirmation.
 
@@ -74,7 +79,7 @@ they were iced at (refused for one that exists again, or whose commit is gone).
 
 ## Act now
 
-git nominates the branches Cleanup lists, quick to delete.
+git nominates the branches Cleanup lists, quick to delete; those to check first are left out.
 
 ## Buttons
 
@@ -82,11 +87,11 @@ git nominates the branches Cleanup lists, quick to delete.
 
 | Path | Fields | Does |
 | --- | --- | --- |
-| `/actions/git/pull_branch` | `repo`, `branch` | Fetches its upstream's remote and fast-forwards the branch to its upstream, checked out or not; refused when it has commits its upstream doesn't, or its checkout has uncommitted changes. Never merges or forces. |
-| `/actions/git/push_branch` | `repo`, `branch` | `git push`, where git would push it: a branch with an upstream to its push remote; one without to its `pushRemote`, `remote.pushDefault`, its remote or the only remote, setting the upstream (refused when there are several and nothing says which). Never forces. |
+| `/actions/git/pull_branch` | `repo`, `branch` | Fetches its upstream's remote and fast-forwards the branch to its upstream (for one tracking a local branch, its copy where Push sends it), checked out or not; refused when it has commits its upstream doesn't, or its checkout has uncommitted changes. Never merges or forces. |
+| `/actions/git/push_branch` | `repo`, `branch` | `git push`, where git would push it: a branch with an upstream to its push remote; one without to its `pushRemote`, `remote.pushDefault`, its remote or the only remote, setting the upstream (refused when there are several and nothing says which). One tracking a local branch (`--track main`) is pushed to that remote under its own name, never into the local branch, and is counted against that copy once it's there. Never forces. |
 | `/actions/git/wip_commit` | `repo`, `worktree` | Commits the worktree's modified tracked files as `WIP`; the worktree must be the repo's. |
-| `/actions/git/delete_branch` | `repo`, `branch` | `git branch -D`. Refused for a checked-out branch, or an iced one with commits since it was iced. |
-| `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`) | Deletes each; one failure doesn't stop the rest. |
+| `/actions/git/delete_branch` | `repo`, `branch`, optional `sha` | `git branch -D`. Refused for a checked-out branch, an iced one with commits since it was iced, or one no longer at `sha` (the commit the page showed). |
+| `/actions/git/delete_branches` | `targets` (lines of `<repo dir>\t<branch>`, optionally `\t<sha>`) | Deletes each, as `delete_branch` does; one failure doesn't stop the rest. |
 | `/actions/git/delete_together` | `targets` | Deletes all of them or, if any can't go, none. |
 | `/actions/git/restore_together` | `targets` | Recreates each iced branch at the commit it was iced at: all of them or, if any can't be, none. |
 

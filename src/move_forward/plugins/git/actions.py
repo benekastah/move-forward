@@ -69,15 +69,24 @@ def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
     if worktree := checked_out_in(repo, branch):
         raise ActionError(f"{branch} is checked out in {worktree}; switch it away first")
     iced_sha = _iced_sha(graph, repo, branch)
-    if iced_sha and git(repo, "rev-parse", branch).strip() != iced_sha:
+    if iced_sha and _tip(repo, branch) != iced_sha:
         raise ActionError(f"{branch} has commits since it was iced; thaw it, or ice it again")
 
 
+def _tip(repo: Path, branch: str) -> str:
+    """The commit the branch points at: the branch's, never a tag of the same name's."""
+    return git(repo, "rev-parse", "--verify", f"refs/heads/{branch}").strip()
+
+
 def delete_branch(req: ActionRequest[GitConfig]) -> str:
+    """`git branch -D`, refused where `_check_deletable` says, or when it no longer points at
+    `sha`, the commit the page judged safe to lose: one made since would be lost unseen."""
     ctx, graph = req.ctx, req.graph
     repo = repo_path(ctx.config, req.field("repo"))
     branch = req.field("branch")
     _check_deletable(graph, repo, branch)
+    if (sha := req.fields.get("sha")) and _tip(repo, branch) != sha:
+        raise ActionError(f"{branch} has moved since the page showed it: look again")
     git(repo, "branch", "-D", branch)
     return f"deleted {branch} in {repo}"
 
@@ -137,16 +146,21 @@ def restore_together(req: ActionRequest[GitConfig]) -> str:
 
 
 def delete_branches(req: ActionRequest[GitConfig]) -> str:
-    """Delete every `<repo>\\t<branch>` line of `targets`; one failure doesn't stop the rest."""
+    """Delete every `<repo>\\t<branch>\\t<sha>` line of `targets`, each only while it's at that
+    commit (see `delete_branch`; a line without one isn't checked so); one failure doesn't stop
+    the rest."""
     ctx, graph, fields = req.ctx, req.graph, req.fields
     done: list[str] = []
     failed: list[str] = []
     for line in fields.get("targets", "").splitlines():
-        repo_dir, branch = branch_parts(line)
+        target, sha = line.rsplit("\t", 1) if line.count("\t") >= 2 else (line, "")
+        repo_dir, branch = branch_parts(target)
         if not branch:
             continue
         try:
-            delete_branch(ActionRequest(ctx, graph, {"repo": repo_dir, "branch": branch}))
+            delete_branch(
+                ActionRequest(ctx, graph, {"repo": repo_dir, "branch": branch, "sha": sha})
+            )
             done.append(branch)
         except (ActionError, CommandError) as e:
             failed.append(f"{branch}: {e}")
@@ -172,6 +186,11 @@ def push_branch(req: ActionRequest[GitConfig]) -> str:
         has_upstream = False
     if has_upstream:
         remote, ref = client.push_target(repo, branch)
+        if not remote:
+            raise ActionError(
+                f"{branch} tracks a local branch, and {repo} has no remote to push to, or several:"
+                " set remote.pushDefault to say which"
+            )
         git(repo, "push", remote, f"refs/heads/{branch}:{ref}")
     else:
         remote = client.push_remote(repo, branch)
@@ -184,7 +203,8 @@ def push_branch(req: ActionRequest[GitConfig]) -> str:
 
 
 def pull_branch(req: ActionRequest[GitConfig]) -> str:
-    """Bring a branch up to its upstream, fast-forward only: refused when its upstream was
+    """Bring a branch up to its upstream (for one tracking a local branch, its copy on the
+    remote Push sends it to), fast-forward only: refused when its upstream was
     rewritten (force-pushed), or its checkout has changes in the way. Never merges, never
     forces. A branch checked out is merged in its worktree; one that isn't is moved by `git
     fetch .`, which git refuses for a branch checked out, rebased or bisected anywhere."""
@@ -197,15 +217,29 @@ def pull_branch(req: ActionRequest[GitConfig]) -> str:
         remote = git(repo, "config", f"branch.{branch}.remote").strip()
     except CommandError as e:
         raise ActionError(f"{branch} has no upstream to pull from") from e
+    upstream_ref = f"{branch}@{{upstream}}"
+    if remote == ".":  # it tracks a local branch: pull its copy where Push sent it, as counted
+        remote = client.push_remote(repo, branch) or ""
+        upstream_ref = f"refs/remotes/{remote}/{branch}"
+        if not remote:
+            raise ActionError(
+                f"{branch} tracks a local branch, and {repo} has no remote to pull it from, or"
+                " several: set remote.pushDefault to say which"
+            )
     try:
         git(repo, "fetch", "--quiet", remote)
     except CommandError as e:
         raise ActionError(f"couldn't fetch {remote}: {e}") from e
     try:
-        upstream = git(repo, "rev-parse", "--verify", f"{branch}@{{upstream}}").strip()
+        upstream = git(repo, "rev-parse", "--verify", upstream_ref).strip()
         here = git(repo, "rev-parse", "--verify", f"refs/heads/{branch}").strip()
     except CommandError as e:
-        raise ActionError(f"{branch} has no upstream to pull from") from e
+        missing = (
+            f"no copy on {remote} to pull"
+            if upstream_ref.startswith("refs/remotes/")
+            else "no upstream to pull from"
+        )
+        raise ActionError(f"{branch} has {missing}") from e
     if here == upstream:
         return f"{branch} is up to date"
     try:

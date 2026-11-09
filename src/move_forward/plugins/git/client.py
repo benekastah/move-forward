@@ -22,7 +22,7 @@ GITHUB_HOSTS = ("github.com",)
 _TRACK_RE = re.compile(r"ahead (\d+)|behind (\d+)|(gone)")
 _FOR_EACH_REF_FORMAT = (
     "%(refname:short)%09%(upstream:short)%09%(upstream:track)%09%(committerdate:iso-strict)"
-    "%09%(objectname)"
+    "%09%(objectname)%09%(upstream:remotename)"
 )
 FALLBACK_DEFAULT_BRANCH = "main"
 
@@ -60,9 +60,13 @@ def worktree_status(worktree: Path) -> tuple[int, int]:
 def parse_branches(for_each_ref: str) -> list[Branch]:
     branches: list[Branch] = []
     for line in for_each_ref.splitlines():
-        name, upstream, track, date, sha = (line.split("\t") + ["", "", "", "", ""])[:5]
+        name, upstream, track, date, sha, remote = (line.split("\t") + [""] * 6)[:6]
         if not name or not date:
             continue
+        if remote == ".":
+            # Tracking a local branch (`--track main`): nothing of it is on a remote, so it
+            # has no upstream as far as pushing goes, and its counts aren't "unpushed".
+            upstream, track = "", ""
         ahead = behind = 0
         gone = False
         for match in _TRACK_RE.finditer(track):
@@ -84,6 +88,16 @@ def parse_branches(for_each_ref: str) -> list[Branch]:
             )
         )
     return branches
+
+
+def local_tracking(for_each_ref: str) -> set[str]:
+    """The branches tracking a local branch (`--track main`), in `for-each-ref`'s output with
+    `_FOR_EACH_REF_FORMAT`."""
+    return {
+        fields[0]
+        for line in for_each_ref.splitlines()
+        if len(fields := line.split("\t")) >= 6 and fields[5] == "."
+    }
 
 
 def github_repo(remote_url: str, hosts: Sequence[str] = GITHUB_HOSTS) -> str | None:
@@ -178,7 +192,9 @@ def push_remote(repo: Path, branch: str) -> str | None:
 def push_target(repo: Path, branch: str) -> tuple[str, str]:
     """Where to push a branch that has an upstream: git's push remote for it (its
     `pushRemote`, `remote.pushDefault`, else its upstream's remote) and, there, its
-    upstream's branch when that's the same remote, else a branch of its own name."""
+    upstream's branch when that's the same remote, else a branch of its own name. One tracking
+    a local branch goes to the remote `push_remote` picks, under its own name; the remote is
+    empty when there's none."""
     out = git(
         repo,
         "for-each-ref",
@@ -186,6 +202,10 @@ def push_target(repo: Path, branch: str) -> tuple[str, str]:
         f"refs/heads/{branch}",
     )
     remote, upstream_remote, upstream_ref = out.strip("\n").split("\t")
+    if upstream_remote == "." and remote in ("", "."):
+        # Its upstream is a local branch: pushing there would move that branch. Empty when
+        # there's no remote to push to instead.
+        return push_remote(repo, branch) or "", f"refs/heads/{branch}"
     if remote == upstream_remote and upstream_ref:
         return remote, upstream_ref
     return remote or upstream_remote, f"refs/heads/{branch}"
@@ -224,9 +244,9 @@ def collect_repo(
         modified, untracked = worktree_status(Path(path))
         worktrees.append(Worktree(path=path, branch=branch, modified=modified, untracked=untracked))
 
-    branches = parse_branches(
-        git(repo, "for-each-ref", "refs/heads", f"--format={_FOR_EACH_REF_FORMAT}")
-    )
+    refs = git(repo, "for-each-ref", "refs/heads", f"--format={_FOR_EACH_REF_FORMAT}")
+    tracking = local_tracking(refs)
+    branches = [_pushed_copy(repo, b) if b.name in tracking else b for b in parse_branches(refs)]
     recent = now - timedelta(days=commit_history_days)
     try:
         repo_email = my_email(repo)  # a repo can have its own, e.g. a personal project's
@@ -234,10 +254,8 @@ def collect_repo(
         repo_email = ""
     with_counts: list[Branch] = []
     for branch in branches:
-        if (
-            branch.upstream is None
-            and branch.name != default_branch
-            and branch.committed_at >= recent
+        if branch.name != default_branch and (
+            branch.gone or (branch.upstream is None and branch.committed_at >= recent)
         ):
             try:
                 count = int(
@@ -267,6 +285,23 @@ def collect_repo(
         branches=with_counts,
         my_dirs=_my_dirs(repo, found.default_refs, email, commit_history_days),
     )
+
+
+def _pushed_copy(repo: Path, branch: Branch) -> Branch:
+    """A branch tracking a local one, counted against its copy on the remote Push sends it to
+    (`<remote>/<branch>`) once there is one; as it is (no upstream) before."""
+    remote = push_remote(repo, branch.name)
+    copy = f"{remote}/{branch.name}"
+    if remote is None or not _ref_exists(repo, f"refs/remotes/{copy}"):
+        return branch
+    ahead, behind = git(
+        repo,
+        "rev-list",
+        "--left-right",
+        "--count",
+        f"refs/heads/{branch.name}...refs/remotes/{copy}",
+    ).split()
+    return branch.model_copy(update={"upstream": copy, "ahead": int(ahead), "behind": int(behind)})
 
 
 def _my_commits(repo: Path, default_refs: list[str], branch: str, email: str) -> int | None:
