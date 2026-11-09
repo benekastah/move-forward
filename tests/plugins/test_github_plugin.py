@@ -92,6 +92,8 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
         ("open", False),
     ]
     assert [e.lifecycle for e in entities.values()] == ["open", "done", "done", "open"]
+    # What alice's PR names can't hide it from me: she wrote it.
+    assert [e.mentions_hide for e in entities.values()] == [True, True, True, False]
     first = entities[mine.url]
     assert first.attrs["requested_teams"] == ["web"]
     assert first.attrs["head_oid"] == mine.head_oid  # for git, to see a checkout fall behind
