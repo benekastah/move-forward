@@ -720,6 +720,22 @@ def test_why_a_plugin_changed_is_logged(
     assert "changed: github (2 PRs notified); refreshing" in caplog.messages
 
 
+class _GitHubAnsweringBadly(GitHubPlugin):
+    change_check_seconds: ClassVar[int | None] = 60
+
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
+        return True  # pyright: ignore[reportReturnType]  # not a Changed
+
+
+def test_a_malformed_change_check_is_a_failed_one(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Skipped and tried again, rather than raised out of the round of checks."""
+    swap = {"github": _GitHubAnsweringBadly()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    assert app.check_for_changes(1000.0) == set()
+
+
 class _GitHubWatchingGit(_GitHubWithChecks):
     change_check_seconds: ClassVar[int | None] = None
     watches: ClassVar[list[str]] = ["git"]

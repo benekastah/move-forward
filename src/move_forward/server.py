@@ -225,9 +225,10 @@ class App:
 
     def _changed(self, e: Enabled, graph: Graph) -> str | None:
         """Why `e.plugin.changed` says its tool has something new ("" when it doesn't say);
-        None when it hasn't, or the check fails: logged at debug, since the plugin's refresh
-        shows the error, and tried again next time."""
-        try:  # reading the answer too: a plugin of an older API may give a bare bool
+        None when it hasn't, or the check fails (raises, or answers with something that isn't
+        a `Changed`): logged at debug and tried again next time, so one plugin's check can't
+        stop the others'."""
+        try:  # reading the answer too, so a malformed one counts as a failed check
             answer = e.plugin.changed(ChangedRequest(e.ctx, graph))
             return answer.reason if answer.changed else None
         except Exception:
