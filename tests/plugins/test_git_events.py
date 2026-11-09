@@ -3,16 +3,28 @@
 from datetime import timedelta
 from typing import cast
 
-from conftest import NOW, local_branch, local_snapshot, pr, snapshot, stacks, stored
+from conftest import (
+    NOW,
+    events_between,
+    local_branch,
+    local_snapshot,
+    pr,
+    snapshot,
+    stacks,
+    stored,
+)
 
 from move_forward import refresh, registry
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
+from move_forward.notifications import Event
+from move_forward.page import anchor
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack import events
-from move_forward.plugins.git_stack.models import StackBranch
+from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch
+from move_forward.plugins.git_stack.panels import stack_branch_ref
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.github.snapshots import PrRepository
 
@@ -59,21 +71,34 @@ def test_the_plugins_offer_the_kinds_they_make() -> None:
     assert GitStackPlugin.notification_kinds == events.KINDS
 
 
+def _changes(before: GitStackSnapshot, after: GitStackSnapshot) -> list[Event]:
+    return events_between("git_stack", {"stacks": before}, {"stacks": after})
+
+
 def _stack(*branches: StackBranch) -> list[tuple[str, str]]:
-    return [(e.kind, e.text) for e in events.changes(stacks(), stacks(*branches))]
+    return [(e.kind, e.text) for e in _changes(stacks(), stacks(*branches))]
+
+
+def _branch(status: str) -> StackBranch:
+    return StackBranch(name="me/x", parent="main", status=status)
 
 
 def test_a_branch_needing_a_restack_or_merged_is_said_when_its_status_changes() -> None:
-    def branch(status: str) -> StackBranch:
-        return StackBranch(name="me/x", parent="main", status=status)
-
     def between(before: str, after: str) -> list[tuple[str, str]]:
-        return [
-            (e.kind, e.text) for e in events.changes(stacks(branch(before)), stacks(branch(after)))
-        ]
+        return [(e.kind, e.text) for e in _changes(stacks(_branch(before)), stacks(_branch(after)))]
 
     assert between("up-to-date", "needs-restack") == [("needs_restack", "needs a restack")]
     assert between("needs-restack", "needs-restack") == []
     assert between("up-to-date", "merged") == [("merged", "was merged")]
     assert between("needs-restack", "up-to-date") == []
-    assert _stack(branch("needs-restack")) == []  # a branch the earlier snapshot didn't hold
+    assert _stack(_branch("needs-restack")) == []  # a branch the earlier snapshot didn't hold
+
+
+def test_a_stack_branchs_event_is_about_the_branch_and_opens_at_it() -> None:
+    [event] = _changes(stacks(_branch("up-to-date")), stacks(_branch("needs-restack")))
+    ref = stack_branch_ref("/src/widgets", "me/x")
+    assert (event.thing, event.title, event.anchor) == (
+        f"stack:{ref.id}",
+        "me/x in /src/widgets",
+        anchor(ref.kind, ref.id),
+    )

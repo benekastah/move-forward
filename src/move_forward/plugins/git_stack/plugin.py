@@ -1,8 +1,9 @@
 """The git_stack plugin."""
 
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from ...api import (
     API_VERSION,
@@ -10,11 +11,10 @@ from ...api import (
     ActNowRequest,
     Changed,
     ChangedRequest,
+    ChangeRule,
     CollectAfterRequest,
     EntitiesRequest,
     Entity,
-    Event,
-    EventsRequest,
     Item,
     ItemActionsRequest,
     ItemAdditions,
@@ -51,6 +51,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
+    change_rules: ClassVar[Sequence[ChangeRule[Any]]] = events.RULES
 
     def init_suggested(self) -> bool:
         """Only when git stack is installed, i.e. `git stack` would run."""
@@ -111,10 +112,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
             else items[0]
             for items in by_repo.values()
         ]
-
-    def events(self, req: EventsRequest[GitStackConfig, GitStackSnapshot]) -> list[Event]:
-        before, after = req.before, req.after
-        return events.changes(before, after)
 
     def item_actions(self, req: ItemActionsRequest[GitStackConfig]) -> ItemAdditions:
         action = untrack_iced_action(req.item, req.graph)

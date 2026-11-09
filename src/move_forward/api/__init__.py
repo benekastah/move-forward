@@ -21,7 +21,7 @@ from ..db import Database, Migration, Params
 from ..domain import KindModel, Model
 from ..graph import Entity, Graph, KindSpec, Ref, attrs
 from ..markdown import cell, tables
-from ..notifications import Event
+from ..notifications import ChangeRule, Event, becomes
 from ..page import (
     Action,
     Badge,
@@ -96,6 +96,7 @@ __all__ = [
     "Asker",
     "Badge",
     "Band",
+    "ChangeRule",
     "Changed",
     "ChangedRequest",
     "CliHandler",
@@ -150,6 +151,7 @@ __all__ = [
     "age",
     "anchor",
     "attrs",
+    "becomes",
     "branch_prefix",
     "cell",
     "channel",

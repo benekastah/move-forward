@@ -128,17 +128,19 @@ def before_refresh(db: Database, plugins: list[Enabled]) -> Before:
 def events_of(
     e: Enabled, before: BaseModel | None, after: BaseModel | None, previous: Graph, graph: Graph
 ) -> list[Event]:
-    """Every event a plugin makes of a refresh, subscribed to or not: its `events`, from its
-    snapshot `before` and `after` and the graph `previous`ly and now (none while it has no
+    """Every event a plugin makes of a refresh, subscribed to or not: what its change rules
+    find of its entities `previous`ly and in the `graph` now (`notifications.changed`), its
+    `events` of its snapshot `before` and `after` and the graphs (none while it has no
     snapshot to compare with), then its items newly shown with a notification
     (`notifications.newly_shown`), which keeps what its panels show now for the next."""
+    ruled = notifications.changed(e.name, e.plugin.change_rules, previous, graph)
     found = (
         e.plugin.events(EventsRequest(e.ctx, before, after, previous, graph))
         if before is not None and after is not None
         else []
     )
     panels = e.plugin.panels(PanelsRequest(e.ctx, after, graph))
-    return [*found, *notifications.newly_shown(e.ctx.db, e.name, panels)]
+    return [*ruled, *found, *notifications.newly_shown(e.ctx.db, e.name, panels)]
 
 
 def _events(

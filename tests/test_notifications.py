@@ -12,8 +12,15 @@ from pydantic import ValidationError
 from move_forward import notifications, refresh, registry
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.graph import Ref
-from move_forward.notifications import Event, NotificationRepository, NotificationsConfig
+from move_forward.domain import Model
+from move_forward.graph import Entity, Graph, Ref
+from move_forward.notifications import (
+    ChangeRule,
+    Event,
+    NotificationRepository,
+    NotificationsConfig,
+    becomes,
+)
 from move_forward.page import Item, Notify, Panel, anchor
 from move_forward.plugin import CollectRequest, EventsRequest, LoadRequest, StoreRequest
 from move_forward.plugins.git.config import GitConfig
@@ -344,6 +351,60 @@ def test_unsubscribing_forgets_what_the_panels_showed() -> None:
         refresh.refresh(config, db, NOW)
         shown = db.query("SELECT plugin FROM shown_plugins")
         assert [row["plugin"] for row in shown] == (["git"] if subscribe else [])
+
+
+class _Issue(Model):
+    status: str
+
+
+def _issues(**statuses: str) -> Graph:
+    """A graph of tracker's issues, by id, each with its status; and a PR of the same id."""
+    return Graph(
+        [
+            Entity(ref=Ref(kind="tracker.issue", id=id), title=f"Issue {id}", attrs={"status": s})
+            for id, s in statuses.items()
+        ]
+        + [Entity(ref=Ref(kind="pull_request", id=id), title="PR") for id in statuses]
+    )
+
+
+_CLOSED = ChangeRule(
+    kind="closed",
+    entity="tracker.issue",
+    view=_Issue,
+    when=becomes(lambda issue: issue.status == "closed"),
+    text="was closed",
+)
+
+
+def test_a_change_rule_says_what_became_true_of_an_entity_held_before_and_after() -> None:
+    [event] = notifications.changed(
+        "tracker",
+        [_CLOSED],
+        _issues(a="open", b="closed"),
+        _issues(a="closed", b="closed", c="closed"),
+    )
+    assert event == Event(
+        kind="closed",
+        thing="a",
+        title="Issue a",
+        text="was closed",
+        anchor=anchor("tracker.issue", "a"),
+    )  # not b, closed before too, nor c, new
+
+
+def test_a_change_rule_can_name_its_thing_and_title_and_make_its_text() -> None:
+    rule = ChangeRule(
+        kind="moved",
+        entity="tracker.issue",
+        view=_Issue,
+        when=lambda before, after: before.status != after.status,
+        text=lambda issue: f"now {issue.status}",
+        thing=lambda issue: f"issue:{issue.status}",
+        title=lambda issue: "An issue",
+    )
+    [event] = notifications.changed("tracker", [rule, _CLOSED], _issues(a="open"), _issues(a="new"))
+    assert (event.thing, event.title, event.text) == ("issue:new", "An issue", "now new")
 
 
 def test_what_an_item_notifies_of_is_not_part_of_the_page() -> None:

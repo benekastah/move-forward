@@ -101,7 +101,8 @@ fetched entity carries:
 ### `pull_request`
 
 The pull request family, modeled in core (`api.kinds.PullRequest`); github adds `number`,
-`base` and `author`.
+`base` and `author`, and on my open PRs `review_decision`, `rollup_state`, `mergeable`,
+`in_merge_queue` and `failed_checks`.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
@@ -129,6 +130,11 @@ On my open PRs only:
 | `stale_review_hours` | integer | `[github] stale_review_hours`, for what says how long a review request must be quiet |
 | `failing_policy_checks` | list of strings | the failing checks named in `[github] policy_checks`, other than those only waiting for a review on a PR not yet approved |
 | `progress` | string | where it is: `draft`, `ready to merge`, `CI failing` or `in review` |
+| `review_decision` | string or null | GitHub's, e.g. `APPROVED`, `CHANGES_REQUESTED` (github's) |
+| `rollup_state` | string or null | its checks' combined state, e.g. `SUCCESS`, `FAILURE` (github's) |
+| `mergeable` | string | `MERGEABLE`, `CONFLICTING`, or `UNKNOWN` while GitHub works it out (github's) |
+| `in_merge_queue` | bool | (github's) |
+| `failed_checks` | list of strings | the checks whose state counts as failed: `FAILURE`, `ERROR`, `TIMED_OUT`, `CANCELLED`, `ACTION_REQUIRED` or `STARTUP_FAILURE` (github's) |
 
 ### `person`
 
@@ -195,7 +201,7 @@ A branch git stack tracks, including one git no longer has.
 ### `ticket`
 
 The ticket family, modeled in core (`api.kinds.Ticket`); jira adds `status`,
-`status_category` and `type`.
+`status_category`, `type` and `open_blockers`.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
@@ -204,6 +210,7 @@ The ticket family, modeled in core (`api.kinds.Ticket`); jira adds `status`,
 | `status` | string | |
 | `status_category` | string | Jira's `new`, `indeterminate` or `done` |
 | `type` | string | the issue type |
+| `open_blockers` | list of keys | the unfinished tickets blocking it (jira's) |
 
 ### `notes.entry`
 

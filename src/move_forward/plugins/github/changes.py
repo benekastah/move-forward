@@ -1,12 +1,15 @@
-"""What changed between two GitHub snapshots, as notification events (`Plugin.events`).
+"""What changed between two GitHub snapshots, as notification events.
 
-Each kind says something once, when a state changes; a PR the earlier snapshot didn't hold
-has no state to compare, so it only ever says it's new (a review requested of me).
+A change of a PR's state is a change rule over the `pull_request`s github publishes (`RULES`,
+`Plugin.change_rules`); what needs the snapshots (a new review, comment or timeline event, a
+review requested) is `changes` (`Plugin.events`). Each kind says something once, when a
+state changes; a PR the earlier snapshot didn't hold has no state to compare, so it only
+ever says it's new (a review requested of me).
 """
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 
-from ...api import Event, anchor
+from ...api import ChangeRule, Event, Model, anchor
 from .models import GitHubSnapshot, PullRequest, Review, TimelineEvent
 from .panels import PR
 
@@ -39,6 +42,93 @@ REVIEW_TEXT = {
 """What a review says, by its state; a dismissed one says nothing."""
 
 
+class _PrView(Model):
+    """What the change rules read of a `pull_request`: the state fields are on my open PRs
+    only."""
+
+    title: str
+    state: str | None
+    repo: str
+    number: int
+    mine: bool
+    draft: bool
+    head_oid: str | None = None
+    review_decision: str | None = None
+    rollup_state: str | None = None
+    mergeable: str | None = None
+    in_merge_queue: bool | None = None
+    failed_checks: list[str] | None = None
+
+
+def _ready(pr: _PrView) -> bool:
+    """Approved, green and conflict-free, and not yet queued: ready to merge."""
+    return (
+        not pr.draft
+        and not pr.in_merge_queue
+        and pr.review_decision == "APPROVED"
+        and pr.rollup_state == "SUCCESS"
+        and pr.mergeable == "MERGEABLE"
+    )
+
+
+def _failing(pr: _PrView) -> bool:
+    return pr.rollup_state in FAILED
+
+
+def _settled(old: _PrView, pr: _PrView) -> bool:
+    """More than GitHub done recomputing mergeability, which it reports as UNKNOWN meanwhile:
+    a return to its previous value is no news, but a review, check or commit changing is."""
+    moved = (old.review_decision, old.rollup_state, old.head_oid)
+    return old.mergeable != "UNKNOWN" or moved != (pr.review_decision, pr.rollup_state, pr.head_oid)
+
+
+def _rule(
+    kind: str,
+    when: Callable[[_PrView, _PrView], bool],
+    text: str | Callable[[_PrView], str],
+    *,
+    ends: bool = False,
+) -> ChangeRule[_PrView]:
+    """`kind` when `when` says one of my open PRs changed: one still open, or one that `ends`
+    (merged or closed, by anyone)."""
+    return ChangeRule(
+        kind=kind,
+        entity=PR,
+        view=_PrView,
+        when=lambda old, pr: (
+            old.mine and old.state == "open" and (ends or pr.state == "open") and when(old, pr)
+        ),
+        text=text,
+        title=lambda pr: f"{pr.repo}#{pr.number} {pr.title}",
+    )
+
+
+RULES = [
+    _rule(
+        "pr_mergeable", lambda o, p: _ready(p) and not _ready(o) and _settled(o, p), "can be merged"
+    ),
+    _rule(
+        "ci_failed",
+        lambda o, p: _failing(p) and not _failing(o),
+        lambda p: f"CI failed: {', '.join(p.failed_checks)}" if p.failed_checks else "CI failed",
+    ),
+    _rule(
+        "ci_recovered", lambda o, p: _failing(o) and p.rollup_state == "SUCCESS", "CI passes again"
+    ),
+    _rule(
+        "merge_conflict",
+        lambda o, p: (
+            p.mergeable == "CONFLICTING"
+            and (o.mergeable not in {"CONFLICTING", "UNKNOWN"} or p.head_oid != o.head_oid)
+        ),
+        "has a merge conflict",
+    ),
+    _rule("pr_merged", lambda o, p: p.state == "merged", "was merged", ends=True),
+    _rule("pr_closed", lambda o, p: p.state == "closed", "was closed without merging", ends=True),
+]
+"""What's said of a PR's state changing (`Plugin.change_rules`)."""
+
+
 def _event(pr: PullRequest, kind: str, text: str) -> Event:
     return Event(
         kind=kind,
@@ -57,21 +147,6 @@ def _other(login: str | None, me: str, ignored: Collection[str]) -> str | None:
 def _human(login: str | None, me: str, ignored: Collection[str]) -> str | None:
     """`login` unless it's me, a bot or an ignored reviewer: for what only a person does."""
     return _other(login, me, ignored) if login and not login.endswith("[bot]") else None
-
-
-def ready(pr: PullRequest) -> bool:
-    """Approved, green and conflict-free, and not yet queued: ready to merge."""
-    return (
-        not pr.is_draft
-        and not pr.in_merge_queue
-        and pr.review_decision == "APPROVED"
-        and pr.rollup_state == "SUCCESS"
-        and pr.mergeable == "MERGEABLE"
-    )
-
-
-def _failing(pr: PullRequest) -> bool:
-    return pr.rollup_state in FAILED
 
 
 def _new_events(pr: PullRequest, old: PullRequest, kind: str) -> list[TimelineEvent]:
@@ -99,31 +174,9 @@ def _replies(pr: PullRequest, old: PullRequest) -> int:
     return sum(max(0, t.comment_count - counts[t.url]) for t in pr.threads if t.url in counts)
 
 
-def _mine(pr: PullRequest, old: PullRequest, me: str, ignored: Collection[str]) -> list[Event]:
-    """What changed on one of my PRs that's still open."""
+def _on_mine(pr: PullRequest, old: PullRequest, me: str, ignored: Collection[str]) -> list[Event]:
+    """What changed on one of my PRs that's still open, beyond its state (`RULES`)."""
     found: list[Event] = []
-    # GitHub briefly reports UNKNOWN while recomputing mergeability. A return to its
-    # previous value is not a new event; a review or check changing still is.
-    if (
-        ready(pr)
-        and not ready(old)
-        and (
-            old.mergeable != "UNKNOWN"
-            or old.review_decision != pr.review_decision
-            or old.rollup_state != pr.rollup_state
-            or old.head_oid != pr.head_oid
-        )
-    ):
-        found.append(_event(pr, "pr_mergeable", "can be merged"))
-    if _failing(pr) and not _failing(old):
-        names = ", ".join(c.name for c in pr.checks if c.state in FAILED)
-        found.append(_event(pr, "ci_failed", f"CI failed: {names}" if names else "CI failed"))
-    if pr.rollup_state == "SUCCESS" and _failing(old):
-        found.append(_event(pr, "ci_recovered", "CI passes again"))
-    if pr.mergeable == "CONFLICTING" and (
-        old.mergeable not in {"CONFLICTING", "UNKNOWN"} or pr.head_oid != old.head_oid
-    ):
-        found.append(_event(pr, "merge_conflict", "has a merge conflict"))
     for review in _new_reviews(pr, old, me, ignored):
         found.append(_event(pr, "review_received", f"{review.author} {REVIEW_TEXT[review.state]}"))
     for comment in _new_events(pr, old, "IssueComment"):
@@ -168,23 +221,14 @@ def _open(snapshot: GitHubSnapshot) -> dict[str, PullRequest]:
 def changes(
     before: GitHubSnapshot, after: GitHubSnapshot, ignored: Collection[str] = ()
 ) -> list[Event]:
-    """The events between two snapshots, leaving out what the `ignored` logins did."""
+    """The events between two snapshots that no change rule says (`RULES`), leaving out
+    what the `ignored` logins did."""
     me = after.login
     found: list[Event] = []
     old_mine = {pr.url: pr for pr in before.mine}
-    now_mine = {pr.url for pr in after.mine}
     for pr in after.mine:
         if old := old_mine.get(pr.url):
-            found += _mine(pr, old, me, ignored)
-    merged = {pr.url: pr for pr in after.merged_recent}
-    closed = {pr.url: pr for pr in after.closed_recent}
-    for url in old_mine:
-        if url in now_mine:
-            continue
-        if url in merged:
-            found.append(_event(merged[url], "pr_merged", "was merged"))
-        elif url in closed:
-            found.append(_event(closed[url], "pr_closed", "was closed without merging"))
+            found += _on_mine(pr, old, me, ignored)
     old_open = _open(before)
     for pr in after.reviewed_by_me:
         if old := old_open.get(pr.url):

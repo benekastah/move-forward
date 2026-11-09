@@ -10,6 +10,17 @@ class GitHubPullRequest(PullRequest):
     """Its number in its repo; `handle` is `#<number>`."""
     base: str
     author: str | None
+    review_decision: str | None = None
+    """On my open PRs only: GitHub's, e.g. `APPROVED`, `CHANGES_REQUESTED`."""
+    rollup_state: str | None = None
+    """On my open PRs only: its checks' combined state, e.g. `SUCCESS`, `FAILURE`."""
+    mergeable: str | None = None
+    """On my open PRs only: `MERGEABLE`, `CONFLICTING` or `UNKNOWN` (while GitHub works it
+    out)."""
+    in_merge_queue: bool | None = None
+    """On my open PRs only."""
+    failed_checks: list[str] | None = None
+    """On my open PRs only: the checks whose state counts as failed (`FAILURE`, `ERROR`, ...)."""
 
 
 class GitHubPerson(Person):

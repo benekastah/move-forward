@@ -1,25 +1,30 @@
 """Browser notifications about things that changed: what to tell me, when to, and who keeps
 track of what I've been told.
 
-A plugin compares its snapshot and the graph from before a refresh with the ones after
-(`Plugin.events`) and says what happened as `Event`s; core adds an event for each item with
-a notification (`Item.notify`) newly in the plugin's panels (`newly_shown`), and the ones
-about the dashboard itself (a plugin that keeps failing). Nothing is on until I subscribe to its kind
-(`[notifications] subscribe`, set on the settings page or by `mfd init`): events of kinds I
-haven't subscribed to are never stored. Stored events wait until a dashboard tab, with
+A plugin's events are what its change rules find of its entities before a refresh and after
+(`Plugin.change_rules`, `changed`), what its own `events` say of its snapshot and the graph
+before and after, and its items with a notification (`Item.notify`) newly in its panels
+(`newly_shown`); core adds the ones about the dashboard itself (a plugin that keeps
+failing). Nothing is on until I subscribe to its kind (`[notifications] subscribe`, set on
+the settings page or by `mfd init`): events of kinds I haven't subscribed to are never
+stored. Stored events wait until a dashboard tab, with
 the browser's permission, asks for them; events about the same thing arrive as one
 notification.
 """
 
 import logging
-from collections.abc import Collection
+from collections.abc import Callable, Collection, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from .db import CORE, Database
 from .domain import Model
-from .page import Panel
+from .graph import Graph
+from .kinds import FAMILIES
+from .page import Panel, anchor
 from .repositories import KvRepository, SnapshotRepository
 from .strict import Strict
 from .text import shown
@@ -151,6 +156,67 @@ def _notification(thing: str, events: list[tuple[str, str, str]]) -> Notificatio
         tag=thing,
         url=f"/#{anchor}" if anchor else "/",
     )
+
+
+@dataclass(frozen=True)
+class ChangeRule[V: BaseModel]:
+    """A notification kind raised when one of the plugin's entities changes so that `when`
+    holds of it as it was before a refresh and as it is after (`Plugin.change_rules`), e.g.
+    `pr_merged` when an open PR of mine becomes merged. Core asks it of every entity of
+    `entity` the plugin publishes both before and after, so an entity new to the graph says
+    nothing; a rule that holds while a state lasts (rather than when it begins) would be told
+    after every refresh, so `when` compares the two, as `becomes` does."""
+
+    kind: str
+    """One of the plugin's `notification_kinds`."""
+    entity: str
+    """The kind of the plugin's entities it watches, as its `kinds` names it:
+    `pull_request`, `git_stack.stack_branch`."""
+    view: type[V]
+    """The plugin's view of the fields it reads, as `Graph.view` makes it: from the entity's
+    `id`, `title`, `url`, `state` and attributes."""
+    when: Callable[[V, V], bool]
+    """Whether it happened, given the entity before and after."""
+    text: str | Callable[[V], str]
+    """What happened, as a short phrase ("was merged"), or made from the entity after."""
+    thing: Callable[[V], str] | None = None
+    """What it's about (see `Event.thing`), from the entity after; None for its id."""
+    title: Callable[[V], str] | None = None
+    """The notification's title, from the entity after; None for the entity's title."""
+
+
+def becomes[V: BaseModel](holds: Callable[[V], bool]) -> Callable[[V, V], bool]:
+    """A `ChangeRule.when` for `holds` coming true: it holds after, and didn't before."""
+    return lambda before, after: holds(after) and not holds(before)
+
+
+def changed(
+    plugin: str, rules: Sequence[ChangeRule[Any]], previous: Graph, graph: Graph
+) -> list[Event]:
+    """The events of the plugin's change `rules`, in their order: for each, the plugin's
+    entities of its kind in `graph` that `previous` held too and that `when` says changed."""
+    found: list[Event] = []
+    for rule in rules:
+        full = f"{plugin}.{rule.entity}" if rule.entity in FAMILIES else rule.entity
+        for entity in graph.of_kind(full):
+            ref = entity.ref
+            old = previous.get(ref.kind, ref.id)
+            if old is None or old.kind != entity.kind:
+                continue  # new to the plugin: no state to compare with
+            before = previous.view_one(ref.kind, ref.id, rule.view)
+            after = graph.view_one(ref.kind, ref.id, rule.view)
+            if before is None or after is None or not rule.when(before, after):
+                continue
+            found.append(
+                Event(
+                    kind=rule.kind,
+                    thing=rule.thing(after) if rule.thing else ref.id,
+                    title=rule.title(after) if rule.title else entity.title,
+                    text=rule.text if isinstance(rule.text, str) else rule.text(after),
+                    anchor=anchor(ref.kind, ref.id),
+                )
+            )
+    return found
 
 
 def newly_shown(db: Database, plugin: str, panels: list[Panel]) -> list[Event]:
