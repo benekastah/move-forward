@@ -16,7 +16,9 @@ for themselves (a token, a request, an example config) is core's.
 
 - **Importing**: `import_dir(req: ImportRequest)` reads what the plugin recognises in
   `req.dir` for `mfd import <dir>` and says what, one line each; `req.replace` is
-  `--replace`. Raising `ValueError` fails the command, without stopping the other plugins.
+  `--replace`; what it won't overwrite without it, it skips with a line saying so, as
+  `mfd import` is run again routinely. Raising `ValueError` or `OSError` fails the command,
+  without stopping the other plugins.
 - **Lookup caches**: `LookupCache` (with the sources `BY_HAND`, `IMPORTED` and `LOOKED_UP`)
   keeps a plugin's cache of looked-up values in its own table: by hand wins over an import,
   which wins over a lookup, and lookups that found nothing are tried again after a cutoff.

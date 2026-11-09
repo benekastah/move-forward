@@ -129,3 +129,9 @@ def test_the_migration_keeps_imported_team_channels_as_set_by_hand() -> None:
     # An import no longer replaces them.
     slack.replace_imported([], [], [])
     assert set(slack.team_channels()) == {"core", "web"}
+
+
+def test_a_team_named_twice_in_the_map_takes_its_first_row() -> None:
+    text = "## Teams\n\n| Team | Channel |\n|---|---|\n| web | #web (C0123ABCD) |\n| web | #other (C0999ZZZZ) |\n"
+    _, teams = markdown.read_reviewer_map(text)
+    assert [(t.slug, t.channel_name, t.channel_id) for t in teams] == [("web", "#web", "C0123ABCD")]

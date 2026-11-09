@@ -21,7 +21,7 @@ _CHANNEL_RE = re.compile(r"#[\w-]+")
 
 def read_reviewer_map(text: str) -> tuple[list[Contact], list[TeamChannel]]:
     """People's Slack ids (the Users table: login, email, Slack id) and teams' channels (the
-    Teams table: team, channel as `#name (C0123456)`)."""
+    Teams table: team, channel as `#name (C0123456)`), a team's first row only."""
     by_heading = tables(text)
     contacts = [
         Contact(login=login, slack_id=cell(row, 2) or None)
@@ -30,7 +30,7 @@ def read_reviewer_map(text: str) -> tuple[list[Contact], list[TeamChannel]]:
     ]
     teams: list[TeamChannel] = []
     for row in by_heading.get("Teams", []):
-        if not (slug := cell(row, 0)):
+        if not (slug := cell(row, 0)) or any(t.slug == slug for t in teams):
             continue
         channel = cell(row, 1)
         id_match = _SLACK_ID_RE.search(channel)

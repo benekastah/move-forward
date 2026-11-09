@@ -448,7 +448,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   import <dir>` into its tables, and returns what it read, one line each (none when it
   recognises nothing there). What it won't overwrite without `req.replace` (`--replace`) it
   skips with a line saying so, as `mfd import` is run again routinely; it raises `ValueError`
-  only for what fails, which makes the command fail.
+  (or lets an `OSError` through) only for what fails, which makes the command fail.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the
 plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their
