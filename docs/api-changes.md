@@ -52,21 +52,18 @@ Fewer things to know: what no plugin used is gone.
 - **Token fields**: `api.keychain.TokenFields` is a `Strict` base for a section keeping one
   token, with `token_env` and `keychain_service`, defaulting to the class's
   `default_token_env` and `default_keychain_service`.
-- **Text as shown**: `api.html.shown(text)` drops what could make text a stranger wrote
-  read as something else (bidi controls, zero-width characters, tag characters outside a
-  flag), turns control characters into spaces, and collapses its whitespace. Core shows every item's title, subtitle, details,
-  badges and links' text through it; use it for such text on a plugin's own pages.
+- **Text as shown**: `api.html.shown(text)` drops what could make text a stranger wrote read
+  as something else (bidi controls, zero-width characters, tag characters outside a flag),
+  turns control characters into spaces, and collapses its whitespace. Core shows every
+  item's title, subtitle, details, badges and links' text through it; use it for such text
+  on a plugin's own pages.
 - **One HTTP request**: `api.http.request(url, *, secret_name, headers, json, form, method,
-  timeout)` sends a request carrying a secret (https only, no redirects) with a JSON or
-  form body, and returns the answer's body. When there's no answer (no network, a timeout, a cut or garbled response) or an error status, it raises
-  `api.http.RequestError`, whose `status` is the HTTP status, or None without one.
-
-## Version 1
-
-The first version. While the built-ins are its only plugins, changes go into it without
-raising the version; it's listed so a plugin written against an earlier checkout can
-catch up.
-
+  timeout)` sends a request carrying a secret (https only, no redirects) with a JSON or form
+  body, and returns the answer's body. When there's no answer (no network, a timeout, a cut
+  or garbled response) or an error status, it raises `api.http.RequestError`, whose `status`
+  is the HTTP status, or None without one. ## Version 1 The first version. While the
+  built-ins are its only plugins, changes go into it without raising the version; it's
+  listed so a plugin written against an earlier checkout can catch up.
 - **A checkout's git directory**: `api.shell.git_common_dir(repo)` is the directory holding a
   checkout's refs and config (its `.git`, or a linked worktree's main repository's), read
   from the files without running git; None when `repo` isn't a checkout.
