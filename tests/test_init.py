@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from conftest import section
+from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 from move_forward import asking, cli, config, init, keychain, registry
@@ -411,6 +412,23 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
         and f"[{plugin.name}.{key}]" not in shown
         and not (_tables(plugin.config_model.model_fields[key]) and f"[{plugin.name}." in shown)
     ]
+    assert missing == []
+
+
+def test_every_key_of_core_is_in_the_example() -> None:
+    """Core's top-level keys, and those of its own sections (`[act_now]` and the like)."""
+    example = cli.EXAMPLE_CONFIG
+    missing: list[str] = []
+    for name, field in config.Config.model_fields.items():
+        if name == "sections":  # the plugins' own, checked by plugin below
+            continue
+        model = field.annotation
+        if isinstance(model, type) and issubclass(model, BaseModel):
+            section = re.search(rf"^# \[{name}\][^\n]*\n((?:#[^\n]*\n)*)", example, re.MULTILINE)
+            shown = section[1] if section else ""
+            missing += [f"{name}.{key}" for key in model.model_fields if f"{key} =" not in shown]
+        elif f"{name} =" not in example:
+            missing.append(name)
     assert missing == []
 
 

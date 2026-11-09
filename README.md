@@ -3,8 +3,8 @@
 A local dashboard of everything in flight: my PRs and what they're waiting on,
 reviews asked of me, PRs my team should look at, local branches with
 unpushed or uncommitted work, git stack health, todos and merge conditions
-from my work notes, my Jira tickets, mail that needs me, and who's waiting on my reviews in
-Slack. No AI involved: everything is worked out from GitHub, git, Jira, mail, Slack, my
+from my work notes, my Jira tickets, mail that needs me, and whom to ping in Slack about my
+PRs. No AI involved: everything is worked out from GitHub, git, Jira, mail, Slack, my
 address book (vCard) and the notes.
 
 It runs a small HTTP server on localhost, refreshes in the background, and
@@ -377,7 +377,7 @@ entry on ice comes off it once its work is over the same way (a stack stays
 until it's reopened), the notes' offers and declines that old are forgotten,
 pings that old leave the database, and so do Act now's
 snoozes once over, and its dismissals and pins that old. A priority set on work that's since
-finished is cleared, and so is a tag I put on something gone. Reviewer email and Slack id
+finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. Reviewer email and Slack id
 lookups that found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 

@@ -193,8 +193,8 @@ in the browser", below, which already plans tables on the settings page.
 
 ### Accounts
 
-A plugin reads one login, as github reads many repos but one account and jira one site, unless
-it can read several itself (mail does: see its page), as accounts in its own section, so it keeps one
+A plugin reads one login: github many repos but one account, jira one site. One that can read
+several does it itself (mail does: see its page), as accounts in its own section, so it keeps one
 set of tables, pages and actions, and settles what two of them both see the way its tool needs
 (the same conversation in two mailboxes is one item). Core gives each account its token:
 `Plugin.tokens` names them, and `mfd token set <plugin>.<account>` stores one.

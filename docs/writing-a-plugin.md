@@ -86,10 +86,11 @@ class LinearConfig(Strict):
   whose entries are tables of their own, by name (mail's `[mail.<name>]` accounts), says so
   with `json_schema_extra={"tables": True}`, and its example is one such table.
 - Every field has a docstring.
-- Every key appears in four places: the model, the plugin's page in `docs/plugins/`,
-  `mfd init`'s rendered config as a commented default (the plugin's `init_template`),
-  and, for a built-in, `mfd init --example` (`cli.py`); a plugin from another package can't
-  add to that, so its `init_template` and `init_example` are its example.
+- A built-in's every key appears in four places: the model, the plugin's page in
+  `docs/plugins/`, `mfd init`'s rendered config as a commented default (the plugin's
+  `init_template`), and `mfd init --example` (`cli.py`). A plugin from another package can't
+  add to those pages or that example: its model, its own docs, and its `init_template` and
+  `init_example` are where its keys appear.
 - `mfd init` asks which plugins to set up (offering those whose `init_suggested()` is
   true), then each chosen one's `init_questions(ask, setup)`, which returns its section's
   values. `setup` has my email, where init runs and the teams found so far; a plugin that
@@ -145,8 +146,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - `name` is the config section, the kv namespace and migrations' owner, the tables'
   prefix and the first part of the actions' paths: lower-case letters, digits and `_`,
   unique, and not one of `registry.RESERVED_NAMES` (core's own names, commands, top-level
-  keys and paths, `core` and `act_now` among them). The registry checks this when it's
-  imported.
+  keys and paths, `core` and `act_now` among them) nor a prefix of one of core's tables or
+  indexes (`team` of `team_channels`). The registry checks this when it's imported.
 - Every hook gets `ctx`, the plugin's context: its section (`ctx.config`), `ctx.name`,
   `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, its database (`ctx.db`) and key/value
   state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
@@ -503,6 +504,9 @@ A built-in's tests go in `tests/plugins/`, named after it (`test_jira_*.py`); th
 built-ins working together use `conftest.dashboard(...)` and `conftest.stored(...)`.
 
 ## Docs to update in the same commit
+
+For a built-in, in this repository; a plugin from another package keeps the same in its own
+docs, and its `init_template` and `init_example`.
 
 - The plugin's page, `docs/plugins/<name>.md` (copy one of the others): its config and
   setup, what it publishes, its panels, what it nominates for Act now, its buttons, pages
