@@ -400,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if args.example:
             config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(EXAMPLE_CONFIG)
+            config_path.write_text(EXAMPLE_CONFIG, encoding="utf-8")
             print(f"wrote {config_path}; edit it, then run `mfd serve --open`")
             return 0
         try:

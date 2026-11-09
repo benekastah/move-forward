@@ -36,12 +36,12 @@ def config_file(repo: Path) -> Path | None:
         return dot / "config"
     if not dot.is_file():
         return None
-    text = dot.read_text().strip()
+    text = dot.read_text(encoding="utf-8").strip()
     if not text.startswith("gitdir:"):
         return None
     own = (repo / text.removeprefix("gitdir:").strip()).resolve()
     common = own / "commondir"
-    base = (own / common.read_text().strip()).resolve() if common.is_file() else own
+    base = (own / common.read_text(encoding="utf-8").strip()).resolve() if common.is_file() else own
     return base / "config"
 
 

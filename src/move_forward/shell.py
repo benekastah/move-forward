@@ -45,7 +45,16 @@ def run(
     if _stopping.is_set():
         raise CommandError(f"{args[0]}: not run, shutting down")
     result = subprocess.run(
-        args, cwd=cwd, input=input, capture_output=True, text=True, timeout=timeout, check=False
+        args,
+        cwd=cwd,
+        input=input,
+        capture_output=True,
+        # Every tool here speaks UTF-8; Windows' default would be its code page. A byte that
+        # isn't UTF-8 (in a commit message, say) mustn't fail the whole read.
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
     )
     if result.returncode != 0:
         shown = " ".join(args)

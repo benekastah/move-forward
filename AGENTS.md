@@ -161,7 +161,8 @@ is what's left to build.
   on all three; CI runs `dev.py tests` on each (and `dev.py static`, the same everywhere, once),
   and they must pass on all of them.
   Use `pathlib` rather than joining paths with `/`, and write paths into TOML or
-  URLs with `as_posix()`. Branch on `sys.platform` rather than assuming POSIX
+  URLs with `as_posix()`. Read and write text as UTF-8 (`encoding="utf-8"`; Windows' default
+  is its code page): `tests/test_encoding.py` checks every call. Branch on `sys.platform` rather than assuming POSIX
   (modes, process groups, `os.execv`, `time.tzset`), and when a system needs its
   own way (`private.py`'s access lists, `keychain.py`'s stores), give it one
   rather than skipping it there. Dev tooling goes in `dev.py`, not shell scripts.

@@ -94,8 +94,9 @@ def offered() -> list[Plugin[Any, Any]]:
 
 
 def _toml_value(value: object) -> str:
-    """TOML for a string, int, or list of strings (JSON's quoting is valid TOML)."""
-    return json.dumps(value)
+    """TOML for a string, int, or list of strings (JSON's quoting is valid TOML, with what isn't
+    ASCII written as itself: TOML refuses JSON's surrogate pairs)."""
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _table(name: str, values: dict[str, object], optional: str = "") -> str:
@@ -206,7 +207,7 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
     """Interview, write the file, and return what to do next."""
     text = interview(prompt, cwd or Path.cwd())
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
     next_steps = f"wrote {path}\nrun `mfd serve --open` to start"
     if "\n[jira]\n" in text:
         next_steps += (

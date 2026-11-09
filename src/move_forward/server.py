@@ -655,7 +655,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             url = urlsplit(self.path)
             if url.path in STATIC_FILES:
                 name, content_type = STATIC_FILES[url.path]
-                self._send(HTTPStatus.OK, (STATIC_DIR / name).read_text(), content_type)
+                self._send(
+                    HTTPStatus.OK, (STATIC_DIR / name).read_text(encoding="utf-8"), content_type
+                )
                 return
             if url.path == LOGIN_PATH:
                 self._login(url.query)

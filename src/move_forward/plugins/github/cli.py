@@ -22,7 +22,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
         if not path.exists():
             print(f"mfd github import: no {path}", file=sys.stderr)
             return 1
-        emails = read_reviewer_map(path.read_text())
+        emails = read_reviewer_map(path.read_text(encoding="utf-8"))
         PeopleRepository(ctx.db).replace_imported(emails)
         print(f"imported {len(emails)} reviewers' emails")
         return 0
