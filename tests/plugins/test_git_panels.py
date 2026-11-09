@@ -20,6 +20,7 @@ from legacy import save_json_snapshot
 from move_forward import refresh, render
 from move_forward.db import Database
 from move_forward.page import Badge
+from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Worktree
 from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
 from move_forward.plugins.git_stack.models import StackBranch
@@ -37,6 +38,16 @@ def test_branches_are_published_with_their_checkout() -> None:
     assert branch is not None
     assert branch.attrs["repo_dir"] == "/src/widgets" and branch.attrs["ahead"] == 2
     assert branch.attrs["sha"] == "c0ffee"
+
+
+def test_a_repo_is_published_with_how_far_back_commits_count() -> None:
+    config, db = stored(local=local_snapshot())
+    git = config.section("git", GitConfig)
+    assert git is not None
+    config = config.with_section("git", git.model_copy(update={"commit_history_days": 30}))
+    graph, _ = refresh.stored_graph(db, enabled(config, db, NOW))
+    [repo] = graph.of_kind("git.repo")
+    assert repo.attrs["commit_history_days"] == 30  # what github's reviewer suggestions use
 
 
 # Local

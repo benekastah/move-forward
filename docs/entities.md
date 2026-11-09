@@ -183,7 +183,8 @@ importance as a tool's on the person would, which only a type I set on their add
 | `dir` | string | the main checkout's path |
 | `default_branch` | string | |
 | `default_refs` | list of strings | the default branch on each remote (`origin/main`, `upstream/main`), or the local one when no remote has it (empty when there's none), as refs `git log` takes in `dir` |
-| `my_dirs` | list of strings | directories I committed to within `[git] commit_history_days`, repo-relative and POSIX (`src/api`) |
+| `my_dirs` | list of strings | directories I committed to within `commit_history_days`, repo-relative and POSIX (`src/api`) |
+| `commit_history_days` | int | how far back commits count, in days (`[git] commit_history_days`): for `my_dirs`, and for whoever reads others' commits in `dir` (github's reviewer suggestions) |
 
 ### `git.branch`
 

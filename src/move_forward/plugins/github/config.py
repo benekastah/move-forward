@@ -20,7 +20,6 @@ DEFAULT_HOUR_REVIEW_MAX_LINES = 300
 DEFAULT_HOUR_REVIEW_MAX_FILES = 12
 DEFAULT_SPLIT_PR_SUGGEST_LINES = 600
 DEFAULT_SPLIT_PR_LINES = 800
-DEFAULT_REVIEWER_HISTORY_DAYS = 180
 ReviewerAssignment = Literal["team", "individual"]
 
 
@@ -112,8 +111,6 @@ class GitHubConfig(Strict):
     stale_draft_days: int = Field(default=DEFAULT_STALE_DRAFT_DAYS, ge=0)
     """My draft PRs untouched for this many days, e.g. `14`, get a "stale draft" line in PR
     housekeeping. 0: never."""
-    reviewer_history_days: int = DEFAULT_REVIEWER_HISTORY_DAYS
-    """How far back commits count when suggesting reviewers."""
 
     def slug(self, team: str) -> str:
         return self.teams.get(team, team)

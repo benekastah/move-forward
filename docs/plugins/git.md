@@ -35,8 +35,9 @@ of `my_branch_prefixes`. Without prefixes, a branch with only others' commits (a
 checkout) isn't yours, and an older one that wasn't counted is. Local work also shows
 the unpushed commits of any branch git stack tracks (with the git_stack plugin), since
 stacks are built on your own branches. `ignored_worktree_globs`
-leaves worktrees out, and `commit_history_days` says how far back
-your commits (by the repo's `user.email`) count towards the directories you work in. A
+leaves worktrees out, and `commit_history_days` (180) says how far back commits count: yours
+(by the repo's `user.email`) towards the directories you work in, and others' towards the
+github plugin's reviewer suggestions. A
 repo git can't read (one whose git hangs, say) is logged and kept as it was last read, or
 left out if it never was (a path that isn't a repo), so it doesn't hold up the others,
 until its next change or the next full read (every `refresh_seconds`); a worktree deleted

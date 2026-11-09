@@ -25,6 +25,8 @@ class Checkout(Model):
     """The default branch on each of its remotes, as refs `git log` takes in `dir`."""
     my_dirs: list[str] = Field(default_factory=list)
     """Directories I committed to recently."""
+    commit_history_days: int
+    """How far back commits count, in days: git's window, which reviewer suggestions share."""
 
 
 def _in_my_dirs(path: str, my_dirs: list[str]) -> bool:
@@ -68,11 +70,11 @@ def team_score(
 def suggest_reviewers(
     repo: Checkout,
     files: list[str],
-    since_days: int,
     emails: Mapping[str, str | None],
     exclude: set[str],
 ) -> list[ReviewerSuggestion]:
-    """People who recently committed to the PR's directories, by commit count.
+    """People who committed to the PR's directories within the checkout's
+    `commit_history_days`, by commit count.
 
     Only authors whose email is known (so they map to a GitHub login) are suggested;
     `emails` are by login. Logins in `exclude` are left out whatever their case, as GitHub's
@@ -87,7 +89,7 @@ def suggest_reviewers(
             Path(repo.dir),
             "log",
             *repo.default_refs,
-            f"--since={since_days} days ago",
+            f"--since={repo.commit_history_days} days ago",
             "--format=%ae",
             "--",
             *dirs,
@@ -113,7 +115,6 @@ def collect(
     emails: Mapping[str, str | None],
     org: str,
     teams: list[str],
-    commit_history_days: int,
     required_owner_marker: str = "",
     wants_reviewer: Callable[[PullRequest], bool] = lambda pr: True,
 ) -> DerivedSnapshot:
@@ -145,7 +146,6 @@ def collect(
         pr.url: suggest_reviewers(
             repos[pr.repo.lower()],
             pr.files,
-            commit_history_days,
             emails,
             {github.login, *pr.requested_users},
         )

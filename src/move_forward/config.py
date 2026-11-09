@@ -27,14 +27,16 @@ DEFAULT_REFRESH_ON_LOAD_SECONDS = 60
 DEFAULT_PRUNE_DAYS = 90
 
 MOVED_SETTINGS = {
-    "repos": "git",
-    "my_branch_prefixes": "git",
-    "ignored_worktree_globs": "git",
-    "commit_history_days": "git",
-    "email_domains": "github",
-    "stale_review_hours": "github",
+    "repos": "git.repos",
+    "my_branch_prefixes": "git.my_branch_prefixes",
+    "ignored_worktree_globs": "git.ignored_worktree_globs",
+    "commit_history_days": "git.commit_history_days",
+    "email_domains": "github.email_domains",
+    "stale_review_hours": "github.stale_review_hours",
+    "github.reviewer_history_days": "git.commit_history_days",
 }
-"""Top-level settings that moved into a plugin's section, to say so instead of just "extra
+"""Settings that moved, from where they were (a top-level key, or a plugin's as
+`<section>.<key>`) to where they are now (`<section>.<key>`), to say so instead of just "extra
 input"."""
 REMOVED_PLUGINS = {
     "vcard": (
@@ -52,6 +54,21 @@ GONE_NOTIFICATIONS = {
 }
 """Notification kinds that no longer exist, with why, to say so to a config still subscribed
 to one instead of just "no such kind"."""
+
+
+def _moved_settings(settings: dict[object, object]) -> list[str]:
+    """What `MOVED_SETTINGS` says of the settings in the config file that moved."""
+    found: list[str] = []
+    for old, new in MOVED_SETTINGS.items():
+        section, _, key = old.rpartition(".")
+        table = settings.get(section) if section else settings
+        if not isinstance(table, dict) or key not in table:
+            continue
+        new_section, new_key = new.split(".")
+        where = f"`{key}` in [{section}]" if section else f"`{key}`"
+        renamed = f" `{new_key}`" if new_key != key else ""
+        found.append(f"{where} is now{renamed} in [{new_section}]")
+    return found
 
 
 class Config(Strict):
@@ -149,11 +166,7 @@ class Config(Strict):
         if not isinstance(data, dict):
             return data
         settings = cast(dict[object, object], data)
-        moved = [
-            f"`{key}` is now in [{MOVED_SETTINGS[key]}]"
-            for key in map(str, settings)
-            if key in MOVED_SETTINGS
-        ]
+        moved = _moved_settings(settings)
         if "notes_dir" in settings:
             moved.append(
                 "`notes_dir` is gone; the notes live in the database now: import them once with"
