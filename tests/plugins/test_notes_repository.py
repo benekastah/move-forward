@@ -222,7 +222,7 @@ def test_conditions_kept_before_they_named_their_pr_are_given_one_once() -> None
         Condition(pr=two, text="after the release"),
     ]
     assert second.conditions == [] and second.lines == ["- Merge condition: ask Sam"]
-    assert NotesRepository(db).entries() == [first, second]  # once
+    assert db.migrate("notes", MIGRATIONS) == 0  # once
 
 
 def test_rekeying_asks_for_new_ids_outside_its_transaction() -> None:

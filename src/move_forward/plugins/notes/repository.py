@@ -6,7 +6,6 @@ from collections.abc import Callable, Collection
 from datetime import date, datetime
 
 from ...api import Database, Migration, Ref
-from ...api.kinds import PULL_REQUEST as PR
 from .markdown import BRANCH, attach_conditions
 from .models import (
     CheckIn,
@@ -22,6 +21,40 @@ from .models import (
     Size,
     Todo,
 )
+
+
+def _attach_old_conditions(conn: sqlite3.Connection) -> None:
+    """Give each condition kept before conditions named their PR its PR, by
+    `markdown.attach_conditions`: the PR its text names, else each of its entry's PRs; one
+    with neither becomes a line of its entry."""
+    old = conn.execute(
+        "SELECT entry_id, text FROM notes_conditions WHERE pr IS NULL ORDER BY entry_id, position"
+    ).fetchall()
+    texts: defaultdict[int, list[str]] = defaultdict(list)
+    for row in old:
+        texts[row["entry_id"]].append(row["text"])
+    for entry_id, written in texts.items():
+        prs = [
+            row["ref"]
+            for row in conn.execute(
+                # The kind as 0007 named it, whatever the live constant becomes.
+                "SELECT ref FROM notes_links WHERE entry_id = ? AND kind = 'pull_request'"
+                " ORDER BY ref",
+                (entry_id,),
+            )
+        ]
+        conditions, lines = attach_conditions(written, prs)
+        conn.execute("DELETE FROM notes_conditions WHERE entry_id = ? AND pr IS NULL", (entry_id,))
+        for condition in conditions:
+            _insert_condition(conn, entry_id, condition)
+        for line in lines:
+            conn.execute(
+                "INSERT INTO notes_entry_lines VALUES (?,"
+                " (SELECT COALESCE(MAX(position), -1) + 1 FROM notes_entry_lines"
+                " WHERE entry_id = ?), ?)",
+                (entry_id, entry_id, line),
+            )
+
 
 MIGRATIONS = [
     Migration(
@@ -182,6 +215,8 @@ MIGRATIONS = [
     END;
     """,
     ),
+    # Conditions from before conditions named their PR are given theirs, once.
+    Migration("0008_old_conditions_given_prs", _attach_old_conditions),
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
 only the notes know what's in them."""
@@ -232,7 +267,6 @@ class NotesRepository:
                     links=todo_links[row["id"]],
                 )
             )
-        self._attach_conditions()
         conditions: defaultdict[int, list[Condition]] = defaultdict(list)
         for row in db.query("SELECT * FROM notes_conditions ORDER BY entry_id, position"):
             conditions[row["entry_id"]].append(Condition(pr=row["pr"], text=row["text"]))
@@ -394,40 +428,6 @@ class NotesRepository:
                 ).rowcount
                 > 0
             )
-
-    def _attach_conditions(self) -> None:
-        """Give each condition kept before conditions named their PR its PR, once, by
-        `markdown.attach_conditions`: the PR its text names, else each of its entry's PRs;
-        one with neither becomes a line of its entry."""
-        with self._db.transaction() as conn:
-            old = conn.execute(
-                "SELECT entry_id, text FROM notes_conditions WHERE pr IS NULL"
-                " ORDER BY entry_id, position"
-            ).fetchall()
-            texts: defaultdict[int, list[str]] = defaultdict(list)
-            for row in old:
-                texts[row["entry_id"]].append(row["text"])
-            for entry_id, written in texts.items():
-                prs = [
-                    row["ref"]
-                    for row in conn.execute(
-                        "SELECT ref FROM notes_links WHERE entry_id = ? AND kind = ? ORDER BY ref",
-                        (entry_id, PR),
-                    )
-                ]
-                conditions, lines = attach_conditions(written, prs)
-                conn.execute(
-                    "DELETE FROM notes_conditions WHERE entry_id = ? AND pr IS NULL", (entry_id,)
-                )
-                for condition in conditions:
-                    _insert_condition(conn, entry_id, condition)
-                for line in lines:
-                    conn.execute(
-                        "INSERT INTO notes_entry_lines VALUES (?,"
-                        " (SELECT COALESCE(MAX(position), -1) + 1 FROM notes_entry_lines"
-                        " WHERE entry_id = ?), ?)",
-                        (entry_id, entry_id, line),
-                    )
 
     def add_condition(self, entry_id: int, condition: Condition) -> bool:
         """Add a merge condition at the end; False if the entry already has it."""
