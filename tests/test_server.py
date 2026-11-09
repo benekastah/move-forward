@@ -730,7 +730,7 @@ class _GitHubAnsweringBadly(GitHubPlugin):
 def test_a_malformed_change_check_is_a_failed_one(
     app: server.App, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Skipped and tried again, rather than raised out of the round of checks."""
+    """Skipped, as a check that raises is, rather than raised out of the round of checks."""
     swap = {"github": _GitHubAnsweringBadly()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     assert app.check_for_changes(1000.0) == set()
