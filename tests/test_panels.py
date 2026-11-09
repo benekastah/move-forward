@@ -947,3 +947,65 @@ def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
     )
     gone = entry_.model_copy(update={"parts": [Item(title="a")]})  # the next day
     assert act_now.Nomination("x", ticked).fingerprint == act_now.Nomination("x", gone).fingerprint
+
+
+@pytest.mark.parametrize(
+    ("said", "blocked"),
+    [
+        ("-", False),
+        ("–", False),
+        ("nothing", False),
+        ("nothing yet", False),
+        ("None.", False),
+        ("none for now", False),
+        ("n/a", False),
+        ("Not blocked yet", False),
+        ("not blocked anymore", False),
+        ("NA", False),
+        ("No blockers.", False),
+        ("no blockers yet", False),
+        ("nothing...", False),
+        ("none, just waiting", True),
+        ("nothing but Bob's review", True),
+        ("N/A until Bob merges #12", True),
+        ("NA - waiting on legal", True),
+        ("not blocked on me, blocked on infra", True),
+        ("no reviewer yet", True),
+        ("no one has reviewed", True),
+        ("reviews", True),
+    ],
+)
+def test_blocked_on_nothing_is_said_by_the_whole_line(said: str, blocked: bool) -> None:
+    noted = entry("APP-3 x", [todo("x", "quick")], **{"Blocked on": [said]})
+    [item] = panel(dashboard(work_items=[noted]), "notes.todos").items
+    texts = [b if isinstance(b, str) else b.text for b in item.badges]
+    assert any(t.startswith("blocked") for t in texts) == blocked
+
+
+@pytest.mark.parametrize(
+    ("text", "mentioned"),
+    [
+        ("bump to 1.2.5 and pay $5", False),
+        ("up 5% since 5.1", False),
+        ("€5 a month, or 5€", False),
+        ("costs $1,234,005 a month", False),
+        ("merge 5—it's ready", True),
+        ("PRs 4-5", False),
+        ("PRs 4–5", False),
+        ("rebase 4,5", True),
+        ("see #5/#6", True),
+        ("#5-fix lands first", True),
+        ("then 5.", True),
+    ],
+)
+def test_a_todo_mentions_a_pr_by_its_number_but_not_by_a_number_within_another(
+    text: str, mentioned: bool
+) -> None:
+    url = "https://github.com/acme/widgets/pull/5"
+    noted = entry("APP-1 one", [todo(text, "quick")], Where=[url])
+    built = dashboard(
+        work_items=[noted], github=snapshot(merged_recent=[pr(5, state="MERGED", merged_at=NOW)])
+    )
+    [item] = panel(built, "notes.todos").items
+    assert any(link.strong for link in item.links if link.url == url) == mentioned
+    assert ("its PRs are done" in item.badges) == mentioned

@@ -117,3 +117,9 @@ def test_a_todo_ticked_off_today_stays_listed_ticked_to_untick() -> None:
     stepped = [part.title for _, part in built.focus_items("notes.todos") or []]
     assert stepped == ["dishes"]  # what's ticked off isn't a step
     assert list(items) == ["Chores", "Done today"]  # all ticked off: last
+
+
+def test_a_blank_new_todo_is_an_empty_todo() -> None:
+    config, db = stored(work_items=[])
+    with pytest.raises(ActionError, match="the todo is empty"):
+        refresh.run_action(config, db, "notes/todo_new", {"input": "  "})

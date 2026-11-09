@@ -4,15 +4,17 @@ The move-forward skill's work notes, in the database: work entries with their to
 conditions and links, and what's on ice. Always on; a `[notes]` section only changes its
 settings, and it has none yet. The smallest config, `email` alone, is a todo list.
 
-Notes kept as the skill's markdown files (`work-notes.md`, `on-ice.md`,
-`reviewer-map.md`) are read in once with `mfd notes import <dir>`; `mfd notes export
-<dir>` writes them back out.
+Notes kept as the skill's markdown files (`work-notes.md`, `on-ice.md`) are read in once
+with `mfd notes import <dir>`; `mfd notes export <dir>` writes them back out. (The skill's
+`reviewer-map.md` is read by `mfd github import` and `mfd slack import`.) The markdown can't
+hold everything the database does: an export loses the links made with Link and the order of
+an entry's lines, and an import gives todos new ids.
 
 ## Publishes
 
 `notes.entry` for each work entry, pointing at the PRs and tickets it's linked to and mentioning
-its title (for the tickets it names), and `notes.iced` for each act of icing, hiding what it
-covers; see [entities.md](../entities.md). Entries are a linking kind: two things an entry
+its title (for the tickets it names), `notes.todo` for each open todo, and `notes.iced` for each
+act of icing, hiding what it covers; see [entities.md](../entities.md). Entries are a linking kind: two things an entry
 names are related through it.
 
 ## Panels
@@ -46,8 +48,9 @@ Put on ice has an ice icon with its label in the title. It joins git's Delete bu
 in a group when both are offered, and joins Snooze, Dismiss and Pin on Act now items.
 
 In focus mode, work entries are split into their todos, one per page, quick ones first.
-Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number)
-first and in bold; merged PRs are purple and struck through, closed ones gray and struck
+Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number, but
+not a number within a version, an amount, a path or a range: `1.2.5`, `$5`, `1230-1234`) first
+and in bold; merged PRs are purple and struck through, closed ones gray and struck
 through. When every PR a todo mentions is merged or closed, it's flagged "its PRs are
 done" and its Done box is drawn bigger. Each todo has a Done checkbox, a Delete
 button, Quick and Big buttons (its size highlighted), and a Link field that links it to a Jira ticket (by key) or a PR (by URL). Add todo's drop-down
@@ -91,7 +94,7 @@ Every `mfd notes` command works on the database without the server, and prints J
 
 | Command | Does |
 | --- | --- |
-| `mfd notes list [--open]` | The entries with their open todos (`--open`: only those with some). Every `mfd notes` command works on the database without the server, and prints JSON with `--json`, for scripts and the skill. |
+| `mfd notes list [--open]` | The entries, a line each: its id, title, status, what it's blocked on and how many todos are open (`--open`: only those with some); with `--json`, each entry whole. |
 | `mfd notes show <entry>` | One entry with its todos, merge conditions and links. An entry is named by its id, its title, or a PR URL or ticket key it's about. |
 | `mfd notes add-entry <title> [--link <PR URL or ticket key>]... [--status S] [--where W]` | Add an entry. A ticket key in the title makes it about that ticket (with `[jira]`). |
 | `mfd notes remove <entry>` | Remove an entry with its todos, for finished work. |
@@ -111,5 +114,5 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its git-stack stack and group, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
-| `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database. Lines it doesn't understand are kept with their entry. Refuses to replace notes already imported without `--replace`, which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |
+| `mfd notes import <dir> [--replace]` | Read the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database, refused when it has neither. Lines it doesn't understand are kept with their entry. Refuses to replace notes already there without `--replace` (anything read replaces them all, even a preamble alone), which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |
 | `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. `on-ice.md` holds only stacks: PRs, tickets and entries on ice stay in the database. |
