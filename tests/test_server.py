@@ -33,7 +33,6 @@ from move_forward.plugin import (
     Response,
 )
 from move_forward.plugins.git.config import GitConfig
-from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.github.snapshots import PrRepository
@@ -721,8 +720,10 @@ def test_why_a_plugin_changed_is_logged(
     assert "changed: github (2 PRs notified); refreshing" in caplog.messages
 
 
-class _GitChanging(GitPlugin):
-    def changed(self, req: ChangedRequest[GitConfig]) -> Changed:
+class _SlackChanging(SlackPlugin):
+    change_check_seconds: ClassVar[int | None] = 60
+
+    def changed(self, req: ChangedRequest[SlackConfig]) -> Changed:
         return Changed(True, "a commit")
 
 
@@ -737,11 +738,12 @@ def test_a_malformed_change_check_is_a_failed_one(
     app: server.App, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Skipped, as a check that raises is, while the others' changes still count."""
-    swap = {"github": _GitHubAnsweringBadly(), "git": _GitChanging()}
+    # Slack is checked after github (by name), so its change counts only if the round goes on.
+    swap = {"github": _GitHubAnsweringBadly(), "slack": _SlackChanging()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    app.config = app.config.with_section("git", GitConfig(repos=[]))
+    app.config = app.config.with_section("slack", SlackConfig())
     migrate(app.config, app.db)
-    assert app.check_for_changes(1000.0) == {"git"}
+    assert app.check_for_changes(1000.0) == {"slack"}
 
 
 class _GitHubWatchingGit(_GitHubWithChecks):
