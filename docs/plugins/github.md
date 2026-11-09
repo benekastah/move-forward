@@ -76,6 +76,11 @@ labels as its tags but `placeholder_labels` and `split_pr_labels`, which are abo
 
 ## Panels
 
+On the page they go by band (see the README's page order): what's asked of me (Ready for me to
+review, Replies for me, Requested from my teams), my own PRs (Fix before review, Feedback to
+address, CI failures, PR policy, Merge conflicts, Needs a reviewer, Ready to merge), what waits
+on others (Ready for review, Held by merge conditions, In the merge queue), then PR housekeeping.
+
 - **Fix before review**: my open, non-draft PRs with failing CI or policy checks, conflicts,
   unresolved or unanswered feedback, changes requested, or reviewer assignments missing
   under the teams' rules. A changes request counts even when another reviewer approved.

@@ -22,7 +22,7 @@ from conftest import (
 
 from move_forward import act_now, panels, render
 from move_forward.graph import Ref
-from move_forward.page import Action, Badge, Group, Item, Panel, Signals
+from move_forward.page import Action, Badge, Band, Group, Item, Panel, Signals
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice, IcedItem
@@ -130,31 +130,54 @@ def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
     dashboard = build(local=local_snapshot(), stacks=stacks(StackBranch(name="main")))
     assert [(g.key, g.panel_keys) for g in dashboard.groups] == [
         ("act", ["act.now"]),
-        ("notes", ["notes.todos", "notes.iced"]),  # by each group's most urgent panel: step 0b
+        ("notes", ["notes.todos", "notes.iced"]),  # by their most urgent band: planned
         (
             "github",
             [
                 f"github.{k}"
                 for k in (
-                    "fix_before_review",
-                    "ready_for_review",
-                    "reviews_for_me",
+                    "reviews_for_me",  # asked of me
                     "replies_for_me",
-                    "conflicts",
+                    "team_prs",
+                    "fix_before_review",  # mine to move on
                     "feedback",
                     "ci_failures",
                     "policy",
-                    "metadata",
+                    "conflicts",
                     "needs_reviewer",
-                    "team_prs",
                     "ready_to_merge",
+                    "ready_for_review",  # waiting on others
                     "held",
                     "merge_queue",
+                    "metadata",  # housekeeping
                 )
             ],
         ),
         ("git", ["git.local_work", "git.cleanup"]),
         ("git_stack", ["git_stack.stacks"]),
+    ]
+
+
+def test_groups_in_one_band_go_by_name_and_a_plugins_panels_in_its_order() -> None:
+    def plugin(key: str, *bands: Band) -> panels.PluginPanels:
+        listed = [
+            Panel(key=f"{key}.{n}", title="", description="", items=[], priority=band)
+            for n, band in enumerate(bands)
+        ]
+        return panels.PluginPanels(key, key, listed)
+
+    shown = panels.groups(
+        [
+            plugin("zed", Band.ASKED),
+            plugin("beta", Band.WAITING, Band.MINE, Band.MINE),
+            plugin("alpha", Band.MINE),
+        ],
+        [],
+    )
+    assert [(g.key, g.panel_keys) for g in shown[1:]] == [
+        ("zed", ["zed.0"]),
+        ("alpha", ["alpha.0"]),
+        ("beta", ["beta.1", "beta.2", "beta.0"]),
     ]
 
 
@@ -533,31 +556,46 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
         slack=True,
     )
     plugins_panels = [p for p in built.panels if p.key != "act.now"]
-    by_priority = [p.key for p in sorted(plugins_panels, key=lambda p: p.priority)]
-    assert by_priority == [
-        "notes.todos",
-        "github.fix_before_review",
-        "github.ready_for_review",
-        "github.reviews_for_me",
-        "github.replies_for_me",
-        "github.conflicts",
-        "github.feedback",
-        "github.ci_failures",
-        "github.policy",
-        "git.local_work",
-        "git_stack.stacks",
-        "github.metadata",
-        "github.needs_reviewer",
-        "github.team_prs",
-        "slack.nudges",
-        "github.ready_to_merge",
-        "github.held",
-        "github.merge_queue",
-        "git.cleanup",
-        "jira.jira_transitions",
-        "jira.rollouts",
-        "jira.jira_next",
-        "notes.iced",
+    bands: dict[Band, list[str]] = {}
+    for p in plugins_panels:
+        bands.setdefault(p.priority, []).append(p.key)
+    assert {band: sorted(keys) for band, keys in bands.items()} == {
+        Band.PLAN: ["notes.todos"],
+        Band.ASKED: ["github.replies_for_me", "github.reviews_for_me", "github.team_prs"],
+        Band.MINE: [
+            "git.local_work",
+            "git_stack.stacks",
+            "github.ci_failures",
+            "github.conflicts",
+            "github.feedback",
+            "github.fix_before_review",
+            "github.needs_reviewer",
+            "github.policy",
+            "github.ready_to_merge",
+        ],
+        Band.WAITING: [
+            "github.held",
+            "github.merge_queue",
+            "github.ready_for_review",
+            "slack.nudges",
+        ],
+        Band.HOUSEKEEPING: [
+            "git.cleanup",
+            "github.metadata",
+            "jira.jira_transitions",
+            "jira.rollouts",
+        ],
+        Band.NEXT: ["jira.jira_next"],
+        Band.PARKED: ["notes.iced"],
+    }
+    assert [g.key for g in built.groups] == [
+        "act",
+        "notes",
+        "github",
+        "git",
+        "git_stack",
+        "slack",
+        "jira",
     ]
     assert {p.key for p in built.panels if p.act_now} == {
         "github.reviews_for_me",

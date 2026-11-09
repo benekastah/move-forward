@@ -5,6 +5,19 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Panels go by what kind they are
+
+Each panel's `priority`, in `mfd dump`, is now one of seven bands, saying what kind of panel
+it is: 0 planned (my todos), 10 asked of me, 20 my own work, 30 waiting on others, 40
+housekeeping, 50 what next, 60 parked. It used to be a step per tool (0 to 1000), and several
+panels now share one: a script that sorted panels by `priority` should follow each group's
+`panel_keys` instead, which are in page order. On the page, GitHub's panels move: what's asked
+of me (Ready for me to review, Replies for me, Requested from my teams) comes first, then my
+own PRs (Fix before review, Feedback to address, CI failures, PR policy, Merge conflicts, Needs
+a reviewer, Ready to merge), then those waiting on others (Ready for review, Held by merge
+conditions, In the merge queue), then PR housekeeping. Other panels and the groups keep their
+order, and a layout you dragged is kept.
+
 ### Dismiss is Snooze until it changes
 
 The Dismiss button is gone: Snooze now picks how long, "for a while" (`[act_now]`

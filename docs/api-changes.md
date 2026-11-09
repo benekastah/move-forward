@@ -81,6 +81,12 @@ for themselves (a token, a request, an example config) is core's.
   has Unsnooze. A plugin that read it tests it for truth.
 - **A drop-down on a plain button**: `Action.choices` no longer needs an `input`; without one,
   the drop-down sits before the button.
+- **Bands say what kind of panel it is**: `Band` is `PLAN`, `ASKED`, `MINE`, `WAITING`,
+  `HOUSEKEEPING`, `NEXT` and `PARKED`, no longer a step per tool (`REVIEWS`, `CI`, `MERGE`
+  and the rest are gone), and `Panel.priority` is a `Band` (by default `HOUSEKEEPING`), not
+  any int: `Band.CI + 5` is refused. Pick the band that says what the panel is; a plugin's
+  panels in one band go in the order `panels` lists them, and groups whose most urgent
+  panels share a band go by plugin name.
 
 ## Version 1
 

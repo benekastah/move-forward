@@ -170,8 +170,13 @@ it changes or the snooze ends; panel and group counts leave it out, and focus mo
 Pin is Act now's.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
-Panels go in the skill's step order (each panel's priority), and groups by
-their most urgent panel: notes (todos), github, mail, git, git_stack, slack, jira.
+Panels go in the skill's step order, by what kind of panel each is (its band): what I
+planned (notes' todos), what others ask of me (reviews, replies, mail), my own work that needs
+me (failing checks, conflicts, feedback, unpushed commits), what I'm waiting on others for
+(reviews asked, merges under way, nudges), housekeeping (PR labels, branches to clean up, ticket
+statuses), what to pick up next, and what's on ice. A plugin's panels in one band go in its
+own order, and groups by their most urgent panel's band, then by name: notes, github, mail,
+git, git_stack, slack, jira.
 Drag a group's or a panel's title to move it (a panel within its group; Act
 now stays first); the order is kept in the database, and focus mode's list of
 panels follows it. A group or panel new since then goes after the one it followed by default.

@@ -1,8 +1,8 @@
 """The Dashboard: every enabled plugin's panels in groups, and focus mode's view of them.
 
 Act now is core's group: the panels whose plugins flag them as needing acting on now. Every
-other panel sits in its plugin's group. Panels and groups go in priority order (the skill's
-step order). Focus mode walks Act now, or one panel, an item at a time.
+other panel sits in its plugin's group. Panels and groups go in their bands' order (the
+skill's step order; see `Band`). Focus mode walks Act now, or one panel, an item at a time.
 """
 
 import logging
@@ -55,16 +55,18 @@ def panel_key(plugin: str, key: str) -> str:
 
 
 def _by_priority(panels: list[Panel]) -> list[str]:
+    """The panels' keys by band, those in one band in the order given (`sorted` is stable)."""
     return [p.key for p in sorted(panels, key=lambda p: p.priority)]
 
 
 def groups(plugins: list[PluginPanels], act_now_keys: list[str]) -> list[Group]:
-    """Act now with its `act_now_keys` panels, then a group per plugin: panels by priority,
-    and groups by their most urgent panel's."""
+    """Act now with its `act_now_keys` panels, then a group per plugin: panels by band, in the
+    order the plugin gives those in one, and groups by their most urgent panel's band, then by
+    name."""
     result = [Group(key=ACT_NOW, title="Act now", panel_keys=act_now_keys, open=True)]
     rest = sorted(
         [plugin for plugin in plugins if plugin.panels],
-        key=lambda plugin: min(p.priority for p in plugin.panels),
+        key=lambda plugin: (min(p.priority for p in plugin.panels), plugin.key),
     )
     for plugin in rest:
         result.append(

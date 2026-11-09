@@ -15,7 +15,7 @@ from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref, attrs
 from move_forward.kinds import PERSON, Person, personal_email
-from move_forward.page import Item, Panel, Signals
+from move_forward.page import Band, Item, Panel, Signals
 from move_forward.people import Contacts, PeopleConfig
 from move_forward.plugin import (
     API_VERSION,
@@ -251,7 +251,7 @@ def test_a_contact_never_lowers_what_a_plugin_said() -> None:
 def test_a_panel_ordered_by_importance_counts_the_contact() -> None:
     panel = Panel(
         key="threads",
-        priority=1,
+        priority=Band.ASKED,
         title="Threads",
         description="Threads, most important first.",
         sort_by_importance=True,
@@ -314,7 +314,7 @@ class _InboxPlugin(Plugin[BaseModel, BaseModel]):
         return [
             Panel(
                 key="threads",
-                priority=1,
+                priority=Band.ASKED,
                 title="Threads",
                 description="Mail to answer.",
                 items=[item],

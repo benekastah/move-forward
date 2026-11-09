@@ -501,7 +501,7 @@ class Builder:
             )
         return Panel(
             key=TODOS,
-            priority=Band.TODOS,
+            priority=Band.PLAN,
             title="Todos from the work notes",
             description="Easy close-outs first; blocked work last; what's all ticked off today after.",
             items=items,

@@ -227,7 +227,7 @@ class Pinger:
             )
         return Panel(
             key="nudges",
-            priority=Band.NUDGES,
+            priority=Band.WAITING,
             act_now=True,
             title="Nudge reviewers",
             description="In order (green, no conflicts, no open threads), with a reviewer asked"

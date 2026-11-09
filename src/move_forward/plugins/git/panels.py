@@ -188,7 +188,7 @@ class Builder:
                     items.append(item)
         return Panel(
             key="local_work",
-            priority=Band.PUSH,
+            priority=Band.MINE,
             title="Local work",
             description="Uncommitted changes in worktrees, branches with unpushed commits, and"
             " checkouts of PRs that moved on GitHub.",
@@ -294,7 +294,7 @@ class Builder:
         )
         return Panel(
             key="cleanup",
-            priority=Band.CLEANUP,
+            priority=Band.HOUSEKEEPING,
             act_now=True,
             signals=Signals(verb="Delete the branch", task="delete_the_branch", effort="minutes"),
             title="Cleanup",
