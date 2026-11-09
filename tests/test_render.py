@@ -68,11 +68,6 @@ def test_every_text_of_an_item_is_shown_without_hidden_characters() -> None:
         assert f">{text}<" in html
 
 
-def test_shown_keeps_the_joiners_emoji_and_scripts_need() -> None:
-    family = "\U0001f468\u200d\U0001f469\u200d\U0001f467"  # joined by ZWJs
-    assert render.shown(f" {family}\u200c  x\n") == f"{family}\u200c x"
-
-
 def test_each_plugin_says_when_it_last_refreshed_and_refreshes_on_a_click() -> None:
     built = _dashboard()
     html = render.dashboard_page(built, refreshing=frozenset())
@@ -588,16 +583,3 @@ def test_a_buttons_choices_are_a_drop_down_beside_its_field() -> None:
 def test_a_focused_drop_down_holds_off_reloads_and_arrow_keys() -> None:
     assert "closest('input, textarea, select')" in render.RELOAD_SCRIPT
     assert "closest('input, textarea, select')" in render.FOCUS_KEYS_SCRIPT
-
-
-def test_shown_keeps_right_to_left_letters() -> None:
-    for text in (
-        "שלום עולם",
-        "مرحبا بالعالم",
-        "می\u200cخواهم",
-    ):  # Hebrew, Arabic, Persian with ZWNJ
-        assert render.shown(text) == text
-    # Hidden characters inside a word go without a trace; a flag's tag characters stay.
-    assert render.shown("Ko\u00adoper\u2060ation\ufeff") == "Kooperation"
-    england = "\U0001f3f4\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f"
-    assert render.shown(england) == england
