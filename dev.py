@@ -25,7 +25,7 @@ VENV = ROOT / ".venv"
 WINDOWS = sys.platform == "win32"
 BIN = VENV / ("Scripts" if WINDOWS else "bin")
 STAMP = VENV / "installed"
-"""Touched after installing; older than pyproject.toml means install again."""
+"""Touched after installing; older than pyproject.toml or uv.lock means install again."""
 
 
 def tool(name: str) -> str:
