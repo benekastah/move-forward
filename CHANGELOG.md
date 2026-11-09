@@ -5,6 +5,23 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### A page load no longer refreshes
+
+`refresh_on_load_seconds` is gone, and with it the refresh a page load asked for of every
+plugin whose data was older than that (60 seconds by default). Each plugin still refreshes on
+its own `refresh_seconds`, and sooner when its tool has something new; the Refresh buttons
+and an item's ↻ refresh now. A config that still sets `refresh_on_load_seconds` is refused,
+saying it's gone: delete the line. A script that loaded `/` to make the dashboard refresh
+should `POST /refresh` instead, or run `mfd refresh`.
+
+### One key for how far back commits count
+
+`[github] reviewer_history_days` is gone: reviewer suggestions now count commits as far back
+as `[git] commit_history_days` (180 by default), which already said how far back my commits
+count towards the directories I work in. A config that still sets `reviewer_history_days` is
+refused, saying where it went: delete the line, and if you had changed it, set
+`commit_history_days` in `[git]` instead.
+
 ### Focus mode walks Act now or one panel
 
 Focus mode no longer has All or a walk of a plugin's group: `/focus?cat=all` and

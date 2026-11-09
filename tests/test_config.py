@@ -95,10 +95,17 @@ def test_unknown_keys_are_errors(tmp_path: Path) -> None:
 def test_moved_settings_say_where_they_went(tmp_path: Path) -> None:
     with pytest.raises(ValidationError, match=r"`repos` is now in \[git\]"):
         _load(tmp_path, MINIMAL + "repos = []\n")
+    with pytest.raises(
+        ValidationError,
+        match=r"`reviewer_history_days` in \[github\] is now `commit_history_days` in \[git\]",
+    ):
+        _load(tmp_path, MINIMAL + '\n[github]\norg = "acme"\nreviewer_history_days = 90\n')
     with pytest.raises(ValidationError, match=r"`notes_dir` is gone; .*mfd notes import"):
         _load(tmp_path, MINIMAL + 'notes_dir = "~/n"\n')
     with pytest.raises(ValidationError, match=r"`https` is gone; .*plain HTTP.*delete the line"):
         _load(tmp_path, MINIMAL + "https = true\n")
+    with pytest.raises(ValidationError, match=r"`refresh_on_load_seconds` is gone; .*delete the"):
+        _load(tmp_path, MINIMAL + "refresh_on_load_seconds = 60\n")
     with pytest.raises(ValidationError, match=r"`dir` is gone; .*mfd notes import"):
         _load(tmp_path, MINIMAL + '\n[notes]\ndir = "~/n"\n')
 

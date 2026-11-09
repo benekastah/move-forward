@@ -38,8 +38,8 @@ A plugin uses core only through `move_forward.api` (relatively, `from ...api imp
 Plugin, Context, Graph`): everything a plugin may use is there, and core's own modules may
 change without notice. Its submodules group the rest: `api.html` (`page`, `e` to escape,
 `shown` to drop hidden characters, `buttons`, `linkable`), `api.shell` (`run`, `git`,
-`git_common_dir`, `CommandError`), `api.http` (`request`, `RequestError`, `opener`,
-`require_https`), `api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`,
+`git_common_dir`, `CommandError`), `api.http` (`request`, `RequestError`),
+`api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`,
 `branch_parts`), `api.tags` (`handle`) and `api.keychain` (`token`, `read`, `write`,
 `delete`). Ruff refuses any other core import in a plugin, and
 `tests/test_api.py` checks it too.
@@ -270,9 +270,10 @@ class LinearPlugin(...):
 - **Families.** A kind that more than one tool could publish (a pull request, a ticket, a
   person, an organisation) is a family core models in `api.kinds`: name your kind for it (`TICKET`) and
   extend its model (`class LinearIssue(Ticket)`), setting `handle` to how your tool shows
-  it, and give each entity an id by the family's rule (`api.kinds.FAMILIES[...].id_rule`:
-  a URL for a ticket or a PR, `<host>/<login>` for a person, `<host>/<id>` for an organisation), so it's unique across tools. Its refs name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it
-  through the family's model, whoever publishes it.
+  it, and give each entity an id by the family's rule (`api.kinds.FAMILIES[...].id_rule`;
+  [entities.md](entities.md#families) lists them), so it's unique across tools. Its refs
+  name the family (`Ref(kind=TICKET, id=...)`), and other plugins read it through the
+  family's model, whoever publishes it.
 - **Your own families.** For something several tools share that core doesn't model (a CRM
   deal, say), declare the family in `families`: a `Family` with its name (lower-case, no
   dot), label, model (with a `handle`, as every family's has), id rule (`api.kinds.is_url`,
@@ -291,17 +292,12 @@ class LinearPlugin(...):
 - **Linking kinds.** A kind that stands for a unit of work (a ticket, a work entry) is
   declared `linking` (`KindSpec(..., linking=True)`), so the graph relates what's about it.
   Give the pattern of its ids in `linking_patterns` (from what the plugin has seen, if need
-  be) and other plugins' entities point at it from the text they mention:
-
-  ```python
-  def linking_patterns(self, req: LinkingRequest[LinearConfig]) -> dict[str, str | None]:
-      return {ISSUE: rf"\b{re.escape(req.ctx.config.team)}-\d+\b"}
-  ```
-
-  A publisher puts text that might name a unit of work in `Entity.mentions` (github does
-  with a PR's branch, title and body), never refs to another plugin's kind. Where someone
-  else wrote that text, it sets `mentions_hide=False`, so what they name can't hide the
-  entity from me (see the graph's hidden entities).
+  be), as jira does, and other plugins' entities point at it from the text they mention; see
+  [graph.md](graph.md#related-entities). A publisher puts text that might name a unit of
+  work in `Entity.mentions` (github does with a PR's branch, title and body), never refs to
+  another plugin's kind. Where someone else wrote that text, it sets `mentions_hide=False`,
+  so what they name can't hide the entity from me (see
+  [hidden entities](graph.md#hidden-entities)).
 - **Hiding kinds**, declared `KindSpec(..., hides=True)`, hide what their entities point at
   (`notes.iced`).
 - **Lifecycle.** Each entity says whether its work is over: `lifecycle="done"` for a merged
@@ -320,9 +316,8 @@ class LinearPlugin(...):
   or named by an entity with `graph.related(ref, TAG)` (`api.kinds.TAG`).
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
   graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
-  daily prune.
-  Each must say its `lifecycle`, and its attributes fit its family's fetched model (core's
-  `PullRequestFetched`, `TicketFetched`), else any of the kind's own.
+  daily prune; what a fetched entity must carry is in
+  [entities.md](entities.md#fetched-on-demand).
 - A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
 - **Relations.** What only your plugin knows links one of its entities to another's (a PR
   to its local branch) goes in `relate(req)`, as `(mine, theirs)` pairs; see
@@ -331,24 +326,11 @@ class LinearPlugin(...):
 ## Reading other plugins' entities
 
 Read another plugin's entities through a small model of your own, a view, listing only the
-fields you use:
-
-```python
-class _PrView(Model):
-    """What linear reads of a `pull_request`."""
-
-    id: str
-    state: str | None = None
-    mine: bool
-
-
-for pr in graph.view_related(Ref(kind=ISSUE, id=key), PULL_REQUEST, _PrView):
-    ...
-```
-
-If the publisher renames an attribute, the view raises and your tests fail, instead of
-the page quietly showing less. See [graph.md](graph.md#reading-it) for `view`, `view_one`,
-`view_related`, `related`, `named`, `hidden` and `fetch`.
+fields you use (`graph.view_related(ref, PULL_REQUEST, _PrView)`), never `entity.attrs`: if
+the publisher renames an attribute, the view raises and your tests fail, instead of the page
+quietly showing less. [graph.md](graph.md#through-a-view) shows one, and
+[Reading it](graph.md#reading-it) the rest: `view`, `view_one`, `view_related`, `related`,
+`named`, `hidden` and `fetch`.
 
 ## Panels
 

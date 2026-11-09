@@ -1,14 +1,27 @@
 """The server's token: a secret in a file only my account can read.
 
 Anyone on the machine can connect to the server's port; the token is what tells my requests
-from theirs. Scripts send it as `Authorization: Bearer <token>`. Browsers don't hold it: a
-visit to `/login`, which `mfd open` makes, starts a session, and the browser's cookie names
-that session (see `repositories.SessionRepository`), which can expire or be revoked.
+from theirs. It's in `TOKEN_FILE` next to the database, made on first start and private to
+my account (see `private`). Scripts send it as `Authorization: Bearer <token>`. Browsers
+don't hold it: a visit to `/login`, which `mfd open` makes, starts a session, and the
+browser's cookie names that session, which can expire or be revoked.
 
-The token never goes in a URL or to a server that hasn't proved it has it. `mfd open` runs a
-handshake first (see `Handshake`): each side proves it knows the token by an HMAC over fresh
-nonces, so a program squatting on the port can't learn it, and the browser is sent to
-`/login?code=…`, a code good once, for a minute.
+The token never goes in a URL or to a server that hasn't proved it has it. `mfd open`
+(`signin.py`) runs a handshake first (see `Handshake`), so a program squatting on the port
+can't learn the token, nor pass for the dashboard:
+
+1. `POST /login/challenge` answers `{"nonce": ...}`, a nonce good once, for
+   `NONCE_SECONDS`.
+2. `POST /login/code` sends `{"nonce", "client_nonce", "proof"}`: a nonce of the client's
+   own, and its proof that it knows the token. The nonce is used up whatever the answer.
+   With the right proof, the server answers `{"code", "proof"}`: a login code, good once for
+   `CODE_SECONDS`, and the server's own proof, which `mfd open` checks before sending the
+   browser anywhere. `Handshake` says what each proof signs.
+3. The browser opens `login_url`, `/login?code=…`, which uses up the code and starts a
+   session of `SESSION_DAYS`: a random id that the database keeps only as its hash (see
+   `repositories.SessionRepository`). Its cookie (`set_cookie`) is `HttpOnly` and
+   `SameSite=Strict`, with no `Domain`, so only `HOST` gets it back, and is named for the
+   port (`session_cookie`). `mfd logout` and `mfd token rotate` end every session.
 
 Browsers reach the dashboard under `HOST`, not its address. Cookies ignore ports, so a
 cookie for `127.0.0.1` would go to every other program on the machine that listens on that

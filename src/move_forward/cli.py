@@ -54,7 +54,6 @@ teams = ["my-team"]                   # the teams I'm on or review for, by name
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # db_backups = 10                        # copies kept in backups/, taken before migrations
 # port = 8765
-# refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                         # clear work finished this long ago from the notes
 
 [github]
@@ -82,7 +81,6 @@ org = "example-org"
 # split_pr_suggest_lines = 600           # my PRs this big "may need splitting"
 # split_pr_lines = 800                   # ...and this big are "worth splitting"
 # split_pr_labels = []                   # labels that mean worth splitting, e.g. ["size/XL"]
-# reviewer_history_days = 180
 
 # [github.merge]
 # method = "squash"                     # where a repo allows several; else GitHub's pick for me

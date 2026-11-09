@@ -16,8 +16,11 @@ class RepoAttrs(KindModel):
     has it: what a commit not yet on the default branch isn't on; empty when there's none.
     Pass them to `git log` in `dir`."""
     my_dirs: list[str] = Field(default_factory=list[str])
-    """Directories I committed to within `[git] commit_history_days`, repo-relative and POSIX
+    """Directories I committed to within `commit_history_days`, repo-relative and POSIX
     (`src/api`)."""
+    commit_history_days: int
+    """How far back commits count, in days (`[git] commit_history_days`): for `my_dirs`, and
+    for whoever reads others' commits in `dir`."""
 
 
 class BranchAttrs(KindModel):

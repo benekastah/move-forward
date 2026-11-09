@@ -23,18 +23,19 @@ BASE_DIR = Path("~/.config/move-forward")
 DEFAULT_CONFIG_PATH = (BASE_DIR / "config.toml").expanduser()
 DEFAULT_DB_PATH = Path("~/.local/share/move-forward/dashboard.db")
 DEFAULT_PORT = 8765
-DEFAULT_REFRESH_ON_LOAD_SECONDS = 60
 DEFAULT_PRUNE_DAYS = 90
 
 MOVED_SETTINGS = {
-    "repos": "git",
-    "my_branch_prefixes": "git",
-    "ignored_worktree_globs": "git",
-    "commit_history_days": "git",
-    "email_domains": "github",
-    "stale_review_hours": "github",
+    "repos": "git.repos",
+    "my_branch_prefixes": "git.my_branch_prefixes",
+    "ignored_worktree_globs": "git.ignored_worktree_globs",
+    "commit_history_days": "git.commit_history_days",
+    "email_domains": "github.email_domains",
+    "stale_review_hours": "github.stale_review_hours",
+    "github.reviewer_history_days": "git.commit_history_days",
 }
-"""Top-level settings that moved into a plugin's section, to say so instead of just "extra
+"""Settings that moved, from where they were (a top-level key, or a plugin's as
+`<section>.<key>`) to where they are now (`<section>.<key>`), to say so instead of just "extra
 input"."""
 REMOVED_PLUGINS = {
     "vcard": (
@@ -54,6 +55,21 @@ GONE_NOTIFICATIONS = {
 to one instead of just "no such kind"."""
 
 
+def _moved_settings(settings: dict[object, object]) -> list[str]:
+    """What `MOVED_SETTINGS` says of the settings in the config file that moved."""
+    found: list[str] = []
+    for old, new in MOVED_SETTINGS.items():
+        section, _, key = old.rpartition(".")
+        table = settings.get(section) if section else settings
+        if not isinstance(table, dict) or key not in table:
+            continue
+        new_section, new_key = new.split(".")
+        where = f"`{key}` in [{section}]" if section else f"`{key}`"
+        renamed = f" `{new_key}`" if new_key != key else ""
+        found.append(f"{where} is now{renamed} in [{new_section}]")
+    return found
+
+
 class Config(Strict):
     """Everything the collectors and panels need to know about me and my machine."""
 
@@ -71,9 +87,6 @@ class Config(Strict):
     migrations change the database; the oldest go first. 0 takes none."""
     port: int = DEFAULT_PORT
     """The localhost port `mfd serve` listens on."""
-    refresh_on_load_seconds: int = DEFAULT_REFRESH_ON_LOAD_SECONDS
-    """A page load asks each plugin whose last refresh began longer ago than this to refresh,
-    in the background."""
     prune_days: int = DEFAULT_PRUNE_DAYS
     """Work finished this long ago (merged PRs, closed tickets, done todos) is cleared from
     the notes by a daily job, as are pings, Act now's dismissals and pins, and lookups that
@@ -149,11 +162,7 @@ class Config(Strict):
         if not isinstance(data, dict):
             return data
         settings = cast(dict[object, object], data)
-        moved = [
-            f"`{key}` is now in [{MOVED_SETTINGS[key]}]"
-            for key in map(str, settings)
-            if key in MOVED_SETTINGS
-        ]
+        moved = _moved_settings(settings)
         if "notes_dir" in settings:
             moved.append(
                 "`notes_dir` is gone; the notes live in the database now: import them once with"
@@ -163,6 +172,12 @@ class Config(Strict):
             moved.append(
                 "`https` is gone; the dashboard serves plain HTTP on localhost only: delete the"
                 " line"
+            )
+        if "refresh_on_load_seconds" in settings:
+            moved.append(
+                "`refresh_on_load_seconds` is gone; a page load no longer refreshes: each plugin"
+                " refreshes on its own schedule, sooner when its tool has something new, and ↻"
+                " and Refresh refresh now: delete the line"
             )
         if "refresh_seconds" in settings:
             moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")

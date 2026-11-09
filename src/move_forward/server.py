@@ -142,8 +142,8 @@ class App:
         self.last_refreshed: dict[str, float] = {}
         """`time.monotonic()` when each plugin's last refresh started."""
         self._pending: set[str] | None = set()
-        """Plugins asked for since the loop last ran: by a page load (stale ones) or the
-        Refresh buttons (None: all of them)."""
+        """Plugins asked for since the loop last ran: by the Refresh buttons (None: all of
+        them), a change check, or a plugin's button."""
         self._pending_lock = threading.Lock()
         self._subjects: list[Ref] = []
         """Entities asked to be fetched again (`request_refresh_subjects`), under
@@ -293,20 +293,6 @@ class App:
         with self._refresh_lock:
             return refresh_subjects(self.config, self.db, refs)
 
-    def refresh_if_stale(self) -> None:
-        """Ask for the plugins whose data is older than `refresh_on_load_seconds`."""
-        if self.refreshing:
-            return
-        now = time.monotonic()
-        last = self.last_refreshed
-        stale = {
-            name
-            for name in self.intervals()
-            if name not in last or now - last[name] >= self.config.refresh_on_load_seconds
-        }
-        if stale:
-            self.request_refresh(stale)
-
     def _seconds_to_next(self) -> float:
         """How long until the next plugin is due, at least a second."""
         now = time.monotonic()
@@ -339,8 +325,7 @@ class App:
             only = None if pending is None else pending | self.due()
 
     def dashboard_page(self, notice: str = "", spot: render.Spot | None = None) -> str:
-        """The page from stored data; a page load also refreshes stale data in the background."""
-        self.refresh_if_stale()
+        """The page from stored data."""
         return render.dashboard_page(
             build_dashboard(self.config, self.db), self.refreshing, notice, spot
         )
@@ -406,7 +391,6 @@ class App:
         `kept` names an item an action asked to keep on the page, e.g. a todo just ticked off,
         so it can be undone; see `Plugin.kept_item`.
         """
-        self.refresh_if_stale()
         dashboard = build_dashboard(self.config, self.db, surface="focus")
         if not category:
             return render.focus_categories_page(dashboard)
