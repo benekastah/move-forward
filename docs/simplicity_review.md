@@ -1,5 +1,9 @@
 # Simplicity review
 
+> A record of the code at `206461e`, not kept up to date: items done since aren't struck out
+> here (the PRs that do them say which), and the roadmap's "First: simplify" step goes when
+> they're done.
+
 A review of move-forward for what could be removed, merged or moved, the roadmap's first
 step. Read at `206461e` (main, 2026-11-09) by three parallel passes:
 
