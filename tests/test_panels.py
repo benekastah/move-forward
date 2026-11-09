@@ -957,9 +957,14 @@ def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
         ("nothing", False),
         ("nothing yet", False),
         ("None.", False),
-        ("none, just waiting", False),
+        ("none for now", False),
         ("n/a", False),
         ("Not blocked yet", False),
+        ("none, just waiting", True),
+        ("nothing but Bob's review", True),
+        ("N/A until Bob merges #12", True),
+        ("NA - waiting on legal", True),
+        ("not blocked on me, blocked on infra", True),
         ("no reviewer yet", True),
         ("no one has reviewed", True),
         ("reviews", True),
@@ -977,11 +982,13 @@ def test_blocked_on_nothing_is_said_by_the_whole_line(said: str, blocked: bool) 
     [
         ("bump to 1.2.5 and pay $5", False),
         ("up 5% since 5.1", False),
+        ("12,345 rows, €5 a month", False),
         ("see #5/#6", True),
-        ("PRs 4-5? no: just 5.", True),
+        ("#5-fix lands first", True),
+        ("then 5.", True),
     ],
 )
-def test_a_number_within_a_version_or_an_amount_is_no_mention_of_a_pr(
+def test_a_todo_mentions_a_pr_by_its_number_but_not_by_a_number_within_another(
     text: str, mentioned: bool
 ) -> None:
     url = "https://github.com/acme/widgets/pull/5"

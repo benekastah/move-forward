@@ -49,7 +49,8 @@ in a group when both are offered, and joins Snooze, Dismiss and Pin on Act now i
 
 In focus mode, work entries are split into their todos, one per page, quick ones first.
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number, but
-not a number within a version, an amount or a path: `1.2.5`, `$5`, `5%`) first and in bold; merged PRs are purple and struck through, closed ones gray and struck
+not a number within a version, an amount, a path or a range: `1.2.5`, `$5`, `12,345`, `1230-1234`)
+first and in bold; merged PRs are purple and struck through, closed ones gray and struck
 through. When every PR a todo mentions is merged or closed, it's flagged "its PRs are
 done" and its Done box is drawn bigger. Each todo has a Done checkbox, a Delete
 button, Quick and Big buttons (its size highlighted), and a Link field that links it to a Jira ticket (by key) or a PR (by URL). Add todo's drop-down
