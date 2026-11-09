@@ -13,7 +13,11 @@ from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
 from .markdown import PR_URL_RE
 from .models import Condition, Entry, Ice, Todo
 
-NOT_BLOCKED_RE = re.compile(r"^\s*(nothing|none|no|-|n/a)\b", re.IGNORECASE)
+NOT_BLOCKED_RE = re.compile(
+    r"\s*(nothing|none|no|not blocked|n/?a|-+|—)?\s*[.!]?\s*", re.IGNORECASE
+)
+"""A "Blocked on" that says it's on nothing, as a whole: "-", "none.", "n/a" (but not "no
+reviewer yet", which is blocked)."""
 
 ENTRY = "notes.entry"
 ICED = "notes.iced"
@@ -126,7 +130,7 @@ PROBABLY_DONE = "its PRs are done"
 
 
 def _is_blocked(entry: Entry) -> bool:
-    return bool(entry.blocked_on) and not NOT_BLOCKED_RE.match(entry.blocked_on or "")
+    return bool(entry.blocked_on) and not NOT_BLOCKED_RE.fullmatch(entry.blocked_on or "")
 
 
 def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph) -> list[Link]:
@@ -134,7 +138,8 @@ def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph
     PRs and Jira tickets only the todo is about (named in it, or linked with its Link button).
 
     A todo mentions a PR by its URL, `#<number>`, or the bare number (PR numbers are long
-    enough that a matching bare number in a todo is almost surely the PR).
+    enough that a matching bare number in a todo is almost surely the PR), but not a number
+    within another: a version (`1.2.5`), an amount (`$5`, `5%`), a path.
     """
     text = todo.text
     own_prs = [*PR_URL_RE.findall(text), *(link.ref for link in todo.links if link.kind == PR)]
@@ -145,7 +150,9 @@ def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph
     links: list[Link] = []
     for u in urls:
         number = u.rsplit("/", 1)[1]
-        mentioned = u in own_prs or re.search(rf"(?<![\w/])#?{number}\b", text) is not None
+        mentioned = (
+            u in own_prs or re.search(rf"(?<![\w/.$-])#?{number}(?![\w%/-]|\.\d)", text) is not None
+        )
         links.append(Link(text=f"PR {number}", url=u, strong=mentioned, done=done.get(u, False)))
     links.sort(key=lambda link: not link.strong)
     for u in dict.fromkeys(own_prs):

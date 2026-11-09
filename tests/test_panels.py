@@ -947,3 +947,33 @@ def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
     )
     gone = entry_.model_copy(update={"parts": [Item(title="a")]})  # the next day
     assert act_now.Nomination("x", ticked).fingerprint == act_now.Nomination("x", gone).fingerprint
+
+
+@pytest.mark.parametrize(
+    ("said", "blocked"),
+    [
+        ("-", False),
+        ("nothing", False),
+        ("None.", False),
+        ("n/a", False),
+        ("no reviewer yet", True),
+        ("no one has reviewed", True),
+        ("reviews", True),
+    ],
+)
+def test_blocked_on_nothing_is_said_by_the_whole_line(said: str, blocked: bool) -> None:
+    noted = entry("APP-3 x", [todo("x", "quick")], **{"Blocked on": [said]})
+    [item] = panel(dashboard(work_items=[noted]), "notes.todos").items
+    texts = [b if isinstance(b, str) else b.text for b in item.badges]
+    assert any(t.startswith("blocked") for t in texts) == blocked
+
+
+def test_a_number_within_a_version_or_an_amount_is_no_mention_of_a_pr() -> None:
+    url = "https://github.com/acme/widgets/pull/5"
+    noted = entry("APP-1 one", [todo("bump to 1.2.5 and pay $5", "quick")], Where=[url])
+    built = dashboard(
+        work_items=[noted], github=snapshot(merged_recent=[pr(5, state="MERGED", merged_at=NOW)])
+    )
+    [item] = panel(built, "notes.todos").items
+    assert not any(link.strong for link in item.links if link.url == url)
+    assert "its PRs are done" not in item.badges

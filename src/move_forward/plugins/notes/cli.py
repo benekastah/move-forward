@@ -32,7 +32,6 @@ from .repository import NotesRepository
 LAST_ASKED_ICE = "last_asked_ice"
 """The kv key of when the skill last asked about what's on ice; `mfd notes asked ice` sets
 it, and the import reads it from `on-ice.md`."""
-"""The kv key for when the skill last asked about what's on ice."""
 
 
 def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> str:
@@ -44,11 +43,15 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
         path = notes_dir / name
         return path.read_text() if path.exists() else ""
 
+    names = (markdown.WORK_NOTES_FILE, markdown.ON_ICE_FILE)
+    if not any((notes_dir / name).exists() for name in names):
+        raise ValueError(f"{notes_dir} has neither {' nor '.join(names)}: nothing to import")
     repo = NotesRepository(ctx.db)
     work_notes = read(markdown.WORK_NOTES_FILE)
     entries, sections = markdown.read_work_notes(work_notes)
     ices, last_asked = markdown.read_on_ice(read(markdown.ON_ICE_FILE), ctx.today)
-    if (entries or ices) and not repo.is_empty() and not replace:
+    if (entries or ices or sections) and not repo.is_empty() and not replace:
+        # Anything read replaces all that's there: even a preamble alone would empty them.
         raise ValueError("the notes already have entries; pass --replace to replace them")
     if entries or ices or sections:
         repo.replace_all(entries, ices, sections)
@@ -178,13 +181,17 @@ def cmd_ices(req: CliRequest[NotesConfig]) -> Result:
 def cmd_add_entry(req: CliRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
-    if notes.entry_id(args.title) is not None:
-        raise ValueError(f"there is already an entry titled {args.title!r}")
+    try:
+        title = actions.entry_title(args.title.strip())  # as the dashboard's buttons check it
+    except ActionError as e:
+        raise ValueError(str(e)) from e
+    if notes.entry_id(title) is not None:
+        raise ValueError(f"there is already an entry titled {title!r}")
     links = [actions.link_for(graph, v) for v in args.link]
     entry_id = notes.add_entry(
-        args.title, ctx.today, args.status, args.where, list(dict.fromkeys(links))
+        title, ctx.today, args.status, args.where, list(dict.fromkeys(links))
     )
-    return Result(f"added entry {entry_id}", {"notice": f"added {args.title}", "id": entry_id})
+    return Result(f"added entry {entry_id}", {"notice": f"added {title}", "id": entry_id})
 
 
 def cmd_remove(req: CliRequest[NotesConfig]) -> Result:

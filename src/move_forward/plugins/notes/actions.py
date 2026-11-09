@@ -151,7 +151,7 @@ def ice_note(req: ActionRequest[NotesConfig]) -> str:
 
 
 def thaw(req: ActionRequest[NotesConfig]) -> str:
-    """Take a stack off ice."""
+    """Take what's on ice (`ice`, its id) off it: a stack, a PR, a ticket or a work entry."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
     ice_id = _ice_id(req)
@@ -284,7 +284,7 @@ def todo_add(req: ActionRequest[NotesConfig]) -> str:
     title = req.field("entry")
     entry_id = notes.entry_id(title)
     if entry_id is None and fields.get("create"):
-        _entry_title(title)
+        entry_title(title)
         where = fields.get("where", "")
         entry_id = notes.add_entry(title, ctx.today, INFERRED, where or None, links_in(where))
     if entry_id is None:
@@ -294,10 +294,12 @@ def todo_add(req: ActionRequest[NotesConfig]) -> str:
     return f"added: {text}"
 
 
-def _entry_title(text: str) -> str:
+def entry_title(text: str) -> str:
     """`text` as a new entry's title, refused where the skill's markdown (`mfd notes export`)
     would read it back as something else: a line break (any `splitlines` takes) splits its
     heading, and a title of a section of its own is that section."""
+    if not text.strip():
+        raise ActionError("an entry needs a title")
     if len(text.splitlines()) > 1:
         raise ActionError("an entry's title is one line")
     if text.casefold() == REVIEWS_SECTION.casefold():
@@ -312,7 +314,7 @@ def todo_new(req: ActionRequest[NotesConfig]) -> str:
     the todo instead, but not one on ice, where it would be hidden, nor twice."""
     ctx, graph = req.ctx, req.graph
     text, written = sized((req.fields.get("input") or "").strip())
-    text = _entry_title(text.strip())
+    text = entry_title(text.strip())
     if not text:
         raise ActionError("the todo is empty")
     if graph.hidden(Ref(kind=ENTRY, id=text)):
