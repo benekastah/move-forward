@@ -112,27 +112,29 @@ class NotificationRepository:
         than `keep` are dropped. At most `MAX_DELIVERED_AT_ONCE` things are told: every
         pending event about each of them is included, so repeats cannot starve other work."""
         cutoff = (now - keep).isoformat()
-        self._db.execute("DELETE FROM notifications WHERE created_at < ?", (cutoff,))
-        selected = self._db.query(
-            "SELECT thing FROM notifications WHERE told_at IS NULL GROUP BY thing"
-            " ORDER BY MIN(id) LIMIT ?",
-            (MAX_DELIVERED_AT_ONCE,),
-        )
-        if not selected:
-            return []
-        places = ", ".join("?" for _ in selected)
-        rows = self._db.query(
-            f"SELECT * FROM notifications WHERE told_at IS NULL AND thing IN ({places}) ORDER BY id",
-            tuple(row["thing"] for row in selected),
-        )
-        things: dict[str, list[tuple[str, str, str]]] = {}
-        for row in rows:
-            things.setdefault(row["thing"], []).append((row["title"], row["text"], row["anchor"]))
+        # All at once: two tabs asking together mustn't both be told the same events.
         with self._db.transaction() as conn:
+            conn.execute("DELETE FROM notifications WHERE created_at < ?", (cutoff,))
+            selected = conn.execute(
+                "SELECT thing FROM notifications WHERE told_at IS NULL GROUP BY thing"
+                " ORDER BY MIN(id) LIMIT ?",
+                (MAX_DELIVERED_AT_ONCE,),
+            ).fetchall()
+            if not selected:
+                return []
+            places = ", ".join("?" for _ in selected)
+            rows = conn.execute(
+                f"SELECT * FROM notifications WHERE told_at IS NULL AND thing IN ({places})"
+                " ORDER BY id",
+                tuple(row["thing"] for row in selected),
+            ).fetchall()
             conn.executemany(
                 "UPDATE notifications SET told_at = ? WHERE id = ?",
                 [(now.isoformat(), row["id"]) for row in rows],
             )
+        things: dict[str, list[tuple[str, str, str]]] = {}
+        for row in rows:
+            things.setdefault(row["thing"], []).append((row["title"], row["text"], row["anchor"]))
         return [_notification(thing, found) for thing, found in things.items()]
 
 

@@ -515,7 +515,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def load(self, req: LoadRequest[C]) -> S | None:
         """What the last good collect kept, for `entities` and `panels`; None when there's
-        nothing (no snapshot model, say)."""
+        nothing (no snapshot model, say). Core holds the database while it runs
+        (`Database.reading`), so a refresh can't store between its queries: it mustn't wait on
+        another thread using `ctx.db`."""
         return None
 
     def events(self, req: EventsRequest[C, S]) -> list[Event]:

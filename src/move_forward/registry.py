@@ -17,7 +17,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from . import act_now, notifications, tags, tls
 from . import plugins as builtin_plugins
-from .db import CORE, OWNER_RE, Database
+from .db import CORE, OWNER_RE, Database, core_objects
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
@@ -151,10 +151,10 @@ _CORE_FAMILY_NAMES = {family.name for family in CORE_FAMILIES}
 
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     """Raise unless every plugin is built against this dashboard's `API_VERSION`, and its
-    name is its own and fit to be one: lower-case, not two plugins', and none of core's
-    (`RESERVED_NAMES`). A plugin's kinds are named for it
-    (`git.branch`), or for a family, core's or one it declares (`Plugin.families`), whose model
-    they must extend."""
+    name is its own and fit to be one: lower-case, not two plugins', none of core's
+    (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`).
+    A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
+    declares (`Plugin.families`), whose model they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -163,6 +163,9 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(f"plugin name {name!r}: use lower-case letters, digits and _")
         if name in RESERVED_NAMES:
             raise RuntimeError(f"plugin name {name!r} is core's")
+        if owned := sorted(t for t in core_objects() if t.startswith(f"{name}_")):
+            # Its tables are named `<name>_...`: these would be its too.
+            raise RuntimeError(f"plugin name {name!r} would own core's {', '.join(owned)}")
     for plugin in plugins:
         if plugin.api_version != API_VERSION:
             raise RuntimeError(
@@ -241,7 +244,8 @@ class Enabled:
 
     def snapshot(self) -> BaseModel | None:
         """What the plugin last stored; None when it has nothing, or its `load` fails."""
-        return call(self.name, "load", lambda: self.plugin.load(LoadRequest(self.ctx)), None)
+        with self.ctx.db.reading():  # all of one refresh's, never half of the next's
+            return call(self.name, "load", lambda: self.plugin.load(LoadRequest(self.ctx)), None)
 
 
 def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:
@@ -328,9 +332,10 @@ def notification_kinds_of(plugin_names: list[str]) -> dict[str, str]:
 
 def migrate(config: "Config", db: Database) -> None:
     """Apply the enabled plugins' migrations. Once, when `mfd` opens the database."""
+    owners = [p.name for p in PLUGINS]
     for plugin in PLUGINS:
         if config.section(plugin.name) is not None:
-            db.migrate(plugin.name, plugin.migrations)
+            db.migrate(plugin.name, plugin.migrations, owners)
 
 
 def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:

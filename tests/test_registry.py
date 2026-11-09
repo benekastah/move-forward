@@ -281,3 +281,23 @@ def test_what_a_built_in_imports_failing_is_said_as_it_is(
     finally:
         for name in ("fake_broken", "fake_broken.plugin"):
             sys.modules.pop(name, None)
+
+
+def test_a_plugin_named_for_a_core_tables_prefix_is_refused() -> None:
+    class Team(Plugin[Strict, KindModel]):
+        name = "team"
+        config_model = Strict
+        api_version = API_VERSION
+
+    with pytest.raises(RuntimeError, match="would own core's team_channels"):
+        registry.check_plugins([Team()])
+
+
+def test_a_plugin_named_for_a_core_indexs_prefix_is_refused() -> None:
+    class Pings(Plugin[Strict, KindModel]):
+        name = "pings"
+        config_model = Strict
+        api_version = API_VERSION
+
+    with pytest.raises(RuntimeError, match="would own core's pings_"):
+        registry.check_plugins([Pings()])

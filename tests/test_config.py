@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from pathlib import Path
 from typing import ClassVar
 
@@ -177,9 +178,9 @@ def test_plugin_migrations_run_when_migrated_not_on_every_page(
     calls: list[str] = []
     real_migrate = db.migrate
 
-    def counting(owner: str, migrations: list[Migration]) -> int:
+    def counting(owner: str, migrations: list[Migration], owners: Iterable[str] = ()) -> int:
         calls.append(owner)
-        return real_migrate(owner, migrations)
+        return real_migrate(owner, migrations, owners)
 
     monkeypatch.setattr(db, "migrate", counting)
     enabled(loaded, db, NOW)
