@@ -539,7 +539,7 @@ def test_a_sender_the_server_didnt_vouch_for_is_no_one() -> None:
 def test_a_ticket_on_ice_its_subject_names_doesnt_hide_mail() -> None:
     """Its sender wrote the subject, not me."""
     harness = mailbox(message(1, subject="About APP-1"))
-    [thread] = harness.entities()
+    [thread] = [e for e in harness.entities() if e.ref.kind == THREAD]
     assert thread.mentions == ["About APP-1"] and not thread.mentions_hide
 
 
