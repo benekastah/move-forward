@@ -16,6 +16,7 @@ API_MODULES = [
     "api.keychain",
     "api.kinds",
     "api.ids",
+    "api.tags",
 ]
 
 
