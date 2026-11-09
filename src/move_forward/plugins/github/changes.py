@@ -196,11 +196,14 @@ def changes(
                     pr, "thread_reply", f"{replies} new thread repl{'y' if replies == 1 else 'ies'}"
                 )
             )
-    asked = {pr.url for pr in (*before.direct_requests, *before.team_requests)}
+    # What was asked while a draft is news once it's ready, and asking me by name news after
+    # asking my team.
+    asked_me = {pr.url for pr in before.direct_requests if not pr.is_draft}
+    asked_team = {pr.url for pr in before.team_requests if not pr.is_draft}
     for pr in after.direct_requests:
-        if pr.url not in asked and not pr.is_draft:
+        if pr.url not in asked_me and not pr.is_draft:
             found.append(_event(pr, "review_requested_me", "review requested of you"))
     for pr in after.team_requests:
-        if pr.url not in asked and not pr.is_draft:
+        if pr.url not in asked_team | asked_me and not pr.is_draft:
             found.append(_event(pr, "review_requested_team", "review requested of your team"))
     return found

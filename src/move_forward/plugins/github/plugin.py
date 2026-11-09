@@ -71,6 +71,8 @@ NOTIFICATIONS_SEEN = "notifications_last_modified"
 """The kv key of the notifications' last `Last-Modified`, for `changed`."""
 NOTIFICATIONS_WAIT = "notifications_poll_after"
 """The kv key of when GitHub lets `changed` poll the notifications again."""
+NOTIFICATIONS_FAILED = "notifications_failed"
+"""The kv key of why the last poll of the notifications failed, warned of once."""
 BRANCHES_SEEN = "pr_branches_seen"
 """The kv key of where my open PRs' local branches were at the last check (`pushes.tips`)."""
 CHANGED = "prs_changed"
@@ -206,9 +208,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
-        refresh of git, which it watches), or I have a notification about something in the
-        org, polled as often as GitHub allows. Which PRs changed is kept for `collect`, to
-        fetch just those, and asks for a refresh until it has."""
+        refresh of git, which it watches), or I have a notification about something my
+        searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed is
+        kept for `collect`, to fetch just those, and asks for a refresh until it has."""
         ctx, graph = req.ctx, req.graph
         changed = self._branches_moved(ctx, graph) | self._notified(ctx)
         # Pending until `collect` fetches them: what's seen in the check core makes right
@@ -228,16 +230,29 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return pushes.moved(cast(dict[str, str], before), now)
 
     def _notified(self, ctx: Context[GitHubConfig]) -> set[str]:
-        """The PRs I have a notification about in the org (a review requested, a comment, a
-        review), newer than the last look. A CI run names only its repo, so it stands for my
-        open PRs there; what no search shows (an issue, a release, an alert) for nothing; and
-        anything else for `EVERYTHING`. A "not modified" answer is cheap, and GitHub's poll
-        interval is kept to."""
+        """The PRs I have a notification about where my searches look (a review requested, a
+        comment, a review), newer than the last look. A CI run names only its repo, so it stands
+        for my open PRs there; what no search shows (an issue, a release, an alert) for nothing;
+        and anything else for `EVERYTHING`. A "not modified" answer is cheap, and GitHub's poll
+        interval is kept to. A poll that fails finds nothing, warning once per new reason, and
+        is tried again after the default interval."""
         wait = ctx.kv.get(NOTIFICATIONS_WAIT)
         if wait and ctx.now < datetime.fromisoformat(wait):
             return set()
         seen = ctx.kv.get(NOTIFICATIONS_SEEN)
-        found = notifications.fetch(ctx.config.host, seen)
+        try:
+            found = notifications.fetch(ctx.config.host, seen)
+        except (CommandError, KeyError, ValueError) as e:
+            # A token that can't read notifications (a fine-grained one can't) or a blip: the
+            # branch moves found with it still count.
+            if ctx.kv.get(NOTIFICATIONS_FAILED) != str(e):
+                ctx.log.warning("can't read GitHub notifications: %s", e)
+                ctx.kv.set(NOTIFICATIONS_FAILED, str(e))
+            retry = ctx.now + timedelta(seconds=notifications.DEFAULT_POLL_SECONDS)
+            ctx.kv.set(NOTIFICATIONS_WAIT, retry.isoformat())
+            return set()
+        if ctx.kv.get(NOTIFICATIONS_FAILED) is not None:
+            ctx.kv.delete(NOTIFICATIONS_FAILED)
         if found is None:
             return set()
         ctx.kv.set(NOTIFICATIONS_SEEN, found.last_modified)
@@ -248,7 +263,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             return set()
         prs: set[str] = set()
         ci_repos: set[str] = set()
-        for n in found.new_in(ctx.config.org, seen):
+        org = ctx.config.org if ctx.config.search_scope == "org" else None
+        for n in found.new_in(org, seen):
             if n.pr is not None:
                 prs.add(f"{n.repo}#{n.pr}")
             elif n.kind == notifications.CHECK_SUITE:

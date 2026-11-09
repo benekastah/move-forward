@@ -162,6 +162,21 @@ def test_a_review_request_is_said_when_new_or_asked_again() -> None:
     ]
 
 
+def test_a_review_asked_of_a_draft_is_said_once_it_is_ready_and_asked_of_me_after_my_team() -> None:
+    draft = pr(7, author="alice", requested_users=[ME], is_draft=True)
+    ready = pr(7, author="alice", requested_users=[ME])
+    assert _kinds(snapshot(), snapshot(direct_requests=[draft])) == []
+    assert _kinds(snapshot(direct_requests=[draft]), snapshot(direct_requests=[ready])) == [
+        ("review_requested_me", "review requested of you")
+    ]
+    team = pr(8, author="alice")
+    assert _kinds(snapshot(team_requests=[team]), snapshot(direct_requests=[team])) == [
+        ("review_requested_me", "review requested of you")
+    ]
+    # asked of me, then my team too: nothing new
+    assert _kinds(snapshot(direct_requests=[team]), snapshot(team_requests=[team])) == []
+
+
 def test_new_commits_and_the_authors_comments_on_a_reviewed_pr_are_said() -> None:
     reviewed = pr(7, author="alice")
     pushed = pr(7, author="alice", head_oid="b" * 40)

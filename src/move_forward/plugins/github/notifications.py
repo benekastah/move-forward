@@ -88,10 +88,15 @@ class Notifications:
     """How long GitHub asks to wait before polling again."""
     found: list[Notification]
 
-    def new_in(self, org: str, since: str) -> list[Notification]:
-        """Those in `org` updated after `since`, an earlier `last_modified`."""
+    def new_in(self, org: str | None, since: str) -> list[Notification]:
+        """Those in `org` (with None, anyone's) updated after `since`, an earlier
+        `last_modified`."""
         after = parsedate_to_datetime(since)
-        return [n for n in self.found if n.owner.lower() == org.lower() and n.updated_at > after]
+        return [
+            n
+            for n in self.found
+            if (org is None or n.owner.lower() == org.lower()) and n.updated_at > after
+        ]
 
 
 def _notification(raw: _Notification) -> Notification:
