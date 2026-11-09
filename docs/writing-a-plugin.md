@@ -91,8 +91,8 @@ class LinearConfig(Strict):
   `init_template`), and `mfd init --example` (`cli.py`). A plugin from another package can't
   add to those pages or that example: its model, its own docs, and its `init_template` and
   `init_example` are where its keys appear.
-- `mfd init` asks which plugins to set up (offering those whose `init_suggested()` is
-  true), then each chosen one's `init_questions(ask, setup)`, which returns its section's
+- `mfd init` asks which plugins to set up (offering by default those whose
+  `init_suggested()` is true; it's false unless a plugin overrides it), then each chosen one's `init_questions(ask, setup)`, which returns its section's
   values. `setup` has my email, where init runs and the teams found so far; a plugin that
   sets the teams (github does) says so with `init_finds_teams`, and otherwise core asks
   for them by name before any plugin's questions. Init refuses a plugin chosen without the

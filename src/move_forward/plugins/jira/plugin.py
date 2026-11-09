@@ -416,10 +416,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
     change_check_seconds: ClassVar[int | None] = 60
 
-    def init_suggested(self) -> bool:
-        """Only when asked for: it needs a site (jira) or workspace (slack) to be useful."""
-        return False
-
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 

@@ -31,6 +31,8 @@ Fewer things to know: what no plugin used is gone.
 - **Two hooks no plugin overrode are gone**: `refresh_seconds(ctx)` (a plugin refreshes on
   its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
   place under other names overrides `tokens(config)`, returning `{"": settings}`).
+- **`init_suggested()` is False by default**: `mfd init` suggests a plugin only when it
+  overrides it to say True.
 
 ## Version 1
 

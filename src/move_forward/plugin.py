@@ -635,8 +635,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     # Set-up and upkeep
 
     def init_suggested(self) -> bool:
-        """Whether `mfd init` offers to set the plugin up by default."""
-        return True
+        """Whether `mfd init` offers to set the plugin up by default: not unless the plugin
+        says so, as most need something of mine (a site, a mailbox) to be of use."""
+        return False
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         """Ask for the `[name]` section's settings in `mfd init`; returns its values (a

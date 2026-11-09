@@ -74,6 +74,10 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         self._clones_warned: set[tuple[str, ...]] = set()
         """The clones of one GitHub repo already warned of, so each is warned of once a run."""
 
+    def init_suggested(self) -> bool:
+        """Always: init guesses its repo from the checkout it runs in."""
+        return True
+
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 
