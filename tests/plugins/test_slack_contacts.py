@@ -1,4 +1,5 @@
-"""Where review pings go: the /slack/contacts page, its buttons, and `mfd slack contact(s)`."""
+"""Where review pings go: the /slack/contacts page, its buttons, and `mfd slack contact` and
+`mfd slack destinations`."""
 
 import json
 from pathlib import Path

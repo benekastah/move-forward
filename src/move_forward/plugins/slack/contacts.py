@@ -196,7 +196,7 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
         " <code>[slack.teams]</code> in the config wins over what's here.</p>"
         f"<table>{team_rows}</table></article>"
     )
-    return html.page("Where pings go", "slack contacts", body)
+    return html.page("Where pings go", "where pings go", body)
 
 
 LOOKUPS_FAILED = "lookups_failed"
