@@ -5,6 +5,36 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Panels go by what kind they are
+
+Each panel's `priority`, in `mfd dump`, is now one of seven bands, saying what kind of panel
+it is: 0 planned (my todos), 10 asked of me, 20 my own work, 30 waiting on others, 40
+housekeeping, 50 what next, 60 parked. It used to be a step per tool (0 to 1000), and several
+panels now share one: a script that sorted panels by `priority` should follow each group's
+`panel_keys` instead, which are in page order. On the page, GitHub's panels move: what's asked
+of me (Ready for me to review, Replies for me, Requested from my teams) comes first, then my
+own PRs (Fix before review, Feedback to address, CI failures, PR policy, Merge conflicts, Needs
+a reviewer, Ready to merge), then those waiting on others (Ready for review, Held by merge
+conditions, In the merge queue), then PR housekeeping. Other panels and the groups keep their
+order, and a layout you dragged is kept.
+
+### Dismiss is Snooze until it changes
+
+The Dismiss button is gone: Snooze now picks how long, "for a while" (`[act_now]`
+`snooze_days`, until tomorrow by default) or "until it changes", which is what Dismiss did.
+What was dismissed is snoozed until it changes now, and comes back as before.
+- `POST /actions/act_now/dismiss` is refused (unknown action): post `act_now/snooze` with the
+  same fields and `choice=changed`. `act_now/snooze` without `choice` snoozes as before.
+- `mfd snooze <entity> changed` snoozes until it changes; it prints "snoozed N item(s) until
+  each changes".
+- `mfd snoozes` lists snoozes until it changes too, with `until` null; a script reading
+  `until` must allow for it. It lists only the snoozes still in force, as the page has them:
+  no longer one whose item has changed since, or is gone from every panel and from Act now (a
+  merged PR, a deleted todo). One whose item is on ice is listed, though the page hides it.
+- In `mfd dump`, an item's `set_aside` is `true` or `false`, where it was `"snooze"`,
+  `"dismiss"` or null: test it for truth.
+- Undismiss is Unsnooze.
+
 ### `[slack] team_channel` is gone; teams' channels are set by hand
 
 A team's ping channel now comes only from `[slack.teams]` or from one set by hand

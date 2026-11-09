@@ -28,12 +28,19 @@ from . import (
     tags,
 )
 from . import config as config_module
-from .act_now import PRIORITIES
+from .act_now import PRIORITIES, UNTIL_CHANGED
 from .db import Database
 from .graph import Ref
 from .kinds import label
 from .plugin import CliHandler, CliRequest, ImportRequest
-from .refresh import build_dashboard, refresh, refresh_subjects, snooze_item, stored_graph
+from .refresh import (
+    build_dashboard,
+    refresh,
+    refresh_subjects,
+    snooze_item,
+    snoozed,
+    stored_graph,
+)
 from .registry import Enabled, enabled, enabled_names, migrate
 from .repositories import (
     ContactRepository,
@@ -98,7 +105,8 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     snooze_parser.add_argument(
         "duration",
         nargs="?",
-        help="e.g. 7d or 12h; default: as the button, [act_now] snooze_days for its kind",
+        help=f"e.g. 7d or 12h, or {UNTIL_CHANGED} for until it changes; default: as the"
+        " button, [act_now] snooze_days for its kind",
     )
     snooze_parser.add_argument("--kind", help="the entity's kind, e.g. notes.todo")
     snooze_parser.add_argument("--task", help="only this task of its, e.g. review")
@@ -127,7 +135,7 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     contact_parser.add_argument("type", help="e.g. customer, or clear")
     commands.add_parser("contacts", help="print the contact types I set as JSON: who, contact_type")
     unsnooze_parser = commands.add_parser(
-        "unsnooze", help="bring back what's snoozed or dismissed about an entity"
+        "unsnooze", help="bring back what's snoozed about an entity"
     )
     unsnooze_parser.add_argument(
         "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
@@ -136,7 +144,9 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     unsnooze_parser.add_argument("--task", help="only this task of its, e.g. review")
     commands.add_parser(
         "snoozes",
-        help="print the Act now items snoozed now as JSON: kind, id, task, until, fingerprint",
+        help="print the Act now items snoozed now (not yet over, and unchanged since), including"
+        " items on ice, which the page hides, as JSON: kind, id, task, until (null: until it"
+        " changes), fingerprint",
     )
     import_parser = commands.add_parser(
         "import",
@@ -356,7 +366,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "snooze":
         now = datetime.now(UTC)
         try:
-            duration = snooze.parse_duration(args.duration) if args.duration else None
+            until_changed = args.duration == UNTIL_CHANGED
+            duration = (
+                snooze.parse_duration(args.duration)
+                if args.duration and not until_changed
+                else None
+            )
             graph, _ = stored_graph(db, enabled(config, db, now))
             ref = priority.resolve(graph, args.entity, args.kind)
         except (ValueError, LookupError) as err:
@@ -368,13 +383,17 @@ def main(argv: list[str] | None = None) -> int:
             words += ["--task", args.task] if args.task else []
             again = command_line(words)
             print(
-                f"nothing about {ref.id} is shown with a Snooze button: it may be snoozed or"
-                f" dismissed already (`{again}` first), or not shown at all",
+                f"nothing about {ref.id} is shown with a Snooze button: it may be snoozed"
+                f" already (`{again}` first), or not shown at all",
                 file=sys.stderr,
             )
             return 1
-        ends = [snooze_item(config.act_now, db, f, now, duration) for f in buttons]
-        until = f"{localtime.local(max(ends)):%Y-%m-%d %H:%M}"
+        ends = [snooze_item(config.act_now, db, f, now, duration, until_changed) for f in buttons]
+        timed = [end for end in ends if end is not None]
+        if not timed:
+            print(f"snoozed {len(buttons)} item(s) until each changes")
+            return 0
+        until = f"{localtime.local(max(timed)):%Y-%m-%d %H:%M}"
         print(f"snoozed {len(buttons)} item(s) until {until}, or until each changes")
         return 0
     if args.command == "priority":
@@ -447,11 +466,10 @@ def main(argv: list[str] | None = None) -> int:
                 "kind": kind,
                 "id": id,
                 "task": task,
-                "until": f.until.isoformat(),
+                "until": f.until.isoformat() if f.until else None,
                 "fingerprint": f.fingerprint,
             }
-            for (kind, id, task), f in FeedbackRepository(db).all().items()
-            if f.action == "snooze" and f.until is not None and f.until > now
+            for (kind, id, task), f in snoozed(config, db, now).items()
         ]
         print(json.dumps(snoozes, indent=2))
         return 0

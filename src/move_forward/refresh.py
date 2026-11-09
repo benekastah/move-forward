@@ -370,7 +370,7 @@ def _prune_plugins(
     they did, by plugin."""
     notices: list[str] = []
     if dropped := FeedbackRepository(db).prune(now, now - timedelta(days=days)):
-        notices.append(f"act_now: forgot {dropped} snooze(s), dismissal(s) or pin(s)")
+        notices.append(f"act_now: forgot {dropped} snooze(s) or pin(s)")
     try:  # it asks plugins for what they no longer hold, which can fail (a token gone bad)
         if cleared := priority.forget_finished(PriorityRepository(db), graph):
             notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")
@@ -399,15 +399,13 @@ def _merged(first: ItemAdditions, then: ItemAdditions) -> ItemAdditions:
     )
 
 
-def build_dashboard(
-    config: Config, db: Database, now: datetime | None = None, surface: Surface = "dashboard"
-) -> panels.Dashboard:
-    """The dashboard from whatever is stored; cheap, no network. `surface` is where the
-    plugins' panels are shown (the dashboard or focus mode), for what other plugins add to
-    their items."""
-    now = now or datetime.now(UTC)
-    plugins = enabled(config, db, now)
-    graph, snapshots = stored_graph(db, plugins)
+def _plugin_panels(
+    config: Config,
+    plugins: list[Enabled],
+    graph: Graph,
+    snapshots: dict[str, BaseModel | None],
+) -> list[panels.PluginPanels]:
+    """Each plugin's panels and its nominations for Act now, from its stored snapshot."""
     plugin_panels: list[panels.PluginPanels] = []
     for e in plugins:
         snapshot = snapshots[e.name]
@@ -429,6 +427,34 @@ def build_dashboard(
             [],
         )
         plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
+    return plugin_panels
+
+
+def snoozed(config: Config, db: Database, now: datetime) -> dict[act_now.FeedbackKey, Feedback]:
+    """The snoozes in force, by their item's key, as the page sees them: those whose time
+    isn't up and whose item hasn't changed since (`act_now.set_aside`). One whose item is in
+    no panel and not nominated isn't. One whose item is on ice still is, though the page hides
+    the item: the snooze holds once it's thawed. Cheap, as `build_dashboard`."""
+    plugins = enabled(config, db, now)
+    graph, snapshots = stored_graph(db, plugins)
+    current = panels.fingerprints(_plugin_panels(config, plugins, graph, snapshots))
+    return {
+        key: f
+        for key, f in FeedbackRepository(db).all().items()
+        if key in current and act_now.set_aside(current[key], f, now)
+    }
+
+
+def build_dashboard(
+    config: Config, db: Database, now: datetime | None = None, surface: Surface = "dashboard"
+) -> panels.Dashboard:
+    """The dashboard from whatever is stored; cheap, no network. `surface` is where the
+    plugins' panels are shown (the dashboard or focus mode), for what other plugins add to
+    their items."""
+    now = now or datetime.now(UTC)
+    plugins = enabled(config, db, now)
+    graph, snapshots = stored_graph(db, plugins)
+    plugin_panels = _plugin_panels(config, plugins, graph, snapshots)
     identities = [
         found
         for e in plugins
@@ -631,29 +657,37 @@ def snooze_item(
     fields: dict[str, str],
     now: datetime,
     duration: timedelta | None = None,
-) -> datetime:
+    until_changed: bool = False,
+) -> datetime | None:
     """Snooze the item a Snooze button's `fields` name, and those shown with it, until each
-    changes (its fingerprint) or `duration` passes (by default as long as `config` says for
-    its kind of subject): the Snooze button, and `mfd snooze`. When the item's snooze ends."""
+    changes (its fingerprint) or, unless `until_changed`, `duration` passes (by default as
+    long as `config` says for its kind of subject): the Snooze button, and `mfd snooze`. When
+    the item's snooze ends; None if only once it changes (or once it's `prune_days` old, and
+    pruned)."""
+
+    def ends(kind: str) -> datetime | None:
+        if until_changed:
+            return None
+        return now + duration if duration else config.snooze_until(kind, now)
+
     feedback = FeedbackRepository(db)
-    end: datetime | None = None
-    for kind, id, task, fingerprint in _members(fields):
-        until = now + duration if duration else config.snooze_until(kind, now)
+    members = _members(fields)
+    for kind, id, task, fingerprint in members:
         feedback.say(
-            (kind, id, task), Feedback(action="snooze", fingerprint=fingerprint, until=until), now
+            (kind, id, task),
+            Feedback(action="snooze", fingerprint=fingerprint, until=ends(kind)),
+            now,
         )
-        end = end or until  # the item's own: `_members` gives it first
-    assert end is not None, "a Snooze button always names its own item"
-    return end
+    return ends(members[0][0])  # the item's own: `_members` gives it first
 
 
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
-    """Act now's own buttons, on any surface: snooze an item (for as long as `config` says),
-    dismiss it, bring it back (unsnooze), or pin or unpin it, by its main subject and task, and
-    the items joined to it (`also`) alike; set or clear the priority of its main subject; tag
-    it; and set or clear who someone is to me."""
+    """Act now's own buttons, on any surface: snooze an item (for as long as `config` says, or
+    until it changes, by its `choice`), bring it back (unsnooze), or pin or unpin it, by its
+    main subject and task, and the items joined to it (`also`) alike; set or clear the
+    priority of its main subject; tag it; and set or clear who someone is to me."""
     now = datetime.now(UTC)
     if action in ("priority", "contact", "contact_clear", "tag", "untag"):
         try:
@@ -673,11 +707,16 @@ def _act_now_action(
     members = _members(fields)
     feedback = FeedbackRepository(db)
     if action == "opened":
-        # What I did elsewhere isn't a choice to keep: it never replaces a pin or a snooze.
+        # What I did elsewhere isn't a choice to keep: it never replaces a pin or a snooze in
+        # force. One that's lapsed (its time is up, or its item has changed) it does.
         said = feedback.all()
         for kind, id, task, f in members:
             before = said.get((kind, id, task))
-            if before is None or before.action == "opened":
+            if (
+                before is None
+                or before.action == "opened"
+                or (before.action == "snooze" and not act_now.set_aside(f, before, now))
+            ):
                 until = now + act_now.OPENED_FOR
                 feedback.say(
                     (kind, id, task), Feedback(action="opened", fingerprint=f, until=until), now
@@ -692,16 +731,22 @@ def _act_now_action(
             feedback.bring_back(kind, id, task, now)
         return ActionResult("back")
     if action == "snooze":
-        until = localtime.day(snooze_item(config, db, fields, now))
+        length = fields.get("choice") or ""
+        if length not in act_now.SNOOZE_LENGTHS.values():
+            raise ActionError(f"unknown snooze length {length!r}")
+        end = snooze_item(config, db, fields, now, until_changed=length == act_now.UNTIL_CHANGED)
+        if end is None:
+            return ActionResult("snoozed until it changes")
+        until = localtime.day(end)
         tomorrow = localtime.day(now) + timedelta(days=1)
         return ActionResult(
             "snoozed until " + ("tomorrow" if until == tomorrow else until.isoformat())
         )
-    if action not in ("dismiss", "pin"):
+    if action != "pin":
         raise ActionError(f"unknown action {act_now.ACTIONS}/{action}")
     for kind, id, task, f in members:
-        feedback.say((kind, id, task), Feedback(action=action, fingerprint=f), now)
-    return ActionResult("dismissed" if action == "dismiss" else "pinned")
+        feedback.say((kind, id, task), Feedback(action="pin", fingerprint=f), now)
+    return ActionResult("pinned")
 
 
 def _known_action(plugins: list[Enabled]) -> panels.KnownAction:

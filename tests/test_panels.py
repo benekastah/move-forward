@@ -19,10 +19,11 @@ from conftest import (
     titles,
     todo,
 )
+from pydantic import ValidationError
 
 from move_forward import act_now, panels, render
 from move_forward.graph import Ref
-from move_forward.page import Action, Badge, Group, Item, Panel, Signals
+from move_forward.page import Action, Badge, Band, Group, Item, Panel, Signals
 from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice, IcedItem
@@ -130,32 +131,63 @@ def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
     dashboard = build(local=local_snapshot(), stacks=stacks(StackBranch(name="main")))
     assert [(g.key, g.panel_keys) for g in dashboard.groups] == [
         ("act", ["act.now"]),
-        ("notes", ["notes.todos", "notes.iced"]),  # by each group's most urgent panel: step 0b
+        ("notes", ["notes.todos", "notes.iced"]),  # by their most urgent band: planned
         (
             "github",
             [
                 f"github.{k}"
                 for k in (
-                    "fix_before_review",
-                    "ready_for_review",
-                    "reviews_for_me",
+                    "reviews_for_me",  # asked of me
                     "replies_for_me",
-                    "conflicts",
+                    "team_prs",
+                    "fix_before_review",  # mine to move on
                     "feedback",
                     "ci_failures",
                     "policy",
-                    "metadata",
+                    "conflicts",
                     "needs_reviewer",
-                    "team_prs",
                     "ready_to_merge",
+                    "ready_for_review",  # waiting on others
                     "held",
                     "merge_queue",
+                    "metadata",  # housekeeping
                 )
             ],
         ),
         ("git", ["git.local_work", "git.cleanup"]),
         ("git_stack", ["git_stack.stacks"]),
     ]
+
+
+def test_groups_in_one_band_go_by_name_and_a_plugins_panels_in_its_order() -> None:
+    def plugin(key: str, *bands: Band) -> panels.PluginPanels:
+        listed = [
+            Panel(key=f"{key}.{n}", title="", description="", items=[], priority=band)
+            for n, band in enumerate(bands)
+        ]
+        return panels.PluginPanels(key, key, listed)
+
+    shown = panels.groups(
+        [
+            plugin("zed", Band.ASKED),
+            plugin("beta", Band.WAITING, Band.MINE, Band.MINE),
+            plugin("alpha", Band.MINE),
+        ],
+        [],
+    )
+    assert [(g.key, g.panel_keys) for g in shown[1:]] == [
+        ("zed", ["zed.0"]),
+        ("alpha", ["alpha.0"]),
+        ("beta", ["beta.1", "beta.2", "beta.0"]),
+    ]
+
+
+@pytest.mark.parametrize("priority", [Band.MINE + 5, 15, -1])
+def test_a_panels_priority_is_a_band_not_any_number(priority: int) -> None:
+    with pytest.raises(ValidationError):
+        Panel.model_validate(
+            {"key": "k", "title": "", "description": "", "items": [], "priority": priority}
+        )
 
 
 def test_focus_items_by_category() -> None:
@@ -228,7 +260,6 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("notes/todo_size", False, False),
         ("notes/todo_add", False, False),
         ("act_now/snooze", False, False),  # its entry's, as on the page
-        ("act_now/dismiss", False, False),
         ("notes/ice_item", False, False),  # it stands in for its entry, as on the page
     ]
     todo_id = part.actions[0].fields["todo"]
@@ -254,7 +285,6 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         "notes/todo_size",
         "notes/todo_add",
         "act_now/snooze",
-        "act_now/dismiss",
         "notes/ice_item",
     ]
     assert (
@@ -410,11 +440,10 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
         "where": "https://jira/browse/APP-8",
     }
     assert add("notes.todos", "APP-1 Fix") == {"entry": "APP-1 Fix"}
-    # Other people's PRs get Snooze, Dismiss and the shared importance choices.
+    # Other people's PRs get Snooze and the shared importance choices.
     review = next(i for i in panel(dashboard, "github.reviews_for_me").items)
     assert [a.name for a in review.actions if a.group not in ("Importance", "Tags")] == [
         "act_now/snooze",
-        "act_now/dismiss",
     ]
 
 
@@ -536,31 +565,46 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
         slack=True,
     )
     plugins_panels = [p for p in built.panels if p.key != "act.now"]
-    by_priority = [p.key for p in sorted(plugins_panels, key=lambda p: p.priority)]
-    assert by_priority == [
-        "notes.todos",
-        "github.fix_before_review",
-        "github.ready_for_review",
-        "github.reviews_for_me",
-        "github.replies_for_me",
-        "github.conflicts",
-        "github.feedback",
-        "github.ci_failures",
-        "github.policy",
-        "git.local_work",
-        "git_stack.stacks",
-        "github.metadata",
-        "github.needs_reviewer",
-        "github.team_prs",
-        "slack.nudges",
-        "github.ready_to_merge",
-        "github.held",
-        "github.merge_queue",
-        "git.cleanup",
-        "jira.jira_transitions",
-        "jira.rollouts",
-        "jira.jira_next",
-        "notes.iced",
+    bands: dict[Band, list[str]] = {}
+    for p in plugins_panels:
+        bands.setdefault(p.priority, []).append(p.key)
+    assert {band: sorted(keys) for band, keys in bands.items()} == {
+        Band.PLAN: ["notes.todos"],
+        Band.ASKED: ["github.replies_for_me", "github.reviews_for_me", "github.team_prs"],
+        Band.MINE: [
+            "git.local_work",
+            "git_stack.stacks",
+            "github.ci_failures",
+            "github.conflicts",
+            "github.feedback",
+            "github.fix_before_review",
+            "github.needs_reviewer",
+            "github.policy",
+            "github.ready_to_merge",
+        ],
+        Band.WAITING: [
+            "github.held",
+            "github.merge_queue",
+            "github.ready_for_review",
+            "slack.nudges",
+        ],
+        Band.HOUSEKEEPING: [
+            "git.cleanup",
+            "github.metadata",
+            "jira.jira_transitions",
+            "jira.rollouts",
+        ],
+        Band.NEXT: ["jira.jira_next"],
+        Band.PARKED: ["notes.iced"],
+    }
+    assert [g.key for g in built.groups] == [
+        "act",
+        "notes",
+        "github",
+        "git",
+        "git_stack",
+        "slack",
+        "jira",
     ]
     assert {p.key for p in built.panels if p.act_now} == {
         "github.reviews_for_me",
@@ -834,11 +878,11 @@ def test_an_item_set_aside_waits_last_in_its_panel_until_it_changes() -> None:
         return built.panel("x.p").items
 
     waiting = shown("before")
-    assert [(i.title, i.set_aside) for i in waiting] == [("other", None), ("before", "snooze")]
+    assert [(i.title, i.set_aside) for i in waiting] == [("other", False), ("before", True)]
     assert [a.label for a in waiting[1].actions if a.group == "Act now"] == ["Unsnooze"]
     changed = shown("after")
-    assert [(i.title, i.set_aside) for i in changed] == [("after", None), ("other", None)]
-    assert [a.label for a in changed[0].actions if a.group == "Act now"] == ["Snooze", "Dismiss"]
+    assert [(i.title, i.set_aside) for i in changed] == [("after", False), ("other", False)]
+    assert [a.label for a in changed[0].actions if a.group == "Act now"] == ["Snooze"]
 
 
 def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:
@@ -856,10 +900,10 @@ def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:
 
 
 def _set_aside_board(
-    action: "act_now.SetAside", nominated_detail: str | None = None
+    until: datetime | None = NOW + timedelta(days=1), nominated_detail: str | None = None
 ) -> panels.Dashboard:
-    """A panel with one item about a PR, set aside as `action`, Act now having nominated it
-    (with an extra detail, as git_stack adds one, if `nominated_detail`)."""
+    """A panel with one item about a PR, snoozed `until` (None: until it changes), Act now
+    having nominated it (with an extra detail, as git_stack adds one, if `nominated_detail`)."""
     item = Item(
         title="Fix it",
         subjects=[Ref(kind="pull_request", id="pr")],
@@ -869,9 +913,7 @@ def _set_aside_board(
     fingerprint = act_now.Nomination("x", nominee).fingerprint
     feedback: dict[act_now.FeedbackKey, act_now.Feedback] = {
         ("pull_request", "pr", "fix"): act_now.Feedback(
-            action=action,
-            fingerprint=fingerprint,
-            until=NOW + timedelta(days=1) if action == "snooze" else None,
+            action="snooze", fingerprint=fingerprint, until=until
         )
     }
     panel_ = Panel(key="p", title="P", description="", items=[item])
@@ -879,23 +921,23 @@ def _set_aside_board(
     return panels.build(NOW, [plugin], {}, feedback=feedback)
 
 
-def test_a_dismissed_item_waits_with_undismiss() -> None:
-    [item] = _set_aside_board("dismiss").panel("x.p").items
-    assert item.set_aside == "dismiss"
-    assert [a.label for a in item.actions if a.group == "Act now"] == ["Undismiss"]
+def test_an_item_snoozed_until_it_changes_waits_with_unsnooze() -> None:
+    [item] = _set_aside_board(until=None).panel("x.p").items
+    assert item.set_aside
+    assert [a.label for a in item.actions if a.group == "Act now"] == ["Unsnooze"]
 
 
 def test_an_item_set_aside_in_act_now_is_set_aside_in_its_panel_though_act_now_saw_it_otherwise() -> (
     None
 ):
-    board = _set_aside_board("snooze", nominated_detail="and 2 more merged here")
+    board = _set_aside_board(nominated_detail="and 2 more merged here")
     assert board.act_now() == []
     [item] = board.panel("x.p").items
-    assert item.set_aside == "snooze"
+    assert item.set_aside
 
 
 def test_whats_set_aside_isnt_counted_nor_stepped_through_and_is_dimmed() -> None:
-    board = _set_aside_board("snooze")
+    board = _set_aside_board()
     assert board.focus_items("x.p") == []
     page = render._panel(board.panel("x.p"))  # pyright: ignore[reportPrivateUsage]
     assert "<span class='count'>0</span>" in page

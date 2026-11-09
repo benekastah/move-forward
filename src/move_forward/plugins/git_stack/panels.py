@@ -212,7 +212,7 @@ class Builder:
                     )
         return Panel(
             key="stacks",
-            priority=Band.STACKS_NO_PR,
+            priority=Band.MINE,
             title="Stacks",
             description="git stack branches that need a restack, were merged, or have no PR.",
             items=items,

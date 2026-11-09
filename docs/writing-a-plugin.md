@@ -346,7 +346,7 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
     return [
         Panel(
             key="assigned",
-            priority=Band.TRANSITIONS + 5,
+            priority=Band.MINE,
             title="Linear issues",
             description="Issues assigned to me, oldest first.",
             items=[...],
@@ -357,9 +357,12 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database reads beyond what
   the plugin passes in. Anything slow belongs in `collect`.
 - The page keys a panel `<plugin>.<key>` (`linear.assigned`) and groups a plugin's panels
-  together. `priority` sets the default order, lowest first, in the skill's step order:
-  pick the `Band` it belongs in (`Band.REVIEWS`, `Band.CI`, `Band.NEXT`, ...), adding to
-  one to fall between two. The person can drag panels and groups about, and that wins.
+  together. `priority` is the `Band` saying what kind of panel it is, which sets the
+  default order, lowest first: `PLAN` (my todos), `ASKED` (others wait on me),
+  `MINE` (my own work needs me), `WAITING` (I wait on others), `HOUSEKEEPING`, `NEXT` (what
+  to pick up) and `PARKED`. A plugin's panels in one band go in the order `panels` lists
+  them, and plugins' groups by their most urgent band, then by name. The person can drag
+  panels and groups about, and that wins.
 - An item's `rank` orders it within its panel only; Act now orders by score.
 - Each `Item` names its `subjects`, the entities it's about, main one first. Other plugins
   add their buttons by them, and core hides items whose subject is on ice.
@@ -392,13 +395,13 @@ subject is a unit of work (a linking kind, like a ticket) joins the best item ab
 something in that unit, so give such items a `verb` that reads well after another's.
 A plugin that nominates by due date passes `req.due_horizon` to `due_pressure`, so it agrees
 with `[act_now] due_warning_days`.
-Set `Item.fingerprint` to what would make a snoozed or dismissed item worth another look.
-An item with a `task` also has Snooze and Dismiss in its own panel; what's snoozed or dismissed
-waits there, last and dimmed, with Unsnooze or Undismiss, and Act now leaves it out. Give a task to any item it makes
+Set `Item.fingerprint` to what would make a snoozed item worth another look.
+An item with a `task` also has Snooze in its own panel; what's snoozed
+waits there, last and dimmed, with Unsnooze, and Act now leaves it out. Give a task to any item it makes
 sense to set aside.
 
 Every nominated item needs a `task`: a stable id for what doing it is (`triage`,
-`transition`), lower-case letters, digits and `_`. Act now keeps a snooze, dismissal or pin
+`transition`), lower-case letters, digits and `_`. Act now keeps a snooze or pin
 by the item's main subject and its task, so `verb`, the words shown, can change (a status
 name, a count) without losing them. Core leaves out, and logs, a nomination without one.
 

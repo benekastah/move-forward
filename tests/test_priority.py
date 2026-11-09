@@ -79,11 +79,13 @@ def test_items_keep_both_importance_choices_and_highlight_the_selected_one() -> 
     assert [a.icon for a in marked.actions if a.group == "Importance"] == ["❗️", "‼️"]
     html = render.item_html(marked)
     assert "<div class='button-group' role='group' aria-label='Act now'>" in html
-    assert [a.icon for a in marked.actions[:3]] == ["💤", "👋", "📌"]
-    assert "title='Snooze' aria-label='Snooze'><span aria-hidden='true'>💤</span></button>" in html
+    assert [a.icon for a in marked.actions[:2]] == ["💤", "📌"]
     assert (
-        "title='Dismiss' aria-label='Dismiss'><span aria-hidden='true'>👋</span></button>" in html
-    )
+        "<select name='choice' aria-label='Snooze'><option value=''>for a while</option>"
+        "<option value='changed'>until it changes</option></select>"
+        "<button type='submit' class='secondary small' title='Snooze' aria-label='Snooze'>"
+        "<span aria-hidden='true'>💤</span></button>"
+    ) in html
     assert "title='Pin' aria-label='Pin'><span aria-hidden='true'>📌</span></button>" in html
     assert "<div class='button-group' role='group' aria-label='Importance'>" in html
     assert (
@@ -109,12 +111,12 @@ def test_named_buttons_join_even_with_other_actions_between_them() -> None:
     assert html.index("aria-label='Act now'") < html.index(">Important</button>")
 
 
-def test_act_now_groups_ice_with_snooze_dismiss_and_pin() -> None:
+def test_act_now_groups_ice_with_snooze_and_pin() -> None:
     config, db = stored(work_items=[entry("APP-1 finish", [todo("reply", "quick")])])
     dashboard = refresh.build_dashboard(config, db, NOW)
     shown = next(item for item in dashboard.act_now() if "APP-1 finish" in item.title)
     group = [a for a in shown.actions if a.group == "Act now"]
-    assert [a.label for a in group] == ["Snooze", "Dismiss", "Pin", "Put on ice"]
+    assert [a.label for a in group] == ["Snooze", "Pin", "Put on ice"]
     html = render.item_html(shown)
     joined = html.split("aria-label='Act now'>", 1)[1].split("</div>", 1)[0]
     assert "title='Put on ice' aria-label='Put on ice'" in joined

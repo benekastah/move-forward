@@ -89,7 +89,7 @@ class Config(Strict):
     """The localhost port `mfd serve` listens on."""
     prune_days: int = DEFAULT_PRUNE_DAYS
     """Work finished this long ago (merged PRs, closed tickets, done todos) is cleared from
-    the notes by a daily job, as are pings, Act now's dismissals and pins, and lookups that
+    the notes by a daily job, as are pings, Act now's snoozes and pins, and lookups that
     found nothing (tried again) this old."""
     act_now: ActNowConfig = Field(default_factory=ActNowConfig)
     """`[act_now]`: how core ranks what the plugins nominate for Act now."""

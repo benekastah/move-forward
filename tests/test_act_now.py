@@ -203,15 +203,16 @@ def _feedback(
     }
 
 
-def test_dismissed_and_snoozed_items_stay_away_until_they_change_or_wake() -> None:
+def test_snoozed_items_stay_away_until_they_change_or_wake() -> None:
     review = _item("PR 1", "u1", verb="Review")
     other = _item("PR 2", "u2")
     nominations = [Nomination("github", review), Nomination("github", other)]
-    dismissed = _feedback("dismiss", review)
-    assert _titles(_ranked(nominations, feedback=dismissed, now=NOW)) == ["PR 2"]
+    until_changed = _feedback("snooze", review)
+    years_on = NOW + timedelta(days=1000)
+    assert _titles(_ranked(nominations, feedback=until_changed, now=years_on)) == ["PR 2"]
     changed = review.model_copy(update={"badges": ["+400 lines"]})
     again = [Nomination("github", changed), Nomination("github", other)]
-    assert _titles(_ranked(again, feedback=dismissed, now=NOW)) == ["Review: PR 1", "PR 2"]
+    assert _titles(_ranked(again, feedback=until_changed, now=NOW)) == ["Review: PR 1", "PR 2"]
     snoozed = _feedback("snooze", review, until=NOW + timedelta(hours=1))
     assert _titles(_ranked(nominations, feedback=snoozed, now=NOW)) == ["PR 2"]
     later = NOW + timedelta(hours=2)
@@ -237,8 +238,12 @@ def test_a_pinned_item_comes_first_and_says_so() -> None:
     )
     assert _titles(ranked) == ["PR 1", "PR 2"]
     assert ranked.items[0].details == ["why: pinned"]
-    assert [a.label for a in ranked.items[0].actions][:3] == ["Snooze", "Dismiss", "Unpin"]
-    assert [a.label for a in ranked.items[1].actions][:3] == ["Snooze", "Dismiss", "Pin"]
+    assert [a.label for a in ranked.items[0].actions][:2] == ["Snooze", "Unpin"]
+    assert [a.label for a in ranked.items[1].actions][:2] == ["Snooze", "Pin"]
+    assert ranked.items[1].actions[0].choices == {
+        "for a while": "",
+        "until it changes": "changed",
+    }
     assert ranked.items[1].actions[0].fields == {
         "kind": "pull_request",
         "id": "u2",
@@ -298,7 +303,7 @@ def test_an_item_about_a_unit_of_work_joins_the_best_item_about_something_in_it(
     assert [i.title for i in items] == ["Reply: PR 1", "Write it up", "Fix CI: PR 2"]
     joined = items[0]
     assert joined.details == ["why: quick, al waiting", "then: Move to In Review: APP-1 Do it"]
-    assert [a.label for a in joined.actions][:4] == ["Move", "Snooze", "Dismiss", "Pin"]
+    assert [a.label for a in joined.actions][:3] == ["Move", "Snooze", "Pin"]
     assert [link.url for link in joined.links] == ["https://jira/APP-1"]
     also = json.loads(joined.actions[1].fields["also"])
     assert also == [["ticket", "APP-1", "move_to_in_review", Nomination("jira", move).fingerprint]]

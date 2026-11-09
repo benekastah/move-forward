@@ -68,8 +68,9 @@ if it weren't blocked.
 A due date starts raising an item `due_warning_days` (7) ahead.
 A snooze lasts `default_snooze_days` (1: until tomorrow), or `snooze_days[<kind>]`
 for a kind of subject (`snooze_days = { pull_request = 7 }` snoozes a PR for a week),
-or until the item changes. It ends at local midnight, or at `snooze_until_hour` (9: nine
-in the morning) on its last day.
+or until the item changes, whichever comes first; with Snooze's "until it changes", only when
+it changes (or once it's `prune_days` old). A timed snooze ends at local midnight, or at
+`snooze_until_hour` (9: nine in the morning) on its last day.
 
 Teams are named once, at the top level. A plugin that has its own idea of a
 team maps the names in a `teams` table of its section: `[github.teams]` gives
@@ -121,11 +122,11 @@ before the command's name.
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
-| `mfd snooze <entity> [7d\|12h] [--kind K] [--task T]` | Snooze the items about an entity (named as for `mfd priority`; all its tasks, or `--task`'s), as their Snooze button does: each until it changes or the time is up (default: `[act_now]` `snooze_days` for its kind). It snoozes what has a Snooze button, in Act now or a panel, and says so when nothing does. `mfd unsnooze <entity> [--kind K] [--task T]` brings back anything snoozed or dismissed (named as for `mfd priority`; all its tasks, or `--task`'s). |
+| `mfd snooze <entity> [7d\|12h\|changed] [--kind K] [--task T]` | Snooze the items about an entity (named as for `mfd priority`; all its tasks, or `--task`'s), as their Snooze button does: each until it changes or the time is up (default: `[act_now]` `snooze_days` for its kind); with `changed`, only until it changes. It snoozes what has a Snooze button, in Act now or a panel, and says so when nothing does. `mfd unsnooze <entity> [--kind K] [--task T]` brings back anything snoozed (named as for `mfd priority`; all its tasks, or `--task`'s). |
 | `mfd priority <entity> <1\|2\|clear> [--kind K]` | Set how much an entity matters: 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
 | `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one I put there off; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
-| `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, task, until, fingerprint), for the skill. |
+| `mfd snoozes` | Print the Act now items snoozed now, as the page has them (the snooze's time isn't up and the item hasn't changed since), including items on ice, which the page hides, as JSON (kind, id, task, until, fingerprint; `until` is null for a snooze until it changes), for the skill. |
 | `mfd import <dir> [--replace]` | Read the move-forward skill's markdown notes (`work-notes.md`, `on-ice.md`, `reviewer-map.md`) from `<dir>`: each enabled plugin imports what it knows of them, saying what, prefixed with its name. Notes already holding notes skip them, saying so, unless `--replace`, which overwrites the notes. One failing (a file it can't read) doesn't stop the others; the command fails then, and when nothing in `<dir>` is imported. See each plugin's page for what it reads. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 | `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) or password (mail) without showing it (`<plugin>.<account>` for one of a plugin's accounts, when it reads several), and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under its `keychain_service` (the plugin's, or the account's), with `email` as the account; the config is refused when two tokens are kept under the same one, whatever its case. |
@@ -156,22 +157,27 @@ ticket, a work entry's todo) joins the best item about something in it, to do
 after it, with its buttons: "Reply: PR 330", then "Move to In Review: APP-12". An item made of
 several parts, like an entry's todos, lists them with their own buttons. Each
 plugin nominates its own items; its page says which. Each item has Snooze
-(until tomorrow), Dismiss and Pin (first until unpinned), which act on all it shows: what else
-is due on its subject and what's joined to it. A snoozed or dismissed item comes back once it
-changes (its title, badges or details). Opening an
+(for a while, by default until tomorrow, or until it changes, picked beside it) and Pin (first
+until unpinned), which act on all it shows: what else is due on its subject and what's joined
+to it. A snoozed item comes back once it changes (its title, badges or details). Opening an
 item's link, or pressing a plugin's button on it, marks it opened: it's dimmed in its place,
 with when you opened it, until it changes (or for a day at most). Coming back to the tab
 fetches again just what you opened in the last half hour, not its plugins whole; an item's
 ↻ button does the same for it at once.
 
-Items with something to do have the same Snooze in their own panels. An item snoozed or
-dismissed, in Act now or its panel, leaves Act now and waits in its panel, last and dimmed, with
-Unsnooze (or Undismiss), until it changes or the snooze ends; panel and group counts leave it
-out, and focus mode skips it. Dismiss goes with Snooze wherever an item is; Pin is Act now's.
+Items with something to do have the same Snooze in their own panels. An item snoozed, in Act
+now or its panel, leaves Act now and waits in its panel, last and dimmed, with Unsnooze, until
+it changes or the snooze ends; panel and group counts leave it out, and focus mode skips it.
+Pin is Act now's.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
-Panels go in the skill's step order (each panel's priority), and groups by
-their most urgent panel: notes (todos), github, mail, git, git_stack, slack, jira.
+Panels go in order of what kind of panel each is (its band): what I
+planned (notes' todos), what others ask of me (reviews, replies, mail), my own work that needs
+me (failing checks, conflicts, feedback, unpushed commits), what I'm waiting on others for
+(reviews asked, merges under way, nudges), housekeeping (PR labels, branches to clean up, ticket
+statuses), what to pick up next, and what's on ice. A plugin's panels in one band go in its
+own order, and groups by their most urgent panel's band, then by name: notes, github, mail,
+git, git_stack, slack, jira.
 Drag a group's or a panel's title to move it (a panel within its group; Act
 now stays first); the order is kept in the database, and focus mode's list of
 panels follows it. A group or panel new since then goes after the one it followed by default.
@@ -179,9 +185,9 @@ Panels that order by importance use the priority set on an item's subject first,
 their own rank for ties.
 Every item with an entity subject but what's on ice, including a todo in the Notes panel or Focus mode, shows
 Important and Critical as one group of buttons (❗️ / ‼️), highlighting the selected level. To set
-something aside rather than raise it, Snooze, Dismiss or put it on ice. For an
+something aside rather than raise it, Snooze or put it on ice. For an
 item about several entities, the choice applies to its first subject. Once one is set, a Clear priority button goes with them. Act now groups
-its Snooze, Dismiss, Pin and Put on ice choices too, with emoji icons. Emoji buttons show
+its Snooze, Pin and Put on ice choices too, with emoji icons. Emoji buttons show
 their text in a hover title and an accessible name.
 Reset layout, in the footer, goes back to the default order.
 Only Act now starts expanded; each panel inside a group collapses too. Items
@@ -347,7 +353,7 @@ over 64 KiB:
 | `/settings` | `<section>:<key>` per setting (`:prune_days`, `github:history_days`, `act_now:weights.closes`); a list one per line; a true-or-false one `on` or `off` | Saves the settings the form changed into the config file (see [Settings](#settings)), and redirects back to `/settings` saying what was saved, or why nothing was. Settings left out of the form are left as they are. |
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` (and then of those that watch it, if what they read changed); `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
-| `/actions/act_now/<snooze\|unsnooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and what's shown with it) until tomorrow, dismisses it, or pins or unpins it; `unsnooze` brings back what's snoozed or dismissed; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
+| `/actions/act_now/<snooze\|unsnooze\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`); for `snooze`, `choice` (optional: `changed` for until it changes, else empty or left out for `[act_now]` `snooze_days`) | Snoozes an Act now item (and what's shown with it) for `snooze_days` (until tomorrow by default) or until it changes, or pins or unpins it; `unsnooze` brings back what's snoozed; `opened` dims it until it changes, or for a day (never replacing a pin, or a snooze still in force). |
 | `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
 | `/actions/act_now/tag` | `kind`, `id` (the entity), `input` (the tag: `garbage-day`, `#Garbage Day`) | Puts the tag on the entity, as `mfd tag` does. |
 | `/actions/act_now/untag` | `kind`, `id`, `tag` (its handle) | Takes off a tag I put on it. |
@@ -372,7 +378,7 @@ neither is cleared `prune_days` after it last changed), a PR, ticket or
 entry on ice comes off it once its work is over the same way (a stack stays
 until it's reopened), what the notes remembered (`mfd notes remember`) as happening that long ago is forgotten,
 pings that old leave the database, and so do Act now's
-snoozes once over, and its dismissals and pins that old. A priority set on work that's since
+snoozes once over, and its other snoozes and pins that old. A priority set on work that's since
 finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. Reviewer email and Slack id
 lookups that found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
@@ -382,7 +388,7 @@ Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 `dashboard.db` holds what each plugin last fetched, in that plugin's own
 tables (kept when a refresh fails, with the error shown alongside), the
 notes in the notes plugin's tables, the page's dragged order (core's `layout`), what you
-snoozed, dismissed or pinned in Act now (core's `act_now_feedback`), the priorities, tags and
+snoozed or pinned in Act now (core's `act_now_feedback`), the priorities, tags and
 contact types you set, the sign-in sessions and the notifications waiting to be told (core's
 too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
 plugin's (from `mfd import`, or looked up from commits), and the messages

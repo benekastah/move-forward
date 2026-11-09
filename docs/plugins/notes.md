@@ -45,7 +45,7 @@ notes adds an Add todo field to every item about one of my open PRs or a ticket 
 goes to the entry covering it, or creates one), and Put on ice to every item about a local
 branch (with its stack and group in git stack), one of my open PRs, a ticket or a work entry.
 Put on ice has an ice icon with its label in the title. It joins git's Delete button
-in a group when both are offered, and joins Snooze, Dismiss and Pin on Act now items.
+in a group when both are offered, and joins Snooze and Pin on Act now items.
 
 In focus mode, work entries are split into their todos, one per page, quick ones first.
 Each todo lists its entry's PRs, the ones it mentions (by URL, `#number` or bare number, but
@@ -65,7 +65,7 @@ blocked one ranks lower until it's gone `[act_now] blocked_stale_days` untouched
 with one todo has its buttons in Act now, and joined to another item it's listed beneath that
 one with them. An entry with several lists each todo with its own buttons, as the Todos panel
 does. Once a lone todo's PRs
-are done it's badged as probably done, which brings it back if it was snoozed or dismissed.
+are done it's badged as probably done, which brings it back if it was snoozed.
 
 ## Buttons
 
