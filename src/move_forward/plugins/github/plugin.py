@@ -409,6 +409,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             state=state,
             lifecycle="open" if state == "open" else "done",
             mentions=[pr.head, pr.title, pr.body],
+            # Another's PR, as one I'm asked to review, names what its author likes: an iced
+            # ticket it names mustn't hide it from me.
+            mentions_hide=mine,
             # Its labels are its tags, but the template's placeholders and those that say it's
             # worth splitting: they're about the PR's shape, not its topic.
             tags=[
