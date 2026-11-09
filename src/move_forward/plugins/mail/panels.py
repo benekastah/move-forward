@@ -98,9 +98,10 @@ def named_tags(graph: Graph, thread: Thread) -> list[str]:
     """The `#tags` a conversation is about, by handle, when its latest sender is verified: those
     its subject names, and those I put on it, each while something else open carries it, so a
     tag only it has isn't news. The labels I or my filters put on it count, but not Gmail's own
-    (`\\Inbox`, `\\Starred`), which say nothing of what it's about and are on most mail. Anyone
-    can write a subject, and reply into a conversation by naming it (`References`), taking on
-    what I put on it: an unverified sender gets none."""
+    (`\\Inbox`, `\\Starred`), which say nothing of what it's about and are on most mail, nor a
+    tag named as one of those on it (its subject's or mine, which the graph can't tell apart).
+    Anyone can write a subject, and reply into a conversation by naming it (`References`),
+    taking on what I put on it: an unverified sender gets none."""
     ref = Ref(kind=THREAD, id=thread.id)
     entity = graph.get(THREAD, thread.id)
     if entity is None or not thread.latest.verified:

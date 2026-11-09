@@ -157,7 +157,8 @@ several words something open carries (see the README's Tags), and its sender is 
 it too; a one-word tag, like `#invoice`, any stranger may write, so it's shown but raises
 nothing; a tag or label I put on the mail counts too, while something else open has it and its
 latest sender is verified, since anyone can reply into a conversation, but not Gmail's own
-labels, `#inbox` or `#starred`, which say nothing of what it's about), when its latest message,
+labels, `#inbox`, `#starred`, `#important` and the like, which say nothing of what it's about,
+nor a tag of the same name on a thread that has one), when its latest message,
 from a verified sender (anyone can name a Message-ID of mine), answers mail I sent (the newest 1000 within `known_days`; its
 `In-Reply-To`, else the last of its `References`, names one of my sent Message-IDs; badged
 "replies to me"; if my sent mail can't be read, nothing counts as replying), when it's from

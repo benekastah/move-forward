@@ -1272,7 +1272,7 @@ def test_an_account_on_mails_own_host_keeps_mails_auth_servers() -> None:
     assert [m.trusted_auth_servers() for m in cased.mailboxes()] == [{"mx.example.com"}] * 2
 
 
-def test_gmails_own_labels_make_a_thread_about_nothing_but_mine_do() -> None:
+def test_gmails_own_labels_make_a_thread_about_nothing() -> None:
     harness = mailbox(
         message(1, subject="Hello", thread="a", labels=["\\Inbox", "\\Starred"]),
         message(2, subject="Hi", thread="b", labels=["\\Inbox", "\\Starred"]),
