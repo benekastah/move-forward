@@ -8,6 +8,7 @@ from ...api import (
     API_VERSION,
     ActionHandler,
     Asker,
+    Changed,
     ChangedRequest,
     CollectRequest,
     Context,
@@ -165,7 +166,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 worktrees[Path(wt.path).resolve()] = common.resolve()
         self._watcher.sync(worktrees)
 
-    def changed(self, req: ChangedRequest[GitConfig]) -> bool:
+    def changed(self, req: ChangedRequest[GitConfig]) -> Changed:
         """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a
         worktree's uncommitted edits changed. Watched repos say so as it happens (see
         `watch`); the rest are polled, their refs by their files' times (see `changes`) and
@@ -194,7 +195,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             ctx.kv.set_json(MOVED, sorted(pending))
         # Pending until `collect` takes them: what's seen in the check core makes right after
         # a refresh (whose answer it ignores) still asks for a refresh at the next one.
-        return bool(pending) or (before is not None and set(before) != set(now))
+        return Changed(
+            bool(pending) or (before is not None and set(before) != set(now)), "a repo moved"
+        )
 
     def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:
         """The repos (common git directories) with a worktree whose uncommitted edits differ

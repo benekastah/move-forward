@@ -159,8 +159,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
   request answered "not modified", another plugin's entities in the graph) sets
   `change_check_seconds` and implements `changed(req)`: the server asks that often, and
-  refreshes the plugin as soon as it says True, or `Changed(True, reason)`, whose reason
-  goes into the log line. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
+  refreshes the plugin as soon as it says `Changed(True, reason)`, whose reason goes into
+  the log line. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
   the server asks once more and ignores the answer, so what the refresh did itself isn't
   taken for a change. With `changed`, `refresh_seconds` can be long. A `changed` that
   reads another plugin's entities from the graph names that plugin in `watches`: the

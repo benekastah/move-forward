@@ -368,7 +368,8 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
     def changed() -> bool:
         plugins = enabled(config, db, NOW)
         e = next(e for e in plugins if e.name == "git_stack")
-        return GitStackPlugin().changed(ChangedRequest(e.ctx, refresh.stored_graph(db, plugins)[0]))
+        graph = refresh.stored_graph(db, plugins)[0]
+        return GitStackPlugin().changed(ChangedRequest(e.ctx, graph)).changed
 
     assert not changed()  # the first look notes where things stand
     assert not changed()

@@ -677,12 +677,13 @@ class _GitHubWithChecks(GitHubPlugin):
 
     change_check_seconds: ClassVar[int | None] = 60
     answers: ClassVar[list[bool | Changed | Exception]] = []
+    """Each a `Changed`, or a bare bool for one without a reason."""
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return answer
+        return answer if isinstance(answer, Changed) else Changed(answer)
 
 
 def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(

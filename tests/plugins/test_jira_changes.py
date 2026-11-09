@@ -42,7 +42,7 @@ def test_the_plugin_says_changed_when_a_ticket_of_mine_was_updated_since_it_look
             db=db,
             kv=KvRepository(db, "jira"),
         )
-        return plugin.changed(ChangedRequest(ctx, Graph([])))
+        return plugin.changed(ChangedRequest(ctx, Graph([]))).changed
 
     assert not changed(0) and asked == []  # the first look only notes the time
     assert changed(90)

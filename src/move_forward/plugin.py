@@ -519,15 +519,17 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.
         caching lookups in the plugin's tables."""
 
-    def changed(self, req: ChangedRequest[C]) -> bool | Changed:
+    def changed(self, req: ChangedRequest[C]) -> Changed:
         """Whether what the plugin collects has changed since this was last asked, by a check
         far cheaper than `collect` (files' times, a request answered "not modified", other
         plugins' entities in `graph`, built from what's stored), so the plugin refreshes soon
         after a change rather than at its next `refresh_seconds`. Keep what it compares
-        against in `ctx.kv`; with nothing kept yet, keep it and say False. Core asks once more after each refresh of the plugin and ignores the answer,
-        so what the refresh did itself (`git status` rewriting the index) doesn't count. May
-        raise; the error is logged and the next check tries again."""
-        return False
+        against in `ctx.kv`; with nothing kept yet, keep it and say `Changed(False)`. Say
+        why it changed in `Changed.reason`, for the log. Core asks once more after each
+        refresh of the plugin and ignores the answer, so what the refresh did itself (`git
+        status` rewriting the index) doesn't count. May raise; the error is logged and the
+        next check tries again."""
+        return Changed(False)
 
     # Reading
 

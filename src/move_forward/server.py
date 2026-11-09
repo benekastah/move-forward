@@ -22,7 +22,7 @@ from .db import Database
 from .graph import Graph, Ref
 from .notifications import NotificationRepository
 from .panels import Layout
-from .plugin import KEPT, MAX_SUBJECTS, ActionError, Changed, ChangedRequest, Response, page_path
+from .plugin import KEPT, MAX_SUBJECTS, ActionError, ChangedRequest, Response, page_path
 from .refresh import (
     PageFailed,
     build_dashboard,
@@ -232,9 +232,7 @@ class App:
         except Exception:
             log.debug("%s: change check failed", e.name, exc_info=True)
             return None
-        if isinstance(answer, Changed):
-            return answer.reason if answer.changed else None
-        return "" if answer else None
+        return answer.reason if answer.changed else None
 
     def check_for_changes(self, now: float | None = None) -> set[str]:
         """Ask each plugin whose `change_check_seconds` have passed whether it `changed`,

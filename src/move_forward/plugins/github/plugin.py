@@ -220,7 +220,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         ctx, snapshot = req.ctx, req.snapshot
         PrRepository(ctx.db).replace(snapshot)
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
         refresh of git, which it watches), or I have a notification about something my
         searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed is
