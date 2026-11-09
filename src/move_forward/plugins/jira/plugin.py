@@ -409,6 +409,8 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     config_model = JiraConfig
     api_version = API_VERSION
     snapshot_model = JiraSnapshot
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"site"})
+    """Where its token is sent."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         TICKET: KindSpec(JiraTicket, linking=True, fetchable=True, resolvable=True)

@@ -86,6 +86,11 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     config_model = MailConfig
     api_version = API_VERSION
     snapshot_model = MailSnapshot
+    locked_settings: ClassVar[frozenset[str]] = frozenset(
+        {"host", "port", "message_url", "auth_servers"}
+    )
+    """Where its passwords are sent, where its items link (with my username in the link), and
+    whose word decides a sender is who they claim."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         # Its title is a subject anyone can write: a #tag in it puts no tag on it.

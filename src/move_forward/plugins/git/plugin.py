@@ -57,6 +57,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     config_model = GitConfig
     api_version = API_VERSION
     snapshot_model = LocalSnapshot
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"repos", "github_hosts"})
+    """Where it runs git, and which remotes it takes for GitHub's (whose PRs it links)."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         REPO: KindSpec(RepoAttrs),
