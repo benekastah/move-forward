@@ -201,13 +201,11 @@ in the browser", below, which already plans tables on the settings page.
 ### Accounts
 
 A plugin reads one login: github many repos but one account, jira one site, mail one mailbox.
-A plugin that can read several does it itself, as accounts in its own section, so it keeps one
+A plugin that can read several does it itself (mail does: see its page), as accounts in its own section, so it keeps one
 set of tables, pages and actions, and settles what two of them both see the way its tool needs
 (the same conversation in two mailboxes is one item). Core gives each account its token:
 `Plugin.tokens` names them, and `mfd token set <plugin>.<account>` stores one.
 
-- **mail**: a home and a work mailbox, each `[mail.<name>]` taking from `[mail]` what it
-  leaves out.
 - **github**: a personal and a work login (on github.com, or an Enterprise host). `gh` keeps
   one active account per host, so each call would take its account's token (`gh auth token
   --user <login>`) as `GH_TOKEN`.

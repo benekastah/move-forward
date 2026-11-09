@@ -190,6 +190,12 @@ class MailConfig(Strict):
 
     @model_validator(mode="after")
     def _complete(self) -> Self:
+        if self.accounts and self.username:
+            # Its own mailbox would stop being read, unnoticed, once accounts come.
+            raise ValueError(
+                "[mail] has accounts, so its username names no mailbox: move it to an account"
+                " of its own ([mail.home]), with `mfd token set mail.home` for its password"
+            )
         self.mailboxes()  # each has a host and a username
         return self
 
@@ -220,8 +226,11 @@ class MailConfig(Strict):
 
         host, username = said(account.host, self.host), said(account.username, self.username)
         if not host or not username:
-            where = f"[mail.{name}]" if name else "[mail]"
-            raise ValueError(f"{where} needs a host and a username (or [mail] gives them)")
+            raise ValueError(
+                f"[mail.{name}] needs a host and a username, its own or [mail]'s"
+                if name
+                else "[mail] needs a host and a username, or accounts ([mail.<name>]) that have them"
+            )
         return Mailbox(
             name=name,
             host=host,
@@ -230,7 +239,10 @@ class MailConfig(Strict):
             mailbox=said(account.mailbox, self.mailbox),
             sent_mailbox=said(account.sent_mailbox, self.sent_mailbox),
             message_url=said(account.message_url, self.message_url),
-            auth_servers=said(account.auth_servers, self.auth_servers),
+            # Whose results headers count depends on the server: one of its own trusts its own.
+            auth_servers=account.auth_servers
+            if account.auth_servers is not None or account.host is not None
+            else self.auth_servers,
             # A password is never shared: an account's isn't [mail]'s.
             token_env=account.token_env or f"{DEFAULT_MAIL_TOKEN_ENV}_{name.upper()}"
             if name

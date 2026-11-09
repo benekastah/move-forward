@@ -73,9 +73,11 @@ through the plugin's `/mail/open` page, which sends the browser on to the mail a
 Each sub-table of `[mail]` is a mailbox of its own, named by it: `[mail.home]` and `[mail.work]`
 read two. What one leaves out, `[mail]` says for every one (`host`, `port`, `username`,
 `mailbox`, `sent_mailbox`, `message_url`, `auth_servers`); `refresh_seconds`, `known_days`,
-`since_days`, `max_messages` and the word lists are `[mail]`'s alone. With accounts, `[mail]`'s
-own `host` and `username` are no mailbox, only what the accounts take. Its name is lower-case
-letters, digits and `_`.
+`since_days`, `max_messages` and the word lists are `[mail]`'s alone. With accounts, `[mail]` is
+no mailbox itself: it can't have a `username` (move it to an account, `[mail.home]`, and set its
+password with `mfd token set mail.home`). An account with a `host` of its own doesn't take
+`[mail]`'s `auth_servers`, as which server's results count depends on the server. An account's
+name starts with a letter, then up to 29 lower-case letters, digits and `_`.
 
 ```toml
 [mail]
@@ -95,8 +97,10 @@ Each has its own password, never `[mail]`'s: `mfd token set mail.work` stores it
 `move-forward-mail-work`, or export `MAIL_PASSWORD_WORK` (or set the account's `token_env` and
 `keychain_service`). A conversation is one item whichever mailboxes have it, linked by the
 mailbox of its latest message, and a message in two (sent to both addresses) counts once, as
-the first mailbox's, flagged if either flagged it. Each mailbox's sent mail says whom I know and
-what answers me for its own mail. A mailbox that fails to sign in fails the refresh, keeping
+the first mailbox's, flagged, to me, replying to me, from someone I know or important if either
+copy is. A message only claiming another's Message-ID (from another sender, or unverified where
+the other was) is its own, and nothing is merged within one mailbox. Each mailbox's sent mail
+says whom I know and what answers me for its own mail. A mailbox that fails to sign in fails the refresh, keeping
 what was read last.
 
 ## Publishes

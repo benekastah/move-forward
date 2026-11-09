@@ -82,7 +82,9 @@ class LinearConfig(Strict):
     """The environment variable holding a personal API key."""
 ```
 
-- Config models subclass `Strict`, which rejects unknown keys: a typo is an error.
+- Config models subclass `Strict`, which rejects unknown keys: a typo is an error. A field
+  whose entries are tables of their own, by name (mail's `[mail.<name>]` accounts), says so
+  with `json_schema_extra={"tables": True}`, and its example is one such table.
 - Every field has a docstring.
 - Every key appears in four places: the model, the plugin's page in `docs/plugins/`,
   `mfd init`'s rendered config as a commented default (the plugin's `init_template`),

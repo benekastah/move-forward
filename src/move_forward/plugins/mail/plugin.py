@@ -46,6 +46,36 @@ def person_id(email: str) -> str:
     return f"mail/{email}"
 
 
+def merged(read: list[Message], more: list[Message]) -> list[Message]:
+    """`read`, from the mailboxes before, with another mailbox's messages: a copy of one already
+    read (the same Message-ID, from the same sender, as verified) adds only what's about me
+    there, flagged, to me, replying to me, from someone I know or important, to the first copy.
+    Within a mailbox nothing is merged, and a message only claiming another's Message-ID (from
+    someone else, or unverified where the other was) is its own: it takes nothing from it."""
+    first: dict[tuple[str | None, str | None, bool], int] = {
+        (m.message_id, m.sender_email, m.verified): i for i, m in enumerate(read) if m.message_id
+    }
+    found = list(read)
+    taken: set[int] = set()  # a mailbox has one copy of a message: more claim to be it
+    for message in more:
+        i = first.get((message.message_id, message.sender_email, message.verified))
+        if message.message_id is None or i is None or i in taken:
+            found.append(message)
+            continue
+        taken.add(i)
+        copy = found[i]
+        found[i] = copy.model_copy(
+            update={
+                "flagged": copy.flagged or message.flagged,
+                "to_me": copy.to_me or message.to_me,
+                "replies_to_me": copy.replies_to_me or message.replies_to_me,
+                "known": copy.known or message.known,
+                "important": copy.important or message.important,
+            }
+        )
+    return found
+
+
 class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     name = "mail"
     title = "Mail"
@@ -76,20 +106,11 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
 
     def collect(self, req: CollectRequest[MailConfig]) -> MailSnapshot:
         """Every mailbox's unread and flagged mail, newest first. A conversation is one whichever
-        mailboxes have it; a message in several (sent to two of my addresses) is the first's
-        copy, flagged if any is."""
+        mailboxes have it, and a message sent to two of my addresses is one (`merged`)."""
         ctx = req.ctx
-        found: dict[str, Message] = {}
-        alone: list[Message] = []  # no Message-ID to know a copy by
+        messages: list[Message] = []
         for mailbox in ctx.config.mailboxes():
-            for message in client.collect(mailbox, ctx.email, ctx.now).messages:
-                if message.message_id is None:
-                    alone.append(message)
-                elif (first := found.get(message.message_id)) is None:
-                    found[message.message_id] = message
-                elif message.flagged and not first.flagged:
-                    found[message.message_id] = first.model_copy(update={"flagged": True})
-        messages = [*found.values(), *alone]
+            messages = merged(messages, client.collect(mailbox, ctx.email, ctx.now).messages)
         return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
     def store(self, req: StoreRequest[MailConfig, MailSnapshot]) -> None:
