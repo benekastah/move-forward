@@ -48,7 +48,7 @@ CUTOFF = NOW - timedelta(days=90)
 
 
 def _seeded() -> Database:
-    """A database holding `WORK_NOTES`, as `mfd notes import` leaves it."""
+    """A database holding `WORK_NOTES`, as `mfd import` leaves it."""
     db = Database(":memory:")
     db.migrate("notes", MIGRATIONS)
     entries, sections = markdown.read_work_notes(WORK_NOTES)

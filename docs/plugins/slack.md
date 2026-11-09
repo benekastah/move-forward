@@ -7,14 +7,18 @@ section.
 ## Config
 
 `workspace_url` makes the ping page link to channels and people, `ping_first` and
-`ping_follow_up` are the messages, `[slack.teams]` the channel each team's pings go to
-(winning over the reviewer map), and `team_channel` (e.g. `"#team-{team}"`) a guess at the
-channel of a team nothing else names one for.
+`ping_follow_up` are the messages, and `[slack.teams]` the channel each team's pings go to.
 
-People's Slack ids and teams' channels come from the skill's `reviewer-map.md`, read with
-`mfd slack import <dir>` (which also picks up the nudges the skill logged in
-`work-notes.md`), or are set by hand on `/slack/contacts` or with
-`mfd slack contact|team set`; what's set by hand wins over a later import. With a Slack token
+A team's channel comes from `[slack.teams]`, or is set by hand on `/slack/contacts` or with
+`mfd slack team set`; `[slack.teams]` wins. A team named in neither has no channel, and its
+ping says only `team <name>`. `mfd import <dir>` sets the channels of the teams in the skill's
+`reviewer-map.md` as if by hand, but for teams that have one set already, and names those it
+left whose channel differs from the map's.
+
+People's Slack ids come from the skill's `reviewer-map.md`, read with `mfd import <dir>`
+(which also picks up the nudges the skill logged in `work-notes.md`), or are set by hand on
+`/slack/contacts` or with `mfd slack contact set`; what's set by hand wins over a later
+import. With a Slack token
 (`token_env`, default `SLACK_API_TOKEN`, else the system's secret store under
 `keychain_service` for your email, stored with `mfd token set slack`), each refresh also looks
 up the Slack id of every reviewer my open PRs ask for whom nothing names one for, by the email
@@ -44,7 +48,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | Path | Shows |
 | --- | --- |
 | `/slack/ping?pr=<PR URL>` | The ping page for one of my PRs. |
-| `/slack/contacts` | Where people's and teams' pings go, imported, set by hand or looked up, with a form to change each and a Clear button for what's kept (asking first), and why the last lookup by email failed, if it did; the ping page links to it. |
+| `/slack/contacts` | Where people's and teams' pings go, and whether a person's was imported, set by hand or looked up, with a form to change each and a Clear button for what's kept (asking first), and why the last lookup by email failed, if it did; the ping page links to it. |
 
 ## Buttons
 
@@ -54,13 +58,13 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | `/actions/slack/set_contact` | `login`, `slack_id` (blank for none) | Sets where a person's pings go, by hand; it wins over imports, and blank keeps them unlinked. |
 | `/actions/slack/clear_contact` | `login` | Forgets where a person's pings go, asking first on the page, so they're imported or looked up again. |
 | `/actions/slack/set_team_channel` | `team`, `channel_name`, `channel_id` (one of them at least) | Sets where a team's pings go, by hand; `[slack.teams]` still wins. |
-| `/actions/slack/clear_team_channel` | `team` | Forgets a team's channel, asking first on the page; `[slack.teams]` still wins, and a later `mfd slack import` can bring an imported one back. |
+| `/actions/slack/clear_team_channel` | `team` | Forgets a team's channel, asking first on the page; `[slack.teams]` still wins, and a later `mfd import` can set it again. |
 
 ## Commands
 
 | Command | Does |
 | --- | --- |
-| `mfd slack destinations [--json]` | Where people's and teams' pings go, and whether each was imported, set by hand or looked up by email. |
+| `mfd slack destinations [--json]` | Where people's and teams' pings go, and whether each was imported, set by hand or looked up by email (a team's is always set by hand, `dashboard`). |
 | `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
 | `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel. |
-| `mfd slack import <dir>` | Read people's Slack ids and teams' channels from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read. |
+| `mfd import <dir>` | Core's command; slack reads people's Slack ids from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read; and sets its teams' channels as if by hand, but for teams that have one set already, naming those whose channel differs from the map's. Run it again, without `--replace`, whenever the map changes: `--replace` would overwrite the notes too. |

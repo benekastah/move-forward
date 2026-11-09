@@ -7,7 +7,6 @@ TEMPLATE = """\
 # ping_follow_up = "Gentle bump on this review request"
 # token_env = "SLACK_API_TOKEN"          # a token with users:read.email, to find Slack ids by email
 # keychain_service = "move-forward-slack" # else the system's secret store, for your email
-# team_channel = ""                      # a team's channel when none is set, e.g. "#team-{team}"
 # [slack.teams]                         # where review pings to a team go, by its name in `teams`
 # my-team = "#team-my-team"
 """

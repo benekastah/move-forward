@@ -1,6 +1,6 @@
 """Who to ping about each of my open PRs, how, and whether it's time.
 
-Pure functions of my PRs (the graph's `pull_request` entities), the reviewer map and the pings
+Pure functions of my PRs (the graph's `pull_request` entities), where pings go and the pings
 recorded so far; no I/O.
 """
 
@@ -154,8 +154,6 @@ class Pinger:
                 destination = f"{team.channel_name or name} ({team.channel_id})"
             elif team and team.channel_name:
                 destination = team.channel_name
-            elif guessed := self.config.guessed_channel(name):
-                destination = f"{guessed} (guessed from team_channel)"
             targets.append(
                 self._target(
                     "team", name, link, destination, last_by_target.get(f"team:{name}"), pr

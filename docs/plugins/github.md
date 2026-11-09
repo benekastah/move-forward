@@ -169,7 +169,7 @@ Requested from my teams and PR housekeeping aren't nominated.
 
 | Command | Does |
 | --- | --- |
-| `mfd github import <dir>` | Read reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions; they win over emails looked up from commits. Run it again whenever the map changes. |
+| `mfd import <dir>` | Core's command; github reads reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions, replacing what the last import read; they win over emails looked up from commits. Run it again, without `--replace`, whenever the map changes: notes skips its part then, where `--replace` would overwrite the notes too. |
 
 ## Notifications
 

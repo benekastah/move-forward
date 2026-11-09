@@ -34,6 +34,37 @@ What was dismissed is snoozed until it changes now, and comes back as before.
   `"dismiss"` or null: test it for truth.
 - Undismiss is Unsnooze.
 
+### `[slack] team_channel` is gone; teams' channels are set by hand
+
+A team's ping channel now comes only from `[slack.teams]` or from one set by hand
+(`/slack/contacts`, `mfd slack team set`), `[slack.teams]` winning. A config that still sets
+`team_channel` is refused, saying it's gone: delete the line, and name each team's channel in
+`[slack.teams]` (`web = "#team-web"`) or with `mfd slack team set <team> <#channel>`. Channels
+an earlier import read are kept, as set by hand. `mfd import` now sets the reviewer map's
+teams' channels as if by hand, leaving a team that has one, and names those whose channel
+differs from the map's: it no longer replaces them on a second run. In `mfd slack destinations --json`, every team's
+`source` is `dashboard`.
+
+### One `mfd import <dir>` replaces the three imports
+
+`mfd notes import`, `mfd github import` and `mfd slack import` are gone. `mfd import <dir>
+[--replace]` reads the skill's markdown from `<dir>` into every enabled plugin that knows it,
+printing a line per plugin (`notes: imported …`, `github: …`, `slack: …`):
+
+| Was | Now |
+| --- | --- |
+| `mfd notes import <dir> [--replace]` | `mfd import <dir> [--replace]` |
+| `mfd github import <dir>` | `mfd import <dir>` |
+| `mfd slack import <dir>` | `mfd import <dir>` |
+
+A directory with neither `work-notes.md` nor `on-ice.md` no longer fails the notes' part: the
+command fails only when no plugin imports anything from it, or when one fails (a file it can't
+read), the others importing anyway. Notes already holding notes skip them without `--replace`,
+printing `notes: already has notes; skipped, pass --replace to overwrite them`, and the
+command still exits 0. So to read a changed `reviewer-map.md` again once the notes are in, run
+`mfd import <dir>` without `--replace`: `--replace` overwrites the notes too, losing what was
+changed on the dashboard since. `mfd github` has no commands left.
+
 ### Slack's sign-in is gone
 
 slack no longer connects to a Slack app: `[slack] client_id`, the `/slack`, `/slack/connect` and

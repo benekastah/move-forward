@@ -1,4 +1,5 @@
-"""The slack plugin's tables: what its migration copies from core, and `mfd slack import`."""
+"""The slack plugin's tables: what its migration copies from core, and what `mfd import`
+reads for it."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,20 +50,88 @@ def test_the_reviewer_map_and_logged_nudges_are_read() -> None:
     ]
 
 
-def test_mfd_slack_import(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_mfd_import_reads_slack_ids_teams_and_nudges(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     notes_dir = tmp_path / "skill"
     notes_dir.mkdir()
     (notes_dir / markdown.REVIEWER_MAP_FILE).write_text(REVIEWER_MAP)
     (notes_dir / markdown.WORK_NOTES_FILE).write_text(WORK_NOTES)
     config = tmp_path / "config.toml"
     config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
-    assert cli.main(["-c", str(config), "slack", "import", str(notes_dir)]) == 0
-    assert "logged nudges" in capsys.readouterr().out
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert "slack: imported 2 people" in capsys.readouterr().out
     slack = SlackRepository(Database(tmp_path / "d.db"))
     slack.add_ping(Ping(pr_url="https://pr/9", target="user:x", kind="first", sent_at=NOW))
     imported = len(slack.pings()) - 1
     assert imported and slack.contacts()
     # Importing again replaces what the last import read, and keeps what the dashboard sent.
-    assert cli.main(["-c", str(config), "slack", "import", str(notes_dir)]) == 0
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
     assert len(slack.pings()) == imported + 1
-    assert cli.main(["-c", str(config), "slack", "import", str(tmp_path / "nope")]) == 1
+    assert cli.main(["-c", str(config), "import", str(tmp_path / "nope")]) == 1
+
+
+def test_the_import_sets_teams_channels_as_by_hand_where_none_is(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notes_dir = tmp_path / "skill"
+    notes_dir.mkdir()
+    (notes_dir / markdown.REVIEWER_MAP_FILE).write_text(REVIEWER_MAP)
+    config = tmp_path / "config.toml"
+    config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0  # makes the tables
+    slack = SlackRepository(Database(tmp_path / "d.db"))
+    slack.set_team_channel("web", "#web-mine", None)
+    slack.unset_team_channel("core")
+    capsys.readouterr()
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert "slack: set 1 teams' channels, as by hand; left web, whose channel set already" in (
+        capsys.readouterr().out
+    )
+    channels = slack.team_channels()
+    assert (channels["web"].channel_name, channels["core"].channel_name) == (
+        "#web-mine",
+        "#team-core-chat",
+    )
+    assert slack.sources()["team:core"] == "dashboard"
+    # Teams whose kept channel is the map's go unmentioned, so nothing is said of them.
+    slack.set_team_channel("web", "#team-web", "C0123ABCD")
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert [line for line in capsys.readouterr().out.splitlines() if "slack" in line] == [
+        "slack: imported 2 people and 0 logged nudges"
+    ]
+
+
+def test_the_import_says_nothing_of_teams_without_a_map(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notes_dir = tmp_path / "skill"
+    notes_dir.mkdir()
+    (notes_dir / markdown.WORK_NOTES_FILE).write_text(WORK_NOTES)
+    config = tmp_path / "config.toml"
+    config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    said = [line for line in capsys.readouterr().out.splitlines() if line.startswith("slack:")]
+    assert len(said) == 1 and said[0].startswith("slack: imported 0 people")
+
+
+def test_the_migration_keeps_imported_team_channels_as_set_by_hand() -> None:
+    db = Database(":memory:")
+    db.migrate("slack", MIGRATIONS[:3])
+    db.execute("INSERT INTO slack_team_channels VALUES ('core', '#core', 'C1', 'import')")
+    db.execute("INSERT INTO slack_team_channels VALUES ('web', '#web', NULL, 'dashboard')")
+    db.migrate("slack", MIGRATIONS)
+    slack = SlackRepository(db)
+    assert {t: (c.channel_name, c.channel_id) for t, c in slack.team_channels().items()} == {
+        "core": ("#core", "C1"),
+        "web": ("#web", None),
+    }
+    # An import no longer replaces them.
+    slack.replace_imported([], [], [])
+    assert set(slack.team_channels()) == {"core", "web"}
+
+
+def test_a_team_named_twice_in_the_map_takes_its_first_row() -> None:
+    text = "## Teams\n\n| Team | Channel |\n|---|---|\n| web | #web (C0123ABCD) |\n| web | #other (C0999ZZZZ) |\n"
+    _, teams = markdown.read_reviewer_map(text)
+    assert [(t.slug, t.channel_name, t.channel_id) for t in teams] == [("web", "#web", "C0123ABCD")]

@@ -1,19 +1,9 @@
 """The slack plugin's tables, and the queries over them."""
 
 from datetime import datetime
-from typing import Literal
 
-from ...api import Database, Migration
+from ...api import BY_HAND, IMPORTED, Database, LookupCache, Migration
 from .models import Contact, Ping, TeamChannel
-
-Source = Literal["import", "dashboard", "lookup"]
-IMPORTED: Source = "import"
-"""Rows `mfd slack import` read from the skill's markdown; an import replaces them."""
-DASHBOARD: Source = "dashboard"
-"""Rows set from the dashboard, e.g. a Slack id set by hand or a ping marked as sent; an
-import leaves them."""
-LOOKED_UP: Source = "lookup"
-"""Slack ids found through Slack's API by email; an import or a hand overrides them."""
 
 MIGRATIONS = [
     Migration(
@@ -76,20 +66,41 @@ MIGRATIONS = [
     ALTER TABLE slack_contacts ADD COLUMN looked_up_at TEXT;
     """,
     ),
+    Migration(
+        "0004_team_channels_by_hand",
+        """
+    -- A team's channel is set by hand (an import sets it once, as if by hand), so it needs no
+    -- source: imported channels are kept, as set by hand.
+    CREATE TABLE slack_team_channels_new ( -- kept: where a team's pings go, set by hand
+        team TEXT PRIMARY KEY,
+        channel_name TEXT,
+        channel_id TEXT
+    );
+    INSERT INTO slack_team_channels_new
+        SELECT team, channel_name, channel_id FROM slack_team_channels;
+    DROP TABLE slack_team_channels;
+    ALTER TABLE slack_team_channels_new RENAME TO slack_team_channels;
+    """,
+    ),
 ]
 """The slack plugin's migrations. Every table is kept: only the dashboard knows these."""
 
 
 class SlackRepository:
-    """People's and teams' Slack destinations, and the pings sent."""
+    """People's and teams' Slack destinations, and the pings sent. A person's Slack id and a
+    ping say where they came from (`source`): an import (`IMPORTED`, which the next import
+    replaces), the dashboard (`BY_HAND`: set by hand, or a ping marked as sent; an import
+    leaves it) or, for a Slack id, a lookup through Slack's API by email (`LOOKED_UP`);
+    people's Slack ids are an `api.LookupCache`. A team's channel is always set by hand."""
 
     def __init__(self, db: Database):
         self._db = db
+        self._contacts = LookupCache(db, "slack_contacts", "login", "slack_id")
 
     def contacts(self) -> dict[str, Contact]:
         return {
-            row["login"]: Contact(login=row["login"], slack_id=row["slack_id"])
-            for row in self._db.query("SELECT * FROM slack_contacts")
+            login: Contact(login=login, slack_id=slack_id)
+            for login, slack_id in self._contacts.values().items()
         }
 
     def team_channels(self) -> dict[str, TeamChannel]:
@@ -100,53 +111,38 @@ class SlackRepository:
             for row in self._db.query("SELECT * FROM slack_team_channels")
         }
 
-    def sources(self) -> dict[str, Source]:
+    def sources(self) -> dict[str, str]:
         """Where each contact (`user:<login>`) and team channel (`team:<team>`) came from."""
-        rows = self._db.query(
-            "SELECT 'user:' || login AS target, source FROM slack_contacts"
-            " UNION ALL SELECT 'team:' || team, source FROM slack_team_channels"
-        )
-        return {row["target"]: row["source"] for row in rows}
+        teams = self._db.query("SELECT team FROM slack_team_channels")
+        return {f"user:{login}": source for login, source in self._contacts.sources().items()} | {
+            f"team:{row['team']}": BY_HAND for row in teams
+        }
 
     def save_looked_up(self, login: str, slack_id: str | None, now: datetime) -> None:
         """Remember what a lookup found, or that it found nobody, unless the login is known."""
-        self._db.execute(
-            "INSERT OR IGNORE INTO slack_contacts (login, slack_id, source, looked_up_at)"
-            " VALUES (?, ?, ?, ?)",
-            (login, slack_id, LOOKED_UP, now.isoformat()),
-        )
+        self._contacts.save_looked_up(login, slack_id, now)
 
     def forget_misses_before(self, cutoff: datetime) -> int:
         """Forget lookups that found nobody before `cutoff`, so they're tried again (the
         person may have joined Slack since); how many."""
-        with self._db.transaction() as conn:
-            return conn.execute(
-                "DELETE FROM slack_contacts WHERE source = ? AND slack_id IS NULL"
-                " AND (looked_up_at IS NULL OR looked_up_at < ?)",
-                (LOOKED_UP, cutoff.isoformat()),
-            ).rowcount
+        return self._contacts.forget_misses_before(cutoff)
 
     def set_contact(self, login: str, slack_id: str | None) -> None:
         """Set a person's Slack id by hand; it wins over imports from now on."""
-        self._db.execute(
-            "INSERT OR REPLACE INTO slack_contacts (login, slack_id, source) VALUES (?, ?, ?)",
-            (login, slack_id, DASHBOARD),
-        )
+        self._contacts.set_by_hand(login, slack_id)
 
     def unset_contact(self, login: str) -> bool:
         """Forget a person's Slack id; False if there was none. An import can bring it back."""
-        with self._db.transaction() as conn:
-            return conn.execute("DELETE FROM slack_contacts WHERE login = ?", (login,)).rowcount > 0
+        return self._contacts.forget(login)
 
     def set_team_channel(self, team: str, name: str | None, channel_id: str | None) -> None:
-        """Set a team's channel by hand; it wins over imports from now on."""
+        """Set a team's channel by hand, in place of the one set before."""
         self._db.execute(
-            "INSERT OR REPLACE INTO slack_team_channels VALUES (?, ?, ?, ?)",
-            (team, name, channel_id, DASHBOARD),
+            "INSERT OR REPLACE INTO slack_team_channels VALUES (?, ?, ?)", (team, name, channel_id)
         )
 
     def unset_team_channel(self, team: str) -> bool:
-        """Forget a team's channel; False if there was none. An import can bring it back."""
+        """Forget a team's channel; False if there was none. An import can set it again."""
         with self._db.transaction() as conn:
             return (
                 conn.execute("DELETE FROM slack_team_channels WHERE team = ?", (team,)).rowcount > 0
@@ -175,7 +171,7 @@ class SlackRepository:
                 ping.kind,
                 ping.message,
                 ping.sent_at.isoformat(),
-                DASHBOARD,
+                BY_HAND,
             ),
         )
 
@@ -188,24 +184,24 @@ class SlackRepository:
 
     def replace_imported(
         self, contacts: list[Contact], teams: list[TeamChannel], pings: list[Ping]
-    ) -> None:
-        """Replace what an earlier import read with these; what the dashboard wrote stays, and
-        wins where both name the same person or team. People without a Slack id are left out,
-        so they can still be looked up."""
+    ) -> list[str]:
+        """Replace the Slack ids and pings an earlier import read with these; what the
+        dashboard wrote stays, and wins where both name the same person. People without a
+        Slack id are left out, so they can still be looked up. Sets the teams' channels as if
+        by hand, but for teams that have one already; returns the teams it set."""
         with self._db.transaction() as conn:
-            for table in ("slack_contacts", "slack_team_channels", "slack_pings"):
-                conn.execute(f"DELETE FROM {table} WHERE source = ?", (IMPORTED,))
-            conn.executemany(  # over a lookup, but not over a value set by hand
-                "INSERT INTO slack_contacts (login, slack_id, source) VALUES (?, ?, ?)"
-                " ON CONFLICT (login) DO UPDATE"
-                " SET slack_id = excluded.slack_id, source = excluded.source"
-                " WHERE slack_contacts.source = ?",
-                [(c.login, c.slack_id, IMPORTED, LOOKED_UP) for c in contacts if c.slack_id],
+            self._contacts.replace_imported(
+                {c.login: c.slack_id for c in contacts if c.slack_id}, conn
             )
-            conn.executemany(
-                "INSERT OR IGNORE INTO slack_team_channels VALUES (?, ?, ?, ?)",
-                [(t.slug, t.channel_name, t.channel_id, IMPORTED) for t in teams],
-            )
+            conn.execute("DELETE FROM slack_pings WHERE source = ?", (IMPORTED,))
+            set_teams = [
+                t.slug
+                for t in teams
+                if conn.execute(
+                    "INSERT OR IGNORE INTO slack_team_channels VALUES (?, ?, ?)",
+                    (t.slug, t.channel_name, t.channel_id),
+                ).rowcount
+            ]
             conn.executemany(
                 "INSERT INTO slack_pings (pr_url, target, kind, message, sent_at, source)"
                 " VALUES (?, ?, ?, ?, ?, ?)",
@@ -214,3 +210,4 @@ class SlackRepository:
                     for p in pings
                 ],
             )
+        return set_teams
