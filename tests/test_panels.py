@@ -953,9 +953,13 @@ def test_whats_done_is_last_and_not_in_act_now_nor_its_fingerprint() -> None:
     ("said", "blocked"),
     [
         ("-", False),
+        ("–", False),
         ("nothing", False),
+        ("nothing yet", False),
         ("None.", False),
+        ("none, just waiting", False),
         ("n/a", False),
+        ("Not blocked yet", False),
         ("no reviewer yet", True),
         ("no one has reviewed", True),
         ("reviews", True),
@@ -968,12 +972,23 @@ def test_blocked_on_nothing_is_said_by_the_whole_line(said: str, blocked: bool) 
     assert any(t.startswith("blocked") for t in texts) == blocked
 
 
-def test_a_number_within_a_version_or_an_amount_is_no_mention_of_a_pr() -> None:
+@pytest.mark.parametrize(
+    ("text", "mentioned"),
+    [
+        ("bump to 1.2.5 and pay $5", False),
+        ("up 5% since 5.1", False),
+        ("see #5/#6", True),
+        ("PRs 4-5? no: just 5.", True),
+    ],
+)
+def test_a_number_within_a_version_or_an_amount_is_no_mention_of_a_pr(
+    text: str, mentioned: bool
+) -> None:
     url = "https://github.com/acme/widgets/pull/5"
-    noted = entry("APP-1 one", [todo("bump to 1.2.5 and pay $5", "quick")], Where=[url])
+    noted = entry("APP-1 one", [todo(text, "quick")], Where=[url])
     built = dashboard(
         work_items=[noted], github=snapshot(merged_recent=[pr(5, state="MERGED", merged_at=NOW)])
     )
     [item] = panel(built, "notes.todos").items
-    assert not any(link.strong for link in item.links if link.url == url)
-    assert "its PRs are done" not in item.badges
+    assert any(link.strong for link in item.links if link.url == url) == mentioned
+    assert ("its PRs are done" in item.badges) == mentioned

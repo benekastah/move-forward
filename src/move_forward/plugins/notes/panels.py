@@ -14,10 +14,12 @@ from .markdown import PR_URL_RE
 from .models import Condition, Entry, Ice, Todo
 
 NOT_BLOCKED_RE = re.compile(
-    r"\s*(nothing|none|no|not blocked|n/?a|-+|—)?\s*[.!]?\s*", re.IGNORECASE
+    r"\s*(?:(?:nothing|none|n/?a|not blocked)\b.*|(?:no|-+|–|—)?\s*[.!]?\s*)",
+    re.IGNORECASE | re.DOTALL,
 )
-"""A "Blocked on" that says it's on nothing, as a whole: "-", "none.", "n/a" (but not "no
-reviewer yet", which is blocked)."""
+"""A "Blocked on" that says it's on nothing: one starting "nothing", "none", "n/a" or "not
+blocked" ("nothing yet", "none, just waiting"), or one that's no more than "no", a dash or
+nothing; but not "no reviewer yet", which is blocked."""
 
 ENTRY = "notes.entry"
 ICED = "notes.iced"
@@ -151,7 +153,9 @@ def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph
     for u in urls:
         number = u.rsplit("/", 1)[1]
         mentioned = (
-            u in own_prs or re.search(rf"(?<![\w/.$-])#?{number}(?![\w%/-]|\.\d)", text) is not None
+            u in own_prs
+            or re.search(rf"#{number}\b", text) is not None
+            or re.search(rf"(?<![\w/.$#-]){number}(?![\w%/-]|\.\d)", text) is not None
         )
         links.append(Link(text=f"PR {number}", url=u, strong=mentioned, done=done.get(u, False)))
     links.sort(key=lambda link: not link.strong)

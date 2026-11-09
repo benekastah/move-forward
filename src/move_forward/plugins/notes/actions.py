@@ -314,9 +314,9 @@ def todo_new(req: ActionRequest[NotesConfig]) -> str:
     the todo instead, but not one on ice, where it would be hidden, nor twice."""
     ctx, graph = req.ctx, req.graph
     text, written = sized((req.fields.get("input") or "").strip())
-    text = entry_title(text.strip())
-    if not text:
+    if not text.strip():
         raise ActionError("the todo is empty")
+    text = entry_title(text.strip())
     if graph.hidden(Ref(kind=ENTRY, id=text)):
         raise ActionError(f"{text!r} is an entry on ice: thaw it, or name the todo otherwise")
     notes = NotesRepository(ctx.db)
