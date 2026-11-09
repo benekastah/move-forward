@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### `mfd slack contacts` is now `mfd slack destinations`
+
+It clashed with `mfd contacts`, which prints contact types. Its output and `--json` are
+unchanged: call `mfd slack destinations` instead.
+
 ### `[jira.teams]` is gone
 
 Jira never used it. A config that still has a `[jira.teams]` table is refused when it loads:

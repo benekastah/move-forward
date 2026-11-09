@@ -41,7 +41,7 @@ def test_setting_by_hand_checks_the_ids_and_wins_over_imports() -> None:
     assert slack.sources()["user:bob"] == "dashboard"
 
 
-def test_mfd_slack_contacts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_mfd_slack_destinations(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config = tmp_path / "config.toml"
     config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
 
@@ -51,7 +51,7 @@ def test_mfd_slack_contacts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     assert mfd("contact", "set", "alice", "U111111") == 0
     assert mfd("team", "set", "web", "#team-web", "--id", "C123456") == 0
     capsys.readouterr()
-    assert mfd("contacts", "--json") == 0
+    assert mfd("destinations", "--json") == 0
     listed = json.loads(capsys.readouterr().out)
     assert listed["people"] == [{"login": "alice", "slack_id": "U111111", "source": "dashboard"}]
     assert listed["teams"][0]["channel_id"] == "C123456"
