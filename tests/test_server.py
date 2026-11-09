@@ -658,7 +658,7 @@ def test_a_page_load_asks_for_no_refresh(app: server.App, monkeypatch: pytest.Mo
     clock = [1000.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
     app.refresh_now()
-    clock[0] += 299  # minutes since github's refresh, before it's due again
+    clock[0] += 299  # past a minute, but a second short of github's 300 s: not due
     app.dashboard_page()
     app.focus_page("", 0)
     assert app._pending == set()  # pyright: ignore[reportPrivateUsage]

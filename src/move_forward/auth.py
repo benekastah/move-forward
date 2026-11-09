@@ -13,10 +13,10 @@ can't learn the token, nor pass for the dashboard:
 1. `POST /login/challenge` answers `{"nonce": ...}`, a nonce good once, for
    `NONCE_SECONDS`.
 2. `POST /login/code` sends `{"nonce", "client_nonce", "proof"}`: a nonce of the client's
-   own, and `proof(token, "client", nonce, client_nonce)`. The nonce is used up whatever the
-   answer. With the right proof, the server answers `{"code", "proof"}`: a login code, good
-   once for `CODE_SECONDS`, and `proof(token, "server", client_nonce, code)`, which `mfd open`
-   checks before sending the browser anywhere.
+   own, and its proof that it knows the token. The nonce is used up whatever the answer.
+   With the right proof, the server answers `{"code", "proof"}`: a login code, good once for
+   `CODE_SECONDS`, and the server's own proof, which `mfd open` checks before sending the
+   browser anywhere. `Handshake` says what each proof signs.
 3. The browser opens `login_url`, `/login?code=…`, which uses up the code and starts a
    session of `SESSION_DAYS`: a random id that the database keeps only as its hash (see
    `repositories.SessionRepository`). Its cookie (`set_cookie`) is `HttpOnly` and

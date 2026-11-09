@@ -41,7 +41,8 @@ The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
 `db_path`, `db_backups` and `prune_days`. Each plugin that
 fetches refreshes on its own schedule, the `refresh_seconds` in its section
-(git every minute, github every 5, jira every 15, by default), and sooner when
+(github every 5 minutes, jira and mail every 15, git and git stack every 30 behind
+watching their repos, by default), and sooner when
 its plugin can tell cheaply that its tool has something new (each plugin's page
 says how). Loading the page refreshes nothing: the Refresh buttons (a plugin's, or the
 header's) and an item's ↻ do. Everything about a tool is
@@ -284,7 +285,8 @@ Buttons on a focused item come back to the same item afterwards.
 ## API
 
 Everything the page does goes through plain HTTP on `127.0.0.1:<port>`, so a
-script (or Claude) can drive it. Browsers use `mfd.localhost:<port>`. `mfd dump` prints the
+script (or Claude) can drive it. Browsers use `mfd.localhost:<port>` (browsers send every
+`*.localhost` name to this machine). `mfd dump` prints the
 same data as JSON.
 
 Every request must carry the dashboard's token, so other programs and users on the machine
