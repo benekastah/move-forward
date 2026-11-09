@@ -471,7 +471,7 @@ _KEY = re.compile(r"^([a-z_]+) =")
 def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, Any]) -> None:
     """Uncommenting `mfd init --example`'s section for a plugin gives a section it accepts, and
     so does taking what's behind `##` instead (several mailboxes, say): its tables, each a
-    mailbox of its own, and what every one of them sets moved out of the section."""
+    mailbox of its own, and what any of them sets moved out of the section."""
     section = _example_section(plugin)
     if section is None:
         return  # no section to give (notes: always on)
@@ -496,7 +496,7 @@ def _check_uncommented(plugin: Plugin[Any, Any], section: list[str]) -> None:
             tables.append(set())
         elif tables and (m := _KEY.match(line)):
             tables[-1].add(m[1])
-    moved: set[str] = tables[0].intersection(*tables[1:]) if tables else set()
+    moved: set[str] = set[str]().union(*tables)
     kept = [line for line in base if not ((m := _KEY.match(line)) and m[1] in moved)]
     text = "\n".join(
         [*kept, *(line for line in instead if line.startswith("[") or _KEY.match(line))]

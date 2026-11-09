@@ -30,7 +30,8 @@ _ACCOUNT = re.compile(r"[a-z][a-z0-9_]{0,29}")
 
 @dataclass(frozen=True)
 class Mailbox:
-    """One mailbox to read, as `[mail]` and its account (if any) say together."""
+    """One mailbox to read, as its account says (or `[mail]`, for its own), with what `[mail]`
+    says for all mail."""
 
     name: str
     """The account's name (`work` for `[mail.work]`); empty for `[mail]`'s own."""
@@ -81,62 +82,16 @@ def _message_url(value: str) -> str:
     return value
 
 
-class MailAccount(Strict):
-    """`[mail.<name>]`: one of several mailboxes. Each key is as `[mail]`'s, and one it leaves
-    out is `[mail]`'s, but for its password (`token_env`, `keychain_service`): its own."""
+class MailboxKeys(Strict):
+    """The keys that say one mailbox: `[mail]`'s own, or an account's, each complete."""
 
-    host: str | None = None
-    port: int | None = Field(default=None, ge=1, le=65535)
-    username: str | None = None
-    mailbox: str | None = None
-    sent_mailbox: str | None = None
-    message_url: str | None = None
-    auth_servers: list[str] | None = None
-    token_env: str | None = None
-    """`MAIL_PASSWORD_<NAME>` unless set (`MAIL_PASSWORD_WORK` for `[mail.work]`)."""
-    keychain_service: str | None = None
-    """`move-forward-mail-<name>` unless set; `mfd token set mail.<name>` stores it."""
-
-    @field_validator("host")
-    @classmethod
-    def _valid_host(cls, value: str | None) -> str | None:
-        return value if value is None else _host(value)
-
-    @field_validator("message_url")
-    @classmethod
-    def _valid_message_url(cls, value: str | None) -> str | None:
-        return value if value is None else _message_url(value)
-
-
-class MailConfig(TokenFields):
-    """`[mail]`: mailboxes read over IMAP, for their unread and flagged mail. Optional.
-
-    One mailbox is `[mail]`'s own `host` and `username`; several are its accounts, each a table
-    of its own (`[mail.home]`, `[mail.work]`), taking from `[mail]` what they leave out. It signs
-    in to each with its password (for Gmail, an app password) from `token_env`, else the
-    system's secret store, over TLS only: `[mail]`'s `token_env` and `keychain_service` are
-    its own mailbox's, and an account has its own. It reads them without changing them: only
-    the headers it needs, never a message's body, and nothing is marked read.
-    """
-
-    default_token_env: ClassVar[str] = DEFAULT_MAIL_TOKEN_ENV
-    default_keychain_service: ClassVar[str] = DEFAULT_MAIL_KEYCHAIN_SERVICE
-
-    token_env: str = ""
-    """The environment variable holding `[mail]`'s own password; an account has its own.
-    `MAIL_PASSWORD` unless set."""
-    keychain_service: str = ""
-    """The service `[mail]`'s own password is stored under in the system's secret store (the
-    macOS keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't
-    set; its account is the top-level `email`. An account has its own. `move-forward-mail`
-    unless set."""
     host: str = ""
-    """The IMAP server, e.g. `imap.gmail.com`: needed here unless every account says its own."""
+    """The IMAP server, e.g. `imap.gmail.com`."""
     port: int = Field(default=DEFAULT_PORT, ge=1, le=65535)
     """Its port for IMAP over TLS (IMAPS)."""
     username: str = ""
     """Who to sign in as, usually my address; also my address for telling mail sent to me from
-    mail I'm copied on. Needed here unless every account says its own."""
+    mail I'm copied on."""
     mailbox: str = DEFAULT_MAILBOX
     """The mailbox to read."""
     sent_mailbox: str = ""
@@ -153,8 +108,57 @@ class MailConfig(TokenFields):
     the authserv-id), e.g. `mx.google.com`: a sender counts as who `From` says only when that
     server found it authentic (DMARC passed), since anyone can write any `From`. Unset, it's
     known for Gmail; for another server, look for the name in a message's source. Empty, no
-    sender is verified. With accounts, only those on this `host` (whatever its case) without
-    their own take them, and the config is refused when none does."""
+    sender is verified."""
+
+    @field_validator("host")
+    @classmethod
+    def _valid_host(cls, value: str) -> str:
+        return _host(value)
+
+    @field_validator("message_url")
+    @classmethod
+    def _valid_message_url(cls, value: str) -> str:
+        return _message_url(value)
+
+
+MAILBOX_KEYS = tuple(MailboxKeys.model_fields)
+"""`[mail]`'s keys about its own mailbox, which an account says for itself instead."""
+
+
+class MailAccount(MailboxKeys):
+    """`[mail.<name>]`: one of several mailboxes, complete in itself: it takes nothing from
+    `[mail]`, and its password (`token_env`, `keychain_service`) is its own. `MailConfig`
+    refuses one without a `host` or a `username`, naming it."""
+
+    token_env: str = ""
+    """`MAIL_PASSWORD_<NAME>` unless set (`MAIL_PASSWORD_WORK` for `[mail.work]`)."""
+    keychain_service: str = ""
+    """`move-forward-mail-<name>` unless set; `mfd token set mail.<name>` stores it."""
+
+
+class MailConfig(TokenFields, MailboxKeys):
+    """`[mail]`: mailboxes read over IMAP, for their unread and flagged mail. Optional.
+
+    One mailbox is `[mail]`'s own `host` and `username`; several are its accounts, each a table
+    of its own (`[mail.home]`, `[mail.work]`) saying its own mailbox's keys (`MAILBOX_KEYS`),
+    while `[mail]` keeps what's for all mail. It signs in to each with its password (for Gmail,
+    an app password) from `token_env`, else the system's secret store, over TLS only:
+    `[mail]`'s `token_env` and `keychain_service` are its own mailbox's, and an account has its
+    own. It reads them without changing them: only the headers it needs, never a message's
+    body, and nothing is marked read.
+    """
+
+    default_token_env: ClassVar[str] = DEFAULT_MAIL_TOKEN_ENV
+    default_keychain_service: ClassVar[str] = DEFAULT_MAIL_KEYCHAIN_SERVICE
+
+    token_env: str = ""
+    """The environment variable holding `[mail]`'s own password; an account has its own.
+    `MAIL_PASSWORD` unless set."""
+    keychain_service: str = ""
+    """The service `[mail]`'s own password is stored under in the system's secret store (the
+    macOS keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't
+    set; its account is the top-level `email`. An account has its own. `move-forward-mail`
+    unless set."""
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=60)
     """How often the dashboard reads the mailboxes in the background; it also looks every couple
     of minutes for a change, and reads them at once if there is one."""
@@ -170,7 +174,7 @@ class MailConfig(TokenFields):
     "digest", "FYI": whole words, ignoring case; not a reply to me or mail from someone I know,
     and flagged mail still counts."""
     since_days: int = Field(default=DEFAULT_SINCE_DAYS, ge=1)
-    """Mail older than this is left out, flagged or not."""
+    """Mail older than this is left out, flagged or not, in every mailbox."""
     max_messages: int = Field(default=DEFAULT_MAX_MESSAGES, ge=1, le=2000)
     """The most unread messages read in each mailbox, newest first; flagged ones are read
     however many."""
@@ -182,97 +186,89 @@ class MailConfig(TokenFields):
     @model_validator(mode="before")
     @classmethod
     def _gather_accounts(cls, data: Any) -> Any:
-        """Each sub-table of `[mail]` is an account."""
+        """Each sub-table of `[mail]` is an account, which says its own mailbox's keys: `[mail]`
+        then says none, so that no account reads a mailbox it doesn't name itself."""
         if not isinstance(data, dict):
             return data
         section = cast(dict[str, Any], data)
         tables: dict[str, Any] = {k: v for k, v in section.items() if isinstance(v, dict)}
-        for name in tables:
+        if not tables:
+            return section
+        for name, table in tables.items():
             if not _ACCOUNT.fullmatch(name):
                 raise ValueError(
                     f"[mail.{name}]: an account's name is lower-case letters, digits and _"
                 )
-        if not tables:
-            return section
-        return {**{k: v for k, v in section.items() if k not in tables}, "accounts": tables}
-
-    @model_validator(mode="after")
-    def _complete(self) -> Self:
-        if (
-            self.accounts
-            and self.auth_servers is not None
-            and not any(self._takes_auth_servers(a) for a in self.accounts.values())
-        ):
-            # They're for [mail]'s host: an account on another keeps to its own.
-            raise ValueError(
-                "[mail] sets auth_servers, but no account takes them (each is on another host,"
-                " or sets its own): set them in the accounts they're for"
-            )
-        if self.accounts and self.username:
-            # Its own mailbox would stop being read, unnoticed, once accounts come.
+            if missing := [k for k in ("host", "username") if not table.get(k)]:
+                raise ValueError(
+                    f"[mail.{name}] needs its own {' and '.join(missing)}"
+                    + (
+                        ", as an account takes nothing from [mail]"
+                        if section.keys() & missing
+                        else ""
+                    )
+                )
+        if "username" in section:
             raise ValueError(
                 "[mail] has accounts, so its username names no mailbox: move it to an account"
                 " of its own ([mail.home]), with `mfd token set mail.home` for its password"
             )
-        self.mailboxes()  # each has a host and a username
+        if shared := [k for k in MAILBOX_KEYS if k in section]:
+            key = shared[0]
+            lacking = [f"[mail.{name}]" for name, table in tables.items() if key not in table]
+            raise ValueError(
+                f"[mail] has accounts, which take nothing from it, so its `{key}` is no"
+                " mailbox's: "
+                + (
+                    f"set `{key}` in {' and '.join(lacking)} if it was theirs, and remove it"
+                    " from [mail]"
+                    if lacking
+                    else "remove it"
+                )
+            )
+        return {**{k: v for k, v in section.items() if k not in tables}, "accounts": tables}
+
+    @model_validator(mode="after")
+    def _complete(self) -> Self:
+        if not self.accounts and not (self.host and self.username):
+            raise ValueError(
+                "[mail] needs a host and a username, or accounts ([mail.<name>]) that have them"
+            )
         return self
 
     def mailboxes(self) -> list[Mailbox]:
-        """The mailboxes to read: each account's, or `[mail]`'s own when it has none. Raises
-        ValueError for one without a host or a username."""
+        """The mailboxes to read: each account's, or `[mail]`'s own when it has none."""
         if not self.accounts:
-            return [self._mailbox("", MailAccount())]
-        return [self._mailbox(name, account) for name, account in self.accounts.items()]
+            return [self._mailbox("", self, self.token_env, self.keychain_service)]
+        return [
+            self._mailbox(
+                name,
+                account,
+                account.token_env or f"{DEFAULT_MAIL_TOKEN_ENV}_{name.upper()}",
+                account.keychain_service or f"{DEFAULT_MAIL_KEYCHAIN_SERVICE}-{name}",
+            )
+            for name, account in self.accounts.items()
+        ]
 
     def mailbox_named(self, name: str) -> Mailbox | None:
         """The mailbox called `name` (`""` for `[mail]`'s own); None when there's none."""
         return next((m for m in self.mailboxes() if m.name == name), None)
 
-    @field_validator("host")
-    @classmethod
-    def _valid_host(cls, value: str) -> str:
-        return _host(value)
-
-    @field_validator("message_url")
-    @classmethod
-    def _valid_message_url(cls, value: str) -> str:
-        return _message_url(value)
-
-    def _takes_auth_servers(self, account: MailAccount) -> bool:
-        """Whether `account` trusts `[mail]`'s `auth_servers`: it sets none of its own, and it's on
-        `[mail]`'s host (whose results headers they are), whatever its case."""
-        host = account.host if account.host is not None else self.host
-        return account.auth_servers is None and bool(host) and host.lower() == self.host.lower()
-
-    def _mailbox(self, name: str, account: MailAccount) -> Mailbox:
-        def said[T](mine: T | None, shared: T) -> T:
-            return mine if mine is not None else shared
-
-        host, username = said(account.host, self.host), said(account.username, self.username)
-        if not host or not username:
-            raise ValueError(
-                f"[mail.{name}] needs a host and a username, its own or [mail]'s"
-                if name
-                else "[mail] needs a host and a username, or accounts ([mail.<name>]) that have them"
-            )
+    def _mailbox(
+        self, name: str, keys: MailboxKeys, token_env: str, keychain_service: str
+    ) -> Mailbox:
+        """`keys`' mailbox, called `name`, with what `[mail]` says for every mailbox."""
         return Mailbox(
             name=name,
-            host=host,
-            port=said(account.port, self.port),
-            username=username,
-            mailbox=said(account.mailbox, self.mailbox),
-            sent_mailbox=said(account.sent_mailbox, self.sent_mailbox),
-            message_url=said(account.message_url, self.message_url),
-            auth_servers=self.auth_servers
-            if self._takes_auth_servers(account)
-            else account.auth_servers,
-            # A password is never shared: an account's isn't [mail]'s.
-            token_env=account.token_env or f"{DEFAULT_MAIL_TOKEN_ENV}_{name.upper()}"
-            if name
-            else self.token_env,
-            keychain_service=account.keychain_service or f"{DEFAULT_MAIL_KEYCHAIN_SERVICE}-{name}"
-            if name
-            else self.keychain_service,
+            host=keys.host,
+            port=keys.port,
+            username=keys.username,
+            mailbox=keys.mailbox,
+            sent_mailbox=keys.sent_mailbox,
+            message_url=keys.message_url,
+            auth_servers=keys.auth_servers,
+            token_env=token_env,
+            keychain_service=keychain_service,
             since_days=self.since_days,
             max_messages=self.max_messages,
             known_days=self.known_days,

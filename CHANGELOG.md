@@ -5,6 +5,18 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Each mail account says its own mailbox
+
+A `[mail.<name>]` account no longer takes what it leaves out from `[mail]`: each says its own
+`host` and `username`, and its `port`, `mailbox`, `sent_mailbox`, `message_url` and
+`auth_servers` where it doesn't want their defaults (993, `INBOX`, the server's sent mailbox,
+no link, and the servers known for its host). With accounts, `[mail]` sets none of those, only
+what's about all mail (`refresh_seconds`, `known_days`, `since_days`, `max_messages`,
+`urgent_words`, `low_words`). A config whose `[mail]` still sets one alongside accounts is
+refused, naming the key and the accounts that went without it: copy the key into each of those
+accounts it was for, then delete it from `[mail]`. Passwords are unchanged, as they were
+already each account's own.
+
 ### A page load no longer refreshes
 
 `refresh_on_load_seconds` is gone, and with it the refresh a page load asked for of every
