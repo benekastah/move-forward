@@ -121,5 +121,7 @@ def load(repo_dir: Path, required_marker: str = "") -> CodeOwners | None:
     for location in CODEOWNERS_LOCATIONS:
         path = repo_dir / location
         if path.exists():
-            return CodeOwners(path.read_text(encoding="utf-8"), required_marker)
+            return CodeOwners(
+                path.read_text(encoding="utf-8-sig", errors="replace"), required_marker
+            )
     return None

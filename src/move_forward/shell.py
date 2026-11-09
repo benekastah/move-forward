@@ -37,8 +37,11 @@ def run(
     cwd: Path | None = None,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
     input: str | None = None,
+    encoding: str = "utf-8",
 ) -> str:
-    """Run a command, with `input` on its stdin, and return its stdout.
+    """Run a command, with `input` on its stdin, and return its stdout, read as `encoding`:
+    UTF-8, which git, gh and git-stack write; a Windows tool of its own (`icacls`) writes in
+    the console's code page, `"oem"`.
 
     Raises CommandError if it exits non-zero, or if `stop` was called.
     """
@@ -49,9 +52,9 @@ def run(
         cwd=cwd,
         input=input,
         capture_output=True,
-        # Every tool here speaks UTF-8; Windows' default would be its code page. A byte that
-        # isn't UTF-8 (in a commit message, say) mustn't fail the whole read.
-        encoding="utf-8",
+        # Not Windows' default, its code page. A byte that isn't `encoding` (in a commit
+        # message, say) mustn't fail the whole read.
+        encoding=encoding,
         errors="replace",
         timeout=timeout,
         check=False,

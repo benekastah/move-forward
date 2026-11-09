@@ -41,7 +41,7 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
 
     def read(name: str) -> str:
         path = notes_dir / name
-        return path.read_text(encoding="utf-8") if path.exists() else ""
+        return path.read_text(encoding="utf-8-sig", errors="replace") if path.exists() else ""
 
     names = (markdown.WORK_NOTES_FILE, markdown.ON_ICE_FILE)
     if not any((notes_dir / name).exists() for name in names):

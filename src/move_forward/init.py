@@ -8,14 +8,13 @@ setup. Plugins left out are written as commented-out sections. The answers are v
 as a `Config` before the file is written.
 """
 
-import json
 import tomllib
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
-from . import asking, registry
+from . import asking, registry, tomledit
 from . import config as config_module
 from .asking import Asker, Complete, InitSetup, Prompt, choices, quiet
 from .config import Config
@@ -94,9 +93,8 @@ def offered() -> list[Plugin[Any, Any]]:
 
 
 def _toml_value(value: object) -> str:
-    """TOML for a string, int, or list of strings (JSON's quoting is valid TOML, with what isn't
-    ASCII written as itself: TOML refuses JSON's surrogate pairs)."""
-    return json.dumps(value, ensure_ascii=False)
+    """TOML for a string, int, or list of strings."""
+    return tomledit.value(value)
 
 
 def _table(name: str, values: dict[str, object], optional: str = "") -> str:
