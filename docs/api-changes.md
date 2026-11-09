@@ -9,19 +9,6 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
-## Version 3
-
-Core no longer models organisations, nor what a tool says of how much someone matters: no
-plugin published either, and a plugin that needs them can declare them.
-
-- **No `organisation` family**: `api.kinds.ORGANISATION` and `Organisation` have left `api`,
-  and core no longer ranks or badges ("key account") a person's items by an organisation
-  they point at. A plugin publishing organisations declares the family itself
-  (`Plugin.families`), as for any family core doesn't model.
-- **No `Person.importance`**: a person's items rank by their contact type alone (one I set,
-  or a tool's `Person.contact_type`), and the "VIP" badge is gone. A plugin that set it
-  publishes the person without it, or the graph leaves them out.
-
 ## Version 2
 
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
@@ -77,6 +64,13 @@ for themselves (a token, a request, an example config) is core's.
   body, and returns the answer's body. When there's no answer (no network, a timeout, a cut
   or garbled response) or an error status, it raises `api.http.RequestError`, whose `status`
   is the HTTP status, or None without one.
+- **No `organisation` family**: `api.kinds.ORGANISATION` and `Organisation` have left `api`,
+  and core no longer ranks or badges ("key account") a person's items by an organisation
+  they point at. A plugin publishing organisations declares the family itself
+  (`Plugin.families`), as for any family core doesn't model.
+- **No `Person.importance`**: a person's items rank by their contact type alone (one I set,
+  or a tool's `Person.contact_type`), and the "VIP" badge is gone. A plugin that set it
+  publishes the person without it, or the graph leaves them out.
 
 ## Version 1
 

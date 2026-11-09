@@ -183,10 +183,11 @@ Confluence, Notion, Figma). In order:
    tool's handle), not one email; `me` on core's `Person`, not just github's; how far an
    identity can be trusted, since an address in a header proves nothing (mail publishes a
    sender only when the receiving server verified them; a family-level `verified` would let
-   any plugin say so, and core join and trust only that: a person's contact type spreads to everyone with their email, and github's reviewer emails come from
-   commits, which anyone can author as someone else); and availability, which a calendar, an
-   on-call schedule or a Slack status can each give, so Slack feature 6 (Reviewer
-   availability) reads it from any of them rather than Slack alone.
+   any plugin say so, and core join and trust only that: a person's contact type spreads to
+   everyone with their email, and github's reviewer emails come from commits, which anyone
+   can author as someone else); and availability, which a calendar, an on-call schedule or a
+   Slack status can each give, so Slack feature 6 (Reviewer availability) reads it from any
+   of them rather than Slack alone.
 5. **What `Signals` can't say yet.** It has `due`, `waiting_since` and `importance` (where a
    plugin maps its tool's priority). Missing: a breach apart from `due` (a support SLA, an
    incident's acknowledgement), stakes apart from importance (a customer's tier, a deal's
