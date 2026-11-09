@@ -138,7 +138,10 @@ def collect(config: Mailbox, email: str, now: datetime) -> MailSnapshot:
         # flagged is what I marked, which a busy week of newsletters mustn't push out.
         [unread] = _ok(imap.uid("SEARCH", "SINCE", since, "UNSEEN"), "SEARCH")
         [flagged] = _ok(imap.uid("SEARCH", "SINCE", since, "FLAGGED"), "SEARCH")
-        newest = (unread if isinstance(unread, bytes) else b"").split()[-config.max_messages :]
+        # Newest by UID: a server needn't answer SEARCH in order.
+        newest = sorted((unread if isinstance(unread, bytes) else b"").split(), key=int)[
+            -config.max_messages :
+        ]
         marked = (flagged if isinstance(flagged, bytes) else b"").split()
         uids = sorted(set(newest) | set(marked), key=int)
         if not uids:
@@ -169,7 +172,7 @@ def collect(config: Mailbox, email: str, now: datetime) -> MailSnapshot:
         replies = bool(_referenced(headers) & sent)
         known = written[m.sender_email or ""] >= KNOWN_AFTER
         # Gmail's category is a guess, which a reply to me or someone I know outweighs.
-        filed_aside = m.uid in aside and not (replies or (known and m.verified))
+        filed_aside = m.uid in aside and not (m.verified and (replies or known))
         # A conversation is its Message-ID whichever mailbox has it, but one without any is
         # the message's own, by its UID: that mailbox's.
         thread = (
@@ -235,7 +238,7 @@ def _my_sent(
         _ok(imap.select(_quoted(mailbox), readonly=True), "EXAMINE")
         since = imap_date(now - timedelta(days=config.known_days))
         [found] = _ok(imap.uid("SEARCH", "SINCE", since), "SEARCH")
-        uids = (found if isinstance(found, bytes) else b"").split()[-SENT_CAP:]
+        uids = sorted((found if isinstance(found, bytes) else b"").split(), key=int)[-SENT_CAP:]
         ids: set[str] = set()
         written: Counter[str] = Counter()
         for start in range(0, len(uids), FETCH_CHUNK):
@@ -299,7 +302,9 @@ def status(config: Mailbox, email: str) -> str:
 
 
 def _message_ids(text: str) -> list[str]:
-    return _MESSAGE_ID.findall(text)
+    """The Message-IDs in a header, but those shaped like the ids given to mail without one
+    (`uid:...`): a sender naming one would join that conversation."""
+    return [m for m in _MESSAGE_ID.findall(text) if not m.lower().startswith("uid:")]
 
 
 def _gm_labels(meta: bytes) -> list[str]:
