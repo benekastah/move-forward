@@ -62,6 +62,6 @@ def test_the_fetched_table_names_every_fetchable_kind_and_what_it_carries() -> N
             if not spec.fetchable:
                 continue
             family = FAMILIES.get(kind)
-            model = spec.fetched_attrs or (family.fetched if family else None)
+            model = family.fetched if family else None
             fetchable[kind] = set(model.model_fields) if model else set()
     assert documented == fetchable

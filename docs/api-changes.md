@@ -21,6 +21,8 @@ Fewer things to know: what no plugin used is gone.
   soon after they change, it `watches` them.
 - **No `ctx.data_dir`**: `Context` loses `data_dir` and `data_root`. A plugin keeps what it
   needs in its tables or `ctx.kv`.
+- **No `KindSpec.fetched_attrs`**: a fetched entity's attributes fit its family's fetched
+  model, or else its kind's own attributes.
 
 ## Version 1
 

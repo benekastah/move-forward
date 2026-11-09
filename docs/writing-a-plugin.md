@@ -319,8 +319,8 @@ class LinearPlugin(...):
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
   graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune.
-  Each must say its `lifecycle`, and its attributes fit `KindSpec.fetched_attrs` (a
-  family's are core's: `PullRequestFetched`, `TicketFetched`), else any of the kind's own.
+  Each must say its `lifecycle`, and its attributes fit its family's fetched model (core's
+  `PullRequestFetched`, `TicketFetched`), else any of the kind's own.
 - A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
 - **Relations.** What only your plugin knows links one of its entities to another's (a PR
   to its local branch) goes in `relate(req)`, as `(mine, theirs)` pairs; see
