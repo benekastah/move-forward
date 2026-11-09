@@ -5,6 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### `mfd token set` refuses a shared keychain service
+
+`mfd token set <plugin>` now refuses, exiting 1, when another plugin's section names the same
+`keychain_service`: storing one token would replace the other's. Give each section its own.
+
 ### vCard address books
 
 A `[vcard]` section (`paths`, `group_importance`, `group_types`, `refresh_seconds`) reads an

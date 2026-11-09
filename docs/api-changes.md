@@ -15,6 +15,10 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **What a token setting is**: `api.keychain.TokenSettings`, anything with a `token_env` and a
+  `keychain_service` (read-only), so a plugin can annotate `token_settings` and return frozen
+  settings. `mfd token set` refuses to store a token whose `keychain_service` another plugin's
+  shares, as one would replace the other's.
 - **Organisations**: core declares the `organisation` family (`api.kinds.ORGANISATION`,
   `Organisation`: `handle`, `contact_type`, `importance`), with ids `<host>/<its id there>`.
   A person points at theirs, and its type or importance counts for that person's items as

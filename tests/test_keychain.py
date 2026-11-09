@@ -211,3 +211,26 @@ def test_mfd_token_finds_a_plugins_token_by_its_token_settings(
     config.write_text(config.read_text() + '[github]\norg = "acme"\n')
     assert cli.main(["-c", str(config), "token", "check"]) == 0
     assert "github: from $GITHUB_PAT" in capsys.readouterr().out
+
+
+def test_mfd_token_set_refuses_a_token_whose_service_another_shares(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stored: list[str] = []
+
+    def write(service: str, account: str, secret: str) -> None:
+        stored.append(service)
+
+    monkeypatch.setattr(keychain, "write", write)
+    config = _config(tmp_path)
+    config.write_text(
+        config.read_text().replace(
+            'site = "https://j"', 'site = "https://j"\nkeychain_service = "shared"'
+        )
+        + '[slack]\nkeychain_service = "shared"\n'
+    )
+    assert cli.main(["-c", str(config), "token", "set", "jira"]) == 1
+    assert "jira and slack share keychain_service 'shared'" in capsys.readouterr().err
+    assert stored == []
+    assert cli.main(["-c", str(config), "token", "check"]) == 0  # the rest still works
+    assert cli.main(["-c", str(config), "token", "rotate"]) == 0
