@@ -2,8 +2,17 @@
 
 from datetime import UTC, datetime, timedelta
 
-from move_forward import prune
+import pytest
+from conftest import entry, pr, snapshot, stored
+
+from move_forward import prune, refresh
 from move_forward.db import Database
+from move_forward.graph import Ref
+from move_forward.plugin import PruneRequest, SourceError
+from move_forward.plugins.notes.config import NotesConfig
+from move_forward.plugins.notes.plugin import NotesPlugin
+from move_forward.registry import enabled
+from move_forward.repositories import TagRepository
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
 
@@ -21,3 +30,27 @@ def test_plugins_prune_once_a_day() -> None:
     assert len(runs) == 1
     prune.prune_if_due(db, NOW + timedelta(days=1), plugins)
     assert len(runs) == 2
+
+
+def test_a_failing_fetch_in_cores_clean_up_leaves_the_rest_of_it_and_the_plugins_to_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, db = stored(github=snapshot(mine=[pr(1)]), work_items=[entry("Chores", [])])
+    gone = Ref(kind="notes.entry", id="Gone")
+    TagRepository(db).add(gone, "chores", NOW)
+    ran: list[str] = []
+
+    def failing(repo: object, graph: object) -> int:
+        raise SourceError("the token can't fetch")
+
+    def notes_prune(self: NotesPlugin, req: PruneRequest[NotesConfig]) -> list[str]:
+        ran.append("notes")
+        return []
+
+    monkeypatch.setattr(refresh.priority, "forget_finished", failing)
+    monkeypatch.setattr(NotesPlugin, "prune", notes_prune)
+    plugins = enabled(config, db, NOW)
+    graph, _ = refresh.stored_graph(db, plugins)
+    notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
+    assert "tags: took my tags off 1 entity(ies) that are gone" in notices
+    assert ran == ["notes"]

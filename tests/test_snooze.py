@@ -1,6 +1,10 @@
-from datetime import UTC, datetime, timedelta, timezone
+import sys
+import time
+from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import time as dt_time
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 import pytest
 from conftest import NOW, pr, snapshot, stored
@@ -128,3 +132,43 @@ def test_unsnooze_from_a_stale_page_leaves_a_pin_made_since() -> None:
     fields = {"kind": key[0], "id": key[1], "task": key[2], "fingerprint": "f"}
     assert refresh.run_action(config, db, "act_now/unsnooze", fields) == "back"
     assert feedback.all()[key].action == "pin"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no time.tzset to set the zone")
+def test_a_snooze_across_a_clock_change_ends_at_its_hour_in_the_systems_zone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(localtime, "zone", None)  # the system's, as `mfd serve` runs
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    try:
+        before = datetime(2026, 10, 31, 16, tzinfo=UTC)  # Saturday, summer time
+        ends = ActNowConfig(snooze_until_hour=9).snooze_until("pull_request", before)
+        assert ends == datetime(2026, 11, 1, 14, tzinfo=UTC)  # 09:00 EST, the day it ends
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+
+
+def test_a_local_time_on_a_day_takes_that_days_offset_through_a_gap_and_a_fold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(localtime, "zone", ZoneInfo("America/New_York"))
+    assert localtime.at(date(2026, 11, 1), dt_time(9)).astimezone(UTC) == datetime(
+        2026, 11, 1, 14, tzinfo=UTC
+    )
+    assert localtime.at(date(2026, 10, 31), dt_time(9)).astimezone(UTC) == datetime(
+        2026, 10, 31, 13, tzinfo=UTC
+    )
+    # 01:30 happens twice on the day clocks go back: the first, still summer time.
+    assert localtime.at(date(2026, 11, 1), dt_time(1, 30)).astimezone(UTC) == datetime(
+        2026, 11, 1, 5, 30, tzinfo=UTC
+    )
+    ends = ActNowConfig(snooze_until_hour=9).snooze_until(
+        "pull_request", datetime(2026, 10, 31, 16, tzinfo=UTC)
+    )
+    assert ends.astimezone(UTC) == datetime(2026, 11, 1, 14, tzinfo=UTC)  # a snooze across it
+    # 02:30 doesn't happen on the day they go forward: read as an hour on, not refused.
+    assert localtime.at(date(2026, 3, 8), dt_time(2, 30)).astimezone(UTC) == datetime(
+        2026, 3, 8, 7, 30, tzinfo=UTC
+    )

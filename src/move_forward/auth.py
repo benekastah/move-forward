@@ -255,4 +255,7 @@ def notice_from(token: str, cookie: str | None) -> str | None:
         return None
     signature, _, quoted = value.partition(".")
     notice = unquote(quoted)
-    return notice if hmac.compare_digest(_sign(token, notice), signature) else ""
+    # As bytes: compare_digest refuses a str that isn't ASCII, and any page on another port of
+    # this host can set the cookie to one.
+    signed = hmac.compare_digest(_sign(token, notice).encode(), signature.encode())
+    return notice if signed else ""

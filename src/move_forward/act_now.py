@@ -134,10 +134,7 @@ class ActNowConfig(Strict):
         """When a snooze of an item about a `kind` of subject, made at `now`, ends: that many
         local days on, at `snooze_until_hour`."""
         days = max(self.snooze_days.get(kind, self.default_snooze_days), 1)
-        local = localtime.local(now)
-        return datetime.combine(
-            local.date() + timedelta(days=days), time(self.snooze_until_hour), local.tzinfo
-        )
+        return localtime.at(localtime.day(now) + timedelta(days=days), time(self.snooze_until_hour))
 
 
 def _listed_parts(item: Item) -> list[Item]:

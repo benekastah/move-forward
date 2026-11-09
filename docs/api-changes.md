@@ -15,6 +15,8 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **A local time on a day**: `api.localtime.at(day, time)` gives the local clock time on a
+  day, at that day's offset, so a time across a summer-time change keeps its clock time.
 - **Several tokens**: `Plugin.tokens(config)` names every token a plugin keeps, `""` for its
   own (by default `token_settings`'s) and one per account for a plugin reading several;
   `mfd token set <plugin>.<account>` stores one, and the config is refused when two tokens,

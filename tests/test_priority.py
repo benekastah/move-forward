@@ -9,6 +9,7 @@ from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.page import Action, Item, Signals
+from move_forward.plugin import SourceError
 from move_forward.repositories import PriorityRepository
 
 PR = Ref(kind="pull_request", id="https://github.com/o/r/pull/1")
@@ -220,3 +221,19 @@ def test_a_pr_the_graph_lacks_is_looked_up_and_kept_when_it_cannot_be_found() ->
     repo.set(lost, 2, NOW)
     assert priority.forget_finished(repo, graph) == 1
     assert set(repo.all()) == {lost}
+
+
+def test_a_kind_whose_lookup_fails_keeps_its_priorities_and_the_others_are_looked_up() -> None:
+    pr, ticket = Ref(kind="pull_request", id="old"), Ref(kind="ticket", id="https://j/APP-9")
+
+    def fetch(kind: str, ids: list[str]) -> list[Entity]:
+        if kind == "pull_request":
+            raise SourceError("the token can't fetch")
+        return [Entity(ref=Ref(kind=kind, id=i), title="t", lifecycle="done") for i in ids]
+
+    graph = Graph([], fetch=fetch, kinds=KINDS)
+    repo = PriorityRepository(Database(":memory:"))
+    for ref in (pr, ticket):  # the PR first: its failure mustn't stop the ticket's lookup
+        repo.set(ref, 1, NOW)
+    assert priority.forget_finished(repo, graph) == 1
+    assert set(repo.all()) == {pr}

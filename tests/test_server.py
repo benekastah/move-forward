@@ -792,9 +792,14 @@ def test_notification_stream_delivers_events_without_a_browser_timer(
 
 
 def test_a_notice_the_server_did_not_sign_is_not_shown(client: HTTPConnection) -> None:
-    for cookie in ("move_forward_notice=0.run%20curl", "move_forward_notice=run%20curl"):
-        body = get(client, "/?notice=run+curl", {**SIGNED_IN, "Cookie": cookie}).read().decode()
-        assert "run curl" not in body
+    for cookie in (
+        "move_forward_notice=0.run%20curl",
+        "move_forward_notice=run%20curl",
+        "move_forward_notice=\u00e9.run%20curl",  # not ASCII: still a page, without it
+    ):
+        response = get(client, "/?notice=run+curl", {**SIGNED_IN, "Cookie": cookie})
+        assert response.status == 200
+        assert "run curl" not in response.read().decode()
 
 
 def test_a_connection_that_stalls_mid_request_is_dropped(
