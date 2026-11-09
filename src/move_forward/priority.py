@@ -4,9 +4,13 @@ A priority on an entity counts for the items about it, and about what it's part 
 a PR's items carry its ticket's and its work entry's, a work entry's carry its todos'.
 """
 
+import logging
+
 from .act_now import PriorityOf
 from .graph import Entity, Graph, Ref
 from .repositories import PriorityRepository
+
+log = logging.getLogger(__name__)
 
 TODO = "notes.todo"
 """The kind of a work entry's todo, published by notes."""
@@ -52,7 +56,8 @@ def forget_finished(repo: PriorityRepository, graph: Graph) -> int:
     (`KindSpec.gone_means_done`: notes' entries and todos). One of a kind that can be fetched
     (`KindSpec.fetchable`: a PR long closed, a ticket) that the graph lacks is looked up; one
     that can't be found keeps its priority, and so does one of any other kind (a branch can
-    be missing while git's last refresh failed). How many were cleared."""
+    be missing while git's last refresh failed). A kind whose lookup fails keeps them, for the
+    next day. How many were cleared."""
     cleared = 0
     marks = repo.all()
     missing: dict[str, list[Ref]] = {}
@@ -70,7 +75,11 @@ def forget_finished(repo: PriorityRepository, graph: Graph) -> int:
             repo.clear(ref)
             cleared += 1
     for kind, refs in missing.items():
-        fetched = graph.fetch(kind, [r.id for r in refs])
+        try:  # one kind's plugin failing (a token gone bad) leaves the others to be looked up
+            fetched = graph.fetch(kind, [r.id for r in refs])
+        except Exception:
+            log.exception("looking up finished %s for their priorities failed", kind)
+            continue
         for ref in refs:
             if (entity := fetched.get(ref.id)) is not None and _finished(entity):
                 repo.clear(ref)
