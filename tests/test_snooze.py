@@ -14,6 +14,7 @@ from move_forward.act_now import ActNowConfig, Feedback
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Ref
+from move_forward.plugins.github.models import Check
 from move_forward.repositories import FeedbackRepository
 
 
@@ -87,7 +88,8 @@ def test_only_the_task_given_is_snoozed_and_nothing_without_a_button() -> None:
 
 
 def test_a_task_given_is_snoozed_alone_among_the_entitys_others() -> None:
-    mine = pr(1, mergeable="CONFLICTING", rollup_state="FAILURE")  # conflicts, and CI failing
+    failing = [Check(name="tests", state="FAILURE", url="https://ci/1")]
+    mine = pr(1, mergeable="CONFLICTING", checks=failing)  # conflicts, and CI failing
     config, db = stored(github=snapshot(mine=[mine]))
     ref = Ref(kind="pull_request", id=mine.url)
     assert _snooze(config, db, ref, "resolve_conflicts")

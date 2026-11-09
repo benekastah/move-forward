@@ -671,9 +671,8 @@ def snooze_item(
         feedback.say(
             (kind, id, task), Feedback(action="snooze", fingerprint=fingerprint, until=until), now
         )
-        end = end or until  # the item's own, the first member
-    if end is None:
-        raise ValueError("a Snooze button names the item it snoozes")
+        end = end or until  # the item's own: `_members` gives it first
+    assert end is not None, "a Snooze button always names its own item"
     return end
 
 
