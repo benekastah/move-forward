@@ -27,11 +27,11 @@ An action that touched a PR (a ping, a reaction) and `mfd refresh --subject pull
 
 Such a refresh fetches only the PRs that changed, in one request, and places them in the
 lists the searches fill (mine, merged or closed; requesting my review or my team's;
-reviewed by me), keeping the rest as they were. A CI run's notification names its repo,
+reviewed by me; mentioning me), keeping the rest as they were. A CI run's notification names its repo,
 not its PR, so it fetches my open PRs in that repo; one about what no search shows (an
 issue, a discussion, a release, a commit comment, a security alert) fetches nothing. Every
 search runs instead when `refresh_seconds` have passed since they last did, for a
-notification about anything else, when more PRs changed than a search page holds (25), and
+notification about anything else, when more PRs changed than a search page holds (20), and
 when fetching the PRs fails. A PR that newly concerns me without a notification (one I
 just opened, say) waits for that.
 
@@ -104,7 +104,7 @@ labels as its tags but `placeholder_labels` and `split_pr_labels`, which are abo
   `merge_queue_eviction_days` (2), unless the PR is back in the queue, was queued again, or
   is green now. Checks
   named in `policy_checks` never count as failures. One whose failing checks name a finished Actions
-  run of its repo has Rerun failed.
+  run of its repo has Rerun failed, as it does in Fix before review.
 - **PR policy**: failing checks named in `policy_checks`, linked to their details, which
   say what's missing (a label, an assignee); not one only waiting for a review, until the PR
   is approved and it still fails.
@@ -113,7 +113,8 @@ labels as its tags but `placeholder_labels` and `split_pr_labels`, which are abo
   CODEOWNERS gives me or my teams, when there are some: "my part: 12 lines in 2 of 119
   files". The PR's badges still show the whole PR. Without owned files, the whole PR sizes it.
 - **Needs a reviewer**: the assignment reasons from Fix before review, on PRs not in the merge
-  queue, with recent committers suggested for PRs requesting a team. GitHub's `reviewDecision` is null where
+  queue, with recent committers to what the PR changes suggested (from a local checkout of its
+  repo, leaving out those already asked). GitHub's `reviewDecision` is null where
   the base branch requires no review; Ready to merge asks for no approval there. These PRs,
   here and in Fix before review, have a field to request a reviewer, suggesting the requested
   teams' members as far as they're known, then recent committers; any login can be typed.

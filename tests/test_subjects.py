@@ -10,11 +10,9 @@ from conftest import NOW, issue, pr, snapshot, stored
 from move_forward import refresh, registry
 from move_forward.graph import Ref
 from move_forward.plugin import Subjects, SubjectsRequest
-from move_forward.plugins.github import client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
-from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.models import JiraSnapshot
 
 PR_1 = Ref(kind="pull_request", id=pr(1).url)
@@ -59,32 +57,6 @@ def test_a_plugin_taking_too_long_is_refreshed_whole(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(_Recording, "subjects_timeout_seconds", 0.05)
     config, db = stored(github=snapshot(mine=[pr(1)]))
     assert refresh.refresh_subjects(config, db, [PR_1], NOW) == {"github"}
-
-
-def test_github_fetches_one_pr_and_keeps_the_rest_of_its_lists(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config, db = stored(github=snapshot(mine=[pr(1), pr(2)]))
-    asked: list[list[client.PrId]] = []
-
-    def fetch_prs(host: str, ids: list[client.PrId]) -> list[object]:
-        asked.append(ids)
-        return [pr(1, title="Fixed it")]
-
-    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
-    assert refresh.refresh_subjects(config, db, [PR_1], NOW) == set()
-    assert asked == [[client.PrId(repo="acme/widgets", number=1)]]
-    kept = PrRepository(db).load()
-    assert kept is not None
-    assert [(p.number, p.title) for p in kept.mine] == [(1, "Fixed it"), (2, pr(2).title)]
-
-
-def test_a_url_that_isnt_one_of_the_hosts_prs_isnt_fetched() -> None:
-    from move_forward.plugins.github.plugin import pr_id_of
-
-    assert pr_id_of("github.com", pr(1).url) == client.PrId(repo="acme/widgets", number=1)
-    assert pr_id_of("github.com", "https://github.acme.com/a/b/pull/1") is None
-    assert pr_id_of("github.com", "https://github.com/a/b/issues/1") is None
 
 
 @pytest.mark.usefixtures("recording")

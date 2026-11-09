@@ -72,6 +72,8 @@ def test_suggest_reviewers_counts_recent_committers_with_known_logins(tmp_path: 
     }
     suggestions = derive.suggest_reviewers(local, ["api/new.py"], 30, emails, exclude={"me"})
     assert [(s.login, s.commits) for s in suggestions] == [("alice", 2), ("bob", 1)]
+    asked = derive.suggest_reviewers(local, ["api/new.py"], 30, emails, exclude={"Me", "BOB"})
+    assert [s.login for s in asked] == ["alice"]  # logins ignore case
 
 
 def test_a_checkout_scores_its_prs_whatever_case_its_remote_names_the_repo_in(
@@ -84,3 +86,34 @@ def test_a_checkout_scores_its_prs_whatever_case_its_remote_names_the_repo_in(
     assert asked.repo == "acme/widgets"
     found = derive.collect(snapshot(team_requests=[asked]), [checkout], {}, "acme", ["core"], 90)
     assert found.team_scores[asked.url].my_files == 1  # in a dir I work in, below it
+
+
+def test_each_of_my_prs_in_a_checkout_gets_suggestions_but_whom_it_asked(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    _commit(repo, "alice@x", "api/a.py")
+    _commit(repo, "alice@x", "api/c.py")
+    _commit(repo, "bob@x", "api/b.py")
+    git(repo, "update-ref", "refs/remotes/upstream/main", "HEAD")
+    local = derive.Checkout(
+        github_repo="acme/widgets",
+        dir=str(repo),
+        default_branch="main",
+        default_refs=["upstream/main"],
+    )
+    unasked = pr(1, files=["api/x.py"])  # no reviewer requested, of no team
+    asked_bob = pr(2, files=["api/x.py"], requested_users=["bob"])
+    elsewhere = pr(3, files=["api/x.py"], repo="acme/other")  # no checkout of it
+    theirs = pr(4, author="alice", files=["api/x.py"])
+    github = snapshot(mine=[unasked, asked_bob, elsewhere], direct_requests=[theirs])
+    emails = {"alice": "alice@x", "bob": "bob@x"}
+    found = derive.collect(github, [local], emails, "acme", [], 30).suggestions
+    assert {url: [s.login for s in s_] for url, s_ in found.items()} == {
+        unasked.url: ["alice", "bob"],
+        asked_bob.url: ["alice"],
+    }
+    picked = derive.collect(
+        github, [local], emails, "acme", [], 30, wants_reviewer=lambda pr: pr.number == 2
+    )
+    assert list(picked.suggestions) == [asked_bob.url]  # only what wants_reviewer picks

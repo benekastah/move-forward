@@ -7,13 +7,15 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from conftest import ME, NOW, pr, snapshot
+from conftest import ME, NOW, pr, snapshot, stored
 from legacy import save_json_snapshot
 
+from move_forward import refresh
 from move_forward.db import Database
-from move_forward.graph import Graph
+from move_forward.graph import Graph, Ref
 from move_forward.page import Identity
 from move_forward.plugin import (
+    AfterCollectRequest,
     CollectRequest,
     Context,
     EntitiesRequest,
@@ -21,8 +23,9 @@ from move_forward.plugin import (
     IdentityRequest,
     PruneRequest,
     StoreRequest,
+    SubjectsRequest,
 )
-from move_forward.plugins.github import client
+from move_forward.plugins.github import client, derive
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import (
     Check,
@@ -36,7 +39,14 @@ from move_forward.plugins.github.models import (
     TimelineEvent,
 )
 from move_forward.plugins.github.people import PeopleRepository
-from move_forward.plugins.github.plugin import CHANGED, EVERYTHING, LAST_FULL, GitHubPlugin
+from move_forward.plugins.github.plugin import (
+    CHANGED,
+    EVERYTHING,
+    LAST_FULL,
+    GitHubPlugin,
+    pr_id_of,
+    wants_reviewer,
+)
 from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository
 from move_forward.plugins.github.tables import MIGRATIONS
 from move_forward.repositories import KvRepository
@@ -380,6 +390,104 @@ def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     found = GitHubPlugin().collect(CollectRequest(ctx))
     assert found.team_members == ["ann"]  # mine, not acme/x's
+
+
+def test_a_refresh_of_one_pr_keeps_the_rest_of_its_lists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, db = stored(github=snapshot(mine=[pr(1), pr(2)]))
+    asked: list[list[client.PrId]] = []
+
+    def fetch_prs(host: str, ids: list[client.PrId]) -> list[object]:
+        asked.append(ids)
+        return [pr(1, title="Fixed it")]
+
+    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
+    one = Ref(kind="pull_request", id=pr(1).url)
+    assert refresh.refresh_subjects(config, db, [one], NOW) == set()
+    assert asked == [[client.PrId(repo="acme/widgets", number=1)]]
+    kept = PrRepository(db).load()
+    assert kept is not None
+    assert [(p.number, p.title) for p in kept.mine] == [(1, "Fixed it"), (2, pr(2).title)]
+
+
+def test_a_url_that_isnt_one_of_the_hosts_prs_isnt_fetched() -> None:
+    assert pr_id_of("github.com", pr(1).url) == client.PrId(repo="acme/widgets", number=1)
+    assert pr_id_of("github.com", "https://github.acme.com/a/b/pull/1") is None
+    assert pr_id_of("github.com", "https://github.com/a/b/issues/1") is None
+
+
+@pytest.mark.parametrize(
+    ("fields", "repos", "wanted"),
+    [
+        ({}, [], True),
+        ({"in_merge_queue": True}, [], False),
+        ({"is_draft": True}, [], False),
+        ({"is_draft": True}, ["ACME/widgets"], True),  # a draft may get its primary reviewer
+    ],
+)
+def test_reviewers_are_suggested_where_one_may_yet_be_picked(
+    fields: dict[str, object], repos: list[str], wanted: bool
+) -> None:
+    config = GitHubConfig(org="acme", primary_reviewer_repos=repos)
+    assert wants_reviewer(config, pr(1, **fields)) is wanted
+
+
+def test_after_collect_suggests_reviewers_only_where_one_may_be_picked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    picked: list[int] = []
+
+    def collect(*args: object, wants_reviewer: Callable[[PullRequest], bool]) -> DerivedSnapshot:
+        mine = [pr(1), pr(2, in_merge_queue=True), pr(3, is_draft=True)]
+        picked.extend(p.number for p in mine if wants_reviewer(p))
+        return DerivedSnapshot()
+
+    monkeypatch.setattr(derive, "collect", collect)
+    ctx = _context()
+    PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
+    GitHubPlugin().after_collect(AfterCollectRequest(ctx, Graph()))
+    assert picked == [1]
+
+
+def test_refreshing_subjects_fetches_those_prs_into_their_lists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked: list[list[client.PrId]] = []
+
+    def fetch_prs(host: str, ids: list[client.PrId]) -> list[PullRequest]:
+        asked.append(ids)
+        return [pr(1, title="Renamed"), pr(3, author="alice", requested_users=[ME])]
+
+    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
+    ctx = _context()
+    stored = snapshot(mine=[pr(1), pr(2)])
+    refs = [Ref(kind="pull_request", id=pr(n).url) for n in (1, 3, 4)]  # 4: gone
+    found = GitHubPlugin().refresh_subjects(SubjectsRequest(ctx, refs, stored))
+    assert found is not None
+    assert asked == [[client.PrId(repo="acme/widgets", number=n) for n in (1, 3, 4)]]
+    assert [(p.number, p.title) for p in found.snapshot.mine] == [(1, "Renamed"), (2, "PR 2")]
+    assert [p.number for p in found.snapshot.direct_requests] == [3]
+    assert found.updated == refs[:2]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.example.com/acme/widgets/pull/1",  # another host
+        "https://github.com/acme/widgets/issues/1",
+        "https://github.com/acme/widgets/pull/x",
+    ],
+)
+def test_refreshing_what_isnt_one_of_the_hosts_prs_falls_back_to_a_refresh(url: str) -> None:
+    ref = Ref(kind="pull_request", id=url)
+    plugin = GitHubPlugin()
+    assert plugin.refresh_subjects(SubjectsRequest(_context(), [ref], snapshot())) is None
+
+
+def test_refreshing_subjects_before_a_first_refresh_waits_for_it() -> None:
+    ref = Ref(kind="pull_request", id=pr(1).url)
+    assert GitHubPlugin().refresh_subjects(SubjectsRequest(_context(), [ref], None)) is None
 
 
 def test_the_daily_prune_looks_up_old_misses_again() -> None:

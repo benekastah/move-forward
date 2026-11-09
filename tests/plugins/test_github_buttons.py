@@ -115,8 +115,9 @@ def test_a_ci_failure_with_failed_runs_can_run_them_again(monkeypatch: pytest.Mo
         ],
     )
     built = dashboard(github=snapshot(mine=[failing]), policy_checks=["policy"])
-    [item] = panel(built, "github.ci_failures").items
-    assert [a.label for a in item.actions if a.name == RERUN_FAILED] == ["Rerun failed"]
+    for key in ("github.ci_failures", "github.fix_before_review"):  # wherever "CI failing" is
+        [item] = panel(built, key).items
+        assert [a.label for a in item.actions if a.name == RERUN_FAILED] == ["Rerun failed"]
     commands = _commands(monkeypatch)
     config, db = stored(github=snapshot(mine=[failing]), policy_checks=["policy"])
     result = perform_action(config, db, RERUN_FAILED, {"pr": URL})
