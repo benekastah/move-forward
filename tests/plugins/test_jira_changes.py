@@ -20,13 +20,14 @@ def test_the_plugin_says_changed_when_a_ticket_of_mine_was_updated_since_it_look
     asked: list[dict[str, object]] = []
     answers = ['{"issues": [{"key": "APP-1"}]}', '{"issues": []}']
 
-    def search_page(
-        config: JiraConfig, email: str, api_token: str, body: dict[str, object]
+    def request(
+        config: JiraConfig, email: str, api_token: str, path: str, body: dict[str, object]
     ) -> bytes:
+        assert path == client.SEARCH_PATH
         asked.append(body)
         return answers.pop(0).encode()
 
-    monkeypatch.setattr(client, "_search_page", search_page)
+    monkeypatch.setattr(client, "_request", request)
     monkeypatch.setenv("JIRA_API_TOKEN", "t")
     db = Database(":memory:")
     plugin = JiraPlugin()
