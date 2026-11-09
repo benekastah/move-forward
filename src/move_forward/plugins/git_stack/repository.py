@@ -31,7 +31,25 @@ MIGRATIONS = [
             json_each(repo.value, '$.branches') AS branch
         WHERE snapshots.source = 'git_stack' AND snapshots.payload IS NOT NULL;
     """,
-    )
+    ),
+    Migration(
+        "0002_drop_current",
+        """
+    CREATE TABLE git_stack_branches_new (  -- fetched: `git stack info` in each checkout
+        repo_dir TEXT NOT NULL,
+        position INTEGER NOT NULL,     -- git stack info's order
+        name TEXT NOT NULL,
+        parent TEXT,                   -- NULL for a root, e.g. main
+        status TEXT,
+        stack_group TEXT,
+        PRIMARY KEY (repo_dir, name)
+    );
+    INSERT INTO git_stack_branches_new
+        SELECT repo_dir, position, name, parent, status, stack_group FROM git_stack_branches;
+    DROP TABLE git_stack_branches;
+    ALTER TABLE git_stack_branches_new RENAME TO git_stack_branches;
+    """,
+    ),
 ]
 """The git_stack plugin's migrations."""
 
@@ -45,9 +63,9 @@ class StackRepository:
         with self._db.transaction() as conn:
             conn.execute("DELETE FROM git_stack_branches")
             conn.executemany(
-                "INSERT INTO git_stack_branches VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO git_stack_branches VALUES (?, ?, ?, ?, ?, ?)",
                 [
-                    (repo.dir, i, b.name, b.parent, b.status, b.current, b.group)
+                    (repo.dir, i, b.name, b.parent, b.status, b.group)
                     for repo in snapshot.repos
                     for i, b in enumerate(repo.branches)
                 ],
@@ -61,7 +79,6 @@ class StackRepository:
                     name=row["name"],
                     parent=row["parent"],
                     status=row["status"],
-                    current=bool(row["current"]),
                     group=row["stack_group"],
                 )
             )

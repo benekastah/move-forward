@@ -26,7 +26,7 @@ from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.plugin import ActionError, ChangedRequest, CollectAfterRequest
 from move_forward.plugins.git.repository import LocalRepository
-from move_forward.plugins.git_stack import actions, client
+from move_forward.plugins.git_stack import actions, changes, client, events
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 from move_forward.plugins.git_stack.panels import repo_dirs, stack_of
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
@@ -40,7 +40,7 @@ ICED = iced("me/x", "/src/widgets")
 def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
     names = ["main", "me/APP-1-branch", "me/APP-2-branch", "me/APP-3-branch", "me/no-pr"]
     built = dashboard(
-        github=snapshot(mine=[pr(1), pr(2)]),
+        github=snapshot(mine=[pr(1), pr(2)], merged_recent=[pr(3, state="MERGED")]),
         local=local_snapshot(branches=[local_branch(n) for n in names]),  # PRs relate to them
         stacks=stacks(
             StackBranch(name="main"),
@@ -55,6 +55,9 @@ def test_stacks_panel_reports_unhealthy_and_pr_less_branches() -> None:
         "me/APP-3-branch: merged",
         "me/no-pr: tracked, no PR",
     ]
+    merged = next(i for i in panel(built, "git_stack.stacks").items if "merged" in i.title)
+    assert merged.url == pr(3).url  # linked, but not about it: ice on its ticket can't hide it
+    assert Ref(kind="pull_request", id=pr(3).url) not in merged.subjects
     restack = next(i for i in panel(built, "git_stack.stacks").items if "restack" in i.title)
     assert restack.url == pr(2).url
     [button] = [a for a in restack.actions if a.name == "git_stack/stack_restack"]
@@ -127,7 +130,7 @@ def test_parse_info_reads_git_stack_json() -> None:
     )
     assert client.parse_info(out) == [
         StackBranch(name="main"),
-        StackBranch(name="me/a", parent="main", status="up-to-date", current=True, group="g"),
+        StackBranch(name="me/a", parent="main", status="up-to-date", group="g"),
     ]
 
 
@@ -184,7 +187,7 @@ def test_the_migration_keeps_the_last_snapshot_and_store_replaces_it() -> None:
     db = Database(":memory:")
     first = stacks(
         StackBranch(name="main"),
-        StackBranch(name="me/a", parent="main", status="needs-restack", current=True, group="g"),
+        StackBranch(name="me/a", parent="main", status="needs-restack", group="g"),
     )
     save_json_snapshot(db, "git_stack", first)
     db.migrate("git_stack", MIGRATIONS)
@@ -216,10 +219,7 @@ def test_iced_stack_branches_are_left_out_of_the_stacks_panel() -> None:
         ),
         iced_stacks=[ICED],
     )
-    assert sorted(titles(built, "git_stack.stacks")) == [
-        "me/y: needs-restack",
-        "me/y: tracked, no PR",
-    ]
+    assert titles(built, "git_stack.stacks") == ["me/y: needs-restack, no PR"]  # one item
 
 
 JsonEvent = dict[str, object]
@@ -305,6 +305,17 @@ def test_a_clean_that_fails_partway_says_how_far_it_got(monkeypatch: pytest.Monk
         _clean_with(monkeypatch, failing)
 
 
+def test_a_clean_that_crashes_before_its_report_says_why(monkeypatch: pytest.MonkeyPatch) -> None:
+    def crashing(repo: Path, *args: str, timeout: int = 0) -> str:
+        out = "\n".join(json.dumps(e) for e in [FETCHING, DELETED_A]) + "\nTraceback\n"
+        raise CommandError("git stack clean: Traceback ... KeyError: 'parent'", out)
+
+    with pytest.raises(
+        ActionError, match=r"clean failed: git stack clean: Traceback.*\(after it deleted me/a\)"
+    ):
+        _clean_with(monkeypatch, crashing)
+
+
 def test_untrack_says_which_branches_now_start_their_own_stacks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -325,6 +336,22 @@ def test_untrack_says_which_branches_now_start_their_own_stacks(
     notice = refresh.run_action(config, db, "git_stack/untrack", {"targets": "/src/widgets\tme/b"})
     assert ran == [("stack", "untrack", "me/b", "--json")]
     assert notice == "untracked me/b; me/c now starts its own stack"
+
+
+def test_an_untrack_that_crashes_says_why_and_nothing_it_didnt_do(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def crashing(repo: Path, *args: str, timeout: int = 0) -> str:
+        raise CommandError("git stack untrack: Traceback", json.dumps(FETCHING) + "\nTraceback\n")
+
+    monkeypatch.setattr(actions, "git", crashing)
+    config, db = stored(
+        local=local_snapshot(branches=[local_branch("main"), local_branch("me/b")]),
+        stacks=stacks(StackBranch(name="me/b", parent="main")),
+    )
+    with pytest.raises(ActionError) as failed:
+        refresh.run_action(config, db, "git_stack/untrack", {"targets": "/src/widgets\tme/b"})
+    assert str(failed.value) == "git stack untrack failed: git stack untrack: Traceback"
 
 
 def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_record(
@@ -517,3 +544,85 @@ def test_a_restack_that_skips_a_branch_doesnt_say_it_restacked_all(
         config, db, "git_stack/stack_restack", {"repo": "/src/widgets", "branch": "me/a"}
     )
     assert notice == "restacked what it could of me/a's stack; skipping me/a: checked out in /wt"
+
+
+def test_a_branch_needing_a_restack_or_merged_is_said_once_and_a_new_one_not() -> None:
+    def snap(**status: str | None) -> GitStackSnapshot:
+        branches = [StackBranch(name=n, parent="main", status=s) for n, s in status.items()]
+        return GitStackSnapshot(repos=[StackRepo(dir="/src/widgets", branches=branches)])
+
+    before = snap(a="up-to-date", b="up-to-date", c="needs-restack")
+    after = snap(a="needs-restack", b="merged", c="needs-restack", d="needs-restack")
+    said = [(e.kind, e.title, e.text) for e in events.changes(before, after)]
+    assert said == [
+        ("needs_restack", "a in /src/widgets", "needs a restack"),
+        ("merged", "b in /src/widgets", "was merged"),
+    ]  # c was already, and d is new to the snapshot
+
+
+def test_a_linked_worktrees_config_is_its_main_repositorys(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(
+        repo,
+        "-c",
+        "user.email=me@x",
+        "-c",
+        "user.name=Me",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "a",
+    )
+    linked = tmp_path / "linked"
+    git(repo, "worktree", "add", "-q", "-b", "side", str(linked))
+    assert changes.config_file(linked) == (repo / ".git" / "config").resolve()
+    assert changes.config_file(repo) == repo / ".git" / "config"
+    assert changes.config_file(tmp_path) is None
+
+
+def test_the_branches_kept_before_current_was_dropped_are_kept() -> None:
+    db = Database(":memory:")
+    db.migrate("git_stack", MIGRATIONS[:1])
+    with db.transaction() as conn:
+        conn.execute(
+            "INSERT INTO git_stack_branches VALUES ('/src/w', 0, 'me/a', 'main', 'merged', 1, 'g')"
+        )
+    db.migrate("git_stack", MIGRATIONS)
+    assert StackRepository(db).load() == stacks(
+        StackBranch(name="me/a", parent="main", status="merged", group="g"), dir="/src/w"
+    )
+
+
+def test_no_pr_is_said_only_of_a_branch_without_one_open_or_merged() -> None:
+    names = ["main", "me/APP-3-branch", "me/gone"]
+    built = dashboard(
+        github=snapshot(merged_recent=[pr(3, state="MERGED")]),
+        local=local_snapshot(branches=[local_branch(n) for n in names]),
+        stacks=stacks(
+            StackBranch(name="main"),
+            StackBranch(name="me/APP-3-branch", parent="main", status="needs-restack"),
+            StackBranch(name="me/gone", parent="main", status="merged"),  # no PR at all
+        ),
+    )
+    assert sorted(titles(built, "git_stack.stacks")) == [
+        "me/APP-3-branch: needs-restack",
+        "me/gone: merged",
+    ]
+
+
+def test_a_merged_branch_links_its_merged_pr_even_with_an_open_one_of_its_name() -> None:
+    merged = pr(3, state="MERGED")
+    reopened = pr(4, head=merged.head)  # the branch name used again
+    built = dashboard(
+        github=snapshot(mine=[reopened], merged_recent=[merged]),
+        local=local_snapshot(branches=[local_branch("main"), local_branch(merged.head)]),
+        stacks=stacks(
+            StackBranch(name="main"), StackBranch(name=merged.head, parent="main", status="merged")
+        ),
+    )
+    [item] = panel(built, "git_stack.stacks").items
+    assert item.url == merged.url
+    assert Ref(kind="pull_request", id=reopened.url) not in item.subjects

@@ -50,8 +50,6 @@ class _PrView(Model):
     id: str
     url: str | None = None
     state: str | None = None
-    repo: str
-    head: str
     mine: bool
 
     @property
@@ -164,15 +162,22 @@ class Builder:
                 # it may find more or fewer.
                 label = f"Clean about {len(merged)} merged in {Path(repo.dir).name}"
                 actions.append(clean.model_copy(update={"label": label}))
+            listed: set[str] = set()
             for b in repo.branches:
                 if b.status in (None, "up-to-date"):
                     continue
-                pr = self._pr(repo.dir, b.name, "open")
+                listed.add(b.name)
                 is_merged = b.status == "merged"
+                # A merged branch links its merged PR, but isn't about it: an iced ticket
+                # linking that PR mustn't hide the cleanup, nor its snooze key move.
+                pr = None if is_merged else self._pr(repo.dir, b.name, "open")
+                merged_pr = self._pr(repo.dir, b.name, "merged") if pr is None else None
+                link = pr or merged_pr
+                no_pr = not is_merged and b.parent is not None and link is None
                 items.append(
                     Item(
-                        title=f"{b.name}: {b.status}",
-                        url=pr.url if pr else None,
+                        title=f"{b.name}: {b.status}" + (", no PR" if no_pr else ""),
+                        url=link.url if link else None,
                         subtitle=f"{repo.dir} · on {b.parent}",
                         rank=1,
                         actions=[clean]
@@ -191,7 +196,7 @@ class Builder:
                     )
                 )
             for b in repo.branches:
-                if b.parent is None or b.status == "merged":
+                if b.parent is None or b.name in listed:
                     continue
                 if not (self._pr(repo.dir, b.name, "open") or self._pr(repo.dir, b.name, "merged")):
                     items.append(
