@@ -7,8 +7,8 @@ code, which is exchanged for the tokens. Slack takes an `http://localhost` redir
 PKCE app, so the dashboard needs no certificate.
 
 Tokens rotate: the access token lasts 12 hours and the refresh token 30 days, and each
-refresh replaces both. They're kept in the system's secret store, the access token where
-`mfd token set slack` puts a token and the refresh token beside it; what isn't secret (who
+refresh replaces both. They're kept in the system's secret store under `keychain_service`-app
+and -refresh, apart from a token given by hand (`mfd token set slack`); what isn't secret (who
 signed in, where, the scopes granted, when the access token runs out) is kept in kv.
 """
 
@@ -98,6 +98,9 @@ class Connection(Model):
     scopes: list[str]
     expires_at: datetime | None = None
     """When the access token runs out; None for one that doesn't (no rotation)."""
+    own_entry: bool = False
+    """Its access token is under `app_service`; a connection made before that kept it under
+    `keychain_service`, where it stays, read and revoked there, until its next refresh."""
 
 
 def app_service(config: SlackConfig) -> str:
@@ -223,6 +226,7 @@ def _expiry(now: datetime, expires_in: int | None) -> datetime | None:
 
 def _store(ctx: Context[SlackConfig], connection: Connection, tokens: _Tokens) -> None:
     keychain.write(app_service(ctx.config), ctx.email, tokens.access_token)
+    connection = connection.model_copy(update={"own_entry": True})
     if tokens.refresh_token:
         keychain.write(refresh_service(ctx.config), ctx.email, tokens.refresh_token)
     ctx.kv.set(CONNECTION, connection.model_dump_json())
@@ -246,7 +250,7 @@ def token(ctx: Context[SlackConfig]) -> str | None:
         found = connection(ctx)
         if found is None:
             return keychain.token(ctx.config, ctx.email)
-        access = _app_token(ctx)
+        access = keychain.read(_app_service(ctx, found), ctx.email)
         if found.expires_at is None or ctx.now < found.expires_at - REFRESH_AHEAD:
             return access
         refresh = keychain.read(refresh_service(ctx.config), ctx.email)
@@ -275,6 +279,9 @@ def token(ctx: Context[SlackConfig]) -> str | None:
         renewed = found.model_copy(update={"expires_at": _expiry(ctx.now, tokens.expires_in)})
         try:
             _store(ctx, renewed, tokens)
+            if not found.own_entry:  # its old token, where a hand-given one goes, is spent now
+                with contextlib.suppress(CommandError, OSError):
+                    keychain.delete(ctx.config.keychain_service, ctx.email)
         except (ValueError, CommandError, OSError) as e:
             # The old refresh token is spent, and the new one couldn't be kept: the connection
             # is forgotten now, and the new access token serves this one call.
@@ -282,15 +289,10 @@ def token(ctx: Context[SlackConfig]) -> str | None:
         return tokens.access_token
 
 
-def _app_token(ctx: Context[SlackConfig]) -> str | None:
-    """The app's access token. A connection made before the app had an entry of its own kept
-    it in the hand one's: moved to the app's, once, so revoking and forgetting find it."""
-    access = keychain.read(app_service(ctx.config), ctx.email)
-    if access is None and (legacy := keychain.read(ctx.config.keychain_service, ctx.email)):
-        keychain.write(app_service(ctx.config), ctx.email, legacy)
-        keychain.delete(ctx.config.keychain_service, ctx.email)
-        return legacy
-    return access
+def _app_service(ctx: Context[SlackConfig], found: Connection) -> str:
+    """Where `found`'s access token is: its own entry, or for a connection made before it had
+    one, `keychain_service`. Nothing is moved: a failed read must never take a hand token."""
+    return app_service(ctx.config) if found.own_entry else ctx.config.keychain_service
 
 
 def _lose(ctx: Context[SlackConfig], why: str) -> None:
@@ -304,15 +306,17 @@ def _lose(ctx: Context[SlackConfig], why: str) -> None:
 
 def forget(ctx: Context[SlackConfig]) -> None:
     """Drop the connection and its tokens from the secret store; a token stored by hand
-    stays."""
+    stays (but a connection made before the app had its own entry kept its token there)."""
+    found = connection(ctx)
     ctx.kv.delete(CONNECTION)
-    keychain.delete(app_service(ctx.config), ctx.email)
+    keychain.delete(_app_service(ctx, found) if found else app_service(ctx.config), ctx.email)
     keychain.delete(refresh_service(ctx.config), ctx.email)
 
 
 def disconnect(ctx: Context[SlackConfig]) -> None:
     """Sign out: revoke the token with Slack (if it still works), then forget it."""
-    access = _app_token(ctx) if connection(ctx) is not None else None
+    found = connection(ctx)
+    access = keychain.read(_app_service(ctx, found), ctx.email) if found else None
     if access:
         # Gone already, or offline: forgetting it is what matters here.
         with contextlib.suppress(client.SlackError, urllib.error.URLError):

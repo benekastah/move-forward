@@ -24,8 +24,9 @@ the dashboard serves HTTPS). The manifest lists that URL for the default port; o
 port, add yours to the app's redirect URLs. The sign-in's tokens go in the system's secret
 store under `keychain_service`-app (the access token) and `keychain_service`-refresh, apart
 from a token given by hand with `mfd token set slack` (under `keychain_service`), which
-connecting and disconnecting leave alone; `mfd token check` speaks of that one, and slack's page
-of the connection. The access token lasts 12 hours and is refreshed before it
+connecting and disconnecting leave alone (a connection made before the app had its own entry
+kept its token there, and uses it there until its next refresh moves it to its own);
+`mfd token check` speaks of the token given by hand, and slack's page of the connection. The access token lasts 12 hours and is refreshed before it
 runs out; the refresh token lasts 30 days, so after a month away, connect again. When
 Slack refuses a refresh, slack forgets the connection, says why on its page, and goes back
 to the token given by hand, if any. Disconnect revokes the token and forgets it.

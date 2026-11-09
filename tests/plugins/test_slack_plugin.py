@@ -24,7 +24,7 @@ from conftest import (
 
 from move_forward import render, server
 from move_forward.graph import Graph
-from move_forward.plugin import Context, PruneRequest
+from move_forward.plugin import Context, PageRequest, PruneRequest
 from move_forward.plugins.github.models import Check
 from move_forward.plugins.slack import plugin as slack_plugin
 from move_forward.plugins.slack.config import (
@@ -36,6 +36,7 @@ from move_forward.plugins.slack.models import Ping, TeamChannel
 from move_forward.plugins.slack.pings import Pinger
 from move_forward.plugins.slack.plugin import ping_page
 from move_forward.plugins.slack.repository import SlackRepository
+from move_forward.refresh import stored_graph
 from move_forward.registry import enabled
 
 
@@ -355,7 +356,20 @@ def test_the_ping_page_comes_back_to_itself_whatever_the_pr_url_holds_and_says_w
     assert "<p class='notice'>marked as sent</p>" in html
 
 
-@pytest.mark.parametrize("message", ["Ping {url.foo}", "Ping {url[0]}"])
+@pytest.mark.parametrize(
+    "message", ["Ping {url.foo}", "Ping {url[0]}", "Ping {url:{x}}", "Ping {url!z}", "Ping {url:d}"]
+)
 def test_a_first_ping_reaching_into_its_url_is_refused(message: str) -> None:
     with pytest.raises(ValueError, match="can name only"):
         SlackConfig(ping_first=message)
+
+
+def test_the_ping_page_says_what_its_last_button_did() -> None:
+    candidate = pr(1, requested_users=["alice"])
+    config, db = stored(github=snapshot(mine=[candidate]), slack=True)
+    plugins = enabled(config, db, NOW)
+    graph, _ = stored_graph(db, plugins)
+    [slack] = [e for e in plugins if e.name == "slack"]
+    query = {"pr": [candidate.url], "notice": ["marked the first ping to alice as sent"]}
+    page = slack.plugin.pages()["ping"](PageRequest(slack.ctx, graph, query, "/slack/ping"))
+    assert isinstance(page, str) and "marked the first ping to alice as sent" in page

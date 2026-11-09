@@ -281,12 +281,49 @@ def test_a_sign_in_state_that_isnt_ascii_is_turned_away_not_a_crash() -> None:
         oauth.finish(_ctx(db, 1), {"code": ["c"], "state": ["été"]})
 
 
-def test_a_connection_made_before_the_apps_entry_is_revoked_and_its_token_moved(
+def _old_style(db: Database, secrets: FakeSecrets) -> None:
+    """A connection made before the app had an entry of its own: its token where a hand-given
+    one goes, and no `own_entry`."""
+    ctx = _ctx(db)
+    found = oauth.connection(ctx)
+    assert found is not None
+    ctx.kv.set(oauth.CONNECTION, found.model_copy(update={"own_entry": False}).model_dump_json())
+    secrets.stored[SERVICE] = secrets.stored.pop(f"{SERVICE}-app")
+
+
+def test_a_connection_made_before_the_apps_entry_is_revoked_where_its_token_is(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     secrets, slack, db = _connected(monkeypatch)
-    secrets.stored[SERVICE] = secrets.stored.pop(f"{SERVICE}-app")  # where it used to be kept
+    _old_style(db, secrets)
     slack.answers.append({"ok": True, "revoked": True})
     oauth.disconnect(_ctx(db))
     assert slack.asked == [("auth.revoke", "xoxe.xoxp-1", {})]
     assert secrets.stored == {}
+
+
+def test_an_old_connections_refresh_gives_it_its_own_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    secrets, slack, db = _connected(monkeypatch)
+    _old_style(db, secrets)
+    slack.answers.append(
+        {
+            "ok": True,
+            "access_token": "xoxe.xoxp-2",
+            "refresh_token": "xoxe-1-r2",
+            "expires_in": 43200,
+        }
+    )
+    assert oauth.token(_ctx(db, 12 * 60 - 5)) == "xoxe.xoxp-2"
+    assert secrets.stored == {f"{SERVICE}-app": "xoxe.xoxp-2", f"{SERVICE}-refresh": "xoxe-1-r2"}
+
+
+def test_an_app_token_that_cant_be_read_never_takes_one_given_by_hand(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secrets, slack, db = _connected(monkeypatch)
+    secrets.stored[SERVICE] = "xoxb-by-hand"
+    del secrets.stored[f"{SERVICE}-app"]  # a read that fails comes back empty
+    slack.answers.append({"ok": True, "revoked": True})
+    oauth.disconnect(_ctx(db))
+    assert slack.asked == []  # nothing of the app's to revoke; the hand one isn't it
+    assert secrets.stored == {SERVICE: "xoxb-by-hand"}

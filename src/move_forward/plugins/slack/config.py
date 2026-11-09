@@ -66,10 +66,12 @@ class SlackConfig(Strict):
     @classmethod
     def _ping_first(cls, value: str) -> str:
         try:
-            fields = [field for _, field, _, _ in Formatter().parse(value) if field is not None]
-        except ValueError as e:  # a lone brace
-            fields = [f"({e})"]
-        if any(field != "url" for field in fields):
+            fields = [
+                (f, spec, conv) for _, f, spec, conv in Formatter().parse(value) if f is not None
+            ]
+        except ValueError:  # a lone brace
+            fields = [("", "", None)]
+        if any(field != ("url", "", None) for field in fields):  # a bare {url}, nothing else
             raise ValueError(
                 f"{value!r} can name only {{url}}, and a brace of its own is written {{{{ or }}}}"
             )
