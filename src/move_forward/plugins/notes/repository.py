@@ -528,7 +528,7 @@ class NotesRepository:
     def rekey(self, kinds: Collection[str], identify: Callable[[str, str], str]) -> int:
         """Give the links and what's on ice of `kinds` the ids `identify` says their entities
         have now (`Graph.identify`: a ticket kept by its key gets its URL); where the new
-        id is there already, the old row goes, and an act of icing left with nothing with it.
+        id is there already, the old row goes, and an act of icing it leaves with nothing.
         How many ids changed. `identify` runs before
         the transaction, not in it: it asks plugins (`url_for`), which may use the database."""
         marks = ", ".join("?" * len(kinds))
@@ -547,14 +547,28 @@ class NotesRepository:
             if (new := identify(row["kind"], row["id"])) != row["id"]
         ]
         with self._db.transaction() as conn:
+            touched: set[int] = set()  # the acts of icing whose items moved
             for table, column, kind, old, new in moves:
+                if table == "notes_iced":
+                    touched |= {
+                        row["ice_id"]
+                        for row in conn.execute(
+                            "SELECT ice_id FROM notes_iced WHERE kind = ? AND ref_id = ?",
+                            (kind, old),
+                        )
+                    }
                 conn.execute(
                     f"UPDATE OR IGNORE {table} SET {column} = ? WHERE kind = ? AND {column} = ?",
                     (new, kind, old),
                 )
                 conn.execute(f"DELETE FROM {table} WHERE kind = ? AND {column} = ?", (kind, old))
-            # An act of icing whose only item was on ice already, in another, is that one.
-            conn.execute("DELETE FROM notes_ice WHERE id NOT IN (SELECT ice_id FROM notes_iced)")
+            # One whose every item was on ice already, in another, is that one; an act with no
+            # items of its own (a stack imported without branches) is left alone.
+            conn.executemany(
+                "DELETE FROM notes_ice WHERE id = ?"
+                " AND NOT EXISTS (SELECT 1 FROM notes_iced WHERE ice_id = notes_ice.id)",
+                [(i,) for i in touched],
+            )
         return len(moves)
 
     def replace_covers(self, ice_ids: list[int], covers: dict[int, list[Ref]]) -> None:

@@ -257,6 +257,7 @@ def test_rekeying_moves_links_todos_links_and_whats_on_ice_once_each() -> None:
     notes.link_todo(todo, new)
     notes.add_ice("a", DAY, None, [IcedItem(kind="jira.issue", ref_id="APP-1", name="APP-1")])
     notes.add_ice("b", DAY, None, [IcedItem(kind="jira.issue", ref_id=URL, name="APP-1")])
+    notes.add_ice("c", DAY, "parked, no branches listed", [])  # an import's, say: it stays
 
     def identify(kind: str, ref: str) -> str:
         return URL if ref == "APP-1" else ref
@@ -266,5 +267,6 @@ def test_rekeying_moves_links_todos_links_and_whats_on_ice_once_each() -> None:
     assert [link.ref for link in read.links] == [URL]
     assert [link.ref for link in read.todos[0].links] == [URL]
     assert [(ice.title, [item.ref_id for item in ice.items]) for ice in notes.ices()] == [
-        ("b", [URL])  # "a" held only what "b" holds: it goes, not left empty
+        ("b", [URL]),  # "a" held only what "b" holds: it goes, not left empty
+        ("c", []),
     ]
