@@ -105,7 +105,8 @@ class Harness:
         self.now = now
         self.db = Database(":memory:")
         self._dir = tempfile.TemporaryDirectory(prefix="move-forward-harness-")
-        """Where the plugin's `ctx.data_dir` is; gone with the harness."""
+        """Where the config's `db_path` points, so nothing reaches the real database's
+        folder; gone with the harness."""
         self._section = dict(section or {})
         self._email = email
         self._teams = list(teams)

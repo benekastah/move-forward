@@ -13,12 +13,11 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
-from . import localtime, private, shell
+from . import localtime, shell
 from .act_now import DUE_HORIZON
 from .asking import Asker, InitSetup
 from .db import Database, Migration
@@ -64,25 +63,11 @@ class Context[C: BaseModel]:
     machine; the dashboard sends it on to `mfd.localhost`, where its sign-in cookie is."""
     name: str = ""
     """The plugin's name, as `Plugin.name`."""
-    data_root: Path | None = None
-    """Where plugins' files go (see `data_dir`): beside the database."""
 
     @property
     def log(self) -> logging.Logger:
         """The plugin's logger, `move_forward.plugins.<name>`, so its lines say whose they are."""
         return logging.getLogger(f"move_forward.plugins.{self.name}")
-
-    @property
-    def data_dir(self) -> Path:
-        """A directory of the plugin's own, for files it keeps (a cache, a clone): made on
-        first use, private to me like the database beside it."""
-        if self.data_root is None or not self.name:
-            raise RuntimeError("this context has no data directory")
-        path = self.data_root / "plugins" / self.name
-        if not path.is_dir():
-            path.mkdir(parents=True)
-            private.make_private(path)
-        return path
 
     @property
     def today(self) -> date:
@@ -230,15 +215,6 @@ class CollectAfterRequest[C: BaseModel]:
 
 
 @dataclass(frozen=True)
-class Collected[S: BaseModel]:
-    """What `collect` returns when it did part of the work: core stores `snapshot` and runs
-    `collect` again right after the other due plugins, until `more` is False."""
-
-    snapshot: S
-    more: bool = False
-
-
-@dataclass(frozen=True)
 class StoreRequest[C: BaseModel, S: BaseModel]:
     ctx: Context[C]
     snapshot: S
@@ -344,7 +320,7 @@ PageHandler = Callable[[PageRequest[Any]], str | Response | None]
 """Renders a page, as HTML or a `Response`; None means not found."""
 CliHandler = Callable[[CliRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
-API_VERSION = 1
+API_VERSION = 2
 """The version of `move_forward.api` this dashboard offers. A change that would break a
 plugin built against it (a hook's request losing a field, a name leaving `api`) raises it;
 see `docs/api-changes.md`."""
@@ -416,7 +392,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     kinds: ClassVar[dict[str, KindSpec]] = {}
     """The entity kinds the plugin publishes, each with its spec: the model of its
     attributes, which the graph checks its entities against, and whether it links what it's
-    about (see `Graph.related`; `linking_patterns` can narrow its id pattern), hides what it
+    about (see `Graph.related`; `linking_patterns` gives its id pattern), hides what it
     points at (core leaves items about hidden things off the page, but for the hiding
     plugin's own, e.g. notes' On ice), can be fetched, is done once gone, or is where `mfd
     priority` looks."""
@@ -436,14 +412,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The field of the plugin's section mapping each top-level team to what the tool calls
     it (`teams`, e.g. `[github.teams]`), so the config can check it names only teams it has;
     None for a plugin without one."""
-    collects_after_graph: ClassVar[bool] = False
-    """Whether the snapshot comes from `collect_after` instead of `collect`."""
-    subjects_timeout_seconds: ClassVar[int] = 60
-    """How long `refresh_subjects` may take before core refreshes the plugin instead."""
-    collect_timeout_seconds: ClassVar[int] = 300
-    """How long `collect` (or `collect_after`) may take. Past it, the refresh records the
-    plugin as failed and goes on; the plugin is left out of refreshes until its collect
-    returns (a thread can't be stopped)."""
     notification_kinds: ClassVar[dict[str, str]] = {}
     """The events the plugin's `events` makes, by kind, each with what it says, for the
     settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
@@ -475,8 +443,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     locked_settings: ClassVar[frozenset[str]] = frozenset()
     """Its settings the settings page shows but won't change, as they say where a credential
     goes (a site, a host) or what runs where. Its token's `token_env` and `keychain_service`
-    are locked without naming them; settings its `token_settings` reads a token's place from
-    under other names, or builds it from, it names here."""
+    are locked without naming them; settings its `tokens` reads a token's place from under
+    other names, or builds it from, it names here."""
     token_help: ClassVar[str] = ""
     """`mfd init`'s next step for its token(s), in place of the plain "`mfd token set <name>`
     stores its token": where to get one, or another way in (signing in in the browser)."""
@@ -487,33 +455,28 @@ class Plugin[C: BaseModel, S: BaseModel]:
         calls its `collect` (or `collect_after`) and it has a schedule."""
         return self.snapshot_model is not None
 
-    def refresh_seconds(self, ctx: Context[C]) -> int | None:
-        """How often the plugin refreshes on its own, in seconds; None for never (one that
-        collects after the plugins it requires may rely on being refreshed with them). By
-        default its section's `refresh_seconds`, when it has one."""
-        seconds: object = getattr(ctx.config, "refresh_seconds", None)
-        return seconds if isinstance(seconds, int) else None
-
-    def token_settings(self, config: C) -> TokenSettings | None:
-        """Where the plugin's API token is, for `mfd token`: by default its section, when that
-        has `token_env` and `keychain_service`; None for a plugin with no token."""
-        return config if isinstance(config, TokenSettings) else None
+    @property
+    def collects_after_graph(self) -> bool:
+        """Whether the snapshot comes from `collect_after` instead of `collect`: the plugin
+        implements `collect_after`."""
+        return any("collect_after" in vars(c) for c in type(self).__mro__ if c is not Plugin)
 
     def tokens(self, config: C) -> dict[str, TokenSettings]:
-        """Every token the plugin keeps, for `mfd token`, by name: `""` for its own (by default
-        `token_settings`'s), and one per account for a plugin reading several (several
-        mailboxes, say), stored as `<plugin>.<name>`. Each needs a `keychain_service` of its own:
-        the config is refused when two tokens share one."""
-        own = self.token_settings(config)
-        return {"": own} if own is not None else {}
+        """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
+        account for a plugin reading several (several mailboxes, say), stored as
+        `<plugin>.<name>`. By default its section is its own token's place, when that has
+        `token_env` and `keychain_service`. Each needs a `keychain_service` of its own: the
+        config is refused when two tokens share one."""
+        return {"": config} if isinstance(config, TokenSettings) else {}
 
     # Refresh
 
-    def collect(self, req: CollectRequest[C]) -> "S | Collected[S]":
+    def collect(self, req: CollectRequest[C]) -> S:
         """Fetch the plugin's snapshot. Runs in parallel with other plugins' and may raise;
-        the error is shown and the last good snapshot kept. It has `collect_timeout_seconds`;
-        with more to do than fits, return `Collected(snapshot, more=True)` and keep your
-        place in `ctx.kv`: core stores the piece and calls `collect` again."""
+        the error is shown and the last good snapshot kept. It has five minutes
+        (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
+        failed and goes on, and leaves it out of refreshes until its collect returns (a thread
+        can't be stopped)."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
     def store(self, req: StoreRequest[C, S]) -> None:
@@ -544,25 +507,29 @@ class Plugin[C: BaseModel, S: BaseModel]:
         (`previous_graph`, `previous_snapshot`), and say what became true."""
         return []
 
-    def collect_after(self, req: CollectAfterRequest[C]) -> "S | Collected[S]":
+    def collect_after(self, req: CollectAfterRequest[C]) -> S:
         """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
-        repos git found. Runs once their snapshots are stored, in parallel with other
-        `collect_after`s, and fails like `collect`."""
-        raise NotImplementedError(f"{self.name} collects after the graph but has no collect_after")
+        repos git found, in place of `collect`: a plugin that implements it collects after the
+        graph. Runs once the other plugins due have stored their snapshots, in parallel with
+        other `collect_after`s, and fails like `collect`. It's refreshed on its own schedule,
+        not with the plugins it reads: to refresh soon after they change, `watches` them."""
+        raise NotImplementedError(f"{self.name} doesn't collect after the graph")
 
     def after_collect(self, req: AfterCollectRequest[C]) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.
         caching lookups in the plugin's tables."""
 
-    def changed(self, req: ChangedRequest[C]) -> bool | Changed:
+    def changed(self, req: ChangedRequest[C]) -> Changed:
         """Whether what the plugin collects has changed since this was last asked, by a check
         far cheaper than `collect` (files' times, a request answered "not modified", other
         plugins' entities in `graph`, built from what's stored), so the plugin refreshes soon
         after a change rather than at its next `refresh_seconds`. Keep what it compares
-        against in `ctx.kv`; with nothing kept yet, keep it and say False. Core asks once more after each refresh of the plugin and ignores the answer,
-        so what the refresh did itself (`git status` rewriting the index) doesn't count. May
-        raise; the error is logged and the next check tries again."""
-        return False
+        against in `ctx.kv`; with nothing kept yet, keep it and say `Changed(False)`. Say
+        why it changed in `Changed.reason`, for the log. Core asks once more after each
+        refresh of the plugin and ignores the answer, so what the refresh did itself (`git
+        status` rewriting the index) doesn't count. May raise; the error is logged and the
+        next check tries again."""
+        return Changed(False)
 
     # Reading
 
@@ -572,7 +539,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         keeps the result as a refresh would, events and all, but it doesn't count as the
         plugin's refresh (`fetched_at` stays). None, by default, when the plugin can't:
         core refreshes the whole plugin instead, as it does when this fails or takes longer
-        than `subjects_timeout_seconds`."""
+        than a minute (`refresh.SUBJECTS_TIMEOUT_SECONDS`)."""
         return None
 
     def relate(self, req: RelateRequest[C]) -> list[tuple[Ref, Ref]]:
@@ -585,11 +552,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def linking_patterns(self, req: LinkingRequest[C]) -> dict[str, str | None]:
         """Its `linking` kinds with the patterns of their ids as of now, e.g. only the project
-        keys jira has seen; None where no id can be found in text. Read from its tables, so
-        cheap: core asks every time it builds the graph."""
-        return {
-            kind: spec.linking for kind, spec in self.kinds.items() if spec.linking is not False
-        }
+        keys jira has seen; None where no id can be found in text, as by default. Read from
+        its tables, so cheap: core asks every time it builds the graph."""
+        return {kind: None for kind, spec in self.kinds.items() if spec.linking}
 
     def identity(self, req: IdentityRequest[C, S]) -> Identity | None:
         """Who I am in the plugin's tool (a login), for the page's footer, which lists each
@@ -672,8 +637,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     # Set-up and upkeep
 
     def init_suggested(self) -> bool:
-        """Whether `mfd init` offers to set the plugin up by default."""
-        return True
+        """Whether `mfd init` offers to set the plugin up by default: not unless the plugin
+        says so, as most need something of mine (a site, a mailbox) to be of use."""
+        return False
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         """Ask for the `[name]` section's settings in `mfd init`; returns its values (a

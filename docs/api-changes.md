@@ -9,6 +9,35 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Version 2
+
+Fewer things to know: what no plugin used is gone.
+
+- **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
+  return the snapshot, and core calls each once per refresh.
+- **Collecting after the graph** is implementing `collect_after`: `collects_after_graph` is a
+  property saying whether the plugin does, no longer a class variable to set. Such a plugin
+  is refreshed on its own schedule, no longer with the plugins it `requires`; to refresh
+  soon after they change, it `watches` them.
+- **No `ctx.data_dir`**: `Context` loses `data_dir` and `data_root`. A plugin keeps what it
+  needs in its tables or `ctx.kv`.
+- **No `KindSpec.fetched_attrs`**: a fetched entity's attributes fit its family's fetched
+  model, or else its kind's own attributes.
+- **Timeouts are core's**: the class variables `collect_timeout_seconds` and
+  `subjects_timeout_seconds` are gone. `collect` (and `collect_after`) has five minutes, and
+  `refresh_subjects` a minute, for every plugin.
+- **`KindSpec.linking` is a `bool`**: `linking=True` where it was `linking=None`. A pattern
+  for its ids comes only from `linking_patterns`, which by default gives none: a kind that
+  gave `linking` a pattern string sets `linking=True` and returns the pattern from
+  `linking_patterns` (`{kind: pattern}`), or its ids are never found in text.
+- **Two hooks no plugin overrode are gone**: `refresh_seconds(ctx)` (a plugin refreshes on
+  its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
+  place under other names overrides `tokens(config)`, returning `{"": settings}`).
+- **`changed` returns a `Changed`**, never a bare bool: `Changed(True, "why")` or
+  `Changed(False)`.
+- **`init_suggested()` is False by default**: `mfd init` suggests a plugin only when it
+  overrides it to say True.
+
 ## Version 1
 
 The first version. While the built-ins are its only plugins, changes go into it without

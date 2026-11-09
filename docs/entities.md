@@ -87,9 +87,9 @@ URL.
 
 `Graph.fetch(kind, ids)` asks the plugin that owns a kind for entities by id, now, even ones
 long gone from its snapshot; it's slow, so it's for rare work like the daily prune. A
-fetched entity must say its `lifecycle`, and its attributes fit its kind's
-`KindSpec.fetched_attrs`, or its family's fetched model (`api.kinds.PullRequestFetched`,
-`TicketFetched`), whoever publishes it; core leaves out, and logs, one that doesn't. What a
+fetched entity must say its `lifecycle`, and its attributes fit its family's fetched model
+(`api.kinds.PullRequestFetched`, `TicketFetched`), whoever publishes it, or else its kind's
+own attributes; core leaves out, and logs, one that doesn't. What a
 fetched entity carries:
 
 | Kind | Fetched by | state | Attributes |

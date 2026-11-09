@@ -677,12 +677,13 @@ class _GitHubWithChecks(GitHubPlugin):
 
     change_check_seconds: ClassVar[int | None] = 60
     answers: ClassVar[list[bool | Changed | Exception]] = []
+    """Each a `Changed`, or a bare bool for one without a reason."""
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> bool | Changed:
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return answer
+        return answer if isinstance(answer, Changed) else Changed(answer)
 
 
 def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
@@ -717,6 +718,30 @@ def test_why_a_plugin_changed_is_logged(
         assert app.check_for_changes(1000.0) == {"github"}
         assert app.check_for_changes(1060.0) == set()  # said no, whatever its reason
     assert "changed: github (2 PRs notified); refreshing" in caplog.messages
+
+
+class _SlackChanging(SlackPlugin):
+    change_check_seconds: ClassVar[int | None] = 60
+
+    def changed(self, req: ChangedRequest[SlackConfig]) -> Changed:
+        return Changed(True, "a message")
+
+
+class _GitHubAnsweringBadly(GitHubPlugin):
+    change_check_seconds: ClassVar[int | None] = 60
+
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
+        return True  # pyright: ignore[reportReturnType]  # not a Changed
+
+
+def test_a_malformed_change_check_is_a_failed_one(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Skipped, as a check that raises is, while the others' changes still count."""
+    # Slack is checked after github (by name), so its change counts only if the round goes on.
+    swap = {"github": _GitHubAnsweringBadly(), "slack": _SlackChanging()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    assert app.check_for_changes(1000.0) == {"slack"}
 
 
 class _GitHubWatchingGit(_GitHubWithChecks):

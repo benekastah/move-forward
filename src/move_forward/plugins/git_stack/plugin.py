@@ -8,6 +8,7 @@ from ...api import (
     API_VERSION,
     ActionHandler,
     ActNowRequest,
+    Changed,
     ChangedRequest,
     CollectAfterRequest,
     EntitiesRequest,
@@ -46,7 +47,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     requires: ClassVar[list[str]] = ["git"]
     watches: ClassVar[list[str]] = ["git"]
     snapshot_model = GitStackSnapshot
-    collects_after_graph = True
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
@@ -64,7 +64,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         ctx, snapshot = req.ctx, req.snapshot
         StackRepository(ctx.db).replace(snapshot)
 
-    def changed(self, req: ChangedRequest[GitStackConfig]) -> bool:
+    def changed(self, req: ChangedRequest[GitStackConfig]) -> Changed:
         """Whether a stack may have moved since the last look (see `changes`): asked right
         after each refresh of git, rather than collecting with every one."""
         ctx, graph = req.ctx, req.graph
@@ -72,7 +72,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         before = ctx.kv.get(FINGERPRINT)
         if now != before:
             ctx.kv.set(FINGERPRINT, now)
-        return before is not None and now != before
+        return Changed(before is not None and now != before, "a stack may have moved")
 
     def load(self, req: LoadRequest[GitStackConfig]) -> GitStackSnapshot | None:
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""

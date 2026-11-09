@@ -199,11 +199,11 @@ class _ElsewhereToken:
 class _GitHubWithAToken(GitHubPlugin):
     """github, keeping a token its section doesn't name as `token_env`."""
 
-    def token_settings(self, config: GitHubConfig) -> keychain.TokenSettings | None:
-        return _ElsewhereToken()
+    def tokens(self, config: GitHubConfig) -> dict[str, keychain.TokenSettings]:
+        return {"": _ElsewhereToken()}
 
 
-def test_mfd_token_finds_a_plugins_token_by_its_token_settings(
+def test_mfd_token_finds_a_plugins_token_where_it_says(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     swap = {"github": _GitHubWithAToken()}
@@ -231,8 +231,8 @@ def test_a_config_keeping_two_tokens_in_one_place_is_refused(tmp_path: Path) -> 
 
 
 class _GitHubKeepingJirasService(GitHubPlugin):
-    def token_settings(self, config: GitHubConfig) -> keychain.TokenSettings | None:
-        return _JiraService()
+    def tokens(self, config: GitHubConfig) -> dict[str, keychain.TokenSettings]:
+        return {"": _JiraService()}
 
 
 class _JiraService:
@@ -240,7 +240,7 @@ class _JiraService:
     keychain_service: str = "move-forward-jira"
 
 
-def test_a_plugins_token_settings_count_where_it_keeps_its_token(
+def test_where_a_plugin_says_it_keeps_its_token_counts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     swap = {"github": _GitHubKeepingJirasService()}

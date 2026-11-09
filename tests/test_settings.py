@@ -246,8 +246,8 @@ class _ElsewherePlugin(Plugin[_ElsewhereConfig, BaseModel]):
     api_version = API_VERSION
     locked_settings: ClassVar[frozenset[str]] = frozenset({"secret_env", "secret_service"})
 
-    def token_settings(self, config: _ElsewhereConfig) -> TokenSettings | None:
-        return _ElsewhereSettings(config)
+    def tokens(self, config: _ElsewhereConfig) -> dict[str, TokenSettings]:
+        return {"": _ElsewhereSettings(config)}
 
 
 def test_settings_a_plugin_names_stay_in_the_file_and_save_leaves_them(

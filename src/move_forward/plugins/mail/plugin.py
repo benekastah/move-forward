@@ -95,10 +95,6 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     """Threads are published while they have unread or flagged mail: one that's gone is done."""
     change_check_seconds: ClassVar[int | None] = 120
 
-    def init_suggested(self) -> bool:
-        """Only when asked for: it needs a mailbox and its password."""
-        return False
-
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 

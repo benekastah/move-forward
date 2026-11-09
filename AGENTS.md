@@ -36,7 +36,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   another plugin's entities with `graph.view(kind, View)`, through its own
   small model of the fields it uses, not `attrs.get`. A kind that stands for a
   unit of work (a ticket, a work entry) is declared `linking` (with
-  `linking_patterns` narrowing its id pattern from the plugin's data); an entity
+  `linking_patterns` giving its id pattern from the plugin's data); an entity
   that may name one publishes the text in `mentions` (with `mentions_hide=False` where someone
   else wrote it, so what it names can't hide it) rather than refs to
   another plugin's kind. Core adds `tag`s (`tags.py`): what carries one points at it, but
@@ -48,10 +48,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   plugin last fetched, and why it failed.
 - Every plugin hook that runs with the plugin's context takes one request object
   (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
-  breaking its overrides; `refresh_seconds(ctx)` is the one that takes its context bare. Those
-  called before there's a context take what they need: `init_suggested()` and
-  `init_questions(ask, setup)` (`mfd init`), `token_settings(config)` and `tokens(config)`
-  (`mfd token`, and loading the config), `cli(parser)`, `pages()` and `actions()`.
+  breaking its overrides. Those called before there's a context take what they need:
+  `init_suggested()` and `init_questions(ask, setup)` (`mfd init`), `tokens(config)` (`mfd
+  token`, and loading the config), `cli(parser)`, `pages()` and `actions()`.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.

@@ -54,7 +54,7 @@ def test_each_plugin_is_asked_for_its_own_and_one_that_cant_is_refreshed_whole()
 @pytest.mark.usefixtures("recording")
 def test_a_plugin_taking_too_long_is_refreshed_whole(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_Recording, "slow", True)
-    monkeypatch.setattr(_Recording, "subjects_timeout_seconds", 0.05)
+    monkeypatch.setattr(refresh, "SUBJECTS_TIMEOUT_SECONDS", 0.05)
     config, db = stored(github=snapshot(mine=[pr(1)]))
     assert refresh.refresh_subjects(config, db, [PR_1], NOW) == {"github"}
 

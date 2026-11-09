@@ -10,7 +10,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import entry_points
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
@@ -355,7 +354,6 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
             kv=KvRepository(db, plugin.name),
             dashboard_url=f"http://localhost:{config.port}",
             name=plugin.name,
-            data_root=Path(config.db_path).parent,
         )
         result.append(Enabled(plugin, ctx))
     return result
@@ -363,12 +361,12 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
 
 def _unfit_fetched(entity: Entity, spec: KindSpec) -> str | None:
     """Why a fetched entity doesn't fit its kind, or None: it must say its `lifecycle`, and
-    its `attrs` fit `spec.fetched_attrs`, its family's fetched model, or else are fields of
-    `spec.attrs`, each of its type."""
+    its `attrs` fit its family's fetched model, or else are fields of `spec.attrs`, each of
+    its type."""
     if "lifecycle" not in entity.model_fields_set:
         return "no lifecycle"
     family = FAMILIES.get(entity.ref.kind)
-    model = spec.fetched_attrs or (family.fetched if family else None)
+    model = family.fetched if family else None
     try:
         if model is not None:
             model.model_validate(entity.attrs)
@@ -452,7 +450,7 @@ def build_graph(
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
         """Each plugin's answer; one that fails is logged and left out, so its entities just
         aren't known (the prune keeps what it can't check). So is an entity that doesn't fit
-        what its kind's fetched entities carry (`KindSpec.fetched_attrs`)."""
+        what its kind's fetched entities carry (see `_unfit_fetched`)."""
         found: list[Entity] = []
         for e in plugins:
             try:

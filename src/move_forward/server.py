@@ -22,7 +22,7 @@ from .db import Database
 from .graph import Graph, Ref
 from .notifications import NotificationRepository
 from .panels import Layout
-from .plugin import KEPT, MAX_SUBJECTS, ActionError, Changed, ChangedRequest, Response, page_path
+from .plugin import KEPT, MAX_SUBJECTS, ActionError, ChangedRequest, Response, page_path
 from .refresh import (
     PageFailed,
     build_dashboard,
@@ -225,16 +225,15 @@ class App:
 
     def _changed(self, e: Enabled, graph: Graph) -> str | None:
         """Why `e.plugin.changed` says its tool has something new ("" when it doesn't say);
-        None when it hasn't, or the check fails: logged at debug, since the plugin's refresh
-        shows the error, and tried again next time."""
-        try:
+        None when it hasn't, or the check fails (raises, or answers with something that isn't
+        a `Changed`): logged at debug and tried again next time, so one plugin's check can't
+        stop the others'."""
+        try:  # reading the answer too, so a malformed one counts as a failed check
             answer = e.plugin.changed(ChangedRequest(e.ctx, graph))
+            return answer.reason if answer.changed else None
         except Exception:
             log.debug("%s: change check failed", e.name, exc_info=True)
             return None
-        if isinstance(answer, Changed):
-            return answer.reason if answer.changed else None
-        return "" if answer else None
 
     def check_for_changes(self, now: float | None = None) -> set[str]:
         """Ask each plugin whose `change_check_seconds` have passed whether it `changed`,
