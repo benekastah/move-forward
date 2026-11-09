@@ -20,7 +20,8 @@ class SlackConfig(Strict):
     slack's page; empty until someone has made the app (see docs/plugins/slack.md). It isn't
     a secret: the app signs in with PKCE, and has no client secret to share."""
     ping_first: str = DEFAULT_PING_FIRST
-    """The first review reminder; `{url}` is the PR."""
+    """The first review reminder; `{url}` is the PR, and a brace of its own is written `{{` or
+    `}}`."""
     ping_follow_up: str = DEFAULT_PING_FOLLOW_UP
     """The reminder once a reviewer has been pinged about the PR."""
     teams: dict[str, str] = Field(default_factory=dict)
@@ -57,3 +58,15 @@ class SlackConfig(Strict):
     def guessed_channel(self, team: str) -> str | None:
         """The channel `team_channel` gives `team`, if it's set."""
         return self.team_channel.replace("{team}", team) if self.team_channel else None
+
+    @field_validator("ping_first")
+    @classmethod
+    def _ping_first(cls, value: str) -> str:
+        try:
+            value.format(url="")
+        except (KeyError, IndexError, ValueError) as e:
+            raise ValueError(
+                f"{value!r} can name only {{url}}, and a brace of its own is written {{{{ or }}}}"
+                f" ({e!r})"
+            ) from e
+        return value

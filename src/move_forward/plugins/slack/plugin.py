@@ -6,7 +6,7 @@ import` reads the first two from the skill's `reviewer-map.md`.
 
 import argparse
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import ClassVar, Literal
 from urllib.parse import quote
 
@@ -72,8 +72,12 @@ def _team_channels(config: SlackConfig, known: dict[str, TeamChannel]) -> dict[s
     teams = dict(known)
     for name, channel in config.teams.items():
         current = teams.get(name)
+        # The map's id is its channel's: another channel named here is looked up anew.
+        same = current is not None and current.channel_name == channel
         teams[name] = TeamChannel(
-            slug=name, channel_name=channel, channel_id=current.channel_id if current else None
+            slug=name,
+            channel_name=channel,
+            channel_id=current.channel_id if same and current else None,
         )
     return teams
 
@@ -100,7 +104,8 @@ def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> str:
         else "<span class='target-note'>no Slack link known for this target</span>"
     )
     return (
-        "<section class='target'><form method='post' action='/actions/slack/mark_sent'>"
+        "<section class='target'><form method='post'"
+        f" action='/actions/slack/mark_sent?back={e(quote(f'{PING_PATH}?pr={ping.pr_url}', safe='/?='))}'>"
         f"<input type='hidden' name='pr_url' value='{e(ping.pr_url)}'>"
         f"<input type='hidden' name='target' value='{e(target.kind)}:{e(target.name)}'>"
         f"<input type='hidden' name='kind' value='{e(target.ping_kind)}'>"
@@ -234,7 +239,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
                     target=form.target,
                     kind=form.kind,
                     message=form.message,
-                    sent_at=datetime.now(UTC),
+                    sent_at=ctx.now,
                 )
             )
             return f"marked the {form.kind} ping to {form.target.partition(':')[2]} as sent"

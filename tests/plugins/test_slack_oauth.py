@@ -119,7 +119,7 @@ def test_connecting_signs_in_with_pkce_and_keeps_the_tokens(
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
     assert query["code_challenge"] == [challenge.rstrip(b"=").decode()]
     assert params["redirect_uri"] == query["redirect_uri"][0] and "client_secret" not in params
-    assert secrets.stored == {SERVICE: "xoxe.xoxp-1", f"{SERVICE}-refresh": "xoxe-1-r1"}
+    assert secrets.stored == {f"{SERVICE}-app": "xoxe.xoxp-1", f"{SERVICE}-refresh": "xoxe-1-r1"}
     with pytest.raises(oauth.SignInError, match="isn't the sign-in"):  # the state is used up
         oauth.finish(_ctx(db, 3), {"code": ["c0de"], "state": query["state"]})
 
@@ -262,3 +262,20 @@ def test_loading_the_connect_page_does_not_restart_a_sign_in_under_way() -> None
     assert parse_qs(urlsplit(oauth.pending_url(_ctx(db)) or "").query)["state"] == state
     with pytest.raises(ActionError, match="client_id"):
         account.connect_action(ActionRequest(_ctx(db, client_id=""), Graph([]), {}))
+
+
+def test_losing_the_connection_leaves_a_token_stored_by_hand(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secrets, slack, db = _connected(monkeypatch)
+    secrets.stored[SERVICE] = "xoxb-by-hand"
+    slack.answers.append(client.SlackError("oauth.v2.access", "invalid_refresh_token"))
+    assert oauth.token(_ctx(db, 24 * 60)) is None  # the app's is gone
+    assert secrets.stored == {SERVICE: "xoxb-by-hand"}
+
+
+def test_a_sign_in_state_that_isnt_ascii_is_turned_away_not_a_crash() -> None:
+    db = Database(":memory:")
+    _started(db)
+    with pytest.raises(oauth.SignInError, match="isn't the sign-in"):
+        oauth.finish(_ctx(db, 1), {"code": ["c"], "state": ["été"]})

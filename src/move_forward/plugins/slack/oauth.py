@@ -100,8 +100,15 @@ class Connection(Model):
     """When the access token runs out; None for one that doesn't (no rotation)."""
 
 
+def app_service(config: SlackConfig) -> str:
+    """Where the app's access token is kept in the secret store: apart from a token stored by
+    hand (`mfd token set slack`, under `keychain_service`), which connecting and losing the
+    connection leave alone."""
+    return f"{config.keychain_service}-app"
+
+
 def refresh_service(config: SlackConfig) -> str:
-    """Where the refresh token is kept in the secret store."""
+    """Where the app's refresh token is kept in the secret store."""
     return f"{config.keychain_service}-refresh"
 
 
@@ -162,7 +169,12 @@ def finish(ctx: Context[SlackConfig], query: dict[str, list[str]]) -> Connection
         pending = Pending.model_validate_json(stored) if stored else None
     except ValidationError:
         pending = None
-    if pending is None or not state or not hmac.compare_digest(state, pending.state):
+    # As bytes: compare_digest refuses a str that isn't ASCII, and the query is anyone's.
+    if (
+        pending is None
+        or not state
+        or not hmac.compare_digest(state.encode(), pending.state.encode())
+    ):
         raise SignInError("this isn't the sign-in this dashboard started; connect again")
     ctx.kv.delete(PENDING)  # single use, whatever happens next
     if ctx.now - pending.started > timedelta(minutes=SIGN_IN_MINUTES):
@@ -210,7 +222,7 @@ def _expiry(now: datetime, expires_in: int | None) -> datetime | None:
 
 
 def _store(ctx: Context[SlackConfig], connection: Connection, tokens: _Tokens) -> None:
-    keychain.write(ctx.config.keychain_service, ctx.email, tokens.access_token)
+    keychain.write(app_service(ctx.config), ctx.email, tokens.access_token)
     if tokens.refresh_token:
         keychain.write(refresh_service(ctx.config), ctx.email, tokens.refresh_token)
     ctx.kv.set(CONNECTION, connection.model_dump_json())
@@ -234,7 +246,10 @@ def token(ctx: Context[SlackConfig]) -> str | None:
         found = connection(ctx)
         if found is None:
             return keychain.token(ctx.config, ctx.email)
-        access = keychain.read(ctx.config.keychain_service, ctx.email)
+        # A connection made before the app had its own entry kept its token in the hand one's.
+        access = keychain.read(app_service(ctx.config), ctx.email) or keychain.read(
+            ctx.config.keychain_service, ctx.email
+        )
         if found.expires_at is None or ctx.now < found.expires_at - REFRESH_AHEAD:
             return access
         refresh = keychain.read(refresh_service(ctx.config), ctx.email)
@@ -264,8 +279,8 @@ def token(ctx: Context[SlackConfig]) -> str | None:
         try:
             _store(ctx, renewed, tokens)
         except (ValueError, CommandError, OSError) as e:
-            # The old refresh token is spent: without the new one kept, the connection is
-            # gone once this access token runs out. Use it meanwhile.
+            # The old refresh token is spent, and the new one couldn't be kept: the connection
+            # is forgotten now, and the new access token serves this one call.
             _lose(ctx, f"couldn't keep its refreshed token: {e}")
         return tokens.access_token
 
@@ -280,15 +295,16 @@ def _lose(ctx: Context[SlackConfig], why: str) -> None:
 
 
 def forget(ctx: Context[SlackConfig]) -> None:
-    """Drop the connection and its tokens from the secret store."""
+    """Drop the connection and its tokens from the secret store; a token stored by hand
+    stays."""
     ctx.kv.delete(CONNECTION)
-    keychain.delete(ctx.config.keychain_service, ctx.email)
+    keychain.delete(app_service(ctx.config), ctx.email)
     keychain.delete(refresh_service(ctx.config), ctx.email)
 
 
 def disconnect(ctx: Context[SlackConfig]) -> None:
     """Sign out: revoke the token with Slack (if it still works), then forget it."""
-    access = keychain.read(ctx.config.keychain_service, ctx.email)
+    access = keychain.read(app_service(ctx.config), ctx.email)
     if access and connection(ctx) is not None:
         # Gone already, or offline: forgetting it is what matters here.
         with contextlib.suppress(client.SlackError, urllib.error.URLError):
