@@ -6,6 +6,7 @@ import conftest
 import pytest
 
 from move_forward import auth, registry, tls
+from move_forward import db as db_module
 from move_forward.config import DEFAULT_DB_PATH
 from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database, Migration
 from move_forward.plugin import LoadRequest
@@ -189,6 +190,32 @@ def test_the_database_and_its_backups_are_mine_alone(tmp_path: Path) -> None:
     [backup] = (path.parent / "backups").iterdir()
     assert is_private(backup)
     assert is_private(path.parent / "backups")
+
+
+def test_sqlites_side_files_are_mine_alone_too(tmp_path: Path) -> None:
+    path = tmp_path / "dashboard.db"
+    db = Database(path)
+    db.migrate("test", [Migration("0001_t", "CREATE TABLE test_t (x);")])
+    db.execute("INSERT INTO test_t VALUES (1)")
+    sides = [path.with_name(path.name + s) for s in ("-wal", "-shm")]
+    assert sides and all(is_private(side) for side in sides if side.exists())
+
+
+def test_on_windows_the_side_files_are_made_private_before_sqlite_opens_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """There SQLite makes them with their folder's access, not the database's, as on Unix."""
+    made: list[str] = []
+    real = db_module._private  # pyright: ignore[reportPrivateUsage]
+
+    def recording(path: Path) -> None:
+        made.append(path.name)
+        real(path)
+
+    monkeypatch.setattr(db_module.sys, "platform", "win32")
+    monkeypatch.setattr(db_module, "_private", recording)
+    Database(tmp_path / "dashboard.db")
+    assert made == ["dashboard.db", "dashboard.db-wal", "dashboard.db-shm"]
 
 
 def test_kinds_kept_by_core_are_renamed_for_the_plugins_that_publish_them(tmp_path: Path) -> None:

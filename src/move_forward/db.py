@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import sqlite3
+import sys
 import threading
 from collections.abc import Callable, Generator, Iterable, Sequence
 from contextlib import contextmanager
@@ -324,10 +325,16 @@ Params = tuple[object, ...]
 
 def _private(path: Path) -> None:
     """Make `path` a file only I can read, creating it empty if it isn't there: the notes and
-    what the plugins fetched are mine, not other users' of this machine. SQLite gives its
-    -wal and -shm files the database's permissions."""
+    what the plugins fetched are mine, not other users' of this machine. On Unix SQLite gives
+    its -wal and -shm files the database's permissions; on Windows they'd take their folder's,
+    so `Database` makes them first (see `_side_files`)."""
     os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
     make_private(path)
+
+
+def _side_files(path: Path) -> list[Path]:
+    """The -wal and -shm files SQLite keeps beside the database in WAL mode."""
+    return [path.with_name(path.name + suffix) for suffix in ("-wal", "-shm")]
 
 
 class Database:
@@ -339,6 +346,9 @@ class Database:
         if self._path:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             _private(self._path)
+            if sys.platform == "win32":  # SQLite opens them as they are, keeping their access
+                for side in _side_files(self._path):
+                    _private(side)
         self._keep_backups = keep_backups
         self._backed_up = not (self._path and self._path.exists() and self._path.stat().st_size)
         """Whether there's no need for a backup: one was taken, or there's nothing to lose."""
