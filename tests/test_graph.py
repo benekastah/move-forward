@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from move_forward.domain import Model
-from move_forward.graph import Entity, Graph, Ref
+from move_forward.domain import KindModel, Model
+from move_forward.graph import Entity, Graph, KindSpec, Ref
 
 PR = Ref(kind="pull_request", id="https://github.com/o/r/pull/1")
 OTHER_PR = Ref(kind="pull_request", id="https://github.com/o/r/pull/2")
@@ -159,3 +159,19 @@ def test_a_hiding_entity_hides_what_it_covers_and_what_its_linkers_link() -> Non
     assert not graph([PR]).hidden(TICKET)  # icing a PR doesn't ice its ticket
     assert not graph([ENTRY]).hidden(ice)  # what hides is never hidden
     assert not Graph(graph([branch]).of_kind("ice")).hidden(branch)  # no kind declared hiding
+
+
+def test_a_ticket_named_only_in_text_someone_else_wrote_doesnt_hide() -> None:
+    ice = Entity(ref=Ref(kind="ice", id="1"), title="on ice", refs=[TICKET])
+
+    def hidden(pr: Entity, kinds: dict[str, KindSpec] | None = None) -> bool:
+        graph = Graph([pr, ice], linking=LINKING, hiding=["ice"], kinds=kinds)
+        return graph.hidden(pr.ref)
+
+    mine = Entity(ref=PR, title="pr 1", mentions=["follow-up to APP-1"])
+    theirs = mine.model_copy(update={"mentions_hide": False})
+    assert hidden(mine)  # my PR naming the iced ticket
+    assert not hidden(theirs)  # a PR I'm asked to review, its text someone else's
+    assert hidden(theirs.model_copy(update={"refs": [TICKET]}))  # its tool links it: it does
+    anyones = {PR.kind: KindSpec(KindModel, tags_from_text=False)}  # text anyone may write
+    assert not hidden(mine, anyones)
