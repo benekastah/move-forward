@@ -3,7 +3,7 @@ track of what I've been told.
 
 A plugin compares its snapshot from before a refresh with the one after (`Plugin.events`)
 and says what happened as `Event`s; core adds the ones about the dashboard itself (a plugin
-that keeps failing, certificates ending). Nothing is on until I subscribe to its kind
+that keeps failing). Nothing is on until I subscribe to its kind
 (`[notifications] subscribe`, set on the settings page or by `mfd init`): events of kinds I
 haven't subscribed to are never stored. Stored events wait until a dashboard tab, with
 the browser's permission, asks for them; events about the same thing arrive as one
@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 
 from pydantic import Field
 
-from . import tls
 from .db import CORE, Database
 from .domain import Model
 from .repositories import KvRepository, SnapshotRepository
@@ -27,7 +26,6 @@ DASHBOARD = "dashboard"
 """The prefix of the kinds core's own events have; plugins' are `<plugin name>.`."""
 DASHBOARD_KINDS = {
     f"{DASHBOARD}.source_failing": "a plugin can't fetch, for a while",
-    f"{DASHBOARD}.certificate_ending": "the HTTPS certificates are ending soon",
 }
 """The kinds core makes events of, with what each says, for the settings page."""
 MAX_DELIVERED_AT_ONCE = 20
@@ -168,12 +166,9 @@ def unknown(subscribed: list[str], known: set[str]) -> list[str]:
 _SOURCE_STATE = "failing:"
 
 
-def dashboard_events(
-    db: Database, config: NotificationsConfig, https_paths: tls.Paths | None, now: datetime
-) -> list[Event]:
-    """What core itself has to say: a plugin whose fetch has failed for `failing_minutes`
-    (once, until it works again), and the HTTPS certificates ending soon (`https_paths`, None
-    when HTTPS is off), once for each thing wrong. What was said is kept in core's kv."""
+def dashboard_events(db: Database, config: NotificationsConfig, now: datetime) -> list[Event]:
+    """What core itself has to say: a plugin whose fetch has failed for `failing_minutes`,
+    once, until it works again. What was said is kept in core's kv."""
     kv = KvRepository(db, CORE)
     events: list[Event] = []
     for source, status in SnapshotRepository(db).all().items():
@@ -196,7 +191,6 @@ def dashboard_events(
             )
             said = True
         kv.set(key, _SourceState(since=since, said=said).model_dump_json())
-    events += _certificate_events(kv, https_paths)
     return events
 
 
@@ -216,22 +210,3 @@ def _state(raw: str | None) -> _SourceState:
         return _SourceState.model_validate_json(raw)
     except ValueError:
         return _SourceState()
-
-
-def _certificate_events(kv: KvRepository, paths: tls.Paths | None) -> list[Event]:
-    """One event when the certificates' problem is new or has changed, none while it's the
-    same; the kv's copy is cleared once there's no problem."""
-    problem = (tls.problem(paths) or "") if paths is not None else ""
-    if kv.get("certificate") == problem:
-        return []
-    kv.set("certificate", problem)
-    if not problem:
-        return []
-    return [
-        Event(
-            kind="certificate_ending",
-            thing="certificate",
-            title="HTTPS certificates",
-            text=problem[:MAX_TEXT],
-        )
-    ]

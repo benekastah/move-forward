@@ -5,6 +5,15 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### No more HTTPS mode
+
+The dashboard serves plain HTTP on localhost only. A config that sets `https` (true or false)
+is refused when it loads: delete the line. `mfd cert` is gone, and so is the
+`dashboard.certificate_ending` notification kind: take it out of `[notifications] subscribe`.
+Reach the dashboard at `http://mfd.localhost:<port>` (`mfd open` does). The `tls/` folder next
+to the database is no longer read, and can be deleted, as can the authority `mfd cert --trust`
+added to the system's and browsers' stores.
+
 ### Text in UTF-8 everywhere
 
 `mfd` prints UTF-8 even when its output is redirected (on Windows it used the code page, and

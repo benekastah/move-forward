@@ -54,10 +54,6 @@ class Config(Strict):
     migrations change the database; the oldest go first. 0 takes none."""
     port: int = DEFAULT_PORT
     """The localhost port `mfd serve` listens on."""
-    https: bool = False
-    """Serve over HTTPS with the certificate `mfd cert` makes (until there is one, plain
-    HTTP). Off by default: the dashboard only listens on localhost, and nothing it does needs
-    HTTPS."""
     refresh_on_load_seconds: int = DEFAULT_REFRESH_ON_LOAD_SECONDS
     """A page load starts a background refresh if the last one began longer ago than this."""
     prune_days: int = DEFAULT_PRUNE_DAYS
@@ -143,6 +139,11 @@ class Config(Strict):
             moved.append(
                 "`notes_dir` is gone; the notes live in the database now: import them once with"
                 " `mfd notes import <dir>`"
+            )
+        if "https" in settings:
+            moved.append(
+                "`https` is gone; the dashboard serves plain HTTP on localhost only: delete the"
+                " line"
             )
         if "refresh_seconds" in settings:
             moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")

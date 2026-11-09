@@ -19,8 +19,7 @@ the whole workspace, so someone makes it once. Slack's page (`/slack`) shows how
 3. Share its client id.
 
 Then each person sets `client_id` in `[slack]` and presses Connect Slack on `/slack`.
-Slack sends the browser back to `http://localhost:<port>/slack/callback` (`https://` when
-the dashboard serves HTTPS). The manifest lists that URL for the default port; on another
+Slack sends the browser back to `http://localhost:<port>/slack/callback`. The manifest lists that URL for the default port; on another
 port, add yours to the app's redirect URLs. The sign-in's tokens go in the system's secret
 store under `keychain_service`-app (the access token) and `keychain_service`-refresh, apart
 from a token given by hand with `mfd token set slack` (under `keychain_service`), which

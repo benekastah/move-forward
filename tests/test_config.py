@@ -97,6 +97,8 @@ def test_moved_settings_say_where_they_went(tmp_path: Path) -> None:
         _load(tmp_path, MINIMAL + "repos = []\n")
     with pytest.raises(ValidationError, match=r"`notes_dir` is gone; .*mfd notes import"):
         _load(tmp_path, MINIMAL + 'notes_dir = "~/n"\n')
+    with pytest.raises(ValidationError, match=r"`https` is gone; .*plain HTTP.*delete the line"):
+        _load(tmp_path, MINIMAL + "https = true\n")
     with pytest.raises(ValidationError, match=r"`dir` is gone; .*mfd notes import"):
         _load(tmp_path, MINIMAL + '\n[notes]\ndir = "~/n"\n')
 

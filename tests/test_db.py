@@ -5,7 +5,7 @@ from pathlib import Path
 import conftest
 import pytest
 
-from move_forward import auth, registry, tls
+from move_forward import auth, registry
 from move_forward import db as db_module
 from move_forward.config import DEFAULT_DB_PATH
 from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database, Migration
@@ -387,7 +387,6 @@ def test_no_test_touches_the_real_data_dir(tmp_path: Path, monkeypatch: pytest.M
         lambda: Database(real / "dashboard.db"),
         lambda: auth.load_or_create(real / "token"),
         lambda: auth.rotate(real / "token"),
-        lambda: tls.Paths.beside(real / "dashboard.db"),
     ):
         with pytest.raises(AssertionError, match="opened the real database's dir"):
             touch()

@@ -3,16 +3,13 @@
 The token goes nowhere: the client proves it has it by an HMAC over a nonce the server just
 made, and only believes the server, and so only opens a browser at it, once the server has
 proved the same over the client's own nonce. A program that grabbed the port first can do
-neither, and learns nothing it could use. Over HTTPS the connection also verifies the server's
-certificate against the local authority, so a squatter fails earlier still.
+neither, and learns nothing it could use.
 """
 
 import http.client
 import json
 import secrets
-import ssl
 from http import HTTPStatus
-from pathlib import Path
 from typing import cast
 
 from . import auth
@@ -22,15 +19,6 @@ TIMEOUT_SECONDS = 5
 
 class SignInError(Exception):
     """Why the browser can't be signed in; says what to do about it."""
-
-
-def _connection(port: int, scheme: str, ca: Path | None) -> http.client.HTTPConnection:
-    if scheme == "https":
-        context = ssl.create_default_context(cafile=ca) if ca else ssl.create_default_context()
-        return http.client.HTTPSConnection(
-            "127.0.0.1", port, context=context, timeout=TIMEOUT_SECONDS
-        )
-    return http.client.HTTPConnection("127.0.0.1", port, timeout=TIMEOUT_SECONDS)
 
 
 def _post(
@@ -52,10 +40,10 @@ def _post(
     return HTTPStatus(response.status), {k: v for k, v in found.items() if isinstance(v, str)}
 
 
-def login_code(port: int, scheme: str, token: str, ca: Path | None = None) -> str:
+def login_code(port: int, token: str) -> str:
     """A login code from the dashboard on `port`, once it has shown it knows `token`.
     Raises `SignInError` when it isn't running, isn't this dashboard, or won't sign in."""
-    connection = _connection(port, scheme, ca)
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=TIMEOUT_SECONDS)
     try:
         status, challenge = _post(connection, port, "/login/challenge", None)
         nonce = challenge.get("nonce")
@@ -83,7 +71,7 @@ def login_code(port: int, scheme: str, token: str, ca: Path | None = None) -> st
         if not auth.matches(auth.proof(token, "server", mine, code), theirs):
             raise SignInError(f"the server on port {port} didn't prove it is the dashboard")
         return code
-    except (OSError, http.client.HTTPException) as e:  # refused, TLS, timeout
+    except (OSError, http.client.HTTPException) as e:  # refused, timeout
         raise SignInError(
             f"couldn't reach the dashboard on port {port} ({e}): is `mfd serve` running?"
         ) from e

@@ -3,7 +3,6 @@
 import json
 import logging
 import re
-import ssl
 import sys
 import threading
 import time
@@ -12,12 +11,12 @@ from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from pydantic import Field, TypeAdapter, ValidationError
 
-from . import act_now, auth, render, settings, shell, tls
+from . import act_now, auth, render, settings, shell
 from .config import Config
 from .db import Database
 from .graph import Graph, Ref
@@ -52,8 +51,6 @@ STATIC_FILES = {
 }
 """Served paths to the file in `STATIC_DIR` and its content type."""
 MAX_BODY_BYTES = 64 * 1024
-TLS_HANDSHAKE_SECONDS = 10
-"""A connection that hasn't finished its TLS handshake by then is dropped."""
 FRAME_HEADERS = {
     "X-Frame-Options": "DENY",
     "Content-Security-Policy": "frame-ancestors 'none'",
@@ -69,8 +66,6 @@ NOTIFICATION_STREAM_SECONDS = 5
 """How often a connected dashboard tab checks for notifications and gets a heartbeat."""
 CHANGE_LOOP_SECONDS = 1.0
 """How often the change loop looks for plugins whose `change_check_seconds` have passed."""
-TLS_RECHECK_SECONDS = 3600
-"""How often the HTTPS server looks for a newer certificate in the chain."""
 LOGIN_PATH = "/login"
 LOGIN_CHALLENGE_PATH = "/login/challenge"
 LOGIN_CODE_PATH = "/login/code"
@@ -106,9 +101,7 @@ def _allowed_hosts(port: int) -> set[str]:
     return {f"{host}:{port}" for host in LOCAL_HOSTS}
 
 
-def _from_this_dashboard(
-    host: str | None, origin: str | None, port: int, scheme: str = "http"
-) -> bool:
+def _from_this_dashboard(host: str | None, origin: str | None, port: int) -> bool:
     """Whether a request may be served: it names this server as its `Host`, and a browser
     sending it from another page (its `Origin`) isn't sending it from someone else's site.
 
@@ -118,7 +111,7 @@ def _from_this_dashboard(
     allowed = _allowed_hosts(port)
     if host not in allowed:
         return False
-    return origin is None or origin in {f"{scheme}://{h}" for h in allowed}
+    return origin is None or origin in {f"http://{h}" for h in allowed}
 
 
 class App:
@@ -129,7 +122,6 @@ class App:
         config: Config,
         db: Database,
         token: str,
-        scheme: str = "http",
         config_path: Path | None = None,
         token_file: auth.TokenFile | None = None,
     ):
@@ -143,8 +135,6 @@ class App:
         """Where the token is read again from, when it is replaced (`mfd token rotate`)."""
         self.handshake = auth.Handshake()
         """The nonces and codes `mfd open` signs a browser in with (see `auth.Handshake`)."""
-        self.scheme = scheme
-        """"https" when serving with the certificate (see `tls`), else "http"."""
         self._refresh_lock = threading.Lock()
         self._wake = threading.Event()
         self.refreshing: frozenset[str] = frozenset()
@@ -352,23 +342,9 @@ class App:
     def dashboard_page(self, notice: str = "", spot: render.Spot | None = None) -> str:
         """The page from stored data; a page load also refreshes stale data in the background."""
         self.refresh_if_stale()
-        warning, urgency = self.certificate_warning()
         return render.dashboard_page(
-            build_dashboard(self.config, self.db),
-            self.refreshing,
-            notice,
-            warning,
-            urgency,
-            spot,
+            build_dashboard(self.config, self.db), self.refreshing, notice, spot
         )
-
-    def certificate_warning(self) -> tuple[str, str | None]:
-        """What's wrong with the HTTPS certificates, if `https` is on, and how loudly to say
-        it (see `tls.urgency`)."""
-        if not self.config.https:
-            return "", None
-        paths = tls.Paths.beside(self.config.db_path)
-        return tls.problem(paths) or "", tls.urgency(paths)
 
     def run_action(
         self, name: str, fields: dict[str, str], back: str | None = None
@@ -434,13 +410,9 @@ class App:
         self.refresh_if_stale()
         dashboard = build_dashboard(self.config, self.db, surface="focus")
         if not category:
-            return render.focus_categories_page(dashboard, self._alert())
+            return render.focus_categories_page(dashboard)
         done_item = kept_item(self.config, self.db, kept) if kept else None
-        return render.focus_page(dashboard, category, index, notice, done_item, self._alert())
-
-    def _alert(self) -> str:
-        """The certificate banner, for focus mode's pages."""
-        return render.banner(*self.certificate_warning())
+        return render.focus_page(dashboard, category, index, notice, done_item)
 
 
 def _said(changed: dict[str, str]) -> str:
@@ -586,7 +558,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             self.send_response(HTTPStatus.SEE_OTHER)
             self.send_header("Location", location)
             if notice:
-                cookie = auth.notice_cookie(app.token, notice, app.scheme == "https")
+                cookie = auth.notice_cookie(app.token, notice)
                 self.send_header("Set-Cookie", cookie)
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -603,7 +575,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             """Answer 403 to a request from another site; returns whether it did."""
             origin = self.headers.get("Origin") if check_origin else None
             port = cast(HTTPServer, self.server).server_port
-            if _from_this_dashboard(self.headers.get("Host"), origin, port, app.scheme):
+            if _from_this_dashboard(self.headers.get("Host"), origin, port):
                 return False
             self._html(HTTPStatus.FORBIDDEN, "<p>Forbidden: not from this dashboard.</p>")
             return True
@@ -631,7 +603,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             sessions.prune(datetime.now(UTC))
             session = sessions.create(datetime.now(UTC), timedelta(days=auth.SESSION_DAYS))
             self.send_response(HTTPStatus.SEE_OTHER)
-            self.send_header("Set-Cookie", auth.set_cookie(session, port, app.scheme == "https"))
+            self.send_header("Set-Cookie", auth.set_cookie(session, port))
             self.send_header("Location", "/")
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -648,7 +620,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 # they are. The host is one of ours (checked above), so this can't send the
                 # browser anywhere else.
                 self.send_response(HTTPStatus.FOUND)
-                self.send_header("Location", f"{auth.origin(port, app.scheme)}{self.path}")
+                self.send_header("Location", f"{auth.origin(port)}{self.path}")
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
@@ -823,51 +795,6 @@ class _HTTPServer(ThreadingHTTPServer):
     allow_reuse_address = sys.platform != "win32"
 
 
-class _TLSServer(_HTTPServer):
-    """Serves HTTPS: each connection's handshake happens in its own thread, so a client that
-    stalls in it holds up only itself. It serves with the chain's current certificate,
-    looking again every `TLS_RECHECK_SECONDS`, so it moves to the next by itself."""
-
-    def __init__(
-        self,
-        address: tuple[str, int],
-        handler: type[BaseHTTPRequestHandler],
-        paths: tls.Paths,
-        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
-    ):
-        self._paths = paths
-        self._clock = clock
-        self._lock = threading.Lock()
-        self._context = tls.context(paths, clock())
-        self._checked = time.monotonic()
-        super().__init__(address, handler)
-
-    def context(self) -> ssl.SSLContext:
-        """The context for a new connection: with the certificate current now."""
-        with self._lock:
-            if time.monotonic() - self._checked >= TLS_RECHECK_SECONDS:
-                self._context = tls.context(self._paths, self._clock())
-                self._checked = time.monotonic()
-            return self._context
-
-    def finish_request(self, request: Any, client_address: Any) -> None:
-        request.settimeout(TLS_HANDSHAKE_SECONDS)
-        try:
-            tls_request = self.context().wrap_socket(request, server_side=True)
-        except (ssl.SSLError, OSError):  # plain HTTP to the HTTPS port, a scan, a timeout
-            return
-        tls_request.settimeout(None)
-        try:
-            super().finish_request(tls_request, client_address)
-        finally:  # wrapping detached the plain socket, so the server's own close misses this
-            tls_request.close()
-
-
-def scheme(config: Config) -> str:
-    """ "https" when `https` is on and the certificate is there (`mfd cert`), else "http"."""
-    return tls.scheme(config.https, config.db_path)
-
-
 def serve(
     config: Config,
     db: Database,
@@ -876,31 +803,16 @@ def serve(
     config_path: Path | None = None,
     on_listening: Callable[[], object] | None = None,
 ) -> None:
-    """Serve forever on localhost, refreshing in the background: over HTTPS with the
-    certificate, else plain HTTP. The settings page saves into `config_path`. `on_listening`
-    runs in a thread once the port is bound (`mfd serve --open` signs a browser in)."""
+    """Serve forever on localhost over HTTP, refreshing in the background. The settings page
+    saves into `config_path`. `on_listening` runs in a thread once the port is bound (`mfd
+    serve --open` signs a browser in)."""
     if port and port != config.port:  # `--port`: plugins build URLs back to the dashboard
         config = config.model_copy(update={"port": port})
-    served = scheme(config)
-    app = App(
-        config,
-        db,
-        token,
-        served,
-        config_path,
-        auth.TokenFile(auth.token_path(config.db_path)),
-    )
-    address = ("127.0.0.1", port or config.port)
-    if served == "https":
-        paths = tls.Paths.beside(config.db_path)
-        server: _HTTPServer = _TLSServer(address, make_handler(app), paths)
-    else:
-        if config.https:
-            log.warning("no certificate yet, so plain HTTP: `mfd cert` makes one")
-        server = _HTTPServer(address, make_handler(app))
+    app = App(config, db, token, config_path, auth.TokenFile(auth.token_path(config.db_path)))
+    server = _HTTPServer(("127.0.0.1", port or config.port), make_handler(app))
     threading.Thread(target=app.run_refresh_loop, name="refresh", daemon=True).start()
     threading.Thread(target=app.run_change_loop, name="changes", daemon=True).start()
-    log.info("serving on %s://127.0.0.1:%d", served, server.server_port)
+    log.info("serving on http://127.0.0.1:%d", server.server_port)
     if on_listening is not None:
         threading.Thread(target=on_listening, name="listening", daemon=True).start()
     try:
