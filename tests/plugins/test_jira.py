@@ -3,7 +3,7 @@ import urllib.error
 import urllib.request
 from datetime import UTC, date, datetime
 from email.message import Message
-from typing import cast
+from typing import Self, cast
 
 import pytest
 from legacy import save_json_snapshot
@@ -243,8 +243,16 @@ def test_other_jira_errors_still_fail_the_fetch(monkeypatch: pytest.MonkeyPatch)
 
 
 class _Closable:
-    def close(self) -> None:
+    """A response, as `with opener.open(...)` reads it."""
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
         pass
+
+    def read(self) -> bytes:
+        return b"{}"
 
 
 def _empty_search_with_myself(monkeypatch: pytest.MonkeyPatch, status: int) -> list[str]:
@@ -257,10 +265,16 @@ def _empty_search_with_myself(monkeypatch: pytest.MonkeyPatch, status: int) -> l
             raise urllib.error.HTTPError(request.full_url, status, "", Message(), None)
         return _Closable()
 
-    def fake_page(config: object, email: str, api_token: str, body: dict[str, object]) -> bytes:
-        return b'{"issues": []}'
+    real = jira._request  # pyright: ignore[reportPrivateUsage]
 
-    monkeypatch.setattr(jira, "_search_page", fake_page)
+    def fake_request(
+        config: JiraConfig, email: str, api_token: str, path: str, body: object = None
+    ) -> bytes:
+        if path == jira.SEARCH_PATH:
+            return b'{"issues": []}'
+        return real(config, email, api_token, path)
+
+    monkeypatch.setattr(jira, "_request", fake_request)
     monkeypatch.setattr(jira.http.opener, "open", fake_open)
     return asked
 
@@ -390,3 +404,25 @@ def test_a_ticket_done_without_a_resolution_is_resolved_when_it_moved_to_done() 
     fields["status"] = {"name": "In Progress", "statusCategory": {"key": "indeterminate"}}
     fields["resolutiondate"] = "2026-10-20T10:00:00.000+0000"  # reopened: a stale date
     assert jira.to_issue(jira.RawIssue.model_validate(raw), "https://j").resolved is None
+
+
+def test_a_search_reads_every_page_by_its_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[dict[str, object]] = []
+    pages = [
+        '{"issues": [], "nextPageToken": "p2"}',  # an empty first page: not the token's fault
+        '{"issues": [], "nextPageToken": "p3"}',
+        '{"issues": []}',
+    ]
+
+    def fake_request(
+        config: JiraConfig, email: str, api_token: str, path: str, body: object = None
+    ) -> bytes:
+        if path != jira.SEARCH_PATH:
+            return b"{}"  # /myself, accepting the token
+        assert isinstance(body, dict)
+        sent.append(cast(dict[str, object], body))
+        return pages.pop(0).encode()
+
+    monkeypatch.setattr(jira, "_request", fake_request)
+    assert jira.search(JiraConfig(site="https://j"), "me@x", "assignee = me", "t") == []
+    assert [b.get("nextPageToken") for b in sent] == [None, "p2", "p3"]

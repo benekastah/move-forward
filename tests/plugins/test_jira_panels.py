@@ -176,6 +176,20 @@ def test_a_blocked_ticket_is_nominated_and_comes_back_once_untouched_for_days() 
     )  # the stale one first
 
 
+def test_a_ticket_in_a_blocked_status_is_blocked_without_links_and_a_top_bug_is_important() -> None:
+    dashboard = _jira(
+        [
+            issue("APP-1", type="Task", status="Blocked"),  # status_blocked's default
+            issue("APP-2", type="Bug", priority="Highest"),  # not escalated, but at the top
+            issue("APP-3", type="Bug", priority="High"),
+        ]
+    ).dashboard()
+    why = {i.title.split(": ", 1)[1].split()[0]: i.details[0] for i in dashboard.act_now()}
+    assert why == {"APP-2": "why: important", "APP-1": "why: blocked"}
+    next_badges = {i.title.split()[0]: i.badges for i in panel(dashboard, "jira.jira_next").items}
+    assert "blocked" in [getattr(b, "text", b) for b in next_badges["APP-1"]]
+
+
 def test_any_name_of_a_status_matches_and_a_move_offers_them_in_order() -> None:
     dashboard = build(
         github=snapshot(mine=[pr(2)]),

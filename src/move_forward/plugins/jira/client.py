@@ -193,24 +193,6 @@ def to_issue(
     )
 
 
-def _search_page(config: JiraConfig, email: str, api_token: str, body: dict[str, object]) -> bytes:
-    """One page of a JQL search: the response to `body`."""
-    url = config.site.rstrip("/") + SEARCH_PATH
-    http.require_https(url, "the Jira token")
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode(),
-        headers={
-            "Authorization": _basic_auth(email, api_token),
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    with http.opener.open(request, timeout=60) as response:
-        return response.read()
-
-
 def _request(
     config: JiraConfig,
     email: str,
@@ -242,13 +224,8 @@ def verify_token(config: JiraConfig, email: str, api_token: str) -> None:
     """Raise `SourceError` if Jira doesn't accept the token. A search with a rejected token
     isn't refused: Jira answers it as an anonymous user, with no issues, so an empty search
     can't tell a bad token from no tickets."""
-    url = config.site.rstrip("/") + MYSELF_PATH
-    http.require_https(url, "the Jira token")
-    request = urllib.request.Request(
-        url, headers={"Authorization": _basic_auth(email, api_token), "Accept": "application/json"}
-    )
     try:
-        http.opener.open(request, timeout=60).close()
+        _request(config, email, api_token, MYSELF_PATH)
     except urllib.error.HTTPError as e:
         if e.code == HTTPStatus.UNAUTHORIZED:
             raise SourceError(
@@ -277,7 +254,9 @@ def search(
         body: dict[str, object] = {"jql": jql, "fields": FIELDS, "maxResults": PAGE_SIZE}
         if next_token:
             body["nextPageToken"] = next_token
-        page = RawSearchResponse.model_validate_json(_search_page(config, email, api_token, body))
+        page = RawSearchResponse.model_validate_json(
+            _request(config, email, api_token, SEARCH_PATH, body)
+        )
         if not issues and not page.issues:
             verify_token(config, email, api_token)
         issues.extend(
@@ -339,7 +318,9 @@ def updated_within(config: JiraConfig, email: str, minutes: int) -> bool:
         "fields": ["key"],
         "maxResults": 1,
     }
-    page = _Keys.model_validate_json(_search_page(config, email, token(config, email), body))
+    page = _Keys.model_validate_json(
+        _request(config, email, token(config, email), SEARCH_PATH, body)
+    )
     return bool(page.issues)
 
 
