@@ -42,21 +42,27 @@ class SlackConfig(TokenFields):
     filled in, and a brace is a brace."""
     teams: dict[str, str] = Field(default_factory=dict)
     """Where review pings to a team go, e.g. `#team-a`, by its name in the top-level `teams`.
-    Overrides the reviewer map."""
-    team_channel: str = ""
-    """The channel of a team nothing else names one for, from its name: e.g. `#team-{team}`.
-    Empty means no guess."""
+    Wins over a channel set by hand (`mfd slack team set`)."""
 
     @model_validator(mode="before")
     @classmethod
-    def _no_client_id(cls, data: object) -> object:
-        if isinstance(data, dict) and "client_id" in cast(dict[str, object], data):
+    def _gone(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        settings = cast(dict[str, object], data)
+        if "client_id" in settings:
             raise ValueError(
                 "`client_id` is gone, with the Slack app's sign-in: delete the line; for"
                 " looking up reviewers' Slack ids, give a token with users:read.email"
                 " (`mfd token set slack`, or $SLACK_API_TOKEN)"
             )
-        return cast(object, data)
+        if "team_channel" in settings:
+            raise ValueError(
+                "`team_channel` is gone, with its guess at a team's channel: delete the line,"
+                ' and name each team\'s channel in [slack.teams] (e.g. web = "#team-web"), or'
+                " set it with `mfd slack team set <team> <#channel>`"
+            )
+        return settings
 
     @field_validator("workspace_url")
     @classmethod
@@ -64,19 +70,6 @@ class SlackConfig(TokenFields):
         if value and not value.startswith("https://"):
             raise ValueError(f"{value!r} must be an https:// URL, e.g. https://example.slack.com")
         return value
-
-    @field_validator("team_channel")
-    @classmethod
-    def _pattern(cls, value: str) -> str:
-        if value and (not value.startswith("#") or "{team}" not in value):
-            raise ValueError(
-                f"{value!r} must be a channel name with {{team}} in it, e.g. #team-{{team}}"
-            )
-        return value
-
-    def guessed_channel(self, team: str) -> str | None:
-        """The channel `team_channel` gives `team`, if it's set."""
-        return self.team_channel.replace("{team}", team) if self.team_channel else None
 
     @field_validator("ping_first")
     @classmethod

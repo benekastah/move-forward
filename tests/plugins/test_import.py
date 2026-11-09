@@ -27,7 +27,11 @@ def test_each_enabled_plugin_imports_what_it_knows(
     config = _config(tmp_path, '[github]\norg = "acme"\n\n[slack]\n')
     assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
     said = capsys.readouterr().out.splitlines()
-    assert [line.partition(":")[0] for line in said] == ["github", "notes", "slack"]
+    assert list(dict.fromkeys(line.partition(":")[0] for line in said)) == [
+        "github",
+        "notes",
+        "slack",
+    ]
 
 
 def test_one_plugin_refusing_doesnt_stop_the_others(

@@ -69,11 +69,11 @@ class PingForm(BaseModel):
 
 
 def _team_channels(config: SlackConfig, known: dict[str, TeamChannel]) -> dict[str, TeamChannel]:
-    """The reviewer map's team channels, with `[slack.teams]` winning by name."""
+    """The team channels set by hand, with `[slack.teams]` winning by name."""
     teams = dict(known)
     for name, channel in config.teams.items():
         current = teams.get(name)
-        # The map's id is its channel's: another channel named here is looked up anew.
+        # The id set by hand is its channel's: it's kept only for the same channel.
         same = current is not None and current.channel_name == channel
         teams[name] = TeamChannel(
             slug=name,

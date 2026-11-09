@@ -13,9 +13,9 @@ from .repository import SlackRepository
 
 
 def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> list[str]:
-    """Read Slack ids and team channels from `reviewer-map.md`, and logged nudges from
-    `work-notes.md`, replacing what an earlier import read; nothing when it has neither. Can
-    be run again any time."""
+    """Read Slack ids from `reviewer-map.md`, and logged nudges from `work-notes.md`,
+    replacing what an earlier import read; and set its teams' channels as if by hand, where
+    none is set. Nothing when it has neither file. Can be run again any time."""
     names = (markdown.REVIEWER_MAP_FILE, markdown.WORK_NOTES_FILE)
     if not any((notes_dir / name).exists() for name in names):
         return []
@@ -26,8 +26,13 @@ def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> list[str]:
 
     people, teams = markdown.read_reviewer_map(read(markdown.REVIEWER_MAP_FILE))
     pings = markdown.read_nudges(read(markdown.WORK_NOTES_FILE))
-    SlackRepository(ctx.db).replace_imported(people, teams, pings)
-    return [f"imported {len(people)} people, {len(teams)} teams and {len(pings)} logged nudges"]
+    set_teams = SlackRepository(ctx.db).replace_imported(people, teams, pings)
+    left = sorted({t.slug for t in teams} - set(set_teams))
+    return [
+        f"imported {len(people)} people and {len(pings)} logged nudges",
+        f"set {len(set_teams)} teams' channels, as by hand"
+        + (f"; left {', '.join(left)}, which had one set already" if left else ""),
+    ]
 
 
 def list_destinations(ctx: Context[SlackConfig], as_json: bool) -> str:

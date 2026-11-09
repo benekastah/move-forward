@@ -5,6 +5,17 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### `[slack] team_channel` is gone; teams' channels are set by hand
+
+A team's ping channel now comes only from `[slack.teams]` or from one set by hand
+(`/slack/contacts`, `mfd slack team set`), `[slack.teams]` winning. A config that still sets
+`team_channel` is refused, saying it's gone: delete the line, and name each team's channel in
+`[slack.teams]` (`web = "#team-web"`) or with `mfd slack team set <team> <#channel>`. Channels
+an earlier import read are kept, as set by hand. `mfd import` now sets the reviewer map's
+teams' channels as if by hand, leaving a team that has one, and says which it left: it no
+longer replaces them on a second run. In `mfd slack destinations --json`, every team's
+`source` is `dashboard`.
+
 ### One `mfd import <dir>` replaces the three imports
 
 `mfd notes import`, `mfd github import` and `mfd slack import` are gone. `mfd import <dir>

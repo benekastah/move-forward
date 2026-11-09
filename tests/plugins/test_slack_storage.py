@@ -69,3 +69,44 @@ def test_mfd_import_reads_slack_ids_teams_and_nudges(
     assert cli.main(["-c", str(config), "import", str(notes_dir), "--replace"]) == 0
     assert len(slack.pings()) == imported + 1
     assert cli.main(["-c", str(config), "import", str(tmp_path / "nope")]) == 1
+
+
+def test_the_import_sets_teams_channels_as_by_hand_where_none_is(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notes_dir = tmp_path / "skill"
+    notes_dir.mkdir()
+    (notes_dir / markdown.REVIEWER_MAP_FILE).write_text(REVIEWER_MAP)
+    config = tmp_path / "config.toml"
+    config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0  # makes the tables
+    slack = SlackRepository(Database(tmp_path / "d.db"))
+    slack.set_team_channel("web", "#web-mine", None)
+    slack.unset_team_channel("core")
+    capsys.readouterr()
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert "set 1 teams' channels, as by hand; left web, which had one set already" in (
+        capsys.readouterr().out
+    )
+    channels = slack.team_channels()
+    assert (channels["web"].channel_name, channels["core"].channel_name) == (
+        "#web-mine",
+        "#team-core-chat",
+    )
+    assert slack.sources()["team:core"] == "dashboard"
+
+
+def test_the_migration_keeps_imported_team_channels_as_set_by_hand() -> None:
+    db = Database(":memory:")
+    db.migrate("slack", MIGRATIONS[:3])
+    db.execute("INSERT INTO slack_team_channels VALUES ('core', '#core', 'C1', 'import')")
+    db.execute("INSERT INTO slack_team_channels VALUES ('web', '#web', NULL, 'dashboard')")
+    db.migrate("slack", MIGRATIONS)
+    slack = SlackRepository(db)
+    assert {t: (c.channel_name, c.channel_id) for t, c in slack.team_channels().items()} == {
+        "core": ("#core", "C1"),
+        "web": ("#web", None),
+    }
+    # An import no longer replaces them.
+    slack.replace_imported([], [], [])
+    assert set(slack.team_channels()) == {"core", "web"}
