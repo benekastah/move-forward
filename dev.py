@@ -25,7 +25,7 @@ VENV = ROOT / ".venv"
 WINDOWS = sys.platform == "win32"
 BIN = VENV / ("Scripts" if WINDOWS else "bin")
 STAMP = VENV / "installed"
-"""Touched after installing; older than pyproject.toml means install again."""
+"""Touched after installing; older than pyproject.toml or uv.lock means install again."""
 
 
 def tool(name: str) -> str:
@@ -42,10 +42,12 @@ def run(*args: str) -> None:
 
 def venv() -> None:
     """Create .venv with the package (editable) and the dev dependencies from
-    pyproject.toml, or bring it up to date: they're reinstalled whenever pyproject.toml has
-    changed since they were last installed, so it's quick when there's nothing to do. Uses
-    uv when it's installed, else venv and pip (25.1+ for --group)."""
-    if STAMP.exists() and STAMP.stat().st_mtime >= (ROOT / "pyproject.toml").stat().st_mtime:
+    pyproject.toml, or bring it up to date: they're reinstalled whenever pyproject.toml or
+    uv.lock has changed since they were last installed, so it's quick when there's nothing
+    to do. Uses uv when it's installed, else venv and pip (25.1+ for --group)."""
+    sources = [ROOT / "pyproject.toml", ROOT / "uv.lock"]
+    newest = max(path.stat().st_mtime for path in sources if path.exists())
+    if STAMP.exists() and STAMP.stat().st_mtime >= newest:
         return
     print("dev: installing the package and dev dependencies into .venv", file=sys.stderr)
     if shutil.which("uv"):
