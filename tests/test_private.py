@@ -52,7 +52,8 @@ def test_on_windows_only_me_and_the_system_may_hold_access(monkeypatch: pytest.M
         "shared": listing("shared", "ACME\\jane", "BUILTIN\\Users"),
     }
 
-    def icacls(args: list[str]) -> str:
+    def icacls(args: list[str], encoding: str = "utf-8") -> str:
+        assert encoding == "oem"  # Windows' own tools write in the console's code page
         return answers[args[1]]
 
     def me() -> str:
