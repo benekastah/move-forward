@@ -92,11 +92,12 @@ class Context[C: BaseModel]:
         as `github.derived` (see `collect_into`)."""
         return f"{self.name}.{name}"
 
-    def token(self, account: str | None = None) -> str:
+    def token(self, account: str | None = None, *, secret: str = "token") -> str:
         """The plugin's token, or that of its account `account` (see `Plugin.tokens`; `""` is
         the plugin's own too): from its `token_env`, else from the system's secret store under
-        its `keychain_service` for `email`. Raises SourceError, saying how to give one, when
-        neither has it, and LookupError for an account the plugin keeps no token for."""
+        its `keychain_service` for `email`. Raises SourceError, saying how to give one and
+        calling it `secret` (mail's is a "password"), when neither has it, and LookupError for
+        an account the plugin keeps no token for."""
         kept = self.tokens if self.tokens is not None else _section_token(self.config)
         name = account or ""
         settings = kept.get(name)
@@ -105,7 +106,9 @@ class Context[C: BaseModel]:
         if value := keychain.token(settings, self.email):
             return value
         stored = f"{self.name}.{name}" if name else self.name
-        raise SourceError(f"no token: run `mfd token set {stored}`, or set ${settings.token_env}")
+        raise SourceError(
+            f"no {secret}: run `mfd token set {stored}`, or set ${settings.token_env}"
+        )
 
 
 def _section_token(config: BaseModel) -> dict[str, TokenSettings]:

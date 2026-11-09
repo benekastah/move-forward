@@ -390,6 +390,15 @@ def test_no_token_says_how_to_give_one(monkeypatch: pytest.MonkeyPatch) -> None:
         ctx.token("work")
     with pytest.raises(LookupError, match="keeps no token for 'home'"):
         ctx.token("home")
+    with pytest.raises(SourceError, match=r"^no password: run `mfd token set site\.work`"):
+        ctx.token("work", secret="password")  # what the plugin calls it
+
+
+def test_a_section_keeping_a_token_must_say_where_by_default() -> None:
+    with pytest.raises(TypeError, match="_Half must set default_keychain_service"):
+
+        class _Half(keychain.TokenFields):  # pyright: ignore[reportUnusedClass]
+            default_token_env: ClassVar[str] = "HALF_TOKEN"
 
 
 def test_the_context_core_gives_holds_the_plugins_tokens(

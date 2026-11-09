@@ -48,6 +48,15 @@ class TokenFields(Strict):
     keychain, Windows' Credential Manager, the desktop keyring) by `mfd token set`, when
     `token_env` isn't set; its account is the top-level `email`."""
 
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        """Refuse a section that doesn't say its defaults, when it's defined rather than when a
+        config is first loaded."""
+        super().__pydantic_init_subclass__(**kwargs)
+        for name in ("default_token_env", "default_keychain_service"):
+            if not isinstance(getattr(cls, name, None), str):
+                raise TypeError(f"{cls.__name__} must set {name}, a TokenFields class variable")
+
     @model_validator(mode="before")
     @classmethod
     def _default_token_place(cls, data: Any) -> Any:

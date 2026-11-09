@@ -1344,3 +1344,14 @@ def test_a_message_id_shaped_like_one_given_to_mail_without_one_is_ignored(
     imap([(4, "", headers(message_id="uid:5", references="<uid:5>"))])
     [found] = client.collect(_mailbox(), PASSWORD, ME, NOW).messages
     assert (found.message_id, found.thread) == (None, "uid:4")
+
+
+def test_no_password_is_called_a_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    def read(service: str, account: str) -> None:
+        return None
+
+    monkeypatch.delenv("MAIL_PASSWORD", raising=False)
+    monkeypatch.setattr(keychain, "read", read)
+    harness = Harness(MailPlugin(), SECTION, now=NOW)
+    with pytest.raises(SourceError, match=r"^no password: run `mfd token set mail`"):
+        MailPlugin().collect(CollectRequest(harness.ctx))

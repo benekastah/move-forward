@@ -40,6 +40,18 @@ Fewer things to know: what no plugin used is gone.
 - **`api.http` is `request` and `RequestError`**: `api.http.opener` and
   `api.http.require_https` have left `api`. Send a request with `api.http.request`, which
   checks for HTTPS and refuses redirects itself.
+- **The example config is the plugins'**: `mfd init --example` is built from each offered
+  plugin's `init_example` and `init_template`, as `mfd init` writes them, installed plugins'
+  too. A plugin setting `init_example_on` has its section on there, with `init_example`
+  uncommented; any other's is commented out.
+- **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
+  its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;
+  with neither, it raises `SourceError` with core's message ("no token: run `mfd token set
+  <plugin>`, or set $<token_env>", naming it `secret`, e.g. "password"), which `Graph.fetch`
+  passes on. `Context` gains `tokens`, which core fills from `Plugin.tokens`.
+- **Token fields**: `api.keychain.TokenFields` is a `Strict` base for a section keeping one
+  token, with `token_env` and `keychain_service`, defaulting to the class's
+  `default_token_env` and `default_keychain_service`.
 
 ## Version 1
 
@@ -89,18 +101,6 @@ catch up.
   `keychain_service` (read-only), so a plugin can annotate `token_settings` and return frozen
   settings. The config is refused when two enabled plugins' `keychain_service`s are the same,
   as storing one token would replace the other's.
-- **The example config is the plugins'**: `mfd init --example` is built from each offered
-  plugin's `init_example` and `init_template`, as `mfd init` writes them, installed plugins'
-  too. A plugin setting `init_example_on` has its section on there, with `init_example`
-  uncommented; any other's is commented out.
-- **Reading a token**: `ctx.token(account=None)` is the plugin's token (or its account's, as
-  `Plugin.tokens` names it), from its `token_env`, else the secret store; with neither, it
-  raises `SourceError` with core's message ("no token: run `mfd token set <plugin>`, or set
-  $<token_env>"), which `Graph.fetch` passes on. `Context` gains `tokens`, which core fills
-  from `Plugin.tokens`.
-- **Token fields**: `api.keychain.TokenFields` is a `Strict` base for a section keeping one
-  token, with `token_env` and `keychain_service`, defaulting to the class's
-  `default_token_env` and `default_keychain_service`.
 - **Organisations**: core declares the `organisation` family (`api.kinds.ORGANISATION`,
   `Organisation`: `handle`, `contact_type`, `importance`), with ids `<host>/<its id there>`.
   A person points at theirs, and its type or importance counts for that person's items as

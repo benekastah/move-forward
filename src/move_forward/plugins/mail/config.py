@@ -122,6 +122,14 @@ class MailConfig(TokenFields):
     default_token_env: ClassVar[str] = DEFAULT_MAIL_TOKEN_ENV
     default_keychain_service: ClassVar[str] = DEFAULT_MAIL_KEYCHAIN_SERVICE
 
+    token_env: str = ""
+    """The environment variable holding `[mail]`'s own password; an account has its own.
+    `MAIL_PASSWORD` unless set."""
+    keychain_service: str = ""
+    """The service `[mail]`'s own password is stored under in the system's secret store (the
+    macOS keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't
+    set; its account is the top-level `email`. An account has its own. `move-forward-mail`
+    unless set."""
     host: str = ""
     """The IMAP server, e.g. `imap.gmail.com`: needed here unless every account says its own."""
     port: int = Field(default=DEFAULT_PORT, ge=1, le=65535)
