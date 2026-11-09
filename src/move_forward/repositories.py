@@ -192,8 +192,8 @@ class LayoutRepository:
 
 
 class PriorityRepository:
-    """How much I said entities matter (`priorities`): 0 not important, 1 important, 2
-    critical, kept until the entity is done."""
+    """How much I said entities matter (`priorities`): 1 important or 2 critical, kept until
+    the entity is done."""
 
     def __init__(self, db: Database):
         self._db = db

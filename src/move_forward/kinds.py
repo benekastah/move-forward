@@ -30,8 +30,7 @@ TAG = "tag"
 family by its name."""
 
 REVIEW = "review"
-"""The task (`Signals.task`) of reviewing a pull request, whoever publishes it: `mfd snooze`
-snoozes it."""
+"""The task (`Signals.task`) of reviewing a pull request, whoever publishes it."""
 
 _OWN_KIND = re.compile(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*")
 

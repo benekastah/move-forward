@@ -2,7 +2,7 @@
 
 Act now is core's group: the panels whose plugins flag them as needing acting on now. Every
 other panel sits in its plugin's group. Panels and groups go in priority order (the skill's
-step order); focus mode goes through them as the page shows them.
+step order). Focus mode walks Act now, or one panel, an item at a time.
 """
 
 import logging
@@ -112,10 +112,6 @@ def laid_out(groups: list[Group], layout: Layout) -> list[Group]:
     ]
 
 
-FOCUS_ALL = "all"
-"""The focus category that covers every panel."""
-
-
 class Dashboard(Model):
     generated_at: datetime
     identities: list[Identity]
@@ -138,11 +134,9 @@ class Dashboard(Model):
     def focus_title(self, category: str) -> str | None:
         """What the page calls a focus category; None for an unknown one.
 
-        A category is `FOCUS_ALL`, a group key or a panel key.
+        A category is Act now (`ACT_NOW`) or a panel key.
         """
-        if category == FOCUS_ALL:
-            return "All"
-        if (group := self.find_group(category)) is not None:
+        if category == ACT_NOW and (group := self.find_group(ACT_NOW)) is not None:
             return group.title
         if (panel := self.find_panel(category)) is not None:
             return panel.title
@@ -161,25 +155,16 @@ class Dashboard(Model):
     def focus_items(self, category: str) -> list[tuple[Panel, Item]] | None:
         """The items focus mode steps through for a category, each with its panel.
 
-        Panels come as the page shows them (All leaves out Act now, whose items are in the
-        plugins' panels too), items in their panel's order, and an item with `parts`
-        contributes those instead of itself; what's set aside or done isn't a step. None for an
-        unknown category.
+        Act now's come in its own order across the tools. A panel's come in its order, and
+        an item with `parts` (an entry's todos) contributes those instead of itself; what's set
+        aside or done isn't a step. None for an unknown category.
         """
-        if category == ACT_NOW:  # in its own order across the tools, not panel by panel
+        if category == ACT_NOW:
             return [(panel, item) for panel, item in self._act_now()]
-        if category == FOCUS_ALL:  # Act now's items are all in some plugin's panel too
-            keys = [key for g in self.groups if g.key != ACT_NOW for key in g.panel_keys]
-        elif (group := self.find_group(category)) is not None:
-            keys = group.panel_keys
-        elif self.find_panel(category) is not None:
-            keys = [category]
-        else:
+        if (panel := self.find_panel(category)) is None:
             return None
-        panels = [p for key in keys if (p := self.find_panel(key))]
         return [
             (panel, part)
-            for panel in panels
             for item in panel.items
             if item.set_aside is None and not item.done  # nothing to do now
             for part in item.parts or [item]
@@ -197,7 +182,7 @@ def _sorted(
 
     def importance(item: Item) -> int:
         assigned = [priority_of(ref) for ref in item.subjects]
-        levels = [act_now.PRIORITY_IMPORTANCE[level] for level in assigned if level is not None]
+        levels = [level for level in assigned if level is not None]
         own = [item.signals.importance if item.signals else 0]
         own += [contact_importance(ref) for ref in item.subjects]
         return max(levels, default=max(own))

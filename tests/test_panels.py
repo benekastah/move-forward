@@ -68,24 +68,25 @@ def test_build_with_nothing_stored() -> None:
 
 
 def test_a_panel_can_sort_assigned_importance_before_its_own_rank() -> None:
-    ordinary = Item(title="ordinary", rank=100, subjects=[Ref(kind="x", id="ordinary")])
+    ordinary = Item(title="ordinary", rank=200, subjects=[Ref(kind="x", id="ordinary")])
     critical = Item(title="critical", rank=1, subjects=[Ref(kind="x", id="critical")])
-    low = Item(title="low", rank=200, subjects=[Ref(kind="x", id="low")])
+    important = Item(title="important", rank=100, subjects=[Ref(kind="x", id="important")])
     stage = Panel(
         key="stage",
         title="Stage",
         description="",
-        items=[ordinary, critical, low],
+        items=[ordinary, critical, important],
         sort_by_importance=True,
     )
-    assigned = {"critical": 2, "low": 0}
+    assigned = {"critical": 2, "important": 1}
     built = panels.build(
         NOW,
         [panels.PluginPanels("x", "X", [stage])],
         {},
         priority_of=lambda ref: assigned.get(ref.id),
     )
-    assert [item.title for item in built.panel("x.stage").items] == ["critical", "ordinary", "low"]
+    titles = [item.title for item in built.panel("x.stage").items]
+    assert titles == ["critical", "important", "ordinary"]
 
 
 def test_every_entity_item_and_focus_part_gets_importance_choices() -> None:
@@ -113,13 +114,13 @@ def test_every_entity_item_and_focus_part_gets_importance_choices() -> None:
     )
     branch, no_entity = built.panel("x.stage").items
     assert [a.fields for a in branch.actions] == [
-        {"kind": primary.kind, "id": primary.id, "level": level} for level in ("0", "1", "2")
+        {"kind": primary.kind, "id": primary.id, "level": level} for level in ("1", "2")
     ]
     assert no_entity.actions == []
     focused = built.focus_items("x.stage")
     assert focused is not None
     [(_, todo_part), (_, empty)] = focused
-    assert [a.fields["kind"] for a in todo_part.actions] == [part.kind] * 4
+    assert [a.fields["kind"] for a in todo_part.actions] == [part.kind] * 3
     assert todo_part.actions[-1].label == "Clear priority"
     assert [a.label for a in todo_part.actions if a.selected] == ["Critical"]
     assert empty.actions == []
@@ -155,9 +156,6 @@ def test_groups_and_focus_follow_priority_with_act_now_first() -> None:
         ("git", ["git.local_work", "git.cleanup"]),
         ("git_stack", ["git_stack.stacks"]),
     ]
-    everything = dashboard.focus_items(panels.FOCUS_ALL)
-    assert everything is not None  # every item's panel, in the page's order; all empty here
-    assert dashboard.focus_items("github") == []
 
 
 def test_focus_items_by_category() -> None:
@@ -168,15 +166,6 @@ def test_focus_items_by_category() -> None:
             direct_requests=[pr(3, author="bob")],
         ),
     )
-    everything = dashboard.focus_items(panels.FOCUS_ALL)
-    assert everything is not None
-    keys = [panel.key for panel, _ in everything]
-    assert (
-        keys.index("github.reviews_for_me")
-        < keys.index("github.conflicts")
-        < keys.index("github.needs_reviewer")
-    )
-    assert [i.title for _, i in everything if _.key == "github.reviews_for_me"] == [pr(3).title]
     act = dashboard.focus_items("act")  # the review request, then the conflicted PR
     assert act is not None and [i.title for _, i in act] == [
         f"Review: {pr(3).title}",  # quick, and its author is waiting
@@ -186,8 +175,11 @@ def test_focus_items_by_category() -> None:
     one = dashboard.focus_items("slack.nudges")
     assert one is not None and [i.title for _, i in one] == [pr(1).title]
     assert dashboard.focus_items("nope") is None
+    assert dashboard.focus_items("all") is None  # no walk of everything
+    assert dashboard.focus_items("github") is None  # nor of a group but Act now
     assert dashboard.focus_title("act") == "Act now"
-    assert dashboard.focus_title(panels.FOCUS_ALL) == "All"
+    assert dashboard.focus_title("slack.nudges") == "Nudge reviewers"
+    assert dashboard.focus_title("github") is None
     assert dashboard.focus_title("nope") is None
 
 
@@ -247,7 +239,7 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
     assert part.actions[1].confirm is not None and "small" in part.actions[1].confirm
     # A lone todo is about its entry, so its importance is the entry's, as on the page.
     assert [a.fields for a in part.actions if a.group == "Importance"] == [
-        {"kind": "notes.entry", "id": "APP-2 mixed", "level": level} for level in ("0", "1", "2")
+        {"kind": "notes.entry", "id": "APP-2 mixed", "level": level} for level in ("1", "2")
     ]
     # A single-todo entry can be completed on the dashboard as well as in Focus mode.
     assert [
@@ -631,8 +623,8 @@ def test_act_nows_listed_parts_offer_the_importance_their_panel_does() -> None:
     def levels(part: Item) -> list[str]:
         return [a.fields["level"] for a in part.actions if a.group == "Importance"]
 
-    assert [levels(part) for part in item.parts] == [["0", "1", "2"], ["0", "1", "2"]]
-    assert len([a for a in item.actions if a.group == "Importance"]) == 3  # Act now's own, once
+    assert [levels(part) for part in item.parts] == [["1", "2"], ["1", "2"]]
+    assert len([a for a in item.actions if a.group == "Importance"]) == 2  # Act now's own, once
     [panel_item] = panel(built, "notes.todos").items
     assert [levels(part) for part in panel_item.parts] == [levels(part) for part in item.parts]
 

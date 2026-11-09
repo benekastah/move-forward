@@ -1,4 +1,4 @@
-"""Priorities: how much I said an entity matters, 0 not important, 1 important, 2 critical.
+"""Priorities: how much I said an entity matters, 1 important or 2 critical.
 
 A priority on an entity counts for the items about it, and about what it's part of or holds:
 a PR's items carry its ticket's and its work entry's, a work entry's carry its todos'.

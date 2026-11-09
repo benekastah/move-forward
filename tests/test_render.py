@@ -238,15 +238,13 @@ def test_actions_render_as_forms_with_hidden_fields() -> None:
     assert "<span class='notice'>deleted 1 &lt;branch&gt;</span>" in html
 
 
-def test_focus_categories_page_lists_counts_and_links_non_empty_ones() -> None:
+def test_focus_categories_page_lists_act_now_and_panels_with_counts() -> None:
     html = render.focus_categories_page(_dashboard())
-    assert (
-        "<li class='category'><a href='/focus?cat=all&amp;i=0'>All</a><span class='count'>2" in html
-    )
-    assert "<a href='/focus?cat=slack&amp;i=0'>Slack</a>" in html
-    assert "<li class='category sub'><a href='/focus?cat=slack.nudges&amp;i=0'>" in html
     assert "<a href='/focus?cat=act&amp;i=0'>Act now</a><span class='count'>1</span>" in html
+    assert "<li class='category heading'><span>Slack</span></li>" in html  # no walk of a group
+    assert "<li class='category sub'><a href='/focus?cat=slack.nudges&amp;i=0'>" in html
     assert "<li class='category sub empty'><span>Feedback to address</span>" in html
+    assert "cat=all" not in html and "cat=slack&amp;" not in html
 
 
 def test_focus_page_steps_through_items() -> None:
@@ -254,25 +252,29 @@ def test_focus_page_steps_through_items() -> None:
         slack=True,
         github=snapshot(mine=[pr(1, requested_users=["alice"]), pr(2, merge_state="DIRTY")]),
     )
-    first = render.focus_page(built, panels.FOCUS_ALL, 0)
+    first = render.focus_page(built, panels.ACT_NOW, 0)
     assert first is not None
-    assert "<h2>Fix before review</h2>" in first and pr(2).title in first
-    assert pr(1).title not in first
-    assert "<span class='focus-position'>1 of 5</span>" in first
+    assert f"Ping the reviewers: {pr(1).title}" in first
+    assert "<span class='focus-position'>1 of 2</span>" in first
     assert "<span class='button secondary disabled prev'>" in first
-    assert "<a class='button secondary next' href='/focus?cat=all&amp;i=1'>" in first
+    assert "<a class='button secondary next' href='/focus?cat=act&amp;i=1'>" in first
     assert "ArrowLeft" in first and "data-reload" not in first
 
-    last = render.focus_page(built, panels.FOCUS_ALL, 99)  # clamps to the last item
+    last = render.focus_page(built, panels.ACT_NOW, 99)  # clamps to the last item
     assert last is not None
-    assert "<h2>Nudge reviewers</h2>" in last and "5 of 5" in last
-    assert "<a class='button secondary prev' href='/focus?cat=all&amp;i=3'>" in last
+    assert f"Resolve conflicts: {pr(2).title}" in last and "2 of 2" in last
+    assert "<a class='button secondary prev' href='/focus?cat=act&amp;i=0'>" in last
     assert "disabled next" in last
-    assert "/slack/ping?pr=" + quote(pr(1).url, safe="") in last
+
+    nudge = render.focus_page(built, "slack.nudges", 0)
+    assert nudge is not None and "<h2>Nudge reviewers</h2>" in nudge
+    assert "/slack/ping?pr=" + quote(pr(1).url, safe="") in nudge
 
     empty = render.focus_page(built, "github.feedback", 0)
     assert empty is not None and "Nothing here" in empty
     assert render.focus_page(built, "nope", 0) is None
+    assert render.focus_page(built, "all", 0) is None  # no walk of everything
+    assert render.focus_page(built, "github", 0) is None  # nor of a group
 
 
 def test_focus_page_actions_come_back_to_it() -> None:

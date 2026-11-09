@@ -598,8 +598,8 @@ _MEMBERS = TypeAdapter(
 
 
 def _set_priority(db: Database, fields: dict[str, str], now: datetime) -> ActionResult:
-    """The priority buttons on items: set the priority (`level`, 0 to 2) of the entity, or
-    clear it when there's no level."""
+    """The priority buttons on items: set the priority (`level`, 1 important or 2 critical)
+    of the entity, or clear it when there's no level."""
     ref = Ref(kind=fields["kind"], id=fields["id"])
     priorities = PriorityRepository(db)
     if "level" not in fields:
@@ -641,6 +641,41 @@ def _tag(db: Database, action: str, fields: dict[str, str], now: datetime) -> Ac
     return ActionResult(f"tagged #{tag}" if repo.add(ref, tag, now) else f"already #{tag}")
 
 
+def _members(fields: dict[str, str]) -> list[tuple[str, str, str, str]]:
+    """The item an Act now button's `fields` name, and those shown with it (`also`), as kind,
+    id, task and fingerprint."""
+    try:
+        members = [(fields["kind"], fields["id"], fields["task"], fields["fingerprint"])]
+        members += _MEMBERS.validate_json(fields.get("also") or "[]")
+    except KeyError as err:
+        raise ActionError(f"missing field {err}") from err
+    except ValidationError as err:
+        raise ActionError("malformed `also`") from err
+    return members
+
+
+def snooze_item(
+    config: act_now.ActNowConfig,
+    db: Database,
+    fields: dict[str, str],
+    now: datetime,
+    duration: timedelta | None = None,
+) -> datetime:
+    """Snooze the item a Snooze button's `fields` name, and those shown with it, until each
+    changes (its fingerprint) or `duration` passes (by default as long as `config` says for
+    its kind of subject): the Snooze button, and `mfd snooze`. When the item's snooze ends."""
+    feedback = FeedbackRepository(db)
+    end: datetime | None = None
+    for kind, id, task, fingerprint in _members(fields):
+        until = now + duration if duration else config.snooze_until(kind, now)
+        feedback.say(
+            (kind, id, task), Feedback(action="snooze", fingerprint=fingerprint, until=until), now
+        )
+        end = end or until  # the item's own: `_members` gives it first
+    assert end is not None, "a Snooze button always names its own item"
+    return end
+
+
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
@@ -664,13 +699,7 @@ def _act_now_action(
             return ActionResult(f"{who}: type cleared" if kept else f"{who} had no type")
         except KeyError as err:
             raise ActionError(f"missing field {err}") from err
-    try:
-        members = [(fields["kind"], fields["id"], fields["task"], fields["fingerprint"])]
-        members += _MEMBERS.validate_json(fields.get("also") or "[]")
-    except KeyError as err:
-        raise ActionError(f"missing field {err}") from err
-    except ValidationError as err:
-        raise ActionError("malformed `also`") from err
+    members = _members(fields)
     feedback = FeedbackRepository(db)
     if action == "opened":
         # What I did elsewhere isn't a choice to keep: it never replaces a pin or a snooze.
@@ -692,21 +721,16 @@ def _act_now_action(
             feedback.bring_back(kind, id, task, now)
         return ActionResult("back")
     if action == "snooze":
-        said = [
-            Feedback(action="snooze", fingerprint=f, until=config.snooze_until(kind, now))
-            for kind, _, _, f in members
-        ]
-        until = localtime.day(said[0].until or now)
+        until = localtime.day(snooze_item(config, db, fields, now))
         tomorrow = localtime.day(now) + timedelta(days=1)
-        result = "snoozed until " + ("tomorrow" if until == tomorrow else until.isoformat())
-    elif action in ("dismiss", "pin"):
-        said = [Feedback(action=action, fingerprint=f) for *_, f in members]
-        result = "dismissed" if action == "dismiss" else "pinned"
-    else:
+        return ActionResult(
+            "snoozed until " + ("tomorrow" if until == tomorrow else until.isoformat())
+        )
+    if action not in ("dismiss", "pin"):
         raise ActionError(f"unknown action {act_now.ACTIONS}/{action}")
-    for (kind, id, task, _), one in zip(members, said, strict=True):
-        feedback.say((kind, id, task), one, now)
-    return ActionResult(result)
+    for kind, id, task, f in members:
+        feedback.say((kind, id, task), Feedback(action=action, fingerprint=f), now)
+    return ActionResult("dismissed" if action == "dismiss" else "pinned")
 
 
 def _known_action(plugins: list[Enabled]) -> panels.KnownAction:

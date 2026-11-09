@@ -123,7 +123,7 @@ catch up.
   collapsible section; `children_open` sets its initial state and `children_title` names it.
 - **Importance order**: `Panel.sort_by_importance` sorts its items first by user-assigned
   importance on their subjects (or `Signals.importance`), then by `Item.rank`.
-- **Importance choices**: core adds its three priority buttons to every item with a subject,
+- **Importance choices**: core adds its priority buttons (Important, Critical) to every item with a subject,
   including focus-mode parts, targeting the first subject, unless that's a kind that `hides`. `Action`s with the same
   `group` render as one button group, even when other actions separate them;
   `Action.selected` highlights a choice and `Action.icon`

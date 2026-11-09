@@ -48,11 +48,11 @@ def test_a_priority_replaces_the_plugins_importance() -> None:
         _nomination("raised", PR),
         _nomination("lowered", Ref(kind="pull_request", id="l"), importance=2),
     ]
-    marks = {PR: 2, Ref(kind="pull_request", id="l"): 0}
+    marks = {PR: 2, Ref(kind="pull_request", id="l"): 1}
     shown = _items(nominations, priority.level_of(marks, _graph()))
-    assert [i.title for i in shown] == ["raised", "normal", "lowered"]
+    assert [i.title for i in shown] == ["raised", "lowered", "normal"]
     assert shown[0].details[0] == "why: critical"
-    assert shown[2].details[0] == "why: not important"
+    assert shown[1].details[0] == "why: important"
 
 
 def test_a_priority_counts_for_the_units_and_todos_around_an_entity() -> None:
@@ -64,24 +64,19 @@ def test_a_priority_counts_for_the_units_and_todos_around_an_entity() -> None:
     )
     assert priority.level_of({TICKET: 1}, graph)(PR) == 1  # the PR's ticket
     assert priority.level_of({TODO: 2}, graph)(ENTRY) == 2  # the entry's todo
-    assert priority.level_of({TODO: 2, TICKET: 0}, graph)(PR) == 2  # the highest, via the entry
+    assert priority.level_of({TODO: 2, TICKET: 1}, graph)(PR) == 2  # the highest, via the entry
     assert priority.level_of({TICKET: 1}, graph)(Ref(kind="pull_request", id="other")) is None
 
 
-def test_items_keep_all_three_importance_choices_and_highlight_the_selected_one() -> None:
+def test_items_keep_both_importance_choices_and_highlight_the_selected_one() -> None:
     ref = Ref(kind="pull_request", id="p")
     unmarked = _items([_nomination("x", ref)], priority.level_of({}, _graph()))[0]
     labels = [a.label for a in unmarked.actions]
-    assert labels[-3:] == ["Not important", "Important", "Critical"]
+    assert labels[-2:] == ["Important", "Critical"]
     marked = _items([_nomination("x", ref)], priority.level_of({ref: 1}, _graph()))[0]
-    assert [a.label for a in marked.actions][-4:] == [
-        "Not important",
-        "Important",
-        "Critical",
-        "Clear priority",
-    ]
+    assert [a.label for a in marked.actions][-3:] == ["Important", "Critical", "Clear priority"]
     assert [a.label for a in marked.actions if a.selected] == ["Important"]
-    assert [a.icon for a in marked.actions if a.group == "Importance"] == ["❕", "❗️", "‼️"]
+    assert [a.icon for a in marked.actions if a.group == "Importance"] == ["❗️", "‼️"]
     html = render.item_html(marked)
     assert "<div class='button-group' role='group' aria-label='Act now'>" in html
     assert [a.icon for a in marked.actions[:3]] == ["💤", "👋", "📌"]
@@ -93,10 +88,6 @@ def test_items_keep_all_three_importance_choices_and_highlight_the_selected_one(
     assert "<div class='button-group' role='group' aria-label='Importance'>" in html
     assert (
         "class='secondary small selected' aria-pressed='true' title='Important' aria-label='Important'><span aria-hidden='true'>❗️</span></button>"
-        in html
-    )
-    assert (
-        "title='Not important' aria-label='Not important'><span aria-hidden='true'>❕</span></button>"
         in html
     )
     assert (
@@ -135,11 +126,7 @@ def test_a_review_for_me_can_be_marked_important() -> None:
     panel = refresh.build_dashboard(config, db, NOW).find_panel("github.reviews_for_me")
     assert panel is not None
     item = panel.items[0]
-    assert [a.label for a in item.actions if a.group == "Importance"] == [
-        "Not important",
-        "Important",
-        "Critical",
-    ]
+    assert [a.label for a in item.actions if a.group == "Importance"] == ["Important", "Critical"]
     important = next(a for a in item.actions if a.label == "Important")
     assert refresh.run_action(config, db, important.name, important.fields) == "priority: important"
     shown = refresh.build_dashboard(config, db, NOW).find_panel("github.reviews_for_me")
@@ -154,7 +141,7 @@ def test_reviews_for_me_sort_importance_before_recency() -> None:
     config, db = stored(github=snapshot(direct_requests=[recent, old, newest]))
     priorities = PriorityRepository(db)
     priorities.set(Ref(kind="pull_request", id=old.url), 2, NOW)
-    priorities.set(Ref(kind="pull_request", id=newest.url), 0, NOW)
+    priorities.set(Ref(kind="pull_request", id=recent.url), 1, NOW)
     shown = refresh.build_dashboard(config, db, NOW).find_panel("github.reviews_for_me")
     assert shown is not None
     assert [item.url for item in shown.items] == [old.url, recent.url, newest.url]
@@ -174,8 +161,9 @@ def test_the_priority_buttons_set_and_clear_it() -> None:
     )
     assert refresh.run_action(config, db, clear.name, clear.fields) == "priority cleared"
     assert priorities.all() == {}
-    with pytest.raises(refresh.ActionError, match="no priority 5"):
-        refresh.run_action(config, db, "act_now/priority", {**critical.fields, "level": "5"})
+    for gone in ("0", "5"):  # 0 was "not important"
+        with pytest.raises(refresh.ActionError, match=f"no priority {gone}"):
+            refresh.run_action(config, db, "act_now/priority", {**critical.fields, "level": gone})
 
 
 def test_resolve_finds_the_entity_a_name_belongs_to() -> None:
