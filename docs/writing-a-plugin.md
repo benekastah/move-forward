@@ -299,7 +299,9 @@ class LinearPlugin(...):
   ```
 
   A publisher puts text that might name a unit of work in `Entity.mentions` (github does
-  with a PR's branch, title and body), never refs to another plugin's kind.
+  with a PR's branch, title and body), never refs to another plugin's kind. Where someone
+  else wrote that text, it sets `mentions_hide=False`, so what they name can't hide the
+  entity from me (see the graph's hidden entities).
 - **Hiding kinds**, declared `KindSpec(..., hides=True)`, hide what their entities point at
   (`notes.iced`).
 - **Lifecycle.** Each entity says whether its work is over: `lifecycle="done"` for a merged

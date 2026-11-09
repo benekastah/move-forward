@@ -47,6 +47,11 @@ class Entity(Model):
     mentions: list[str] = Field(default_factory=list)
     """Text that may name linking entities by id, e.g. a PR's branch, title and body; the graph
     adds a ref to each linking entity whose id it finds in it."""
+    mentions_hide: bool = True
+    """Whether what its `mentions` name can hide it (see `Graph.hidden`): an iced ticket a PR
+    of mine names. False where someone else wrote the text, as a PR I'm asked to review,
+    lest they decide what I see. Only hiding is held back: what it names is still linked to it
+    (`units`, `related`), and a priority on that still ranks it."""
     attrs: dict[str, JsonValue] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     """Tags its tool puts on it, e.g. a ticket's or PR's labels, as written there ("Garbage
@@ -175,9 +180,16 @@ class Graph:
         self._url_for = url_for
         self._handle_for = handle_for
         self._fetch = fetch
-        entities = [
+        mentioned = [
             _with_mentions(e, self._patterns, self._handles, self._unknown) for e in entities
         ]
+        self._named_only: dict[Ref, set[Ref]] = {
+            e.ref: set(m.refs) - set(e.refs)
+            for e, m in zip(entities, mentioned, strict=True)
+            if not e.mentions_hide
+        }
+        """The refs an entity has only from its mentions, where those can't hide it."""
+        entities = mentioned
         self._by_ref: dict[Ref, Entity] = {}
         self._by_kind: dict[str, list[Entity]] = defaultdict(list)
         self._pointing_at: dict[Ref, list[Entity]] = defaultdict(list)
@@ -268,12 +280,15 @@ class Graph:
 
     def hidden(self, ref: Ref) -> bool:
         """Whether a hiding entity covers `ref`: points at it, or at a linking entity next to
-        it (an iced ticket hides the PRs that mention it, an iced entry the PRs it names)."""
+        it (an iced ticket hides the PRs that mention it, an iced entry the PRs it names). A
+        linking entity found only in text someone else wrote doesn't (`Entity.mentions_hide`)."""
         if self.hides(ref.kind):
             return False
-        linkers = [n.ref for n in self._neighbours(ref) if n.ref.kind in self._linking]
+        named_only = self._named_only.get(ref, set())
         entity = self._by_ref.get(ref)
-        linkers += [r for r in entity.refs if r.kind in self._linking] if entity else []
+        linkers = [r for r in entity.refs if r not in named_only] if entity else []
+        linkers += [e.ref for e in self._pointing_at.get(ref, [])]
+        linkers = [r for r in linkers if r.kind in self._linking]
         return any(
             self.hides(e.ref.kind) for r in [ref, *linkers] for e in self._pointing_at.get(r, [])
         )
