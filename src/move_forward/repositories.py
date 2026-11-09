@@ -2,6 +2,7 @@
 
 import hashlib
 import secrets
+import sqlite3
 from collections.abc import Callable, Collection
 from datetime import datetime, timedelta
 
@@ -48,11 +49,33 @@ class SnapshotRepository:
         )
 
     def all(self) -> dict[str, SnapshotRow]:
+        """Every source's last run, enabled or not."""
+        return self._rows(self._db.query("SELECT * FROM snapshots"))
+
+    def of(self, plugins: Collection[str]) -> dict[str, SnapshotRow]:
+        """The runs of `plugins` and their parts (`github.derived`), by source: not those of a
+        plugin since taken out of the config, or removed, whose last run stays behind."""
+        names = list(plugins)
+        if not names:
+            return {}
+        marks = ", ".join("?" * len(names))
+        # A part's source is `<plugin>.<part>`; `_` is a wildcard in LIKE, so it's escaped.
+        parts = " OR ".join("source LIKE ? ESCAPE '\\'" for _ in names)
+        prefixes = [n.replace("_", "\\_") + ".%" for n in names]
+        return self._rows(
+            self._db.query(
+                f"SELECT * FROM snapshots WHERE source IN ({marks}) OR {parts}",
+                (*names, *prefixes),
+            )
+        )
+
+    @staticmethod
+    def _rows(rows: list[sqlite3.Row]) -> dict[str, SnapshotRow]:
         return {
             row["source"]: SnapshotRow(
                 fetched_at=datetime.fromisoformat(row["fetched_at"]), error=row["error"]
             )
-            for row in self._db.query("SELECT * FROM snapshots")
+            for row in rows
         }
 
 

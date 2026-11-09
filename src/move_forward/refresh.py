@@ -264,7 +264,7 @@ def refresh(
     _identify_kept(db, graph)
     snapshots = {e.name: e.snapshot() for e in plugins}
     _graph_events(plugins, graph, snapshots, previous, previous_snapshots, subscribed, now)
-    _dashboard_events(config, db, subscribed, now)
+    _dashboard_events(config, db, plugins, subscribed, now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
         if e.name not in collected and e.plugin.collects:
@@ -367,7 +367,13 @@ def _graph_events(
             log.exception("%s: finding events from the graph failed", e.name)
 
 
-def _dashboard_events(config: Config, db: Database, subscribed: set[str], now: datetime) -> None:
+def _dashboard_events(
+    config: Config,
+    db: Database,
+    plugins: list[Enabled],
+    subscribed: set[str],
+    now: datetime,
+) -> None:
     """Store the events about the dashboard itself, those I've subscribed to."""
     wanted = {k for k in notifications.DASHBOARD_KINDS if k in subscribed}
     if not wanted:
@@ -375,7 +381,9 @@ def _dashboard_events(config: Config, db: Database, subscribed: set[str], now: d
     try:
         events = [
             e
-            for e in notifications.dashboard_events(db, config.notifications, now)
+            for e in notifications.dashboard_events(
+                db, config.notifications, now, [p.name for p in plugins]
+            )
             if notifications.qualified(notifications.DASHBOARD, e.kind) in wanted
         ]
         NotificationRepository(db).add(notifications.DASHBOARD, events, now)
@@ -464,7 +472,7 @@ def build_dashboard(
     ]
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)
-        for source, row in SnapshotRepository(db).all().items()
+        for source, row in SnapshotRepository(db).of([e.name for e in plugins]).items()
     }
 
     def nothing(req: ItemActionsRequest[Any]) -> ItemAdditions:
