@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Two plugins can't keep their tokens under one keychain service
+
+A config whose sections name the same `keychain_service` is now refused when it loads, as
+storing one token (`mfd token set`, Slack's Connect) would replace the other's. Give each
+section its own.
+
 ### vCard address books
 
 A `[vcard]` section (`paths`, `group_importance`, `group_types`, `refresh_seconds`) reads an
