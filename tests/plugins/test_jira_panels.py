@@ -187,7 +187,7 @@ def test_a_ticket_in_a_blocked_status_is_blocked_without_links_and_a_top_bug_is_
     why = {i.title.split(": ", 1)[1].split()[0]: i.details[0] for i in dashboard.act_now()}
     assert why == {"APP-2": "why: important", "APP-1": "why: blocked"}
     next_badges = {i.title.split()[0]: i.badges for i in panel(dashboard, "jira.jira_next").items}
-    assert "blocked" in [getattr(b, "text", b) for b in next_badges["APP-1"]]
+    assert next_badges["APP-1"][0] == Badge(text="blocked", tone="warn")
 
 
 def test_any_name_of_a_status_matches_and_a_move_offers_them_in_order() -> None:

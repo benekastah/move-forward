@@ -242,7 +242,7 @@ def test_other_jira_errors_still_fail_the_fetch(monkeypatch: pytest.MonkeyPatch)
         jira.tickets(JiraConfig(site="https://j"), "me@x", ["APP-1", "APP-2"], "t")
 
 
-class _Closable:
+class _Response:
     """A response, as `with opener.open(...)` reads it."""
 
     def __enter__(self) -> Self:
@@ -259,11 +259,11 @@ def _empty_search_with_myself(monkeypatch: pytest.MonkeyPatch, status: int) -> l
     """An empty search, and `/myself` answering with `status`; the paths asked."""
     asked: list[str] = []
 
-    def fake_open(request: urllib.request.Request, timeout: float) -> _Closable:
+    def fake_open(request: urllib.request.Request, timeout: float) -> _Response:
         asked.append(request.full_url)
         if status != 200:
             raise urllib.error.HTTPError(request.full_url, status, "", Message(), None)
-        return _Closable()
+        return _Response()
 
     real = jira._request  # pyright: ignore[reportPrivateUsage]
 
@@ -408,15 +408,30 @@ def test_a_ticket_done_without_a_resolution_is_resolved_when_it_moved_to_done() 
 
 def test_a_search_reads_every_page_by_its_token(monkeypatch: pytest.MonkeyPatch) -> None:
     sent: list[dict[str, object]] = []
-    pages = [
-        '{"issues": [], "nextPageToken": "p2"}',  # an empty first page: not the token's fault
-        '{"issues": [], "nextPageToken": "p3"}',
-        '{"issues": []}',
-    ]
+    asked: list[str] = []
+
+    def page(keys: list[str], token: str | None) -> str:
+        issues = [
+            {
+                "key": key,
+                "fields": {
+                    "summary": "s",
+                    "status": {"name": "To Do", "statusCategory": {"key": "new"}},
+                    "issuetype": {"name": "Task"},
+                    "created": "2026-11-01T00:00:00.000+0000",
+                    "updated": "2026-11-01T00:00:00.000+0000",
+                },
+            }
+            for key in keys
+        ]
+        return json.dumps({"issues": issues, **({"nextPageToken": token} if token else {})})
+
+    pages = [page([], "p2"), page(["APP-1"], "p3"), page(["APP-2"], None)]
 
     def fake_request(
         config: JiraConfig, email: str, api_token: str, path: str, body: object = None
     ) -> bytes:
+        asked.append(path)
         if path != jira.SEARCH_PATH:
             return b"{}"  # /myself, accepting the token
         assert isinstance(body, dict)
@@ -424,5 +439,8 @@ def test_a_search_reads_every_page_by_its_token(monkeypatch: pytest.MonkeyPatch)
         return pages.pop(0).encode()
 
     monkeypatch.setattr(jira, "_request", fake_request)
-    assert jira.search(JiraConfig(site="https://j"), "me@x", "assignee = me", "t") == []
+    found = jira.search(JiraConfig(site="https://j"), "me@x", "assignee = me", "t")
+    assert [i.key for i in found] == ["APP-1", "APP-2"]  # every page's, in order
     assert [b.get("nextPageToken") for b in sent] == [None, "p2", "p3"]
+    # The empty first page asked whether the token works: Jira answers a bad one with nothing.
+    assert asked.count(jira.MYSELF_PATH) == 1
