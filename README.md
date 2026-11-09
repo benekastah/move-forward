@@ -32,11 +32,8 @@ serve` answers on `https://`. It signs three ahead, each starting 25 days before
 before it ends, and `mfd serve` moves to the next by itself, without a restart: about six
 and a half years without renewing. `--trust` adds the authority (`tls/ca.pem`, next to the
 database) to macOS's keychain or Windows's user store, and, where NSS's `certutil` is
-installed (`libnss3-tools`, `nss-tools`), to Firefox's profiles on Linux and macOS and
-Chrome's store on Linux (Firefox on Windows reads Windows's store while its
-`security.enterprise_roots.enabled` is on, the default from Firefox 120); a store it can't add it to
-is named, to import it by hand; elsewhere, import it as an authority in the browser's
-certificate settings.
+installed (`libnss3-tools`, `nss-tools`), to Firefox's profiles and Chrome's store on
+Linux; elsewhere, import it as an authority in the browser's certificate settings.
 With `https = false` (the default), or without a certificate, the dashboard stays on plain HTTP. The page's
 header and `mfd check` warn 30 days before the last certificate ends, and a banner across
 every page from 14 days: blue, yellow from 7, red from 3; `mfd cert --force --trust` then makes a new authority

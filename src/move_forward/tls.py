@@ -21,7 +21,6 @@ import ipaddress
 import os
 import shutil
 import ssl
-import subprocess
 import sys
 from contextlib import suppress
 from dataclasses import dataclass
@@ -275,6 +274,7 @@ FIREFOX_PROFILES = [
     "~/.mozilla/firefox",
     "~/snap/firefox/common/.mozilla/firefox",
     "~/Library/Application Support/Firefox/Profiles",
+    "~/AppData/Roaming/Mozilla/Firefox/Profiles",
 ]
 """Where Firefox keeps its profiles, each with its own certificate store."""
 NSS_NICKNAME = "move-forward local CA"
@@ -282,11 +282,7 @@ NSS_NICKNAME = "move-forward local CA"
 
 def nss_stores(home: Path | None = None) -> list[Path]:
     """The NSS stores to add the authority to: Chrome's on Linux, and every Firefox
-    profile's but on Windows, where Firefox reads the system's store while its
-    `security.enterprise_roots.enabled` is on (the default from Firefox 120), and the
-    `certutil` on the path is Windows' own, not NSS's."""
-    if sys.platform == "win32":
-        return []
+    profile's."""
     home = home or Path.home()
     stores = [home / ".pki" / "nssdb"] if sys.platform.startswith("linux") else []
     for profiles in FIREFOX_PROFILES:
@@ -322,14 +318,8 @@ def trust(paths: Paths, home: Path | None = None) -> list[str]:
     allows; what was done, and what's left to do by hand."""
     done: list[str] = []
     if command := system_trust_command(paths):
-        try:
-            run(command)
-        # A prompt refused, or left unanswered past the timeout: the browsers' stores still
-        # get it.
-        except (CommandError, subprocess.TimeoutExpired) as e:
-            done.append(f"couldn't trust it in the system's store ({e}): import {paths.ca} by hand")
-        else:
-            done.append("trusted it in the system's store for your user")
+        run(command)
+        done.append("trusted it in the system's store for your user")
     stores = nss_stores(home)
     if stores and shutil.which("certutil") is None:
         done.append(
@@ -341,11 +331,7 @@ def trust(paths: Paths, home: Path | None = None) -> list[str]:
         db = f"sql:{store}"
         with suppress(CommandError):  # an older authority of ours, if there is one
             run(["certutil", "-d", db, "-D", "-n", NSS_NICKNAME])
-        try:
-            run(["certutil", "-d", db, "-A", "-t", "C,,", "-n", NSS_NICKNAME, "-i", str(paths.ca)])
-        except CommandError as e:  # one store failing leaves the others to do
-            done.append(f"couldn't trust it in {store} ({e}): import {paths.ca} there by hand")
-            continue
+        run(["certutil", "-d", db, "-A", "-t", "C,,", "-n", NSS_NICKNAME, "-i", str(paths.ca)])
         done.append(f"trusted it in {store}")
     if not done:
         done.append(f"import {paths.ca} as an authority in your browser's certificate settings")

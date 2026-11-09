@@ -2,7 +2,6 @@
 
 import json
 import ssl
-import subprocess
 import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -19,7 +18,6 @@ from move_forward.db import Database
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.private import is_private
 from move_forward.registry import enabled, migrate
-from move_forward.shell import CommandError
 
 TOKEN = "s3cret"
 
@@ -203,88 +201,6 @@ def test_without_certutil_it_says_what_to_install(
     monkeypatch.setattr(tls.shutil, "which", which)
     [said] = tls.trust(paths, tmp_path / "home")
     assert "certutil" in said and str(paths.ca) in said
-
-
-def test_on_windows_only_its_own_store_is_used_not_firefoxs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Firefox there reads the system's store, and the `certutil` on the path isn't NSS's."""
-    paths = tls.Paths(tmp_path / "tls")
-    tls.make(paths)
-    profile = tmp_path / "home" / "AppData" / "Roaming" / "Mozilla" / "Firefox" / "Profiles"
-    (profile / "abc.default").mkdir(parents=True)
-    (profile / "abc.default" / "cert9.db").write_text("")
-    ran: list[list[str]] = []
-
-    def run(args: list[str]) -> str:
-        ran.append(args)
-        return ""
-
-    def which(_name: str) -> str:
-        return r"C:\Windows\System32\certutil.exe"
-
-    monkeypatch.setattr(tls.sys, "platform", "win32")
-    monkeypatch.setattr(tls.shutil, "which", which)
-    monkeypatch.setattr(tls, "run", run)
-    assert tls.trust(paths, tmp_path / "home") == ["trusted it in the system's store for your user"]
-    assert ran == [["certutil", "-user", "-addstore", "Root", str(paths.ca)]]
-
-
-def test_a_store_that_fails_is_said_and_the_others_still_get_it(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    paths = tls.Paths(tmp_path / "tls")
-    tls.make(paths)
-    profile = tmp_path / "home" / ".mozilla" / "firefox" / "abc.default"
-    profile.mkdir(parents=True)
-    (profile / "cert9.db").write_text("")
-
-    def run(args: list[str]) -> str:
-        if "-A" in args and ".pki" in args[2]:
-            raise CommandError("certutil: bad database")
-        return ""
-
-    def which(_name: str) -> str:
-        return "/usr/bin/certutil"
-
-    monkeypatch.setattr(tls.sys, "platform", "linux")
-    monkeypatch.setattr(tls.shutil, "which", which)
-    monkeypatch.setattr(tls, "run", run)
-    failed, trusted = tls.trust(paths, tmp_path / "home")
-    assert failed.startswith("couldn't trust it in") and "bad database" in failed
-    assert trusted == f"trusted it in {profile}"
-
-
-@pytest.mark.parametrize(
-    "failure",
-    [
-        CommandError("security: User canceled the operation."),
-        subprocess.TimeoutExpired(["security"], 120),
-    ],
-)
-def test_a_system_store_that_refuses_still_leaves_the_browsers_stores(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception
-) -> None:
-    paths = tls.Paths(tmp_path / "tls")
-    tls.make(paths)
-    profile = tmp_path / "home" / "Library" / "Application Support" / "Firefox" / "Profiles"
-    (profile / "abc.default").mkdir(parents=True)
-    (profile / "abc.default" / "cert9.db").write_text("")
-
-    def run(args: list[str]) -> str:
-        if args[0] == "security":  # the password prompt cancelled, or left past the timeout
-            raise failure
-        return ""
-
-    def which(_name: str) -> str:
-        return "/opt/homebrew/bin/certutil"
-
-    monkeypatch.setattr(tls.sys, "platform", "darwin")
-    monkeypatch.setattr(tls.shutil, "which", which)
-    monkeypatch.setattr(tls, "run", run)
-    refused, trusted = tls.trust(paths, tmp_path / "home")
-    assert refused.startswith("couldn't trust it in the system's store")
-    assert trusted == f"trusted it in {profile / 'abc.default'}"
 
 
 def test_on_macos_the_authority_is_trusted_for_tls_only(
