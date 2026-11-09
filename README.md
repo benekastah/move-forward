@@ -256,8 +256,9 @@ and nothing is written. `mfd serve` then restarts with it, as it does whenever t
 changes. Tables such as `[github.teams]` are edited in the file, and `db_path`, `port` and
 `https` aren't changed here, since changing them moves the server. Nor are the settings that
 say where a credential goes or comes from, or where commands run: `email`, `[github] host`,
-`[jira] site`/`token_env`/`keychain_service`, `[slack]`
-`client_id`/`workspace_url`/`token_env`/`keychain_service` and `[git] repos`/`github_hosts`.
+`[jira] site`/`token_env`/`keychain_service`, `[mail]` `host`/`port`/`token_env`/`keychain_service`,
+`[slack]` `client_id`/`workspace_url`/`token_env`/`keychain_service` and `[git]`
+`repos`/`github_hosts`.
 They're shown read-only; edit the file.
 
 ## Notifications

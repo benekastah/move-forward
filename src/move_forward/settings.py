@@ -37,6 +37,7 @@ SECRET_LOCKED: dict[str | None, set[str]] = {
     None: {"email"},
     "github": {"host"},
     "jira": {"site", "token_env", "keychain_service"},
+    "mail": {"host", "port", "token_env", "keychain_service"},
     "slack": {"client_id", "workspace_url", "token_env", "keychain_service"},
     "git": {"repos", "github_hosts"},
 }
