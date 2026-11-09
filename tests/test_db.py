@@ -1,4 +1,5 @@
 import sqlite3
+import threading
 from pathlib import Path
 
 import conftest
@@ -7,6 +8,9 @@ import pytest
 from move_forward import auth, registry, tls
 from move_forward.config import DEFAULT_DB_PATH
 from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database, Migration
+from move_forward.plugin import LoadRequest
+from move_forward.plugins.notes.config import NotesConfig
+from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.private import is_private
 from move_forward.repositories import KvRepository
 
@@ -371,3 +375,62 @@ def test_no_test_touches_the_real_data_dir(tmp_path: Path, monkeypatch: pytest.M
             touch()
     assert not real.exists()
     Database(tmp_path / "mine.db")  # anywhere else is fine
+
+
+@pytest.mark.parametrize("order", ["alone", "reversed"])
+def test_each_plugins_migrations_need_no_others(order: str) -> None:
+    plugins = list(registry.BUILTINS)
+    if order == "alone":
+        for plugin in plugins:  # each on a database of its own
+            Database(":memory:").migrate(plugin.name, plugin.migrations)
+    else:
+        db = Database(":memory:")
+        for plugin in reversed(plugins):
+            db.migrate(plugin.name, plugin.migrations)
+
+
+def test_a_plugins_migration_may_not_make_a_longer_named_plugins_tables() -> None:
+    db = Database(":memory:")
+    stray = Migration("0001_x", "CREATE TABLE git_stack_hijack (x INTEGER)")
+    with pytest.raises(ValueError, match="git_stack_hijack"):
+        db.migrate("git", [stray], owners=["git", "git_stack"])
+
+
+def test_a_migration_another_process_ran_first_is_taken_as_done(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "d.db"
+    first, second = Database(path), Database(path)
+    migrations = [Migration("0001_t", "CREATE TABLE p_t (x INTEGER)")]
+    real = Database._applied  # pyright: ignore[reportPrivateUsage]
+    asked: list[str] = []
+
+    def applied(self: Database, owner: str, names: list[str]) -> list[str]:
+        asked.append(owner)
+        return [] if len(asked) == 1 else real(self, owner, names)  # first, what it saw before
+
+    first.migrate("p", migrations)
+    monkeypatch.setattr(Database, "_applied", applied)
+    assert second.migrate("p", migrations) == 1  # it tried, found it done, and went on
+    assert [r["name"] for r in second.query("SELECT name FROM migrations WHERE owner = 'p'")] == [
+        "0001_t"
+    ]
+
+
+def test_a_plugins_load_sees_no_write_between_its_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    config, db = conftest.stored(work_items=[])
+    db.execute("CREATE TABLE notes_probe (x INTEGER)")
+    db.execute("INSERT INTO notes_probe VALUES (1)")
+    seen: list[int] = []
+
+    def load(self: NotesPlugin, req: LoadRequest[NotesConfig]) -> None:
+        seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
+        writer = threading.Thread(target=db.execute, args=("UPDATE notes_probe SET x = 2",))
+        writer.start()
+        writer.join(0.2)  # a refresh storing meanwhile: it waits for the load
+        seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
+
+    monkeypatch.setattr(NotesPlugin, "load", load)
+    [notes] = [e for e in registry.enabled(config, db, conftest.NOW) if e.name == "notes"]
+    notes.snapshot()
+    assert seen == [1, 1]

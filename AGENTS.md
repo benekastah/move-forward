@@ -131,6 +131,9 @@ is what's left to build.
   number (`0004_issue_comments`). A plugin's tables, indexes, views and
   triggers are prefixed with its name: core refuses a migration that makes
   another.
+  Write a new one against a scratch `db_path`, not the database `mfd serve --reload` runs
+  on: it runs the migration as soon as the file is saved, and once it has, renaming it makes
+  the server refuse to start.
 - **A plugin table is fetched or kept**, and its comment says which.
   Fetched tables hold what `collect` brings back; `store` replaces them
   wholesale, so they're never pruned. A table computed from the graph in

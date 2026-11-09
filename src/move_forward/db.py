@@ -11,7 +11,7 @@ import os
 import re
 import sqlite3
 import threading
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Generator, Iterable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -351,16 +351,21 @@ class Database:
         if self._path:
             # Readers don't block the writer, so other processes can use it while we do.
             self._conn.execute("PRAGMA journal_mode = WAL")
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        """Held by whoever uses the connection; re-entered by `reading`'s holder's queries."""
         with self._lock:
             self._conn.executescript(_SCHEMA_VERSIONS)
         self.migrate(CORE, CORE_MIGRATIONS)
 
-    def migrate(self, owner: str, migrations: Sequence[Migration]) -> int:
+    def migrate(
+        self, owner: str, migrations: Sequence[Migration], owners: Iterable[str] = ()
+    ) -> int:
         """Apply `owner`'s migrations that haven't run yet, in order, each in its own
         transaction with its line in the ledger. A plugin's (any owner but core's) may make or
-        remove only tables, indexes, views and triggers named `<owner>_...`; one that touches
-        another is rolled back and refused.
+        remove only tables, indexes, views and triggers named `<owner>_...`, but not those of
+        another of `owners` whose name starts so (`git_stack_...` for `git`); one that touches
+        another is rolled back and refused. Another process (`mfd notes` while `mfd serve`
+        starts) running the same migration first is fine: it's taken as done.
 
         Foreign keys are enforced, and SQLite can't turn them off inside a transaction, so a
         migration that rebuilds a referenced table copies it under a new name and renames,
@@ -390,8 +395,14 @@ class Database:
             pending = migrations[len(applied) :]
             if pending:
                 self._backup()
+            longer = [o for o in owners if o != owner and o.startswith(f"{owner}_")]
             for version, migration in enumerate(pending, start=len(applied) + 1):
-                self._run(owner, version, migration)
+                try:
+                    self._run(owner, version, migration, longer)
+                except Exception:
+                    if migration.name in self._applied(owner, names):
+                        continue  # another process ran it meanwhile
+                    raise
             return len(pending)
 
     def _applied(self, owner: str, names: list[str]) -> list[str]:
@@ -421,7 +432,7 @@ class Database:
                 )
         return names[:counted]
 
-    def _run(self, owner: str, version: int, migration: Migration) -> None:
+    def _run(self, owner: str, version: int, migration: Migration, others: list[str]) -> None:
         """Run one migration and record it, in one transaction. Call with the lock held."""
         conn = self._conn
         before = self._objects()
@@ -437,7 +448,12 @@ class Database:
                 after = self._objects()
                 changed = {"made": after - before, "removed": before - after}
                 for did, names in changed.items():
-                    if stray := sorted(n for n in names if not n.startswith(f"{owner}_")):
+                    if stray := sorted(
+                        n
+                        for n in names
+                        if not n.startswith(f"{owner}_")
+                        or any(n.startswith(f"{other}_") for other in others)
+                    ):
                         raise ValueError(
                             f"{owner}'s migration {migration.name} {did} {', '.join(stray)}:"
                             f" a plugin's tables are named {owner}_..., and only its own"
@@ -497,6 +513,14 @@ class Database:
                 path.with_name(path.name + suffix).unlink(missing_ok=True)
 
     @contextmanager
+    def reading(self) -> Generator[None]:
+        """Several reads, with no write of another thread between them: a plugin's `load`
+        reads its tables in several queries, and mustn't get half of one refresh's and half of
+        the next's."""
+        with self._lock:
+            yield
+
+    @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection]:
         """The connection, locked, in a transaction that commits on success."""
         with self._lock, self._conn:
@@ -509,3 +533,9 @@ class Database:
     def execute(self, sql: str, params: Params = ()) -> None:
         with self.transaction() as conn:
             conn.execute(sql, params)
+
+
+def core_tables() -> set[str]:
+    """The tables core's migrations make (some since dropped), and the ledgers'."""
+    sql = "\n".join(m.run for m in CORE_MIGRATIONS if isinstance(m.run, str))
+    return set(re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?(\w+)", f"{sql}\n{_SCHEMA_VERSIONS}"))
