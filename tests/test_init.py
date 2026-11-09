@@ -416,8 +416,14 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
 
 
 def test_every_key_of_core_is_in_the_example() -> None:
-    """Core's top-level keys, and those of its own sections (`[act_now]` and the like)."""
+    """Core's top-level keys, before any section, and those of its own sections (`[act_now]`
+    and the like), each as a whole key starting a commented line."""
     example = cli.EXAMPLE_CONFIG
+    top = re.split(r"^(?:# )?\[", example, maxsplit=1, flags=re.MULTILINE)[0]
+
+    def has(key: str, text: str) -> bool:
+        return re.search(rf"^(?:#+ ?)?{re.escape(key)} =", text, re.MULTILINE) is not None
+
     missing: list[str] = []
     for name, field in config.Config.model_fields.items():
         if name == "sections":  # the plugins' own, checked by plugin below
@@ -426,8 +432,8 @@ def test_every_key_of_core_is_in_the_example() -> None:
         if isinstance(model, type) and issubclass(model, BaseModel):
             section = re.search(rf"^# \[{name}\][^\n]*\n((?:#[^\n]*\n)*)", example, re.MULTILINE)
             shown = section[1] if section else ""
-            missing += [f"{name}.{key}" for key in model.model_fields if f"{key} =" not in shown]
-        elif f"{name} =" not in example:
+            missing += [f"{name}.{key}" for key in model.model_fields if not has(key, shown)]
+        elif not has(name, top):
             missing.append(name)
     assert missing == []
 
