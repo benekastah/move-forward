@@ -95,6 +95,10 @@ for themselves (a token, a request, an example config) is core's.
   any int: `Band.CI + 5` is refused. Pick the band that says what the panel is; a plugin's
   panels in one band go in the order `panels` lists them, and groups whose most urgent
   panels share a band go by plugin name.
+- **An item's tags**: core sets `Item.tags`, the tags whose `#tag` badges the item shows, which
+  the page's tag view (`?tag=`) keeps it by; a plugin's are ignored. `api.html.buttons` takes
+  `tags`, the tags the dashboard its buttons go back to is filtered by; a plugin's page leaves
+  it out.
 
 ## Version 1
 

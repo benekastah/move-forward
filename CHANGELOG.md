@@ -5,6 +5,16 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### The page filters by tag
+
+`/` and `/focus` take `tag` query parameters, repeated for several (`/?tag=chores&tag=bins`),
+and show only the items carrying one of them, by handle (`#Garbage Day` is `garbage-day`).
+- A link or bookmark to the page can name tags; one without `tag` shows everything, as before.
+- Every form posting from the page (`/refresh`, `/layout/reset`, `/actions/...`) carries the
+  page's `tag` parameters in its query, and its redirect keeps them: a script posting without
+  them is sent back to `/` unfiltered, as before.
+- In `mfd dump`, each item has `tags`: the tags its badges show, by handle.
+
 ### Panels go by what kind they are
 
 Each panel's `priority`, in `mfd dump`, is now one of seven bands, saying what kind of panel

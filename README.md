@@ -239,6 +239,17 @@ one, or setting its priority, doesn't touch the others. Core publishes each as a
 (see [entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
 shows.
 
+The page can show only what carries some tags (the tag view). The drop-down above Act now lists
+every tag the page's items carry, with how many things carry it; picking one, or clicking an
+item's `#tag` badge, adds it to the selection, and the page then shows only the items carrying
+at least one of the tags selected: in Act now, in every panel and in focus mode. An item carries
+the tags its badges show; one with parts (an entry's todos) is kept, parts and all, when it or
+one of its parts carries one. Panels and groups left empty are left off, and while tags are
+selected, groups and panels can't be dragged. Each selected tag has a link clearing it, beside one
+clearing them all, and one that nothing carries any more stays there to clear. The selection is
+in the page's address (`/?tag=chores&tag=garbage-day`), so it can be bookmarked, and the page's
+reload, focus mode's links and the buttons' redirects keep it.
+
 ## Settings
 
 `/settings` (Settings, in the header) shows the config's settings as a form: the top
@@ -282,7 +293,8 @@ The Focus button in the header opens a list of what to walk through: Act now, an
 panel under its group's title, with counts. Pick one to see a single item at a time, with
 Prev and Next (or the left and right arrow keys). Act now goes through its items in their
 order overall; a panel, in its own. Work entries are split into their todos
-([notes](docs/plugins/notes.md#panels) says how).
+([notes](docs/plugins/notes.md#panels) says how). With tags selected (see [Tags](#tags)), it goes
+through only what carries one.
 Buttons on a focused item come back to the same item afterwards.
 
 ## API
@@ -314,10 +326,12 @@ Pages (GET, HTML):
 
 | Path | Shows |
 | --- | --- |
-| `/` | The dashboard. |
+| `/` | The dashboard. `?tag=<tag>`, repeated for several, shows only what carries one of them (see [Tags](#tags)). |
 | `/settings` | The config's settings as a form (see [Settings](#settings)). |
 | `/focus` | Focus mode's category list. |
 | `/focus?cat=<key>&i=<n>` | Item `n` of a category: `act` (Act now) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
+
+Both focus pages take `tag` as `/` does.
 
 Plugins add pages and buttons of their own, listed on their pages (see
 [Plugins](#plugins)).
@@ -342,7 +356,8 @@ its own page at `/<plugin>`; core's paths' first segments (`focus`, `settings`, 
 
 Forms (POST, `application/x-www-form-urlencoded`). A plugin's buttons post to
 `/actions/<plugin>/<action>`; the rest are core's. Each answers `303 See Other`
-to `/`, or to the `back` query parameter when it's a local path, with its outcome
+to `/` (filtered by the `tag` query parameters the form posted to, as the page's forms do), or
+to the `back` query parameter when it's a local path, with its outcome
 in a short-lived cookie the next page shows once (signed, so no other site or app
 on localhost can show a notice of its own); an action that fails says
 `failed: <reason>`, not an error status. A malformed request gets one: `400`, or `413` for a body

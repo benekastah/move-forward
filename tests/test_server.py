@@ -13,7 +13,7 @@ from urllib.parse import quote, urlencode
 from xml.etree import ElementTree
 
 import pytest
-from conftest import ME, pr, snapshot
+from conftest import ME, NOW, pr, snapshot
 
 from move_forward import auth, registry, server, settings
 from move_forward.config import Config
@@ -39,7 +39,7 @@ from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.plugin import SlackPlugin
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.registry import migrate
-from move_forward.repositories import LayoutRepository, SessionRepository
+from move_forward.repositories import LayoutRepository, SessionRepository, TagRepository
 
 
 @pytest.fixture
@@ -357,6 +357,41 @@ def test_actions_redirect_to_the_panel_they_were_in(
     )
     response = post(client, "/actions/x?at=a%22%3E%3Cscript", {})  # only a panel's key
     assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
+
+
+def test_the_page_and_focus_mode_are_filtered_by_the_tags_in_their_address(
+    client: HTTPConnection, app: server.App
+) -> None:
+    TagRepository(app.db).add(Ref(kind="pull_request", id=pr(1).url), "chores", NOW)
+    # What the page's reload fetches again: its own address.
+    assert pr(1).title in get(client, "/?tag=chores").read().decode()
+    body = get(client, "/?tag=bins&tag=%27%3E%3Cb%3E").read().decode()
+    assert pr(1).title not in body and "Nothing carries #bins or #b." in body
+    assert "'><b>" not in body
+    body = get(client, "/focus?cat=act&i=0&tag=chores").read().decode()
+    assert "1 of 1" in body and "href='/focus?tag=chores'>focus</a>" in body
+    assert "Nothing carries #bins" in get(client, "/focus?tag=bins").read().decode()
+
+
+def test_a_buttons_redirect_keeps_the_tags_the_page_is_filtered_by(
+    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_run(*_: object) -> str:
+        return "did it"
+
+    monkeypatch.setattr(server, "perform_action", _results(fake_run))
+    response = post(client, "/actions/x?at=github.ready&pos=3&tag=chores&tag=Garbage+Day", {})
+    assert (response.getheader("Location"), notice_of(response)) == (
+        "/?at=github.ready&pos=3&tag=chores&tag=garbage-day#spot",
+        "did it",
+    )
+    response = post(client, "/refresh?tag=chores", {})
+    response.read()
+    assert response.getheader("Location") == "/?tag=chores"
+    # A focus page's address has its own.
+    response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dact%26tag%3Dchores&tag=x", {})
+    assert response.getheader("Location") == "/focus?cat=act&tag=chores"
+    response.read()
 
 
 def test_ticking_a_todo_off_redirects_back_with_it(

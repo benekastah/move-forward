@@ -523,6 +523,7 @@ def build_dashboard(
         _known_action(plugins),
         graph.hides,
         contacts.importance,
+        tagging.of,
     )
     return built.model_copy(update={"problems": list(registry.DISCOVERY_ERRORS)})
 

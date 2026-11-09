@@ -36,6 +36,7 @@ def _tasked(plugin: str, item: Item) -> bool:
 
 ACT_NOW = "act"
 """Act now's group key."""
+ACT_NOW_TITLE = "Act now"
 
 
 @dataclass(frozen=True)
@@ -63,7 +64,7 @@ def groups(plugins: list[PluginPanels], act_now_keys: list[str]) -> list[Group]:
     """Act now with its `act_now_keys` panels, then a group per plugin: panels by band, in the
     order the plugin gives those in one, and groups by their most urgent panel's band, then by
     name."""
-    result = [Group(key=ACT_NOW, title="Act now", panel_keys=act_now_keys, open=True)]
+    result = [Group(key=ACT_NOW, title=ACT_NOW_TITLE, panel_keys=act_now_keys, open=True)]
     rest = sorted(
         [plugin for plugin in plugins if plugin.panels],
         key=lambda plugin: (min(p.priority for p in plugin.panels), plugin.key),
@@ -138,8 +139,9 @@ class Dashboard(Model):
 
         A category is Act now (`ACT_NOW`) or a panel key.
         """
-        if category == ACT_NOW and (group := self.find_group(ACT_NOW)) is not None:
-            return group.title
+        if category == ACT_NOW:  # its group is left out while the tag view leaves it empty
+            group = self.find_group(ACT_NOW)
+            return group.title if group else ACT_NOW_TITLE
         if (panel := self.find_panel(category)) is not None:
             return panel.title
         return None
@@ -211,6 +213,14 @@ surface; see `Plugin.item_actions`."""
 
 def _no_item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
     return ItemAdditions()
+
+
+TagsOf = Callable[[Item], list[str]]
+"""The tags whose badges core shows on an item (see `tags.Tags.of`)."""
+
+
+def _no_tags(item: Item) -> list[str]:
+    return []
 
 
 Hidden = Callable[[Item], bool]
@@ -320,10 +330,11 @@ def _with_item_actions(
     surface: Surface,
     item_actions: ItemActions,
     known: KnownAction = _any_action,
+    tags_of: TagsOf = _no_tags,
 ) -> Panel:
     """Each item, and each of its focus-mode parts, with what the plugins add: buttons,
-    badges, details and links. `owner` is the plugin whose panel it is. Buttons posting to
-    no action `known` knows are left out."""
+    badges, details and links, and the tags core's badges show (`tags_of`). `owner` is the
+    plugin whose panel it is. Buttons posting to no action `known` knows are left out."""
 
     def add(item: Item) -> Item:
         added = item_actions(item, owner, surface)
@@ -331,6 +342,7 @@ def _with_item_actions(
         return item.model_copy(
             update={
                 "actions": actions,
+                "tags": tags_of(item),
                 "badges": [*item.badges, *added.badges],
                 "details": [*item.details, *added.details],
                 "links": [*item.links, *added.links],
@@ -343,11 +355,12 @@ def _with_item_actions(
 
 def _as_given(item: Item) -> Item:
     """A plugin's item without what only core sets (`act_now_fields`, `opened_at`,
-    `parts_listed`, `set_aside`)."""
+    `parts_listed`, `set_aside`, `tags`)."""
     if (
         item.act_now_fields is None
         and item.opened_at is None
         and not item.set_aside
+        and not item.tags
         and not item.parts
     ):
         return item
@@ -356,6 +369,7 @@ def _as_given(item: Item) -> Item:
             "act_now_fields": None,
             "opened_at": None,
             "set_aside": False,
+            "tags": [],
             "parts_listed": False,
             "parts": [_as_given(part) for part in item.parts],
         }
@@ -426,6 +440,7 @@ def build(
     known_action: KnownAction = _any_action,
     hides: HidesKind = _hides_nothing,
     contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
+    tags_of: TagsOf = _no_tags,
 ) -> Dashboard:
     """The dashboard: Act now, ranked from the plugins' nominations, then the plugins' panels in
     their groups, without hidden items, each item with the plugins' buttons, sorted, in the
@@ -433,7 +448,8 @@ def build(
     `units` the graph's, for Act now to join items about the same unit of work, and
     `priority_of` what I set as the priority of what an item is about; `known_action` says
     which buttons post to an action that's there, `hides` which kinds hide what they point
-    at, and `contact_importance` what who an item is about adds to it. A panel's key is its
+    at, `contact_importance` what who an item is about adds to it, and `tags_of` the tags
+    core's badges show on an item, kept in its `tags`. A panel's key is its
     plugin's name and its own, e.g. `github.conflicts`,
     so two plugins' panels never clash."""
     plugins = [
@@ -466,7 +482,7 @@ def build(
     # todo offers the same wherever it's shown.
     ranked = [
         _with_importance_actions(
-            _with_item_actions(p, p.key, "act_now", item_actions, known_action),
+            _with_item_actions(p, p.key, "act_now", item_actions, known_action, tags_of),
             priority_of,
             hides,
             parts_only=True,
@@ -489,6 +505,7 @@ def build(
                             surface,
                             item_actions,
                             known_action,
+                            tags_of,
                         ),
                         priority_of,
                         hides,
