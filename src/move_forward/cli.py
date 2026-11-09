@@ -159,6 +159,8 @@ my-team = "#team-my-team"
 # priorities = ["Lowest", "Low", "Medium", "High", "Highest"]  # Jira's priority names, lowest first
 # incident_types = ["incident"]           # issue types (substrings, lower-case)
 # bug_types = ["bug"]
+## [jira.teams]                         # a team's id in Jira's team field, by its name in teams (unused for now)
+## my-team = "10042"
 
 # [people]                              # what people are to me
 # contact_types = { customer = 1, partner = 1, vendor = 0 }  # the types offered, each with the importance it gives (0 to 2)

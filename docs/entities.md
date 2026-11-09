@@ -95,7 +95,7 @@ fetched entity carries:
 | Kind | Fetched by | state | Attributes |
 | --- | --- | --- | --- |
 | `pull_request` | github, with `gh pr view` | `open`, `merged` or `closed` | `closed_at`: ISO datetime or null, when it was merged or closed |
-| `ticket` | jira, open or resolved; it remembers their projects | the ticket's status | `resolved_at`: ISO datetime, or null while open |
+| `ticket` | jira, open or resolved; it remembers their projects | the ticket's status | `resolved_at`: ISO datetime (its resolution, else when it moved into a done status), or null while open |
 
 ## Attributes
 

@@ -1,3 +1,4 @@
+import json
 import urllib.error
 import urllib.request
 from datetime import UTC, date, datetime
@@ -371,3 +372,16 @@ def test_only_the_latest_comments_are_kept() -> None:
     raw = jira.RawIssue.model_validate({**RAW, "fields": fields})
     kept = jira.to_issue(raw, "https://jira").comments
     assert [c.id for c in kept] == [str(n) for n in range(20, 30)]
+
+
+def test_a_ticket_done_without_a_resolution_is_resolved_when_it_moved_to_done() -> None:
+    raw = json.loads(json.dumps(RAW))
+    fields = raw["fields"]
+    fields["status"] = {"name": "Done", "statusCategory": {"key": "done"}}
+    fields["statuscategorychangedate"] = "2026-10-25T10:00:00.000+0000"
+    fields.pop("resolutiondate", None)
+    done = jira.to_issue(jira.RawIssue.model_validate(raw), "https://j")
+    assert done.resolved is not None and done.resolved.day == 25
+    fields["status"] = {"name": "In Progress", "statusCategory": {"key": "indeterminate"}}
+    fields["resolutiondate"] = "2026-10-20T10:00:00.000+0000"  # reopened: a stale date
+    assert jira.to_issue(jira.RawIssue.model_validate(raw), "https://j").resolved is None

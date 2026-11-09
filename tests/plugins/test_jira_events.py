@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import cast
 
 """What Jira notifications say, from two snapshots and the graph."""
@@ -25,7 +26,8 @@ def _kinds(before: list[JiraIssue], after: list[JiraIssue]) -> list[tuple[str, s
 
 
 def _comment(id: str, author: str = "Alice", **fields: bool) -> JiraComment:
-    return JiraComment(id=id, author=author, created=NOW, **fields)
+    """A comment made `id` minutes after NOW: later ones are newer."""
+    return JiraComment(id=id, author=author, created=NOW + timedelta(minutes=int(id)), **fields)
 
 
 def test_every_kind_the_plugin_offers_is_listed() -> None:
@@ -109,3 +111,9 @@ def test_a_ticket_already_closeable_the_first_time_is_not_said() -> None:
     merged = snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)])
     pair = stored(github=merged, jira=tickets)
     assert _Refreshes(pair).closeable() == []
+
+
+def test_an_older_comment_back_in_the_window_is_not_new() -> None:
+    old = issue(comments=[_comment(str(i)) for i in range(2, 12)])  # the newest ten
+    new = issue(comments=[_comment("1"), *(_comment(str(i)) for i in range(2, 11))])  # 11 gone
+    assert _kinds([old], [new]) == []

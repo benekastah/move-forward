@@ -46,8 +46,11 @@ def _raised(config: JiraConfig, before: JiraIssue, after: JiraIssue) -> bool:
 def _changed(config: JiraConfig, old: JiraIssue, issue: JiraIssue) -> list[Event]:
     found: list[Event] = []
     seen = {c.id for c in old.comments}
+    # Only the newest are kept: one older than all of those, back in the window because a
+    # newer one was deleted, isn't new.
+    since = max((c.created for c in old.comments), default=None)
     for comment in issue.comments:
-        if comment.id in seen or comment.mine:
+        if comment.id in seen or comment.mine or (since and comment.created <= since):
             continue
         if comment.mentions_me:
             found.append(_event(issue, "mentioned", f"{comment.author} mentioned you"))

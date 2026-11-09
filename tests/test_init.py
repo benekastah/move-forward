@@ -125,7 +125,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     }
     assert loaded.email == "jane@other.com"
     # Each token chosen is named, or its plugin says what to do instead.
-    assert "For Jira: `mfd token set jira` (or export JIRA_API_TOKEN) stores its token" in message
+    assert "For Jira: create an API token at https://id.atlassian.com/" in message
     assert message.endswith(
         "For Slack: `mfd token set slack` (or export SLACK_API_TOKEN) stores its token"
     )
@@ -488,6 +488,7 @@ def test_a_plugin_with_several_tokens_names_them_on_one_line(
         return {"home": _Token("A_TOKEN", "a"), "work": _Token("B_TOKEN", "b")}
 
     monkeypatch.setattr(JiraPlugin, "tokens", tokens)
+    monkeypatch.setattr(JiraPlugin, "token_help", "")  # the plain line, naming each
     message = init.init(
         tmp_path / "config.toml",
         scripted({"Plugins": "jira", "Jira site": "https://o.atlassian.net"}),

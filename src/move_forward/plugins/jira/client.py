@@ -32,6 +32,7 @@ FIELDS = [
     "parent",
     "issuelinks",
     "resolutiondate",
+    "statuscategorychangedate",
     "duedate",
     "comment",
 ]
@@ -100,6 +101,7 @@ class _Fields(_Raw):
     parent: _Named | None = None
     issuelinks: list[_IssueLink] = []
     resolutiondate: datetime | None = None
+    statuscategorychangedate: datetime | None = None
     duedate: date | None = None
     comment: _RawComments = _RawComments()
 
@@ -179,7 +181,11 @@ def to_issue(
         updated=f.updated,
         parent=f.parent.key if f.parent else None,
         open_blockers=open_blockers,
-        resolved=f.resolutiondate,
+        # Done by its status, whether or not its workflow sets a resolution: when it was
+        # resolved, else when it moved into Done.
+        resolved=(f.resolutiondate or f.statuscategorychangedate)
+        if f.status.status_category.key == "done"
+        else None,
         due=f.duedate,
         url=ticket_url(site, raw.key),
         comments=comments,
