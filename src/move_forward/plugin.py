@@ -491,6 +491,14 @@ class Plugin[C: BaseModel, S: BaseModel]:
         has `token_env` and `keychain_service`; None for a plugin with no token."""
         return config if isinstance(config, TokenSettings) else None
 
+    def tokens(self, config: C) -> dict[str, TokenSettings]:
+        """Every token the plugin keeps, for `mfd token`, by name: `""` for its own (by default
+        `token_settings`'s), and one per account for a plugin reading several (several
+        mailboxes, say), stored as `<plugin>.<name>`. Each needs a `keychain_service` of its own:
+        the config is refused when two tokens share one."""
+        own = self.token_settings(config)
+        return {"": own} if own is not None else {}
+
     # Refresh
 
     def collect(self, req: CollectRequest[C]) -> "S | Collected[S]":

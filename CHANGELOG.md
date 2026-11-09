@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Tokens for a plugin's accounts
+
+`mfd token set <plugin>.<account>` stores the token of one of a plugin's accounts, for a plugin
+reading several, and `mfd token check` lists each account's apart. An unknown name's error now
+lists the names there are. Nothing to change for one token per plugin.
+
 ### Two plugins can't keep their tokens under one keychain service
 
 A config whose sections name the same `keychain_service` is now refused when it loads, as

@@ -20,6 +20,7 @@ from . import plugins as builtin_plugins
 from .db import CORE, OWNER_RE, Database
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
+from .keychain import TokenSettings
 from .kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named_for
 from .plugin import (
     API_VERSION,
@@ -279,19 +280,32 @@ def unmet_requirements(config: "Config") -> list[str]:
     ]
 
 
-def shared_token_services(config: "Config") -> list[str]:
-    """The keychain services more than one enabled plugin keeps its token under (as
-    `token_settings` says), each with who, e.g. "[jira] and [slack] keep their tokens under
-    'shared'": storing one token would replace the other's. Services a plugin derives from its
-    own (Slack's `-refresh`) aren't counted."""
-    by_service: dict[str, list[str]] = {}
+def tokens(config: "Config") -> dict[str, TokenSettings]:
+    """Where each enabled plugin keeps each of its tokens (`Plugin.tokens`), by the name
+    `mfd token set` takes: the plugin's, or `<plugin>.<account>` for one of several."""
+    found: dict[str, TokenSettings] = {}
     for plugin in PLUGINS:
         section = config.section(plugin.name)
-        if section is not None and (settings := plugin.token_settings(section)) is not None:
-            by_service.setdefault(settings.keychain_service, []).append(f"[{plugin.name}]")
+        if section is not None:
+            for name, settings in plugin.tokens(section).items():
+                found[f"{plugin.name}.{name}" if name else plugin.name] = settings
+    return found
+
+
+def shared_token_services(config: "Config") -> list[str]:
+    """The keychain services more than one token is kept under (as `tokens` says), each with
+    whose, e.g. "jira ('Shared') and slack ('shared') keep their tokens in one place": storing
+    one token would replace the other's. Case doesn't count, on every system, as Windows'
+    Credential Manager ignores it: one config means the same everywhere. Services a plugin
+    derives from its own (Slack's `-refresh`) aren't counted."""
+    by_service: dict[str, list[tuple[str, str]]] = {}
+    for name, settings in tokens(config).items():
+        service = settings.keychain_service
+        by_service.setdefault(service.casefold(), []).append((name, service))
     return [
-        f"{' and '.join(who)} keep their tokens under {service!r}: give each its own keychain_service"
-        for service, who in by_service.items()
+        f"{' and '.join(f'{name} ({service!r})' for name, service in who)} keep their tokens in"
+        " one place (case doesn't count): give each its own keychain_service"
+        for who in by_service.values()
         if len(who) > 1
     ]
 
