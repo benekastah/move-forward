@@ -1,6 +1,6 @@
 """What a plugin may use from core: everything here, and nothing else. A plugin imports from
-`move_forward.api` (and its submodules `html`, `shell`, `http`, `localtime`, `keychain`),
-never from core's own modules, which may change without notice."""
+`move_forward.api` (and its submodules `html`, `shell`, `http`, `localtime`, `keychain`,
+`kinds`, `ids`, `tags`), never from core's own modules, which may change without notice."""
 
 from ..act_now import due_pressure
 from ..asking import (

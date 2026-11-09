@@ -50,6 +50,7 @@ extend-select = ["I", "UP", "B", "C4", "SIM", "TID251"]
 "move_forward.notifications".msg = "plugins import from move_forward.api"
 "move_forward.page".msg = "plugins import from move_forward.api"
 "move_forward.panels".msg = "plugins import from move_forward.api"
+"move_forward.people".msg = "plugins import from move_forward.api"
 "move_forward.plugin".msg = "plugins import from move_forward.api"
 "move_forward.priority".msg = "plugins import from move_forward.api"
 "move_forward.private".msg = "plugins import from move_forward.api"
@@ -66,6 +67,8 @@ extend-select = ["I", "UP", "B", "C4", "SIM", "TID251"]
 "move_forward.snooze".msg = "plugins import from move_forward.api"
 "move_forward.strict".msg = "plugins import from move_forward.api"
 "move_forward.supervisor".msg = "plugins import from move_forward.api"
+"move_forward.tags".msg = "plugins import from move_forward.api"
+"move_forward.testing".msg = "plugins import from move_forward.api"
 "move_forward.tls".msg = "plugins import from move_forward.api"
 "move_forward.tomledit".msg = "plugins import from move_forward.api"
 

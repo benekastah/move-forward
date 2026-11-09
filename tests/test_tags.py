@@ -6,6 +6,7 @@ import pytest
 from conftest import NOW, pr, snapshot, stored
 
 from move_forward import cli, panels, refresh, tags
+from move_forward.api.tags import handle as api_handle
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
@@ -374,3 +375,7 @@ def test_a_tag_written_and_labelled_is_written() -> None:
     graph = Graph(tags.tagged([carrier], {}))
     found = tags.Tags(graph, {}).additions(Item(title="t", subjects=[ref]))
     assert found.badges == ["#bug"]  # it stays when the label goes: not coloured as one
+
+
+def test_a_plugin_names_a_tag_as_core_does() -> None:
+    assert api_handle is tags.handle
