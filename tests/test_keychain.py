@@ -223,7 +223,10 @@ def test_a_config_keeping_two_tokens_in_one_place_is_refused(tmp_path: Path) -> 
         )
         + '[slack]\nkeychain_service = "shared"\n'
     )
-    with pytest.raises(ValidationError, match="jira and slack keep their tokens under 'shared'"):
+    with pytest.raises(
+        ValidationError,
+        match=r"jira \('shared'\) and slack \('shared'\) keep their tokens in one place",
+    ):
         config_module.load(config)
 
 
@@ -244,7 +247,7 @@ def test_a_plugins_token_settings_count_where_it_keeps_its_token(
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     config = _config(tmp_path)
     config.write_text(config.read_text() + '[github]\norg = "acme"\n')
-    with pytest.raises(ValidationError, match="github and jira keep their tokens"):
+    with pytest.raises(ValidationError, match=r"github \('move-forward-jira'\) and jira"):
         config_module.load(config)
 
 
@@ -301,7 +304,7 @@ def test_an_accounts_token_counts_where_it_is_kept(
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     config = _config(tmp_path)
     config.write_text(config.read_text() + '[github]\norg = "acme"\n')
-    with pytest.raises(ValidationError, match="github.work and jira keep their tokens"):
+    with pytest.raises(ValidationError, match=r"github.work \('move-forward-jira'\) and jira"):
         config_module.load(config)
 
 
@@ -313,5 +316,5 @@ def test_services_differing_only_in_case_are_one(tmp_path: Path) -> None:
         )
         + '[slack]\nkeychain_service = "shared"\n'
     )
-    with pytest.raises(ValidationError, match="jira and slack keep their tokens"):
+    with pytest.raises(ValidationError, match=r"jira \('Shared'\) and slack \('shared'\) keep"):
         config_module.load(config)

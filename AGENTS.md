@@ -44,10 +44,12 @@ is what's left to build.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
   plugin last fetched, and why it failed.
-- Every plugin hook takes one request object (`PanelsRequest(ctx, snapshot,
-  graph)` and so on), so a hook can gain an input without breaking its overrides. But for
-  those `mfd init` and `mfd token` call with no context, on the config alone: `init_questions`,
-  `token_settings` and `tokens`.
+- Every plugin hook that runs with the plugin's context takes one request object
+  (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
+  breaking its overrides; `refresh_seconds(ctx)` is the one that takes its context bare. Those
+  called before there's a context take what they need: `init_suggested()` and
+  `init_questions(ask, setup)` (`mfd init`), `token_settings(config)` and `tokens(config)`
+  (`mfd token`, and loading the config), `cli(parser)`, `pages()` and `actions()`.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.

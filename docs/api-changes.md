@@ -18,7 +18,7 @@ catch up.
 - **Several tokens**: `Plugin.tokens(config)` names every token a plugin keeps, `""` for its
   own (by default `token_settings`'s) and one per account for a plugin reading several;
   `mfd token set <plugin>.<account>` stores one, and the config is refused when two tokens,
-  whoever's, share a `keychain_service`.
+  whoever's, share a `keychain_service`, whatever its case.
 - **What a token setting is**: `api.keychain.TokenSettings`, anything with a `token_env` and a
   `keychain_service` (read-only), so a plugin can annotate `token_settings` and return frozen
   settings. The config is refused when two enabled plugins' `keychain_service`s are the same,

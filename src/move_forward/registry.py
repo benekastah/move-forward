@@ -294,16 +294,18 @@ def tokens(config: "Config") -> dict[str, TokenSettings]:
 
 def shared_token_services(config: "Config") -> list[str]:
     """The keychain services more than one token is kept under (as `tokens` says), each with
-    whose, e.g. "jira and slack keep their tokens under 'shared'": storing one token would
-    replace the other's. Services a plugin derives from its own (Slack's `-refresh`) aren't
-    counted."""
-    by_service: dict[str, list[str]] = {}
+    whose, e.g. "jira ('Shared') and slack ('shared') keep their tokens in one place": storing
+    one token would replace the other's. Case doesn't count, on every system, as Windows'
+    Credential Manager ignores it: one config means the same everywhere. Services a plugin
+    derives from its own (Slack's `-refresh`) aren't counted."""
+    by_service: dict[str, list[tuple[str, str]]] = {}
     for name, settings in tokens(config).items():
-        # Windows' Credential Manager ignores case.
-        by_service.setdefault(settings.keychain_service.casefold(), []).append(name)
+        service = settings.keychain_service
+        by_service.setdefault(service.casefold(), []).append((name, service))
     return [
-        f"{' and '.join(who)} keep their tokens under {service!r}: give each its own keychain_service"
-        for service, who in by_service.items()
+        f"{' and '.join(f'{name} ({service!r})' for name, service in who)} keep their tokens in"
+        " one place (case doesn't count): give each its own keychain_service"
+        for who in by_service.values()
         if len(who) > 1
     ]
 
