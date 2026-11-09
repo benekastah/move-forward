@@ -215,7 +215,7 @@ def test_push_of_a_branch_tracking_a_local_one_goes_to_the_remote_not_into_it(
 
 def _branch(repo: Path, name: str) -> Branch:
     """The branch as git's collect reads it."""
-    collected = client.collect_repo(repo, "me@x", datetime.now(UTC), 30, [])
+    collected = client.collect_repo(repo, datetime.now(UTC), 30, [])
     return next(b for b in collected.branches if b.name == name)
 
 
@@ -283,9 +283,7 @@ def test_a_branch_whose_upstream_is_gone_counts_what_isnt_on_the_default_branch(
     git(repo, "push", "-q", "origin", "--delete", "wip")
     git(repo, "fetch", "-q", "--prune")
     [wip] = [
-        b
-        for b in client.collect_repo(repo, "me@x", datetime.now(UTC), 30, []).branches
-        if b.name == "wip"
+        b for b in client.collect_repo(repo, datetime.now(UTC), 30, []).branches if b.name == "wip"
     ]
     assert (wip.gone, wip.ahead_of_default) == (True, 1)
 

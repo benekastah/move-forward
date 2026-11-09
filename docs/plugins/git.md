@@ -34,11 +34,16 @@ checkout) isn't yours, and an older one that wasn't counted is. Local work also 
 the unpushed commits of any branch git-stack tracks (with the git_stack plugin), since
 stacks are built on your own branches. `ignored_worktree_globs`
 leaves worktrees out, and `commit_history_days` says how far back
-your commits count towards the directories you work in.
+your commits (by the repo's `user.email`) count towards the directories you work in. A
+repo git can't read (a path that isn't one, say) is logged and kept as it was last read, so
+it doesn't hold up the others; a worktree deleted without `git worktree remove` is left out.
 
 Remotes can have any names. "The default branch" is the default branch on every remote
-(`upstream/main` and `origin/main` in a fork), or the local one in a repo without remotes:
-a commit on any of them is on the default branch. The repo's GitHub name comes from the
+(`upstream/main` and `origin/main` in a fork): a commit on any of them is on the default
+branch. When no remote's `HEAD` is known (a repo without remotes, or one pushed to without
+`git remote set-head`), it's `init.defaultBranch`, `main` or `master`, the first the repo has,
+on each remote that has it, else the local one; with none of those, no branch is counted
+against it. The repo's GitHub name comes from the
 remote its local default branch tracks, else from the first remote on GitHub. A remote is on
 GitHub when its host, as the remote URL names it, is one of `github_hosts`
 (`["github.com"]`): add a GitHub Enterprise Server's host, or an alias from

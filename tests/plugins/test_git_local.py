@@ -1,12 +1,15 @@
 import os
+import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 from move_forward.db import Database
 from move_forward.plugins.git import client as local
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
-from move_forward.shell import git
+from move_forward.shell import CommandError, git
 
 WORKTREES = """\
 worktree /repo
@@ -97,7 +100,7 @@ def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
     (repo / "dirty.txt").write_text("x")
 
     now = datetime.now(UTC) + timedelta(seconds=1)
-    result = local.collect_repo(repo, "me@example.com", now, 30, ["*/ignored/*"])
+    result = local.collect_repo(repo, now, 30, ["*/ignored/*"])
     assert result.default_branch == "main"
     assert result.github_repo is None
     assert [(w.branch, w.modified, w.untracked) for w in result.worktrees] == [("feature", 0, 1)]
@@ -139,7 +142,7 @@ def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) 
     git(repo, "switch", "-q", "main")
 
     now = datetime.now(UTC) + timedelta(seconds=1)
-    result = local.collect_repo(repo, "nobody@example.com", now, 30, [])  # the repo's email wins
+    result = local.collect_repo(repo, now, 30, [])
     counted = {b.name: b.my_commits for b in result.branches}
     assert counted == {"main": None, "mine": 1, "stacked": 1, "theirs": 0}
 
@@ -149,7 +152,7 @@ def test_a_repo_without_a_remote_is_collected(tmp_path: Path) -> None:
     _init_repo(repo)
     _commit(repo, "a.txt")
     git(repo, "checkout", "-q", "-b", "idea")
-    collected = local.collect_repo(repo, "me@example.com", datetime.now(UTC), 30, [])
+    collected = local.collect_repo(repo, datetime.now(UTC), 30, [])
     assert collected.github_repo is None and collected.my_dirs == ["."]  # from the local main
     assert [b.name for b in collected.branches] == ["idea", "main"]
 
@@ -180,7 +183,7 @@ def test_remotes_are_read_whatever_they_are_called(tmp_path: Path) -> None:
     assert found.default_branch == "main" and found.github_repo == "acme/widgets"
     assert sorted(found.default_refs) == ["fork/main", "upstream/main"]
     now = datetime.now(UTC) + timedelta(seconds=1)
-    collected = local.collect_repo(repo, "", now, 30, [])
+    collected = local.collect_repo(repo, now, 30, [])
     branches = {b.name: b for b in collected.branches}
     assert branches["mine"].ahead_of_default == 1 and branches["mine"].my_commits == 1
     assert branches["synced"].ahead_of_default == 0 and branches["synced"].my_commits == 0
@@ -205,3 +208,73 @@ def test_reading_a_worktrees_status_leaves_the_index_alone(tmp_path: Path) -> No
     assert local.worktree_status(repo) == (0, 1)
     after = index.stat()
     assert (after.st_mtime_ns, after.st_ino) == (before.st_mtime_ns, before.st_ino)
+
+
+def test_one_repo_git_cant_read_doesnt_fail_the_rest(tmp_path: Path) -> None:
+    good = tmp_path / "good"
+    _init_repo(good)
+    _commit(good, "a.txt")
+    gone = tmp_path / "gone-wt"
+    git(good, "worktree", "add", "-q", "-b", "wt", str(gone))
+    shutil.rmtree(gone)  # deleted without `git worktree remove`
+    plain = tmp_path / "plain"  # a directory, but no repository
+    plain.mkdir()
+    now = datetime.now(UTC)
+    found = local.collect([plain, good], now, 30, [])
+    assert [r.dir for r in found.repos] == [str(good)]
+    assert [w.path for w in found.repos[0].worktrees] == [str(good)]
+    earlier = found.repos[0].model_copy(update={"dir": str(plain)})
+    kept = local.collect([plain, good], now, 30, [], previous=LocalSnapshot(repos=[earlier]))
+    assert [r.dir for r in kept.repos] == [str(plain), str(good)]  # as read before
+
+
+def test_when_no_repo_can_be_read_the_collect_fails(tmp_path: Path) -> None:
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    with pytest.raises(CommandError):
+        local.collect([plain], datetime.now(UTC), 30, [])
+
+
+def test_a_repo_on_master_with_no_remote_head_counts_against_master(tmp_path: Path) -> None:
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    git(origin, "init", "-q", "--bare", "-b", "master")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "master")
+    _configure(repo)
+    _commit(repo, "a.txt")
+    git(repo, "remote", "add", "origin", str(origin))
+    git(repo, "push", "-q", "-u", "origin", "master")  # sets no origin/HEAD
+    git(repo, "switch", "-q", "-c", "topic")
+    _commit(repo, "b.txt")
+    git(repo, "switch", "-q", "master")
+    found = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
+    assert (found.default_branch, found.default_refs) == ("master", ["origin/master"])
+    counts = {b.name: (b.ahead_of_default, b.my_commits) for b in found.branches}
+    assert counts == {"master": (None, None), "topic": (1, 1)}
+
+
+def test_with_nothing_to_count_against_nothing_is_counted(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "trunk")
+    _configure(repo)
+    _commit(repo, "a.txt")
+    found = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
+    assert found.default_refs == []
+    assert [(b.ahead_of_default, b.my_commits) for b in found.branches] == [(None, None)]
+
+
+def test_the_dirs_i_work_in_are_by_the_repos_email_exactly_and_posix(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    git(repo, "config", "user.email", "an@x.com")
+    _commit(repo, "api/v1/mine.py")
+    git(repo, "-c", "user.email=jan@x.com", "commit", "-q", "--allow-empty", "-m", "x")
+    (repo / "web").mkdir()
+    (repo / "web" / "theirs.ts").write_text("t")
+    git(repo, "add", "web")
+    git(repo, "-c", "user.email=jan@x.com", "commit", "-q", "-m", "theirs")
+    found = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
+    assert found.my_dirs == ["api/v1"]  # not jan@x.com's web, whose email has mine in it
