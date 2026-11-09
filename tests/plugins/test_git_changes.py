@@ -170,7 +170,7 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
     assert not plugin.changed(ChangedRequest(ctx(80), Graph([])))
 
 
-def test_a_collect_that_fails_leaves_what_moved_to_be_read(
+def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo = _repo(tmp_path / "r")
@@ -196,5 +196,5 @@ def test_a_collect_that_fails_leaves_what_moved_to_be_read(
     monkeypatch.setattr(client, "collect_repo", failing)
     with pytest.raises(CommandError):
         plugin.collect(CollectRequest(ctx))
-    assert ctx.kv.get_json(MOVED, list[str]) and ctx.kv.get(LAST_FULL) is None
-    assert plugin.changed(ChangedRequest(ctx, Graph([])))  # still asking for a refresh
+    assert ctx.kv.get(LAST_FULL) is None  # the next collect reads every repo
+    assert not plugin.changed(ChangedRequest(ctx, Graph([])))  # no refresh every check

@@ -1,13 +1,15 @@
 import os
 import shutil
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from move_forward.db import Database
 from move_forward.plugins.git import client as local
-from move_forward.plugins.git.models import LocalSnapshot
+from move_forward.plugins.git.models import LocalRepo, LocalSnapshot
 from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
 from move_forward.shell import CommandError, git
 
@@ -278,3 +280,22 @@ def test_the_dirs_i_work_in_are_by_the_repos_email_exactly_and_posix(tmp_path: P
     git(repo, "-c", "user.email=jan@x.com", "commit", "-q", "-m", "theirs")
     found = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     assert found.my_dirs == ["api/v1"]  # not jan@x.com's web, whose email has mine in it
+
+
+def test_a_repo_whose_git_hangs_doesnt_fail_the_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hung, good = tmp_path / "hung", tmp_path / "good"
+    for repo in (hung, good):
+        _init_repo(repo)
+        _commit(repo, "a.txt")
+    real = local.collect_repo
+
+    def hanging(repo: Path, *args: Any) -> LocalRepo:
+        if repo == hung:
+            raise subprocess.TimeoutExpired(["git", "status"], 120)
+        return real(repo, *args)
+
+    monkeypatch.setattr(local, "collect_repo", hanging)
+    found = local.collect([hung, good], datetime.now(UTC), 30, [])
+    assert [r.dir for r in found.repos] == [str(good)]

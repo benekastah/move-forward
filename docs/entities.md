@@ -180,7 +180,7 @@ importance as a tool's on the person would, which only a type I set on their add
 | --- | --- | --- |
 | `dir` | string | the main checkout's path |
 | `default_branch` | string | |
-| `default_refs` | list of strings | the default branch on each remote (`origin/main`, `upstream/main`), or the local one when no remote has it, as refs `git log` takes in `dir` |
+| `default_refs` | list of strings | the default branch on each remote (`origin/main`, `upstream/main`), or the local one when no remote has it (empty when there's none), as refs `git log` takes in `dir` |
 | `my_dirs` | list of strings | directories I committed to within `[git] commit_history_days`, repo-relative and POSIX (`src/api`) |
 
 ### `git.branch`

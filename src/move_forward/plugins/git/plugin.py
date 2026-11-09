@@ -78,10 +78,12 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         """Every repo; or, after `changed` saw only some move, just those, keeping the rest
         as stored, unless a full collect is due (`refresh_seconds` since the last), so
-        frequent changes can't put it off. What moved stays to be read until a collect has
-        read it, and what was read before stands in for a repo git can't read now."""
+        frequent changes can't put it off. What moved is taken as the collect starts: one that
+        fails waits for the next refresh rather than asking again at once, and isn't counted
+        as a full collect. What was read before stands in for a repo git can't read now."""
         ctx = req.ctx
         moved = set(ctx.kv.get_json(MOVED, list[str]) or [])
+        ctx.kv.delete(MOVED)
         last_full = ctx.kv.get(LAST_FULL)
         full_due = (
             last_full is None
@@ -99,11 +101,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             previous=previous,
             github_hosts=ctx.config.github_hosts,
         )
-        # Read again: what `changed` saw move while this collect ran is still to read.
-        if left := set(ctx.kv.get_json(MOVED, list[str]) or []) - moved:
-            ctx.kv.set_json(MOVED, sorted(left))
-        else:
-            ctx.kv.delete(MOVED)
         if not partial:
             ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         return found

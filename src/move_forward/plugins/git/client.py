@@ -3,6 +3,7 @@
 import fnmatch
 import logging
 import re
+import subprocess
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -118,11 +119,11 @@ class Remotes:
     fork's own name)."""
 
     default_branch: str
-    """The default branch's name, from the main remote's `HEAD`."""
+    """The default branch's name, from the main remote's `HEAD`, else the local one."""
     default_refs: list[str]
     """The default branch on every remote that has one (`origin/main`, `upstream/main`),
     or the local default branch when no remote does: a commit on none of them isn't on the
-    default branch yet."""
+    default branch yet. Empty when there's none at all, and nothing is counted against it."""
     github_repo: str | None
     """`owner/name` of the main remote on GitHub, else of the first remote on GitHub."""
 
@@ -381,12 +382,12 @@ def collect(
 ) -> LocalSnapshot:
     """Every repo among `repos`, or with `only` (common git directories, see
     `changes.fingerprints`) just those, keeping the rest as `previous` has them; a repo
-    `previous` lacks is read anyway. A repo git can't read is logged and kept as `previous`
-    has it, or left out, so it doesn't fail the rest; when none can be read, its error is
-    raised."""
+    `previous` lacks is read anyway. A repo git can't read (or that times out) is logged and
+    kept as `previous` has it, or left out, so it doesn't fail the rest; when none can be
+    read, the first error is raised."""
     existing = folded([repo for repo in repos if repo.exists()])
     before = {r.dir: r for r in previous.repos} if previous else {}
-    failed: list[CommandError] = []
+    failed: list[Exception] = []
 
     def one(repo: Path) -> LocalRepo | None:
         if only is not None and str(repo) in before and str(changes.common_dir(repo)) not in only:
@@ -395,7 +396,7 @@ def collect(
             return collect_repo(
                 repo, now, commit_history_days, ignored_worktree_globs, github_hosts
             )
-        except CommandError as e:
+        except (CommandError, subprocess.SubprocessError, OSError) as e:  # a hung git, say
             failed.append(e)
             kept = "keeping what was read before" if str(repo) in before else "leaving it out"
             log.warning("can't read %s, so %s: %s", repo, kept, e)

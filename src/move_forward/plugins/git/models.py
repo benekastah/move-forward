@@ -42,11 +42,12 @@ class LocalRepo(Model):
     default_branch: str
     default_refs: list[str] = Field(default_factory=list)
     """The default branch on each remote (`origin/main`, `upstream/main`), or the local one
-    when no remote has it: what "not on the default branch yet" is measured against."""
+    when no remote has it: what "not on the default branch yet" is measured against; empty
+    when there's none, and nothing is measured."""
     worktrees: list[Worktree]
     branches: list[Branch]
     my_dirs: list[str] = Field(default_factory=list)
-    """Directories I committed to within `commit_history_days`."""
+    """Directories I committed to within `commit_history_days`, repo-relative and POSIX."""
 
 
 class LocalSnapshot(Model):
