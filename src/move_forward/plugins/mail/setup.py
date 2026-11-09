@@ -17,6 +17,9 @@ TEMPLATE = """\
 # auth_servers = ["mx.google.com"]      # who stamps Authentication-Results; known for Gmail, else from a message's source
 # token_env = "MAIL_PASSWORD"           # else the system's secret store, for your email (`mfd token set mail`)
 # keychain_service = "move-forward-mail"
+# [mail.work]                           # another mailbox (then [mail]'s own is one too, [mail.home]): what it leaves out, [mail] says
+# host = "imap.work.example"
+# username = "me@work.example"          # its password: `mfd token set mail.work`, or $MAIL_PASSWORD_WORK
 """
 EXAMPLE = '# host = "imap.gmail.com"\n# username = "me@example.com"\n'
 GMAIL_DOMAINS = ("gmail.com", "googlemail.com")

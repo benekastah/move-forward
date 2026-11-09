@@ -14,7 +14,9 @@ class Message(Model):
     """A message, as far as ranking it needs: never its body."""
 
     uid: int
-    """Its IMAP UID in the mailbox."""
+    """Its IMAP UID in its mailbox."""
+    account: str = ""
+    """The mailbox it's in: its account's name, empty for `[mail]`'s own."""
     message_id: str | None
     """Its Message-ID, without `<>`; None when it has none."""
     thread: str

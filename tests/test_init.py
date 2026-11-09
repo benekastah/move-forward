@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from conftest import section
+from pydantic.fields import FieldInfo
 
 from move_forward import asking, cli, config, init, registry
 from move_forward.plugin import Plugin
@@ -368,6 +369,11 @@ def test_an_unknown_notification_is_asked_again(tmp_path: Path, no_machine_guess
     assert config.load(path).notifications.subscribe == ["dashboard.certificate_ending"]
 
 
+def _tables(field: FieldInfo) -> bool:
+    """A field whose entries are tables of their own, by name (mail's `[mail.<name>]`)."""
+    return field.json_schema_extra == {"tables": True}
+
+
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[Any, Any]) -> None:
     written = plugin.init_template + plugin.init_example
@@ -378,6 +384,7 @@ def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[An
         and key != "teams"
         and f"# {key} =" not in written
         and f"[{plugin.name}.{key}]" not in written  # a table of its own
+        and not (_tables(field) and f"# [{plugin.name}." in written)  # tables by name
     ]
     assert missing == []
 
@@ -398,6 +405,10 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
     end = next((n for n in range(start + 1, len(lines)) if header.match(lines[n])), len(lines))
     shown = "\n".join(lines[start:end])
     missing = [
-        key for key in keys if f"{key} =" not in shown and f"[{plugin.name}.{key}]" not in shown
+        key
+        for key in keys
+        if f"{key} =" not in shown
+        and f"[{plugin.name}.{key}]" not in shown
+        and not (_tables(plugin.config_model.model_fields[key]) and f"[{plugin.name}." in shown)
     ]
     assert missing == []

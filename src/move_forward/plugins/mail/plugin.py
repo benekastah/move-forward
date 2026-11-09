@@ -26,11 +26,12 @@ from ...api import (
     StoreRequest,
     attrs,
 )
+from ...api.keychain import TokenSettings
 from ...api.kinds import PERSON
 from . import client
 from .config import MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
-from .models import MailSnapshot
+from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
 from .repository import MIGRATIONS, MessageRepository
 from .setup import EXAMPLE, TEMPLATE, questions
@@ -69,9 +70,27 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 
+    def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
+        """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""
+        return {m.name: m for m in config.mailboxes()}
+
     def collect(self, req: CollectRequest[MailConfig]) -> MailSnapshot:
+        """Every mailbox's unread and flagged mail, newest first. A conversation is one whichever
+        mailboxes have it; a message in several (sent to two of my addresses) is the first's
+        copy, flagged if any is."""
         ctx = req.ctx
-        return client.collect(ctx.config, ctx.email, ctx.now)
+        found: dict[str, Message] = {}
+        alone: list[Message] = []  # no Message-ID to know a copy by
+        for mailbox in ctx.config.mailboxes():
+            for message in client.collect(mailbox, ctx.email, ctx.now).messages:
+                if message.message_id is None:
+                    alone.append(message)
+                elif (first := found.get(message.message_id)) is None:
+                    found[message.message_id] = message
+                elif message.flagged and not first.flagged:
+                    found[message.message_id] = first.model_copy(update={"flagged": True})
+        messages = [*found.values(), *alone]
+        return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
     def store(self, req: StoreRequest[MailConfig, MailSnapshot]) -> None:
         MessageRepository(req.ctx.db).replace(req.snapshot)
@@ -80,16 +99,18 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         return MessageRepository(req.ctx.db).load()
 
     def changed(self, req: ChangedRequest[MailConfig]) -> Changed:
-        """Whether the mailbox's counts moved since the last look: mail came, went or was
-        read. One `STATUS`, without opening the mailbox."""
+        """Whether a mailbox's counts moved since the last look: mail came, went or was
+        read. One `STATUS` each, without opening the mailbox."""
         ctx = req.ctx
-        now = client.status(ctx.config, ctx.email)
+        now = "\n".join(client.status(m, ctx.email) for m in ctx.config.mailboxes())
         before = ctx.kv.get(STATUS)
         ctx.kv.set(STATUS, now)
         return Changed(before is not None and before != now, "the mailbox changed")
 
     def identity(self, req: IdentityRequest[MailConfig, MailSnapshot]) -> Identity | None:
-        return Identity(tool=self.title, login=req.ctx.config.username)
+        return Identity(
+            tool=self.title, login=", ".join(m.username for m in req.ctx.config.mailboxes())
+        )
 
     def entities(self, req: EntitiesRequest[MailConfig, MailSnapshot]) -> list[Entity]:
         found: list[Entity] = []

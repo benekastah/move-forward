@@ -68,10 +68,41 @@ It must be an `https://` link or start with `message:` or `mid:`; empty, the def
 unlinked. The page links only to http(s), so an item with a `message:` or `mid:` link goes
 through the plugin's `/mail/open` page, which sends the browser on to the mail app.
 
+### Several mailboxes
+
+Each sub-table of `[mail]` is a mailbox of its own, named by it: `[mail.home]` and `[mail.work]`
+read two. What one leaves out, `[mail]` says for every one (`host`, `port`, `username`,
+`mailbox`, `sent_mailbox`, `message_url`, `auth_servers`); `refresh_seconds`, `known_days`,
+`since_days`, `max_messages` and the word lists are `[mail]`'s alone. With accounts, `[mail]`'s
+own `host` and `username` are no mailbox, only what the accounts take. Its name is lower-case
+letters, digits and `_`.
+
+```toml
+[mail]
+host = "imap.gmail.com"
+message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"
+
+[mail.home]
+username = "me@gmail.com"
+
+[mail.work]
+host = "imap.work.example"
+username = "me@work.example"
+message_url = "mid:{message_id}"
+```
+
+Each has its own password, never `[mail]`'s: `mfd token set mail.work` stores it under
+`move-forward-mail-work`, or export `MAIL_PASSWORD_WORK` (or set the account's `token_env` and
+`keychain_service`). A conversation is one item whichever mailboxes have it, linked by the
+mailbox of its latest message, and a message in two (sent to both addresses) counts once, as
+the first mailbox's, flagged if either flagged it. Each mailbox's sent mail says whom I know and
+what answers me for its own mail. A mailbox that fails to sign in fails the refresh, keeping
+what was read last.
+
 ## Publishes
 
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
-with, pointing at the `person` who wrote its latest message and, when its sender is verified,
+with (`uid:<uid>` for a message with none, `uid:<account>:<uid>` in an account's mailbox), pointing at the `person` who wrote its latest message and, when its sender is verified,
 mentioning its subject (so a ticket key in it relates the two). Its Gmail labels, Gmail's own
 (`#inbox`, `#starred`) and mine, are its tags, whoever sent it. A `#tag` in a subject puts no
 tag on the thread (`tags_from_text=False`): anyone can write one. A subject still names tags
