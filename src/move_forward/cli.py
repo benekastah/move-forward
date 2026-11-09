@@ -31,7 +31,7 @@ from .db import Database
 from .graph import Ref
 from .kinds import label
 from .plugin import CliHandler, CliRequest
-from .refresh import build_dashboard, refresh, refresh_subjects, stored_graph
+from .refresh import build_dashboard, refresh, refresh_subjects, snooze_item, stored_graph
 from .registry import enabled, enabled_names, migrate
 from .repositories import (
     ContactRepository,
@@ -214,12 +214,20 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     commands.add_parser("dump", help="print the dashboard as JSON from what is stored")
     snooze_parser = commands.add_parser(
-        "snooze", help="snooze a PR's review until it changes (or the time given is up)"
+        "snooze",
+        help="snooze the items about an entity, as the Snooze button does, until each changes"
+        " (or the time is up)",
     )
-    snooze_parser.add_argument("url", help="the PR's URL")
     snooze_parser.add_argument(
-        "duration", nargs="?", help="e.g. 7d or 12h; default: [act_now] snooze_days for PRs"
+        "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
     )
+    snooze_parser.add_argument(
+        "duration",
+        nargs="?",
+        help="e.g. 7d or 12h; default: as the button, [act_now] snooze_days for its kind",
+    )
+    snooze_parser.add_argument("--kind", help="the entity's kind, e.g. notes.todo")
+    snooze_parser.add_argument("--task", help="only this task of its, e.g. review")
     priority_parser = commands.add_parser(
         "priority",
         help="set how much an entity matters: 1 important, 2 critical, or clear",
@@ -429,17 +437,21 @@ def main(argv: list[str] | None = None) -> int:
         print(build_dashboard(config, db).model_dump_json(indent=2))
         return 0
     if args.command == "snooze":
+        now = datetime.now(UTC)
         try:
             duration = snooze.parse_duration(args.duration) if args.duration else None
-            plugins = enabled(config, db, datetime.now(UTC))
-            graph, _ = stored_graph(db, plugins)
-            until = snooze.snooze_review(
-                FeedbackRepository(db), graph, config.act_now, args.url, datetime.now(UTC), duration
-            )
+            graph, _ = stored_graph(db, enabled(config, db, now))
+            ref = priority.resolve(graph, args.entity, args.kind)
         except (ValueError, LookupError) as err:
             print(err, file=sys.stderr)
             return 1
-        print(f"snoozed until {localtime.local(until):%Y-%m-%d %H:%M}, or until the PR changes")
+        buttons = snooze.snooze_buttons(build_dashboard(config, db, now), ref, args.task)
+        if not buttons:
+            print(f"nothing about {ref.id} is shown with a Snooze button", file=sys.stderr)
+            return 1
+        ends = [snooze_item(config.act_now, db, f, now, duration) for f in buttons]
+        until = f"{localtime.local(max(ends)):%Y-%m-%d %H:%M}"
+        print(f"snoozed {len(buttons)} item(s) until {until}, or until each changes")
         return 0
     if args.command == "priority":
         graph, _ = stored_graph(db, enabled(config, db, datetime.now(UTC)))

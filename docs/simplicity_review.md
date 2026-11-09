@@ -235,7 +235,7 @@ title, badges and details, so the two end under different conditions.
 
 - **(a) S/M:** fold Dismiss into Snooze, as an "until it changes" length.
 - **(b) S:** drop "Not important"; Dismiss or ice covers it. **Done.**
-- **(c) S:** make `mfd snooze` take any entity and key it as the button does.
+- **(c) S:** make `mfd snooze` take any entity and key it as the button does. **Done.**
 
 Ice earns its keep: it hides across panels, covers linked items and keeps a stack's commits.
 

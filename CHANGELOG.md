@@ -5,6 +5,17 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### `mfd snooze` takes any entity, as the Snooze button does
+
+`mfd snooze <entity> [7d|12h] [--kind K] [--task T]` names what to snooze as `mfd priority` and
+`mfd unsnooze` do (a PR's URL still works), and snoozes the items about it that have a Snooze
+button, in Act now or a panel, the way the button does: each comes back when it changes (a PR's
+review, when its head commit moves, as before) or when the time is up. Without a time, the
+snooze lasts `[act_now] snooze_days` for the entity's kind, as the button's does. For one of
+its tasks only, add `--task`, e.g. `--task review`. It exits 1, saying so, when nothing about
+the entity has a Snooze button (already snoozed, or not shown), where it used to need a PR the
+dashboard knew. It prints "snoozed N item(s) until …, or until each changes".
+
 ### No "Not important" priority
 
 A priority is now important (1) or critical (2). `mfd priority <entity> 0` and

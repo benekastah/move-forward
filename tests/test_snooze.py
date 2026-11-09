@@ -7,11 +7,13 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 import pytest
-from conftest import NOW, pr, snapshot, stored
+from conftest import NOW, entry, pr, snapshot, stored, todo
 
 from move_forward import cli, localtime, refresh, snooze
 from move_forward.act_now import ActNowConfig, Feedback
+from move_forward.config import Config
 from move_forward.db import Database
+from move_forward.graph import Ref
 from move_forward.repositories import FeedbackRepository
 
 
@@ -29,22 +31,59 @@ def test_other_durations_are_refused(text: str) -> None:
         snooze.parse_duration(text)
 
 
+def _snooze(
+    config: Config, db: Database, ref: Ref, task: str | None = None, **duration: float
+) -> list[datetime]:
+    """What `mfd snooze` does: run the Snooze buttons on the items about `ref`."""
+    span = timedelta(**duration) if duration else None
+    buttons = snooze.snooze_buttons(refresh.build_dashboard(config, db, NOW), ref, task)
+    return [refresh.snooze_item(config.act_now, db, f, NOW, span) for f in buttons]
+
+
 def test_a_snoozed_review_waits_dimmed_in_reviews_for_me_until_it_is_woken() -> None:
     config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice", head_oid="a1")]))
     url = pr(1).url
-    graph, _ = refresh.stored_graph(db, refresh.enabled(config, db, NOW))
-    feedback = FeedbackRepository(db)
 
-    until = snooze.snooze_review(feedback, graph, ActNowConfig(), url, NOW, timedelta(days=7))
-
-    assert until == NOW + timedelta(days=7)
+    assert _snooze(config, db, Ref(kind="pull_request", id=url), days=7) == [
+        NOW + timedelta(days=7)
+    ]
     [item] = refresh.build_dashboard(config, db, NOW).panel("github.reviews_for_me").items
     assert item.set_aside == "snooze"
     assert "Unsnooze" in [a.label for a in item.actions]
-    assert feedback.all()[("pull_request", url, "review")].fingerprint == "a1"
+    assert FeedbackRepository(db).all()[("pull_request", url, "review")].fingerprint == "a1"
     assert not any(
         i.subjects[0].id == url for i in refresh.build_dashboard(config, db, NOW).act_now()
     )
+
+
+def test_the_command_snoozes_as_the_button_does_until_the_item_changes() -> None:
+    work = [entry("APP-1 finish", [todo("reply", "quick")])]
+    config, db = stored(work_items=work)
+    ref = Ref(kind="notes.entry", id="APP-1 finish")
+    [shown] = [
+        i for i in refresh.build_dashboard(config, db, NOW).act_now() if i.subjects[0] == ref
+    ]
+    button = next(a for a in shown.actions if a.label == "Snooze")
+
+    assert _snooze(config, db, ref)
+    said = FeedbackRepository(db).all()[(ref.kind, ref.id, button.fields["task"])]
+    assert said.fingerprint == button.fields["fingerprint"]  # the button's, so it ends as one
+    assert ref not in [i.subjects[0] for i in refresh.build_dashboard(config, db, NOW).act_now()]
+
+    changed = [entry("APP-1 finish", [todo("reply", "quick"), todo("ship", "quick")])]
+    config, later = stored(work_items=changed)
+    for key, one in FeedbackRepository(db).all().items():
+        FeedbackRepository(later).say(key, one, NOW)
+    back = refresh.build_dashboard(config, later, NOW).act_now()
+    assert ref in [i.subjects[0] for i in back]
+
+
+def test_only_the_task_given_is_snoozed_and_nothing_without_a_button() -> None:
+    config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
+    ref = Ref(kind="pull_request", id=pr(1).url)
+    assert _snooze(config, db, ref, "merge") == []
+    assert _snooze(config, db, Ref(kind="pull_request", id="https://x/pull/9")) == []
+    assert FeedbackRepository(db).all() == {}
 
 
 def test_unsnooze_brings_back_anything_set_aside(
@@ -78,20 +117,33 @@ def test_unsnooze_brings_back_anything_set_aside(
     assert "brought back 1 item(s)" in capsys.readouterr().out
 
 
-def test_without_a_duration_the_config_for_prs_says_how_long() -> None:
+def test_without_a_duration_the_config_for_the_kind_says_how_long() -> None:
     config, db = stored(github=snapshot(direct_requests=[pr(1, head_oid="a1")]))
-    graph, _ = refresh.stored_graph(db, refresh.enabled(config, db, NOW))
-    until = snooze.snooze_review(
-        FeedbackRepository(db), graph, ActNowConfig(snooze_days={"pull_request": 3}), pr(1).url, NOW
-    )
+    config = config.model_copy(update={"act_now": ActNowConfig(snooze_days={"pull_request": 3})})
+    [until] = _snooze(config, db, Ref(kind="pull_request", id=pr(1).url))
     assert timedelta(days=2) < until - NOW <= timedelta(days=3)
 
 
-def test_an_unknown_pr_cannot_be_snoozed() -> None:
-    config, db = stored(github=snapshot())
-    graph, _ = refresh.stored_graph(db, refresh.enabled(config, db, NOW))
-    with pytest.raises(LookupError, match="mfd refresh"):
-        snooze.snooze_review(FeedbackRepository(db), graph, ActNowConfig(), "https://x/pull/9", NOW)
+def test_mfd_snooze_takes_any_entity_and_refuses_one_it_cannot_snooze(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "config.toml"
+    db_path = tmp_path / "dashboard.db"
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
+    assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
+    assert (
+        cli.main(["-c", str(config), "notes", "todo", "add", "Chores", "sweep", "--size", "quick"])
+        == 0
+    )
+    capsys.readouterr()
+    assert cli.main(["-c", str(config), "snooze", "Chores", "2d"]) == 0
+    assert "snoozed 1 item(s) until " in capsys.readouterr().out
+    [(kind, id, _)] = FeedbackRepository(Database(db_path)).all()
+    assert (kind, id) == ("notes.entry", "Chores")
+    assert cli.main(["-c", str(config), "snooze", "Chores"]) == 1  # snoozed: no Snooze button
+    assert "nothing about Chores" in capsys.readouterr().err
+    assert cli.main(["-c", str(config), "snooze", "Nothing"]) == 1
+    assert cli.main(["-c", str(config), "snooze", "Chores", "1w"]) == 1
 
 
 def test_a_snooze_ends_at_the_configured_local_hour_of_its_last_day() -> None:
