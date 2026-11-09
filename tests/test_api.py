@@ -35,7 +35,12 @@ def _modules(file: Path, node: ast.ImportFrom | ast.Import) -> list[list[str]]:
     `from package import name`, `name` may itself be a module, so it's counted as
     `package.name`."""
     if isinstance(node, ast.Import):
-        return [a.name.split(".")[1:] for a in node.names if a.name.startswith("move_forward.")]
+        # A bare `import move_forward` reaches every module through it: core itself.
+        return [
+            a.name.split(".")[1:] or ["move_forward"]
+            for a in node.names
+            if a.name == "move_forward" or a.name.startswith("move_forward.")
+        ]
     if node.level == 0:
         module = node.module or ""
         if module != "move_forward" and not module.startswith("move_forward."):
@@ -84,6 +89,7 @@ def test_every_way_of_reaching_past_the_api_is_caught() -> None:
     assert caught("from ...people import Contacts") == ["people.Contacts"]
     assert caught("from move_forward.tags import handle") == ["tags.handle"]
     assert caught("import move_forward.db") == ["db"]
+    assert caught("import move_forward as mf") == ["move_forward"]
     assert caught("from ..github import plugin") == ["plugins.github.plugin"]
     assert caught("from .. import github") == ["plugins.github"]
     assert caught("from ...api import html") == []
