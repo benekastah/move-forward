@@ -299,7 +299,8 @@ def shared_token_services(config: "Config") -> list[str]:
     counted."""
     by_service: dict[str, list[str]] = {}
     for name, settings in tokens(config).items():
-        by_service.setdefault(settings.keychain_service, []).append(name)
+        # Windows' Credential Manager ignores case.
+        by_service.setdefault(settings.keychain_service.casefold(), []).append(name)
     return [
         f"{' and '.join(who)} keep their tokens under {service!r}: give each its own keychain_service"
         for service, who in by_service.items()

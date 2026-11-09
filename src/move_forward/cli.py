@@ -288,17 +288,11 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     return parser, plugin_commands
 
 
-def _token_settings(config: config_module.Config) -> dict[str, keychain.TokenSettings]:
-    """Where each enabled plugin keeps each of its tokens (`Plugin.tokens`), by the name
-    `mfd token set` takes: the plugin's, or `<plugin>.<account>` for one of several."""
-    return registry.tokens(config)
-
-
 def _token(config: config_module.Config, config_path: Path, args: argparse.Namespace) -> int:
     """`mfd token set <plugin>` (or `<plugin>.<account>`): ask for the token without echoing
     it and store it in the system's secret store, for the top-level `email`. `mfd token
     check`: say where each enabled plugin's tokens are found, without showing them."""
-    sections = _token_settings(config)
+    tokens = registry.tokens(config)
     if args.token_command == "rotate":
         path = auth.token_path(config.db_path)
         auth.load_or_create(path)
@@ -307,18 +301,18 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
         print(f"new token in {path}; ended {ended} session(s): `mfd open` signs a browser in")
         return 0
     if args.token_command == "check":
-        for name, section in sections.items():
-            if os.environ.get(section.token_env):
-                print(f"{name}: from ${section.token_env}")
-            elif keychain.read(section.keychain_service, config.email):
-                print(f"{name}: from the secret store ({section.keychain_service})")
+        for name, settings in tokens.items():
+            if os.environ.get(settings.token_env):
+                print(f"{name}: from ${settings.token_env}")
+            elif keychain.read(settings.keychain_service, config.email):
+                print(f"{name}: from the secret store ({settings.keychain_service})")
             else:
                 print(f"{name}: missing; run `mfd token set {name}`")
         return 0
-    section = sections.get(args.plugin)
-    if section is None:
+    settings = tokens.get(args.plugin)
+    if settings is None:
         print(
-            f"{args.plugin} isn't a token {config_path} keeps: {', '.join(sections) or 'none'}",
+            f"{args.plugin} isn't a token {config_path} keeps: {', '.join(tokens) or 'none'}",
             file=sys.stderr,
         )
         return 1
@@ -328,19 +322,19 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
         print("\nnothing stored", file=sys.stderr)
         return 1
     try:
-        keychain.write(section.keychain_service, config.email, secret)
+        keychain.write(settings.keychain_service, config.email, secret)
     except FileNotFoundError:
         print(
-            f"no secret store: install `secret-tool` (libsecret), or set ${section.token_env}",
+            f"no secret store: install `secret-tool` (libsecret), or set ${settings.token_env}",
             file=sys.stderr,
         )
         return 1
     except (ValueError, CommandError) as e:
         print(f"not stored: {e}", file=sys.stderr)
         return 1
-    print(f"stored under {section.keychain_service} for {config.email}")
-    if os.environ.get(section.token_env):
-        print(f"note: ${section.token_env} is set, and is used before the secret store")
+    print(f"stored under {settings.keychain_service} for {config.email}")
+    if os.environ.get(settings.token_env):
+        print(f"note: ${settings.token_env} is set, and is used before the secret store")
     return 0
 
 

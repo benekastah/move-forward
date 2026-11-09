@@ -193,8 +193,8 @@ class Config(Strict):
 
     @model_validator(mode="after")
     def _token_services(self) -> "Config":
-        """No two plugins keep their tokens in one place, where storing one (`mfd token set`,
-        Slack's Connect) would replace the other's."""
+        """No two tokens (two plugins', or two of one plugin's accounts) are kept in one place,
+        where storing one (`mfd token set`, Slack's Connect) would replace the other's."""
         if shared := registry.shared_token_services(self):
             raise ValueError("; ".join(shared))
         return self

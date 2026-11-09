@@ -303,3 +303,15 @@ def test_an_accounts_token_counts_where_it_is_kept(
     config.write_text(config.read_text() + '[github]\norg = "acme"\n')
     with pytest.raises(ValidationError, match="github.work and jira keep their tokens"):
         config_module.load(config)
+
+
+def test_services_differing_only_in_case_are_one(tmp_path: Path) -> None:
+    config = _config(tmp_path)  # Windows' Credential Manager ignores case
+    config.write_text(
+        config.read_text().replace(
+            'site = "https://j"', 'site = "https://j"\nkeychain_service = "Shared"'
+        )
+        + '[slack]\nkeychain_service = "shared"\n'
+    )
+    with pytest.raises(ValidationError, match="jira and slack keep their tokens"):
+        config_module.load(config)
