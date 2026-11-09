@@ -86,6 +86,16 @@ def test_only_the_task_given_is_snoozed_and_nothing_without_a_button() -> None:
     assert FeedbackRepository(db).all() == {}
 
 
+def test_a_task_given_is_snoozed_alone_among_the_entitys_others() -> None:
+    mine = pr(1, mergeable="CONFLICTING", rollup_state="FAILURE")  # conflicts, and CI failing
+    config, db = stored(github=snapshot(mine=[mine]))
+    ref = Ref(kind="pull_request", id=mine.url)
+    assert _snooze(config, db, ref, "resolve_conflicts")
+    snoozed = {task for _, _, task in FeedbackRepository(db).all()}
+    # With what Act now shows alongside it, as the button snoozes; but not the CI failure.
+    assert "resolve_conflicts" in snoozed and "fix_ci" not in snoozed
+
+
 def test_unsnooze_brings_back_anything_set_aside(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

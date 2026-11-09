@@ -665,14 +665,16 @@ def snooze_item(
     changes (its fingerprint) or `duration` passes (by default as long as `config` says for
     its kind of subject): the Snooze button, and `mfd snooze`. When the item's snooze ends."""
     feedback = FeedbackRepository(db)
-    ends: list[datetime] = []
+    end: datetime | None = None
     for kind, id, task, fingerprint in _members(fields):
         until = now + duration if duration else config.snooze_until(kind, now)
         feedback.say(
             (kind, id, task), Feedback(action="snooze", fingerprint=fingerprint, until=until), now
         )
-        ends.append(until)
-    return ends[0]
+        end = end or until  # the item's own, the first member
+    if end is None:
+        raise ValueError("a Snooze button names the item it snoozes")
+    return end
 
 
 def _act_now_action(

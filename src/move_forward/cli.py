@@ -447,7 +447,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         buttons = snooze.snooze_buttons(build_dashboard(config, db, now), ref, args.task)
         if not buttons:
-            print(f"nothing about {ref.id} is shown with a Snooze button", file=sys.stderr)
+            print(
+                f"nothing about {ref.id} is shown with a Snooze button: it may be snoozed or"
+                f" dismissed already (`mfd unsnooze {ref.id}` first), or not shown at all",
+                file=sys.stderr,
+            )
             return 1
         ends = [snooze_item(config.act_now, db, f, now, duration) for f in buttons]
         until = f"{localtime.local(max(ends)):%Y-%m-%d %H:%M}"
