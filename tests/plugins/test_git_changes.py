@@ -15,10 +15,10 @@ from move_forward.plugin import ChangedRequest, CollectRequest, Context, LoadReq
 from move_forward.plugins.git import changes, client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalRepo
-from move_forward.plugins.git.plugin import MOVED, GitPlugin
+from move_forward.plugins.git.plugin import LAST_FULL, MOVED, GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.repositories import KvRepository
-from move_forward.shell import git
+from move_forward.shell import CommandError, git
 
 
 def _repo(path: Path) -> Path:
@@ -168,3 +168,33 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
         StoreRequest(ctx(40), plugin.collect(CollectRequest(ctx(40))))
     )  # reads it, untracked file and all
     assert not plugin.changed(ChangedRequest(ctx(80), Graph([])))
+
+
+def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path / "r")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    ctx = Context(
+        config=GitConfig(repos=[repo]),
+        email="me@example.com",
+        teams=[],
+        prune_days=90,
+        now=NOW,
+        db=db,
+        kv=KvRepository(db, "git"),
+    )
+    plugin = GitPlugin(watching=False)
+    assert not plugin.changed(ChangedRequest(ctx, Graph([])))
+    git(repo, "commit", "-q", "--allow-empty", "-m", "second")
+    assert plugin.changed(ChangedRequest(ctx, Graph([])))
+
+    def failing(*args: Any, **kwargs: Any) -> LocalRepo:
+        raise CommandError("git: index.lock exists")
+
+    monkeypatch.setattr(client, "collect_repo", failing)
+    with pytest.raises(CommandError):
+        plugin.collect(CollectRequest(ctx))
+    assert ctx.kv.get(LAST_FULL) is None  # the next collect reads every repo
+    assert not plugin.changed(ChangedRequest(ctx, Graph([])))  # no refresh every check

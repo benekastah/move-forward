@@ -13,10 +13,11 @@ class RepoAttrs(KindModel):
     default_branch: str
     default_refs: list[str] = Field(default_factory=list[str])
     """The default branch on each remote (`upstream/main`), or the local one when no remote
-    has it: what a commit not yet on the default branch isn't on. Pass them to `git log` in
-    `dir`."""
+    has it: what a commit not yet on the default branch isn't on; empty when there's none.
+    Pass them to `git log` in `dir`."""
     my_dirs: list[str] = Field(default_factory=list[str])
-    """Directories I committed to within `[git] commit_history_days`."""
+    """Directories I committed to within `[git] commit_history_days`, repo-relative and POSIX
+    (`src/api`)."""
 
 
 class BranchAttrs(KindModel):

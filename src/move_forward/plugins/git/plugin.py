@@ -78,7 +78,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         """Every repo; or, after `changed` saw only some move, just those, keeping the rest
         as stored, unless a full collect is due (`refresh_seconds` since the last), so
-        frequent changes can't put it off."""
+        frequent changes can't put it off. What moved is taken as the collect starts: one that
+        fails waits for the next refresh rather than asking again at once, and isn't counted
+        as a full collect. What was read before stands in for a repo git can't read now."""
         ctx = req.ctx
         moved = set(ctx.kv.get_json(MOVED, list[str]) or [])
         ctx.kv.delete(MOVED)
@@ -88,18 +90,20 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             or (ctx.now - datetime.fromisoformat(last_full)).total_seconds()
             >= ctx.config.refresh_seconds
         )
-        previous = None if full_due or not moved else self.load(LoadRequest(ctx))
-        if previous is None:
-            ctx.kv.set(LAST_FULL, ctx.now.isoformat())
-        return client.collect(
+        previous = self.load(LoadRequest(ctx))
+        partial = bool(moved) and not full_due and previous is not None
+        found = client.collect(
             ctx.config.repos,
             ctx.now,
             ctx.config.commit_history_days,
             ctx.config.ignored_worktree_globs,
-            only=moved if previous is not None else None,
+            only=moved if partial else None,
             previous=previous,
             github_hosts=ctx.config.github_hosts,
         )
+        if not partial:
+            ctx.kv.set(LAST_FULL, ctx.now.isoformat())
+        return found
 
     def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
         """Keep the snapshot, and watch the worktrees it found (once `changed` has started
@@ -145,7 +149,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         worktree's uncommitted edits changed. Watched repos say so as it happens (see
         `watch`); the rest are polled, their refs by their files' times (see `changes`) and
         their edits every `status_seconds` by `git status`. Which repos moved is kept for
-        `collect`, to read just those, and asks for a refresh until it has."""
+        `collect`, to read just those, and asks for a refresh until a collect takes them."""
         ctx = req.ctx
         watcher = self._watcher_for(ctx)
         moved_now, edited_now = watcher.take() if watcher else (set[Path](), set[Path]())
@@ -167,7 +171,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         if moved - pending:
             pending |= moved
             ctx.kv.set_json(MOVED, sorted(pending))
-        # Pending until `collect` reads them: what's seen in the check core makes right after
+        # Pending until `collect` takes them: what's seen in the check core makes right after
         # a refresh (whose answer it ignores) still asks for a refresh at the next one.
         return bool(pending) or (before is not None and set(before) != set(now))
 

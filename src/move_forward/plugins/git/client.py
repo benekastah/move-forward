@@ -1,16 +1,20 @@
 """Local git collector: worktrees, branches and the directories I work in."""
 
 import fnmatch
+import logging
 import re
+import subprocess
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from ...api.shell import CommandError, git
 from . import changes
 from .models import Branch, LocalRepo, LocalSnapshot, Worktree
+
+log = logging.getLogger(__name__)
 
 _REMOTE_RE = re.compile(
     r"^(?:[a-z][a-z0-9+.-]*://)?(?:[^@/\s]+@)?([^/:\s]+)(?::\d+)?[:/]"
@@ -115,11 +119,11 @@ class Remotes:
     fork's own name)."""
 
     default_branch: str
-    """The default branch's name, from the main remote's `HEAD`."""
+    """The default branch's name, from the main remote's `HEAD`, else the local one."""
     default_refs: list[str]
     """The default branch on every remote that has one (`origin/main`, `upstream/main`),
     or the local default branch when no remote does: a commit on none of them isn't on the
-    default branch yet."""
+    default branch yet. Empty when there's none at all, and nothing is counted against it."""
     github_repo: str | None
     """`owner/name` of the main remote on GitHub, else of the first remote on GitHub."""
 
@@ -153,17 +157,28 @@ def _ref_exists(repo: Path, ref: str) -> bool:
     return True
 
 
+def _local_default(repo: Path) -> str:
+    """The default branch when no remote's `HEAD` says: `init.defaultBranch`, `main` or
+    `master`, the first there is locally."""
+    configured = _config(repo, "init.defaultBranch")
+    for name in [*([configured] if configured else []), FALLBACK_DEFAULT_BRANCH, "master"]:
+        if _ref_exists(repo, f"refs/heads/{name}"):
+            return name
+    return configured or FALLBACK_DEFAULT_BRANCH
+
+
 def read_remotes(repo: Path, hosts: Sequence[str] = GITHUB_HOSTS) -> Remotes:
     """The repository's default branch and GitHub repo, from all its remotes. The main
     remote is the one the local default branch tracks (`upstream` in a fork, often), else
-    the first whose `HEAD` git knows."""
+    the first whose `HEAD` git knows. With no `HEAD` known (no remotes, or one pushed to
+    without `git remote set-head`), the default branch is the local one (`_local_default`)."""
     names = remotes(repo)
     heads = {name: head for name in names if (head := _remote_head(repo, name))}
     main = next(
         (name for name, head in heads.items() if _config(repo, f"branch.{head}.remote") == name),
         next(iter(heads), names[0] if names else None),
     )
-    default_branch = heads.get(main or "", FALLBACK_DEFAULT_BRANCH)
+    default_branch = heads.get(main or "") or _local_default(repo)
     default_refs = [
         f"{name}/{heads.get(name, default_branch)}"
         for name in names
@@ -212,24 +227,25 @@ def push_target(repo: Path, branch: str) -> tuple[str, str]:
 
 
 def _my_dirs(repo: Path, default_refs: list[str], email: str, since_days: int) -> list[str]:
-    """Directories with commits of mine on the default branch within `since_days`."""
-    if not default_refs:
+    """Directories with commits of mine (by my email, as a fixed string) on the default branch
+    within `since_days`, as git names them: repo-relative and POSIX, on every system."""
+    if not default_refs or not email:
         return []
     out = git(
         repo,
         "log",
         *default_refs,
         f"--since={since_days} days ago",
-        f"--author={email}",
+        "--fixed-strings",
+        f"--author=<{email}>",
         "--name-only",
         "--format=",
     )
-    return sorted({str(Path(path).parent) for path in out.splitlines() if path})
+    return sorted({str(PurePosixPath(path).parent) for path in out.splitlines() if path})
 
 
 def collect_repo(
     repo: Path,
-    email: str,
     now: datetime,
     commit_history_days: int,
     ignored_worktree_globs: list[str],
@@ -241,6 +257,8 @@ def collect_repo(
     for path, branch in parse_worktrees(git(repo, "worktree", "list", "--porcelain")):
         if any(fnmatch.fnmatch(path, glob) for glob in ignored_worktree_globs):
             continue
+        if not Path(path).exists():  # deleted without `git worktree remove`: git lists it
+            continue
         modified, untracked = worktree_status(Path(path))
         worktrees.append(Worktree(path=path, branch=branch, modified=modified, untracked=untracked))
 
@@ -249,13 +267,16 @@ def collect_repo(
     branches = [_pushed_copy(repo, b) if b.name in tracking else b for b in parse_branches(refs)]
     recent = now - timedelta(days=commit_history_days)
     try:
-        repo_email = my_email(repo)  # a repo can have its own, e.g. a personal project's
-    except CommandError:
-        repo_email = ""
+        email = my_email(repo)  # a repo can have its own, e.g. a personal project's
+    except CommandError:  # none set: nothing counts as mine
+        email = ""
     with_counts: list[Branch] = []
     for branch in branches:
-        if branch.name != default_branch and (
-            branch.gone or (branch.upstream is None and branch.committed_at >= recent)
+        # Without a default branch to count against, there's nothing to count.
+        if (
+            found.default_refs
+            and branch.name != default_branch
+            and (branch.gone or (branch.upstream is None and branch.committed_at >= recent))
         ):
             try:
                 count = int(
@@ -272,7 +293,7 @@ def collect_repo(
                 count = None
             branch = branch.model_copy(update={"ahead_of_default": count})
         if branch.name != default_branch and branch.committed_at >= recent:
-            mine = _my_commits(repo, found.default_refs, branch.name, repo_email or email)
+            mine = _my_commits(repo, found.default_refs, branch.name, email)
             branch = branch.model_copy(update={"my_commits": mine})
         with_counts.append(branch)
 
@@ -307,7 +328,7 @@ def _pushed_copy(repo: Path, branch: Branch) -> Branch:
 def _my_commits(repo: Path, default_refs: list[str], branch: str, email: str) -> int | None:
     """My commits on `branch` that aren't on the default branch (on any remote), by my email
     (taken as a fixed string, not a pattern); None when git can't say."""
-    if not email:
+    if not email or not default_refs:
         return None
     try:
         return int(
@@ -337,7 +358,10 @@ def folded(repos: list[Path]) -> list[Path]:
     is folded into it, keeping the main checkout if it's listed, else the first listed."""
     by_main: dict[Path, Path] = {}
     for repo in repos:
-        main = main_worktree(repo)
+        try:
+            main = main_worktree(repo)
+        except CommandError:  # not a repository: left to fail, and be said, on its own
+            main = repo.resolve()
         if main not in by_main or repo.resolve() == main:
             by_main[main] = repo
     return list(by_main.values())
@@ -358,17 +382,28 @@ def collect(
 ) -> LocalSnapshot:
     """Every repo among `repos`, or with `only` (common git directories, see
     `changes.fingerprints`) just those, keeping the rest as `previous` has them; a repo
-    `previous` lacks is read anyway."""
-    email = my_email(repos[0]) if repos else ""
+    `previous` lacks is read anyway. A repo git can't read (or that times out) is logged and
+    kept as `previous` has it, or left out, so it doesn't fail the rest; when none can be
+    read, the first error is raised."""
     existing = folded([repo for repo in repos if repo.exists()])
-    kept = {r.dir: r for r in previous.repos} if previous and only is not None else {}
+    before = {r.dir: r for r in previous.repos} if previous else {}
+    failed: list[Exception] = []
 
-    def one(repo: Path) -> LocalRepo:
-        if str(repo) in kept and str(changes.common_dir(repo)) not in (only or set()):
-            return kept[str(repo)]
-        return collect_repo(
-            repo, email, now, commit_history_days, ignored_worktree_globs, github_hosts
-        )
+    def one(repo: Path) -> LocalRepo | None:
+        if only is not None and str(repo) in before and str(changes.common_dir(repo)) not in only:
+            return before[str(repo)]
+        try:
+            return collect_repo(
+                repo, now, commit_history_days, ignored_worktree_globs, github_hosts
+            )
+        except (CommandError, subprocess.SubprocessError, OSError) as e:  # a hung git, say
+            failed.append(e)
+            kept = "keeping what was read before" if str(repo) in before else "leaving it out"
+            log.warning("can't read %s, so %s: %s", repo, kept, e)
+            return before.get(str(repo))
 
     with ThreadPoolExecutor(max_workers=max(1, len(existing))) as pool:
-        return LocalSnapshot(repos=list(pool.map(one, existing)))
+        found = list(pool.map(one, existing))
+    if failed and len(failed) == len(existing):
+        raise failed[0]
+    return LocalSnapshot(repos=[r for r in found if r is not None])
