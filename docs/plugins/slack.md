@@ -12,8 +12,8 @@ section.
 A team's channel comes from `[slack.teams]`, or is set by hand on `/slack/contacts` or with
 `mfd slack team set`; `[slack.teams]` wins. A team named in neither has no channel, and its
 ping says only `team <name>`. `mfd import <dir>` sets the channels of the teams in the skill's
-`reviewer-map.md` as if by hand, but for teams that have one set already, and says which it
-left.
+`reviewer-map.md` as if by hand, but for teams that have one set already, and names those it
+left whose channel differs from the map's.
 
 People's Slack ids come from the skill's `reviewer-map.md`, read with `mfd import <dir>`
 (which also picks up the nudges the skill logged in `work-notes.md`), or are set by hand on
@@ -67,4 +67,4 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 | `mfd slack destinations [--json]` | Where people's and teams' pings go, and whether each was imported, set by hand or looked up by email (a team's is always set by hand, `dashboard`). |
 | `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
 | `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel. |
-| `mfd import <dir>` | Core's command; slack reads people's Slack ids from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read; and sets its teams' channels as if by hand, but for teams that have one set already. |
+| `mfd import <dir>` | Core's command; slack reads people's Slack ids from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read; and sets its teams' channels as if by hand, but for teams that have one set already, naming those whose channel differs from the map's. Run it again, without `--replace`, whenever the map changes: `--replace` would overwrite the notes too. |

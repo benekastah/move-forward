@@ -34,7 +34,7 @@ def test_each_enabled_plugin_imports_what_it_knows(
     ]
 
 
-def test_one_plugin_refusing_doesnt_stop_the_others(
+def test_importing_again_skips_the_notes_already_there(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     notes_dir = tmp_path / "skill"
@@ -43,12 +43,30 @@ def test_one_plugin_refusing_doesnt_stop_the_others(
     config = _config(tmp_path, "[slack]\n")
     assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
     capsys.readouterr()
-    # The notes are there now, so notes refuses without --replace; slack imports again.
+    # The notes are there now, so notes skips them without --replace; slack imports again.
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    out = capsys.readouterr()
+    assert out.err == ""
+    assert out.out.splitlines() == [
+        "notes: already has notes; skipped, pass --replace to overwrite them",
+        "slack: imported 0 people and 2 logged nudges",
+    ]
+    assert cli.main(["-c", str(config), "import", str(notes_dir), "--replace"]) == 0
+    assert "notes: imported" in capsys.readouterr().out
+
+
+def test_one_plugin_failing_doesnt_stop_the_others(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notes_dir = tmp_path / "skill"
+    notes_dir.mkdir()
+    (notes_dir / "work-notes.md").write_text(WORK_NOTES, encoding="utf-8")
+    (notes_dir / "on-ice.md").mkdir()  # unreadable as a file: notes fails
+    config = _config(tmp_path, "[slack]\n")
     assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 1
     out = capsys.readouterr()
-    assert "mfd import: notes: " in out.err and "--replace" in out.err
+    assert "mfd import: notes: " in out.err
     assert out.out.startswith("slack: imported")
-    assert cli.main(["-c", str(config), "import", str(notes_dir), "--replace"]) == 0
 
 
 def test_a_directory_with_nothing_to_import_says_so(

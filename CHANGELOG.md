@@ -12,8 +12,8 @@ A team's ping channel now comes only from `[slack.teams]` or from one set by han
 `team_channel` is refused, saying it's gone: delete the line, and name each team's channel in
 `[slack.teams]` (`web = "#team-web"`) or with `mfd slack team set <team> <#channel>`. Channels
 an earlier import read are kept, as set by hand. `mfd import` now sets the reviewer map's
-teams' channels as if by hand, leaving a team that has one, and says which it left: it no
-longer replaces them on a second run. In `mfd slack destinations --json`, every team's
+teams' channels as if by hand, leaving a team that has one, and names those whose channel
+differs from the map's: it no longer replaces them on a second run. In `mfd slack destinations --json`, every team's
 `source` is `dashboard`.
 
 ### One `mfd import <dir>` replaces the three imports
@@ -29,11 +29,12 @@ printing a line per plugin (`notes: imported …`, `github: …`, `slack: …`):
 | `mfd slack import <dir>` | `mfd import <dir>` |
 
 A directory with neither `work-notes.md` nor `on-ice.md` no longer fails the notes' part: the
-command fails only when no plugin imports anything from it, or when one refuses (notes,
-already holding notes, without `--replace`), the others importing anyway. So to read a changed
-`reviewer-map.md` again once the notes are in, run `mfd import <dir>` without `--replace`
-(which would replace the notes too): github and slack import it, and the notes' refusal makes
-it exit 1. `mfd github` has no commands left.
+command fails only when no plugin imports anything from it, or when one fails (a file it can't
+read), the others importing anyway. Notes already holding notes skip them without `--replace`,
+printing `notes: already has notes; skipped, pass --replace to overwrite them`, and the
+command still exits 0. So to read a changed `reviewer-map.md` again once the notes are in, run
+`mfd import <dir>` without `--replace`: `--replace` overwrites the notes too, losing what was
+changed on the dashboard since. `mfd github` has no commands left.
 
 ### Slack's sign-in is gone
 

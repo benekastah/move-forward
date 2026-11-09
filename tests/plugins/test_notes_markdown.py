@@ -1,5 +1,5 @@
 """Reading the skill's markdown notes into the notes plugin's models, and writing them back;
-and `mfd notes import` / `export`."""
+and `mfd import` / `mfd notes export`."""
 
 from datetime import date
 from pathlib import Path
@@ -119,8 +119,8 @@ def test_mfd_import_then_notes_export(
     ]
     assert NotesRepository(db).recall("asked:ice") == date(2026, 10, 30)  # its Last asked
 
-    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 1
-    assert "--replace" in capsys.readouterr().err
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert "notes: already has notes; skipped" in capsys.readouterr().out
     assert cli.main(["-c", str(config), "import", str(notes_dir), "--replace"]) == 0
 
     out = tmp_path / "out"

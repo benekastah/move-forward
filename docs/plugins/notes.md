@@ -109,7 +109,7 @@ Every `mfd notes` command works on the database without the server, and prints J
 | `mfd notes ice (--branch <repo> <branch> \| --item <kind> <id>) [--note N]` | Put a branch, with its stack and group in git stack, on ice, or a `pull_request` (by URL), `ticket` (by key) or `notes.entry` (by title); needs a refresh first, so the graph has it. |
 | `mfd notes ices` | What's on ice, with the ids `thaw` takes. |
 | `mfd notes thaw <id>` | Take what's on ice off it. |
-| `mfd import <dir> [--replace]` | Core's command; notes reads the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database, and nothing when it has neither. Lines it doesn't understand are kept with their entry. Refuses to replace notes already there without `--replace` (anything read replaces them all, even a preamble alone), which replaces the entries and stacks on ice but keeps the PRs, tickets and entries put on ice on their own. |
+| `mfd import <dir> [--replace]` | Core's command; notes reads the skill's `work-notes.md` and `on-ice.md` from `<dir>` into the database, and nothing when it has neither. Lines it doesn't understand are kept with their entry. With notes already there, skips them all without `--replace` (anything read replaces them all, even a preamble alone), saying so, so running it again for github's or slack's part is safe. `--replace` overwrites the entries and stacks on ice, losing what was changed on the dashboard since, but keeps the PRs, tickets and entries put on ice on their own. |
 | `mfd notes export <dir> [--force]` | Write the notes back as `work-notes.md` and `on-ice.md`, in the skill's format, for reading or backup. `on-ice.md` holds only stacks: PRs, tickets and entries on ice stay in the database. |
 
 ### Keys to remember by

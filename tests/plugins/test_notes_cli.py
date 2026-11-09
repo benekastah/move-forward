@@ -236,8 +236,8 @@ def test_an_import_of_a_preamble_alone_doesnt_empty_the_notes_without_replace(
     notes_dir = tmp_path / "notes"
     notes_dir.mkdir()
     (notes_dir / "work-notes.md").write_text("# Work notes\n\nSome words before any entry.\n")
-    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 1
-    assert "mfd import: notes: " in capsys.readouterr().err
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert "notes: already has notes; skipped" in capsys.readouterr().out
     assert [e["title"] for e in _json(run, "list")] == ["APP-1 Fix it"]
 
 

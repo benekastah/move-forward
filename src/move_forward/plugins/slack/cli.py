@@ -15,7 +15,8 @@ from .repository import SlackRepository
 def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> list[str]:
     """Read Slack ids from `reviewer-map.md`, and logged nudges from `work-notes.md`,
     replacing what an earlier import read; and set its teams' channels as if by hand, where
-    none is set. Nothing when it has neither file. Can be run again any time."""
+    none is set, naming the teams whose channel set already differs from the map's. Nothing
+    when it has neither file. Can be run again any time."""
     names = (markdown.REVIEWER_MAP_FILE, markdown.WORK_NOTES_FILE)
     if not any((notes_dir / name).exists() for name in names):
         return []
@@ -26,13 +27,19 @@ def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> list[str]:
 
     people, teams = markdown.read_reviewer_map(read(markdown.REVIEWER_MAP_FILE))
     pings = markdown.read_nudges(read(markdown.WORK_NOTES_FILE))
-    set_teams = SlackRepository(ctx.db).replace_imported(people, teams, pings)
-    left = sorted({t.slug for t in teams} - set(set_teams))
-    return [
-        f"imported {len(people)} people and {len(pings)} logged nudges",
-        f"set {len(set_teams)} teams' channels, as by hand"
-        + (f"; left {', '.join(left)}, which had one set already" if left else ""),
-    ]
+    slack = SlackRepository(ctx.db)
+    set_teams = slack.replace_imported(people, teams, pings)
+    kept = slack.team_channels()
+    # Only a kept channel unlike the map's is worth a word: one equal to it changed nothing.
+    differ = sorted(t.slug for t in teams if kept.get(t.slug) != t)
+    said = ([f"set {len(set_teams)} teams' channels, as by hand"] if set_teams else []) + (
+        [f"left {', '.join(differ)}, whose channel set already differs from the map's"]
+        if differ
+        else []
+    )
+    return [f"imported {len(people)} people and {len(pings)} logged nudges"] + (
+        ["; ".join(said)] if said else []
+    )
 
 
 def list_destinations(ctx: Context[SlackConfig], as_json: bool) -> str:

@@ -66,7 +66,7 @@ def test_mfd_import_reads_slack_ids_teams_and_nudges(
     imported = len(slack.pings()) - 1
     assert imported and slack.contacts()
     # Importing again replaces what the last import read, and keeps what the dashboard sent.
-    assert cli.main(["-c", str(config), "import", str(notes_dir), "--replace"]) == 0
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
     assert len(slack.pings()) == imported + 1
     assert cli.main(["-c", str(config), "import", str(tmp_path / "nope")]) == 1
 
@@ -85,7 +85,7 @@ def test_the_import_sets_teams_channels_as_by_hand_where_none_is(
     slack.unset_team_channel("core")
     capsys.readouterr()
     assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
-    assert "set 1 teams' channels, as by hand; left web, which had one set already" in (
+    assert "slack: set 1 teams' channels, as by hand; left web, whose channel set already" in (
         capsys.readouterr().out
     )
     channels = slack.team_channels()
@@ -94,6 +94,25 @@ def test_the_import_sets_teams_channels_as_by_hand_where_none_is(
         "#team-core-chat",
     )
     assert slack.sources()["team:core"] == "dashboard"
+    # Teams whose kept channel is the map's go unmentioned, so nothing is said of them.
+    slack.set_team_channel("web", "#team-web", "C0123ABCD")
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    assert [line for line in capsys.readouterr().out.splitlines() if "slack" in line] == [
+        "slack: imported 2 people and 0 logged nudges"
+    ]
+
+
+def test_the_import_says_nothing_of_teams_without_a_map(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notes_dir = tmp_path / "skill"
+    notes_dir.mkdir()
+    (notes_dir / markdown.WORK_NOTES_FILE).write_text(WORK_NOTES)
+    config = tmp_path / "config.toml"
+    config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[slack]\n')
+    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
+    said = [line for line in capsys.readouterr().out.splitlines() if line.startswith("slack:")]
+    assert len(said) == 1 and said[0].startswith("slack: imported 0 people")
 
 
 def test_the_migration_keeps_imported_team_channels_as_set_by_hand() -> None:

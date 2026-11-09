@@ -35,8 +35,8 @@ ASKED_ICE = "asked:ice"
 
 def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> list[str]:
     """Read `work-notes.md` and `on-ice.md` from `notes_dir` into the tables, for `mfd
-    import`; nothing when it has neither. Refuses to replace notes already there unless
-    `replace`."""
+    import`; nothing when it has neither. Skips them all, saying so, when notes are already
+    there, unless `replace`."""
 
     def read(name: str) -> str:
         path = notes_dir / name
@@ -51,7 +51,8 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> l
     ices, last_asked = markdown.read_on_ice(read(markdown.ON_ICE_FILE), ctx.today)
     if (entries or ices or sections) and not repo.is_empty() and not replace:
         # Anything read replaces all that's there: even a preamble alone would empty them.
-        raise ValueError("the notes already have entries; pass --replace to replace them")
+        # Not an error: re-running `mfd import` for another plugin's file is routine.
+        return ["already has notes; skipped, pass --replace to overwrite them"]
     if entries or ices or sections:
         repo.replace_all(entries, ices, sections)
     if last_asked:

@@ -145,7 +145,9 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     import_parser.add_argument("dir", type=Path)
     import_parser.add_argument(
-        "--replace", action="store_true", help="replace the notes already there"
+        "--replace",
+        action="store_true",
+        help="overwrite the notes already there too, which are otherwise skipped",
     )
     init_parser = commands.add_parser("init", help="ask for each setting and write the config")
     init_parser.add_argument(
@@ -224,8 +226,8 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
 
 
 def _import(plugins: list[Enabled], directory: Path, replace: bool) -> int:
-    """`mfd import`: each enabled plugin reads what it knows from `directory`; one refusing
-    doesn't stop the others."""
+    """`mfd import`: each enabled plugin reads what it knows from `directory`; one failing
+    doesn't stop the others, but makes the command fail."""
     if not directory.is_dir():
         print(f"mfd import: {directory} isn't a directory", file=sys.stderr)
         return 1

@@ -343,7 +343,8 @@ class ImportRequest[C: BaseModel]:
     ctx: Context[C]
     dir: Path
     replace: bool
-    """`--replace`: replace what's there where the plugin would otherwise refuse."""
+    """`--replace`: overwrite what's there where the plugin would otherwise keep it (notes
+    skips the notes already there without it)."""
 
 
 PageHandler = Callable[[PageRequest[Any]], str | Response | None]
@@ -666,8 +667,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def import_dir(self, req: ImportRequest[C]) -> list[str]:
         """Read what the plugin recognises in `req.dir` (`mfd import`) into its tables, and
-        say what it read, one line each; nothing when it recognises nothing there. Raises
-        `ValueError` to refuse, saying why."""
+        say what it read, one line each; nothing when it recognises nothing there. What it
+        won't overwrite without `req.replace` it skips, saying so in a line. Raises
+        `ValueError` when it fails, saying why."""
         return []
 
     # Set-up and upkeep
