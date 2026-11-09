@@ -279,7 +279,7 @@ def test_focus_page_actions_come_back_to_it() -> None:
         title="x", actions=[page.Action(name="delete_branch", label="Delete", fields={"b": "1"})]
     )
     dashboard = panels.Dashboard(
-        groups=[page.Group(key="git", title="Local", panel_keys=["cleanup"])],
+        groups=[page.Group(key="git", title="Git", panel_keys=["cleanup"])],
         generated_at=NOW,
         identities=[Identity(tool="GitHub", login=ME)],
         panels=[page.Panel(key="cleanup", title="Cleanup", description="", items=[item])],
