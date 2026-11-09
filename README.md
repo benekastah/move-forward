@@ -33,7 +33,8 @@ before it ends, and `mfd serve` moves to the next by itself, without a restart: 
 and a half years without renewing. `--trust` adds the authority (`tls/ca.pem`, next to the
 database) to macOS's keychain or Windows's user store, and, where NSS's `certutil` is
 installed (`libnss3-tools`, `nss-tools`), to Firefox's profiles on Linux and macOS and
-Chrome's store on Linux (Firefox on Windows reads Windows's store); a store it can't add it to
+Chrome's store on Linux (Firefox on Windows reads Windows's store, from Firefox 120 while its
+`security.enterprise_roots.enabled` is on); a store it can't add it to
 is named, to import it by hand; elsewhere, import it as an authority in the browser's
 certificate settings.
 With `https = false` (the default), or without a certificate, the dashboard stays on plain HTTP. The page's

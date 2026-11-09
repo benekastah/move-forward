@@ -281,8 +281,9 @@ NSS_NICKNAME = "move-forward local CA"
 
 def nss_stores(home: Path | None = None) -> list[Path]:
     """The NSS stores to add the authority to: Chrome's on Linux, and every Firefox
-    profile's but on Windows, where Firefox reads the system's store (and the `certutil` on
-    the path is Windows' own, not NSS's)."""
+    profile's but on Windows, where Firefox reads the system's store (from Firefox 120, while
+    its `security.enterprise_roots.enabled` is on), and the `certutil` on the path is Windows'
+    own, not NSS's."""
     if sys.platform == "win32":
         return []
     home = home or Path.home()
@@ -320,8 +321,12 @@ def trust(paths: Paths, home: Path | None = None) -> list[str]:
     allows; what was done, and what's left to do by hand."""
     done: list[str] = []
     if command := system_trust_command(paths):
-        run(command)
-        done.append("trusted it in the system's store for your user")
+        try:
+            run(command)
+        except CommandError as e:  # a prompt refused, say: the browsers' stores still get it
+            done.append(f"couldn't trust it in the system's store ({e}): import {paths.ca} by hand")
+        else:
+            done.append("trusted it in the system's store for your user")
     stores = nss_stores(home)
     if stores and shutil.which("certutil") is None:
         done.append(

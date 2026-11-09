@@ -254,6 +254,31 @@ def test_a_store_that_fails_is_said_and_the_others_still_get_it(
     assert trusted == f"trusted it in {profile}"
 
 
+def test_a_system_store_that_refuses_still_leaves_the_browsers_stores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = tls.Paths(tmp_path / "tls")
+    tls.make(paths)
+    profile = tmp_path / "home" / "Library" / "Application Support" / "Firefox" / "Profiles"
+    (profile / "abc.default").mkdir(parents=True)
+    (profile / "abc.default" / "cert9.db").write_text("")
+
+    def run(args: list[str]) -> str:
+        if args[0] == "security":  # the password prompt cancelled
+            raise CommandError("security: User canceled the operation.")
+        return ""
+
+    def which(_name: str) -> str:
+        return "/opt/homebrew/bin/certutil"
+
+    monkeypatch.setattr(tls.sys, "platform", "darwin")
+    monkeypatch.setattr(tls.shutil, "which", which)
+    monkeypatch.setattr(tls, "run", run)
+    refused, trusted = tls.trust(paths, tmp_path / "home")
+    assert refused.startswith("couldn't trust it in the system's store") and "canceled" in refused
+    assert trusted == f"trusted it in {profile / 'abc.default'}"
+
+
 def test_on_macos_the_authority_is_trusted_for_tls_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

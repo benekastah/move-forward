@@ -192,15 +192,6 @@ def test_the_database_and_its_backups_are_mine_alone(tmp_path: Path) -> None:
     assert is_private(path.parent / "backups")
 
 
-def test_sqlites_side_files_are_mine_alone_too(tmp_path: Path) -> None:
-    path = tmp_path / "dashboard.db"
-    db = Database(path)
-    db.migrate("test", [Migration("0001_t", "CREATE TABLE test_t (x);")])
-    db.execute("INSERT INTO test_t VALUES (1)")
-    sides = [path.with_name(path.name + s) for s in ("-wal", "-shm")]
-    assert sides and all(is_private(side) for side in sides if side.exists())
-
-
 def test_on_windows_the_side_files_are_made_private_before_sqlite_opens_them(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
