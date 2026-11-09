@@ -224,7 +224,7 @@ def test_one_repo_git_cant_read_doesnt_fail_the_rest(tmp_path: Path) -> None:
     now = datetime.now(UTC)
     found = local.collect([plain, good], now, 30, [])
     assert [r.dir for r in found.repos] == [str(good)]
-    assert [w.path for w in found.repos[0].worktrees] == [str(good)]
+    assert [Path(w.path) for w in found.repos[0].worktrees] == [good]  # git writes / on Windows
     earlier = found.repos[0].model_copy(update={"dir": str(plain)})
     kept = local.collect([plain, good], now, 30, [], previous=LocalSnapshot(repos=[earlier]))
     assert [r.dir for r in kept.repos] == [str(plain), str(good)]  # as read before
