@@ -169,9 +169,9 @@ def test_settings_that_choose_where_a_credential_goes_are_only_changed_in_the_fi
     assert shown.count("only the config file sets it") == 11
 
 
-def test_where_mails_password_goes_and_whom_it_trusts_are_read_only() -> None:
+def test_where_mails_password_goes_and_where_its_items_link_are_read_only() -> None:
     config = config_module.Config.model_validate(
         {"email": "me@x", "mail": {"host": "imap.gmail.com", "username": "me@x"}}
     )
     locked = {s.key for s in settings.settings(config) if s.section == "mail" and s.locked}
-    assert locked == {"host", "port", "token_env", "keychain_service"}
+    assert locked == {"host", "port", "token_env", "keychain_service", "message_url"}

@@ -10,9 +10,9 @@ The settings shown are the top level's, `[act_now]`'s and each enabled plugin's,
 kinds a form can hold (numbers, true or false, text, lists); tables such as
 `[github.teams]` stay for editing by hand. `db_path`, `port` and `https` are shown but not
 changed here: changing them moves the server. Nor are the settings that choose where a
-credential is sent or which one is read, or what runs where (see `SECRET_LOCKED`): the page
-is reached with the dashboard's cookie, and a page that could point the Jira site, say, at
-another server could send it the API token.
+credential is sent or which one is read, where items link, whom mail trusts, or what runs
+where (see `SECRET_LOCKED`): the page is reached with the dashboard's cookie, and a page that
+could point the Jira site, say, at another server could send it the API token.
 """
 
 import os
@@ -37,13 +37,15 @@ SECRET_LOCKED: dict[str | None, set[str]] = {
     None: {"email"},
     "github": {"host"},
     "jira": {"site", "token_env", "keychain_service"},
-    "mail": {"host", "port", "token_env", "keychain_service"},
+    "mail": {"host", "port", "token_env", "keychain_service", "message_url", "auth_servers"},
     "slack": {"client_id", "workspace_url", "token_env", "keychain_service"},
     "git": {"repos", "github_hosts"},
 }
 """Settings, by section, only the file changes: where a credential goes (a host, a site, a
 client id, the account a token is keyed by) or comes from (an environment variable, a
-keychain service), and which checkouts `git` runs commands in."""
+keychain service), where items link with my login in the link (mail's `message_url`), whose
+word decides a sender is who they claim (mail's `auth_servers`, though a form can't hold it
+yet), and which checkouts `git` runs commands in."""
 NOTIFICATIONS = "notifications"
 SUBSCRIBE = "subscribe"
 """`[notifications]`'s list of kinds, shown as a checkbox each."""
