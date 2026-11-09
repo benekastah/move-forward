@@ -108,7 +108,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         ctx = req.ctx
         messages: list[Message] = []
         for mailbox in ctx.config.mailboxes():
-            messages = merged(messages, client.collect(mailbox, ctx.email, ctx.now).messages)
+            found = client.collect(mailbox, ctx.token(mailbox.name), ctx.email, ctx.now)
+            messages = merged(messages, found.messages)
         return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
     def store(self, req: StoreRequest[MailConfig, MailSnapshot]) -> None:
@@ -121,7 +122,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         """Whether a mailbox's counts moved since the last look: mail came, went or was
         read. One `STATUS` each, without opening the mailbox."""
         ctx = req.ctx
-        now = "\n".join(client.status(m, ctx.email) for m in ctx.config.mailboxes())
+        now = "\n".join(client.status(m, ctx.token(m.name)) for m in ctx.config.mailboxes())
         before = ctx.kv.get(STATUS)
         ctx.kv.set(STATUS, now)
         return Changed(before is not None and before != now, "the mailbox changed")

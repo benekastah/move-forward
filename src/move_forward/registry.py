@@ -354,6 +354,7 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
             kv=KvRepository(db, plugin.name),
             dashboard_url=f"http://localhost:{config.port}",
             name=plugin.name,
+            tokens=plugin.tokens(section),
         )
         result.append(Enabled(plugin, ctx))
     return result

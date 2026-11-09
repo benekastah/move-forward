@@ -16,7 +16,8 @@ which asks for it without showing it and keeps it in your system's secret store 
 keychain, Windows' Credential Manager, or on Linux the desktop keyring through
 `secret-tool`) under `keychain_service`, with your email as the account. Or export
 `JIRA_API_TOKEN` (or the variable `token_env` names), which wins over the store.
-`mfd token check` says where it was found.
+`mfd token check` says where it was found. Without one, a refresh, and linking a ticket, fail
+saying how to give it.
 
 ## Config
 

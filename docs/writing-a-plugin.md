@@ -40,8 +40,8 @@ change without notice. Its submodules group the rest: `api.html` (`page`, `e` to
 `shown` to drop hidden characters, `buttons`, `linkable`), `api.shell` (`run`, `git`,
 `git_common_dir`, `CommandError`), `api.http` (`request`, `RequestError`, `opener`,
 `require_https`), `api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`,
-`branch_parts`), `api.tags` (`handle`) and `api.keychain` (`token`, `read`, `write`,
-`delete`). Ruff refuses any other core import in a plugin, and
+`branch_parts`), `api.tags` (`handle`) and `api.keychain` (`TokenFields`, `TokenSettings`,
+`token`, `read`, `write`, `delete`). Ruff refuses any other core import in a plugin, and
 `tests/test_api.py` checks it too.
 
 ## Versions
@@ -75,16 +75,17 @@ a checkout run without installing still has them: each package there is one, by 
 ## Config
 
 ```python
-class LinearConfig(Strict):
-    """`[linear]`: issues assigned to me in Linear."""
+class LinearConfig(TokenFields):
+    """`[linear]`: issues assigned to me in Linear, read with a personal API key."""
 
+    default_token_env: ClassVar[str] = "LINEAR_API_TOKEN"
+    default_keychain_service: ClassVar[str] = "move-forward-linear"
     team: str
     """The team key, e.g. `ENG`."""
-    token_env: str = "LINEAR_API_TOKEN"
-    """The environment variable holding a personal API key."""
 ```
 
-- Config models subclass `Strict`, which rejects unknown keys: a typo is an error. A field
+- Config models subclass `Strict` (or `TokenFields`, which is one), which rejects unknown
+  keys: a typo is an error. A field
   whose entries are tables of their own, by name (mail's `[mail.<name>]` accounts), says so
   with `json_schema_extra={"tables": True}`, and its example is one such table.
 - Every field has a docstring.
@@ -107,15 +108,17 @@ class LinearConfig(Strict):
   so the settings page, reached with the dashboard's cookie, shows them without changing them;
   `token_env` and `keychain_service` are locked already; a section keeping its token's place
   under other names, or building it from other settings, names those too.
-- Secrets never go in the config. Give the section `token_env` and `keychain_service`, as
-  jira and slack do, and read the token with `keychain.token(config, email)`: then
+- Secrets never go in the config. Build the section on `api.keychain.TokenFields`, as jira,
+  slack and mail do: it gives it `token_env` and `keychain_service`, defaulting to the
+  `default_token_env` and `default_keychain_service` it sets. Read the token with
+  `ctx.token()`, which raises `SourceError` saying how to give one when there's none: then
   `mfd token set <plugin>` stores it and `mfd token check` finds it; `token_help` is `mfd
   init`'s next step for it, saying where to get one (a section that keeps them under other
   names overrides `tokens(config)`, returning `{"": settings}`, where `settings` is an
   `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
   (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading
-  several accounts, each with its own token, names them all in `tokens(config)`, and `mfd
-  token set <plugin>.<account>` stores one. Anything sent with a
+  several accounts, each with its own token, names them all in `tokens(config)`, reads one
+  with `ctx.token(account)`, and `mfd token set <plugin>.<account>` stores one. Anything sent with a
   token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
   the body, never the URL (its errors name the URL, without its query).
 - A section mapping the top-level teams to the tool's names for them (github's

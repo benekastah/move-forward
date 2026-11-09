@@ -589,10 +589,7 @@ def test_linking_a_ticket_in_a_project_new_to_jira_fetches_it_and_jira_learns_th
         asked.append(keys)
         return [issue(key, url=f"https://j.example/browse/{key}") for key in keys if key == "OPS-5"]
 
-    def token(config: JiraConfig, email: str) -> str:
-        return "t"
-
-    monkeypatch.setattr(jira_client, "token", token)
+    monkeypatch.setenv("JIRA_API_TOKEN", "t")
     monkeypatch.setattr(jira_client, "tickets", tickets)
     fields = {**_todo(config, "get it merged"), "input": "OPS-5"}
     assert run("notes/todo_link", config, fields) == "linked OPS-5"
@@ -612,10 +609,7 @@ def test_linking_a_ticket_says_why_when_jira_turns_the_fetch_away(
     def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
         raise SourceError("Jira rejected the API token")
 
-    def token(config: JiraConfig, email: str) -> str:
-        return "t"
-
-    monkeypatch.setattr(jira_client, "token", token)
+    monkeypatch.setenv("JIRA_API_TOKEN", "t")
     monkeypatch.setattr(jira_client, "tickets", tickets)
     fields = {**_todo(config, "get it merged"), "input": "OPS-5"}
     with pytest.raises(ActionError, match="Jira rejected the API token"):
@@ -659,13 +653,16 @@ def test_the_jira_transition_button_moves_the_ticket_and_reports_what_jira_refus
     config = config.with_section("jira", JiraConfig(site="https://j.example/"))
     moved: list[tuple[str, list[str]]] = []
 
-    def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> str:
+    def transition(
+        config: JiraConfig, email: str, api_token: str, key: str, statuses: list[str]
+    ) -> str:
         if statuses[0] == "Nowhere":
             raise LookupError(f"{key} can't move to {statuses[0]}; it can go to: Done")
         moved.append((key, statuses))
         return statuses[-1]  # as if the workflow offered only the last
 
     monkeypatch.setattr(jira_client, "transition", transition)
+    monkeypatch.setenv("JIRA_API_TOKEN", "t")
     assert run("jira/transition", config, {"key": "APP-1", "to": "In Review"}) == (
         "moved APP-1 to In Review"
     )

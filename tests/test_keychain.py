@@ -4,14 +4,19 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
+from conftest import NOW
 from pydantic import ValidationError
 
 from move_forward import cli, keychain, registry
 from move_forward import config as config_module
+from move_forward.db import Database
+from move_forward.plugin import Context, SourceError
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
+from move_forward.repositories import KvRepository
 from move_forward.shell import CommandError
 
 
@@ -318,3 +323,84 @@ def test_services_differing_only_in_case_are_one(tmp_path: Path) -> None:
     )
     with pytest.raises(ValidationError, match=r"jira \('Shared'\) and slack \('shared'\) keep"):
         config_module.load(config)
+
+
+class _SiteConfig(keychain.TokenFields):
+    default_token_env: ClassVar[str] = "SITE_TOKEN"
+    default_keychain_service: ClassVar[str] = "move-forward-site"
+
+
+def test_a_section_keeping_a_token_has_its_own_defaults_for_where() -> None:
+    assert (_SiteConfig().token_env, _SiteConfig().keychain_service) == (
+        "SITE_TOKEN",
+        "move-forward-site",
+    )
+    mine = _SiteConfig.model_validate({"token_env": "MY_TOKEN"})
+    assert (mine.token_env, mine.keychain_service) == ("MY_TOKEN", "move-forward-site")
+    with pytest.raises(ValidationError):  # still a config model: no unknown keys
+        _SiteConfig.model_validate({"token_envv": "MY_TOKEN"})
+
+
+def _token_ctx(tokens: dict[str, keychain.TokenSettings] | None = None) -> Context[_SiteConfig]:
+    db = Database(":memory:")
+    return Context(
+        config=_SiteConfig(),
+        email="me@x",
+        teams=[],
+        prune_days=90,
+        now=NOW,
+        db=db,
+        kv=KvRepository(db, "site"),
+        name="site",
+        tokens=tokens,
+    )
+
+
+def test_a_plugins_token_is_read_from_its_variable_else_the_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stored = {("move-forward-site", "me@x"): "from-store"}
+
+    def read(service: str, account: str) -> str | None:
+        return stored.get((service, account))
+
+    monkeypatch.setattr(keychain, "read", read)
+    monkeypatch.delenv("SITE_TOKEN", raising=False)
+    assert _token_ctx().token() == "from-store"  # the section's own, by default
+    monkeypatch.setenv("SITE_TOKEN", "from-env")
+    assert _token_ctx().token() == "from-env"
+
+
+def test_no_token_says_how_to_give_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    def read(service: str, account: str) -> None:
+        return None
+
+    monkeypatch.setattr(keychain, "read", read)
+    monkeypatch.delenv("SITE_TOKEN", raising=False)
+    monkeypatch.delenv("WORK_TOKEN", raising=False)
+    work = _ElsewhereToken(token_env="WORK_TOKEN", keychain_service="move-forward-site-work")
+    ctx = _token_ctx({"": _SiteConfig(), "work": work})
+    with pytest.raises(
+        SourceError, match=r"^no token: run `mfd token set site`, or set \$SITE_TOKEN$"
+    ):
+        ctx.token()
+    with pytest.raises(
+        SourceError, match=r"^no token: run `mfd token set site\.work`, or set \$WORK_TOKEN$"
+    ):
+        ctx.token("work")
+    with pytest.raises(LookupError, match="keeps no token for 'home'"):
+        ctx.token("home")
+
+
+def test_the_context_core_gives_holds_the_plugins_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    swap = {"github": _GitHubWithAToken()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    monkeypatch.setenv("GITHUB_PAT", "pat")
+    path = _config(tmp_path)
+    path.write_text(path.read_text() + '[github]\norg = "acme"\n')
+    config = config_module.load(path)
+    enabled = registry.enabled(config, Database(":memory:"), NOW)
+    [github] = [e for e in enabled if e.name == "github"]
+    assert github.ctx.token() == "pat"  # its own, though its section names none

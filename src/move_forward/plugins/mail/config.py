@@ -2,11 +2,12 @@
 
 import re
 from dataclasses import dataclass
-from typing import Any, Self, cast
+from typing import Any, ClassVar, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 
 from ...api import Strict
+from ...api.keychain import TokenFields
 
 DEFAULT_REFRESH_SECONDS = 900
 DEFAULT_PORT = 993
@@ -107,15 +108,19 @@ class MailAccount(Strict):
         return value if value is None else _message_url(value)
 
 
-class MailConfig(Strict):
+class MailConfig(TokenFields):
     """`[mail]`: mailboxes read over IMAP, for their unread and flagged mail. Optional.
 
     One mailbox is `[mail]`'s own `host` and `username`; several are its accounts, each a table
     of its own (`[mail.home]`, `[mail.work]`), taking from `[mail]` what they leave out. It signs
     in to each with its password (for Gmail, an app password) from `token_env`, else the
-    system's secret store, over TLS only. It reads them without changing them: only the headers
-    it needs, never a message's body, and nothing is marked read.
+    system's secret store, over TLS only: `[mail]`'s `token_env` and `keychain_service` are
+    its own mailbox's, and an account has its own. It reads them without changing them: only
+    the headers it needs, never a message's body, and nothing is marked read.
     """
+
+    default_token_env: ClassVar[str] = DEFAULT_MAIL_TOKEN_ENV
+    default_keychain_service: ClassVar[str] = DEFAULT_MAIL_KEYCHAIN_SERVICE
 
     host: str = ""
     """The IMAP server, e.g. `imap.gmail.com`: needed here unless every account says its own."""
@@ -142,12 +147,6 @@ class MailConfig(Strict):
     known for Gmail; for another server, look for the name in a message's source. Empty, no
     sender is verified. With accounts, only those on this `host` (whatever its case) without
     their own take them, and the config is refused when none does."""
-    token_env: str = DEFAULT_MAIL_TOKEN_ENV
-    """The environment variable holding `[mail]`'s own password; an account has its own."""
-    keychain_service: str = DEFAULT_MAIL_KEYCHAIN_SERVICE
-    """The service `[mail]`'s own password is stored under in the system's secret store (the
-    macOS keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't
-    set; its account is the top-level `email`. An account has its own."""
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=60)
     """How often the dashboard reads the mailboxes in the background; it also looks every couple
     of minutes for a change, and reads them at once if there is one."""

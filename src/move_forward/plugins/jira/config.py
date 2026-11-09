@@ -1,11 +1,11 @@
 """`[jira]`."""
 
-from typing import cast
+from typing import ClassVar, cast
 from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 
-from ...api import Strict
+from ...api.keychain import TokenFields
 
 DEFAULT_REFRESH_SECONDS = 900
 DEFAULT_JIRA_TOKEN_ENV = "JIRA_API_TOKEN"
@@ -20,24 +20,21 @@ DEFAULT_INCIDENT_TYPES = ["incident"]
 DEFAULT_BUG_TYPES = ["bug"]
 
 
-class JiraConfig(Strict):
+class JiraConfig(TokenFields):
     """`[jira]`: Jira Cloud access and the workflow's names. Optional.
 
     Requests authenticate as the top-level `email` with the API token from `token_env`,
     else the system's secret store.
     """
 
+    default_token_env: ClassVar[str] = DEFAULT_JIRA_TOKEN_ENV
+    default_keychain_service: ClassVar[str] = DEFAULT_JIRA_KEYCHAIN_SERVICE
+
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
     """How often the dashboard refreshes this plugin's data in the background (tickets change slowly)."""
 
     site: str
     """e.g. https://example.atlassian.net. Must be `https://`: requests carry the API token."""
-    token_env: str = DEFAULT_JIRA_TOKEN_ENV
-    """The environment variable holding the API token."""
-    keychain_service: str = DEFAULT_JIRA_KEYCHAIN_SERVICE
-    """The service the token is stored under in the system's secret store (the macOS
-    keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;
-    its account is the top-level `email`."""
     status_in_progress: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_IN_PROGRESS])
     """Workflow status names for "in progress", e.g. `["In Progress", "Doing"]`, for the
     transitions the Jira panel proposes. A ticket is in one if its status is any of the names

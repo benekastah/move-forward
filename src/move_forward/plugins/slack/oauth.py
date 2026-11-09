@@ -23,7 +23,7 @@ from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
-from ...api import Context, Model, http, keychain
+from ...api import Context, Model, SourceError, http, keychain
 from ...api.shell import CommandError
 from . import client, scopes
 from .config import SlackConfig
@@ -249,7 +249,10 @@ def token(ctx: Context[SlackConfig]) -> str | None:
     with _refreshing:
         found = connection(ctx)
         if found is None:
-            return keychain.token(ctx.config, ctx.email)
+            try:
+                return ctx.token()
+            except SourceError:  # none given: no lookups
+                return None
         access = keychain.read(_app_service(ctx, found), ctx.email)
         if found.expires_at is None or ctx.now < found.expires_at - REFRESH_AHEAD:
             return access

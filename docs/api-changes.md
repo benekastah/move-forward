@@ -86,6 +86,14 @@ catch up.
   `keychain_service` (read-only), so a plugin can annotate `token_settings` and return frozen
   settings. The config is refused when two enabled plugins' `keychain_service`s are the same,
   as storing one token would replace the other's.
+- **Reading a token**: `ctx.token(account=None)` is the plugin's token (or its account's, as
+  `Plugin.tokens` names it), from its `token_env`, else the secret store; with neither, it
+  raises `SourceError` with core's message ("no token: run `mfd token set <plugin>`, or set
+  $<token_env>"), which `Graph.fetch` passes on. `Context` gains `tokens`, which core fills
+  from `Plugin.tokens`.
+- **Token fields**: `api.keychain.TokenFields` is a `Strict` base for a section keeping one
+  token, with `token_env` and `keychain_service`, defaulting to the class's
+  `default_token_env` and `default_keychain_service`.
 - **Organisations**: core declares the `organisation` family (`api.kinds.ORGANISATION`,
   `Organisation`: `handle`, `contact_type`, `importance`), with ids `<host>/<its id there>`.
   A person points at theirs, and its type or importance counts for that person's items as
