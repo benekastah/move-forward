@@ -103,6 +103,11 @@ def test_moved_settings_say_where_they_went(tmp_path: Path) -> None:
         _load(tmp_path, MINIMAL + '\n[notes]\ndir = "~/n"\n')
 
 
+def test_a_removed_plugins_section_says_it_was_removed(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match=r"\[vcard\] plugin was removed: delete the section"):
+        _load(tmp_path, MINIMAL + '\n[vcard]\npaths = ["~/.contacts"]\n')
+
+
 def test_a_jira_teams_table_says_its_gone(tmp_path: Path) -> None:
     text = MINIMAL + 'teams = ["core"]\n\n[git]\nrepos = []\n\n[jira]\nsite = "https://j"\n'
     with pytest.raises(ValidationError, match=r"`\[jira.teams\]` is gone; .*delete the table"):

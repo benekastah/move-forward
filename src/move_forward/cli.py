@@ -135,12 +135,6 @@ my-team = "#team-my-team"
 ## host = "imap.work.example"
 ## username = "me@work.example"         # its password: `mfd token set mail.work`
 
-# [vcard]                               # an address book's people, from vCard files
-# paths = ["~/.contacts"]               # vCard files, or directories of them (vdirsyncer's)
-# refresh_seconds = 3600
-# group_importance = {Family = 2}       # how much a group's people matter (0-2)
-# group_types = {Clients = "customer"}  # what a group's people are to me
-
 # [jira]
 # site = "https://example.atlassian.net"
 # refresh_seconds = 900

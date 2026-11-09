@@ -125,7 +125,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   the README (core's) or the plugin's page in `docs/plugins/`, `mfd init`'s rendered config (as a commented default:
   core's in `init.py`, a plugin's in its `setup.py`) and `mfd init --example` (`cli.py`). Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
-  `MOVED_SETTINGS` in `config.py`).
+  `MOVED_SETTINGS` in `config.py`), and a removed plugin's section says it's gone
+  (`REMOVED_PLUGINS`).
 - **Migrations are append-only.** Core and each plugin own a list of named
   `Migration`s (SQL, or a Python function for a data fix), applied in order and
   kept by name in the `migrations` ledger. Never edit, rename or reorder one

@@ -244,6 +244,26 @@ set of tables, pages and actions, and settles what two of them both see the way 
   all (Gmail, or `auth_servers` set): elsewhere no sender is, and every conversation would
   split. That stops forged `From`s, not a stranger with a verified domain.
 
+### Contacts
+
+- **Read the address book where it lives.** A plugin publishing a `person` for each address
+  in my contacts, titled by their name, with the groups they're in, and the `importance` or
+  `contact_type` their groups give (a group's importance and type set in its section), so the
+  people who matter rank first wherever they show up; a type I set (Set type) still beats
+  theirs. It replaces the vcard plugin, removed because it read `.vcf` files from local paths,
+  which only stayed current through a sync tool (vdirsyncer), while my contacts are in Google
+  and Apple Contacts. Each a source of its own, as accounts in one section or a plugin each:
+  - **Google Contacts** through the People API, with the read-only `contacts.readonly` scope.
+    The same setup cost as Gmail's API (see [Read Gmail without a password that can do
+    more](#mail)): a personal Google Cloud project with an OAuth client and myself as a test
+    user, whose sign-in lasts about a week while the app is in testing; one project and
+    sign-in could serve both.
+  - **Apple Contacts** through iCloud's CardDAV, with an app-specific password, from any
+    system (CardDAV gives vCards: vcard's parser reads them, `git show
+    38b2bb7:src/move_forward/plugins/vcard/client.py`); or on macOS
+    through the Contacts framework, without a password but on that one system, and reached
+    from Python only through a new dependency (PyObjC) or a helper outside it.
+
 ## Follow-ups
 
 ### Refreshing

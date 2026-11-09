@@ -5,6 +5,14 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### No more vcard plugin
+
+The vcard plugin, which read an address book's vCard files, is gone. A config with a `[vcard]`
+section is refused when it loads: delete the section. Say who matters with contact types
+instead of its `group_importance` and `group_types`: Set type on an item about them, or
+`mfd contact <address|@domain> <type>` (see the README's People). Its tables (`vcard_*`) stay
+in an existing database, read by nothing; they're harmless, and can be dropped by hand.
+
 ### Jira no longer tells of comments and mentions
 
 The `jira.comment_added` and `jira.mentioned` notification kinds are gone: Jira already tells
@@ -66,12 +74,6 @@ lists the names there are. Nothing to change for one token per plugin.
 A config whose sections name the same `keychain_service` is now refused when it loads, as
 storing one token (`mfd token set`, Slack's Connect) would replace the other's. Give each
 section its own.
-
-### vCard address books
-
-A `[vcard]` section (`paths`, `group_importance`, `group_types`, `refresh_seconds`) reads an
-address book's vCard files, and ranks the people in its groups. Nothing to change unless you add
-it.
 
 ### Merge when ready
 

@@ -36,6 +36,14 @@ MOVED_SETTINGS = {
 }
 """Top-level settings that moved into a plugin's section, to say so instead of just "extra
 input"."""
+REMOVED_PLUGINS = {
+    "vcard": (
+        "the [vcard] plugin was removed: delete the section; contact types (Set type, or"
+        " `mfd contact <address|@domain> <type>`) say who matters"
+    ),
+}
+"""Built-in plugins that are gone, by name, and what to say to a config still naming one,
+instead of "no plugin is named". An installed plugin of that name is read as any other."""
 
 GONE_NOTIFICATIONS = {
     "dashboard.certificate_ending": "with HTTPS mode",
@@ -160,7 +168,8 @@ class Config(Strict):
             moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")
         plugins = [p.name for p in registry.PLUGINS]
         moved += [
-            f"no plugin is named [{key}]; the plugins are {', '.join(plugins)}"
+            REMOVED_PLUGINS.get(key)
+            or f"no plugin is named [{key}]; the plugins are {', '.join(plugins)}"
             for key in map(str, settings)
             if isinstance(settings[key], dict)
             and key not in cls.model_fields
