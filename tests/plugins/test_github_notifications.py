@@ -124,3 +124,57 @@ def test_a_failure_other_than_not_modified_is_raised(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(notifications, "run", run)
     with pytest.raises(CommandError, match="401"):
         notifications.fetch("github.com", None)
+
+
+def _context(db: Database, minutes: int = 0, **config: object) -> Context[GitHubConfig]:
+    return Context(
+        config=GitHubConfig.model_validate({"org": "acme", **config}),
+        email="me@acme.com",
+        teams=[],
+        prune_days=90,
+        now=NOW + timedelta(minutes=minutes),
+        db=db,
+        kv=KvRepository(db, "github"),
+    )
+
+
+def test_a_poll_that_fails_finds_nothing_warns_once_and_tries_again_later(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    calls: list[str] = []
+
+    refused = "gh api: HTTP 403: Resource not accessible by personal access token"
+
+    def run(args: list[str]) -> str:
+        calls.append("poll")
+        raise CommandError(refused)
+
+    monkeypatch.setattr(notifications, "run", run)
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    plugin = GitHubPlugin()
+    for minutes in (0, 0, 1, 2):
+        assert not plugin.changed(ChangedRequest(_context(db, minutes), Graph([])))
+    assert calls == ["poll", "poll", "poll"]  # not again within the minute
+    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
+        f"can't read GitHub notifications: {refused}"
+    ]
+
+
+def test_searching_everywhere_hears_of_every_owners_prs(monkeypatch: pytest.MonkeyPatch) -> None:
+    answers = [
+        _answer(FIRST),
+        _answer(SECOND, _note("someone-else", "2026-10-30T12:01:30Z")),
+    ]
+
+    def run(args: list[str]) -> str:
+        return answers.pop(0)
+
+    monkeypatch.setattr(notifications, "run", run)
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    plugin = GitHubPlugin()
+    assert not plugin.changed(ChangedRequest(_context(db, search_scope="everywhere"), Graph([])))
+    found = plugin.changed(ChangedRequest(_context(db, 2, search_scope="everywhere"), Graph([])))
+    assert found
+    assert json.loads(KvRepository(db, "github").get(CHANGED) or "[]") == ["someone-else/widgets#7"]

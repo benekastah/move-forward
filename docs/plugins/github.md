@@ -11,10 +11,12 @@ Every `gh api` call goes there. `mfd init` fills it in from an Enterprise org's 
 git's `github_hosts` too, so git knows the server's remotes.
 
 `refresh_seconds` (300) is how often it refreshes in the background: GitHub's API is rate-limited.
-It also refreshes soon after I get a notification about something in the org (a review
-requested, a review, a comment, CI): it polls my notifications as often as GitHub allows
-(every 60 seconds, usually), and GitHub answers "not modified" cheaply when there's nothing
-new. And it refreshes within seconds of a commit or push on the local branch of one of my
+It also refreshes soon after I get a notification about something in the org (anyone's,
+with `search_scope = "everywhere"`): a review requested, a review, a comment, CI. It polls my
+notifications as often as GitHub allows (every 60 seconds, usually), and GitHub answers "not
+modified" cheaply when there's nothing new. A token that can't read notifications (a
+fine-grained one can't) logs a warning, and only the background refresh and pushes below
+refresh it. And it refreshes within seconds of a commit or push on the local branch of one of my
 open PRs: GitHub notifies nobody of their own pushes, so github watches git, and after each
 refresh of git it compares where `git.branch` entities for those PRs' heads stand (their
 commit, and how far ahead of or behind their upstream) with what it saw last. Other changes that notify nobody, like a PR falling into
@@ -182,8 +184,8 @@ notification unless a review, check, or commit changed.
 | `merge_queue_added` | someone else queues my PR (unsaid when GitHub's recent timeline doesn't say who) |
 | `merge_queue_removed` | my PR leaves the queue without merging, with GitHub's reason |
 | `thread_reply` | a review thread on my PR, or one I reviewed, gains comments |
-| `review_requested_me` | a review is requested of me, including asked again |
-| `review_requested_team` | a review is requested of my team |
+| `review_requested_me` | a review is requested of me, including asked again, after my team was, or while a draft once it's ready |
+| `review_requested_team` | a review is requested of my team (while a draft: once it's ready), unless I'm asked too |
 | `new_push` | new commits on a PR I reviewed |
 | `author_replied` | the author comments on a PR I reviewed |
 

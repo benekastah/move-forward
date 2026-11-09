@@ -1,5 +1,7 @@
 """github telling that a branch of one of my PRs moved, from git's branches in the graph."""
 
+import subprocess
+
 import pytest
 from conftest import NOW, local_branch, local_snapshot, pr, snapshot, stored
 
@@ -10,6 +12,7 @@ from move_forward.plugins.github.plugin import CHANGED, GitHubPlugin
 from move_forward.refresh import stored_graph
 from move_forward.registry import enabled
 from move_forward.repositories import KvRepository
+from move_forward.shell import CommandError
 
 
 def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
@@ -46,3 +49,36 @@ def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
     assert not changed_after(  # someone else's branch isn't my PR's
         local_branch(mine.head, sha="b", ahead=1), local_branch("theirs", sha="c")
     )
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        CommandError("gh api: HTTP 403: Resource not accessible by personal access token"),
+        subprocess.TimeoutExpired(["gh", "api"], 120),
+    ],
+)
+def test_a_push_counts_when_the_notifications_cant_be_read(
+    monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    def refused(host: str, if_modified_since: str | None) -> None:
+        raise failure
+
+    monkeypatch.setattr(notifications, "fetch", refused)
+    mine = pr(1)
+    config, db = stored(
+        github=snapshot(mine=[mine]),
+        local=local_snapshot(branches=[local_branch(mine.head, sha="a", ahead=1)]),
+    )
+
+    def changed() -> bool:
+        plugins = enabled(config, db, NOW)
+        github = next(e for e in plugins if e.name == "github")
+        return bool(
+            GitHubPlugin().changed(ChangedRequest(github.ctx, stored_graph(db, plugins)[0]))
+        )
+
+    assert not changed()  # the first look notes where things stand
+    LocalRepository(db).replace(local_snapshot(branches=[local_branch(mine.head, ahead=0)]))
+    assert changed()
+    assert KvRepository(db, "github").get(CHANGED) == '["acme/widgets#1"]'
