@@ -91,14 +91,11 @@ Subscribe under Notifications on `/settings` (or `[notifications] subscribe` as
 | Kind | When |
 | --- | --- |
 | `assigned` | a ticket appears among my open tickets |
-| `comment_added` | someone but me comments on one |
-| `mentioned` | someone mentions me in a comment (said instead of `comment_added`) |
 | `priority_raised` | its priority goes up in the order of `priorities` |
 | `unblocked` | the last unfinished ticket blocking it is done |
 | `closeable` | its PRs are merged, so the transitions panel proposes closing it |
 
 `priorities` (`["Lowest", "Low", "Medium", "High", "Highest"]`) lists Jira's priority names
-lowest first; one not listed is never counted as raised. Comments come with the search (the
-latest ten per ticket are kept), and my account id from `/myself` tells mine from others'.
-A flagged (impediment) ticket isn't told: Jira's flag is a custom field whose id differs by
-site.
+lowest first; one not listed is never counted as raised. Comments and mentions aren't told:
+Jira tells of those itself (through Slack, for one). A flagged (impediment) ticket isn't
+told: Jira's flag is a custom field whose id differs by site.
