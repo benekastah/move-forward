@@ -204,16 +204,39 @@ def test_push_of_a_branch_tracking_a_local_one_goes_to_the_remote_not_into_it(
     git(repo, "switch", "-q", "feat")
     _commit(repo, "c.txt")
     git(repo, "switch", "-q", "main")
+    assert _branch(repo, "feat").upstream is None  # not "unpushed" against a local branch
     main_before = git(repo, "rev-parse", "main")
     assert run("git/push_branch", config, {"repo": str(repo), "branch": "feat"}) == "pushed feat"
     assert git(repo, "rev-parse", "main") == main_before  # main didn't move
     assert git(repo, "rev-parse", "origin/feat") == git(repo, "rev-parse", "feat")
-    [feat] = [
-        b
-        for b in client.collect_repo(repo, "me@x", datetime.now(UTC), 30, []).branches
-        if b.name == "feat"
-    ]
-    assert (feat.upstream, feat.ahead) == (None, 0)  # not "unpushed" against a local branch
+    pushed = _branch(repo, "feat")
+    assert (pushed.upstream, pushed.ahead) == ("origin/feat", 0)  # counted against its copy
+
+
+def _branch(repo: Path, name: str) -> Branch:
+    """The branch as git's collect reads it."""
+    collected = client.collect_repo(repo, "me@x", datetime.now(UTC), 30, [])
+    return next(b for b in collected.branches if b.name == name)
+
+
+def test_push_of_a_branch_tracking_a_local_one_with_nowhere_to_go_is_refused(
+    config: Config, repo: Path
+) -> None:
+    git(repo, "remote", "remove", "origin")
+    git(repo, "branch", "-q", "--track", "feat", "main")
+    with pytest.raises(ActionError, match="tracks a local branch"):
+        run("git/push_branch", config, {"repo": str(repo), "branch": "feat"})
+
+
+def test_delete_refuses_a_branch_moved_since_the_page_showed_it(config: Config, repo: Path) -> None:
+    shown = git(repo, "rev-parse", "done").strip()
+    git(repo, "switch", "-q", "done")
+    _commit(repo, "after.txt")
+    git(repo, "switch", "-q", "main")
+    with pytest.raises(ActionError, match="moved since the page showed it"):
+        run("git/delete_branch", config, {"repo": str(repo), "branch": "done", "sha": shown})
+    notice = run("git/delete_branches", config, {"targets": f"{repo}\tdone\t{shown}"})
+    assert "moved since" in notice and git(repo, "branch", "--list", "done").strip()
 
 
 def test_a_branch_whose_upstream_is_gone_counts_what_isnt_on_the_default_branch(

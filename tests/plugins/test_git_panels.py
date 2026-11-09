@@ -138,11 +138,13 @@ def test_cleanup_lists_merged_and_gone_branches() -> None:
     assert [
         a.fields for item in cleanup.items for a in item.actions if a.name == "git/delete_branch"
     ] == [
-        {"repo": "/src/widgets", "branch": "me/done"},
-        {"repo": "/src/widgets", "branch": "me/gone"},
+        {"repo": "/src/widgets", "branch": "me/done", "sha": MERGED_TIP},
+        {"repo": "/src/widgets", "branch": "me/gone", "sha": ""},
     ]
     assert cleanup.actions[0].name == "git/delete_branches"
-    assert cleanup.actions[0].fields["targets"] == "/src/widgets\tme/done\n/src/widgets\tme/gone"
+    assert cleanup.actions[0].fields["targets"] == (
+        f"/src/widgets\tme/done\t{MERGED_TIP}\n/src/widgets\tme/gone\t"
+    )
     assert cleanup.actions[0].confirm is not None
 
 
@@ -336,7 +338,9 @@ def test_a_checkout_of_a_pr_that_moved_on_github_is_shown_without_fetching() -> 
 
 
 def test_a_gone_branch_has_a_subject_so_deleting_it_can_hide_its_act_now_item() -> None:
-    local = local_snapshot(branches=[local_branch("me/gone", upstream="origin/me/gone", gone=True)])
+    local = local_snapshot(
+        branches=[local_branch("me/gone", upstream="origin/me/gone", gone=True, ahead_of_default=0)]
+    )
     dashboard = build(github=snapshot(), local=local)
     act = panel(dashboard, "act.git")
     delete = next(a for a in act.items[0].actions if a.name == "git/delete_branch")
@@ -351,6 +355,7 @@ def test_a_branch_with_work_not_merged_is_listed_to_check_not_to_delete_with_the
             local_branch("main"),
             local_branch("me/done", upstream="origin/me/done", sha="b" * 40),  # committed since
             local_branch("me/gone", upstream="origin/me/gone", gone=True, ahead_of_default=2),
+            local_branch("me/unknown", upstream="origin/me/unknown", gone=True),
         ]
     )
     dashboard = build(github=snapshot(merged_recent=[merged, mine]), local=local)
@@ -358,13 +363,14 @@ def test_a_branch_with_work_not_merged_is_listed_to_check_not_to_delete_with_the
     assert [(i.title, i.badges) for i in cleanup.items] == [
         ("me/done: PR merged 1d ago", ["check first"]),
         ("me/gone: upstream gone", ["check first"]),
+        ("me/unknown: upstream gone", ["check first"]),
     ]
-    assert "commits its merged PR didn't have" in (cleanup.items[0].subtitle or "")
+    assert "another commit than the one that merged" in (cleanup.items[0].subtitle or "")
     confirms = [
         a.confirm for i in cleanup.items for a in i.actions if a.name == "git/delete_branch"
     ]
-    assert all(c and "they're lost with it" in c for c in confirms)
+    assert all(c and "lost with it" in c for c in confirms)
     assert "2 of its commits aren't on main" in (confirms[1] or "")
     assert cleanup.actions == []  # Delete all takes only what's safe to lose
-    act = dashboard.act_now()
-    assert all("quick" not in i.details for i in act)
+    assert all(i.deferred for i in cleanup.items)
+    assert dashboard.act_now() == []  # nothing in Cleanup is a quick delete here

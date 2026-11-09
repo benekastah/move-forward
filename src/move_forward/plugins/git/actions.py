@@ -74,10 +74,14 @@ def _check_deletable(graph: Graph, repo: Path, branch: str) -> None:
 
 
 def delete_branch(req: ActionRequest[GitConfig]) -> str:
+    """`git branch -D`, refused where `_check_deletable` says, or when it no longer points at
+    `sha`, the commit the page judged safe to lose: one made since would be lost unseen."""
     ctx, graph = req.ctx, req.graph
     repo = repo_path(ctx.config, req.field("repo"))
     branch = req.field("branch")
     _check_deletable(graph, repo, branch)
+    if (sha := req.fields.get("sha")) and git(repo, "rev-parse", branch).strip() != sha:
+        raise ActionError(f"{branch} has moved since the page showed it: look again")
     git(repo, "branch", "-D", branch)
     return f"deleted {branch} in {repo}"
 
@@ -137,16 +141,21 @@ def restore_together(req: ActionRequest[GitConfig]) -> str:
 
 
 def delete_branches(req: ActionRequest[GitConfig]) -> str:
-    """Delete every `<repo>\\t<branch>` line of `targets`; one failure doesn't stop the rest."""
+    """Delete every `<repo>\\t<branch>\\t<sha>` line of `targets`, each only while it's at that
+    commit (see `delete_branch`; a line without one isn't checked so); one failure doesn't stop
+    the rest."""
     ctx, graph, fields = req.ctx, req.graph, req.fields
     done: list[str] = []
     failed: list[str] = []
     for line in fields.get("targets", "").splitlines():
-        repo_dir, branch = branch_parts(line)
+        target, sha = line.rsplit("\t", 1) if line.count("\t") >= 2 else (line, "")
+        repo_dir, branch = branch_parts(target)
         if not branch:
             continue
         try:
-            delete_branch(ActionRequest(ctx, graph, {"repo": repo_dir, "branch": branch}))
+            delete_branch(
+                ActionRequest(ctx, graph, {"repo": repo_dir, "branch": branch, "sha": sha})
+            )
             done.append(branch)
         except (ActionError, CommandError) as e:
             failed.append(f"{branch}: {e}")

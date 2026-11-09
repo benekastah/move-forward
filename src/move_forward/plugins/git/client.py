@@ -90,6 +90,16 @@ def parse_branches(for_each_ref: str) -> list[Branch]:
     return branches
 
 
+def local_tracking(for_each_ref: str) -> set[str]:
+    """The branches tracking a local branch (`--track main`), in `for-each-ref`'s output with
+    `_FOR_EACH_REF_FORMAT`."""
+    return {
+        fields[0]
+        for line in for_each_ref.splitlines()
+        if len(fields := line.split("\t")) >= 6 and fields[5] == "."
+    }
+
+
 def github_repo(remote_url: str, hosts: Sequence[str] = GITHUB_HOSTS) -> str | None:
     """The `owner/name` of a remote on one of `hosts` (as the remote names it: github.com,
     an Enterprise server, or an SSH alias for either); None for any other remote."""
@@ -234,9 +244,9 @@ def collect_repo(
         modified, untracked = worktree_status(Path(path))
         worktrees.append(Worktree(path=path, branch=branch, modified=modified, untracked=untracked))
 
-    branches = parse_branches(
-        git(repo, "for-each-ref", "refs/heads", f"--format={_FOR_EACH_REF_FORMAT}")
-    )
+    refs = git(repo, "for-each-ref", "refs/heads", f"--format={_FOR_EACH_REF_FORMAT}")
+    tracking = local_tracking(refs)
+    branches = [_pushed_copy(repo, b) if b.name in tracking else b for b in parse_branches(refs)]
     recent = now - timedelta(days=commit_history_days)
     try:
         repo_email = my_email(repo)  # a repo can have its own, e.g. a personal project's
@@ -275,6 +285,23 @@ def collect_repo(
         branches=with_counts,
         my_dirs=_my_dirs(repo, found.default_refs, email, commit_history_days),
     )
+
+
+def _pushed_copy(repo: Path, branch: Branch) -> Branch:
+    """A branch tracking a local one, counted against its copy on the remote Push sends it to
+    (`<remote>/<branch>`) once there is one; as it is (no upstream) before."""
+    remote = push_remote(repo, branch.name)
+    copy = f"{remote}/{branch.name}"
+    if remote is None or not _ref_exists(repo, f"refs/remotes/{copy}"):
+        return branch
+    ahead, behind = git(
+        repo,
+        "rev-list",
+        "--left-right",
+        "--count",
+        f"refs/heads/{branch.name}...refs/remotes/{copy}",
+    ).split()
+    return branch.model_copy(update={"upstream": copy, "ahead": int(ahead), "behind": int(behind)})
 
 
 def _my_commits(repo: Path, default_refs: list[str], branch: str, email: str) -> int | None:

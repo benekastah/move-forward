@@ -222,8 +222,10 @@ class Builder:
         targets: list[str] = []
         for repo in self.local.repos if self.local else []:
             for b in repo.branches:
+                # Never the default branch, even when a PR from my fork's merged; nor one
+                # git-stack's Clean takes, which untracks it as it deletes it.
                 if b.name == repo.default_branch or self._stack_cleans(repo, b):
-                    continue  # a PR from my fork's default branch merged: the branch stays
+                    continue
                 merged = self._pr(repo.dir, b.name, "merged")
                 if merged:
                     when = datetime.fromisoformat(merged.merged_at) if merged.merged_at else None
@@ -233,7 +235,7 @@ class Builder:
                     risk = (
                         None
                         if b.sha is not None and b.sha == merged.head_oid
-                        else "it has commits its merged PR didn't have"
+                        else "it points at another commit than the one that merged"
                     )
                 elif b.gone and self._is_my_branch(repo.dir, b):
                     title = f"{b.name}: upstream gone"
@@ -243,33 +245,30 @@ class Builder:
                         if b.ahead_of_default == 0
                         else f"{b.ahead_of_default} of its commits aren't on {repo.default_branch}"
                         if b.ahead_of_default
-                        else "what of it is on the default branch isn't known"
+                        else "whether its commits are on the default branch isn't known"
                     )
                 else:
                     continue
                 if risk is None:
-                    targets.append(branch_id(repo.dir, b.name))
+                    targets.append(f"{branch_id(repo.dir, b.name)}\t{b.sha or ''}")
                 items.append(
                     Item(
                         title=title,
                         url=merged.url if merged else None,
                         subtitle=subtitle if risk is None else f"{subtitle} · {risk}",
                         badges=["git branch -D"] if risk is None else ["check first"],
-                        # Not a quick delete: what's on it may be the only copy.
-                        signals=None
-                        if risk is None
-                        else Signals(
-                            verb="Look at the branch, then delete it", task="delete_the_branch"
-                        ),
+                        # Not a quick delete for Act now: what's on it may be the only copy, and
+                        # a squash-merged branch would stay there for good.
+                        deferred=risk is not None,
                         actions=[
                             action(
                                 "delete_branch",
                                 "Delete",
-                                {"repo": repo.dir, "branch": b.name},
+                                {"repo": repo.dir, "branch": b.name, "sha": b.sha or ""},
                                 confirm=f"Delete local branch {b.name}?"
                                 if risk is None
                                 else f"Delete local branch {b.name}? {risk[0].upper()}{risk[1:]}:"
-                                " they're lost with it unless they're somewhere else.",
+                                " commits only on it are lost with it.",
                                 group="Disposition",
                                 icon="🗑️",
                             )
