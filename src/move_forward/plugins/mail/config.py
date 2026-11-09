@@ -190,6 +190,12 @@ class MailConfig(Strict):
 
     @model_validator(mode="after")
     def _complete(self) -> Self:
+        if self.accounts and not self.host and self.auth_servers is not None:
+            # They're for [mail]'s host: an account on its own keeps to its own.
+            raise ValueError(
+                "[mail] sets auth_servers but no host, so no account takes them: set them in each"
+                " account, or give [mail] the host they're for"
+            )
         if self.accounts and self.username:
             # Its own mailbox would stop being read, unnoticed, once accounts come.
             raise ValueError(
@@ -241,7 +247,7 @@ class MailConfig(Strict):
             message_url=said(account.message_url, self.message_url),
             # Whose results headers count depends on the server: another trusts its own.
             auth_servers=account.auth_servers
-            if account.auth_servers is not None or host != self.host
+            if account.auth_servers is not None or host.lower() != self.host.lower()
             else self.auth_servers,
             # A password is never shared: an account's isn't [mail]'s.
             token_env=account.token_env or f"{DEFAULT_MAIL_TOKEN_ENV}_{name.upper()}"

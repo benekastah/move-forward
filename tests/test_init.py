@@ -412,3 +412,20 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
         and not (_tables(plugin.config_model.model_fields[key]) and f"[{plugin.name}." in shown)
     ]
     assert missing == []
+
+
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
+def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, Any]) -> None:
+    """Uncommenting `mfd init --example`'s section for a plugin gives a section it accepts; what
+    is instead of something else in it stays commented, behind `##`."""
+    lines = cli.EXAMPLE_CONFIG.splitlines()
+    header = re.compile(r"^(# )?\[([a-z_]+)\]")
+    start = next(
+        (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),
+        None,
+    )
+    if start is None:
+        return  # no section to give (notes: always on)
+    end = next((n for n in range(start + 1, len(lines)) if header.match(lines[n])), len(lines))
+    text = "\n".join(line.removeprefix("# ") for line in lines[start:end])
+    plugin.config_model.model_validate(tomllib.loads(text)[plugin.name])

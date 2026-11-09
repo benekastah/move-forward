@@ -1044,6 +1044,7 @@ def test_each_sub_table_is_an_account_taking_from_mail_what_it_leaves_out() -> N
         ({"work": {"host": "imap.work.example"}}, r"\[mail.work\] needs a host and a username"),
         ({**SECTION, "work": WORK}, r"\[mail\] has accounts, so its username names no mailbox"),
         ({**SHARED, "Work": WORK}, "lower-case letters"),
+        ({"auth_servers": ["mx.example.com"], "work": WORK}, "no account takes them"),
         ({**SHARED, "work": {**WORK, "since_days": 3}}, "since_days"),  # [mail]'s alone
     ],
 )
@@ -1192,16 +1193,21 @@ def test_an_account_on_its_own_server_trusts_only_its_own_results() -> None:
     assert work.trusted_auth_servers() == set()  # imap.work.example's are unknown
 
 
-@pytest.mark.parametrize(("home", "work"), [(False, False), (True, False), (False, True)])
-def test_a_copy_merges_only_when_both_senders_are_verified(home: bool, work: bool) -> None:
+@pytest.mark.parametrize(
+    ("home", "work", "found"),
+    [
+        (True, True, [("home", True)]),
+        (False, False, [("home", False), ("work", True)]),
+        (True, False, [("home", False), ("work", True)]),
+        (False, True, [("home", False), ("work", True)]),
+    ],
+)
+def test_a_copy_merges_only_when_both_senders_are_verified(
+    home: bool, work: bool, found: list[tuple[str, bool]]
+) -> None:
     first = message(1, account="home", verified=home)
     copy = message(1, account="work", verified=work, flagged=True)
-    assert [(m.account, m.flagged) for m in merged([first], [copy])] == [
-        ("home", False),
-        ("work", True),
-    ]
-    both = merged([message(1, account="home")], [message(1, account="work", flagged=True)])
-    assert [(m.account, m.flagged) for m in both] == [("home", True)]
+    assert [(m.account, m.flagged) for m in merged([first], [copy])] == found
 
 
 def test_an_account_on_mails_own_host_keeps_mails_auth_servers() -> None:
@@ -1214,3 +1220,5 @@ def test_an_account_on_mails_own_host_keeps_mails_auth_servers() -> None:
         }
     )
     assert [m.trusted_auth_servers() for m in config.mailboxes()] == [{"mx.example.com"}] * 2
+    cased = config.model_copy(update={"host": "IMAP.Example.com"})
+    assert [m.trusted_auth_servers() for m in cased.mailboxes()] == [{"mx.example.com"}] * 2

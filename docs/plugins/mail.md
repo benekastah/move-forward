@@ -98,9 +98,8 @@ Each has its own password, never `[mail]`'s: `mfd token set mail.work` stores it
 `keychain_service`). A conversation is one item whichever mailboxes have it, linked by the
 mailbox of its latest message, and a message in two (sent to both addresses) counts once, as
 the first mailbox's, flagged, to me, replying to me, from someone I know or important if either
-copy is. Only copies whose sender each server verified merge, as anyone can write a `From`
-and a Message-ID: one neither can verify is shown once per mailbox. Nothing is merged within
-one mailbox. Each mailbox's sent mail
+copy is. Only copies whose sender both servers verified merge, as anyone can write a `From`
+and a Message-ID: any other is shown once per mailbox. Nothing is merged within one mailbox. Each mailbox's sent mail
 says whom I know and what answers me for its own mail. A mailbox that fails to sign in fails the refresh, keeping
 what was read last.
 
