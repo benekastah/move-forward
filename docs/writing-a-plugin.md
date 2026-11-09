@@ -192,12 +192,13 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   same when this refresh didn't fetch it) and the graph before it and now
   (`req.previous_graph`, `req.graph`), and returns an `Event` for what became true: its
   `thing` (the plugin's events with the same one are told together; core keeps it as
-  `<plugin>:<thing>`, so another plugin's events about one URL stay apart), `title`, `text`, and `anchor` (an
-  item's `page.anchor(kind, id)`, to open the dashboard at it). Say it on a change of state,
-  not while it holds, and nothing about what `before` has no state for. What's news because
-  it's newly in a panel needs no `events`: the item says so (`Item.notify`, under Panels). It isn't asked before the plugin's first snapshot, which has
-  nothing to compare with; after a restart, "before" is what was stored when the dashboard
-  stopped. A failure is logged and the refresh goes on.
+  `<plugin>:<thing>`, so another plugin's events about one URL stay apart), `title`, `text`,
+  and `anchor` (an item's `page.anchor(kind, id)`, to open the dashboard at it). Say it on a
+  change of state, not while it holds, and nothing about what `before` has no state for.
+  `events` isn't asked before the plugin's first snapshot, which has nothing to compare
+  with; after a restart, "before" is what was stored when the dashboard stopped. A failure
+  is logged and the refresh goes on. What's news because it's newly in a panel needs no
+  `events`: the item says so (`Item.notify`, under Panels).
 - `after_collect(req)` runs after every refresh, for work that needs the graph and
   writes the plugin's tables, e.g. notes finding what its ice covers.
 

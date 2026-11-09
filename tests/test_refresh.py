@@ -439,8 +439,39 @@ def test_a_plugins_events_and_its_panels_notifications_fail_apart(
     assert _told(db) == _MERGE_TOLD
 
 
-def test_a_refresh_stopping_still_tells_what_it_stored(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The next start compares with what this one stored, so it's told now or never."""
+def test_an_item_newly_shown_by_its_plugins_own_refresh_is_told_by_that_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """git's branch loses its upstream: the refresh that fetched that shows it in Cleanup, and
+    tells so then, not a refresh later."""
+    tracked = local_branch("me/gone", upstream="origin/me/gone")
+    gone = local_branch("me/gone", upstream="origin/me/gone", gone=True)
+    fetched = [local_snapshot(branches=[tracked]), local_snapshot(branches=[gone])]
+    _, db = stored(local=fetched[0])
+    config = Config.model_validate(
+        {
+            "email": "me@acme.com",
+            "git": {"repos": []},
+            "notifications": {"subscribe": ["git.branch_deletable"]},
+        }
+    )
+
+    def git_now(self: GitPlugin, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+        return fetched.pop(0)
+
+    monkeypatch.setattr(_Git, "collect", git_now)
+    refresh.refresh(config, db, NOW)
+    assert _told(db) == []
+    refresh.refresh(config, db, NOW)
+    assert _told(db) == [("me/gone: upstream gone", "can be deleted")]
+
+
+def test_a_refresh_that_sees_the_dashboard_stopping_still_tells_what_it_stored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The next start compares with what this one stored, so it's told now or never. Only
+    when the refresh gets this far: on the server's own shutdown its daemon thread may be
+    frozen first (see `refresh`)."""
     merged = snapshot(merged_recent=[_MERGED])
     subscribe = ["github.pr_merged", "git.branch_deletable"]
     config, db = _merging(monkeypatch, subscribe, snapshot(mine=[_OPEN]), merged)

@@ -265,7 +265,10 @@ def refresh(
     the graph is built again, the plugins' events found against what held before, the daily
     prune runs if due, and `after_collect` runs for the plugins collected and those that
     collect nothing (they work from the others' data). When the dashboard is stopping, it
-    collects no more, but still finds the events of what it stored, and ends there."""
+    collects no more, but still finds the events of what it stored, and ends there, as long as
+    it gets that far: the server runs it in a daemon thread, which its own shutdown may freeze
+    first, and then that refresh's events are lost (the next start compares with what it
+    stored). Run outside that thread (`mfd refresh`, a test), it always gets that far."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     before = before_refresh(db, plugins)
@@ -284,7 +287,7 @@ def refresh(
         graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
     _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)
-    if shell.stopping():  # what was stored is told, as the next start compares with it
+    if shell.stopping():  # what was stored is told above, if the thread got that far
         return
     _dashboard_events(config, db, plugins, set(config.notifications.subscribe), now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
