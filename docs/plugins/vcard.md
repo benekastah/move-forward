@@ -32,8 +32,8 @@ A group is a card's category (`CATEGORIES`), or a group's own card naming its me
 `X-ADDRESSBOOKSERVER-KIND` (what iCloud syncs). Only a person's card (no `KIND`, or
 `KIND:individual`) gives contacts: not a group's, an organisation's (or Apple's company card,
 `X-ABShowAs:COMPANY`), a place's or any other kind's. It reads vCard 4, 3 and 2.1
-(quoted-printable values too); of a card, only its name, addresses, categories, `UID` and
-kind.
+(quoted-printable values too); of a card, only its name, addresses, categories, `UID`, kind
+and a group's members.
 
 ## Publishes
 

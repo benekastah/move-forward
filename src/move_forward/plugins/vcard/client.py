@@ -31,7 +31,8 @@ class Card:
     emails: list[str] = field(default_factory=list[str])
     categories: list[str] = field(default_factory=list[str])
     kind: str = "individual"
-    """Its `KIND`, lower-case: a person's card unless it says otherwise."""
+    """Its `KIND`, lower-case (`org` for Apple's `X-ABShowAs:COMPANY` too): a person's card
+    unless it says otherwise."""
     members: list[str] = field(default_factory=list[str])
     """A group's members, by their `UID` or address (`mailto:`)."""
 
@@ -124,17 +125,22 @@ def decode(raw: bytes) -> str:
 def _decoded_lines(lines: list[bytes], i: int) -> tuple[str, int]:
     """Line `i` decoded, and the index of the next line to read: UTF-8, joined with the lines
     folded after it while it ends cut inside a character, else Windows-1252 alone."""
-    joined, j = lines[i], i + 1
-    while True:
-        body = joined.removesuffix(b"\r")  # the CR of a CRLF ends it, not a character
-        try:
-            return body.decode("utf-8") + ("\r" if body != joined else ""), j
-        except UnicodeDecodeError as e:
-            cut = e.reason == "unexpected end of data"
-            if not cut or j >= len(lines) or lines[j][:1] not in (b" ", b"\t"):
-                return lines[i].decode("cp1252", errors="replace"), i + 1
-        joined = body + lines[j][1:]
-        j += 1
+    decoder = codecs.getincrementaldecoder("utf-8")()  # each byte read once, however folded
+    parts: list[str] = []
+    line, j = lines[i], i
+    try:
+        while True:
+            body = line.removesuffix(b"\r")  # the CR of a CRLF ends it, not a character
+            parts.append(decoder.decode(body))
+            j += 1
+            if not decoder.getstate()[0]:  # it ends on a whole character
+                return "".join(parts) + ("\r" if body != line else ""), j
+            if j >= len(lines) or lines[j][:1] not in (b" ", b"\t"):
+                break
+            line = lines[j][1:]
+    except UnicodeDecodeError:
+        pass
+    return lines[i].decode("cp1252", errors="replace"), i + 1
 
 
 def _uid(text: str) -> str:
