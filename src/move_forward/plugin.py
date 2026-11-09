@@ -472,6 +472,14 @@ class Plugin[C: BaseModel, S: BaseModel]:
     commented out because the plugin wasn't chosen."""
     init_finds_teams: ClassVar[bool] = False
     """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
+    locked_settings: ClassVar[frozenset[str]] = frozenset()
+    """Its settings the settings page shows but won't change, as they say where a credential
+    goes (a site, a host) or what runs where. Its token's `token_env` and `keychain_service`
+    are locked without naming them; settings its `token_settings` reads a token's place from
+    under other names, or builds it from, it names here."""
+    token_help: ClassVar[str] = ""
+    """`mfd init`'s next step for its token(s), in place of the plain "`mfd token set <name>`
+    stores its token": where to get one, or another way in (signing in in the browser)."""
 
     @property
     def collects(self) -> bool:

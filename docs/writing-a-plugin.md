@@ -99,9 +99,14 @@ class LinearConfig(Strict):
   on the first tab) or `asking.directories`. Keep the questions and guesses in a
   `setup.py` (see github's), with `init_template` (the optional keys, commented) and `init_example` (the
   required ones, commented, written when the plugin isn't chosen).
+- Settings that say where a credential goes (a site, a host) are named in `locked_settings`,
+  so the settings page, reached with the dashboard's cookie, shows them without changing them;
+  `token_env` and `keychain_service` are locked already; a section keeping its token's place
+  under other names, or building it from other settings, names those too.
 - Secrets never go in the config. Give the section `token_env` and `keychain_service`, as
   jira and slack do, and read the token with `keychain.token(config, email)`: then
-  `mfd token set <plugin>` stores it and `mfd token check` finds it (a section that keeps
+  `mfd token set <plugin>` stores it and `mfd token check` finds it; `token_help` is `mfd
+  init`'s next step for it, saying where to get one (a section that keeps
   them under other names overrides `token_settings(config)`, returning an
   `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
   (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading

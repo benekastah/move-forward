@@ -3,10 +3,16 @@
 import sys
 import tomllib
 from pathlib import Path
-from typing import cast
+from typing import ClassVar, cast
+
+import pytest
+from pydantic import BaseModel
 
 from move_forward import config as config_module
-from move_forward import settings
+from move_forward import registry, settings
+from move_forward.keychain import TokenSettings
+from move_forward.plugin import API_VERSION, Plugin
+from move_forward.strict import Strict
 
 TEXT = """\
 # my config
@@ -175,3 +181,64 @@ def test_where_mails_password_goes_and_where_its_items_link_are_read_only() -> N
     )
     locked = {s.key for s in settings.settings(config) if s.section == "mail" and s.locked}
     assert locked == {"host", "port", "token_env", "keychain_service", "message_url"}
+
+
+class _SiteConfig(Strict):
+    site: str = "https://x"
+    token_env: str = "SITE_TOKEN"
+    keychain_service: str = "move-forward-site"
+    page_size: int = 50
+
+
+class _SitePlugin(Plugin[_SiteConfig, BaseModel]):
+    """A plugin of its own, from another package, locking its site."""
+
+    name = "site"
+    config_model = _SiteConfig
+    api_version = API_VERSION
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"site"})
+
+
+def test_a_plugin_of_its_own_says_which_settings_stay_in_the_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _SitePlugin()])
+    config = config_module.Config.model_validate({"email": "me@x", "site": {}})
+    locked = {s.key: s.locked for s in settings.settings(config) if s.section == "site"}
+    assert locked == {"site": True, "token_env": True, "keychain_service": True, "page_size": False}
+
+
+class _ElsewhereConfig(Strict):
+    secret_env: str = "ELSEWHERE_TOKEN"
+    secret_service: str = "move-forward-elsewhere"
+
+
+class _ElsewhereSettings:
+    def __init__(self, config: _ElsewhereConfig) -> None:
+        self.token_env = config.secret_env
+        self.keychain_service = config.secret_service
+
+
+class _ElsewherePlugin(Plugin[_ElsewhereConfig, BaseModel]):
+    """A plugin keeping its token's settings under names of its own, which it names."""
+
+    name = "elsewhere"
+    config_model = _ElsewhereConfig
+    api_version = API_VERSION
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"secret_env", "secret_service"})
+
+    def token_settings(self, config: _ElsewhereConfig) -> TokenSettings | None:
+        return _ElsewhereSettings(config)
+
+
+def test_settings_a_plugin_names_stay_in_the_file_and_save_leaves_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _ElsewherePlugin()])
+    path = tmp_path / "config.toml"
+    path.write_text('email = "me@x"\n\n[elsewhere]\n', encoding="utf-8")
+    config = config_module.load(path)
+    locked = {s.key for s in settings.settings(config) if s.section == "elsewhere" and s.locked}
+    assert locked == {"secret_env", "secret_service"}
+    settings.save(path, config, {"elsewhere:secret_env": "OTHER_TOKEN"})
+    assert "OTHER_TOKEN" not in path.read_text(encoding="utf-8")

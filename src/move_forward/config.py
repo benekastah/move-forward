@@ -16,7 +16,6 @@ from .act_now import ActNowConfig
 from .db import DEFAULT_KEEP_BACKUPS
 from .notifications import NotificationsConfig
 from .people import PeopleConfig
-from .plugins.notes.config import IMPORT_ONCE
 from .strict import Strict
 
 BASE_DIR = Path("~/.config/move-forward")
@@ -141,7 +140,10 @@ class Config(Strict):
             if key in MOVED_SETTINGS
         ]
         if "notes_dir" in settings:
-            moved.append(f"`notes_dir` is gone; {IMPORT_ONCE}")
+            moved.append(
+                "`notes_dir` is gone; the notes live in the database now: import them once with"
+                " `mfd notes import <dir>`"
+            )
         if "refresh_seconds" in settings:
             moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")
         plugins = [p.name for p in registry.PLUGINS]
