@@ -12,8 +12,9 @@ from .config import VcardConfig
 from .models import Contact, VcardSnapshot
 
 SUFFIX = ".vcf"
-_GROUP_KINDS = ("KIND", "X-ADDRESSBOOKSERVER-KIND")
-"""Where a card says it's a group: vCard 4's `KIND`, and Apple's (iCloud's CardDAV)."""
+_KINDS = ("KIND", "X-ADDRESSBOOKSERVER-KIND")
+"""Where a card says what it's of (a group, an organisation): vCard 4's `KIND`, and Apple's
+(iCloud's CardDAV)."""
 _MEMBERS = ("MEMBER", "X-ADDRESSBOOKSERVER-MEMBER")
 _UUID_URN = "urn:uuid:"
 
@@ -29,10 +30,15 @@ class Card:
     """`name` is its first `FN`, which later ones and its `N` don't replace."""
     emails: list[str] = field(default_factory=list[str])
     categories: list[str] = field(default_factory=list[str])
-    group: bool = False
-    """It's a group's card (`KIND:group`), naming its `members` by their `UID` or address
-    (`mailto:`)."""
+    kind: str = "individual"
+    """Its `KIND`, lower-case: a person's card unless it says otherwise."""
     members: list[str] = field(default_factory=list[str])
+    """A group's members, by their `UID` or address (`mailto:`)."""
+
+    @property
+    def group(self) -> bool:
+        """It's a group's card (`KIND:group`), naming its `members`."""
+        return self.kind == "group"
 
 
 def files(config: VcardConfig) -> list[Path]:
@@ -69,7 +75,7 @@ def collect(config: VcardConfig) -> VcardSnapshot:
     names: dict[str, str] = {}
     their_groups: dict[str, list[str]] = {}
     for card in cards:
-        if card.group:
+        if card.kind != "individual":  # a group, an organisation or a place: not a person
             continue
         named = [*card.categories, *(by_uid.get(_uid(card.uid), []) if card.uid else [])]
         for email in card.emails:
@@ -102,17 +108,34 @@ def _read(path: Path) -> str:
 
 def decode(raw: bytes) -> str:
     """A file's text: UTF-16 by its byte-order mark, else each line UTF-8 or, failing that
-    (2.1's raw 8-bit values, as old exports write them), Windows-1252."""
+    (2.1's raw 8-bit values, as old exports write them), Windows-1252. A line folded inside a
+    character, as RFC 6350 says simple writers do, is unfolded to read it as UTF-8."""
     if raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
         return raw.decode("utf-16", errors="replace")
-    return "\n".join(_decoded_line(line) for line in raw.removeprefix(codecs.BOM_UTF8).split(b"\n"))
-
-
-def _decoded_line(line: bytes) -> str:
-    try:
-        return line.decode("utf-8")
-    except UnicodeDecodeError:
-        return line.decode("cp1252", errors="replace")
+    lines = raw.removeprefix(codecs.BOM_UTF8).split(b"\n")
+    found: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
+        try:
+            found.append(line.decode("utf-8"))
+            continue
+        except UnicodeDecodeError:
+            pass
+        joined, j = line, i
+        while j < len(lines) and lines[j][:1] in (b" ", b"\t"):
+            joined = joined.removesuffix(b"\r") + lines[j][1:]
+            j += 1
+            try:
+                found.append(joined.decode("utf-8"))
+            except UnicodeDecodeError:
+                continue
+            i = j
+            break
+        else:
+            found.append(line.decode("cp1252", errors="replace"))
+    return "\n".join(found)
 
 
 def _uid(text: str) -> str:
@@ -163,7 +186,9 @@ def _read_property(card: Card, name: str, value: str) -> None:
             card.name, card.has_fn = fn, True
     elif name == "N" and not card.name:
         # Each part may be a list (`Jane,Ann`): its items are names too.
-        parts = [" ".join(_split(p, ",")) for p in _split_raw(value, ";")]
+        parts = [
+            " ".join(i.strip() for i in _split(p, ",") if i.strip()) for p in _split_raw(value, ";")
+        ]
         family, given, additional, prefix, suffix = [*parts, "", "", "", "", ""][:5]
         card.name = " ".join(p for p in (prefix, given, additional, family, suffix) if p.strip())
     elif name == "EMAIL":
@@ -174,8 +199,8 @@ def _read_property(card: Card, name: str, value: str) -> None:
         card.categories += [c.strip() for c in _split(value, ",") if c.strip()]
     elif name == "UID":
         card.uid = _unescape(value).strip() or None
-    elif name in _GROUP_KINDS:
-        card.group = card.group or value.strip().lower() == "group"
+    elif name in _KINDS:
+        card.kind = value.strip().lower() or card.kind
     elif name in _MEMBERS:
         card.members.append(value.strip())
 
@@ -242,15 +267,21 @@ def _unquoted_split(text: str, sep: str, limit: int = -1) -> list[str]:
 
 
 def _decoded(params: dict[str, str], value: str) -> str:
-    """A 2.1 value written quoted-printable, decoded by its `CHARSET` (UTF-8 if none)."""
+    """A 2.1 value written quoted-printable, decoded by its `CHARSET`; with none, UTF-8 or,
+    failing that, Windows-1252, as old exporters that leave it out write."""
     if (
         params.get("ENCODING", "").upper() != "QUOTED-PRINTABLE"
         and "QUOTED-PRINTABLE" not in params
     ):
         return value
     raw = quopri.decodestring(value.encode("ascii", errors="replace"))
+    if "CHARSET" not in params:
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return raw.decode("cp1252", errors="replace")
     try:
-        return raw.decode(params.get("CHARSET", "utf-8"), errors="replace")
+        return raw.decode(params["CHARSET"], errors="replace")
     except LookupError:
         return raw.decode("utf-8", errors="replace")
 

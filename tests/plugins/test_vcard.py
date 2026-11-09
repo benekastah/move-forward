@@ -187,6 +187,7 @@ def test_a_card_held_in_another_isnt_read_as_it() -> None:
 def test_the_first_fn_names_a_card_and_ns_lists_are_names() -> None:
     assert client.parse(card("FN:First", "FN:Second"))[0].name == "First"
     assert client.parse(card("N:Doe;Jane,Ann;;;"))[0].name == "Jane Ann Doe"
+    assert client.parse(card("N:Doe;Jane,;;;"))[0].name == "Jane Doe"  # an empty item adds nothing
 
 
 def test_an_address_takes_the_name_of_a_card_that_has_one(tmp_path: Path) -> None:
@@ -203,6 +204,11 @@ def test_a_file_is_read_by_its_encoding() -> None:
     mixed = card("FN:José", "EMAIL:j@acme.com").encode() + "FN:René\r\n".encode("cp1252")
     assert "José" in client.decode(mixed) and "René" in client.decode(mixed)
     assert client.decode(b"\xef\xbb\xbf" + text.encode()) == text
+    # A simple writer folds inside a character (RFC 6350 3.2): unfolded, it's UTF-8 again.
+    folded = b"BEGIN:VCARD\r\nFN:Jos\xc3\r\n \xa9 Garc\xc3\xada\r\nEND:VCARD\r\n"
+    assert client.parse(client.decode(folded))[0].name == "José García"
+    qp = b"BEGIN:VCARD\r\nVERSION:2.1\r\nFN;ENCODING=QUOTED-PRINTABLE:Jos=E9\r\nEND:VCARD\r\n"
+    assert client.parse(client.decode(qp))[0].name == "José"  # no CHARSET: Windows-1252
 
 
 def test_21_keeps_the_space_it_folds_at_and_later_versions_drop_it() -> None:
@@ -268,3 +274,12 @@ def test_an_agents_own_agent_is_skipped_too() -> None:
     )
     [found] = client.parse(text)
     assert (found.name, found.emails) == ("Boss", ["boss@acme.com"])
+
+
+def test_an_organisations_or_a_places_card_is_no_person(tmp_path: Path) -> None:
+    (tmp_path / "a.vcf").write_text(
+        card("KIND:org", "FN:Acme", "EMAIL:info@acme.com")
+        + card("KIND:location", "FN:Office", "EMAIL:office@acme.com")
+        + card("KIND:individual", "FN:Ann", "EMAIL:ann@acme.com")
+    )
+    assert [c.email for c in client.collect(config(tmp_path)).contacts] == ["ann@acme.com"]

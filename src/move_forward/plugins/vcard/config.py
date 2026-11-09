@@ -33,7 +33,8 @@ class VcardConfig(Strict):
     group_types: dict[str, str] = Field(default_factory=dict[str, str])
     """What the people in a group are to me, a contact type (see `[people] contact_types`), by
     the group's name, ignoring case, e.g. `{Clients = "customer"}`: the first listed of their
-    groups'. A type I set on someone beats it."""
+    groups'. A type I set on someone beats it. A type starts with a letter, then up to 39
+    letters, digits, spaces, `-` or `_`; one that doesn't is ignored."""
 
     @field_validator("paths")
     @classmethod

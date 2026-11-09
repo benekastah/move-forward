@@ -21,14 +21,16 @@ group_types = {Clients = "customer"}
 - `group_importance` (`{}`): how much the people in a group matter to me (0 normal, 1 high, 2
   critical), by its name, ignoring case; the highest of their groups' counts.
 - `group_types` (`{}`): what the people in a group are to me, a contact type (see the README's
-  People), by its name, ignoring case; the first listed of their groups' counts.
+  People), by its name, ignoring case; the first listed of their groups'. A type starts with a
+  letter, then up to 39 letters, digits, spaces, `-` or `_`; one that doesn't is ignored.
 - `refresh_seconds` (3600): how often it reads the files anyway. It also looks every minute
   for a file added, removed or written (by their times and sizes, without reading them), and
   reads them at once if there is one.
 
 A group is a card's category (`CATEGORIES`), or a group's own card naming its members: vCard
 4's `KIND:group` with `MEMBER`s (by `UID` or `mailto:` address), or Apple's
-`X-ADDRESSBOOKSERVER-KIND` (what iCloud syncs). It reads vCard 4, 3 and 2.1 (quoted-printable
+`X-ADDRESSBOOKSERVER-KIND` (what iCloud syncs). Only a person's card (no `KIND`, or
+`KIND:individual`) gives contacts: an organisation's or a place's doesn't. It reads vCard 4, 3 and 2.1 (quoted-printable
 values too); of a card, only its name, addresses, categories and `UID`.
 
 ## Publishes
