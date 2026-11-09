@@ -394,11 +394,12 @@ def test_no_token_says_how_to_give_one(monkeypatch: pytest.MonkeyPatch) -> None:
         ctx.token("work", secret="password")  # what the plugin calls it
 
 
-def test_a_section_keeping_a_token_must_say_where_by_default() -> None:
-    with pytest.raises(TypeError, match="_Half must set default_keychain_service"):
-
-        class _Half(keychain.TokenFields):  # pyright: ignore[reportUnusedClass]
-            default_token_env: ClassVar[str] = "HALF_TOKEN"
+@pytest.mark.parametrize("missing", ["default_token_env", "default_keychain_service"])
+def test_a_section_keeping_a_token_must_say_where_by_default(missing: str) -> None:
+    defaults = {"default_token_env": "HALF_TOKEN", "default_keychain_service": "half"}
+    del defaults[missing]
+    with pytest.raises(TypeError, match=f"_Half must set {missing}"):
+        type("_Half", (keychain.TokenFields,), {"__annotations__": {}, **defaults})
 
 
 def test_the_context_core_gives_holds_the_plugins_tokens(

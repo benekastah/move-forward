@@ -8,6 +8,7 @@ from ...api import (
     Changed,
     ChangedRequest,
     CollectRequest,
+    Context,
     EntitiesRequest,
     Entity,
     Identity,
@@ -29,7 +30,7 @@ from ...api import (
 from ...api.keychain import TokenSettings
 from ...api.kinds import PERSON
 from . import client
-from .config import MailConfig
+from .config import Mailbox, MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
@@ -44,6 +45,12 @@ def person_id(email: str) -> str:
     """The id of the `person` with address `email`: `mail/<address>`, the same whichever mail
     plugin publishes them, and apart from any code host's `<host>/<login>`."""
     return f"mail/{email}"
+
+
+def password(ctx: Context[MailConfig], mailbox: Mailbox) -> str:
+    """`mailbox`'s password (`ctx.token`, which says "no password" and how to give one when
+    there's none)."""
+    return ctx.token(mailbox.name, secret="password")
 
 
 def merged(read: list[Message], more: list[Message]) -> list[Message]:
@@ -113,9 +120,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         ctx = req.ctx
         messages: list[Message] = []
         for mailbox in ctx.config.mailboxes():
-            found = client.collect(
-                mailbox, ctx.token(mailbox.name, secret="password"), ctx.email, ctx.now
-            )
+            found = client.collect(mailbox, password(ctx, mailbox), ctx.email, ctx.now)
             messages = merged(messages, found.messages)
         return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
@@ -129,9 +134,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         """Whether a mailbox's counts moved since the last look: mail came, went or was
         read. One `STATUS` each, without opening the mailbox."""
         ctx = req.ctx
-        now = "\n".join(
-            client.status(m, ctx.token(m.name, secret="password")) for m in ctx.config.mailboxes()
-        )
+        now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
         before = ctx.kv.get(STATUS)
         ctx.kv.set(STATUS, now)
         return Changed(before is not None and before != now, "the mailbox changed")

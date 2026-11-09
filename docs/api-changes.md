@@ -11,7 +11,8 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
 ## Version 2
 
-Fewer things to know: what no plugin used is gone.
+Fewer things to know: what no plugin used is gone, and what several plugins wrote each
+for themselves (a token, a request, an example config) is core's.
 
 - **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
   return the snapshot, and core calls each once per refresh.
@@ -53,7 +54,8 @@ Fewer things to know: what no plugin used is gone.
   token, with `token_env` and `keychain_service`, defaulting to the class's
   `default_token_env` and `default_keychain_service`.
 - **Text as shown**: `api.html.shown(text)` drops what could make text a stranger wrote read
-  as something else (bidi controls, zero-width characters, tag characters outside a flag),
+  as something else (bidi controls, the zero-width space and no-break space, the word
+  joiner, the soft hyphen, Hangul fillers, tag characters outside a flag; not ZWJ and ZWNJ),
   turns control characters into spaces, and collapses its whitespace. Core shows every
   item's title, subtitle, details, badges and links' text through it; use it for such text
   on a plugin's own pages.
