@@ -1,5 +1,4 @@
-"""Slack's Web API: signing in (OAuth with PKCE, as a public client: no client secret), and
-the methods slack calls with the user token it gets."""
+"""Slack's Web API: the methods slack calls, with the token given it."""
 
 import json
 from typing import Any
@@ -7,8 +6,6 @@ from typing import Any
 from ...api import http
 
 API = "https://slack.com/api/"
-AUTHORIZE = "https://slack.com/oauth/v2/authorize"
-"""Where the browser goes to sign in to the app."""
 NOT_FOUND = "users_not_found"
 TIMEOUT_SECONDS = 30
 
@@ -21,15 +18,14 @@ class SlackError(RuntimeError):
         self.error = error
 
 
-def call(method: str, api_token: str | None, params: dict[str, str]) -> dict[str, Any]:
-    """POST `params` (form-encoded) to Slack's `method`, with `api_token` if given, and return
+def call(method: str, api_token: str, params: dict[str, str]) -> dict[str, Any]:
+    """POST `params` (form-encoded) to Slack's `method`, with `api_token`, and return
     its answer; raises SlackError when it isn't `ok`, `http.RequestError` when Slack can't
     be reached, and ValueError for an answer that isn't JSON."""
-    headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
     body = http.request(
         API + method,
         secret_name="the Slack token",
-        headers=headers,
+        headers={"Authorization": f"Bearer {api_token}"},
         form=params,
         timeout=TIMEOUT_SECONDS,
     )

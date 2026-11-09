@@ -57,10 +57,6 @@ class Context[C: BaseModel]:
     """For the plugin's own repository over its own tables, which its migrations made."""
     kv: KvRepository
     """Key/value state in the plugin's namespace."""
-    dashboard_url: str = ""
-    """Where the dashboard is served, e.g. `http://localhost:8765`, for a tool's sign-in to
-    come back to. It's `localhost`, which is what such sign-ins take for an app on this
-    machine; the dashboard sends it on to `mfd.localhost`, where its sign-in cookie is."""
     name: str = ""
     """The plugin's name, as `Plugin.name`."""
     tokens: Mapping[str, TokenSettings] | None = None
@@ -81,11 +77,6 @@ class Context[C: BaseModel]:
         """An action result's parameters keeping the plugin's item `key` on the focus page
         (`ActionResult.params`); `Plugin.kept_item` gets `key` back."""
         return {KEPT: f"{self.name}:{key}"}
-
-    def page_url(self, key: str) -> str:
-        """The full URL of one of the plugin's pages, e.g. for a sign-in to send the browser
-        back to: `https://localhost:8765/slack/callback`."""
-        return self.dashboard_url + page_path(self.name, key)
 
     def part(self, name: str) -> str:
         """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
@@ -449,12 +440,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
     rather than waiting for `change_check_seconds`."""
-    sign_in_pages: ClassVar[frozenset[str]] = frozenset()
-    """Of its pages, by key, those a tool's sign-in (OAuth) sends the browser back to, e.g.
-    slack's "callback" (`/slack/callback`). Only a key of `pages()` counts. They're served
-    without the dashboard's sign-in cookie, which browsers
-    don't send on a redirect from another site, so the page must check its own proof that
-    the request is the one it started (OAuth's single-use `state`) before doing anything."""
     cli_help: ClassVar[str | None] = None
     """The help line of `mfd <name>`; None means the plugin has no command."""
     always_on: ClassVar[bool] = False
@@ -653,7 +638,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def pages(self) -> dict[str, PageHandler]:
         """Extra pages by key, served at `/<plugin>/<key>` (`page_path`): "ping" is
-        `/slack/ping`, and "" the plugin's own `/slack`."""
+        `/slack/ping`, and "" the plugin's own `/<plugin>`."""
         return {}
 
     # Writing

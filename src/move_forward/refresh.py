@@ -512,8 +512,8 @@ def _failed(e: Enabled) -> Panel:
 
 
 def page_of(path: str) -> tuple[str, str]:
-    """The plugin and the page key a path names: `/slack/ping` is slack's `ping`, `/slack`
-    its index, `""`."""
+    """The plugin and the page key a path names: `/slack/ping` is slack's `ping`, and
+    `/<plugin>` its index, `""`."""
     plugin, _, key = path.strip("/").partition("/")
     return plugin, key
 
