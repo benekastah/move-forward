@@ -37,9 +37,9 @@ someone I wrote to at least twice in the last `known_days` (90). `urgent_words` 
 phrases in a subject that make a conversation from someone I know (verified) critical,
 above other important mail, badged "urgent", and `low_words` ones that rank a conversation
 with lists' mail, unless it replies to me or is from someone I know, a verified sender
-either way (flagged mail still counts): whole words, ignoring case and how a phrase is spaced; both empty by default. Mail older
-than `since_days` (14) is left out, flagged or not; at most `max_messages` (200) unread are
-read, newest first, and every flagged one. `token_env` and `keychain_service` say where its
+either way (flagged mail still counts): whole words, ignoring case and how a phrase is spaced;
+both empty by default. Mail older than `since_days` (14) is left out, flagged or not; at most
+`max_messages` (200) unread are read, newest first, and every flagged one. `token_env` and `keychain_service` say where its
 password is.
 
 `auth_servers` names the servers whose `Authentication-Results` count: their first word, the
@@ -101,8 +101,9 @@ mailbox of its latest message, and a message in two (sent to both addresses) cou
 first mailbox's, flagged, to me, replying to me, from someone I know or important if either copy
 is. Only copies whose sender both servers verified merge, as anyone can write a `From` and a
 Message-ID: any other is kept once per mailbox, in the same conversation, and counted once
-among its unread. Nothing is merged within one mailbox. Each mailbox's sent mail says whom I know and what answers me for its own mail. A mailbox that fails
-to sign in fails the refresh, keeping what was read last.
+among its unread. Nothing is merged within one mailbox. Each mailbox's sent mail says whom I
+know and what answers me for its own mail. A mailbox that fails to sign in fails the refresh,
+keeping what was read last.
 
 ## Publishes
 
@@ -154,10 +155,10 @@ important when it's flagged, when its subject names one of my open tickets, or a
 several words something open carries (see the README's Tags), and its sender is verified
 (shown as "about APP-12 …" or "about #garbage-day"; a priority I set on that ticket counts for
 it too; a one-word tag, like `#invoice`, any stranger may write, so it's shown but raises
-nothing; a tag I put on the mail counts too, while something else open has it and its latest
-sender is verified, since anyone can reply into a conversation, but not its Gmail labels, which
-say nothing of what it's about), when its latest message, from a verified sender (anyone can name
-a Message-ID of mine), answers mail I sent (the newest 1000 within `known_days`; its
+nothing; a tag or label I put on the mail counts too, while something else open has it and its
+latest sender is verified, since anyone can reply into a conversation, but not Gmail's own
+labels, `#inbox` or `#starred`, which say nothing of what it's about), when its latest message,
+from a verified sender (anyone can name a Message-ID of mine), answers mail I sent (the newest 1000 within `known_days`; its
 `In-Reply-To`, else the last of its `References`, names one of my sent Message-IDs; badged
 "replies to me"; if my sent mail can't be read, nothing counts as replying), when it's from
 someone I know (badged "known"; only a verified sender), or when Gmail labels it Important

@@ -745,6 +745,16 @@ def test_mail_answering_mine_replies_to_me(imap: Callable[..., FakeImap]) -> Non
     assert ("select", '"Sent Items"', True) in server.calls  # read-only, found by its \\Sent
 
 
+def test_my_newest_sent_mail_is_read_however_the_server_orders_its_search(
+    imap: Callable[..., FakeImap], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(client, "SENT_CAP", 1)
+    server = imap([(1, "", headers(message_id="r1@acme.com", references="<mine@me>"))])
+    server.sent = {11: "mine@me", 10: "old@me"}  # answered out of UID order
+    [found] = client.collect(_mailbox(), ME, NOW).messages
+    assert found.replies_to_me
+
+
 def test_a_reply_to_me_is_important() -> None:
     harness = mailbox(message(2, subject="New", thread="n"), message(1, replies_to_me=True))
     items = {i.title: i for i in _items(harness)}
@@ -1262,19 +1272,29 @@ def test_an_account_on_mails_own_host_keeps_mails_auth_servers() -> None:
     assert [m.trusted_auth_servers() for m in cased.mailboxes()] == [{"mx.example.com"}] * 2
 
 
-def test_a_threads_own_labels_make_it_about_nothing() -> None:
+def test_gmails_own_labels_make_a_thread_about_nothing_but_mine_do() -> None:
     harness = mailbox(
-        message(1, subject="Hello", sender="city@town.example", labels=["\\Inbox", "Garbage Day"])
+        message(1, subject="Hello", thread="a", labels=["\\Inbox", "\\Starred"]),
+        message(2, subject="Hi", thread="b", labels=["\\Inbox", "\\Starred"]),
     )
     harness.with_entities(
-        [
-            Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out"),
-            Entity(ref=Ref(kind="notes.todo", id="8"), title="clear the #inbox"),
-        ]
+        [Entity(ref=Ref(kind="notes.todo", id="8"), title="clear the #inbox, #starred too")]
     )
-    [item] = _items(harness)
-    assert not any(d.startswith("about") for d in item.details)
-    assert item.signals is not None and item.signals.importance == 0
+    items = _items(harness)
+    assert len(items) == 2  # each has #inbox, as does the other and the todo
+    assert not any(d.startswith("about") for item in items for d in item.details)
+    assert all(item.signals is not None and item.signals.importance == 0 for item in items)
+
+
+def test_a_label_of_mine_or_the_subject_names_what_others_carry() -> None:
+    todo = Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out")
+    labelled = mailbox(message(1, subject="Hello", labels=["\\Inbox", "Garbage Day"]))
+    labelled.with_entities([todo])
+    named = mailbox(message(1, subject="Garbage day moved", labels=["Garbage Day"]))
+    named.with_entities([todo])
+    for harness in (labelled, named):
+        [item] = _items(harness)
+        assert "about #garbage-day" in item.details
 
 
 def test_an_unverified_reply_to_my_mail_lifts_nothing() -> None:

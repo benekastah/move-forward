@@ -51,8 +51,9 @@ def merged(read: list[Message], more: list[Message]) -> list[Message]:
     read (the same Message-ID from the same sender, each copy's sender verified) adds only
     what's about me there, flagged, to me, replying to me, from someone I know or important, to
     the first copy. Only verified copies merge, as anyone can write a `From` and a Message-ID:
-    unverified, a message sent to two of my addresses is kept twice, in one conversation, as
-    their Message-ID is its thread. Within a mailbox nothing is merged."""
+    unverified, a message sent to two of my addresses is kept twice, in one conversation, as the
+    copies name the same one (but a message with no Message-ID, which is its mailbox's alone).
+    Within a mailbox nothing is merged."""
     first: dict[tuple[str, str | None], int] = {
         (m.message_id, m.sender_email): i for i, m in enumerate(read) if m.message_id and m.verified
     }
