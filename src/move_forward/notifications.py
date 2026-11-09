@@ -163,7 +163,7 @@ def newly_shown(db: Database, plugin: str, panels: list[Panel]) -> list[Event]:
         for item in panel.items:
             if (notify := item.notify) is None:
                 continue
-            thing = notify.thing or (item.subjects[0].id if item.subjects else item.title)
+            thing = notify.thing if notify.thing is not None else item.subjects[0].id
             event = Event(
                 kind=notify.kind,
                 thing=thing,

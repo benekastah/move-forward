@@ -378,7 +378,8 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
 - An item whose arrival is news (a branch joining Cleanup) sets `notify=Notify(kind, text)`,
   `kind` one of the plugin's `notification_kinds`: after each refresh core compares the
   plugin's panels with the last refresh's, and raises it for each item newly there, by its
-  kind and `thing` (its main subject's id unless it gives one). The first refresh only keeps
+  kind and `thing` (its main subject's id unless it gives one; an item without subjects must,
+  since its title may change between refreshes). The first refresh only keeps
   what's there, a restart doesn't tell it all again, and an item that leaves and comes back
   is told again. The notification's title is the item's, and it opens the page at the item.
 

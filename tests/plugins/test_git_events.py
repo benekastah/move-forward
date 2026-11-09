@@ -66,6 +66,17 @@ def test_a_branch_already_deletable_the_first_time_is_not_said() -> None:
     assert _Refreshes(stored(github=snapshot(), local=local)).deletable() == []
 
 
+def test_events_between_two_refreshes_tells_what_newly_shows() -> None:
+    local = local_snapshot(branches=[local_branch("me/done", upstream="origin/me/done")])
+    merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
+    said = events_between(
+        "git",
+        {"github": snapshot(mine=[pr(9, head="me/done")]), "local": local},
+        {"github": snapshot(merged_recent=[merged]), "local": local},
+    )
+    assert [(e.kind, e.title) for e in said] == [("branch_deletable", "me/done: PR merged 1d ago")]
+
+
 def test_the_plugins_offer_the_kinds_they_make() -> None:
     assert set(GitPlugin.notification_kinds) == {"branch_deletable"}
     assert GitStackPlugin.notification_kinds == events.KINDS

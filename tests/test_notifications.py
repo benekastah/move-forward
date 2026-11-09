@@ -316,10 +316,15 @@ def test_a_notification_names_its_own_thing_when_it_gives_one() -> None:
     db = Database(":memory:")
     notifications.newly_shown(db, "git", [])
     item = Item(title="no subject", notify=Notify(kind="k", text="t", thing="mine"))
-    plain = Item(title="untitled", notify=Notify(kind="k", text="t"))
-    panel = Panel(key="p", title="P", description="", items=[item, plain])
+    panel = Panel(key="p", title="P", description="", items=[item])
     found = notifications.newly_shown(db, "git", [panel])
-    assert [(e.thing, e.anchor) for e in found] == [("mine", ""), ("untitled", "")]
+    assert [(e.thing, e.anchor) for e in found] == [("mine", "")]
+
+
+def test_an_item_without_subjects_must_name_its_notifications_thing() -> None:
+    """Its title, which may carry an age, would make it new at each refresh."""
+    with pytest.raises(ValidationError, match="its Notify must give a thing"):
+        Item(title="me/x: PR merged 1d ago", notify=Notify(kind="k", text="t"))
 
 
 def test_forgetting_what_a_plugin_showed_starts_it_afresh() -> None:
@@ -347,5 +352,5 @@ def test_unsubscribing_forgets_what_the_panels_showed() -> None:
 
 
 def test_what_an_item_notifies_of_is_not_part_of_the_page() -> None:
-    item = Item(title="x", notify=Notify(kind="k", text="t"))
+    item = Item(title="x", notify=Notify(kind="k", text="t", thing="x"))
     assert "notify" not in item.model_dump()

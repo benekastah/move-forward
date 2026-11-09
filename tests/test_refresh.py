@@ -12,6 +12,7 @@ from move_forward import refresh, registry
 from move_forward.act_now import OPENED_FOR, ActNowConfig, Feedback
 from move_forward.config import Config
 from move_forward.db import Database
+from move_forward.graph import Ref
 from move_forward.notifications import NotificationRepository
 from move_forward.page import Badge, Item
 from move_forward.plugin import (
@@ -21,6 +22,8 @@ from move_forward.plugin import (
     CollectRequest,
     LoadRequest,
     StoreRequest,
+    Subjects,
+    SubjectsRequest,
 )
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
@@ -351,29 +354,30 @@ def test_opening_elsewhere_replaces_a_snooze_only_once_it_has_lapsed() -> None:
     assert dimmed.opened_at is not None
 
 
-def test_events_compare_with_what_was_stored_before_the_refresh(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """After a restart too: what was stored when the dashboard stopped is what the first
-    refresh compares with, so a branch that became deletable meanwhile is said once."""
+_OPEN = pr(9, head="me/done")
+_MERGED = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
+
+
+def _merging(
+    monkeypatch: pytest.MonkeyPatch, subscribe: list[str], *fetched: GitHubSnapshot
+) -> tuple[Config, Database]:
+    """My PR on `me/done`, open in what's stored, which github's collects return as
+    `fetched`, one per refresh; git has the branch."""
     local = local_snapshot(branches=[local_branch("me/done", upstream="origin/me/done")])
-    open_pr = pr(9, head="me/done")
-    merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
-    _, db = stored(github=snapshot(mine=[open_pr]), local=local)
+    _, db = stored(github=snapshot(mine=[_OPEN]), local=local)
     config = Config.model_validate(
         {
             "email": "me@acme.com",
             "teams": ["core"],
             "github": {"org": "acme"},
             "git": {"repos": []},
-            "notifications": {"subscribe": ["git.branch_deletable"]},
+            "notifications": {"subscribe": subscribe},
         }
     )
-
-    fetched = [snapshot(mine=[open_pr])] + [snapshot(merged_recent=[merged])] * 2
+    left = list(fetched)
 
     def github_now(self: GitHubPlugin, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
-        return fetched.pop(0)
+        return left.pop(0)
 
     def git_now(self: GitPlugin, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         return local
@@ -384,13 +388,87 @@ def test_events_compare_with_what_was_stored_before_the_refresh(
     monkeypatch.setattr(GitHubPlugin, "collect", github_now)
     monkeypatch.setattr(_Git, "collect", git_now)  # this module's git
     monkeypatch.setattr(GitHubPlugin, "after_collect", nothing_after)
+    return config, db
+
+
+def _told(db: Database) -> list[tuple[str, str]]:
+    return sorted(
+        (n.title, n.body) for n in NotificationRepository(db).take(NOW, timedelta(hours=1))
+    )
+
+
+_MERGE_TOLD = [
+    (f"{_OPEN.repo}#9 PR 9", "was merged"),
+    ("me/done: PR merged 1d ago", "can be deleted"),
+]
+"""What my PR merging tells, subscribed to github's pr_merged and git's branch_deletable."""
+
+
+def test_events_compare_with_what_was_stored_before_the_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a restart too: what was stored when the dashboard stopped is what the first
+    refresh compares with, so a branch that became deletable meanwhile is said once."""
+    merged = snapshot(merged_recent=[_MERGED])
+    open_ = snapshot(mine=[_OPEN])
+    config, db = _merging(monkeypatch, ["git.branch_deletable"], open_, merged, merged)
     refresh.refresh(config, db, NOW)  # the dashboard's last before it stopped
-    assert NotificationRepository(db).take(NOW, timedelta(hours=1)) == []
+    assert _told(db) == []
     refresh.refresh(config, db, NOW)  # the first after it started again
-    told = NotificationRepository(db).take(NOW, timedelta(hours=1))
-    assert [n.title for n in told] == ["me/done: PR merged 1d ago"]
+    assert _told(db) == [("me/done: PR merged 1d ago", "can be deleted")]
     refresh.refresh(config, db, NOW)
-    assert NotificationRepository(db).take(NOW, timedelta(hours=1)) == []  # said once
+    assert _told(db) == []  # said once
+
+
+def test_a_plugins_events_and_its_panels_notifications_fail_apart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """github's panels failing loses none of its events hook's; git's events failing
+    loses none of its panels'."""
+    merged = snapshot(merged_recent=[_MERGED])
+    subscribe = ["github.pr_merged", "git.branch_deletable"]
+    config, db = _merging(monkeypatch, subscribe, snapshot(mine=[_OPEN]), merged)
+    refresh.refresh(config, db, NOW)
+
+    def broken(*_args: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(GitHubPlugin, "panels", broken)
+    monkeypatch.setattr(_Git, "events", broken)
+    refresh.refresh(config, db, NOW)
+    assert _told(db) == _MERGE_TOLD
+
+
+def test_a_refresh_stopping_still_tells_what_it_stored(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The next start compares with what this one stored, so it's told now or never."""
+    merged = snapshot(merged_recent=[_MERGED])
+    subscribe = ["github.pr_merged", "git.branch_deletable"]
+    config, db = _merging(monkeypatch, subscribe, snapshot(mine=[_OPEN]), merged)
+    refresh.refresh(config, db, NOW)
+    monkeypatch.setattr(refresh.shell, "stopping", lambda: True)
+    refresh.refresh(config, db, NOW)
+    assert _told(db) == _MERGE_TOLD
+
+
+def test_fetching_a_pr_again_tells_what_changed_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """As a refresh does: against what was stored before, for every plugin, so the next
+    refresh, seeing the same, tells nothing again."""
+    merged = snapshot(merged_recent=[_MERGED])
+    subscribe = ["github.pr_merged", "git.branch_deletable"]
+    config, db = _merging(monkeypatch, subscribe, snapshot(mine=[_OPEN]), merged)
+    refresh.refresh(config, db, NOW)
+
+    def again(
+        self: GitHubPlugin, req: SubjectsRequest[GitHubConfig, GitHubSnapshot]
+    ) -> Subjects[GitHubSnapshot]:
+        return Subjects(merged, req.refs)
+
+    monkeypatch.setattr(GitHubPlugin, "refresh_subjects", again)
+    pr_ref = Ref(kind="pull_request", id=_OPEN.url)
+    assert refresh.refresh_subjects(config, db, [pr_ref], NOW) == set()
+    assert _told(db) == _MERGE_TOLD
+    refresh.refresh(config, db, NOW)
+    assert _told(db) == []
 
 
 def test_the_known_actions_are_the_enabled_plugins_declared_ones() -> None:

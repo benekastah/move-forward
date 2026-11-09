@@ -39,7 +39,13 @@ from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
 from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
 from move_forward.plugins.slack.repository import SlackRepository
-from move_forward.refresh import build_dashboard, events_of, store_snapshot, stored_graph
+from move_forward.refresh import (
+    build_dashboard,
+    events_of,
+    newly_shown_of,
+    store_snapshot,
+    stored_graph,
+)
 from move_forward.registry import BUILTINS, enabled, migrate
 from move_forward.repositories import SnapshotRepository
 
@@ -286,12 +292,15 @@ def dashboard(**overrides: object) -> Dashboard:
 
 def events_between(plugin: str, before: dict[str, object], after: dict[str, object]) -> list[Event]:
     """What core finds of a plugin's events (subscribed to or not) between a refresh that
-    stored `before` and one that stored `after`, each `stored`'s overrides."""
+    stored `before` and one that stored `after`, each `stored`'s overrides: those its
+    `events` makes, and its items newly shown with a notification (`Item.notify`) since the
+    panels `before` showed."""
     (_, db_before), (config, db) = stored(**before), stored(**after)
     previous, previous_snapshots = stored_graph(db_before, enabled(config, db_before, NOW))
     plugins = enabled(config, db, NOW)
     graph, snapshots = stored_graph(db, plugins)
     e = next(e for e in plugins if e.name == plugin)
+    newly_shown_of(e, previous_snapshots[plugin], previous)  # what showed before, to compare
     return events_of(e, previous_snapshots[plugin], snapshots[plugin], previous, graph)
 
 

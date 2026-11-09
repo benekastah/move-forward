@@ -106,7 +106,8 @@ for themselves (a token, a request, an example config) is core's.
 - **`Item.notify`**: an item sets `notify=Notify(kind, text, thing=None)` to raise one of its
   plugin's `notification_kinds` when it first shows in its panels; core compares each
   refresh's panels with the last's (kept in core's `shown_notices`), so a plugin no longer
-  builds the panel as it was to compare. `Notify` is new in `api`.
+  builds the panel as it was to compare. An item without `subjects` must give `thing`.
+  `Notify` is new in `api`.
 
 ## Version 1
 

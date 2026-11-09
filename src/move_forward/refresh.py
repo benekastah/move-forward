@@ -125,20 +125,31 @@ def before_refresh(db: Database, plugins: list[Enabled]) -> Before:
     )
 
 
+def changes_of(
+    e: Enabled, before: BaseModel | None, after: BaseModel | None, previous: Graph, graph: Graph
+) -> list[Event]:
+    """The events a plugin's `events` makes of a refresh, subscribed to or not, from its
+    snapshot `before` and `after` and the graph `previous`ly and now; none while it has no
+    snapshot to compare with."""
+    if before is None or after is None:
+        return []
+    return e.plugin.events(EventsRequest(e.ctx, before, after, previous, graph))
+
+
+def newly_shown_of(e: Enabled, after: BaseModel | None, graph: Graph) -> list[Event]:
+    """The events of a plugin's items newly shown with a notification (`Item.notify`),
+    subscribed to or not, by `notifications.newly_shown`, which keeps what its panels show now
+    for the next refresh. Its panels are built whether or not it raises any kind this way."""
+    panels = e.plugin.panels(PanelsRequest(e.ctx, after, graph))
+    return notifications.newly_shown(e.ctx.db, e.name, panels)
+
+
 def events_of(
     e: Enabled, before: BaseModel | None, after: BaseModel | None, previous: Graph, graph: Graph
 ) -> list[Event]:
-    """Every event a plugin makes of a refresh, subscribed to or not: its `events`, from its
-    snapshot `before` and `after` and the graph `previous`ly and now (none while it has no
-    snapshot to compare with), then its items newly shown with a notification
-    (`notifications.newly_shown`), which keeps what its panels show now for the next."""
-    found = (
-        e.plugin.events(EventsRequest(e.ctx, before, after, previous, graph))
-        if before is not None and after is not None
-        else []
-    )
-    panels = e.plugin.panels(PanelsRequest(e.ctx, after, graph))
-    return [*found, *notifications.newly_shown(e.ctx.db, e.name, panels)]
+    """Every event a plugin makes of a refresh, subscribed to or not: `changes_of`, then
+    `newly_shown_of`."""
+    return [*changes_of(e, before, after, previous, graph), *newly_shown_of(e, after, graph)]
 
 
 def _events(
@@ -152,18 +163,22 @@ def _events(
 ) -> None:
     """Store the events of a refresh, of the kinds I've subscribed to, for every plugin I've
     subscribed to some of: what changed since `before`, to the `graph` and `snapshots` now.
-    One that can't tell is logged, and never stops the refresh. What the panels of the others
-    showed is forgotten."""
+    A plugin's `events` and its panels' items are each asked on their own, so one failing
+    loses only its own events: it's logged, and never stops the refresh. What the panels of
+    the others showed is forgotten."""
     wanting = [e for e in plugins if _wants(e, subscribed)]
     notifications.forget_shown(db, [e.name for e in wanting])
     for e in wanting:
+        after = snapshots.get(e.name)
         try:
-            found = events_of(
-                e, before.snapshots.get(e.name), snapshots.get(e.name), before.graph, graph
-            )
+            found = changes_of(e, before.snapshots.get(e.name), after, before.graph, graph)
             _keep(e, found, subscribed, now)
         except Exception:
-            log.exception("%s: finding events failed", e.name)
+            log.exception("%s: finding what changed failed", e.name)
+        try:
+            _keep(e, newly_shown_of(e, after, graph), subscribed, now)
+        except Exception:
+            log.exception("%s: finding items newly shown failed", e.name)
 
 
 def _keep(e: Enabled, events: list[Event], subscribed: set[str], now: datetime) -> None:
@@ -249,7 +264,8 @@ def refresh(
     """Refresh every plugin, or `only` those. Each plugin fails on its own. After collecting,
     the graph is built again, the plugins' events found against what held before, the daily
     prune runs if due, and `after_collect` runs for the plugins collected and those that
-    collect nothing (they work from the others' data)."""
+    collect nothing (they work from the others' data). When the dashboard is stopping, it
+    collects no more, but still finds the events of what it stored, and ends there."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     before = before_refresh(db, plugins)
@@ -257,21 +273,19 @@ def refresh(
     collected = {e.name for e in first + after}
 
     _collect_all(db, first, now, lambda e: e.plugin.collect(CollectRequest(e.ctx)))
-    if shell.stopping():
-        return
     graph, snapshots = stored_graph(db, plugins)
-    if after:
+    if after and not shell.stopping():
         _collect_all(
             db,
             after,
             now,
             lambda e: e.plugin.collect_after(CollectAfterRequest(e.ctx, graph)),
         )
-        if shell.stopping():
-            return
         graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
     _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)
+    if shell.stopping():  # what was stored is told, as the next start compares with it
+        return
     _dashboard_events(config, db, plugins, set(config.notifications.subscribe), now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
