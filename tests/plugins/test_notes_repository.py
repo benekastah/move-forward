@@ -1,5 +1,6 @@
 """The notes plugin's tables, through its repository."""
 
+import threading
 from datetime import date
 
 import pytest
@@ -19,6 +20,7 @@ from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
 DAY = date(2026, 10, 30)
 PR = Link(kind="pull_request", ref="https://github.com/acme/widgets/pull/1")
+URL = "https://acme.atlassian.net/browse/APP-1"
 
 
 @pytest.fixture
@@ -221,3 +223,50 @@ def test_conditions_kept_before_they_named_their_pr_are_given_one_once() -> None
     ]
     assert second.conditions == [] and second.lines == ["- Merge condition: ask Sam"]
     assert NotesRepository(db).entries() == [first, second]  # once
+
+
+def test_rekeying_asks_for_new_ids_outside_its_transaction() -> None:
+    """What gives the new ids asks plugins (their `url_for`), which may use the database."""
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS)
+    notes = NotesRepository(db)
+    notes.add_entry("e", DAY, links=[Link(kind="jira.issue", ref="APP-1")])
+
+    def identify(kind: str, ref: str) -> str:
+        # A plugin's url_for waiting on another thread that reads the database, say.
+        reader = threading.Thread(target=db.query, args=("SELECT 1",))
+        reader.start()
+        reader.join(timeout=2)
+        assert not reader.is_alive(), "identify ran holding the database"
+        return URL
+
+    assert notes.rekey(["jira.issue"], identify) == 1
+    assert [link.ref for link in notes.entries()[0].links] == [URL]
+
+
+def test_rekeying_moves_links_todos_links_and_whats_on_ice_once_each() -> None:
+    """Where the new id is there already, the old row goes: a thing is linked, or on ice,
+    once."""
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS)
+    notes = NotesRepository(db)
+    old, new = Link(kind="jira.issue", ref="APP-1"), Link(kind="jira.issue", ref=URL)
+    entry = notes.add_entry("e", DAY, links=[old, new])
+    todo = notes.add_todo(entry, "t")
+    notes.link_todo(todo, old)
+    notes.link_todo(todo, new)
+    notes.add_ice("a", DAY, None, [IcedItem(kind="jira.issue", ref_id="APP-1", name="APP-1")])
+    notes.add_ice("b", DAY, None, [IcedItem(kind="jira.issue", ref_id=URL, name="APP-1")])
+    notes.add_ice("c", DAY, "parked, no branches listed", [])  # an import's, say: it stays
+
+    def identify(kind: str, ref: str) -> str:
+        return URL if ref == "APP-1" else ref
+
+    assert notes.rekey(["jira.issue"], identify) == 3  # a link, a todo's link, what's on ice
+    [read] = notes.entries()
+    assert [link.ref for link in read.links] == [URL]
+    assert [link.ref for link in read.todos[0].links] == [URL]
+    assert [(ice.title, [item.ref_id for item in ice.items]) for ice in notes.ices()] == [
+        ("b", [URL]),  # "a" held only what "b" holds: it goes, not left empty
+        ("c", []),
+    ]
