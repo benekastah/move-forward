@@ -60,7 +60,7 @@ class SnapshotRepository:
             return {}
         marks = ", ".join("?" * len(names))
         # A part's source is `<plugin>.<part>`: its plugin is what comes before the first `.`,
-        # compared exactly (LIKE would ignore case and need `_` escaped).
+        # compared exactly, case and all.
         plugin = (
             "CASE WHEN instr(source, '.') > 0 THEN substr(source, 1, instr(source, '.') - 1) END"
         )
