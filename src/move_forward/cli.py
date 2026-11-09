@@ -24,7 +24,6 @@ from . import (
     snooze,
     supervisor,
     tags,
-    tls,
 )
 from . import config as config_module
 from .act_now import PRIORITIES
@@ -41,7 +40,7 @@ from .repositories import (
     SessionRepository,
     TagRepository,
 )
-from .server import scheme, serve
+from .server import serve
 from .shell import CommandError
 
 EXAMPLE_CONFIG = """\
@@ -53,7 +52,6 @@ teams = ["my-team"]                   # the teams I'm on or review for, by name
 # db_path = "~/.local/share/move-forward/dashboard.db"
 # db_backups = 10                        # copies kept in backups/, taken before migrations
 # port = 8765
-# https = false                          # serve over HTTPS with `mfd cert`'s certificate
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                         # clear work finished this long ago from the notes
 
@@ -201,15 +199,6 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         help="development: restart when the dashboard's source files change, not just its config",
     )
 
-    cert_parser = commands.add_parser(
-        "cert", help="make the certificate `mfd serve` uses for HTTPS, and trust it"
-    )
-    cert_parser.add_argument(
-        "--trust", action="store_true", help="add it to this system's and browsers' stores"
-    )
-    cert_parser.add_argument(
-        "--force", action="store_true", help="make a new one even if one is there"
-    )
     open_parser = commands.add_parser("open", help="open the running dashboard, signed in")
     open_parser.add_argument("--port", type=int, help="override the configured port")
     commands.add_parser(
@@ -347,44 +336,21 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
     return 0
 
 
-def _cert(paths: tls.Paths, force: bool, trust: bool) -> int:
-    """`mfd cert`: make the certificates unless they're there, and trust them if asked."""
-    if paths.ready() and not force:
-        print(
-            f"certificates in {paths.dir} cover until {localtime.day(tls.expires(paths))};"
-            " --force replaces them"
-        )
-    else:
-        tls.make(paths)
-        print(
-            f"made certificates in {paths.dir} covering until {localtime.day(tls.expires(paths))};"
-            " `mfd serve` moves from one to the next by itself"
-        )
-    if trust:
-        for line in tls.trust(paths):
-            print(line)
-    else:
-        print(f"trust {paths.ca} with `mfd cert --trust`, so browsers don't warn")
-    return 0
-
-
 def _open(url: str) -> None:
     """Open the dashboard in a browser; print the URL when there's no browser to open."""
     if not webbrowser.open(url):
         print(f"open {url} in a browser to sign in")
 
 
-def _open_signed_in(config: config_module.Config, token: str, port: int) -> int:
+def _open_signed_in(token: str, port: int) -> int:
     """Open the running dashboard in a browser, signed in with a one-time code it gives once
     it has proved it knows the token (see `signin`). Returns the exit status."""
-    served = scheme(config)
-    ca = tls.Paths.beside(config.db_path).ca
     try:
-        code = signin.login_code(port, served, token, ca if served == "https" else None)
+        code = signin.login_code(port, token)
     except signin.SignInError as e:
         print(e, file=sys.stderr)
         return 1
-    _open(auth.login_url(port, code, served))
+    _open(auth.login_url(port, code))
     return 0
 
 
@@ -430,8 +396,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{config_path}: ok; plugins: {', '.join(enabled_names(checked))}")
         for error in registry.DISCOVERY_ERRORS:
             print(f"warning: {error}")
-        if checked.https and (problem := tls.problem(tls.Paths.beside(checked.db_path))):
-            print(f"warning: {problem}")
         return 0
     config = config_module.load(config_path)
     if args.command == "restart":
@@ -447,9 +411,7 @@ def main(argv: list[str] | None = None) -> int:
         return supervisor.supervise(full_argv, config_path, code=args.reload)
     token = auth.load_or_create(auth.token_path(config.db_path))
     if args.command == "open":
-        return _open_signed_in(config, token, args.port or config.port)
-    if args.command == "cert":
-        return _cert(tls.Paths.beside(config.db_path), args.force, args.trust)
+        return _open_signed_in(token, args.port or config.port)
     db = Database(config.db_path, config.db_backups)
     migrate(config, db)
 
@@ -579,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
                 token,
                 port,
                 config_path,
-                on_listening=(lambda: _open_signed_in(config, token, port)) if args.open else None,
+                on_listening=(lambda: _open_signed_in(token, port)) if args.open else None,
             )
         except OSError as error:
             if error.errno != errno.EADDRINUSE:

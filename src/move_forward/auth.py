@@ -122,25 +122,23 @@ def _cookie(cookie: str | None, wanted: str) -> str | None:
     return None
 
 
-def set_cookie(session_id: str, port: int, secure: bool = False) -> str:
+def set_cookie(session_id: str, port: int) -> str:
     """The `Set-Cookie` value signing a browser in: scripts can't read it and other sites'
-    requests don't carry it; `secure`, over HTTPS, it's never sent over plain HTTP. It has
-    no `Domain`, so only the host that set it gets it back."""
-    cookie = (
+    requests don't carry it. It has no `Domain`, so only the host that set it gets it back."""
+    return (
         f"{session_cookie(port)}={session_id}; Path=/; HttpOnly; SameSite=Strict;"
         f" Max-Age={COOKIE_MAX_AGE_SECONDS}"
     )
-    return cookie + ("; Secure" if secure else "")
 
 
-def origin(port: int, scheme: str = "http") -> str:
+def origin(port: int) -> str:
     """Where browsers reach the dashboard."""
-    return f"{scheme}://{HOST}:{port}"
+    return f"http://{HOST}:{port}"
 
 
-def login_url(port: int, code: str, scheme: str = "http") -> str:
+def login_url(port: int, code: str) -> str:
     """Where `mfd open` sends the browser: `/login` with a one-time `code` (see `Handshake`)."""
-    return f"{origin(port, scheme)}/login?code={code}"
+    return f"{origin(port)}/login?code={code}"
 
 
 def proof(token: str, role: str, *parts: str) -> str:
@@ -233,16 +231,15 @@ def _sign(token: str, text: str) -> str:
     return hmac.new(token.encode(), text.encode(), "sha256").hexdigest()
 
 
-def notice_cookie(token: str, notice: str, secure: bool = False) -> str:
+def notice_cookie(token: str, notice: str) -> str:
     """The `Set-Cookie` value that shows `notice` on the next page, once. It's signed, since
     other apps on localhost (any port) can set our cookies too, and a notice of theirs mustn't
     look like the dashboard's own."""
     value = f"{_sign(token, notice)}.{quote(notice, safe='')}"
-    cookie = (
+    return (
         f"{NOTICE_COOKIE}={value}; Path=/; HttpOnly; SameSite=Strict;"
         f" Max-Age={NOTICE_MAX_AGE_SECONDS}"
     )
-    return cookie + ("; Secure" if secure else "")
 
 
 CLEAR_NOTICE = f"{NOTICE_COOKIE}=; Path=/; Max-Age=0"

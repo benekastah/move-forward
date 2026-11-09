@@ -117,7 +117,7 @@ class LinearConfig(Strict):
   `[github.teams]`) names that field in `teams_field`, so the config refuses a team it
   doesn't have.
 - A tool whose sign-in sends the browser back to the dashboard (OAuth) is given
-  `ctx.dashboard_url` (`http://localhost:8765`, or `https://` when it serves HTTPS) to
+  `ctx.dashboard_url` (`http://localhost:8765`) to
   build its redirect URL from, and a page of the plugin's to land on.
 
 ## Collecting and storing

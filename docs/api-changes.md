@@ -15,6 +15,8 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **The dashboard's URL**: `Context.dashboard_url` is always `http://localhost:<port>`, as the
+  dashboard no longer serves HTTPS.
 - **Who may hide by text**: `Entity.mentions_hide` (True by default) says whether a unit of
   work named only in its `mentions` can hide it, as an iced ticket hides a PR naming it. Set
   it False where someone else wrote the text (a PR I'm asked to review). What the text names

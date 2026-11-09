@@ -1,5 +1,5 @@
-"""Files only I can read: the sign-in token, the database and its backups, the certificates'
-keys.
+"""Files only I can read: the sign-in token, the database and its backups, the plugins' data
+directories.
 
 On macOS and Linux that's the file's mode: 0600, or 0700 for a directory. Windows has no
 modes (`chmod` there only sets read-only), so there it's the file's access list, set with

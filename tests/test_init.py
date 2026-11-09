@@ -369,10 +369,10 @@ def test_an_unknown_notification_is_asked_again(tmp_path: Path, no_machine_guess
     answers: dict[str, str | list[str]] = {
         "Plugins": "git",
         "Teams": "",
-        "Notifications": ["nope", "dashboard.certificate_ending"],
+        "Notifications": ["nope", "dashboard.source_failing"],
     }
     init.init(path, scripted(answers), cwd=tmp_path)
-    assert config.load(path).notifications.subscribe == ["dashboard.certificate_ending"]
+    assert config.load(path).notifications.subscribe == ["dashboard.source_failing"]
 
 
 def _tables(field: FieldInfo) -> bool:

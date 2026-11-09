@@ -22,22 +22,8 @@ python3 ~/src/move-forward/dev.py install  # .venv, `mfd` on PATH, git hooks, th
 mfd serve --open
 ```
 
-The dashboard listens only on localhost, over plain HTTP. To serve it over HTTPS
-instead, set `https = true` and run `mfd cert --trust`.
-
-`mfd cert` makes certificates for `mfd.localhost` (where browsers reach the dashboard),
-`localhost`, `127.0.0.1` and `::1`, signed by a local
-authority that can vouch for nothing else (its key signs them and is thrown away), so `mfd
-serve` answers on `https://`. It signs three ahead, each starting 25 days before the one
-before it ends, and `mfd serve` moves to the next by itself, without a restart: about six
-and a half years without renewing. `--trust` adds the authority (`tls/ca.pem`, next to the
-database) to macOS's keychain or Windows's user store, and, where NSS's `certutil` is
-installed (`libnss3-tools`, `nss-tools`), to Firefox's profiles and Chrome's store on
-Linux; elsewhere, import it as an authority in the browser's certificate settings.
-With `https = false` (the default), or without a certificate, the dashboard stays on plain HTTP. The page's
-header and `mfd check` warn 30 days before the last certificate ends, and a banner across
-every page from 14 days: blue, yellow from 7, red from 3; `mfd cert --force --trust` then makes a new authority
-and chain, trusted again.
+The dashboard listens only on localhost, over plain HTTP. Browsers treat localhost as a
+secure context, so nothing it does needs HTTPS.
 
 `dev.py install` ends with `mfd init` when there is no config yet: it asks for
 your email, which plugins to set up (github, git, and git_stack when it's
@@ -52,7 +38,6 @@ example without asking; `--force` replaces an existing file.
 
 The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
-`https` (serve over HTTPS with `mfd cert`'s certificate; default false),
 `db_path`, `db_backups`, `refresh_on_load_seconds` (a page load refreshes
 plugins whose data is older than this) and `prune_days`. Each plugin that
 fetches refreshes on its own schedule, the `refresh_seconds` in its section
@@ -131,7 +116,6 @@ before the command's name.
 | `mfd logout` | End every browser session, signing every browser out. |
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
 | `mfd restart` | Ask a running `mfd serve` supervisor to check the code and config, then replace its server process. This works on macOS, Linux and Windows; on macOS and Linux, `SIGUSR1` to the supervisor process does the same. An already running supervisor must be started once with this version to accept restart requests. |
-| `mfd cert [--trust] [--force]` | Make the certificates `mfd serve` uses for HTTPS, unless they're there (`--force` replaces them); `--trust` adds their authority to the system's and browsers' stores. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
 | `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
@@ -253,8 +237,8 @@ level's, `[act_now]`'s and each enabled plugin's, each with what it does. Saving
 only the settings that changed into the config file, each on its own line, keeping the
 file's comments and hand edits, and only if the result loads; otherwise the page says why
 and nothing is written. `mfd serve` then restarts with it, as it does whenever the file
-changes. Tables such as `[github.teams]` are edited in the file, and `db_path`, `port` and
-`https` aren't changed here, since changing them moves the server. Nor are the settings that
+changes. Tables such as `[github.teams]` are edited in the file, and `db_path` and `port`
+aren't changed here, since changing them moves the server. Nor are the settings that
 say where a credential goes or comes from, whom mail trusts, or where commands run: `email`,
 `[github] host`, `[jira] site`/`token_env`/`keychain_service`, `[mail]`
 `host`/`port`/`token_env`/`keychain_service`/`message_url`/`auth_servers`, `[slack]`
@@ -264,7 +248,7 @@ They're shown read-only; edit the file.
 ## Notifications
 
 The dashboard can tell you in the browser when something changes: a PR becomes mergeable,
-a plugin can't fetch, the certificates are ending. Nothing is on until you subscribe, by
+a plugin can't fetch. Nothing is on until you subscribe, by
 ticking kinds of events under Notifications on `/settings`, answering `mfd init`'s
 question, or listing them in `[notifications] subscribe` (for example
 `["dashboard.source_failing"]`). Press "Allow in this browser" on the settings page once.
@@ -281,8 +265,7 @@ question, or listing them in `[notifications] subscribe` (for example
   things, so repeats about one PR cannot hold up other alerts. Clicking one opens the
   dashboard at the item, which is highlighted.
 - `dashboard.source_failing`: a plugin has failed to fetch for `failing_minutes` (15), said
-  once until it works again. `dashboard.certificate_ending`: with `https` on, the
-  certificates have ended or are about to; said once for each problem.
+  once until it works again.
 
 ## Focus mode
 
@@ -316,7 +299,6 @@ server keeps only as a hash, good for 400 days) and sets its cookie
 dashboard. A request without the token or a session gets `401 Unauthorized`. `mfd logout` or
 `mfd token rotate` ends every session.
 
-With the certificate, everything is on `https://` and the cookie is marked `Secure`.
 Requests must also name the server as `mfd.localhost:<port>`, `127.0.0.1:<port>` or
 `localhost:<port>` in their `Host` header (a page asked for under either of the last two,
 without a token in a header, is sent to the same path at `mfd.localhost`, where the session
@@ -405,8 +387,8 @@ notes in the notes plugin's tables, the page's dragged order (core's `layout`), 
 slack plugin's, and reviewers' emails in the github plugin's (from `mfd github
 import`, or looked up from commits). It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.
-The server's token sits next to it, in `token`, and the HTTPS certificate in `tls/`. The
-database, its backups, the token and the certificate's key are readable by you alone (on Windows, by their access lists).
+The server's token sits next to it, in `token`. The
+database, its backups and the token are readable by you alone (on Windows, by their access lists).
 
 The schema is built by migrations: core and each plugin own a list, applied in
 order at start-up and counted in `schema_versions`, so an older database

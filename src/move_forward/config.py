@@ -54,10 +54,6 @@ class Config(Strict):
     migrations change the database; the oldest go first. 0 takes none."""
     port: int = DEFAULT_PORT
     """The localhost port `mfd serve` listens on."""
-    https: bool = False
-    """Serve over HTTPS with the certificate `mfd cert` makes (until there is one, plain
-    HTTP). Off by default: the dashboard only listens on localhost, and nothing it does needs
-    HTTPS."""
     refresh_on_load_seconds: int = DEFAULT_REFRESH_ON_LOAD_SECONDS
     """A page load starts a background refresh if the last one began longer ago than this."""
     prune_days: int = DEFAULT_PRUNE_DAYS
@@ -144,6 +140,11 @@ class Config(Strict):
                 "`notes_dir` is gone; the notes live in the database now: import them once with"
                 " `mfd notes import <dir>`"
             )
+        if "https" in settings:
+            moved.append(
+                "`https` is gone; the dashboard serves plain HTTP on localhost only: delete the"
+                " line"
+            )
         if "refresh_seconds" in settings:
             moved.append("`refresh_seconds` is now per plugin: set it in [github], [git] or [jira]")
         plugins = [p.name for p in registry.PLUGINS]
@@ -179,8 +180,14 @@ class Config(Strict):
 
     @model_validator(mode="after")
     def _known_notifications(self) -> "Config":
-        """`[notifications] subscribe` names only kinds that exist."""
+        """`[notifications] subscribe` names only kinds that exist; the one HTTPS mode had says
+        it's gone, not that it's misspelled."""
         known = registry.notification_kinds()
+        if "dashboard.certificate_ending" in self.notifications.subscribe:
+            raise ValueError(
+                "[notifications] subscribe has dashboard.certificate_ending, which is gone with"
+                " HTTPS mode: take it out"
+            )
         bad = [kind for kind in self.notifications.subscribe if kind not in known]
         if bad:
             raise ValueError(f"[notifications] subscribe has {', '.join(bad)}: no such kind")

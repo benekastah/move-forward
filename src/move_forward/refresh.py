@@ -23,7 +23,6 @@ from . import (
     registry,
     shell,
     tags,
-    tls,
 )
 from .act_now import Feedback
 from .config import Config
@@ -374,10 +373,9 @@ def _dashboard_events(config: Config, db: Database, subscribed: set[str], now: d
     if not wanted:
         return
     try:
-        paths = tls.Paths.beside(config.db_path) if config.https else None
         events = [
             e
-            for e in notifications.dashboard_events(db, config.notifications, paths, now)
+            for e in notifications.dashboard_events(db, config.notifications, now)
             if notifications.qualified(notifications.DASHBOARD, e.kind) in wanted
         ]
         NotificationRepository(db).add(notifications.DASHBOARD, events, now)

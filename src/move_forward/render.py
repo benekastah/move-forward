@@ -326,14 +326,6 @@ def linkable(url: str | None) -> bool:
     return url is not None and (url.startswith(("https://", "http://")) or local_path(url))
 
 
-def banner(text: str, urgency: str | None) -> str:
-    """A bar across the page for something that must be done: "notice" (blue), "soon"
-    (yellow) or "now" (red); nothing without an urgency."""
-    if not text or urgency is None:
-        return ""
-    return f"<div class='banner {_e(urgency)}' role='alert'>{_e(text)}</div>"
-
-
 def _badge(badge: str | Badge) -> str:
     """A badge, coloured by its tone."""
     if isinstance(badge, str):
@@ -710,22 +702,18 @@ def dashboard_page(
     dashboard: Dashboard,
     refreshing: AbstractSet[str],
     notice: str = "",
-    warning: str = "",
-    urgency: str | None = None,
     spot: Spot | None = None,
 ) -> str:
     """The page. `spot` is where an action was just pressed (see `Spot`).
 
     `refreshing` are the plugins a refresh running now collects. `notice` is the outcome of
-    an action just run, shown in the header. `warning` is something to fix, e.g. certificates ending soon,
-    shown in the header, and across the page too with an `urgency` (see `banner`).
+    an action just run, shown in the header.
     """
     status = (
         "refreshing…" if refreshing else f"built {localtime.local(dashboard.generated_at):%H:%M}"
     )
     reload_seconds = REFRESHING_RELOAD_SECONDS if refreshing else PAGE_RELOAD_SECONDS
     notice_html = f"<span class='notice'>{_e(notice)}</span>" if notice else ""
-    notice_html += f"<span class='notice warn'>{_e(warning)}</span>" if warning else ""
     return (
         _head("Move forward", reload_seconds, refresh_icon=bool(refreshing))
         + f"<header><h1>{LOGO}</h1><div class='header-right'>"
@@ -734,7 +722,6 @@ def dashboard_page(
         "<a class='button secondary' href='/settings'>Settings</a>"
         "<form method='post' action='/refresh'><button type='submit'"
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
-        + banner(warning, urgency)
         + "<main>"
         + "".join(_group(group, dashboard, refreshing, spot) for group in dashboard.groups)
         + "</main>"
@@ -758,9 +745,8 @@ def _focus_category(dashboard: Dashboard, key: str, title: str, cls: str) -> str
     )
 
 
-def focus_categories_page(dashboard: Dashboard, alert: str = "") -> str:
-    """Focus mode's first page: "All", then each group with its panels, each with a count.
-    `alert` is a `banner` to show across it."""
+def focus_categories_page(dashboard: Dashboard) -> str:
+    """Focus mode's first page: "All", then each group with its panels, each with a count."""
     rows = [_focus_category(dashboard, FOCUS_ALL, "All", "category")]
     for group in dashboard.groups:
         rows.append(_focus_category(dashboard, group.key, group.title, "category"))
@@ -770,7 +756,7 @@ def focus_categories_page(dashboard: Dashboard, alert: str = "") -> str:
             if (panel := dashboard.find_panel(key))
         )
     return (
-        _head("Focus", None) + f"<header><h1>{LOGO} / focus</h1></header>{alert}"
+        _head("Focus", None) + f"<header><h1>{LOGO} / focus</h1></header>"
         "<main class='single'><article class='panel padded'><h2>What to focus on?</h2>"
         "<p>One item at a time, in the skill's order of priority.</p>"
         f"<ul class='categories'>{''.join(rows)}</ul></article></main></body></html>"
@@ -783,7 +769,6 @@ def focus_page(
     index: int,
     notice: str = "",
     done: tuple[str, Item] | None = None,
-    alert: str = "",
 ) -> str | None:
     """One item of a focus category with previous and next links; None for an unknown category.
 
@@ -800,7 +785,7 @@ def focus_page(
     notice_html = f"<span class='notice'>{_e(notice)}</span>" if notice else ""
     header = (
         f"<header><h1>{LOGO} / <a href='/focus'>focus</a>"
-        f" / {_e(title)}</h1>{notice_html}</header>{alert}<main class='single'>"
+        f" / {_e(title)}</h1>{notice_html}</header><main class='single'>"
     )
     if not items and done is None:
         return (

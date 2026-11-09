@@ -285,8 +285,7 @@ set of tables, pages and actions, and settles what two of them both see the way 
 ### Windows, on a real machine
 
 CI passes on Windows, but these need trying by hand: `py dev.py install` (the PATH
-change, the `mfd.cmd` shim, the hooks through `py -3`); `mfd cert --trust` with
-`https = true`, then Edge, Chrome and Firefox (which should read the Windows store);
+change, the `mfd.cmd` shim, the hooks through `py -3`);
 `mfd serve` replacing its server on a config change, and ctrl-c stopping it;
 `mfd token set` with Credential Manager; Slack's Connect; git stack itself; git watching its
 repos while you work (the watcher holds handles on the watched directories, and Windows can

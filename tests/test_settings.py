@@ -92,12 +92,27 @@ def test_the_port_and_where_the_database_is_arent_changed_here(tmp_path: Path) -
     assert "name=':port' value='8765' disabled" in shown and "moves the server" in shown
 
 
-def test_a_form_without_a_setting_leaves_it_alone(tmp_path: Path) -> None:
+class _ToggleConfig(Strict):
+    loud: bool = False
+
+
+class _TogglePlugin(Plugin[_ToggleConfig, BaseModel]):
+    """A plugin of its own with a true-or-false setting."""
+
+    name = "toggle"
+    config_model = _ToggleConfig
+    api_version = API_VERSION
+
+
+def test_a_form_without_a_setting_leaves_it_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A script posting some fields doesn't turn off the true-or-false settings it left out."""
+    monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _TogglePlugin()])
     path = tmp_path / "config.toml"
-    path.write_text('email = "me@x"\nhttps = true\n\n[act_now]\nsize = 7\n')
+    path.write_text('email = "me@x"\n\n[act_now]\nsize = 7\n\n[toggle]\nloud = true\n')
     notice = settings.save(path, config_module.load(path), {"act_now:size": "5"})
-    assert notice.startswith("saved act_now.size") and "https = true" in path.read_text()
+    assert notice.startswith("saved act_now.size") and "loud = true" in path.read_text()
 
 
 def test_ticked_notifications_are_saved_as_the_subscriptions(tmp_path: Path) -> None:
@@ -114,11 +129,15 @@ def test_a_form_without_the_checkboxes_leaves_the_subscriptions(tmp_path: Path) 
 
 def test_the_page_lists_the_kinds_with_the_subscribed_ticked() -> None:
     config = config_module.Config.model_validate(
-        {"email": "me@x", "notifications": {"subscribe": ["dashboard.source_failing"]}}
+        {
+            "email": "me@x",
+            "github": {"org": "acme"},
+            "notifications": {"subscribe": ["dashboard.source_failing"]},
+        }
     )
     html = settings.page(config)
     assert "name='notify:dashboard.source_failing' checked" in html
-    assert "name='notify:dashboard.certificate_ending'>" in html
+    assert "name='notify:github.ci_failed'>" in html
 
 
 def test_fields_show_their_default_as_a_placeholder_else_the_example_from_their_help() -> None:

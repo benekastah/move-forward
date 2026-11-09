@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from . import act_now, notifications, tags, tls
+from . import act_now, notifications, tags
 from . import plugins as builtin_plugins
 from .db import CORE, OWNER_RE, Database, core_objects
 from .domain import KindModel
@@ -100,7 +100,7 @@ RESERVED_NAMES = frozenset(
         "db_backups",
         "db_path",
         "email",
-        "https",
+        "https",  # gone, and refused as such: a plugin of that name would be too
         "notifications",
         "people",
         "port",
@@ -109,7 +109,6 @@ RESERVED_NAMES = frozenset(
         "sections",
         "teams",
         # Core's commands, `mfd <command>`.
-        "cert",
         "check",
         "contact",
         "contacts",
@@ -354,7 +353,7 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
             now=now,
             db=db,
             kv=KvRepository(db, plugin.name),
-            dashboard_url=f"{tls.scheme(config.https, config.db_path)}://localhost:{config.port}",
+            dashboard_url=f"http://localhost:{config.port}",
             name=plugin.name,
             data_root=Path(config.db_path).parent,
         )

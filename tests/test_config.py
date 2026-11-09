@@ -97,8 +97,16 @@ def test_moved_settings_say_where_they_went(tmp_path: Path) -> None:
         _load(tmp_path, MINIMAL + "repos = []\n")
     with pytest.raises(ValidationError, match=r"`notes_dir` is gone; .*mfd notes import"):
         _load(tmp_path, MINIMAL + 'notes_dir = "~/n"\n')
+    with pytest.raises(ValidationError, match=r"`https` is gone; .*plain HTTP.*delete the line"):
+        _load(tmp_path, MINIMAL + "https = true\n")
     with pytest.raises(ValidationError, match=r"`dir` is gone; .*mfd notes import"):
         _load(tmp_path, MINIMAL + '\n[notes]\ndir = "~/n"\n')
+
+
+def test_a_subscription_to_the_certificates_notification_says_its_gone(tmp_path: Path) -> None:
+    text = MINIMAL + '\n[notifications]\nsubscribe = ["dashboard.certificate_ending"]\n'
+    with pytest.raises(ValidationError, match="gone with HTTPS mode: take it out"):
+        _load(tmp_path, text)
 
 
 def test_a_snooze_days_key_with_a_kinds_old_name_says_its_new_one(tmp_path: Path) -> None:

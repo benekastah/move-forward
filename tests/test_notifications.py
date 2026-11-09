@@ -101,16 +101,16 @@ def test_a_plugin_failing_long_enough_is_said_once_until_it_works_again() -> Non
     db = Database(":memory:")
     config = NotificationsConfig(failing_minutes=15)
     _failing(db, "boom")
-    assert notifications.dashboard_events(db, config, None, NOW) == []
+    assert notifications.dashboard_events(db, config, NOW) == []
     later = NOW + timedelta(minutes=16)
-    [event] = notifications.dashboard_events(db, config, None, later)
+    [event] = notifications.dashboard_events(db, config, later)
     assert event.kind == "source_failing" and "boom" in event.text
-    assert notifications.dashboard_events(db, config, None, later + timedelta(minutes=5)) == []
+    assert notifications.dashboard_events(db, config, later + timedelta(minutes=5)) == []
     _failing(db, None)
-    assert notifications.dashboard_events(db, config, None, later + timedelta(minutes=6)) == []
+    assert notifications.dashboard_events(db, config, later + timedelta(minutes=6)) == []
     _failing(db, "again")
-    assert notifications.dashboard_events(db, config, None, later + timedelta(minutes=7)) == []
-    assert notifications.dashboard_events(db, config, None, later + timedelta(minutes=30))
+    assert notifications.dashboard_events(db, config, later + timedelta(minutes=7)) == []
+    assert notifications.dashboard_events(db, config, later + timedelta(minutes=30))
 
 
 class _Git(GitPlugin):
