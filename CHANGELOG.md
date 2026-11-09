@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Several mailboxes
+
+Each sub-table of `[mail]` (`[mail.home]`, `[mail.work]`) is a mailbox of its own, taking from
+`[mail]` what it leaves out, with its own password (`mfd token set mail.work`, or
+`MAIL_PASSWORD_WORK`). A lone `[mail]` is read as before: nothing to change.
+
 ### Tokens for a plugin's accounts
 
 `mfd token set <plugin>.<account>` stores the token of one of a plugin's accounts, for a plugin

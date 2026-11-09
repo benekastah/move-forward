@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from conftest import section
+from pydantic.fields import FieldInfo
 
 from move_forward import asking, cli, config, init, registry
 from move_forward.plugin import Plugin
@@ -368,6 +369,11 @@ def test_an_unknown_notification_is_asked_again(tmp_path: Path, no_machine_guess
     assert config.load(path).notifications.subscribe == ["dashboard.certificate_ending"]
 
 
+def _tables(field: FieldInfo) -> bool:
+    """A field whose entries are tables of their own, by name (mail's `[mail.<name>]`)."""
+    return field.json_schema_extra == {"tables": True}
+
+
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[Any, Any]) -> None:
     written = plugin.init_template + plugin.init_example
@@ -378,6 +384,7 @@ def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[An
         and key != "teams"
         and f"# {key} =" not in written
         and f"[{plugin.name}.{key}]" not in written  # a table of its own
+        and not (_tables(field) and f"# [{plugin.name}." in written)  # tables by name
     ]
     assert missing == []
 
@@ -385,19 +392,72 @@ def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[An
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> None:
     """`mfd init --example` shows each plugin's keys too, in its section."""
-    lines = cli.EXAMPLE_CONFIG.splitlines()
+    section = _example_section(plugin)
+    keys = [key for key in plugin.config_model.model_fields if key != "teams"]
+    if section is None:
+        assert keys == [], f"the example has no [{plugin.name}]"
+        return
+    shown = "\n".join(section)
+    missing = [
+        key
+        for key in keys
+        if f"{key} =" not in shown
+        and f"[{plugin.name}.{key}]" not in shown
+        and not (_tables(plugin.config_model.model_fields[key]) and f"[{plugin.name}." in shown)
+    ]
+    assert missing == []
+
+
+def _example_section(plugin: Plugin[Any, Any]) -> list[str] | None:
+    """`mfd init --example`'s lines for a plugin's section, up to the next section's; None
+    when it has none."""
+    lines = [str(line) for line in cli.EXAMPLE_CONFIG.splitlines()]
     header = re.compile(r"^(# )?\[([a-z_]+)\]")
     start = next(
         (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),
         None,
     )
-    keys = [key for key in plugin.config_model.model_fields if key != "teams"]
     if start is None:
-        assert keys == [], f"the example has no [{plugin.name}]"
-        return
+        return None
     end = next((n for n in range(start + 1, len(lines)) if header.match(lines[n])), len(lines))
-    shown = "\n".join(lines[start:end])
-    missing = [
-        key for key in keys if f"{key} =" not in shown and f"[{plugin.name}.{key}]" not in shown
-    ]
-    assert missing == []
+    return lines[start:end]
+
+
+_KEY = re.compile(r"^([a-z_]+) =")
+
+
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
+def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, Any]) -> None:
+    """Uncommenting `mfd init --example`'s section for a plugin gives a section it accepts, and
+    so does taking what's behind `##` instead (several mailboxes, say): its tables, each a
+    mailbox of its own, and what every one of them sets moved out of the section."""
+    section = _example_section(plugin)
+    if section is None:
+        return  # no section to give (notes: always on)
+    _check_uncommented(plugin, section)
+    if "\n##" in f"\n{plugin.init_template}":
+        # And `mfd init`'s copy of the alternative, with its required keys as in the example.
+        written = f"[{plugin.name}]\n{plugin.init_example}{plugin.init_template}"
+        _check_uncommented(plugin, written.splitlines())
+
+
+def _check_uncommented(plugin: Plugin[Any, Any], section: list[str]) -> None:
+    """`section`, a plugin's commented config, uncommented, is a config the plugin takes, and
+    so is what's behind `##` instead (see the test above)."""
+    base = [line.removeprefix("# ") for line in section if not line.startswith("##")]
+    plugin.config_model.model_validate(tomllib.loads("\n".join(base))[plugin.name])
+    instead = [line.removeprefix("## ") for line in section if line.startswith("## ")]
+    if not instead:
+        return
+    tables: list[set[str]] = []
+    for line in instead:
+        if line.startswith("["):
+            tables.append(set())
+        elif tables and (m := _KEY.match(line)):
+            tables[-1].add(m[1])
+    moved: set[str] = tables[0].intersection(*tables[1:]) if tables else set()
+    kept = [line for line in base if not ((m := _KEY.match(line)) and m[1] in moved)]
+    text = "\n".join(
+        [*kept, *(line for line in instead if line.startswith("[") or _KEY.match(line))]
+    )
+    plugin.config_model.model_validate(tomllib.loads(text)[plugin.name])

@@ -26,11 +26,12 @@ from ...api import (
     StoreRequest,
     attrs,
 )
+from ...api.keychain import TokenSettings
 from ...api.kinds import PERSON
 from . import client
 from .config import MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
-from .models import MailSnapshot
+from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
 from .repository import MIGRATIONS, MessageRepository
 from .setup import EXAMPLE, TEMPLATE, questions
@@ -43,6 +44,37 @@ def person_id(email: str) -> str:
     """The id of the `person` with address `email`: `mail/<address>`, the same whichever mail
     plugin publishes them, and apart from any code host's `<host>/<login>`."""
     return f"mail/{email}"
+
+
+def merged(read: list[Message], more: list[Message]) -> list[Message]:
+    """`read`, from the mailboxes before, with another mailbox's messages: a copy of one already
+    read (the same Message-ID from the same sender, each copy's sender verified) adds only
+    what's about me there, flagged, to me, replying to me, from someone I know or important, to
+    the first copy. Only verified copies merge, as anyone can write a `From` and a Message-ID:
+    unverified, a message sent to two of my addresses is shown twice. Within a mailbox nothing
+    is merged."""
+    first: dict[tuple[str, str | None], int] = {
+        (m.message_id, m.sender_email): i for i, m in enumerate(read) if m.message_id and m.verified
+    }
+    found = list(read)
+    taken: set[int] = set()  # a mailbox has one copy of a message: more claim to be it
+    for message in more:
+        i = first.get((message.message_id, message.sender_email)) if message.message_id else None
+        if not message.verified or i is None or i in taken:
+            found.append(message)
+            continue
+        taken.add(i)
+        copy = found[i]
+        found[i] = copy.model_copy(
+            update={
+                "flagged": copy.flagged or message.flagged,
+                "to_me": copy.to_me or message.to_me,
+                "replies_to_me": copy.replies_to_me or message.replies_to_me,
+                "known": copy.known or message.known,
+                "important": copy.important or message.important,
+            }
+        )
+    return found
 
 
 class MailPlugin(Plugin[MailConfig, MailSnapshot]):
@@ -69,9 +101,18 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 
+    def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
+        """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""
+        return {m.name: m for m in config.mailboxes()}
+
     def collect(self, req: CollectRequest[MailConfig]) -> MailSnapshot:
+        """Every mailbox's unread and flagged mail, newest first. A conversation is one whichever
+        mailboxes have it, and a message sent to two of my addresses is one (`merged`)."""
         ctx = req.ctx
-        return client.collect(ctx.config, ctx.email, ctx.now)
+        messages: list[Message] = []
+        for mailbox in ctx.config.mailboxes():
+            messages = merged(messages, client.collect(mailbox, ctx.email, ctx.now).messages)
+        return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
     def store(self, req: StoreRequest[MailConfig, MailSnapshot]) -> None:
         MessageRepository(req.ctx.db).replace(req.snapshot)
@@ -80,16 +121,18 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         return MessageRepository(req.ctx.db).load()
 
     def changed(self, req: ChangedRequest[MailConfig]) -> Changed:
-        """Whether the mailbox's counts moved since the last look: mail came, went or was
-        read. One `STATUS`, without opening the mailbox."""
+        """Whether a mailbox's counts moved since the last look: mail came, went or was
+        read. One `STATUS` each, without opening the mailbox."""
         ctx = req.ctx
-        now = client.status(ctx.config, ctx.email)
+        now = "\n".join(client.status(m, ctx.email) for m in ctx.config.mailboxes())
         before = ctx.kv.get(STATUS)
         ctx.kv.set(STATUS, now)
         return Changed(before is not None and before != now, "the mailbox changed")
 
     def identity(self, req: IdentityRequest[MailConfig, MailSnapshot]) -> Identity | None:
-        return Identity(tool=self.title, login=req.ctx.config.username)
+        return Identity(
+            tool=self.title, login=", ".join(m.username for m in req.ctx.config.mailboxes())
+        )
 
     def entities(self, req: EntitiesRequest[MailConfig, MailSnapshot]) -> list[Entity]:
         found: list[Entity] = []

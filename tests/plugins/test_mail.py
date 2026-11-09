@@ -11,17 +11,24 @@ import pytest
 from pydantic import ValidationError
 
 from move_forward.asking import Asker, InitSetup
+from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref, attrs
 from move_forward.kinds import PERSON, Person
-from move_forward.plugin import ChangedRequest, Response, SourceError
+from move_forward.plugin import (
+    ChangedRequest,
+    CollectRequest,
+    IdentityRequest,
+    Response,
+    SourceError,
+)
 from move_forward.plugins.mail import client
-from move_forward.plugins.mail.config import GMAIL_MESSAGE_URL, MailConfig
+from move_forward.plugins.mail.config import GMAIL_MESSAGE_URL, Mailbox, MailConfig
 from move_forward.plugins.mail.kinds import THREAD
 from move_forward.plugins.mail.models import MailSnapshot, Message
+from move_forward.plugins.mail.panels import message_url, says
 from move_forward.plugins.mail.panels import panels as mail_panels
-from move_forward.plugins.mail.panels import says
-from move_forward.plugins.mail.plugin import MailPlugin
-from move_forward.plugins.mail.repository import MessageRepository
+from move_forward.plugins.mail.plugin import MailPlugin, merged
+from move_forward.plugins.mail.repository import MIGRATIONS, MessageRepository
 from move_forward.plugins.mail.setup import questions
 from move_forward.repositories import ContactRepository, TagRepository
 from move_forward.testing import Harness
@@ -29,6 +36,14 @@ from move_forward.testing import Harness
 NOW = datetime(2026, 11, 7, 12, tzinfo=UTC)
 ME = "me@gmail.com"
 SECTION = {"host": "imap.gmail.com", "username": ME, "message_url": GMAIL_MESSAGE_URL}
+SHARED = {"host": "imap.gmail.com", "message_url": GMAIL_MESSAGE_URL}
+"""[mail] with accounts: no username of its own."""
+HOME = {"username": ME}
+WORK = {
+    "host": "imap.work.example",
+    "username": "me@work.example",
+    "message_url": "mid:{message_id}",
+}
 
 
 def headers(
@@ -158,9 +173,9 @@ def test_an_address_with_two_ats_is_never_verified() -> None:
 
 
 def test_gmails_server_is_known_and_others_are_set() -> None:
-    assert _config().trusted_auth_servers() == {"mx.google.com"}
-    assert _config(host="imap.example.com").trusted_auth_servers() == set()
-    assert _config(
+    assert _mailbox().trusted_auth_servers() == {"mx.google.com"}
+    assert _mailbox(host="imap.example.com").trusted_auth_servers() == set()
+    assert _mailbox(
         host="imap.example.com", auth_servers=["MX.Example.com"]
     ).trusted_auth_servers() == {"mx.example.com"}
 
@@ -374,6 +389,11 @@ def _config(**overrides: object) -> MailConfig:
     return MailConfig.model_validate({**SECTION, **overrides})
 
 
+def _mailbox(**overrides: object) -> Mailbox:
+    [mailbox] = _config(**overrides).mailboxes()
+    return mailbox
+
+
 def test_collect_reads_headers_only_without_marking_anything_read(
     imap: Callable[..., FakeImap],
 ) -> None:
@@ -384,7 +404,7 @@ def test_collect_reads_headers_only_without_marking_anything_read(
             (6, "", headers(subject="Newer", message_id="new@acme.com")),
         ]
     )
-    snapshot = client.collect(_config(since_days=7, max_messages=1), "me@work.com", NOW)
+    snapshot = client.collect(_mailbox(since_days=7, max_messages=1), "me@work.com", NOW)
     # The newest unread, at most one, and every flagged one, however old.
     assert sorted(m.subject for m in snapshot.messages) == ["Marked", "Newer"]
     assert ("connect", "imap.gmail.com", 993, client.TIMEOUT_SECONDS) in server.calls
@@ -400,7 +420,7 @@ def test_collect_reads_headers_only_without_marking_anything_read(
 def test_a_refused_sign_in_says_what_to_do(imap: Callable[..., FakeImap]) -> None:
     imap([], refuse=True)
     with pytest.raises(SourceError, match="app password"):
-        client.collect(_config(), "me@work.com", NOW)
+        client.collect(_mailbox(), "me@work.com", NOW)
 
 
 def test_a_password_imap_cant_send_says_so(
@@ -409,7 +429,7 @@ def test_a_password_imap_cant_send_says_so(
     imap([])
     monkeypatch.setenv("MAIL_PASSWORD", "pässword")
     with pytest.raises(SourceError, match="ASCII"):
-        client.collect(_config(), ME, NOW)
+        client.collect(_mailbox(), ME, NOW)
 
 
 def test_no_password_says_how_to_set_one(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -420,7 +440,7 @@ def test_no_password_says_how_to_set_one(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(client.keychain, "read", nothing_stored)
     with pytest.raises(SourceError, match="mfd token set mail"):
-        client.collect(_config(), "me@work.com", NOW)
+        client.collect(_mailbox(), "me@work.com", NOW)
 
 
 @pytest.mark.parametrize(
@@ -609,7 +629,7 @@ def test_many_messages_are_fetched_in_chunks(
 ) -> None:
     monkeypatch.setattr(client, "FETCH_CHUNK", 2)
     server = imap([(uid, "\\Flagged", headers(message_id=f"m{uid}@x")) for uid in range(1, 6)])
-    snapshot = client.collect(_config(), ME, NOW)
+    snapshot = client.collect(_mailbox(), ME, NOW)
     fetches = [c[2] for c in server.calls if c[:2] == ("uid", "FETCH")]
     assert fetches == ["1,2", "3,4", "5"] and len(snapshot.messages) == 5
 
@@ -666,11 +686,11 @@ def test_a_threads_labels_are_its_tags_and_kept_between_refreshes() -> None:
 
 def test_labels_are_asked_for_only_from_gmail(imap: Callable[..., FakeImap]) -> None:
     server = imap([(1, "", headers())])
-    client.collect(_config(), ME, NOW)
+    client.collect(_mailbox(), ME, NOW)
     assert "X-GM-LABELS" not in str([c for c in server.calls if c[:2] == ("uid", "FETCH")])
     server = imap([(1, "", headers())])
     server.capabilities = ("IMAP4REV1", client.GMAIL)
-    client.collect(_config(), ME, NOW)
+    client.collect(_mailbox(), ME, NOW)
     assert "X-GM-LABELS" in str([c for c in server.calls if c[:2] == ("uid", "FETCH")])
 
 
@@ -696,7 +716,7 @@ def test_mail_answering_mine_replies_to_me(imap: Callable[..., FakeImap]) -> Non
         ]
     )
     server.sent = {10: "mine@me"}
-    snapshot = client.collect(_config(), ME, NOW)
+    snapshot = client.collect(_mailbox(), ME, NOW)
     assert {m.message_id: m.replies_to_me for m in snapshot.messages} == {
         "r1@acme.com": True,
         "n1@acme.com": False,
@@ -718,11 +738,11 @@ def test_reading_my_sent_mail_finds_it_by_its_flag_or_config_and_never_fails_the
     server = imap([(1, "", reply)])
     server.sent = {10: "mine@me"}
     server.listed = [b'(\\HasNoChildren) "/" "INBOX"']  # nothing marked \\Sent
-    assert not client.collect(_config(), ME, NOW).messages[0].replies_to_me
+    assert not client.collect(_mailbox(), ME, NOW).messages[0].replies_to_me
     server = imap([(1, "", reply)])
     server.sent = {10: "mine@me"}
     server.listed = []
-    configured = client.collect(_config(sent_mailbox="Sent Items"), ME, NOW)
+    configured = client.collect(_mailbox(sent_mailbox="Sent Items"), ME, NOW)
     assert configured.messages[0].replies_to_me  # sent_mailbox needs no LIST
     for broken in ("closed", "list", "fetch"):
         server = imap([(1, "", reply)])
@@ -733,7 +753,7 @@ def test_reading_my_sent_mail_finds_it_by_its_flag_or_config_and_never_fails_the
             server.listed = None
         else:
             server.sent_fails = True  # a timeout fetching my sent mail
-        [found] = client.collect(_config(), ME, NOW).messages  # the inbox still comes
+        [found] = client.collect(_mailbox(), ME, NOW).messages  # the inbox still comes
         assert not found.replies_to_me
 
 
@@ -749,7 +769,7 @@ def test_a_quoted_sent_mailbox_name_is_unescaped() -> None:
         def list(self) -> tuple[str, list[bytes]]:
             return "OK", [b'(\\Sent) "/" "My \\"Sent\\" \\\\ box"']
 
-    found = client.sent_mailbox(cast(Any, Listing()), _config())
+    found = client.sent_mailbox(cast(Any, Listing()), _mailbox())
     assert found == 'My "Sent" \\ box'
 
 
@@ -806,7 +826,7 @@ def test_someone_i_wrote_to_twice_is_known(imap: Callable[..., FakeImap]) -> Non
         11: f"carol@y.com, {ME}\r\nCc: alice@acme.com, bob@x.com",
         12: "carol@y.com",
     }
-    found = {m.sender_email: m.known for m in client.collect(_config(), ME, NOW).messages}
+    found = {m.sender_email: m.known for m in client.collect(_mailbox(), ME, NOW).messages}
     # Alice twice (To and Cc), bob once, and me never, however often I'm copied.
     assert found == {"alice@acme.com": True, "bob@x.com": False, ME: False}
 
@@ -832,13 +852,13 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
     )
     server.capabilities = ("IMAP4REV1", client.GMAIL)
     server.aside = {1}
-    found = {m.message_id: m.bulk for m in client.collect(_config(), ME, NOW).messages}
+    found = {m.message_id: m.bulk for m in client.collect(_mailbox(), ME, NOW).messages}
     assert found == {"sale@shop": True, "hi@friend": False}
     # A reply to me filed under Promotions is still a person writing to me.
     misfiled = imap([(1, "", headers(message_id="r@contractor", extra="In-Reply-To: <mine@me>"))])
     misfiled.capabilities = ("IMAP4REV1", client.GMAIL)
     misfiled.aside, misfiled.sent = {1}, {10: "mine@me"}
-    [reply] = client.collect(_config(), ME, NOW).messages
+    [reply] = client.collect(_mailbox(), ME, NOW).messages
     assert reply.replies_to_me and not reply.bulk
     # Nor is someone I know, verified; one who isn't verified is put aside.
     for verified, aside in ((True, False), (False, True)):
@@ -851,14 +871,14 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
             {10: "a@me", 11: "b@me"},
             {10: "pal@friend.com", 11: "pal@friend.com"},
         )
-        [found] = client.collect(_config(), ME, NOW).messages
+        [found] = client.collect(_mailbox(), ME, NOW).messages
         assert (found.known, found.bulk) == (True, aside)
     failing = imap([(1, "", headers(message_id="sale@shop"))])
     failing.capabilities, failing.aside = ("IMAP4REV1", client.GMAIL), None
-    assert not client.collect(_config(), ME, NOW).messages[0].bulk  # nothing put aside
+    assert not client.collect(_mailbox(), ME, NOW).messages[0].bulk  # nothing put aside
     plain = imap([(1, "", headers(message_id="sale@shop"))])
     plain.aside = {1}  # not Gmail: not asked
-    assert not client.collect(_config(), ME, NOW).messages[0].bulk
+    assert not client.collect(_mailbox(), ME, NOW).messages[0].bulk
     assert not any("X-GM-RAW" in c for c in plain.calls)
 
 
@@ -982,3 +1002,228 @@ def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
     [forged] = _items(harness)
     assert not any(d.startswith("about") for d in forged.details)
     assert forged.signals is not None and forged.signals.importance == 0
+
+
+def test_each_sub_table_is_an_account_taking_from_mail_what_it_leaves_out() -> None:
+    config = MailConfig.model_validate(
+        {**SHARED, "since_days": 7, "home": HOME, "work": {**WORK, "mailbox": "Work"}}
+    )
+    home, work = config.mailboxes()
+    assert (home.name, home.host, home.username, home.mailbox) == (
+        "home",
+        "imap.gmail.com",
+        ME,
+        "INBOX",
+    )
+    assert (work.name, work.host, work.username, work.mailbox) == (
+        "work",
+        "imap.work.example",
+        "me@work.example",
+        "Work",
+    )
+    assert work.since_days == home.since_days == 7  # what's for every mailbox
+    # A password is never shared: each account's is its own.
+    assert (home.token_env, home.keychain_service) == (
+        "MAIL_PASSWORD_HOME",
+        "move-forward-mail-home",
+    )
+    assert (work.token_env, work.keychain_service) == (
+        "MAIL_PASSWORD_WORK",
+        "move-forward-mail-work",
+    )
+    lone = _config().mailboxes()
+    assert [(m.name, m.token_env, m.keychain_service) for m in lone] == [
+        ("", "MAIL_PASSWORD", "move-forward-mail")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("section", "said"),
+    [
+        ({"username": ME}, r"\[mail\] needs a host"),
+        ({"work": {"host": "imap.work.example"}}, r"\[mail.work\] needs a host and a username"),
+        ({**SECTION, "work": WORK}, r"\[mail\] has accounts, so its username names no mailbox"),
+        ({**SHARED, "Work": WORK}, "lower-case letters"),
+        ({"auth_servers": ["mx.example.com"], "work": WORK}, "no account takes them"),
+        ({**SHARED, "auth_servers": ["mx.google.com"], "work": WORK}, "no account takes them"),
+        (
+            {**SHARED, "auth_servers": ["x"], "home": {**HOME, "auth_servers": ["y"]}},
+            "no account takes them",
+        ),
+        ({**SHARED, "work": {**WORK, "since_days": 3}}, "since_days"),  # [mail]'s alone
+    ],
+)
+def test_a_mailbox_needs_a_host_and_a_username_and_an_account_a_name(
+    section: dict[str, object], said: str
+) -> None:
+    with pytest.raises(ValidationError, match=said):
+        MailConfig.model_validate(section)
+
+
+def test_every_mailbox_is_read_and_a_message_in_two_is_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def collect(mailbox: Mailbox, email: str, now: datetime) -> MailSnapshot:
+        both = message(2, subject="To both", account=mailbox.name, flagged=mailbox.name == "work")
+        own = message(
+            3 if mailbox.name == "home" else 1, subject=f"For {mailbox.name}", account=mailbox.name
+        ).model_copy(update={"message_id": f"{mailbox.name}@acme.com"})
+        return MailSnapshot(messages=[own, both])
+
+    monkeypatch.setattr(client, "collect", collect)
+    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    snapshot = cast(MailSnapshot, harness.plugin.collect(CollectRequest(harness.ctx)))
+    assert [(m.subject, m.account, m.flagged) for m in snapshot.messages] == [
+        ("For home", "home", False),
+        ("To both", "home", True),  # home's copy, flagged in work
+        ("For work", "work", False),
+    ]
+
+
+def test_a_message_without_a_message_id_is_its_mailboxs_own_conversation(
+    imap: Callable[..., FakeImap], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MAIL_PASSWORD_WORK", "app-password")
+    imap([(4, "", headers(message_id=""))])
+    work = MailConfig.model_validate({**SHARED, "work": HOME}).mailboxes()[0]
+    [found] = client.collect(work, ME, NOW).messages
+    assert (found.account, found.thread) == ("work", "uid:work:4")
+
+
+def test_a_message_links_by_its_own_mailboxs_template() -> None:
+    config = MailConfig.model_validate({**SHARED, "home": HOME, "work": WORK})
+    home = message(1, account="home")
+    work = message(2, account="work")
+    assert message_url(config, home) == (
+        "https://mail.google.com/mail/u/me@gmail.com/#search/rfc822msgid:m1@acme.com"
+    )
+    assert message_url(config, work) == "mid:m2@acme.com"
+    assert message_url(config, message(3, account="gone")) is None  # since taken out
+
+
+def test_two_mailboxes_keep_their_messages_apart_and_say_whose_they_are() -> None:
+    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    snapshot = MailSnapshot(
+        messages=[
+            message(1, account="home", labels=["\\Inbox"]),
+            message(1, account="work", thread="other@acme.com"),  # the same UID
+        ]
+    )
+    harness.store(snapshot)
+    assert MessageRepository(harness.db).load() == snapshot
+    [panel] = [p for p in harness.dashboard().panels if p.key == "mail.inbox"]
+    assert "in home's INBOX and work's INBOX" in panel.description
+    plugin = MailPlugin()
+    config = cast(MailConfig, harness.ctx.config)
+    assert sorted(plugin.tokens(config)) == ["home", "work"]
+    identity = plugin.identity(IdentityRequest(harness.ctx, snapshot))
+    assert identity is not None and identity.login == "me@gmail.com, me@work.example"
+
+
+def test_a_mailbox_changing_refreshes_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    counts = {"home": "1", "work": "1"}
+
+    def status(mailbox: Mailbox, email: str) -> str:
+        return counts[mailbox.name]
+
+    monkeypatch.setattr(client, "status", status)
+    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    plugin = MailPlugin()
+    assert not plugin.changed(ChangedRequest(harness.ctx, harness.graph())).changed
+    counts["work"] = "2"
+    assert plugin.changed(ChangedRequest(harness.ctx, harness.graph())).changed
+
+
+def test_the_messages_kept_before_accounts_are_kept_as_mails_own() -> None:
+    db = Database(":memory:")
+    db.migrate("mail", MIGRATIONS[: [m.name for m in MIGRATIONS].index("0006_accounts")])
+    with db.transaction() as conn:
+        conn.execute(
+            "INSERT INTO mail_messages VALUES (7, 0, 'm7@acme.com', 'root@acme.com', 'Hi', 'A',"
+            " 'a@acme.com', 1, 0, 0, 0, 1, '2026-11-07T07:00:00+00:00', 0, 0, 0)"
+        )
+        conn.execute("INSERT INTO mail_message_labels VALUES (7, '\\Inbox')")
+    db.migrate("mail", MIGRATIONS)
+    [kept] = MessageRepository(db).load().messages
+    assert (kept.account, kept.uid, kept.labels) == ("", 7, ["\\Inbox"])
+
+
+def test_a_message_claiming_anothers_message_id_takes_nothing_from_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real = message(1, subject="Renewal", flagged=True)
+    forged = message(2, subject="Pay now", sender="evil@evil.com", verified=False)
+    forged = forged.model_copy(update={"message_id": real.message_id})
+
+    def collect(mailbox: Mailbox, email: str, now: datetime) -> MailSnapshot:
+        return MailSnapshot(messages=[forged, real])
+
+    monkeypatch.setattr(client, "collect", collect)
+    harness = Harness(MailPlugin(), SECTION, now=NOW)  # one mailbox: nothing is merged in it
+    snapshot = cast(MailSnapshot, harness.plugin.collect(CollectRequest(harness.ctx)))
+    assert [(m.sender_email, m.flagged) for m in snapshot.messages] == [
+        ("evil@evil.com", False),
+        ("alice@acme.com", True),
+    ]
+
+
+def test_a_copy_in_another_mailbox_adds_whats_about_me_there_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def collect(mailbox: Mailbox, email: str, now: datetime) -> MailSnapshot:
+        if mailbox.name == "home":
+            return MailSnapshot(messages=[message(1, account="home", to_me=False)])
+        copy = message(1, account="work", to_me=True, replies_to_me=True)
+        other = message(2, account="work", sender="mallory@acme.com", important=True)
+        other = other.model_copy(update={"message_id": "m1@acme.com"})  # another sender
+        return MailSnapshot(messages=[copy, copy.model_copy(update={"uid": 9}), other])
+
+    monkeypatch.setattr(client, "collect", collect)
+    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    snapshot = cast(MailSnapshot, harness.plugin.collect(CollectRequest(harness.ctx)))
+    found = [(m.account, m.uid, m.to_me, m.replies_to_me, m.important) for m in snapshot.messages]
+    assert sorted(found) == [
+        ("home", 1, True, True, False),  # what work's copy says of me
+        ("work", 2, True, False, True),  # another sender's: its own
+        ("work", 9, True, True, False),  # a second claim in work: its own
+    ]
+
+
+def test_an_account_on_its_own_server_trusts_only_its_own_results() -> None:
+    config = MailConfig.model_validate(
+        {**SHARED, "auth_servers": ["mx.google.com"], "home": HOME, "work": WORK}
+    )
+    home, work = config.mailboxes()
+    assert home.trusted_auth_servers() == {"mx.google.com"}
+    assert work.trusted_auth_servers() == set()  # imap.work.example's are unknown
+
+
+@pytest.mark.parametrize(
+    ("home", "work", "found"),
+    [
+        (True, True, [("home", True)]),
+        (False, False, [("home", False), ("work", True)]),
+        (True, False, [("home", False), ("work", True)]),
+        (False, True, [("home", False), ("work", True)]),
+    ],
+)
+def test_a_copy_merges_only_when_both_senders_are_verified(
+    home: bool, work: bool, found: list[tuple[str, bool]]
+) -> None:
+    first = message(1, account="home", verified=home)
+    copy = message(1, account="work", verified=work, flagged=True)
+    assert [(m.account, m.flagged) for m in merged([first], [copy])] == found
+
+
+def test_an_account_on_mails_own_host_keeps_mails_auth_servers() -> None:
+    config = MailConfig.model_validate(
+        {
+            "host": "imap.example.com",
+            "auth_servers": ["mx.example.com"],
+            "home": HOME,
+            "work": {"host": "imap.example.com", "username": "me@work.example"},
+        }
+    )
+    assert [m.trusted_auth_servers() for m in config.mailboxes()] == [{"mx.example.com"}] * 2
+    cased = config.model_copy(update={"host": "IMAP.Example.com"})
+    assert [m.trusted_auth_servers() for m in cased.mailboxes()] == [{"mx.example.com"}] * 2

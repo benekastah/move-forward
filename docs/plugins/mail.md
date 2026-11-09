@@ -68,22 +68,58 @@ It must be an `https://` link or start with `message:` or `mid:`; empty, the def
 unlinked. The page links only to http(s), so an item with a `message:` or `mid:` link goes
 through the plugin's `/mail/open` page, which sends the browser on to the mail app.
 
+### Several mailboxes
+
+Each sub-table of `[mail]` is a mailbox of its own, named by it: `[mail.home]` and `[mail.work]`
+read two. What one leaves out, `[mail]` says for every one (`host`, `port`, `username`,
+`mailbox`, `sent_mailbox`, `message_url`, `auth_servers`); `refresh_seconds`, `known_days`,
+`since_days`, `max_messages` and the word lists are `[mail]`'s alone. With accounts, `[mail]` is
+no mailbox itself: it can't have a `username` (move it to an account, `[mail.home]`, and set its
+password with `mfd token set mail.home`). Only an account on `[mail]`'s `host` (whatever its
+case) takes `[mail]`'s `auth_servers`, as which server's results count depends on the server;
+the config is refused when `[mail]` sets them and no account takes them. An account's name
+starts with a letter, then up to 29 lower-case letters, digits and `_`.
+
+```toml
+[mail]
+host = "imap.gmail.com"
+message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"
+
+[mail.home]
+username = "me@gmail.com"
+
+[mail.work]
+host = "imap.work.example"
+username = "me@work.example"
+message_url = "mid:{message_id}"
+```
+
+Each has its own password, never `[mail]`'s: `mfd token set mail.work` stores it under
+`move-forward-mail-work`, or export `MAIL_PASSWORD_WORK` (or set the account's `token_env` and
+`keychain_service`). A conversation is one item whichever mailboxes have it, linked by the
+mailbox of its latest message, and a message in two (sent to both addresses) counts once, as the
+first mailbox's, flagged, to me, replying to me, from someone I know or important if either copy
+is. Only copies whose sender both servers verified merge, as anyone can write a `From` and a
+Message-ID: any other is shown once per mailbox. Nothing is merged within one mailbox. Each
+mailbox's sent mail says whom I know and what answers me for its own mail. A mailbox that fails
+to sign in fails the refresh, keeping what was read last.
+
 ## Publishes
 
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
-with, pointing at the `person` who wrote its latest message and, when its sender is verified,
+with (`uid:<uid>` for a message with none, `uid:<account>:<uid>` in an account's mailbox),
+pointing at the `person` who wrote its latest message and, when its sender is verified,
 mentioning its subject (so a ticket key in it relates the two). Its Gmail labels, Gmail's own
 (`#inbox`, `#starred`) and mine, are its tags, whoever sent it. A `#tag` in a subject puts no
-tag on the thread (`tags_from_text=False`): anyone can write one. A subject still names tags
-in the graph whoever sent it; only what mail says it's about, and how it ranks, waits for a
-verified sender. That `person` is `mail/<address>`, with the address as its
-`handle` and `email`, so core joins them with the same person in other tools, a CRM say, and
-ranks and badges their mail by their contact type. Only a sender the receiving server vouched
-for is published that way: one whose `From` passed DMARC (its one `dmarc` result), by the server's own
-`Authentication-Results` (the topmost, stamped with a name in `auth_servers`; any below came with
-the message). Anyone can write any
-`From`, and a forged one mustn't borrow a customer's type. Others' mail is still listed, from
-whoever it says. See [entities.md](../entities.md).
+tag on the thread (`tags_from_text=False`): anyone can write one. A subject still names tags in
+the graph whoever sent it; only what mail says it's about, and how it ranks, waits for a
+verified sender. That `person` is `mail/<address>`, with the address as its `handle` and
+`email`, so core joins them with the same person in other tools, a CRM say, and ranks and badges
+their mail by their contact type. Only a sender the receiving server vouched for is published
+that way: one whose `From` passed DMARC (its one `dmarc` result), by the server's own
+`Authentication-Results` (the topmost, stamped with a name in `auth_servers`; any below came
+with the message). Anyone can write any `From`, and a forged one mustn't borrow a customer's
+type. Others' mail is still listed, from whoever it says. See [entities.md](../entities.md).
 
 A conversation is the Message-ID its first message named, which anyone replying can name.
 So its flag (and the importance it gives) counts only flagged mail from whoever wrote its latest
