@@ -11,6 +11,20 @@ salesperson on a CRM and a calendar) can run the dashboard with only the plugins
 and new tools can be added without touching the others. Plugins interact only through a
 small shared entity graph.
 
+## First: simplify
+
+Before building more, a review pass for what can go or be made simpler, since the code has
+grown complicated. Questions to answer, each with what to remove, merge or move:
+
+- **Features that do about the same thing**, where one would do (two ways of setting
+  something aside, of marking importance, of linking work, of telling me something changed).
+- **What in core makes writing a plugin hard**: hooks, request objects, flags and rules a
+  plugin must know about to do something simple.
+- **What makes the plugins complicated now**, and whether it could move to core: the same
+  work done in several plugins (keeping what moved, polling for changes, tokens and accounts,
+  sanitizing what a stranger wrote, item actions), or a plugin working around core.
+- **Anything overcomplicated**: code, config keys or docs that cost more than they give.
+
 ## Slack as a source of work
 
 Slack becomes a source of work, not just a place pings go. The workspace's Slack app and
