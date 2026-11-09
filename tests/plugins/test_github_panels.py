@@ -450,6 +450,27 @@ def test_needs_reviewer_lists_team_only_and_unrequested_prs_with_suggestions() -
     assert items["PR 2"].details == ["no reviewer requested"]
 
 
+def test_needs_reviewer_leaves_out_a_suggestion_since_asked_whatever_its_case() -> None:
+    asked = pr(6, requested_teams=["core"], requested_users=["Carol"])
+    dashboard = build(
+        github=snapshot(mine=[asked]),
+        team_reviewer_assignment={"core": "individual"},
+        derived=DerivedSnapshot(
+            suggestions={
+                asked.url: [
+                    ReviewerSuggestion(login="carol", commits=4),
+                    ReviewerSuggestion(login="dave", commits=2),
+                ]
+            }
+        ),
+    )
+    [item] = panel(dashboard, "github.needs_reviewer").items
+    assert "recent committers here: dave (2)" in item.details
+    [field] = [a for a in item.actions if a.input == "Reviewer"]
+    assert field.suggestions is not None and "dave" in field.suggestions
+    assert not {"carol", "Carol"} & set(field.suggestions)
+
+
 # Feedback
 
 

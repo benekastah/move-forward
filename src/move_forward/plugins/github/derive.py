@@ -1,7 +1,7 @@
 """Derived data that needs local checkouts: CODEOWNERS scores and reviewer suggestions."""
 
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 
 from pydantic import Field
@@ -9,7 +9,7 @@ from pydantic import Field
 from ...api import Model
 from ...api.shell import CommandError, git
 from . import codeowners
-from .models import DerivedSnapshot, GitHubSnapshot, ReviewerSuggestion, TeamPrScore
+from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, ReviewerSuggestion, TeamPrScore
 
 MAX_SUGGESTIONS = 5
 
@@ -113,8 +113,10 @@ def collect(
     teams: list[str],
     commit_history_days: int,
     required_owner_marker: str = "",
+    wants_reviewer: Callable[[PullRequest], bool] = lambda pr: True,
 ) -> DerivedSnapshot:
-    """`teams` are slugs, as PRs' requested teams have them. A checkout's repo is matched to a
+    """`teams` are slugs, as PRs' requested teams have them. Reviewers are suggested for my
+    PRs `wants_reviewer` says a reviewer may yet be picked for, each a `git log`. A checkout's repo is matched to a
     PR's whatever case the remote names it in, as GitHub's names ignore case."""
     repos = {r.github_repo.lower(): r for r in checkouts}
     owners = {
@@ -137,7 +139,6 @@ def collect(
         )
         for pr in asked.values()
     }
-    # Every PR of mine can want a reviewer picked: Needs a reviewer's and the reviewer fields.
     suggestions = {
         pr.url: suggest_reviewers(
             repos[pr.repo.lower()],
@@ -147,6 +148,6 @@ def collect(
             {github.login, *pr.requested_users},
         )
         for pr in github.mine
-        if pr.repo.lower() in repos
+        if pr.repo.lower() in repos and wants_reviewer(pr)
     }
     return DerivedSnapshot(suggestions=suggestions, team_scores=scores)

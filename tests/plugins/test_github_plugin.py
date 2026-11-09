@@ -7,9 +7,10 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from conftest import ME, NOW, pr, snapshot
+from conftest import ME, NOW, pr, snapshot, stored
 from legacy import save_json_snapshot
 
+from move_forward import refresh
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.page import Identity
@@ -381,6 +382,25 @@ def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     found = GitHubPlugin().collect(CollectRequest(ctx))
     assert found.team_members == ["ann"]  # mine, not acme/x's
+
+
+def test_a_refresh_of_one_pr_keeps_the_rest_of_its_lists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, db = stored(github=snapshot(mine=[pr(1), pr(2)]))
+    asked: list[list[client.PrId]] = []
+
+    def fetch_prs(host: str, ids: list[client.PrId]) -> list[object]:
+        asked.append(ids)
+        return [pr(1, title="Fixed it")]
+
+    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
+    one = Ref(kind="pull_request", id=pr(1).url)
+    assert refresh.refresh_subjects(config, db, [one], NOW) == set()
+    assert asked == [[client.PrId(repo="acme/widgets", number=1)]]
+    kept = PrRepository(db).load()
+    assert kept is not None
+    assert [(p.number, p.title) for p in kept.mine] == [(1, "Fixed it"), (2, pr(2).title)]
 
 
 def test_refreshing_subjects_fetches_those_prs_into_their_lists(

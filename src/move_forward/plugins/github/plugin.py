@@ -344,6 +344,12 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 _team_slugs(ctx),
                 ctx.config.reviewer_history_days,
                 ctx.config.required_owner_marker,
+                # Where a reviewer field or Needs a reviewer can show them: not in the merge
+                # queue, and a draft only for its primary reviewer.
+                lambda pr: (
+                    not pr.in_merge_queue
+                    and (not pr.is_draft or ctx.config.has_primary_reviewer(pr.repo))
+                ),
             ),
             DerivedRepository(ctx.db).replace,
         )

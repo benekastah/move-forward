@@ -383,7 +383,7 @@ class Builder:
             ]
             if reasons:
                 item = pr_item(self.now, pr, details=reasons, rank=-pr.updated_at.timestamp())
-                item = self._with_rerun(item, pr) if ci else item
+                item = self._with_rerun(item, pr)
                 fixing.append(self._with_reviewer_field(item, pr) if assignment else item)
             elif not approved(pr) and (
                 review_required(pr) or pr.requested_users or pr.requested_teams
@@ -425,7 +425,10 @@ class Builder:
             # Listed either way, as the teams' rules still say; but an approved PR isn't waiting
             # on anyone, and asking can't answer a team whose members can't be read.
             signals = ask if can_be_requested(details) and not approved(pr) else None
-            if self.derived and (suggestions := self.derived.suggestions.get(pr.url)):
+            # Those asked since the suggestions were worked out are left out: logins ignore case.
+            asked = {login.lower() for login in pr.requested_users}
+            suggested = self.derived.suggestions.get(pr.url, []) if self.derived else []
+            if suggestions := [s for s in suggested if s.login.lower() not in asked]:
                 details.append(
                     "recent committers here: "
                     + ", ".join(f"{s.login} ({s.commits})" for s in suggestions)
@@ -853,8 +856,8 @@ class Builder:
             *(m for team in pr.requested_teams for m in memberships.get(f"{owner}/{team}", [])),
             *(s.login for s in suggested),
         ]
-        chosen = {pr.author, *leaving_out}
-        return [login for login in dict.fromkeys(logins) if login not in chosen]
+        chosen = {login.lower() for login in (pr.author, *leaving_out) if login}  # ignoring case
+        return [login for login in dict.fromkeys(logins) if login.lower() not in chosen]
 
     def _with_reviewer_field(self, item: Item, pr: PullRequest) -> Item:
         """The PR's item with a field to ask someone to review it."""
