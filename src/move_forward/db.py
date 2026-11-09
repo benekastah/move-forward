@@ -292,7 +292,13 @@ DELETE FROM priorities WHERE level = 0;
 """A priority is important (1) or critical (2): "not important" (0) is gone, and Snooze,
 Dismiss or ice set work aside instead."""
 
-_V17_SHOWN_NOTICES = """
+_V17_DISMISS_IS_A_SNOOZE = """
+UPDATE act_now_feedback SET action = 'snooze', until = NULL WHERE action = 'dismiss';
+"""
+"""A dismissal was a snooze with no end: it's kept as one now, a snooze until the item
+changes (`until` NULL)."""
+
+_V18_SHOWN_NOTICES = """
 CREATE TABLE shown_notices (           -- derived, replaced after each refresh: the items with
     plugin TEXT NOT NULL,              -- a notification (`Item.notify`) the plugin's panels
     kind TEXT NOT NULL,                -- showed, by the plugin's kind (`branch_deletable`)
@@ -323,7 +329,8 @@ CORE_MIGRATIONS = [
     Migration("0014_contacts", _V14_CONTACTS),
     Migration("0015_tags", _V15_TAGS),
     Migration("0016_no_unimportant_priority", _V16_NO_UNIMPORTANT_PRIORITY),
-    Migration("0017_shown_notices", _V17_SHOWN_NOTICES),
+    Migration("0017_dismiss_is_a_snooze", _V17_DISMISS_IS_A_SNOOZE),
+    Migration("0018_shown_notices", _V18_SHOWN_NOTICES),
 ]
 
 _SCHEMA_VERSIONS = """

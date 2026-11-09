@@ -311,14 +311,14 @@ class FeedbackRepository:
         )
 
     def bring_back(self, kind: str, id: str, task: str | None, now: datetime) -> int:
-        """Forget the snoozes still running and the dismissals of the entity's items (`task`'s,
-        or all its tasks'), leaving a pin or an open as it is; how many went."""
+        """Forget the snoozes still running of the entity's items (`task`'s, or all its
+        tasks'), leaving a pin or an open as it is; how many went."""
         with self._db.transaction() as conn:
             return conn.execute(
                 "DELETE FROM act_now_feedback WHERE subject_kind = ? AND subject_id = ?"
                 " AND (? IS NULL OR task = ?)"
                 # julianday: `until` keeps the local offset it was set with.
-                " AND (action = 'dismiss' OR (action = 'snooze' AND julianday(until) > julianday(?)))",
+                " AND action = 'snooze' AND (until IS NULL OR julianday(until) > julianday(?))",
                 (kind, id, task, task, now.isoformat()),
             ).rowcount
 
@@ -327,7 +327,8 @@ class FeedbackRepository:
         return _rekey(self._db, "act_now_feedback", "subject_kind", "subject_id", kinds, identify)
 
     def prune(self, now: datetime, before: datetime) -> int:
-        """Drop snoozes that are over, and anything said before `before`; how many went."""
+        """Drop snoozes that are over, and anything said before `before` (a snooze until the
+        item changes, too); how many went."""
         with self._db.transaction() as conn:
             return conn.execute(
                 "DELETE FROM act_now_feedback"

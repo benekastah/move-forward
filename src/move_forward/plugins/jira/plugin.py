@@ -209,7 +209,7 @@ def rollouts(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Panel:
             items.append(_abandoned_rollout(config, issue, prs))
     return Panel(
         key="rollouts",
-        priority=Band.TRANSITIONS + 1,  # after the transitions
+        priority=Band.HOUSEKEEPING,
         act_now=True,
         title="Rollouts",
         description="Tickets in a rollout status and where their PRs are",
@@ -298,7 +298,7 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
             )
     return Panel(
         key="jira_transitions",
-        priority=Band.TRANSITIONS,
+        priority=Band.HOUSEKEEPING,
         act_now=True,
         title="Jira transitions",
         description="Status changes the PR states suggest.",

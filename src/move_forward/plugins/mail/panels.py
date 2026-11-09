@@ -213,7 +213,7 @@ def panels(
     return [
         Panel(
             key="inbox",
-            priority=Band.REVIEWS + 5,
+            priority=Band.ASKED,
             title="Mail",
             description=f"Unread and flagged mail in {_listed([m.shown for m in config.mailboxes()])}"
             ", newest first; lists and automated mail last.",

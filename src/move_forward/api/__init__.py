@@ -20,6 +20,7 @@ from ..asking import (
 from ..db import Database, Migration, Params
 from ..domain import KindModel, Model
 from ..graph import Entity, Graph, KindSpec, Ref, attrs
+from ..lookups import BY_HAND, IMPORTED, LOOKED_UP, LookupCache
 from ..markdown import cell, tables
 from ..notifications import ChangeRule, Event, becomes
 from ..page import (
@@ -60,6 +61,7 @@ from ..plugin import (
     FetchRequest,
     HandleRequest,
     IdentityRequest,
+    ImportRequest,
     ItemActionsRequest,
     KeptItemRequest,
     LinkingRequest,
@@ -84,7 +86,10 @@ from ..strict import Strict
 
 __all__ = [
     "API_VERSION",
+    "BY_HAND",
+    "IMPORTED",
     "KEPT",
+    "LOOKED_UP",
     "MAX_SUBJECTS",
     "ActNowRequest",
     "Action",
@@ -115,6 +120,7 @@ __all__ = [
     "HandleRequest",
     "Identity",
     "IdentityRequest",
+    "ImportRequest",
     "InitSetup",
     "Item",
     "ItemActionsRequest",
@@ -126,6 +132,7 @@ __all__ = [
     "Link",
     "LinkingRequest",
     "LoadRequest",
+    "LookupCache",
     "Migration",
     "Model",
     "Notify",

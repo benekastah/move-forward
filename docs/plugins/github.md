@@ -76,6 +76,11 @@ labels as its tags but `placeholder_labels` and `split_pr_labels`, which are abo
 
 ## Panels
 
+On the page they go by band (see the README's page order): what's asked of me (Ready for me to
+review, Replies for me, Requested from my teams), my own PRs (Fix before review, Feedback to
+address, CI failures, PR policy, Merge conflicts, Needs a reviewer, Ready to merge), what waits
+on others (Ready for review, Held by merge conditions, In the merge queue), then PR housekeeping.
+
 - **Fix before review**: my open, non-draft PRs with failing CI or policy checks, conflicts,
   unresolved or unanswered feedback, changes requested, or reviewer assignments missing
   under the teams' rules. A changes request counts even when another reviewer approved.
@@ -164,7 +169,7 @@ Requested from my teams and PR housekeeping aren't nominated.
 
 | Command | Does |
 | --- | --- |
-| `mfd github import <dir>` | Read reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions; they win over emails looked up from commits. Run it again whenever the map changes. |
+| `mfd import <dir>` | Core's command; github reads reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions, replacing what the last import read; they win over emails looked up from commits. Run it again, without `--replace`, whenever the map changes: notes skips its part then, where `--replace` would overwrite the notes too. |
 
 ## Notifications
 

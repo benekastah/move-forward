@@ -24,40 +24,27 @@ def anchor(kind: str, id: str) -> str:
 
 
 class Band(IntEnum):
-    """Where a panel goes in the day's check-in (`Panel.priority`), lowest first: the order
-    the work-notes skill walks through. A panel between two bands adds to one, e.g.
-    `Band.MERGE + 1`."""
+    """What kind of panel it is (`Panel.priority`), which says where it goes, lowest first:
+    what I planned, then what others wait on me for, my own work, what I wait on others for,
+    housekeeping, what's next and what's parked. Within a band, a plugin's panels go
+    in the order it lists them, and plugins' groups go by their most urgent panel's band, then
+    by name."""
 
-    TODOS = 0
-    """Reconcile the work notes."""
-    REVIEWS = 10
-    """Reviews asked of me."""
-    STACKS = 20
-    """Sync stacks."""
-    FEEDBACK = 30
-    """Feedback on my PRs."""
-    CI = 40
-    """CI failures."""
-    PUSH = 50
-    """Restack and push."""
-    STACKS_NO_PR = 60
-    """Stacks without PRs."""
-    METADATA = 70
-    """PR metadata."""
-    REVIEWERS = 80
-    """A person for each review."""
-    NUDGES = 85
-    """Stale reviews and nudges."""
-    MERGE = 90
-    """The merge queue."""
-    CLEANUP = 100
-    """Cleanup."""
-    TRANSITIONS = 120
-    """Ticket updates."""
-    NEXT = 130
-    """What next."""
-    PARKED = 1000
-    """Parked: what the skill leaves alone."""
+    PLAN = 0
+    """What I said I'd do: the todos a check-in starts with."""
+    ASKED = 10
+    """Others are waiting on me: reviews asked of me, replies, mail."""
+    MINE = 20
+    """My own work needs me to move it on: failing checks, conflicts, feedback, unpushed
+    commits."""
+    WAITING = 30
+    """I'm waiting on others: reviews I asked for, merges under way, people to nudge."""
+    HOUSEKEEPING = 40
+    """Keeping things tidy: labels and links, branches to delete, ticket statuses."""
+    NEXT = 50
+    """What to pick up next."""
+    PARKED = 60
+    """Set aside until I bring it back."""
 
 
 class Link(Model):
@@ -97,9 +84,9 @@ class Action(Model):
     """What the text field offers to pick from, in order; anything else can still be typed.
     Check the posted `input` like any other field."""
     choices: dict[str, str] = Field(default_factory=dict[str, str])
-    """A drop-down beside the text field, posted as `choice`, so only with `input`. Keyed by
-    the label shown, valued by what's posted; the first is chosen to begin with. Check the
-    posted field like any other."""
+    """A drop-down beside the button (after the text field, with `input`), posted as `choice`.
+    Keyed by the label shown, valued by what's posted; the first is chosen to begin with. Check
+    the posted field like any other."""
     href: str | None = None
     """Makes the button a link to this page instead of a form (`name` and `fields` unused).
     Links sit at the top right of their item."""
@@ -164,11 +151,6 @@ class Notify(Model):
     subject or, without one, its title."""
 
 
-SetAside = Literal["snooze", "dismiss"]
-"""How an item is set aside: snoozed, or dismissed. Act now leaves it out; its panel shows it
-dimmed and last, with Unsnooze, and doesn't count it."""
-
-
 class Item(Model):
     title: str
     url: str | None = None
@@ -200,7 +182,7 @@ class Item(Model):
     """The notification to raise when the item first shows in its panel, e.g. a branch
     joining Cleanup: core compares each refresh's panels with the last's. None for none."""
     fingerprint: str | None = None
-    """What would make it worth another look once snoozed or dismissed in Act now, e.g. a
+    """What would make it worth another look once snoozed in Act now, e.g. a
     PR's head and review count; None hashes its title, badges and details."""
     act_now_fields: str | None = None
     """Set by core, in Act now: the JSON fields (`kind`, `id`, `task`, `fingerprint`, `also`)
@@ -208,9 +190,10 @@ class Item(Model):
     opened_at: datetime | None = None
     """Set by core, in Act now: when I opened the item, if it hasn't changed since; it's
     shown dimmed."""
-    set_aside: "SetAside | None" = None
-    """Set by core, in a panel: how I set the item aside (`act_now.set_aside`), if it hasn't
-    changed since; it's shown dimmed and last, with Unsnooze."""
+    set_aside: bool = False
+    """Set by core, in a panel: I snoozed the item (`act_now.set_aside`), and it hasn't changed
+    since nor has the snooze ended. Act now leaves it out; its panel shows it dimmed and last,
+    with Unsnooze, and doesn't count it."""
     done: bool = False
     """Its work is done but it's kept a while to undo (a todo ticked off today): it's shown
     dimmed and last, isn't counted, isn't in Act now, and focus mode doesn't step through it.
@@ -241,10 +224,9 @@ class Panel(Model):
     items: list[Item]
     actions: list[Action] = Field(default_factory=list)
     """Panel-wide buttons, e.g. "delete all"."""
-    priority: int = 100
-    """Where it goes by default, lowest first: the skill's step order, e.g. 0 for the todos
-    the skill starts its check-in with, 10 for reviews asked of me, 130 for what to pick up
-    next. The page's layout, once someone has dragged things about, overrides it."""
+    priority: Band = Band.HOUSEKEEPING
+    """What kind of panel it is, which says where it goes by default (see `Band`). The page's
+    layout, once someone has dragged things about, overrides it."""
     sort_by_importance: bool = False
     """Sort items by their assigned or signaled importance before their `rank`."""
     act_now: bool = False

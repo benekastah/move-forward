@@ -10,12 +10,11 @@ from pathlib import Path
 import pytest
 
 from move_forward import auth, cli
-from move_forward.act_now import Feedback
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.private import is_private
 from move_forward.registry import migrate
-from move_forward.repositories import FeedbackRepository, SessionRepository
+from move_forward.repositories import SessionRepository
 from move_forward.server import App, make_handler
 
 
@@ -203,36 +202,6 @@ def test_a_rotated_token_signs_everyone_out_and_a_running_server_takes_it_up(
     assert not SessionRepository(Database(tmp_path / "dashboard.db")).valid(
         session, datetime.now(UTC)
     )
-
-
-def test_mfd_snoozes_lists_the_snoozes_still_running(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    db_path = tmp_path / "dashboard.db"
-    config = tmp_path / "config.toml"
-    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n')
-    assert cli.main(["-c", str(config), "snoozes"]) == 0  # creates and migrates the database
-    assert json.loads(capsys.readouterr().out) == []
-    now = datetime.now(UTC)
-    feedback = FeedbackRepository(Database(db_path))
-    for id, until in (("over", now - timedelta(hours=1)), ("running", now + timedelta(days=2))):
-        feedback.say(
-            ("pull_request", id, "review"),
-            Feedback(action="snooze", fingerprint="f1", until=until),
-            now,
-        )
-    feedback.say(
-        ("pull_request", "pinned", "review"), Feedback(action="pin", fingerprint="f1"), now
-    )
-    assert cli.main(["-c", str(config), "snoozes"]) == 0
-    [snooze] = json.loads(capsys.readouterr().out)
-    assert snooze | {"until": ""} == {
-        "kind": "pull_request",
-        "id": "running",
-        "task": "review",
-        "until": "",
-        "fingerprint": "f1",
-    }
 
 
 def test_two_processes_making_the_token_at_once_agree(tmp_path: Path) -> None:

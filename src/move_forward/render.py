@@ -412,8 +412,8 @@ def _action(action: Action, back: str = "", at: str = "", pos: int | None = None
             f"<button type='submit' class='secondary small{selected}'{pressed}{title}>"
             f"{label}</button>"
         )
-        if action.input:
-            control = _text_field(action, at, pos) + _choices(action) + control
+        field = _text_field(action, at, pos) if action.input else ""
+        control = field + _choices(action) + control
     return (
         f"<form method='post' action='/actions/{_e(action.name)}{query}' class='action'{confirm}>"
         f"{fields}{control}</form>"
@@ -585,7 +585,7 @@ def _nesting(items: list[Item]) -> dict[int | None, list[tuple[int, Item]]]:
 
 def _live(panel: Panel) -> int:
     """How many of the panel's items there are to do: not what's set aside, or done."""
-    return sum(item.set_aside is None and not item.done for item in panel.items)
+    return sum(not item.set_aside and not item.done for item in panel.items)
 
 
 def _panel(panel: Panel, spot: Spot | None = None) -> str:

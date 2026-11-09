@@ -5,6 +5,67 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Panels go by what kind they are
+
+Each panel's `priority`, in `mfd dump`, is now one of seven bands, saying what kind of panel
+it is: 0 planned (my todos), 10 asked of me, 20 my own work, 30 waiting on others, 40
+housekeeping, 50 what next, 60 parked. It used to be a step per tool (0 to 1000), and several
+panels now share one: a script that sorted panels by `priority` should follow each group's
+`panel_keys` instead, which are in page order. On the page, GitHub's panels move: what's asked
+of me (Ready for me to review, Replies for me, Requested from my teams) comes first, then my
+own PRs (Fix before review, Feedback to address, CI failures, PR policy, Merge conflicts, Needs
+a reviewer, Ready to merge), then those waiting on others (Ready for review, Held by merge
+conditions, In the merge queue), then PR housekeeping. Other panels and the groups keep their
+order, and a layout you dragged is kept.
+
+### Dismiss is Snooze until it changes
+
+The Dismiss button is gone: Snooze now picks how long, "for a while" (`[act_now]`
+`snooze_days`, until tomorrow by default) or "until it changes", which is what Dismiss did.
+What was dismissed is snoozed until it changes now, and comes back as before.
+- `POST /actions/act_now/dismiss` is refused (unknown action): post `act_now/snooze` with the
+  same fields and `choice=changed`. `act_now/snooze` without `choice` snoozes as before.
+- `mfd snooze <entity> changed` snoozes until it changes; it prints "snoozed N item(s) until
+  each changes".
+- `mfd snoozes` lists snoozes until it changes too, with `until` null; a script reading
+  `until` must allow for it. It lists only the snoozes still in force, as the page has them:
+  no longer one whose item has changed since, or is gone from every panel and from Act now (a
+  merged PR, a deleted todo). One whose item is on ice is listed, though the page hides it.
+- In `mfd dump`, an item's `set_aside` is `true` or `false`, where it was `"snooze"`,
+  `"dismiss"` or null: test it for truth.
+- Undismiss is Unsnooze.
+
+### `[slack] team_channel` is gone; teams' channels are set by hand
+
+A team's ping channel now comes only from `[slack.teams]` or from one set by hand
+(`/slack/contacts`, `mfd slack team set`), `[slack.teams]` winning. A config that still sets
+`team_channel` is refused, saying it's gone: delete the line, and name each team's channel in
+`[slack.teams]` (`web = "#team-web"`) or with `mfd slack team set <team> <#channel>`. Channels
+an earlier import read are kept, as set by hand. `mfd import` now sets the reviewer map's
+teams' channels as if by hand, leaving a team that has one, and names those whose channel
+differs from the map's: it no longer replaces them on a second run. In `mfd slack destinations --json`, every team's
+`source` is `dashboard`.
+
+### One `mfd import <dir>` replaces the three imports
+
+`mfd notes import`, `mfd github import` and `mfd slack import` are gone. `mfd import <dir>
+[--replace]` reads the skill's markdown from `<dir>` into every enabled plugin that knows it,
+printing a line per plugin (`notes: imported …`, `github: …`, `slack: …`):
+
+| Was | Now |
+| --- | --- |
+| `mfd notes import <dir> [--replace]` | `mfd import <dir> [--replace]` |
+| `mfd github import <dir>` | `mfd import <dir>` |
+| `mfd slack import <dir>` | `mfd import <dir>` |
+
+A directory with neither `work-notes.md` nor `on-ice.md` no longer fails the notes' part: the
+command fails only when no plugin imports anything from it, or when one fails (a file it can't
+read), the others importing anyway. Notes already holding notes skip them without `--replace`,
+printing `notes: already has notes; skipped, pass --replace to overwrite them`, and the
+command still exits 0. So to read a changed `reviewer-map.md` again once the notes are in, run
+`mfd import <dir>` without `--replace`: `--replace` overwrites the notes too, losing what was
+changed on the dashboard since. `mfd github` has no commands left.
+
 ### Slack's sign-in is gone
 
 slack no longer connects to a Slack app: `[slack] client_id`, the `/slack`, `/slack/connect` and

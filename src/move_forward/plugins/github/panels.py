@@ -305,7 +305,7 @@ class Builder:
                 seen.add(pr.url)
         return Panel(
             key="reviews_for_me",
-            priority=Band.REVIEWS,
+            priority=Band.ASKED,
             act_now=True,
             title="Ready for me to review",
             description="Direct requests and my approvals needing a fresh review.",
@@ -340,7 +340,7 @@ class Builder:
                 )
         return Panel(
             key="replies_for_me",
-            priority=Band.REVIEWS + 1,
+            priority=Band.ASKED,
             act_now=True,
             title="Replies for me",
             description="Open PRs that mention me without requesting my review.",
@@ -399,7 +399,7 @@ class Builder:
         return (
             Panel(
                 key="fix_before_review",
-                priority=Band.REVIEWS - 2,
+                priority=Band.MINE,
                 title="Fix before review",
                 description="My open PRs with failing checks, conflicts, feedback or missing reviewers.",
                 items=fixing,
@@ -407,7 +407,7 @@ class Builder:
             ),
             Panel(
                 key="ready_for_review",
-                priority=Band.REVIEWS - 1,
+                priority=Band.WAITING,
                 title="Ready for review",
                 description="My clean PRs awaiting approval; pending checks do not hold them back.",
                 items=awaiting,
@@ -439,7 +439,7 @@ class Builder:
             items.append(self._with_reviewer_field(item, pr))
         return Panel(
             key="needs_reviewer",
-            priority=Band.REVIEWERS,
+            priority=Band.MINE,
             act_now=True,
             title="Needs a reviewer",
             description="My open PRs missing a reviewer request under their teams' rules.",
@@ -483,7 +483,7 @@ class Builder:
                 )
         return Panel(
             key="feedback",
-            priority=Band.FEEDBACK,
+            priority=Band.MINE,
             act_now=True,
             title="Feedback to address",
             description="Unresolved review threads, changes requested, and comments since my last push.",
@@ -519,7 +519,7 @@ class Builder:
                 items.append(self._with_rerun(item, pr))
         return Panel(
             key="ci_failures",
-            priority=Band.CI,
+            priority=Band.MINE,
             act_now=True,
             signals=Signals(verb="Fix CI", task="fix_ci", effort="hour"),
             title="CI failures",
@@ -539,7 +539,7 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=details, links=links, rank=len(failing)))
         return Panel(
             key="policy",
-            priority=Band.CI + 5,  # CI failures, but quick
+            priority=Band.MINE,
             act_now=True,
             signals=Signals(verb="Meet PR policy", task="meet_pr_policy", effort="minutes"),
             title="PR policy",
@@ -565,7 +565,7 @@ class Builder:
             items.append(pr_item(self.now, pr, details=details, signals=signals))
         return Panel(
             key="conflicts",
-            priority=Band.STACKS,
+            priority=Band.MINE,
             act_now=True,
             signals=Signals(verb="Resolve conflicts", task="resolve_conflicts", effort="hour"),
             title="Merge conflicts",
@@ -601,7 +601,7 @@ class Builder:
         return (
             Panel(
                 key="ready_to_merge",
-                priority=Band.MERGE,
+                priority=Band.MINE,
                 act_now=True,
                 title="Ready to merge",
                 description="Approved, green, no open threads, based on the default branch.",
@@ -609,7 +609,7 @@ class Builder:
             ),
             Panel(
                 key="held",
-                priority=Band.MERGE + 1,  # with merge conditions
+                priority=Band.WAITING,
                 title="Held by merge conditions",
                 description="Would be ready, but the work notes hold them, or GitHub says the branch is"
                 " behind or blocked.",
@@ -620,7 +620,7 @@ class Builder:
     def merge_queue(self) -> Panel:
         return Panel(
             key="merge_queue",
-            priority=Band.MERGE + 2,  # after ready to merge and held
+            priority=Band.WAITING,
             title="In the merge queue",
             description="My PRs waiting in the merge queue.",
             items=[
@@ -713,7 +713,7 @@ class Builder:
                 )
         return Panel(
             key="metadata",
-            priority=Band.METADATA,
+            priority=Band.HOUSEKEEPING,
             title="PR housekeeping",
             description="Draft branch trees, unknown labels, missing ticket links, big PRs.",
             items=list(items.values()),
@@ -742,7 +742,7 @@ class Builder:
                 items.append(pr_item(self.now, pr, details=details, rank=rank))
         return Panel(
             key="team_prs",
-            priority=Band.REVIEWERS + 1,  # for my teams' PRs
+            priority=Band.ASKED,
             title="Requested from my teams",
             description=f"PRs waiting on {', '.join(self.teams) or 'my teams'}, ranked by"
             " CODEOWNERS and the paths I work in.",

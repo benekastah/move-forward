@@ -371,10 +371,7 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
     db.execute("DROP TABLE tags")
     db.execute("DROP TABLE shown_notices")
     db.execute("DROP TABLE shown_plugins")
-    db.execute(
-        "DELETE FROM migrations WHERE owner = 'core' AND name IN ('0013_opened', '0014_contacts',"
-        " '0015_tags', '0016_no_unimportant_priority', '0017_shown_notices')"
-    )
+    db.execute("DELETE FROM migrations WHERE owner = 'core' AND name >= '0013'")
     db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
     db.execute(
         "INSERT INTO act_now_feedback VALUES ('k', 'x', 't', 'pending', NULL, 'f', '2026-10-30')"
@@ -387,6 +384,35 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
         r["subject_id"]: r["action"] for r in Database(path).query("SELECT * FROM act_now_feedback")
     }
     assert actions == {"x": "opened", "y": "pin"}
+
+
+def test_a_dismissal_is_kept_as_a_snooze_until_it_changes(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    db = Database(path)
+    db.execute("DROP TABLE shown_notices")
+    db.execute("DROP TABLE shown_plugins")
+    db.execute("DELETE FROM migrations WHERE owner = 'core' AND name >= '0017'")
+    db.execute("UPDATE schema_versions SET version = 16 WHERE plugin = 'core'")
+    rows = [
+        ("x", "dismiss", None),
+        ("y", "snooze", "2026-11-01T00:00:00+00:00"),
+        ("z", "pin", None),
+    ]
+    for id, action, until in rows:
+        db.execute(
+            "INSERT INTO act_now_feedback VALUES ('k', ?, 't', ?, ?, 'f', '2026-10-30')",
+            (id, action, until),
+        )
+    del db
+    kept = {
+        r["subject_id"]: (r["action"], r["until"])
+        for r in Database(path).query("SELECT * FROM act_now_feedback")
+    }
+    assert kept == {
+        "x": ("snooze", None),
+        "y": ("snooze", "2026-11-01T00:00:00+00:00"),
+        "z": ("pin", None),
+    }
 
 
 def test_a_plugins_migration_may_not_remove_what_isnt_its_own() -> None:
