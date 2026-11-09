@@ -351,7 +351,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 _team_slugs(ctx),
                 ctx.config.reviewer_history_days,
                 ctx.config.required_owner_marker,
-                lambda pr: wants_reviewer(ctx.config, pr),
+                wants_reviewer=lambda pr: wants_reviewer(ctx.config, pr),
             ),
             DerivedRepository(ctx.db).replace,
         )

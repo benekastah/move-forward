@@ -113,3 +113,7 @@ def test_each_of_my_prs_in_a_checkout_gets_suggestions_but_whom_it_asked(tmp_pat
         unasked.url: ["alice", "bob"],
         asked_bob.url: ["alice"],
     }
+    picked = derive.collect(
+        github, [local], emails, "acme", [], 30, wants_reviewer=lambda pr: pr.number == 2
+    )
+    assert list(picked.suggestions) == [asked_bob.url]  # only what wants_reviewer picks

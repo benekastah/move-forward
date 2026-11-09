@@ -15,6 +15,7 @@ from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.page import Identity
 from move_forward.plugin import (
+    AfterCollectRequest,
     CollectRequest,
     Context,
     EntitiesRequest,
@@ -24,7 +25,7 @@ from move_forward.plugin import (
     StoreRequest,
     SubjectsRequest,
 )
-from move_forward.plugins.github import client
+from move_forward.plugins.github import client, derive
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import (
     Check,
@@ -430,6 +431,23 @@ def test_reviewers_are_suggested_where_one_may_yet_be_picked(
 ) -> None:
     config = GitHubConfig(org="acme", primary_reviewer_repos=repos)
     assert wants_reviewer(config, pr(1, **fields)) is wanted
+
+
+def test_after_collect_suggests_reviewers_only_where_one_may_be_picked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    picked: list[int] = []
+
+    def collect(*args: object, wants_reviewer: Callable[[PullRequest], bool]) -> DerivedSnapshot:
+        mine = [pr(1), pr(2, in_merge_queue=True), pr(3, is_draft=True)]
+        picked.extend(p.number for p in mine if wants_reviewer(p))
+        return DerivedSnapshot()
+
+    monkeypatch.setattr(derive, "collect", collect)
+    ctx = _context()
+    PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
+    GitHubPlugin().after_collect(AfterCollectRequest(ctx, Graph()))
+    assert picked == [1]
 
 
 def test_refreshing_subjects_fetches_those_prs_into_their_lists(
