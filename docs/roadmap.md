@@ -193,15 +193,26 @@ Confluence, Notion, Figma). In order:
    a text area (replying to a ticket), and a date (snooze until, follow up on).
 8. **Customer data.** A kind can say it's sensitive, and `mfd dump`, logs, notifications and
    exports leave out or redact its entities' text; `prune` drops them once they're done.
-9. **More than one of a plugin.** A plugin has one config section, so a work and a personal
-   mailbox, or a CRM in two orgs, can't both be read. Instances (`[mail.work]`,
-   `[mail.personal]`) need, per instance: kind names and their ids (mail's threads are
-   Message-IDs, which two mailboxes can share), table prefixes and the migrations ledger,
-   `/<plugin>/<key>` pages, `requires` and `watches`, and keychain defaults. Without that,
-   each plugin builds accounts of its own.
+9. **More than one login of a plugin**: see [Accounts](#accounts), below.
 
 Table-shaped settings (a support plugin's views, a CRM's tiers) belong to "First-run setup
 in the browser", below, which already plans tables on the settings page.
+
+### Accounts
+
+A plugin reads one login: github many repos but one account, jira one site, mail one mailbox.
+A plugin that can read several does it itself, as accounts in its own section, so it keeps one
+set of tables, pages and actions, and settles what two of them both see the way its tool needs
+(the same conversation in two mailboxes is one item). Core gives each account its token:
+`Plugin.tokens` names them, and `mfd token set <plugin>.<account>` stores one.
+
+- **mail**: a home and a work mailbox, each `[mail.<name>]` taking from `[mail]` what it
+  leaves out.
+- **github**: a personal and a work login (on github.com, or an Enterprise host). `gh` keeps
+  one active account per host, so each call would take its account's token (`gh auth token
+  --user <login>`) as `GH_TOKEN`.
+- **jira**: a second site, each with its own token. Ticket keys can look alike across sites,
+  so each site's projects say which site a bare key is on.
 
 ### mail
 
