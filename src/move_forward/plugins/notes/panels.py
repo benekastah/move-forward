@@ -14,8 +14,8 @@ from .markdown import PR_URL_RE
 from .models import Condition, Entry, Ice, Todo
 
 NOT_BLOCKED_RE = re.compile(
-    r"\s*(?:(?:nothing|none|not blocked)(?:\s+(?:yet|now|for now|so far|currently|anymore|any more"
-    r"|at all|atm|at the moment|right now))?|no blockers?|no|n/?a|-+|–|—)?\s*[.!…]*\s*",
+    r"\s*(?:(?:nothing|none|not blocked|no blockers?)(?:\s+(?:yet|now|for now|so far|currently"
+    r"|anymore|any more|at all|atm|at the moment|right now))?|no|n/?a|-+|–|—)?\s*[.!…]*\s*",
     re.IGNORECASE,
 )
 """A "Blocked on" that says, as a whole, it's on nothing: "nothing", "none" or "not blocked",
@@ -129,6 +129,8 @@ BLOCKED_BADGE_WIDTH = 80
 """Characters of what an entry is blocked on that its badge shows, cut at a word."""
 
 
+_AMOUNT_RE = re.compile(r"[$€£]\s?\d[\d,.]*|\d[\d,.]*\s?[$€£]")
+"""An amount of money, `$1,234` or `1.250€`: none of its digits is a PR's number."""
 PROBABLY_DONE = "its PRs are done"
 """What a todo says when every PR it mentions is merged or closed."""
 
@@ -143,9 +145,9 @@ def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph
 
     A todo mentions a PR by its URL, `#<number>`, or the bare number (PR numbers are long
     enough that a matching bare number in a todo is almost surely the PR), but not a number
-    within another: a version (`1.2.5`), an amount (`$5`, `€5`, `5%`), a path, a range
-    (`1230-1234` names neither end). A number written with thousands commas (`12,345`) can
-    still mention one: `1201,1202` is as likely a list.
+    within another: a version (`1.2.5`), an amount (`$5`, `€1,250`, `5%`), a path, a range
+    (`1230-1234` names neither end). A bare number with thousands commas but no currency
+    (`12,345`) can still mention one: `1201,1202` is as likely a list.
     """
     text = todo.text
     own_prs = [*PR_URL_RE.findall(text), *(link.ref for link in todo.links if link.kind == PR)]
@@ -159,7 +161,10 @@ def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph
         mentioned = (
             u in own_prs
             or re.search(rf"#{number}\b", text) is not None
-            or re.search(rf"(?<![\w/.$€£#–—-]){number}(?![\w%/$€£–—-]|\.\d)", text) is not None
+            or re.search(
+                rf"(?<![\w/.$€£#–-]){number}(?![\w%/$€£–-]|\.\d)", _AMOUNT_RE.sub("", text)
+            )
+            is not None
         )
         links.append(Link(text=f"PR {number}", url=u, strong=mentioned, done=done.get(u, False)))
     links.sort(key=lambda link: not link.strong)
