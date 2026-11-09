@@ -14,12 +14,13 @@ from .markdown import PR_URL_RE
 from .models import Condition, Entry, Ice, Todo
 
 NOT_BLOCKED_RE = re.compile(
-    r"\s*(?:(?:nothing|none|not blocked)(?:\s+(?:yet|for now|so far|currently|at the moment"
-    r"|right now))?|no|n/a|-+|–|—)?\s*[.!]?\s*",
+    r"\s*(?:(?:nothing|none|not blocked)(?:\s+(?:yet|now|for now|so far|currently|anymore|any more"
+    r"|at all|atm|at the moment|right now))?|no blockers?|no|n/?a|-+|–|—)?\s*[.!…]*\s*",
     re.IGNORECASE,
 )
 """A "Blocked on" that says, as a whole, it's on nothing: "nothing", "none" or "not blocked",
-perhaps with a word of when ("nothing yet", "none for now"), "no", "n/a", a dash, or nothing.
+perhaps with a word of when ("nothing yet", "none for now", "not blocked anymore"), "no
+blockers", "no", "n/a", a dash, or nothing.
 Anything more names what it's on ("nothing but Bob's review", "no reviewer yet")."""
 
 ENTRY = "notes.entry"
@@ -142,8 +143,9 @@ def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph
 
     A todo mentions a PR by its URL, `#<number>`, or the bare number (PR numbers are long
     enough that a matching bare number in a todo is almost surely the PR), but not a number
-    within another: a version (`1.2.5`), an amount (`$5`, `€5`, `5%`, `12,345`), a path, a
-    range (`1230-1234` names neither end).
+    within another: a version (`1.2.5`), an amount (`$5`, `€5`, `5%`), a path, a range
+    (`1230-1234` names neither end). A number written with thousands commas (`12,345`) can
+    still mention one: `1201,1202` is as likely a list.
     """
     text = todo.text
     own_prs = [*PR_URL_RE.findall(text), *(link.ref for link in todo.links if link.kind == PR)]
@@ -157,7 +159,7 @@ def _todo_links(todo: Todo, urls: list[str], done: dict[str, bool], graph: Graph
         mentioned = (
             u in own_prs
             or re.search(rf"#{number}\b", text) is not None
-            or re.search(rf"(?<![\w/.,$€£#-]){number}(?![\w%/$-]|[.,]\d)", text) is not None
+            or re.search(rf"(?<![\w/.$€£#–—-]){number}(?![\w%/$€£–—-]|\.\d)", text) is not None
         )
         links.append(Link(text=f"PR {number}", url=u, strong=mentioned, done=done.get(u, False)))
     links.sort(key=lambda link: not link.strong)
