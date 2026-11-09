@@ -229,7 +229,11 @@ def test_rekeying_asks_for_new_ids_outside_its_transaction() -> None:
     db = Database(":memory:")
     db.migrate("notes", MIGRATIONS)
     notes = NotesRepository(db)
-    entry = notes.add_entry("e", DAY, links=[Link(kind="jira.issue", ref="APP-1")])
+    url = "https://acme.atlassian.net/browse/APP-1"
+    old = Link(kind="jira.issue", ref="APP-1")
+    entry = notes.add_entry("e", DAY, links=[old, Link(kind="jira.issue", ref=url)])
+    notes.link_todo(notes.add_todo(entry, "t"), old)
+    notes.add_ice("APP-1", DAY, None, [IcedItem(kind="jira.issue", ref_id="APP-1", name="APP-1")])
 
     def identify(kind: str, ref: str) -> str:
         # A plugin's url_for waiting on another thread that reads the database, say.
@@ -239,9 +243,8 @@ def test_rekeying_asks_for_new_ids_outside_its_transaction() -> None:
         assert not reader.is_alive(), "identify ran holding the database"
         return f"https://acme.atlassian.net/browse/{ref}" if ref == "APP-1" else ref
 
-    assert notes.rekey(["jira.issue"], identify) == 1
+    assert notes.rekey(["jira.issue"], identify) == 3  # a link, a todo's link, what's on ice
     [read] = notes.entries()
-    assert (read.id, [link.ref for link in read.links]) == (
-        entry,
-        ["https://acme.atlassian.net/browse/APP-1"],
-    )
+    assert (read.id, [link.ref for link in read.links]) == (entry, [url])  # the new one was there
+    assert [link.ref for link in read.todos[0].links] == [url]
+    assert [item.ref_id for item in notes.ices()[0].items] == [url]
