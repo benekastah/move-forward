@@ -364,8 +364,8 @@ def command_line(words: list[str]) -> str:
     """`words` as a command to paste into this system's shell, each argument kept whole
     whatever it holds (an entry's id is its title): quoted for a POSIX shell, or on Windows
     as its programs split their command line, though cmd and PowerShell still read their own
-    characters inside it (cmd's `&` and `%`; PowerShell's `$`, backtick and `\"`, which it
-    doesn't read as an escaped quote)."""
+    characters inside it (cmd's `&` and `%`; PowerShell's `$` and backtick, and it doesn't
+    take a backslash before a quote as escaping it)."""
     return subprocess.list2cmdline(words) if sys.platform == "win32" else shlex.join(words)
 
 
