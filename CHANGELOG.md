@@ -25,8 +25,8 @@ kept is copied over under these keys, an entry named by its title:
 
 An entry was named by its id, title, PR or ticket; a key names it by its title as it is now,
 which `mfd notes show <entry> --json` gives, and is matched exactly (but for the space around
-it). Every key is forgotten `prune_days` after its day: check-ins, asked-done days and
-once-a-day questions too, which were never forgotten before (only declines and offers were).
+it). Every key is forgotten `prune_days` after its day: check-ins and asked-done days too,
+which were kept as long as their entry, and once-a-day questions, which were kept forever.
 Read an empty `recall` as "not lately", not "never". Once `asked:ice` is forgotten, `mfd notes
 export` writes `on-ice.md` without its `Last asked` line. An offer is now kept by its day rather
 than its time.
