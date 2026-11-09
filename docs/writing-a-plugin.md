@@ -1,7 +1,7 @@
 # Writing a plugin
 
-Every tool the dashboard knows about is a plugin: github, git, git_stack, jira, slack and
-notes are all built this way, in `src/move_forward/plugins/<name>/`. Core knows no tool. It
+Every tool the dashboard knows about is a plugin: github, git, git_stack, jira, mail, slack,
+vcard and notes are all built this way, in `src/move_forward/plugins/<name>/`. Core knows no tool. It
 loads the config, enables the plugins whose section is there, runs their collectors, builds
 the [entity graph](graph.md) from what they publish, and renders their panels.
 
@@ -88,7 +88,8 @@ class LinearConfig(Strict):
 - Every field has a docstring.
 - Every key appears in four places: the model, the plugin's page in `docs/plugins/`,
   `mfd init`'s rendered config as a commented default (the plugin's `init_template`),
-  and `mfd init --example` (`cli.py`).
+  and, for a built-in, `mfd init --example` (`cli.py`); a plugin from another package can't
+  add to that, so its `init_template` and `init_example` are its example.
 - `mfd init` asks which plugins to set up (offering those whose `init_suggested()` is
   true), then each chosen one's `init_questions(ask, setup)`, which returns its section's
   values. `setup` has my email, where init runs and the teams found so far; a plugin that
@@ -143,7 +144,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 
 - `name` is the config section, the kv namespace and migrations' owner, the tables'
   prefix and the first part of the actions' paths: lower-case letters, digits and `_`,
-  unique, and not `core` or `act_now`. The registry checks this when it's imported.
+  unique, and not one of `registry.RESERVED_NAMES` (core's own names, commands, top-level
+  keys and paths, `core` and `act_now` among them). The registry checks this when it's
+  imported.
 - Every hook gets `ctx`, the plugin's context: its section (`ctx.config`), `ctx.name`,
   `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, its database (`ctx.db`) and key/value
   state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
@@ -506,4 +509,4 @@ built-ins working together use `conftest.dashboard(...)` and `conftest.stored(..
   and commands. Add a row for it to the README's plugins table.
 - [entities.md](entities.md) for its kinds, [plugins.md](plugins.md) for what it publishes
   and reads.
-- `mfd init`'s rendered config and `mfd init --example` for its config keys.
+- `mfd init`'s rendered config (and, for a built-in, `mfd init --example`) for its config keys.

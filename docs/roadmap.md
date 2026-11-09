@@ -9,8 +9,7 @@ is done, remove it in the same change, and delete this file once it's empty. The
 Every external tool is a plugin, so someone with a different set of tools (say, a
 salesperson on a CRM and a calendar) can run the dashboard with only the plugins that fit,
 and new tools can be added without touching the others. Plugins interact only through a
-small shared entity graph. The move-forward skill's notes move from markdown files into
-SQLite, behind a CLI and the HTTP API.
+small shared entity graph.
 
 ## Slack as a source of work
 
@@ -135,9 +134,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
     force-push (with lease), which the rule against force-pushing from a button forbids unless
     that's changed.
 
-### jira
-
-
 ### notes
 
 24. **Size a todo, and say why something's on ice, from the CLI.** `todo add --size` sizes a
@@ -147,9 +143,6 @@ Approving stays on GitHub: a review should come from having read the PR there.
     the page), status and where (not shown at all), `link`, and `remove`.
 26. **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
     and remove them on the PR's items.
-
-### slack
-
 
 ## Plugins without core changes
 
@@ -200,8 +193,8 @@ in the browser", below, which already plans tables on the settings page.
 
 ### Accounts
 
-A plugin reads one login: github many repos but one account, jira one site, mail one mailbox.
-A plugin that can read several does it itself (mail does: see its page), as accounts in its own section, so it keeps one
+A plugin reads one login, as github reads many repos but one account and jira one site, unless
+it can read several itself (mail does: see its page), as accounts in its own section, so it keeps one
 set of tables, pages and actions, and settles what two of them both see the way its tool needs
 (the same conversation in two mailboxes is one item). Core gives each account its token:
 `Plugin.tokens` names them, and `mfd token set <plugin>.<account>` stores one.
@@ -251,7 +244,7 @@ set of tables, pages and actions, and settles what two of them both see the way 
 - **Act now, after living with it.** Questions to answer from use: whether quick wins
   should lead at the end of the day and important work in the morning (a weight profile
   per part of the day, which could also rank personal mail down at 10am and work mail down
-  at 10pm, with an instance (Plugins without core changes, 9) saying which it is); whether
+  at 10pm, with mail's account (`[mail.home]`, `[mail.work]`) saying which it is); whether
   someone waiting on my team should weigh more (the `person` entities would need team
   membership, which github already fetches); whether unknown
   effort should count as "hour"; and whether notes' todos should carry `due` and

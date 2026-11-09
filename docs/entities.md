@@ -50,7 +50,7 @@ breaks its family's rule:
 | --- | --- | --- |
 | `pull_request` | its URL | `#7`, `!12` |
 | `ticket` | its URL | its key, `APP-12` |
-| `person` | `<host>/<login>`, e.g. `github.com/alice`; mail's are `mail/<address>` | the login, or the address |
+| `person` | `<host>/<login>`, e.g. `github.com/alice`; mail's are `mail/<address>`, vcard's `vcard/<address>` | the login, or the address |
 | `organisation` | `<host>/<its id there>`, e.g. `crm.example.com/acme` | its name |
 
 What the dashboard kept by a handle before (a priority on `APP-12`, a todo linked to it)
@@ -67,7 +67,7 @@ gone.
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket`s its branch, title and body mention by key |
-| `person` | github: me, and everyone it knows an email for; mail: whoever wrote a thread's latest message, when the server verified them (DMARC) | `<host>/<login>`; mail's `mail/<address>` | | |
+| `person` | github: me, and everyone it knows an email for; mail: whoever wrote a thread's latest message, when the server verified them (DMARC); vcard: each address on a person's card, with the `importance`, `contact_type` and `groups` its groups give | `<host>/<login>`; mail's `mail/<address>`, vcard's `vcard/<address>` | | |
 | `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with; for a message with none, `uid:<uid>` (`uid:<account>:<uid>` in one of several mailboxes) | `unread` or `flagged` | the `person` who wrote its latest message, if verified; it mentions its subject, then too |
 | `git.repo` | git | GitHub `owner/name` | | |
 | `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |

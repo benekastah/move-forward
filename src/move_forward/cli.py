@@ -173,6 +173,10 @@ my-team = "#team-my-team"
 # snooze_until_hour = 0                # the local hour a snooze ends at on its last day (9: 9am)
 # snooze_days = { pull_request = 7 }     # ...for a kind of subject, e.g. a PR's review for a week
 
+# [notifications]                       # browser notifications; none until you subscribe
+# subscribe = []                         # kinds, e.g. "dashboard.source_failing"; see the settings page
+# failing_minutes = 15                   # how long a plugin fails before `source_failing` says so
+# keep_hours = 24                        # events older than this are dropped untold
 """
 
 
