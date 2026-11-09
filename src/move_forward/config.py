@@ -39,6 +39,8 @@ input"."""
 
 GONE_NOTIFICATIONS = {
     "dashboard.certificate_ending": "with HTTPS mode",
+    "jira.comment_added": "(Jira tells of comments itself, e.g. through Slack)",
+    "jira.mentioned": "(Jira tells of mentions itself, e.g. through Slack)",
 }
 """Notification kinds that no longer exist, with why, to say so to a config still subscribed
 to one instead of just "no such kind"."""

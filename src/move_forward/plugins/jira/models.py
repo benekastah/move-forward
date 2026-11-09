@@ -6,21 +6,6 @@ from pydantic import Field
 
 from ...api import Model
 
-MAX_COMMENTS = 10
-"""Comments kept per ticket: the latest."""
-
-
-class JiraComment(Model):
-    """A comment on a ticket, as far as notifications need."""
-
-    id: str
-    author: str
-    """Their display name."""
-    created: datetime
-    mine: bool = False
-    """It's mine."""
-    mentions_me: bool = False
-
 
 class JiraIssue(Model):
     key: str
@@ -43,8 +28,6 @@ class JiraIssue(Model):
     due: date | None = None
     """Its due date, if it has one."""
     url: str
-    comments: list[JiraComment] = Field(default_factory=list)
-    """The latest `MAX_COMMENTS`, oldest first."""
 
 
 class JiraSnapshot(Model):

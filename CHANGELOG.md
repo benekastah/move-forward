@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Jira no longer tells of comments and mentions
+
+The `jira.comment_added` and `jira.mentioned` notification kinds are gone: Jira already tells
+of both itself, through Slack. A config that still subscribes to either is refused when it
+loads: take it out of `[notifications] subscribe`.
+
 ### `mfd slack contacts` is now `mfd slack destinations`
 
 It clashed with `mfd contacts`, which prints contact types. Its output and `--json` are
