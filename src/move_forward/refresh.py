@@ -370,7 +370,7 @@ def _prune_plugins(
     they did, by plugin."""
     notices: list[str] = []
     if dropped := FeedbackRepository(db).prune(now, now - timedelta(days=days)):
-        notices.append(f"act_now: forgot {dropped} snooze(s), dismissal(s) or pin(s)")
+        notices.append(f"act_now: forgot {dropped} snooze(s) or pin(s)")
     try:  # it asks plugins for what they no longer hold, which can fail (a token gone bad)
         if cleared := priority.forget_finished(PriorityRepository(db), graph):
             notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")
@@ -631,29 +631,36 @@ def snooze_item(
     fields: dict[str, str],
     now: datetime,
     duration: timedelta | None = None,
-) -> datetime:
+    until_changed: bool = False,
+) -> datetime | None:
     """Snooze the item a Snooze button's `fields` name, and those shown with it, until each
-    changes (its fingerprint) or `duration` passes (by default as long as `config` says for
-    its kind of subject): the Snooze button, and `mfd snooze`. When the item's snooze ends."""
+    changes (its fingerprint) or, unless `until_changed`, `duration` passes (by default as
+    long as `config` says for its kind of subject): the Snooze button, and `mfd snooze`. When
+    the item's snooze ends; None if only once it changes."""
+
+    def ends(kind: str) -> datetime | None:
+        if until_changed:
+            return None
+        return now + duration if duration else config.snooze_until(kind, now)
+
     feedback = FeedbackRepository(db)
-    end: datetime | None = None
-    for kind, id, task, fingerprint in _members(fields):
-        until = now + duration if duration else config.snooze_until(kind, now)
+    members = _members(fields)
+    for kind, id, task, fingerprint in members:
         feedback.say(
-            (kind, id, task), Feedback(action="snooze", fingerprint=fingerprint, until=until), now
+            (kind, id, task),
+            Feedback(action="snooze", fingerprint=fingerprint, until=ends(kind)),
+            now,
         )
-        end = end or until  # the item's own: `_members` gives it first
-    assert end is not None, "a Snooze button always names its own item"
-    return end
+    return ends(members[0][0])  # the item's own: `_members` gives it first
 
 
 def _act_now_action(
     config: act_now.ActNowConfig, db: Database, action: str, fields: dict[str, str]
 ) -> ActionResult:
-    """Act now's own buttons, on any surface: snooze an item (for as long as `config` says),
-    dismiss it, bring it back (unsnooze), or pin or unpin it, by its main subject and task, and
-    the items joined to it (`also`) alike; set or clear the priority of its main subject; tag
-    it; and set or clear who someone is to me."""
+    """Act now's own buttons, on any surface: snooze an item (for as long as `config` says, or
+    until it changes, by its `choice`), bring it back (unsnooze), or pin or unpin it, by its
+    main subject and task, and the items joined to it (`also`) alike; set or clear the
+    priority of its main subject; tag it; and set or clear who someone is to me."""
     now = datetime.now(UTC)
     if action in ("priority", "contact", "contact_clear", "tag", "untag"):
         try:
@@ -692,16 +699,22 @@ def _act_now_action(
             feedback.bring_back(kind, id, task, now)
         return ActionResult("back")
     if action == "snooze":
-        until = localtime.day(snooze_item(config, db, fields, now))
+        length = fields.get("choice") or ""
+        if length not in act_now.SNOOZE_LENGTHS.values():
+            raise ActionError(f"unknown snooze length {length!r}")
+        end = snooze_item(config, db, fields, now, until_changed=length == act_now.UNTIL_CHANGED)
+        if end is None:
+            return ActionResult("snoozed until it changes")
+        until = localtime.day(end)
         tomorrow = localtime.day(now) + timedelta(days=1)
         return ActionResult(
             "snoozed until " + ("tomorrow" if until == tomorrow else until.isoformat())
         )
-    if action not in ("dismiss", "pin"):
+    if action != "pin":
         raise ActionError(f"unknown action {act_now.ACTIONS}/{action}")
     for kind, id, task, f in members:
-        feedback.say((kind, id, task), Feedback(action=action, fingerprint=f), now)
-    return ActionResult("dismissed" if action == "dismiss" else "pinned")
+        feedback.say((kind, id, task), Feedback(action="pin", fingerprint=f), now)
+    return ActionResult("pinned")
 
 
 def _known_action(plugins: list[Enabled]) -> panels.KnownAction:

@@ -20,13 +20,18 @@ from pydantic import Field, field_validator
 from . import localtime
 from .domain import Model
 from .graph import Ref
-from .page import Action, Badge, Item, Link, Panel, SetAside, Signals, age
+from .page import Action, Badge, Item, Link, Panel, Signals, age
 from .strict import Strict
 
 KEY = "now"
 """The Act now panel's key within core's Act now group."""
 ACTIONS = "act_now"
-"""The prefix of Act now's own buttons, `act_now/<snooze|dismiss|pin|unpin|opened|priority>`."""
+"""The prefix of Act now's own buttons, `act_now/<snooze|unsnooze|pin|unpin|opened|priority>`."""
+UNTIL_CHANGED = "changed"
+"""The Snooze button's `choice` for a snooze with no end: until the item changes."""
+SNOOZE_LENGTHS = {"for a while": "", "until it changes": UNTIL_CHANGED}
+"""The Snooze button's lengths, by label: as long as `[act_now] snooze_days` says for its kind
+(posted empty), or until it changes. Either ends once the item changes."""
 OPENED_FIELD = "opened"
 """The field a plugin's button carries, in Act now, to mark its item opened once the button
 has run: the item's `act_now_fields`."""
@@ -50,13 +55,14 @@ by."""
 class Feedback(Model):
     """What I said of an Act now item."""
 
-    action: Literal["snooze", "dismiss", "pin", "opened"]
+    action: Literal["snooze", "pin", "opened"]
     """`opened` is no choice of mine: I acted on the item elsewhere (a link, a button), so it's
     dimmed until it changes, or for `OPENED_FOR`."""
     fingerprint: str
-    """The item's when I said it; a snooze or dismissal of an item that changed lapses."""
+    """The item's when I said it; a snooze of an item that changed lapses."""
     until: datetime | None = None
-    """When a snooze ends, or an opened item stops being dimmed."""
+    """When a snooze ends (None: only once the item changes), or an opened item stops being
+    dimmed."""
     said_at: datetime | None = None
     """When I said it; set when feedback is read back."""
 
@@ -221,17 +227,16 @@ def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomina
     ), level
 
 
-def set_aside(fingerprint: str, feedback: Feedback | None, now: datetime) -> SetAside | None:
-    """How the item with `fingerprint` (as Act now nominates it) is set aside, snoozed until
-    later or dismissed, if it hasn't changed since; None while it isn't. What Act now and every
+def set_aside(fingerprint: str, feedback: Feedback | None, now: datetime) -> bool:
+    """Whether the item with `fingerprint` (as Act now nominates it) is snoozed: it hasn't
+    changed since, and the snooze has no end or hasn't reached it. What Act now and every
     panel go by."""
-    if feedback is None or feedback.fingerprint != fingerprint:
-        return None
-    if feedback.action == "dismiss":
-        return "dismiss"
-    if feedback.action == "snooze" and feedback.until is not None and feedback.until > now:
-        return "snooze"
-    return None
+    return (
+        feedback is not None
+        and feedback.action == "snooze"
+        and feedback.fingerprint == fingerprint
+        and (feedback.until is None or feedback.until > now)
+    )
 
 
 def opened_at(nomination: Nomination, feedback: Feedback | None, now: datetime) -> datetime | None:
@@ -406,11 +411,11 @@ def panels(
     priority_of: PriorityOf = no_priority,
     contact_importance: ContactImportance = no_contact_importance,
 ) -> list[Panel]:
-    """Act now's panels: nominations not snoozed or dismissed (those I opened dimmed, in
+    """Act now's panels: nominations not snoozed (those I opened dimmed, in
     their place), pinned ones first and
     then the best (by score, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
-    in all, each with buttons to snooze, dismiss, pin or prioritize it; who it's about can raise
+    in all, each with buttons to snooze, pin or prioritize it; who it's about can raise
     the item's importance, and a priority I set replaces it. They're split into a panel per
     plugin (keyed and, by `titles`, titled after it), so they flow across the page; the
     panels come in their best items' order, and each item is badged with its place overall.
@@ -441,8 +446,7 @@ def panels(
     candidates = [
         (n, nom)
         for n, nom in enumerate(nominations)
-        if not nom.item.done
-        and not (now and set_aside(nom.fingerprint, said(nom), now) is not None)
+        if not nom.item.done and not (now and set_aside(nom.fingerprint, said(nom), now))
     ]
     candidates.sort(
         key=lambda c: (
@@ -531,25 +535,36 @@ def importance_actions(subject: Ref, level: int | None) -> list[Action]:
     ]
 
 
-def set_aside_actions(fields: dict[str, str], aside: SetAside | None = None) -> list[Action]:
-    """The buttons that set an item named by `fields` aside, wherever it's shown: Snooze and
-    Dismiss; for one set aside (`aside`), Unsnooze or Undismiss in their place."""
-
-    def button(action: str, label: str, icon: str) -> Action:
-        return Action(
-            name=f"{ACTIONS}/{action}", label=label, fields=fields, group="Act now", icon=icon
+def set_aside_actions(fields: dict[str, str], aside: bool = False) -> list[Action]:
+    """The button that sets an item named by `fields` aside, wherever it's shown: Snooze, with
+    its lengths (`SNOOZE_LENGTHS`); for one snoozed (`aside`), Unsnooze in its place."""
+    if aside:
+        return [
+            Action(
+                name=f"{ACTIONS}/unsnooze",
+                label="Unsnooze",
+                fields=fields,
+                group="Act now",
+                icon="⏰",
+            )
+        ]
+    return [
+        Action(
+            name=f"{ACTIONS}/snooze",
+            label="Snooze",
+            fields=fields,
+            group="Act now",
+            icon="💤",
+            choices=SNOOZE_LENGTHS,
         )
-
-    if aside is not None:
-        return [button("unsnooze", "Unsnooze" if aside == "snooze" else "Undismiss", "⏰")]
-    return [button("snooze", "Snooze", "💤"), button("dismiss", "Dismiss", "👋")]
+    ]
 
 
 def _buttons(
     nomination: Nomination, members: list[Nomination], pinned: bool, level: int | None
 ) -> list[Action]:
-    """Snooze, dismiss, pin or unpin, and set the priority of its subject (or clear it); none
-    for an item about nothing. Snooze, dismiss and pin act on those shown with it (`members`:
+    """Snooze, pin or unpin, and set the priority of its subject (or clear it); none
+    for an item about nothing. Snooze and pin act on those shown with it (`members`:
     what else is due on the subject, and the items joined to it) too, posted as `also`."""
     if nomination.key is None:
         return []

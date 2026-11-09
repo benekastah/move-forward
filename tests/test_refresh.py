@@ -138,7 +138,7 @@ def test_a_failing_store_is_recorded_like_a_failing_collect(
     assert "disk full" in (SnapshotRepository(db).all()["git"].error or "")
 
 
-def test_act_now_buttons_snooze_dismiss_pin_and_unpin(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_act_now_buttons_snooze_pin_and_unpin(monkeypatch: pytest.MonkeyPatch) -> None:
     config, db = stored(
         github=snapshot(direct_requests=[pr(1, author="alice"), pr(2, author="bob")])
     )
@@ -152,17 +152,22 @@ def test_act_now_buttons_snooze_dismiss_pin_and_unpin(monkeypatch: pytest.Monkey
     assert [i.title for i in act()] == [second.title, first.title]
     unpin = next(a for a in act()[0].actions if a.label == "Unpin")
     assert refresh.run_action(config, db, unpin.name, unpin.fields) == "unpinned"
-    dismiss = next(a for a in first.actions if a.label == "Dismiss")
-    assert refresh.run_action(config, db, dismiss.name, dismiss.fields) == "dismissed"
+    snooze = next(a for a in first.actions if a.label == "Snooze")
+    until_changed = {**snooze.fields, "choice": snooze.choices["until it changes"]}
+    assert refresh.run_action(config, db, snooze.name, until_changed) == "snoozed until it changes"
     snooze = next(a for a in second.actions if a.label == "Snooze")
-    assert refresh.run_action(config, db, snooze.name, snooze.fields) == "snoozed until tomorrow"
+    for_a_while = {**snooze.fields, "choice": snooze.choices["for a while"]}
+    assert refresh.run_action(config, db, snooze.name, for_a_while) == "snoozed until tomorrow"
     assert act() == []
-    said = {f.action: f for f in FeedbackRepository(db).all().values()}
-    assert set(said) == {"dismiss", "snooze"}
-    snoozed_until = said["snooze"].until
+    said = {key[1]: f for key, f in FeedbackRepository(db).all().items()}
+    assert {f.action for f in said.values()} == {"snooze"}
+    assert said[first.subjects[0].id].until is None
+    snoozed_until = said[second.subjects[0].id].until
     assert snoozed_until is not None and snoozed_until > NOW
+    with pytest.raises(ActionError, match="unknown snooze length"):
+        refresh.run_action(config, db, snooze.name, {**snooze.fields, "choice": "forever"})
     with pytest.raises(ActionError, match="unknown action"):
-        refresh.run_action(config, db, "act_now/forget", snooze.fields)
+        refresh.run_action(config, db, "act_now/dismiss", snooze.fields)
     with pytest.raises(ActionError, match="missing field"):
         refresh.run_action(config, db, "act_now/pin", {})
 
@@ -177,7 +182,7 @@ def test_a_review_snoozed_in_its_panel_stays_away_for_the_days_set_for_prs() -> 
     snooze = next(a for a in reviews()[0].actions if a.label == "Snooze")
     assert refresh.run_action(config, db, snooze.name, snooze.fields).startswith("snoozed until ")
     [waiting] = reviews()
-    assert waiting.set_aside == "snooze"
+    assert waiting.set_aside
     (said,) = FeedbackRepository(db).all().values()
     now = datetime.now(UTC)  # the snooze counts from the real time, not NOW
     assert said.until is not None and now + timedelta(days=6) < said.until <= now + timedelta(
@@ -186,7 +191,7 @@ def test_a_review_snoozed_in_its_panel_stays_away_for_the_days_set_for_prs() -> 
     assert refresh.build_dashboard(config, db, NOW).act_now() == []
     unsnooze = next(a for a in waiting.actions if a.label == "Unsnooze")
     assert refresh.run_action(config, db, unsnooze.name, unsnooze.fields) == "back"
-    assert reviews()[0].set_aside is None
+    assert not reviews()[0].set_aside
     assert refresh.build_dashboard(config, db, NOW).act_now() != []
 
 
@@ -214,7 +219,7 @@ def test_feedback_that_is_over_or_old_is_pruned() -> None:
     )
     feedback.say(
         ("pull_request", "2", ""),
-        Feedback(action="dismiss", fingerprint="f"),
+        Feedback(action="snooze", fingerprint="f"),  # until it changes
         NOW - timedelta(days=100),
     )
     feedback.say(("pull_request", "3", ""), Feedback(action="pin", fingerprint="f"), NOW)

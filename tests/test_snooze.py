@@ -1,3 +1,4 @@
+import json
 import shlex
 import sys
 import time
@@ -35,7 +36,7 @@ def test_other_durations_are_refused(text: str) -> None:
 
 def _snooze(
     config: Config, db: Database, ref: Ref, task: str | None = None, **duration: float
-) -> list[datetime]:
+) -> list[datetime | None]:
     """What `mfd snooze` does: run the Snooze buttons on the items about `ref`."""
     span = timedelta(**duration) if duration else None
     buttons = snooze.snooze_buttons(refresh.build_dashboard(config, db, NOW), ref, task)
@@ -50,7 +51,7 @@ def test_a_snoozed_review_waits_dimmed_in_reviews_for_me_until_it_is_woken() -> 
         NOW + timedelta(days=7)
     ]
     [item] = refresh.build_dashboard(config, db, NOW).panel("github.reviews_for_me").items
-    assert item.set_aside == "snooze"
+    assert item.set_aside
     assert "Unsnooze" in [a.label for a in item.actions]
     assert FeedbackRepository(db).all()[("pull_request", url, "review")].fingerprint == "a1"
     assert not any(
@@ -107,13 +108,13 @@ def test_unsnooze_brings_back_anything_set_aside(
     config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n')
     assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
     feedback = FeedbackRepository(Database(db_path))
-    said: list[tuple[str, Literal["dismiss", "snooze", "pin"]]] = [
-        ("close", "dismiss"),
-        ("plan", "snooze"),
-        ("other", "pin"),
+    tomorrow = datetime.now(UTC) + timedelta(days=1)
+    said: list[tuple[str, Literal["snooze", "pin"], datetime | None]] = [
+        ("close", "snooze", None),  # until it changes
+        ("plan", "snooze", tomorrow),
+        ("other", "pin", None),
     ]
-    for task, action in said:
-        until = datetime.now(UTC) + timedelta(days=1) if action == "snooze" else None
+    for task, action, until in said:
         feedback.say(
             ("notes.entry", "Chores", task),
             Feedback(action=action, fingerprint="f", until=until),
@@ -134,7 +135,7 @@ def test_without_a_duration_the_config_for_the_kind_says_how_long() -> None:
     config, db = stored(github=snapshot(direct_requests=[pr(1, head_oid="a1")]))
     config = config.model_copy(update={"act_now": ActNowConfig(snooze_days={"pull_request": 3})})
     [until] = _snooze(config, db, Ref(kind="pull_request", id=pr(1).url))
-    assert timedelta(days=2) < until - NOW <= timedelta(days=3)
+    assert until is not None and timedelta(days=2) < until - NOW <= timedelta(days=3)
 
 
 def test_mfd_snooze_takes_any_entity_and_refuses_one_it_cannot_snooze(
@@ -162,6 +163,25 @@ def test_mfd_snooze_takes_any_entity_and_refuses_one_it_cannot_snooze(
     assert f"`{again}` first" in said
     assert cli.main(["-c", str(config), "snooze", "Nothing"]) == 1
     assert cli.main(["-c", str(config), "snooze", "Bob's chores", "1w"]) == 1
+
+
+def test_mfd_snooze_changed_snoozes_until_the_item_changes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "config.toml"
+    db_path = tmp_path / "dashboard.db"
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
+    assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
+    todo = ["notes", "todo", "add", "Chores", "sweep", "--size", "quick"]
+    assert cli.main(["-c", str(config), *todo]) == 0
+    capsys.readouterr()
+    assert cli.main(["-c", str(config), "snooze", "Chores", "changed"]) == 0
+    assert capsys.readouterr().out == "snoozed 1 item(s) until each changes\n"
+    [said] = FeedbackRepository(Database(db_path)).all().values()
+    assert (said.action, said.until) == ("snooze", None)
+    assert cli.main(["-c", str(config), "snoozes"]) == 0
+    [listed] = json.loads(capsys.readouterr().out)
+    assert (listed["id"], listed["until"]) == ("Chores", None)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows splits a command line its own way")

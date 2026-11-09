@@ -97,9 +97,9 @@ class Action(Model):
     """What the text field offers to pick from, in order; anything else can still be typed.
     Check the posted `input` like any other field."""
     choices: dict[str, str] = Field(default_factory=dict[str, str])
-    """A drop-down beside the text field, posted as `choice`, so only with `input`. Keyed by
-    the label shown, valued by what's posted; the first is chosen to begin with. Check the
-    posted field like any other."""
+    """A drop-down beside the button (after the text field, with `input`), posted as `choice`.
+    Keyed by the label shown, valued by what's posted; the first is chosen to begin with. Check
+    the posted field like any other."""
     href: str | None = None
     """Makes the button a link to this page instead of a form (`name` and `fields` unused).
     Links sit at the top right of their item."""
@@ -151,11 +151,6 @@ class Signals(Model):
     a count in it changing, keeps it. A nominated item must have one."""
 
 
-SetAside = Literal["snooze", "dismiss"]
-"""How an item is set aside: snoozed, or dismissed. Act now leaves it out; its panel shows it
-dimmed and last, with Unsnooze, and doesn't count it."""
-
-
 class Item(Model):
     title: str
     url: str | None = None
@@ -184,7 +179,7 @@ class Item(Model):
     signals: Signals | None = None
     """What Act now ranks it by, should its plugin nominate it; None takes its panel's."""
     fingerprint: str | None = None
-    """What would make it worth another look once snoozed or dismissed in Act now, e.g. a
+    """What would make it worth another look once snoozed in Act now, e.g. a
     PR's head and review count; None hashes its title, badges and details."""
     act_now_fields: str | None = None
     """Set by core, in Act now: the JSON fields (`kind`, `id`, `task`, `fingerprint`, `also`)
@@ -192,9 +187,10 @@ class Item(Model):
     opened_at: datetime | None = None
     """Set by core, in Act now: when I opened the item, if it hasn't changed since; it's
     shown dimmed."""
-    set_aside: "SetAside | None" = None
-    """Set by core, in a panel: how I set the item aside (`act_now.set_aside`), if it hasn't
-    changed since; it's shown dimmed and last, with Unsnooze."""
+    set_aside: bool = False
+    """Set by core, in a panel: I snoozed the item (`act_now.set_aside`), and it hasn't changed
+    since nor has the snooze ended. Act now leaves it out; its panel shows it dimmed and last,
+    with Unsnooze, and doesn't count it."""
     done: bool = False
     """Its work is done but it's kept a while to undo (a todo ticked off today): it's shown
     dimmed and last, isn't counted, isn't in Act now, and focus mode doesn't step through it.

@@ -76,6 +76,11 @@ for themselves (a token, a request, an example config) is core's.
 - **No `Person.importance`**: a person's items rank by their contact type alone (one I set,
   or a tool's `Person.contact_type`), and the "VIP" badge is gone. A plugin that set it
   publishes the person without it, or the graph leaves them out.
+- **No Dismiss**: Snooze has a length, for a while or until it changes, which is what Dismiss
+  did. `Item.set_aside` is a `bool` (it was `"snooze"` or `"dismiss"`), and the item it marks
+  has Unsnooze. A plugin that read it tests it for truth.
+- **A drop-down on a plain button**: `Action.choices` no longer needs an `input`; without one,
+  the drop-down sits before the button.
 
 ## Version 1
 

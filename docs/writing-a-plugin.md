@@ -387,13 +387,13 @@ subject is a unit of work (a linking kind, like a ticket) joins the best item ab
 something in that unit, so give such items a `verb` that reads well after another's.
 A plugin that nominates by due date passes `req.due_horizon` to `due_pressure`, so it agrees
 with `[act_now] due_warning_days`.
-Set `Item.fingerprint` to what would make a snoozed or dismissed item worth another look.
-An item with a `task` also has Snooze and Dismiss in its own panel; what's snoozed or dismissed
-waits there, last and dimmed, with Unsnooze or Undismiss, and Act now leaves it out. Give a task to any item it makes
+Set `Item.fingerprint` to what would make a snoozed item worth another look.
+An item with a `task` also has Snooze in its own panel; what's snoozed
+waits there, last and dimmed, with Unsnooze, and Act now leaves it out. Give a task to any item it makes
 sense to set aside.
 
 Every nominated item needs a `task`: a stable id for what doing it is (`triage`,
-`transition`), lower-case letters, digits and `_`. Act now keeps a snooze, dismissal or pin
+`transition`), lower-case letters, digits and `_`. Act now keeps a snooze or pin
 by the item's main subject and its task, so `verb`, the words shown, can change (a status
 name, a count) without losing them. Core leaves out, and logs, a nomination without one.
 

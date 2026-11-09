@@ -5,6 +5,21 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Dismiss is Snooze until it changes
+
+The Dismiss button is gone: Snooze now picks how long, "for a while" (`[act_now]`
+`snooze_days`, until tomorrow by default) or "until it changes", which is what Dismiss did.
+What was dismissed is snoozed until it changes now, and comes back as before.
+- `POST /actions/act_now/dismiss` is refused (unknown action): post `act_now/snooze` with the
+  same fields and `choice=changed`. `act_now/snooze` without `choice` snoozes as before.
+- `mfd snooze <entity> changed` snoozes until it changes; it prints "snoozed N item(s) until
+  each changes".
+- `mfd snoozes` lists snoozes until it changes too, with `until` null; a script reading
+  `until` must allow for it.
+- In `mfd dump`, an item's `set_aside` is `true` or `false`, where it was `"snooze"`,
+  `"dismiss"` or null: test it for truth.
+- Undismiss is Unsnooze.
+
 ### Slack's sign-in is gone
 
 slack no longer connects to a Slack app: `[slack] client_id`, the `/slack`, `/slack/connect` and

@@ -134,7 +134,7 @@ message's flag can still be claimed by an unverified reply giving the same `From
 when no sender can be verified).
 
 A priority, pin or tag I put on a conversation stays with it, whoever replies, a known
-limitation. A snooze or dismiss doesn't: any new reply brings it back, as it's kept by the
+limitation. A snooze doesn't: any new reply brings it back, as it's kept by the
 latest message. Only the first message's Message-ID names the conversation, so it's mostly
 someone already in it, and what they gain is a place on my own page; from a sender the server
 didn't verify, a tag its subject names doesn't make it about my work nor raise it further. Telling a newcomer from

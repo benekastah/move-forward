@@ -228,7 +228,6 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         ("notes/todo_size", False, False),
         ("notes/todo_add", False, False),
         ("act_now/snooze", False, False),  # its entry's, as on the page
-        ("act_now/dismiss", False, False),
         ("notes/ice_item", False, False),  # it stands in for its entry, as on the page
     ]
     todo_id = part.actions[0].fields["todo"]
@@ -254,7 +253,6 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         "notes/todo_size",
         "notes/todo_add",
         "act_now/snooze",
-        "act_now/dismiss",
         "notes/ice_item",
     ]
     assert (
@@ -410,11 +408,10 @@ def test_my_prs_tickets_and_entries_get_an_add_todo_field() -> None:
         "where": "https://jira/browse/APP-8",
     }
     assert add("notes.todos", "APP-1 Fix") == {"entry": "APP-1 Fix"}
-    # Other people's PRs get Snooze, Dismiss and the shared importance choices.
+    # Other people's PRs get Snooze and the shared importance choices.
     review = next(i for i in panel(dashboard, "github.reviews_for_me").items)
     assert [a.name for a in review.actions if a.group not in ("Importance", "Tags")] == [
         "act_now/snooze",
-        "act_now/dismiss",
     ]
 
 
@@ -834,11 +831,11 @@ def test_an_item_set_aside_waits_last_in_its_panel_until_it_changes() -> None:
         return built.panel("x.p").items
 
     waiting = shown("before")
-    assert [(i.title, i.set_aside) for i in waiting] == [("other", None), ("before", "snooze")]
+    assert [(i.title, i.set_aside) for i in waiting] == [("other", False), ("before", True)]
     assert [a.label for a in waiting[1].actions if a.group == "Act now"] == ["Unsnooze"]
     changed = shown("after")
-    assert [(i.title, i.set_aside) for i in changed] == [("after", None), ("other", None)]
-    assert [a.label for a in changed[0].actions if a.group == "Act now"] == ["Snooze", "Dismiss"]
+    assert [(i.title, i.set_aside) for i in changed] == [("after", False), ("other", False)]
+    assert [a.label for a in changed[0].actions if a.group == "Act now"] == ["Snooze"]
 
 
 def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:
@@ -856,10 +853,10 @@ def test_clear_priority_is_offered_in_a_panel_once_one_is_set() -> None:
 
 
 def _set_aside_board(
-    action: "act_now.SetAside", nominated_detail: str | None = None
+    until: datetime | None = NOW + timedelta(days=1), nominated_detail: str | None = None
 ) -> panels.Dashboard:
-    """A panel with one item about a PR, set aside as `action`, Act now having nominated it
-    (with an extra detail, as git_stack adds one, if `nominated_detail`)."""
+    """A panel with one item about a PR, snoozed `until` (None: until it changes), Act now
+    having nominated it (with an extra detail, as git_stack adds one, if `nominated_detail`)."""
     item = Item(
         title="Fix it",
         subjects=[Ref(kind="pull_request", id="pr")],
@@ -869,9 +866,7 @@ def _set_aside_board(
     fingerprint = act_now.Nomination("x", nominee).fingerprint
     feedback: dict[act_now.FeedbackKey, act_now.Feedback] = {
         ("pull_request", "pr", "fix"): act_now.Feedback(
-            action=action,
-            fingerprint=fingerprint,
-            until=NOW + timedelta(days=1) if action == "snooze" else None,
+            action="snooze", fingerprint=fingerprint, until=until
         )
     }
     panel_ = Panel(key="p", title="P", description="", items=[item])
@@ -879,23 +874,23 @@ def _set_aside_board(
     return panels.build(NOW, [plugin], {}, feedback=feedback)
 
 
-def test_a_dismissed_item_waits_with_undismiss() -> None:
-    [item] = _set_aside_board("dismiss").panel("x.p").items
-    assert item.set_aside == "dismiss"
-    assert [a.label for a in item.actions if a.group == "Act now"] == ["Undismiss"]
+def test_an_item_snoozed_until_it_changes_waits_with_unsnooze() -> None:
+    [item] = _set_aside_board(until=None).panel("x.p").items
+    assert item.set_aside
+    assert [a.label for a in item.actions if a.group == "Act now"] == ["Unsnooze"]
 
 
 def test_an_item_set_aside_in_act_now_is_set_aside_in_its_panel_though_act_now_saw_it_otherwise() -> (
     None
 ):
-    board = _set_aside_board("snooze", nominated_detail="and 2 more merged here")
+    board = _set_aside_board(nominated_detail="and 2 more merged here")
     assert board.act_now() == []
     [item] = board.panel("x.p").items
-    assert item.set_aside == "snooze"
+    assert item.set_aside
 
 
 def test_whats_set_aside_isnt_counted_nor_stepped_through_and_is_dimmed() -> None:
-    board = _set_aside_board("snooze")
+    board = _set_aside_board()
     assert board.focus_items("x.p") == []
     page = render._panel(board.panel("x.p"))  # pyright: ignore[reportPrivateUsage]
     assert "<span class='count'>0</span>" in page

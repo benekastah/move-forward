@@ -166,7 +166,7 @@ class Dashboard(Model):
         return [
             (panel, part)
             for item in panel.items
-            if item.set_aside is None and not item.done  # nothing to do now
+            if not item.set_aside and not item.done  # nothing to do now
             for part in item.parts or [item]
             if not part.done
         ]
@@ -192,7 +192,7 @@ def _sorted(
             "items": sorted(
                 panel.items,
                 key=lambda i: (
-                    i.set_aside is not None or i.done,
+                    i.set_aside or i.done,
                     i.deferred,
                     -(importance(i) if panel.sort_by_importance else 0),
                     -i.rank,
@@ -230,9 +230,8 @@ def _with_set_aside(
     now: datetime,
     nominated: dict[act_now.FeedbackKey, str],
 ) -> Panel:
-    """Each of a panel's items that has a task with Snooze and Dismiss, as in Act now; one set
-    aside there or here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze
-    or Undismiss. An item is known by the fingerprint Act now has for it (`nominated`, by key),
+    """Each of a panel's items that has a task with Snooze, as in Act now; one snoozed there or
+    here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze. An item is known by the fingerprint Act now has for it (`nominated`, by key),
     so both agree, else its own; its parts without a task of their own carry its buttons, as
     focus mode shows them, and they set it aside, as a part's Put on ice does its entry."""
 
@@ -320,7 +319,7 @@ def _as_given(item: Item) -> Item:
     if (
         item.act_now_fields is None
         and item.opened_at is None
-        and item.set_aside is None
+        and not item.set_aside
         and not item.parts
     ):
         return item
@@ -328,7 +327,7 @@ def _as_given(item: Item) -> Item:
         update={
             "act_now_fields": None,
             "opened_at": None,
-            "set_aside": None,
+            "set_aside": False,
             "parts_listed": False,
             "parts": [_as_given(part) for part in item.parts],
         }
