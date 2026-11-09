@@ -15,6 +15,11 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **Names and loads**: a plugin named for a prefix of one of core's tables or indexes (`team`
+  of `team_channels`) is refused, and a plugin's migration may not touch another plugin's
+  tables whose name starts with its own (`git_stack_` for `git`). Core holds the database
+  while a plugin's `load` runs, so a refresh can't store between its queries: a `load` mustn't
+  wait on another thread using `ctx.db`.
 - **A local time on a day**: `api.localtime.at(day, time)` gives the local clock time on a
   day, at that day's offset, so a time across a summer-time change keeps its clock time.
 - **Several tokens**: `Plugin.tokens(config)` names every token a plugin keeps, `""` for its

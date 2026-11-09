@@ -411,7 +411,7 @@ def test_a_migration_another_process_ran_first_is_taken_as_done(
 
     first.migrate("p", migrations)
     monkeypatch.setattr(Database, "_applied", applied)
-    assert second.migrate("p", migrations) == 1  # it tried, found it done, and went on
+    assert second.migrate("p", migrations) == 0  # it tried, found it done, and went on
     assert [r["name"] for r in second.query("SELECT name FROM migrations WHERE owner = 'p'")] == [
         "0001_t"
     ]
@@ -423,14 +423,34 @@ def test_a_plugins_load_sees_no_write_between_its_reads(monkeypatch: pytest.Monk
     db.execute("INSERT INTO notes_probe VALUES (1)")
     seen: list[int] = []
 
+    started = threading.Event()
+
+    def write() -> None:
+        started.set()
+        db.execute("UPDATE notes_probe SET x = 2")  # a refresh storing: it waits for the load
+
+    writer = threading.Thread(target=write)
+
     def load(self: NotesPlugin, req: LoadRequest[NotesConfig]) -> None:
         seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
-        writer = threading.Thread(target=db.execute, args=("UPDATE notes_probe SET x = 2",))
         writer.start()
-        writer.join(0.2)  # a refresh storing meanwhile: it waits for the load
+        started.wait()
+        writer.join(0.2)
         seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
 
     monkeypatch.setattr(NotesPlugin, "load", load)
     [notes] = [e for e in registry.enabled(config, db, conftest.NOW) if e.name == "notes"]
     notes.snapshot()
+    writer.join()
     assert seen == [1, 1]
+    assert db.query("SELECT x FROM notes_probe")[0]["x"] == 2  # once the load was done
+
+
+def test_a_transaction_within_a_transaction_is_refused_not_half_committed() -> None:
+    db = Database(":memory:")
+    db.execute("CREATE TABLE t (x INTEGER)")
+    with pytest.raises(RuntimeError, match="within a transaction"), db.transaction() as conn:
+        conn.execute("INSERT INTO t VALUES (1)")
+        with db.transaction():
+            pass
+    assert db.query("SELECT x FROM t") == []

@@ -17,7 +17,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from . import act_now, notifications, tags, tls
 from . import plugins as builtin_plugins
-from .db import CORE, OWNER_RE, Database, core_tables
+from .db import CORE, OWNER_RE, Database, core_objects
 from .domain import KindModel
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
@@ -152,7 +152,7 @@ _CORE_FAMILY_NAMES = {family.name for family in CORE_FAMILIES}
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     """Raise unless every plugin is built against this dashboard's `API_VERSION`, and its
     name is its own and fit to be one: lower-case, not two plugins', none of core's
-    (`RESERVED_NAMES`), and no prefix of core's tables (`team` of `team_channels`). A plugin's kinds are named for it
+    (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`). A plugin's kinds are named for it
     (`git.branch`), or for a family, core's or one it declares (`Plugin.families`), whose model
     they must extend."""
     names = [p.name for p in plugins]
@@ -163,7 +163,7 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(f"plugin name {name!r}: use lower-case letters, digits and _")
         if name in RESERVED_NAMES:
             raise RuntimeError(f"plugin name {name!r} is core's")
-        if owned := sorted(t for t in core_tables() if t.startswith(f"{name}_")):
+        if owned := sorted(t for t in core_objects() if t.startswith(f"{name}_")):
             # Its tables are named `<name>_...`: these would be its too.
             raise RuntimeError(f"plugin name {name!r} would own core's {', '.join(owned)}")
     for plugin in plugins:

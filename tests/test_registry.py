@@ -291,3 +291,13 @@ def test_a_plugin_named_for_a_core_tables_prefix_is_refused() -> None:
 
     with pytest.raises(RuntimeError, match="would own core's team_channels"):
         registry.check_plugins([Team()])
+
+
+def test_a_plugin_named_for_a_core_indexs_prefix_is_refused() -> None:
+    class Pings(Plugin[Strict, KindModel]):
+        name = "pings"
+        config_model = Strict
+        api_version = API_VERSION
+
+    with pytest.raises(RuntimeError, match="would own core's pings_"):
+        registry.check_plugins([Pings()])

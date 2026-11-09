@@ -371,7 +371,7 @@ class Database:
         migration that rebuilds a referenced table copies it under a new name and renames,
         rather than dropping the original first.
 
-        Returns how many ran. Fails, running nothing, when the ledger's names aren't the
+        Returns how many it ran (not those another process did). Fails, running nothing, when the ledger's names aren't the
         first of `migrations`, in order: one was renamed or reordered, or the database was
         used by a newer version of the dashboard.
         """
@@ -396,14 +396,16 @@ class Database:
             if pending:
                 self._backup()
             longer = [o for o in owners if o != owner and o.startswith(f"{owner}_")]
+            ran = 0
             for version, migration in enumerate(pending, start=len(applied) + 1):
                 try:
                     self._run(owner, version, migration, longer)
+                    ran += 1
                 except Exception:
                     if migration.name in self._applied(owner, names):
                         continue  # another process ran it meanwhile
                     raise
-            return len(pending)
+            return ran
 
     def _applied(self, owner: str, names: list[str]) -> list[str]:
         """The names of `owner`'s migrations the database has run, in order. A database from
@@ -522,9 +524,14 @@ class Database:
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection]:
-        """The connection, locked, in a transaction that commits on success."""
-        with self._lock, self._conn:
-            yield self._conn
+        """The connection, locked, in a transaction that commits on success. Not within
+        another: the lock lets its thread in again, and SQLite would commit the outer one's
+        writes with the inner's."""
+        with self._lock:
+            if self._conn.in_transaction:
+                raise RuntimeError("a transaction within a transaction")
+            with self._conn:
+                yield self._conn
 
     def query(self, sql: str, params: Params = ()) -> list[sqlite3.Row]:
         with self.transaction() as conn:
@@ -535,7 +542,8 @@ class Database:
             conn.execute(sql, params)
 
 
-def core_tables() -> set[str]:
-    """The tables core's migrations make (some since dropped), and the ledgers'."""
-    sql = "\n".join(m.run for m in CORE_MIGRATIONS if isinstance(m.run, str))
-    return set(re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?(\w+)", f"{sql}\n{_SCHEMA_VERSIONS}"))
+def core_objects() -> set[str]:
+    """The tables, indexes, views and triggers core makes, as a fresh database has them."""
+    db = Database(":memory:")
+    rows = db.query("SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")
+    return {row["name"] for row in rows}

@@ -172,7 +172,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   place in `ctx.kv`: core stores that piece and calls `collect` again in the same refresh,
   each piece with the timeout to itself.
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
-  for every page. Nothing is kept as JSON.
+  for every page, with the database held so no refresh stores between its queries (so it
+  mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
 - `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
   the page's footer, which lists each plugin's.
 - A plugin that needs other plugins' entities to know what to fetch sets
@@ -206,7 +207,9 @@ The rules:
   one, named with the next number: `Migration("0002_projects", "...")`. Core refuses a
   list whose names don't start with the ones the database ran.
 - **Prefixed.** Every table, index, view and trigger starts with the plugin's name:
-  `linear_issues`. Core rolls back, and refuses, a migration that makes another.
+  `linear_issues`. Core rolls back, and refuses, a migration that makes another, or one of
+  another plugin whose name starts with yours (`git_stack_` for `git`); and refuses a plugin
+  named for a prefix of core's own (`team`, of `team_channels`).
 - **Fetched or kept**, and the table's comment says which. A fetched table holds what
   `collect` brought back and is replaced wholesale by `store`. A kept table holds what
   only the dashboard knows (notes, pings sent, projects seen); it survives refreshes, and
