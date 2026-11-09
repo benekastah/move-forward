@@ -353,7 +353,7 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
   the plugin passes in. Anything slow belongs in `collect`.
 - The page keys a panel `<plugin>.<key>` (`linear.assigned`) and groups a plugin's panels
   together. `priority` is the `Band` saying what kind of panel it is, which sets the
-  default order, in the skill's step order: `PLAN` (my todos), `ASKED` (others wait on me),
+  default order, lowest first: `PLAN` (my todos), `ASKED` (others wait on me),
   `MINE` (my own work needs me), `WAITING` (I wait on others), `HOUSEKEEPING`, `NEXT` (what
   to pick up) and `PARKED`. A plugin's panels in one band go in the order `panels` lists
   them, and plugins' groups by their most urgent band, then by name. The person can drag

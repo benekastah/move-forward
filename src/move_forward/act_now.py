@@ -61,8 +61,8 @@ class Feedback(Model):
     fingerprint: str
     """The item's when I said it; a snooze of an item that changed lapses."""
     until: datetime | None = None
-    """When a snooze ends (None: only once the item changes), or an opened item stops being
-    dimmed."""
+    """When a snooze ends (None: only once the item changes, or once `prune` drops it,
+    `prune_days` after it was said), or an opened item stops being dimmed."""
     said_at: datetime | None = None
     """When I said it; set when feedback is read back."""
 

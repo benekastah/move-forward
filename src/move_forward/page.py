@@ -25,7 +25,8 @@ def anchor(kind: str, id: str) -> str:
 
 class Band(IntEnum):
     """What kind of panel it is (`Panel.priority`), which says where it goes, lowest first:
-    the order the work-notes skill walks through the day. Within a band, a plugin's panels go
+    what I planned, then what others wait on me for, my own work, what I wait on others for,
+    housekeeping, what's next and what's parked. Within a band, a plugin's panels go
     in the order it lists them, and plugins' groups go by their most urgent panel's band, then
     by name."""
 

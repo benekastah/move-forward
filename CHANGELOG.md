@@ -28,7 +28,8 @@ What was dismissed is snoozed until it changes now, and comes back as before.
 - `mfd snooze <entity> changed` snoozes until it changes; it prints "snoozed N item(s) until
   each changes".
 - `mfd snoozes` lists snoozes until it changes too, with `until` null; a script reading
-  `until` must allow for it.
+  `until` must allow for it. It lists only the snoozes still in force, as the page has them:
+  no longer one whose item has changed since.
 - In `mfd dump`, an item's `set_aside` is `true` or `false`, where it was `"snooze"`,
   `"dismiss"` or null: test it for truth.
 - Undismiss is Unsnooze.

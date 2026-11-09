@@ -33,7 +33,14 @@ from .db import Database
 from .graph import Ref
 from .kinds import label
 from .plugin import CliHandler, CliRequest
-from .refresh import build_dashboard, refresh, refresh_subjects, snooze_item, stored_graph
+from .refresh import (
+    build_dashboard,
+    refresh,
+    refresh_subjects,
+    snooze_item,
+    snoozed,
+    stored_graph,
+)
 from .registry import enabled, enabled_names, migrate
 from .repositories import (
     ContactRepository,
@@ -137,8 +144,8 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     unsnooze_parser.add_argument("--task", help="only this task of its, e.g. review")
     commands.add_parser(
         "snoozes",
-        help="print the Act now items snoozed now as JSON: kind, id, task, until (null: until it"
-        " changes), fingerprint",
+        help="print the Act now items snoozed now (not yet over, and unchanged since) as JSON:"
+        " kind, id, task, until (null: until it changes), fingerprint",
     )
     init_parser = commands.add_parser("init", help="ask for each setting and write the config")
     init_parser.add_argument(
@@ -427,8 +434,7 @@ def main(argv: list[str] | None = None) -> int:
                 "until": f.until.isoformat() if f.until else None,
                 "fingerprint": f.fingerprint,
             }
-            for (kind, id, task), f in FeedbackRepository(db).all().items()
-            if f.action == "snooze" and (f.until is None or f.until > now)
+            for (kind, id, task), f in snoozed(config, db, now).items()
         ]
         print(json.dumps(snoozes, indent=2))
         return 0

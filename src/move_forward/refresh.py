@@ -399,15 +399,13 @@ def _merged(first: ItemAdditions, then: ItemAdditions) -> ItemAdditions:
     )
 
 
-def build_dashboard(
-    config: Config, db: Database, now: datetime | None = None, surface: Surface = "dashboard"
-) -> panels.Dashboard:
-    """The dashboard from whatever is stored; cheap, no network. `surface` is where the
-    plugins' panels are shown (the dashboard or focus mode), for what other plugins add to
-    their items."""
-    now = now or datetime.now(UTC)
-    plugins = enabled(config, db, now)
-    graph, snapshots = stored_graph(db, plugins)
+def _plugin_panels(
+    config: Config,
+    plugins: list[Enabled],
+    graph: Graph,
+    snapshots: dict[str, BaseModel | None],
+) -> list[panels.PluginPanels]:
+    """Each plugin's panels and its nominations for Act now, from its stored snapshot."""
     plugin_panels: list[panels.PluginPanels] = []
     for e in plugins:
         snapshot = snapshots[e.name]
@@ -429,6 +427,33 @@ def build_dashboard(
             [],
         )
         plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
+    return plugin_panels
+
+
+def snoozed(config: Config, db: Database, now: datetime) -> dict[act_now.FeedbackKey, Feedback]:
+    """The snoozes in force, by their item's key, as the page sees them: those whose time
+    isn't up and whose item hasn't changed since (`act_now.set_aside`). One whose item is no
+    longer shown or nominated isn't. Cheap, as `build_dashboard`."""
+    plugins = enabled(config, db, now)
+    graph, snapshots = stored_graph(db, plugins)
+    current = panels.fingerprints(_plugin_panels(config, plugins, graph, snapshots))
+    return {
+        key: f
+        for key, f in FeedbackRepository(db).all().items()
+        if key in current and act_now.set_aside(current[key], f, now)
+    }
+
+
+def build_dashboard(
+    config: Config, db: Database, now: datetime | None = None, surface: Surface = "dashboard"
+) -> panels.Dashboard:
+    """The dashboard from whatever is stored; cheap, no network. `surface` is where the
+    plugins' panels are shown (the dashboard or focus mode), for what other plugins add to
+    their items."""
+    now = now or datetime.now(UTC)
+    plugins = enabled(config, db, now)
+    graph, snapshots = stored_graph(db, plugins)
+    plugin_panels = _plugin_panels(config, plugins, graph, snapshots)
     identities = [
         found
         for e in plugins
@@ -636,7 +661,8 @@ def snooze_item(
     """Snooze the item a Snooze button's `fields` name, and those shown with it, until each
     changes (its fingerprint) or, unless `until_changed`, `duration` passes (by default as
     long as `config` says for its kind of subject): the Snooze button, and `mfd snooze`. When
-    the item's snooze ends; None if only once it changes."""
+    the item's snooze ends; None if only once it changes (or once it's `prune_days` old, and
+    pruned)."""
 
     def ends(kind: str) -> datetime | None:
         if until_changed:
@@ -680,11 +706,16 @@ def _act_now_action(
     members = _members(fields)
     feedback = FeedbackRepository(db)
     if action == "opened":
-        # What I did elsewhere isn't a choice to keep: it never replaces a pin or a snooze.
+        # What I did elsewhere isn't a choice to keep: it never replaces a pin or a snooze in
+        # force. One that's lapsed (its time is up, or its item has changed) it does.
         said = feedback.all()
         for kind, id, task, f in members:
             before = said.get((kind, id, task))
-            if before is None or before.action == "opened":
+            if (
+                before is None
+                or before.action == "opened"
+                or (before.action == "snooze" and not act_now.set_aside(f, before, now))
+            ):
                 until = now + act_now.OPENED_FOR
                 feedback.say(
                     (kind, id, task), Feedback(action="opened", fingerprint=f, until=until), now

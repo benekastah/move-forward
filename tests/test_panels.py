@@ -19,6 +19,7 @@ from conftest import (
     titles,
     todo,
 )
+from pydantic import ValidationError
 
 from move_forward import act_now, panels, render
 from move_forward.graph import Ref
@@ -179,6 +180,14 @@ def test_groups_in_one_band_go_by_name_and_a_plugins_panels_in_its_order() -> No
         ("alpha", ["alpha.0"]),
         ("beta", ["beta.1", "beta.2", "beta.0"]),
     ]
+
+
+@pytest.mark.parametrize("priority", [Band.MINE + 5, 15, -1])
+def test_a_panels_priority_is_a_band_not_any_number(priority: int) -> None:
+    with pytest.raises(ValidationError):
+        Panel.model_validate(
+            {"key": "k", "title": "", "description": "", "items": [], "priority": priority}
+        )
 
 
 def test_focus_items_by_category() -> None:

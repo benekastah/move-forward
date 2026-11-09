@@ -1,8 +1,8 @@
 """The Dashboard: every enabled plugin's panels in groups, and focus mode's view of them.
 
 Act now is core's group: the panels whose plugins flag them as needing acting on now. Every
-other panel sits in its plugin's group. Panels and groups go in their bands' order (the
-skill's step order; see `Band`). Focus mode walks Act now, or one panel, an item at a time.
+other panel sits in its plugin's group. Panels and groups go in their bands' order (see
+`Band`). Focus mode walks Act now, or one panel, an item at a time.
 """
 
 import logging
@@ -225,6 +225,33 @@ def _without_hidden(panel: Panel, hidden: Hidden) -> Panel:
     return panel.model_copy(update={"items": [i for i in panel.items if not hidden(i)]})
 
 
+def _as_nomination(plugin: str, panel: Panel, item: Item) -> act_now.Nomination:
+    """A panel's item as Act now would know it: with the panel's signals unless it has its
+    own."""
+    return act_now.Nomination(
+        plugin, item if item.signals else item.model_copy(update={"signals": panel.signals})
+    )
+
+
+def fingerprints(plugins: list[PluginPanels]) -> dict[act_now.FeedbackKey, str]:
+    """The fingerprint of every item the plugins show or nominate, by its key, as the page
+    compares a snooze with it: Act now's nomination's, else its panel item's."""
+    found = {
+        n.key: n.fingerprint
+        for plugin in plugins
+        for panel in plugin.panels
+        for item in panel.items
+        if (n := _as_nomination(plugin.key, panel, item)).key is not None
+    }
+    found.update(
+        (n.key, n.fingerprint)
+        for plugin in plugins
+        for item in plugin.nominations
+        if (n := act_now.Nomination(plugin.key, item)).key is not None
+    )
+    return found
+
+
 def _with_set_aside(
     panel: Panel,
     plugin: str,
@@ -233,14 +260,13 @@ def _with_set_aside(
     nominated: dict[act_now.FeedbackKey, str],
 ) -> Panel:
     """Each of a panel's items that has a task with Snooze, as in Act now; one snoozed there or
-    here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze. An item is known by the fingerprint Act now has for it (`nominated`, by key),
-    so both agree, else its own; its parts without a task of their own carry its buttons, as
-    focus mode shows them, and they set it aside, as a part's Put on ice does its entry."""
+    here (`act_now.set_aside`) marked so, to show dimmed and last, with Unsnooze. An item is
+    known by the fingerprint Act now has for it (`nominated`, by key), so both agree, else its
+    own; its parts without a task of their own carry its buttons, as focus mode shows them,
+    and they set it aside, as a part's Put on ice does its entry."""
 
     def with_buttons(item: Item) -> Item:
-        nomination = act_now.Nomination(
-            plugin, item if item.signals else item.model_copy(update={"signals": panel.signals})
-        )
+        nomination = _as_nomination(plugin, panel, item)
         key = nomination.key
         if key is None:
             return item
@@ -433,7 +459,7 @@ def build(
         for item in plugin.nominations
         if not hidden(item) and _tasked(plugin.key, item)
     ]
-    nominated = {n.key: n.fingerprint for n in nominations if n.key is not None}
+    nominated = fingerprints(plugins)
     titles = {plugin.key: plugin.title for plugin in plugins}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
     # Its listed parts get the importance choices they have in their panels, as the same

@@ -30,7 +30,7 @@ def test_durations_are_days_or_hours(text: str, span: timedelta) -> None:
 
 @pytest.mark.parametrize("text", ["", "7", "d", "0d", "1w", "-1d", "1.5h"])
 def test_other_durations_are_refused(text: str) -> None:
-    with pytest.raises(ValueError, match="isn't a duration"):
+    with pytest.raises(ValueError, match="isn't a duration like 7d or 12h, nor changed"):
         snooze.parse_duration(text)
 
 
@@ -182,6 +182,36 @@ def test_mfd_snooze_changed_snoozes_until_the_item_changes(
     assert cli.main(["-c", str(config), "snoozes"]) == 0
     [listed] = json.loads(capsys.readouterr().out)
     assert (listed["id"], listed["until"]) == ("Chores", None)
+
+    another = ["notes", "todo", "add", "Chores", "mop", "--size", "quick"]
+    assert cli.main(["-c", str(config), *another]) == 0  # the item changed: the snooze is over
+    capsys.readouterr()
+    assert cli.main(["-c", str(config), "snoozes"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_mfd_snoozes_lists_only_the_snoozes_whose_time_isnt_up(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "config.toml"
+    db_path = tmp_path / "dashboard.db"
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
+    assert cli.main(["-c", str(config), "snoozes"]) == 0  # creates and migrates the database
+    assert json.loads(capsys.readouterr().out) == []
+    for title in ("Chores", "Errands"):
+        assert cli.main(["-c", str(config), "notes", "add-entry", title]) == 0
+        todo = ["notes", "todo", "add", title, "sweep", "--size", "quick"]
+        assert cli.main(["-c", str(config), *todo]) == 0
+        assert cli.main(["-c", str(config), "snooze", title, "2d"]) == 0
+    feedback = FeedbackRepository(Database(db_path))
+    now = datetime.now(UTC)
+    [(key, said)] = [(k, f) for k, f in feedback.all().items() if k[1] == "Errands"]
+    feedback.say(key, said.model_copy(update={"until": now - timedelta(hours=1)}), now)
+    capsys.readouterr()
+    assert cli.main(["-c", str(config), "snoozes"]) == 0
+    [listed] = json.loads(capsys.readouterr().out)
+    assert (listed["kind"], listed["id"]) == ("notes.entry", "Chores")
+    assert listed["until"] is not None
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows splits a command line its own way")

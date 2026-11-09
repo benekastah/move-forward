@@ -68,9 +68,9 @@ if it weren't blocked.
 A due date starts raising an item `due_warning_days` (7) ahead.
 A snooze lasts `default_snooze_days` (1: until tomorrow), or `snooze_days[<kind>]`
 for a kind of subject (`snooze_days = { pull_request = 7 }` snoozes a PR for a week),
-or until the item changes, whichever comes first; Snooze's "until it changes" has no end
-but that. It ends at local midnight, or at `snooze_until_hour` (9: nine
-in the morning) on its last day.
+or until the item changes, whichever comes first; with Snooze's "until it changes", only when
+it changes (or once it's `prune_days` old). A timed snooze ends at local midnight, or at
+`snooze_until_hour` (9: nine in the morning) on its last day.
 
 Teams are named once, at the top level. A plugin that has its own idea of a
 team maps the names in a `teams` table of its section: `[github.teams]` gives
@@ -126,7 +126,7 @@ before the command's name.
 | `mfd priority <entity> <1\|2\|clear> [--kind K]` | Set how much an entity matters: 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
 | `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one I put there off; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
-| `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, task, until, fingerprint; `until` is null for a snooze until it changes), for the skill. |
+| `mfd snoozes` | Print the Act now items snoozed now, as the page has them (the snooze's time isn't up and the item hasn't changed since), as JSON (kind, id, task, until, fingerprint; `until` is null for a snooze until it changes), for the skill. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 | `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) or password (mail) without showing it (`<plugin>.<account>` for one of a plugin's accounts, when it reads several), and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under its `keychain_service` (the plugin's, or the account's), with `email` as the account; the config is refused when two tokens are kept under the same one, whatever its case. |
 | `mfd token rotate` | Make a new dashboard token (the one in `token` next to the database) and end every session; a running server picks it up by itself, and scripts need the new one. |
@@ -170,7 +170,7 @@ it changes or the snooze ends; panel and group counts leave it out, and focus mo
 Pin is Act now's.
 
 Below Act now is a collapsible group per enabled plugin holding its panels.
-Panels go in the skill's step order, by what kind of panel each is (its band): what I
+Panels go in order of what kind of panel each is (its band): what I
 planned (notes' todos), what others ask of me (reviews, replies, mail), my own work that needs
 me (failing checks, conflicts, feedback, unpushed commits), what I'm waiting on others for
 (reviews asked, merges under way, nudges), housekeeping (PR labels, branches to clean up, ticket
@@ -352,7 +352,7 @@ over 64 KiB:
 | `/settings` | `<section>:<key>` per setting (`:prune_days`, `github:history_days`, `act_now:weights.closes`); a list one per line; a true-or-false one `on` or `off` | Saves the settings the form changed into the config file (see [Settings](#settings)), and redirects back to `/settings` saying what was saved, or why nothing was. Settings left out of the form are left as they are. |
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` (and then of those that watch it, if what they read changed); `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
-| `/actions/act_now/<snooze\|unsnooze\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`); for `snooze`, `choice` (optional: `changed` for until it changes, else empty or left out for `[act_now]` `snooze_days`) | Snoozes an Act now item (and what's shown with it) for `snooze_days` (until tomorrow by default) or until it changes, or pins or unpins it; `unsnooze` brings back what's snoozed; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
+| `/actions/act_now/<snooze\|unsnooze\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`); for `snooze`, `choice` (optional: `changed` for until it changes, else empty or left out for `[act_now]` `snooze_days`) | Snoozes an Act now item (and what's shown with it) for `snooze_days` (until tomorrow by default) or until it changes, or pins or unpins it; `unsnooze` brings back what's snoozed; `opened` dims it until it changes, or for a day (never replacing a pin, or a snooze still in force). |
 | `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
 | `/actions/act_now/tag` | `kind`, `id` (the entity), `input` (the tag: `garbage-day`, `#Garbage Day`) | Puts the tag on the entity, as `mfd tag` does. |
 | `/actions/act_now/untag` | `kind`, `id`, `tag` (its handle) | Takes off a tag I put on it. |

@@ -223,8 +223,13 @@ def test_feedback_that_is_over_or_old_is_pruned() -> None:
         NOW - timedelta(days=100),
     )
     feedback.say(("pull_request", "3", ""), Feedback(action="pin", fingerprint="f"), NOW)
+    feedback.say(
+        ("pull_request", "4", ""),
+        Feedback(action="snooze", fingerprint="f"),  # until it changes, said lately
+        NOW,
+    )
     assert feedback.prune(NOW + timedelta(seconds=1), NOW - timedelta(days=90)) == 2
-    assert list(feedback.all()) == [("pull_request", "3", "")]
+    assert sorted(feedback.all()) == [("pull_request", "3", ""), ("pull_request", "4", "")]
 
 
 def test_a_plugin_collects_after_the_graph_when_it_implements_collect_after() -> None:
@@ -326,6 +331,24 @@ def test_opening_elsewhere_keeps_a_pin() -> None:
     refresh.run_action(config, db, "act_now/opened", json.loads(item.act_now_fields or "{}"))
     (said,) = FeedbackRepository(db).all().values()
     assert said.action == "pin"
+
+
+def test_opening_elsewhere_replaces_a_snooze_only_once_it_has_lapsed() -> None:
+    config, db = stored(github=snapshot(direct_requests=[pr(1, author="alice")]))
+    (item,) = refresh.build_dashboard(config, db, NOW).act_now()
+    snooze = next(a for a in item.actions if a.label == "Snooze")
+    refresh.run_action(config, db, snooze.name, {**snooze.fields, "choice": "changed"})
+    opened = json.loads(item.act_now_fields or "{}")
+    refresh.run_action(config, db, "act_now/opened", opened)
+    (said,) = FeedbackRepository(db).all().values()
+    assert said.action == "snooze"  # still in force: kept
+
+    moved = pr(1, author="alice", head_oid="b" * 40)  # pushed to since: the snooze is over
+    PrRepository(db).replace(snapshot(direct_requests=[moved]))
+    (back,) = refresh.build_dashboard(config, db, NOW).act_now()
+    refresh.run_action(config, db, "act_now/opened", json.loads(back.act_now_fields or "{}"))
+    (dimmed,) = refresh.build_dashboard(config, db, NOW).act_now()
+    assert dimmed.opened_at is not None
 
 
 def test_graph_events_compare_with_what_was_stored_before_the_refresh(

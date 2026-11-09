@@ -4,7 +4,7 @@ import re
 from collections.abc import Iterator
 from datetime import timedelta
 
-from .act_now import ACTIONS
+from .act_now import ACTIONS, UNTIL_CHANGED
 from .graph import Ref
 from .page import Item
 from .panels import Dashboard
@@ -15,10 +15,11 @@ SNOOZE = f"{ACTIONS}/snooze"
 
 
 def parse_duration(text: str) -> timedelta:
-    """`7d` or `12h` as a time span; raises ValueError for anything else, or for zero."""
+    """`7d` or `12h` as a time span; raises ValueError for anything else, or for zero, naming
+    `mfd snooze`'s other length too (`UNTIL_CHANGED`), which its caller checks for first."""
     match = _DURATION.fullmatch(text)
     if match is None or int(match[1]) == 0:
-        raise ValueError(f"{text!r} isn't a duration like 7d or 12h")
+        raise ValueError(f"{text!r} isn't a duration like 7d or 12h, nor {UNTIL_CHANGED}")
     amount = int(match[1])
     return timedelta(days=amount) if match[2] == "d" else timedelta(hours=amount)
 
