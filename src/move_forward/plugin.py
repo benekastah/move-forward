@@ -427,8 +427,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The field of the plugin's section mapping each top-level team to what the tool calls
     it (`teams`, e.g. `[github.teams]`), so the config can check it names only teams it has;
     None for a plugin without one."""
-    collects_after_graph: ClassVar[bool] = False
-    """Whether the snapshot comes from `collect_after` instead of `collect`."""
     subjects_timeout_seconds: ClassVar[int] = 60
     """How long `refresh_subjects` may take before core refreshes the plugin instead."""
     collect_timeout_seconds: ClassVar[int] = 300
@@ -478,10 +476,15 @@ class Plugin[C: BaseModel, S: BaseModel]:
         calls its `collect` (or `collect_after`) and it has a schedule."""
         return self.snapshot_model is not None
 
+    @property
+    def collects_after_graph(self) -> bool:
+        """Whether the snapshot comes from `collect_after` instead of `collect`: the plugin
+        implements `collect_after`."""
+        return any("collect_after" in vars(c) for c in type(self).__mro__ if c is not Plugin)
+
     def refresh_seconds(self, ctx: Context[C]) -> int | None:
-        """How often the plugin refreshes on its own, in seconds; None for never (one that
-        collects after the plugins it requires may rely on being refreshed with them). By
-        default its section's `refresh_seconds`, when it has one."""
+        """How often the plugin refreshes on its own, in seconds; None for never. By default
+        its section's `refresh_seconds`, when it has one."""
         seconds: object = getattr(ctx.config, "refresh_seconds", None)
         return seconds if isinstance(seconds, int) else None
 
@@ -535,9 +538,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def collect_after(self, req: CollectAfterRequest[C]) -> S:
         """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
-        repos git found. Runs once their snapshots are stored, in parallel with other
-        `collect_after`s, and fails like `collect`."""
-        raise NotImplementedError(f"{self.name} collects after the graph but has no collect_after")
+        repos git found, in place of `collect`: a plugin that implements it collects after the
+        graph. Runs once the other plugins due have stored their snapshots, in parallel with
+        other `collect_after`s, and fails like `collect`. It's refreshed on its own schedule,
+        not with the plugins it reads: to refresh soon after they change, `watches` them."""
+        raise NotImplementedError(f"{self.name} doesn't collect after the graph")
 
     def after_collect(self, req: AfterCollectRequest[C]) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.

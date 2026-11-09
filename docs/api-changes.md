@@ -15,6 +15,10 @@ Fewer things to know: what no plugin used is gone.
 
 - **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
   return the snapshot, and core calls each once per refresh.
+- **Collecting after the graph** is implementing `collect_after`: `collects_after_graph` is a
+  property saying whether the plugin does, no longer a class variable to set. Such a plugin
+  is refreshed on its own schedule, no longer with the plugins it `requires`; to refresh
+  soon after they change, it `watches` them.
 
 ## Version 1
 

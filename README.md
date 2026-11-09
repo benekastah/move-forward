@@ -191,8 +191,8 @@ JavaScript, their normal form redirects still work.
 A group's title bar also says when its plugin last refreshed (in local time,
 with the date when it wasn't today), "refreshing…" while it does, or "refresh
 failed" with the reason on hover. Its Refresh button refreshes just that plugin,
-and the plugins that collect after it (git_stack after git); the header's
-Refresh refreshes them all. The footer lists only plugins without a group.
+and then the plugins that watch it (git_stack watches git) if what they read
+changed; the header's Refresh refreshes them all. The footer lists only plugins without a group.
 While any plugin refreshes, the tab icon shows a dotted version of the
 dashboard arrow, highlighting one dot at a time. If the browser pauses the
 animation in a background tab, it still shows a complete refresh icon. The
@@ -353,7 +353,7 @@ over 64 KiB:
 | Path | Fields | Does |
 | --- | --- | --- |
 | `/settings` | `<section>:<key>` per setting (`:prune_days`, `github:history_days`, `act_now:weights.closes`); a list one per line; a true-or-false one `on` or `off` | Saves the settings the form changed into the config file (see [Settings](#settings)), and redirects back to `/settings` saying what was saved, or why nothing was. Settings left out of the form are left as they are. |
-| `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
+| `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` (and then of those that watch it, if what they read changed); `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
 | `/actions/act_now/<snooze\|unsnooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and what's shown with it) until tomorrow, dismisses it, or pins or unpins it; `unsnooze` brings back what's snoozed or dismissed; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
 | `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |

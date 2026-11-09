@@ -184,37 +184,20 @@ def to_collect(
     plugins: list[Enabled], only: set[str] | None = None
 ) -> tuple[list[Enabled], list[Enabled]]:
     """What a refresh of `only` (None: every plugin) collects: first the plugins that collect
-    on their own, then those that collect after the graph, including any whose `requires`
-    are among the first, unless it `watches` them too: then its `changed` decides, right
-    after they refresh."""
-    collecting = [e for e in plugins if e.plugin.collects]
-    first = [
-        e
-        for e in collecting
-        if not e.plugin.collects_after_graph and (only is None or e.name in only)
-    ]
-    names = {e.name for e in first}
-    after = [
-        e
-        for e in collecting
-        if e.plugin.collects_after_graph
-        and (
-            only is None
-            or e.name in only
-            or names.intersection(set(e.plugin.requires) - set(e.plugin.watches))
-        )
-    ]
+    on their own, then those that collect after the graph."""
+    due = [e for e in plugins if e.plugin.collects and (only is None or e.name in only)]
+    first = [e for e in due if not e.plugin.collects_after_graph]
+    after = [e for e in due if e.plugin.collects_after_graph]
     return first, after
 
 
 def refresh(
     config: Config, db: Database, now: datetime | None = None, only: set[str] | None = None
 ) -> None:
-    """Refresh every plugin, or `only` those (and the plugins that collect after them, e.g.
-    git_stack after git). Each plugin fails on its own. After collecting, the graph is built
-    again, the plugins' events found against what held before, the daily prune runs if due,
-    and `after_collect` runs for the plugins collected and those that collect nothing (they
-    work from the others' data)."""
+    """Refresh every plugin, or `only` those. Each plugin fails on its own. After collecting,
+    the graph is built again, the plugins' events found against what held before, the daily
+    prune runs if due, and `after_collect` runs for the plugins collected and those that
+    collect nothing (they work from the others' data)."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     previous, previous_snapshots = stored_graph(db, plugins)

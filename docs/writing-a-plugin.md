@@ -167,10 +167,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   taken for a change. With `changed`, `refresh_seconds` can be long. A `changed` that
   reads another plugin's entities from the graph names that plugin in `watches`: the
   server asks it right after each refresh of that plugin (github watches git, to see my
-  PRs' branches move), whether or not it also has `change_check_seconds`. A plugin that
-  collects after the graph is refreshed with the plugins it `requires`, unless it watches
-  them too: then only when its `changed` says so, with its own `refresh_seconds` as the
-  backstop.
+  PRs' branches move), whether or not it also has `change_check_seconds`.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with
@@ -182,9 +179,10 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
 - `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
   the page's footer, which lists each plugin's.
-- A plugin that needs other plugins' entities to know what to fetch sets
-  `collects_after_graph = True` and implements `collect_after(req)` instead (see
-  git_stack).
+- A plugin that needs other plugins' entities to know what to fetch implements
+  `collect_after(req)` instead of `collect` (see git_stack): it runs once the others have
+  stored their snapshots, with the graph. It's refreshed on its own schedule, not with the
+  plugins it reads; to refresh soon after they change, it `watches` them.
 - `notification_kinds` and `events(req)` make browser notifications: when the user has
   subscribed to one of the kinds (`<plugin>.<kind>`), `events` gets the last good
   snapshot (`req.before`), the one just collected (`req.after`) and the graph from before
