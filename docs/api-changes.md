@@ -61,9 +61,14 @@ Fewer things to know: what no plugin used is gone.
   timeout)` sends a request carrying a secret (https only, no redirects) with a JSON or form
   body, and returns the answer's body. When there's no answer (no network, a timeout, a cut
   or garbled response) or an error status, it raises `api.http.RequestError`, whose `status`
-  is the HTTP status, or None without one. ## Version 1 The first version. While the
-  built-ins are its only plugins, changes go into it without raising the version; it's
-  listed so a plugin written against an earlier checkout can catch up.
+  is the HTTP status, or None without one.
+
+## Version 1
+
+The first version. While the built-ins are its only plugins, changes go into it without
+raising the version; it's listed so a plugin written against an earlier checkout can
+catch up.
+
 - **A checkout's git directory**: `api.shell.git_common_dir(repo)` is the directory holding a
   checkout's refs and config (its `.git`, or a linked worktree's main repository's), read
   from the files without running git; None when `repo` isn't a checkout.
