@@ -100,7 +100,9 @@ class LinearConfig(Strict):
 - Secrets never go in the config. Give the section `token_env` and `keychain_service`, as
   jira and slack do, and read the token with `keychain.token(config, email)`: then
   `mfd token set <plugin>` stores it and `mfd token check` finds it (a section that keeps
-  them under other names overrides `token_settings(config)`). Anything sent with a
+  them under other names overrides `token_settings(config)`, returning an
+  `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
+  (`move-forward-linear`): the config is refused when two plugins share one. Anything sent with a
   token must go over HTTPS (`api.http`).
 - A section mapping the top-level teams to the tool's names for them (github's
   `[github.teams]`) names that field in `teams_field`, so the config refuses a team it

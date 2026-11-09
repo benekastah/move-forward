@@ -279,6 +279,23 @@ def unmet_requirements(config: "Config") -> list[str]:
     ]
 
 
+def shared_token_services(config: "Config") -> list[str]:
+    """The keychain services more than one enabled plugin keeps its token under, each with
+    who, e.g. "[jira] and [slack] keep their tokens under 'shared'": storing one token would
+    replace the other's."""
+    names = set(enabled_names(config))
+    by_service: dict[str, list[str]] = {}
+    for plugin in PLUGINS:
+        section = config.section(plugin.name) if plugin.name in names else None
+        if section is not None and (settings := plugin.token_settings(section)) is not None:
+            by_service.setdefault(settings.keychain_service, []).append(f"[{plugin.name}]")
+    return [
+        f"{' and '.join(who)} keep their tokens under {service!r}: give each its own keychain_service"
+        for service, who in by_service.items()
+        if len(who) > 1
+    ]
+
+
 def notification_kinds(config: "Config | None" = None) -> dict[str, str]:
     """Every kind of event I can subscribe to, with what it says: the dashboard's, and those
     of the plugins `config` enables (every plugin's without one)."""

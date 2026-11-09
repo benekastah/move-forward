@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from move_forward import cli, keychain, registry
+from move_forward import config as config_module
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.shell import CommandError
@@ -213,15 +215,7 @@ def test_mfd_token_finds_a_plugins_token_by_its_token_settings(
     assert "github: from $GITHUB_PAT" in capsys.readouterr().out
 
 
-def test_mfd_token_set_refuses_a_token_whose_service_another_shares(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    stored: list[str] = []
-
-    def write(service: str, account: str, secret: str) -> None:
-        stored.append(service)
-
-    monkeypatch.setattr(keychain, "write", write)
+def test_a_config_keeping_two_tokens_in_one_place_is_refused(tmp_path: Path) -> None:
     config = _config(tmp_path)
     config.write_text(
         config.read_text().replace(
@@ -229,8 +223,7 @@ def test_mfd_token_set_refuses_a_token_whose_service_another_shares(
         )
         + '[slack]\nkeychain_service = "shared"\n'
     )
-    assert cli.main(["-c", str(config), "token", "set", "jira"]) == 1
-    assert "jira and slack share keychain_service 'shared'" in capsys.readouterr().err
-    assert stored == []
-    assert cli.main(["-c", str(config), "token", "check"]) == 0  # the rest still works
-    assert cli.main(["-c", str(config), "token", "rotate"]) == 0
+    with pytest.raises(
+        ValidationError, match=r"\[jira\] and \[slack\] keep their tokens under 'shared'"
+    ):
+        config_module.load(config)

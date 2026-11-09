@@ -141,7 +141,7 @@ before the command's name.
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, task, until, fingerprint), for the skill. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
-| `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) or password (mail) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account. |
+| `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) or password (mail) without showing it, and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under the plugin's `keychain_service`, with `email` as the account; the config is refused when two plugins name the same one. |
 | `mfd token rotate` | Make a new dashboard token (the one in `token` next to the database) and end every session; a running server picks it up by itself, and scripts need the new one. |
 | `mfd token check` | Say where each enabled plugin's token is found: its environment variable, the secret store, or nowhere. Never prints a token. |
 

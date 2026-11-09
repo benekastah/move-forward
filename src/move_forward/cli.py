@@ -320,17 +320,6 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
     if section is None:
         print(f"[{args.plugin}] isn't in {config_path}, or keeps no token", file=sys.stderr)
         return 1
-    if sharing := [
-        name
-        for name, other in sections.items()
-        if name != args.plugin and other.keychain_service == section.keychain_service
-    ]:
-        print(
-            f"{args.plugin} and {', '.join(sharing)} share keychain_service"
-            f" {section.keychain_service!r}: storing one would replace the other's; give each its own",
-            file=sys.stderr,
-        )
-        return 1
     try:
         secret = getpass.getpass(f"{args.plugin} API token: ").strip()
     except (EOFError, KeyboardInterrupt):

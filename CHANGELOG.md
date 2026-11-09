@@ -5,10 +5,11 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
-### `mfd token set` refuses a shared keychain service
+### Two plugins can't keep their tokens under one keychain service
 
-`mfd token set <plugin>` now refuses, exiting 1, when another plugin's section names the same
-`keychain_service`: storing one token would replace the other's. Give each section its own.
+A config whose sections name the same `keychain_service` is now refused when it loads, as
+storing one token (`mfd token set`, Slack's Connect) would replace the other's. Give each
+section its own.
 
 ### vCard address books
 
