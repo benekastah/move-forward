@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import ClassVar
 
 import pytest
-from conftest import ME, NOW, approved_review, event, pr, snapshot
+from conftest import ME, NOW, approved_review, event, events_between, pr, snapshot
 
 from move_forward import refresh, registry
 from move_forward.config import Config
@@ -22,7 +22,9 @@ WAITING = {"review_decision": "REVIEW_REQUIRED"}
 
 
 def _kinds(before: GitHubSnapshot, after: GitHubSnapshot) -> list[tuple[str, str]]:
-    return [(e.kind, e.text) for e in changes(before, after)]
+    return [
+        (e.kind, e.text) for e in events_between("github", {"github": before}, {"github": after})
+    ]
 
 
 def _mine(**fields: object) -> GitHubSnapshot:
@@ -232,3 +234,4 @@ def test_a_refresh_stores_the_events_of_subscribed_kinds(monkeypatch: pytest.Mon
     [told] = NotificationRepository(db).take(NOW, timedelta(hours=1))
     assert (told.body, told.tag) == ("can be merged", f"github:{pr(1).url}")
     assert told.url == f"/#{anchor('pull_request', pr(1).url)}"
+    assert told.title == f"{pr(1).repo}#1 PR 1"

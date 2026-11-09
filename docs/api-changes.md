@@ -99,6 +99,19 @@ for themselves (a token, a request, an example config) is core's.
   the page's tag view (`?tag=`) keeps it by; a plugin's are ignored. `api.html.buttons` takes
   `tags`, the tags the dashboard its buttons go back to is filtered by; a plugin's page leaves
   it out.
+- **One events hook**: `graph_events` and `GraphEventsRequest` are gone, and `events` takes
+  both inputs. `EventsRequest` has the plugin's snapshot `before` the refresh and `after` it,
+  and the graph before it (`previous_graph`, where `graph` was) and now (`graph`). It's asked
+  after every refresh of anything, as `graph_events` was, never before the plugin's first
+  snapshot. A plugin that had `graph_events` moves it into `events`, reading
+  `before`/`after` for `previous_snapshot`/`snapshot`; one reading `req.graph` in `events`
+  reads `req.previous_graph`. `Harness.graph_events()` is `Harness.events()`, every event the
+  plugin makes since the last `store`.
+- **`Item.notify`**: an item sets `notify=Notify(kind, text, thing=None)` to raise one of its
+  plugin's `notification_kinds` when it first shows in its panels; core compares each
+  refresh's panels with the last's (kept in core's `shown_notices`), so a plugin no longer
+  builds the panel as it was to compare. An item without `subjects` must give `thing`.
+  `Notify` is new in `api`.
 
 ## Version 1
 

@@ -12,9 +12,10 @@ from move_forward import auth, localtime
 from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
+from move_forward.notifications import Event
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
-from move_forward.plugin import AfterCollectRequest, StoreRequest
+from move_forward.plugin import AfterCollectRequest
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
@@ -38,7 +39,13 @@ from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
 from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
 from move_forward.plugins.slack.repository import SlackRepository
-from move_forward.refresh import build_dashboard, stored_graph
+from move_forward.refresh import (
+    build_dashboard,
+    events_of,
+    newly_shown_of,
+    store_snapshot,
+    stored_graph,
+)
 from move_forward.registry import BUILTINS, enabled, migrate
 from move_forward.repositories import SnapshotRepository
 
@@ -258,7 +265,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         know_jira_projects(db, "APP")
     for e in enabled(config, db, NOW):  # kept as a refresh keeps them
         if e.name in snapshots:
-            e.plugin.store(StoreRequest(e.ctx, snapshots[e.name]))
+            store_snapshot(e, snapshots[e.name])
             SnapshotRepository(db).save_fetched(e.name, NOW)
     plugins = enabled(config, db, NOW)
     notes = next(e for e in plugins if e.name == "notes")
@@ -281,6 +288,20 @@ def stored(**overrides: object) -> tuple[Config, Database]:
 def dashboard(**overrides: object) -> Dashboard:
     """The dashboard core builds from what `stored` stores, as `refresh.build_dashboard` does."""
     return build_dashboard(*stored(**overrides), NOW)
+
+
+def events_between(plugin: str, before: dict[str, object], after: dict[str, object]) -> list[Event]:
+    """What core finds of a plugin's events (subscribed to or not) between a refresh that
+    stored `before` and one that stored `after`, each `stored`'s overrides: those its
+    `events` makes, and its items newly shown with a notification (`Item.notify`) since the
+    panels `before` showed."""
+    (_, db_before), (config, db) = stored(**before), stored(**after)
+    previous, previous_snapshots = stored_graph(db_before, enabled(config, db_before, NOW))
+    plugins = enabled(config, db, NOW)
+    graph, snapshots = stored_graph(db, plugins)
+    e = next(e for e in plugins if e.name == plugin)
+    newly_shown_of(e, previous_snapshots[plugin], previous)  # what showed before, to compare
+    return events_of(e, previous_snapshots[plugin], snapshots[plugin], previous, graph)
 
 
 def pings(**overrides: object) -> dict[str, PrPing]:
