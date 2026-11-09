@@ -14,7 +14,9 @@ small shared entity graph.
 ## First: simplify
 
 Before building more, a review pass for what can go or be made simpler, since the code has
-grown complicated. Questions to answer, each with what to remove, merge or move:
+grown complicated. The first pass's findings and options are in
+[simplicity_review.md](simplicity_review.md). Questions to answer, each with what to
+remove, merge or move:
 
 - **Features that do about the same thing**, where one would do (two ways of setting
   something aside, of marking importance, of linking work, of telling me something changed).
