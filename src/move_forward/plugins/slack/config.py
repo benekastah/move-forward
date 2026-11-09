@@ -1,5 +1,7 @@
 """`[slack]`."""
 
+from string import Formatter
+
 from pydantic import Field, field_validator
 
 from ...api import Strict
@@ -20,9 +22,11 @@ class SlackConfig(Strict):
     slack's page; empty until someone has made the app (see docs/plugins/slack.md). It isn't
     a secret: the app signs in with PKCE, and has no client secret to share."""
     ping_first: str = DEFAULT_PING_FIRST
-    """The first review reminder; `{url}` is the PR."""
+    """The first review reminder; `{url}` is the PR, and a brace of its own is written `{{` or
+    `}}`."""
     ping_follow_up: str = DEFAULT_PING_FOLLOW_UP
-    """The reminder once a reviewer has been pinged about the PR."""
+    """The reminder once a reviewer has been pinged about the PR, as written: nothing in it is
+    filled in, and a brace is a brace."""
     teams: dict[str, str] = Field(default_factory=dict)
     """Where review pings to a team go, e.g. `#team-a`, by its name in the top-level `teams`.
     Overrides the reviewer map."""
@@ -57,3 +61,18 @@ class SlackConfig(Strict):
     def guessed_channel(self, team: str) -> str | None:
         """The channel `team_channel` gives `team`, if it's set."""
         return self.team_channel.replace("{team}", team) if self.team_channel else None
+
+    @field_validator("ping_first")
+    @classmethod
+    def _ping_first(cls, value: str) -> str:
+        try:
+            fields = [
+                (f, spec, conv) for _, f, spec, conv in Formatter().parse(value) if f is not None
+            ]
+        except ValueError:  # a lone brace
+            fields = [("", "", None)]
+        if any(field != ("url", "", None) for field in fields):  # a bare {url}, nothing else
+            raise ValueError(
+                f"{value!r} can name only {{url}}, and a brace of its own is written {{{{ or }}}}"
+            )
+        return value

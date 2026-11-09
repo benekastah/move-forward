@@ -1,6 +1,9 @@
 """The Slack plugin: who to ping about my PRs, the Nudge panel, the Ping link and page."""
 
+import html as html_module
+import re
 from datetime import timedelta
+from urllib.parse import parse_qs, urlencode
 
 import pytest
 from conftest import (
@@ -19,9 +22,9 @@ from conftest import (
     titles,
 )
 
-from move_forward import render
+from move_forward import render, server
 from move_forward.graph import Graph
-from move_forward.plugin import Context, PruneRequest
+from move_forward.plugin import Context, PageRequest, PruneRequest
 from move_forward.plugins.github.models import Check
 from move_forward.plugins.slack import plugin as slack_plugin
 from move_forward.plugins.slack.config import (
@@ -33,6 +36,7 @@ from move_forward.plugins.slack.models import Ping, TeamChannel
 from move_forward.plugins.slack.pings import Pinger
 from move_forward.plugins.slack.plugin import ping_page
 from move_forward.plugins.slack.repository import SlackRepository
+from move_forward.refresh import stored_graph
 from move_forward.registry import enabled
 
 
@@ -146,7 +150,10 @@ def test_ping_page_has_a_form_per_target() -> None:
     candidate = pr(1, title="Fix <it>", requested_users=["alice"], requested_teams=["web"])
     ping = pings(github=snapshot(mine=[candidate]))[candidate.url]
     html = ping_page(ping, NOW)
-    assert html.count("<form method='post' action='/actions/slack/mark_sent'>") == 2
+    [action] = set(re.findall(r"action='(/actions/slack/mark_sent\?[^']*)'", html))
+    query = html_module.unescape(action).partition("?")[2]
+    assert html.count(action) == 2
+    assert server._back_to_page(query) == f"/slack/ping?{urlencode({'pr': candidate.url})}"  # pyright: ignore[reportPrivateUsage]
     assert "name='target' value='user:alice'" in html and "Fix &lt;it&gt;" in html
     assert render.e(DEFAULT_PING_FIRST.format(url=candidate.url)) in html
     assert "data-reload" not in html
@@ -293,3 +300,76 @@ def test_a_quiet_pr_with_nobody_requested_is_not_nudged() -> None:
     assert not any(
         "the reviewers" in i.title or "the reviewers" in str(i.details) for i in built.act_now()
     )
+
+
+def test_a_nudge_without_a_target_counts_for_every_target_whatever_came_before_it() -> None:
+    candidate = pr(1, requested_users=["alice", "bob"])
+    found = pings(
+        github=snapshot(mine=[candidate]),
+        pings=[
+            Ping(
+                pr_url=candidate.url,
+                target="unknown (from work notes)",
+                kind="first",
+                sent_at=NOW - timedelta(days=2),
+            ),
+            Ping(
+                pr_url=candidate.url,
+                target="user:alice",
+                kind="first",
+                sent_at=NOW - timedelta(days=1),
+            ),
+        ],
+    )
+    targets = {t.name: t for t in found[candidate.url].targets}
+    assert targets["alice"].last_ping == NOW - timedelta(days=1)
+    assert targets["bob"].ping_kind == "follow-up"  # the nudge still counts for bob
+    assert targets["bob"].last_ping == NOW - timedelta(days=2)
+
+
+def test_a_teams_channel_set_in_the_config_isnt_the_maps_old_channel() -> None:
+    known = {"web": TeamChannel(slug="web", channel_name="#web-old", channel_id="C1")}
+    config = SlackConfig(teams={"web": "#web-new"})
+    [web] = slack_plugin._team_channels(config, known).values()  # pyright: ignore[reportPrivateUsage]
+    assert (web.channel_name, web.channel_id) == ("#web-new", None)
+    same = SlackConfig(teams={"web": "#web-old"})
+    assert slack_plugin._team_channels(same, known)["web"].channel_id == "C1"  # pyright: ignore[reportPrivateUsage]
+
+
+@pytest.mark.parametrize("message", ["Ping {pr}", "Look {", "{0}"])
+def test_a_first_ping_that_names_more_than_its_url_is_refused(message: str) -> None:
+    with pytest.raises(ValueError, match="can name only"):
+        SlackConfig(ping_first=message)
+
+
+def test_the_ping_page_comes_back_to_itself_whatever_the_pr_url_holds_and_says_what_happened() -> (
+    None
+):
+    candidate = pr(1, requested_users=["alice"]).model_copy(
+        update={"url": "https://github.com/acme/r+x/pull/1"}
+    )
+    ping = pings(github=snapshot(mine=[candidate]))[candidate.url]
+    html = ping_page(ping, NOW, "marked as sent")
+    [action] = set(re.findall(r"action='(/actions/slack/mark_sent\?[^']*)'", html))
+    back = server._back_to_page(html_module.unescape(action).partition("?")[2])  # pyright: ignore[reportPrivateUsage]
+    assert parse_qs(back.partition("?")[2])["pr"] == [candidate.url]
+    assert "<p class='notice'>marked as sent</p>" in html
+
+
+@pytest.mark.parametrize(
+    "message", ["Ping {url.foo}", "Ping {url[0]}", "Ping {url:{x}}", "Ping {url!z}", "Ping {url:d}"]
+)
+def test_a_first_ping_reaching_into_its_url_is_refused(message: str) -> None:
+    with pytest.raises(ValueError, match="can name only"):
+        SlackConfig(ping_first=message)
+
+
+def test_the_ping_page_says_what_its_last_button_did() -> None:
+    candidate = pr(1, requested_users=["alice"])
+    config, db = stored(github=snapshot(mine=[candidate]), slack=True)
+    plugins = enabled(config, db, NOW)
+    graph, _ = stored_graph(db, plugins)
+    [slack] = [e for e in plugins if e.name == "slack"]
+    query = {"pr": [candidate.url], "notice": ["marked the first ping to alice as sent"]}
+    page = slack.plugin.pages()["ping"](PageRequest(slack.ctx, graph, query, "/slack/ping"))
+    assert isinstance(page, str) and "marked the first ping to alice as sent" in page

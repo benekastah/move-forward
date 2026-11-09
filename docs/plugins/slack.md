@@ -22,8 +22,13 @@ Then each person sets `client_id` in `[slack]` and presses Connect Slack on `/sl
 Slack sends the browser back to `http://localhost:<port>/slack/callback` (`https://` when
 the dashboard serves HTTPS). The manifest lists that URL for the default port; on another
 port, add yours to the app's redirect URLs. The sign-in's tokens go in the system's secret
-store under `keychain_service` (the access token, where `mfd token set slack` puts one)
-and `keychain_service`-refresh. The access token lasts 12 hours and is refreshed before it
+store under `keychain_service`-app (the access token) and `keychain_service`-refresh, apart
+from a token given by hand with `mfd token set slack` (under `keychain_service`), which
+connecting and disconnecting leave alone. A connection made before the app had its own entry
+kept its token in that one: there it stays (so `mfd token set slack` would replace it) until a
+refresh stores the new token in the app's own, which a token that doesn't run out never needs;
+connect again to move it now.
+`mfd token check` speaks of the token given by hand, and slack's page of the connection. The access token lasts 12 hours and is refreshed before it
 runs out; the refresh token lasts 30 days, so after a month away, connect again. When
 Slack refuses a refresh, slack forgets the connection, says why on its page, and goes back
 to the token given by hand, if any. Disconnect revokes the token and forgets it.
@@ -52,7 +57,7 @@ set by hand wins over a lookup.
 - **Nudge reviewers**: PRs in order (green, no conflicts, no open threads), with a reviewer
   asked and the PR not yet approved, and no review activity for `[github]
   stale_review_hours`. The Ping link opens a page
-  with one message per requested reviewer or team, a link to their Slack DM or channel,
+  with one message per requested reviewer or team, a link to their Slack profile (where a DM is a click away) or their team's channel,
   and "mark as sent", which makes the next ping a follow-up. Nudges the skill logged in
   `work-notes.md` count too, once imported.
 
@@ -89,7 +94,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 
 | Command | Does |
 | --- | --- |
-| `mfd slack contacts [--json]` | Where people's and teams' pings go, and whether each was imported or set by hand. |
+| `mfd slack contacts [--json]` | Where people's and teams' pings go, and whether each was imported, set by hand or looked up by email. |
 | `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
 | `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel. |
 | `mfd slack import <dir>` | Read people's Slack ids and teams' channels from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read. |

@@ -1,7 +1,7 @@
 {
   "display_information": {
     "name": "Move forward",
-    "description": "A local dashboard of work in flight: reads what's waiting on you in Slack, and helps ping reviewers.",
+    "description": "A local dashboard of work in flight: finds reviewers' Slack accounts, and helps ping them.",
     "background_color": "#2c2d30"
   },
   "oauth_config": {

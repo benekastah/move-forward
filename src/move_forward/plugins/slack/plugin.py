@@ -6,9 +6,9 @@ import` reads the first two from the skill's `reviewer-map.md`.
 
 import argparse
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import ClassVar, Literal
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from pydantic import BaseModel, Field
 
@@ -72,8 +72,12 @@ def _team_channels(config: SlackConfig, known: dict[str, TeamChannel]) -> dict[s
     teams = dict(known)
     for name, channel in config.teams.items():
         current = teams.get(name)
+        # The map's id is its channel's: another channel named here is looked up anew.
+        same = current is not None and current.channel_name == channel
         teams[name] = TeamChannel(
-            slug=name, channel_name=channel, channel_id=current.channel_id if current else None
+            slug=name,
+            channel_name=channel,
+            channel_id=current.channel_id if same and current else None,
         )
     return teams
 
@@ -100,7 +104,8 @@ def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> str:
         else "<span class='target-note'>no Slack link known for this target</span>"
     )
     return (
-        "<section class='target'><form method='post' action='/actions/slack/mark_sent'>"
+        "<section class='target'><form method='post'"
+        f" action='/actions/slack/mark_sent?{e(urlencode({'back': f'{PING_PATH}?{urlencode({"pr": ping.pr_url})}'}))}'>"
         f"<input type='hidden' name='pr_url' value='{e(ping.pr_url)}'>"
         f"<input type='hidden' name='target' value='{e(target.kind)}:{e(target.name)}'>"
         f"<input type='hidden' name='kind' value='{e(target.ping_kind)}'>"
@@ -114,7 +119,8 @@ def _target_form(ping: PrPing, target: PingTarget, now: datetime) -> str:
     )
 
 
-def ping_page(ping: PrPing, now: datetime) -> str:
+def ping_page(ping: PrPing, now: datetime, notice: str = "") -> str:
+    """The ping page for one of my PRs, with what the last button said (`notice`)."""
     e = html.e
     blockers = (
         "<ul class='blockers'>" + "".join(f"<li>{e(b)}</li>" for b in ping.blockers) + "</ul>"
@@ -126,7 +132,8 @@ def ping_page(ping: PrPing, now: datetime) -> str:
         targets = "<p>No reviewers are requested on this PR.</p>"
     body = (
         "<article class='panel padded'>"
-        f"<h2>{e(ping.title)}</h2>"
+        + (f"<p class='notice'>{e(notice)}</p>" if notice else "")
+        + f"<h2>{e(ping.title)}</h2>"
         f"<p><a href='{e(ping.pr_url)}' target='_blank' rel='noopener'>{e(ping.pr_url)}</a></p>"
         f"{blockers}{targets}"
         "<p class='target-note'>Copy the message, paste it in Slack, then mark it as sent so the"
@@ -196,7 +203,8 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             ctx, graph, query = req.ctx, req.graph, req.query
             pr_url = query.get("pr", [""])[0]
             found = pinger(ctx, graph).pings().get(pr_url)
-            return ping_page(found, ctx.now) if found else None
+            notice = req.query.get("notice", [""])[0]
+            return ping_page(found, ctx.now, notice) if found else None
 
         def where_pings_go(req: PageRequest[SlackConfig]) -> str | None:
             ctx, graph = req.ctx, req.graph
@@ -234,7 +242,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
                     target=form.target,
                     kind=form.kind,
                     message=form.message,
-                    sent_at=datetime.now(UTC),
+                    sent_at=ctx.now,
                 )
             )
             return f"marked the {form.kind} ping to {form.target.partition(':')[2]} as sent"

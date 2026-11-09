@@ -166,22 +166,26 @@ class Pinger:
     def pings(self) -> dict[str, PrPing]:
         """By PR URL, for my open non-draft PRs that aren't on ice."""
         by_pr: dict[str, dict[str, Ping]] = defaultdict(dict)
-        any_ping: dict[str, Ping] = {}
+        untargeted: dict[str, Ping] = {}  # the latest nudge the skill logged without a target
         for ping in self.recorded:
             by_pr[ping.pr_url][ping.target] = ping
-            any_ping[ping.pr_url] = ping
+            if ping.target.startswith("unknown"):
+                untargeted[ping.pr_url] = ping
         result: dict[str, PrPing] = {}
         for pr in self.my_open_prs:
             if pr.draft or self.graph.hidden(Ref(kind=PR, id=pr.id)):  # e.g. on ice
                 continue
             url = pr.id
             last_by_target = dict(by_pr.get(url, {}))
-            # A nudge the skill logged without a target counts for every target.
-            if (untargeted := any_ping.get(url)) and untargeted.target.startswith("unknown"):
-                for login in pr.requested_users:
-                    last_by_target.setdefault(f"user:{login}", untargeted)
-                for name in pr.requested_teams:
-                    last_by_target.setdefault(f"team:{name}", untargeted)
+            # A nudge the skill logged without a target counts for every target, as its last
+            # ping unless one of its own came after.
+            if nudge := untargeted.get(url):
+                keys = [f"user:{u}" for u in pr.requested_users]
+                keys += [f"team:{t}" for t in pr.requested_teams]
+                for key in keys:
+                    own = last_by_target.get(key)
+                    if own is None or own.sent_at < nudge.sent_at:
+                        last_by_target[key] = nudge
             result[url] = PrPing(
                 pr_url=url,
                 title=pr.title,
