@@ -189,7 +189,7 @@ importance as a tool's on the person would, which only a type I set on their add
 | --- | --- | --- |
 | `ahead`, `behind` | int | commits ahead of and behind its upstream |
 | `gone` | bool | its upstream was deleted |
-| `upstream` | string or null | what it tracks on a remote, e.g. `origin/me/fix`: for one tracking a local branch, its copy where Push sent it; null when never pushed |
+| `upstream` | string or null | what it tracks on a remote, e.g. `origin/me/fix`: for one tracking a local branch, its copy where Push sent it; null when never pushed (or, for one tracking a local branch, when that copy is gone) |
 | `repo_dir` | string | the checkout it's in (git) |
 | `name` | string | the branch's name (git) |
 | `sha` | string or null | the commit it points at, as of the last refresh (git) |

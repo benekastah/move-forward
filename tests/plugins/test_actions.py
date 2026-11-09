@@ -239,6 +239,34 @@ def test_delete_refuses_a_branch_moved_since_the_page_showed_it(config: Config, 
     assert "moved since" in notice and git(repo, "branch", "--list", "done").strip()
 
 
+def test_pull_of_a_branch_tracking_a_local_one_takes_its_pushed_copy(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    git(repo, "branch", "-q", "--track", "feat", "main")
+    run("git/push_branch", config, {"repo": str(repo), "branch": "feat"})
+    other = _clone(tmp_path / "origin.git", tmp_path / "other", "feat")
+    _commit(other, "theirs.txt")
+    git(other, "push", "-q", "origin", "feat")
+    main_before = git(repo, "rev-parse", "main")
+    assert run("git/pull_branch", config, {"repo": str(repo), "branch": "feat"}) == "pulled feat"
+    assert git(repo, "rev-parse", "feat") == git(other, "rev-parse", "feat")
+    assert git(repo, "rev-parse", "main") == main_before
+
+
+def test_delete_goes_through_for_a_branch_still_at_the_commit_shown_whatever_tags_say(
+    config: Config, repo: Path
+) -> None:
+    shown = git(repo, "rev-parse", "done").strip()
+    git(repo, "tag", "done", "wip")  # a tag of the same name, elsewhere
+    assert run("git/delete_branch", config, {"repo": str(repo), "branch": "done", "sha": shown})
+    assert git(repo, "branch", "--list", "done") == ""
+    git(repo, "branch", "-q", "again", "main")
+    again = git(repo, "rev-parse", "again").strip()
+    git(repo, "branch", "-q", "plain", "main")
+    lines = f"{repo}\tagain\t{again}\n{repo}\tplain\t"  # an empty column isn't checked
+    assert run("git/delete_branches", config, {"targets": lines}) == "deleted 2 branches"
+
+
 def test_a_branch_whose_upstream_is_gone_counts_what_isnt_on_the_default_branch(
     repo: Path,
 ) -> None:
