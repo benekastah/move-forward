@@ -44,6 +44,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     config_model = GitStackConfig
     api_version = API_VERSION
     init_template = TEMPLATE
+    init_example_on = True
     requires: ClassVar[list[str]] = ["git"]
     watches: ClassVar[list[str]] = ["git"]
     snapshot_model = GitStackSnapshot

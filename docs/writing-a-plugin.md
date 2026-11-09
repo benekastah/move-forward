@@ -89,10 +89,10 @@ class LinearConfig(TokenFields):
   whose entries are tables of their own, by name (mail's `[mail.<name>]` accounts), says so
   with `json_schema_extra={"tables": True}`, and its example is one such table.
 - Every field has a docstring.
-- A built-in's every key appears in four places: the model, the plugin's page in
-  `docs/plugins/`, `mfd init`'s rendered config as a commented default (the plugin's
-  `init_template`), and `mfd init --example` (`cli.py`). A plugin from another package can't
-  add to those pages or that example: its model, its own docs, and its `init_template` and
+- A built-in's every key appears in three places: the model, the plugin's page in
+  `docs/plugins/`, and `mfd init`'s rendered config (the plugin's `init_template` and
+  `init_example`), which `mfd init --example` is built from too. A plugin from another
+  package can't add to those pages: its model, its own docs, and its `init_template` and
   `init_example` are where its keys appear.
 - `mfd init` asks which plugins to set up (offering by default those whose
   `init_suggested()` is true; it's false unless a plugin overrides it), then each chosen one's `init_questions(ask, setup)`, which returns its section's
@@ -103,7 +103,10 @@ class LinearConfig(TokenFields):
   tab-complete with `complete`: `asking.choices(...)` (a list, or a function fetching it
   on the first tab) or `asking.directories`. Keep the questions and guesses in a
   `setup.py` (see github's), with `init_template` (the optional keys, commented) and `init_example` (the
-  required ones, commented, written when the plugin isn't chosen).
+  required ones with example values, commented, written when the plugin isn't chosen).
+  `mfd init --example` writes each plugin's section as `mfd init` does when it isn't
+  chosen, or, with `init_example_on` (a tool most use: github, git), on, with
+  `init_example` uncommented.
 - Settings that say where a credential goes (a site, a host) are named in `locked_settings`,
   so the settings page, reached with the dashboard's cookie, shows them without changing them;
   `token_env` and `keychain_service` are locked already; a section keeping its token's place
@@ -512,4 +515,5 @@ docs, and its `init_template` and `init_example`.
   and commands. Add a row for it to the README's plugins table.
 - [entities.md](entities.md) for its kinds, [plugins.md](plugins.md) for what it publishes
   and reads.
-- `mfd init`'s rendered config (and, for a built-in, `mfd init --example`) for its config keys.
+- `mfd init`'s rendered config for its config keys: its `init_template` and `init_example`,
+  which `mfd init --example` is built from too.

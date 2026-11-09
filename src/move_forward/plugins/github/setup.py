@@ -38,6 +38,7 @@ TEMPLATE = """\
 # [github.teams]                         # a team's slug, where it isn't the team's name
 # web = "web-reviewers"
 """
+EXAMPLE = '# org = "example-org"\n'
 
 
 def guess_org(cwd: Path) -> str:

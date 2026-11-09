@@ -86,6 +86,10 @@ catch up.
   `keychain_service` (read-only), so a plugin can annotate `token_settings` and return frozen
   settings. The config is refused when two enabled plugins' `keychain_service`s are the same,
   as storing one token would replace the other's.
+- **The example config is the plugins'**: `mfd init --example` is built from each offered
+  plugin's `init_example` and `init_template`, as `mfd init` writes them, installed plugins'
+  too. A plugin setting `init_example_on` has its section on there, with `init_example`
+  uncommented; any other's is commented out.
 - **Reading a token**: `ctx.token(account=None)` is the plugin's token (or its account's, as
   `Plugin.tokens` names it), from its `token_env`, else the secret store; with neither, it
   raises `SourceError` with core's message ("no token: run `mfd token set <plugin>`, or set

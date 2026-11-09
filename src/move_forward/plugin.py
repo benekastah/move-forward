@@ -460,8 +460,14 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The section's optional settings with their defaults, commented out, as `mfd init`
     writes them under the section."""
     init_example: ClassVar[str] = ""
-    """The section's required settings, commented out, for a section `mfd init` writes
-    commented out because the plugin wasn't chosen."""
+    """The section's required settings with example values, commented out, for a section `mfd
+    init` writes commented out because the plugin wasn't chosen. `mfd init --example` writes
+    them uncommented for a plugin `init_example_on`."""
+    init_example_on: ClassVar[bool] = False
+    """`mfd init --example` writes the section on, with `init_example`'s values, rather than
+    commented out like a plugin `mfd init` wasn't asked for: for a tool most use. Off by
+    default, so a plugin whose `init_example` lacks a required key can't make the example
+    a config that won't load."""
     init_finds_teams: ClassVar[bool] = False
     """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
     locked_settings: ClassVar[frozenset[str]] = frozenset()

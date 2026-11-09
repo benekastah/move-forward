@@ -148,6 +148,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     title = "Slack"
     init_template = TEMPLATE
     init_example = EXAMPLE
+    init_example_on = True
     config_model = SlackConfig
     api_version = API_VERSION
     teams_field = "teams"

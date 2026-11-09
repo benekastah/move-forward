@@ -60,7 +60,7 @@ from .prs import (
     review_blockers,
     reviewer_assignment_reasons,
 )
-from .setup import TEMPLATE, questions
+from .setup import EXAMPLE, TEMPLATE, questions
 from .snapshots import DerivedRepository, PrRepository
 from .tables import MIGRATIONS
 
@@ -112,6 +112,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     name = "github"
     title = "GitHub"
     init_template = TEMPLATE
+    init_example = EXAMPLE
+    init_example_on = True
     init_finds_teams = True
     config_model = GitHubConfig
     api_version = API_VERSION

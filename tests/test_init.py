@@ -417,7 +417,7 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
 def test_every_key_of_core_is_in_the_example() -> None:
     """Core's top-level keys, before any section, and those of its own sections (`[act_now]`
     and the like), each as a whole key starting a commented line."""
-    example = cli.EXAMPLE_CONFIG
+    example = init.example()
     top = re.split(r"^(?:# )?\[", example, maxsplit=1, flags=re.MULTILINE)[0]
 
     def has(key: str, text: str) -> bool:
@@ -437,10 +437,22 @@ def test_every_key_of_core_is_in_the_example() -> None:
     assert missing == []
 
 
+def test_mfd_init_example_writes_a_config_with_the_plugins_their_examples_turn_on(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "config.toml"
+    assert cli.main(["-c", str(path), "init", "--example"]) == 0
+    assert "wrote" in capsys.readouterr().out
+    loaded = config.load(path)
+    on = [name for name in registry.enabled_names(loaded) if name != "notes"]  # always on
+    assert on == ["git", "git_stack", "github", "slack"]  # jira and mail start commented out
+    assert section(loaded, "github", GitHubConfig).org == "example-org"
+
+
 def _example_section(plugin: Plugin[Any, Any]) -> list[str] | None:
     """`mfd init --example`'s lines for a plugin's section, up to the next section's; None
     when it has none."""
-    lines = [str(line) for line in cli.EXAMPLE_CONFIG.splitlines()]
+    lines = [str(line) for line in init.example().splitlines()]
     header = re.compile(r"^(# )?\[([a-z_]+)\]")
     start = next(
         (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),

@@ -5,7 +5,8 @@ section (`Plugin.init_questions`), then core asks the port. Every question has a
 guessed from the machine (the current repo's GitHub remote, `gh`'s idea of my teams, git's
 user.email), so pressing Enter through the questions gives a working config on a typical
 setup. Plugins left out are written as commented-out sections. The answers are validated
-as a `Config` before the file is written.
+as a `Config` before the file is written. `mfd init --example` writes the same for example
+answers without asking (`example`).
 """
 
 import tomllib
@@ -23,6 +24,7 @@ from .plugin import Plugin
 OPTIONAL_SETTINGS = """\
 # Optional settings, with their defaults. Uncomment to change.
 # db_path = "~/.local/share/move-forward/dashboard.db"
+# port = 8765                            # where the local server listens
 # db_backups = 10                        # copies kept in backups/, taken before migrations
 # refresh_on_load_seconds = 60           # a page load refreshes data older than this
 # prune_days = 90                        # clear work finished this long ago from the notes
@@ -132,6 +134,27 @@ def render_config(
     if subscribe:
         return text + _table("notifications", {"subscribe": subscribe})
     return text + OPTIONAL_NOTIFICATION_SETTINGS
+
+
+EXAMPLE_ANSWERS: dict[str, object] = {"email": "me@example.com", "teams": ["my-team"]}
+"""The top-level answers of `mfd init --example`."""
+
+
+def example() -> str:
+    """`mfd init --example`: the config `mfd init` would write for `EXAMPLE_ANSWERS`, with
+    the section of each offered plugin `init_example_on` on, set to its `init_example`'s
+    values, and the others commented out."""
+    sections = {
+        plugin.name: tomllib.loads(_uncommented(plugin.init_example))
+        for plugin in offered()
+        if plugin.init_example_on
+    }
+    return render_config(EXAMPLE_ANSWERS, sections)
+
+
+def _uncommented(text: str) -> str:
+    """`text`'s lines without the `# ` that comments each out."""
+    return "".join(line.removeprefix("# ") for line in text.splitlines(keepends=True))
 
 
 def _plugins(answer: str) -> str:

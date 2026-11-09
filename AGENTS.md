@@ -120,9 +120,11 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 
   Before committing, look for docs the change made untrue: search the docs
   and docstrings for the names you renamed, moved or removed.
-- **Every config key appears in four places**: its model (with a docstring),
-  the README (core's) or the plugin's page in `docs/plugins/`, `mfd init`'s rendered config (as a commented default:
-  core's in `init.py`, a plugin's in its `setup.py`) and `mfd init --example` (`cli.py`). Config models reject unknown
+- **Every config key appears in three places**: its model (with a docstring),
+  the README (core's) or the plugin's page in `docs/plugins/`, and `mfd init`'s rendered config
+  (core's in `init.py`; a plugin's in its `setup.py`, an optional key as a commented default in
+  its `init_template`, a required one with an example value in its `init_example`), which
+  `mfd init --example` is built from too. Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
   `MOVED_SETTINGS` in `config.py`), and a removed plugin's section says it's gone
   (`REMOVED_PLUGINS`).

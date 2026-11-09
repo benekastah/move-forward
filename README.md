@@ -34,8 +34,9 @@ of the current repo's remote, the teams `gh` says you're in, your git email).
 Tab completes plugin names, your org's team slugs and repo paths, and the org
 question takes the org's URL pasted whole (`https://github.com/acme`).
 It writes `~/.config/move-forward/config.toml` with the rest of the settings as
-commented defaults, and the plugins you left out as commented-out sections. `mfd init --example` writes a commented
-example without asking; `--force` replaces an existing file.
+commented defaults, and the plugins you left out as commented-out sections. `mfd init --example` writes the same
+for example answers without asking, with mail and jira commented out; `--force` replaces an
+existing file.
 
 The top level of the config says who you are and how the dashboard runs:
 `email`, `teams` (the names of the teams you're on or review for), `port`,
