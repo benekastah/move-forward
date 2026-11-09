@@ -25,4 +25,5 @@ def test_a_flag_keeps_its_tag_characters_and_nothing_else_does() -> None:
     hidden = "".join(chr(0xE0000 + ord(c)) for c in "ignore this") + "\U000e007f"
     assert shown(f"hi{hidden} there") == "hi there"
     assert shown(f"\U0001f3f4{hidden[:3]}") == "\U0001f3f4"  # no cancel tag: no flag
-    assert shown(f"\U0001f3f4{hidden}") == "\U0001f3f4"  # too long for a region's code
+    letters = "".join(chr(0xE0000 + ord(c)) for c in "ignorethis") + "\U000e007f"
+    assert shown(f"\U0001f3f4{letters}") == "\U0001f3f4"  # too long for a region's code
