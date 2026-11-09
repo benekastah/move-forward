@@ -129,14 +129,20 @@ def events_of(
     e: Enabled, before: BaseModel | None, after: BaseModel | None, previous: Graph, graph: Graph
 ) -> list[Event]:
     """Every event a plugin makes of a refresh, subscribed to or not: its `events`, from its
-    snapshot `before` and `after` and the graph `previous`ly and now. Nothing while it has no
-    snapshot to compare with."""
-    if before is None or after is None:
-        return []
-    return e.plugin.events(EventsRequest(e.ctx, before, after, previous, graph))
+    snapshot `before` and `after` and the graph `previous`ly and now (none while it has no
+    snapshot to compare with), then its items newly shown with a notification
+    (`notifications.newly_shown`), which keeps what its panels show now for the next."""
+    found = (
+        e.plugin.events(EventsRequest(e.ctx, before, after, previous, graph))
+        if before is not None and after is not None
+        else []
+    )
+    panels = e.plugin.panels(PanelsRequest(e.ctx, after, graph))
+    return [*found, *notifications.newly_shown(e.ctx.db, e.name, panels)]
 
 
 def _events(
+    db: Database,
     plugins: list[Enabled],
     before: Before,
     graph: Graph,
@@ -146,10 +152,11 @@ def _events(
 ) -> None:
     """Store the events of a refresh, of the kinds I've subscribed to, for every plugin I've
     subscribed to some of: what changed since `before`, to the `graph` and `snapshots` now.
-    One that can't tell is logged, and never stops the refresh."""
-    for e in plugins:
-        if not _wants(e, subscribed):
-            continue
+    One that can't tell is logged, and never stops the refresh. What the panels of the others
+    showed is forgotten."""
+    wanting = [e for e in plugins if _wants(e, subscribed)]
+    notifications.forget_shown(db, [e.name for e in wanting])
+    for e in wanting:
         try:
             found = events_of(
                 e, before.snapshots.get(e.name), snapshots.get(e.name), before.graph, graph
@@ -264,7 +271,7 @@ def refresh(
             return
         graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
-    _events(plugins, before, graph, snapshots, set(config.notifications.subscribe), now)
+    _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)
     _dashboard_events(config, db, plugins, set(config.notifications.subscribe), now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
@@ -329,7 +336,7 @@ def refresh_subjects(
     if stored:
         graph, snapshots = stored_graph(db, list(plugins.values()))
         subscribed = set(config.notifications.subscribe)
-        _events(list(plugins.values()), before, graph, snapshots, subscribed, now)
+        _events(db, list(plugins.values()), before, graph, snapshots, subscribed, now)
     return fallback
 
 

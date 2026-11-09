@@ -369,9 +369,11 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
     db = Database(path)
     db.execute("DROP TABLE contacts")
     db.execute("DROP TABLE tags")
+    db.execute("DROP TABLE shown_notices")
+    db.execute("DROP TABLE shown_plugins")
     db.execute(
-        "DELETE FROM migrations WHERE owner = 'core'"
-        " AND name IN ('0013_opened', '0014_contacts', '0015_tags', '0016_no_unimportant_priority')"
+        "DELETE FROM migrations WHERE owner = 'core' AND name IN ('0013_opened', '0014_contacts',"
+        " '0015_tags', '0016_no_unimportant_priority', '0017_shown_notices')"
     )
     db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
     db.execute(

@@ -18,8 +18,8 @@ from move_forward.plugins.github.snapshots import PrRepository
 
 
 class _Refreshes:
-    """git's `events` over what's stored, as successive refreshes ask it: each against
-    what the one before saw (the first against nothing)."""
+    """What core finds of git's events over what's stored, as successive refreshes do:
+    each against what the one before saw (the first against nothing)."""
 
     def __init__(self, pair: tuple[Config, Database]):
         self.pair = pair

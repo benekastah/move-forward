@@ -342,8 +342,10 @@ def test_events_compare_with_what_was_stored_before_the_refresh(
         }
     )
 
+    fetched = [snapshot(mine=[open_pr])] + [snapshot(merged_recent=[merged])] * 2
+
     def github_now(self: GitHubPlugin, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
-        return snapshot(merged_recent=[merged])
+        return fetched.pop(0)
 
     def git_now(self: GitPlugin, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         return local
@@ -354,7 +356,9 @@ def test_events_compare_with_what_was_stored_before_the_refresh(
     monkeypatch.setattr(GitHubPlugin, "collect", github_now)
     monkeypatch.setattr(_Git, "collect", git_now)  # this module's git
     monkeypatch.setattr(GitHubPlugin, "after_collect", nothing_after)
-    refresh.refresh(config, db, NOW)
+    refresh.refresh(config, db, NOW)  # the dashboard's last before it stopped
+    assert NotificationRepository(db).take(NOW, timedelta(hours=1)) == []
+    refresh.refresh(config, db, NOW)  # the first after it started again
     told = NotificationRepository(db).take(NOW, timedelta(hours=1))
     assert [n.title for n in told] == ["me/done: PR merged 1d ago"]
     refresh.refresh(config, db, NOW)

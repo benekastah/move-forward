@@ -110,8 +110,8 @@ class Harness:
         self._teams = list(teams)
         self._families = (*plugin.families, *families)
         self._seeds: list[_Seed] = []
-        self._previous: refresh.Before | None = None
-        """What held before the last `store`, for `events`."""
+        self._events: list[Event] | None = None
+        """The events of the last `store`; None before the first."""
         with self._installed():
             registry.check_plugins([plugin])
             self.config = self._config()
@@ -141,13 +141,18 @@ class Harness:
 
     def store(self, snapshot: BaseModel) -> None:
         """Keep `snapshot` as a refresh would after collecting it: the plugin's `store`, and
-        when it was fetched. What held before is kept for `events`."""
+        when it was fetched. Its events are found then, as the refresh would (see
+        `events`)."""
         with self._installed():
-            self._previous = refresh.before_refresh(
+            before = refresh.before_refresh(
                 self.db, registry.enabled(self.config, self.db, self.now)
             )
-            refresh.store_snapshot(self._enabled(), snapshot)
-        SnapshotRepository(self.db).save_fetched(self.plugin.name, self.now)
+            me = self._enabled()
+            refresh.store_snapshot(me, snapshot)
+            SnapshotRepository(self.db).save_fetched(self.plugin.name, self.now)
+            self._events = refresh.events_of(
+                me, before.snapshots[self.name], me.snapshot(), before.graph, self.graph()
+            )
 
     def tick(self, seconds: float) -> None:
         """Move the harness's clock on."""
@@ -220,16 +225,12 @@ class Harness:
             return refresh.plugin_page(self.config, self.db, page_path(self.name, key), query or {})
 
     def events(self) -> list[Event]:
-        """Every event the plugin makes of what changed between before the last `store` and
-        now, as core finds them after a refresh, subscribed to or not; none for the first."""
-        if self._previous is None:
+        """Every event the plugin made of the last `store`, subscribed to or not, as core finds
+        them after a refresh: what changed since the store before (none for the first), and
+        its items newly shown with a notification. Entities seeded since don't count."""
+        if self._events is None:
             raise RuntimeError("store a snapshot first: the events are of what it changed")
-        previous = self._previous
-        with self._installed():
-            me = self._enabled()
-            return refresh.events_of(
-                me, previous.snapshots[self.name], me.snapshot(), previous.graph, self.graph()
-            )
+        return self._events
 
     def prune(self) -> list[str]:
         """Run the plugin's daily prune now; what it says it did."""

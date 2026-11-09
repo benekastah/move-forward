@@ -151,6 +151,19 @@ class Signals(Model):
     a count in it changing, keeps it. A nominated item must have one."""
 
 
+class Notify(Model):
+    """A notification to raise when an item first shows in its panel (`Item.notify`)."""
+
+    kind: str
+    """One of its plugin's `notification_kinds`, e.g. `branch_deletable`."""
+    text: str
+    """What happened, as a short phrase: "can be deleted"."""
+    thing: str | None = None
+    """What it's about, which core knows the item by from one refresh to the next (and the
+    plugin's events with the same thing are told as one). None for the id of the item's main
+    subject or, without one, its title."""
+
+
 SetAside = Literal["snooze", "dismiss"]
 """How an item is set aside: snoozed, or dismissed. Act now leaves it out; its panel shows it
 dimmed and last, with Unsnooze, and doesn't count it."""
@@ -183,6 +196,9 @@ class Item(Model):
     plugins add their buttons by them."""
     signals: Signals | None = None
     """What Act now ranks it by, should its plugin nominate it; None takes its panel's."""
+    notify: Notify | None = Field(default=None, exclude=True)
+    """The notification to raise when the item first shows in its panel, e.g. a branch
+    joining Cleanup: core compares each refresh's panels with the last's. None for none."""
     fingerprint: str | None = None
     """What would make it worth another look once snoozed or dismissed in Act now, e.g. a
     PR's head and review count; None hashes its title, badges and details."""

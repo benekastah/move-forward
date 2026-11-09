@@ -31,6 +31,7 @@ from ...api import (
     LoadRequest,
     Migration,
     Model,
+    Notify,
     Panel,
     PanelsRequest,
     Plugin,
@@ -284,6 +285,13 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                         effort="minutes",
                         closes=issue.key if closing else None,
                     ),
+                    notify=Notify(
+                        kind="closeable",
+                        text="its PRs are merged: can be closed",
+                        thing=issue.key,
+                    )
+                    if closing and to
+                    else None,
                 )
             )
     return Panel(
@@ -387,15 +395,6 @@ def key_pattern(projects: list[str]) -> str | None:
     return rf"\b(?:{alternatives})-\d+\b"
 
 
-def _closing(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> set[str]:
-    """The tickets the transitions panel proposes closing."""
-    return {
-        item.actions[0].fields["key"]
-        for item in transitions(config, snapshot, graph).items
-        if item.actions and item.signals and item.signals.closes
-    }
-
-
 class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     name = "jira"
     token_help: ClassVar[str] = (
@@ -422,14 +421,10 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         return questions(ask, setup)
 
     def events(self, req: EventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
-        """What changed on my tickets, and `closeable`: a ticket the transitions panel
-        proposes closing (its PRs are merged) now and didn't before this refresh."""
+        """What changed on my tickets. `closeable` is the transitions panel's
+        (`Item.notify`)."""
         config, before, after = req.ctx.config, req.before, req.after
-        closing = _closing(config, before, req.previous_graph)
-        issues = {i.key: i for i in after.issues}
-        now = _closing(config, after, req.graph)
-        closeable = [changes.closeable(issues[key]) for key in sorted(now - closing)]
-        return [*changes.changes(config, before, after), *closeable]
+        return changes.changes(config, before, after)
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS

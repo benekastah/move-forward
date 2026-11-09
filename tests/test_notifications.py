@@ -14,7 +14,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.notifications import Event, NotificationRepository, NotificationsConfig
-from move_forward.page import Item, anchor
+from move_forward.page import Item, Notify, Panel, anchor
 from move_forward.plugin import CollectRequest, EventsRequest, LoadRequest, StoreRequest
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
@@ -273,3 +273,79 @@ def test_only_enabled_plugins_runs_are_sources() -> None:
     config = NotificationsConfig(failing_minutes=15)
     later = NOW + timedelta(minutes=16)
     assert notifications.dashboard_events(db, config, later, ["github"]) == []
+
+
+def _shown(*things: str, kind: str = "branch_deletable") -> list[Panel]:
+    """A panel of items with a notification, one about each of `things` (a branch)."""
+    items = [
+        Item(
+            title=f"{thing}: PR merged",
+            subjects=[Ref(kind="git.branch", id=thing)],
+            notify=Notify(kind=kind, text="can be deleted"),
+        )
+        for thing in things
+    ]
+    return [Panel(key="cleanup", title="Cleanup", description="", items=items)]
+
+
+def test_an_item_newly_shown_with_a_notification_is_told_once_and_not_the_first_time() -> None:
+    db = Database(":memory:")
+    assert notifications.newly_shown(db, "git", _shown("a")) == []  # nothing to compare with
+    [event] = notifications.newly_shown(db, "git", _shown("a", "b"))
+    assert event == Event(
+        kind="branch_deletable",
+        thing="b",
+        title="b: PR merged",
+        text="can be deleted",
+        anchor=anchor("git.branch", "b"),
+    )
+    assert notifications.newly_shown(db, "git", _shown("a", "b")) == []  # told once
+    assert notifications.newly_shown(db, "git", _shown("a")) == []  # gone
+    assert [e.thing for e in notifications.newly_shown(db, "git", _shown("a", "b"))] == ["b"]
+
+
+def test_what_was_shown_is_kept_by_plugin_and_kind() -> None:
+    db = Database(":memory:")
+    notifications.newly_shown(db, "git", _shown("a"))
+    notifications.newly_shown(db, "jira", [])
+    assert notifications.newly_shown(db, "jira", _shown("a")) != []  # another plugin's
+    assert notifications.newly_shown(db, "git", _shown("a", kind="other")) != []
+
+
+def test_a_notification_names_its_own_thing_when_it_gives_one() -> None:
+    db = Database(":memory:")
+    notifications.newly_shown(db, "git", [])
+    item = Item(title="no subject", notify=Notify(kind="k", text="t", thing="mine"))
+    plain = Item(title="untitled", notify=Notify(kind="k", text="t"))
+    panel = Panel(key="p", title="P", description="", items=[item, plain])
+    found = notifications.newly_shown(db, "git", [panel])
+    assert [(e.thing, e.anchor) for e in found] == [("mine", ""), ("untitled", "")]
+
+
+def test_forgetting_what_a_plugin_showed_starts_it_afresh() -> None:
+    db = Database(":memory:")
+    notifications.newly_shown(db, "git", _shown("a"))
+    notifications.newly_shown(db, "jira", _shown("a"))
+    notifications.forget_shown(db, ["jira"])
+    assert notifications.newly_shown(db, "git", _shown("a", "b")) == []  # as the first time
+    assert notifications.newly_shown(db, "jira", _shown("a", "b")) != []
+    notifications.forget_shown(db, [])
+    assert notifications.newly_shown(db, "jira", _shown("c")) == []
+
+
+def test_unsubscribing_forgets_what_the_panels_showed() -> None:
+    """Subscribing again then doesn't tell all that joined the panels meanwhile."""
+    db = Database(":memory:")
+    for subscribe in (["git.branch_deletable"], []):
+        config = Config.model_validate(
+            {"email": "me@x", "git": {"repos": []}, "notifications": {"subscribe": subscribe}}
+        )
+        registry.migrate(config, db)
+        refresh.refresh(config, db, NOW)
+        shown = db.query("SELECT plugin FROM shown_plugins")
+        assert [row["plugin"] for row in shown] == (["git"] if subscribe else [])
+
+
+def test_what_an_item_notifies_of_is_not_part_of_the_page() -> None:
+    item = Item(title="x", notify=Notify(kind="k", text="t"))
+    assert "notify" not in item.model_dump()
