@@ -148,6 +148,19 @@ def _ice_item(config: Config, db: Database, kind: str, ref_id: str) -> str:
     return refresh.run_action(config, db, "notes/ice_item", {"kind": kind, "id": ref_id})
 
 
+def test_icing_a_ticket_leaves_a_review_request_that_only_names_it() -> None:
+    """Its author wrote that text: what they name mustn't decide what I see."""
+    asked = pr(3, author="alice", title="Follow-up to APP-1")
+    config, db = stored(
+        github=snapshot(mine=[pr(1, merge_state="DIRTY")], direct_requests=[asked]),
+        jira=JiraSnapshot(issues=[issue("APP-1")]),
+    )
+    _ice_item(config, db, "ticket", "APP-1")
+    built = build_dashboard(config, db, NOW)
+    assert titles(built, "github.conflicts") == []  # mine, naming it, is hidden
+    assert asked.title in [i.title for p in built.panels for i in p.items]
+
+
 def test_icing_a_ticket_hides_the_prs_mentioning_it_and_the_entry_about_it() -> None:
     config, db = _work()
     assert {"PR", "APP-1", "APP-2"} <= _shown(config, db)

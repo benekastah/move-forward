@@ -110,7 +110,8 @@ keeping what was read last.
 `mail.thread` for each conversation with unread or flagged mail, by the Message-ID it started
 with (`uid:<uid>` for a message with none, `uid:<account>:<uid>` in an account's mailbox),
 pointing at the `person` who wrote its latest message and, when its sender is verified,
-mentioning its subject (so a ticket key in it relates the two). Its Gmail labels, Gmail's own
+mentioning its subject (so a ticket key in it relates the two, but a ticket on ice it names
+doesn't hide it: its sender wrote that). Its Gmail labels, Gmail's own
 (`#inbox`, `#starred`) and mine, are its tags, whoever sent it. A `#tag` in a subject puts no
 tag on the thread (`tags_from_text=False`): anyone can write one. A subject still names tags in
 the graph whoever sent it; only what mail says it's about, and how it ranks, waits for a
