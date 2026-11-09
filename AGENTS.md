@@ -36,7 +36,8 @@ is what's left to build.
   small model of the fields it uses, not `attrs.get`. A kind that stands for a
   unit of work (a ticket, a work entry) is declared `linking` (with
   `linking_patterns` narrowing its id pattern from the plugin's data); an entity
-  that may name one publishes the text in `mentions` rather than refs to
+  that may name one publishes the text in `mentions` (with `mentions_hide=False` where someone
+  else wrote it, so what it names can't hide it) rather than refs to
   another plugin's kind. Core adds `tag`s (`tags.py`): what carries one points at it, but
   it's no unit of work. A kind whose entities hide what they point at (ice) is
   declared `hides`, and core leaves items about hidden things off the page;

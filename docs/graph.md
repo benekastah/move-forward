@@ -28,6 +28,7 @@ class Entity(Model):
     state: str | None  # "open", "merged", a ticket's status, ...
     refs: list[Ref]  # what it points at
     mentions: list[str]  # text that may name linking entities, see below
+    mentions_hide: bool  # whether what they name can hide it; see hidden entities
     attrs: dict[str, JsonValue]
     tags: list[str]  # tags its tool puts on it, e.g. labels: see move_forward.tags
 ```
@@ -227,8 +228,9 @@ entry points at.
 linking entity next to it: icing a ticket hides the PRs that mention it, icing a work entry
 hides the PRs it names. It doesn't go the other way: icing a PR leaves its ticket alone. A
 ticket found only in text someone else wrote hides nothing: an entity with
-`mentions_hide=False` (a PR I'm asked to review), or of a kind whose `tags_from_text` is False
-(mail, whose senders write its subjects), is hidden only through refs its plugin gave it.
+`mentions_hide=False` (a PR I'm asked to review, a mail thread) is hidden only through refs
+its plugin gave it. Only hiding is held back: what its text names is still linked to it, and a
+priority on that still ranks it.
 
 Core, building the page, leaves out of every panel (and so of Act now and focus mode) each
 item with a hidden subject. Items about the hiding entity itself, like an On ice panel's,

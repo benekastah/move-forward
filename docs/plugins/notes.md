@@ -37,8 +37,8 @@ names are related through it.
   Delete branches and git_stack Untrack for a stack. The stack stays on ice with the
   commits it was iced at until it's reopened; Reopen asks first when its branches are
   gone, since the commits are forgotten with it. Everything on ice is left out of the other
-  panels, with what it links: a stack's PRs, the PRs that mention an iced ticket, and an
-  iced entry's PRs and tickets. Iced PRs, tickets and entries come off ice by themselves
+  panels, with what it links: a stack's PRs, my PRs that mention an iced ticket (not someone
+  else's: their text isn't mine to hide by), and an iced entry's PRs and tickets. Iced PRs, tickets and entries come off ice by themselves
   once their work is over (see the README's daily clean-up).
 
 notes adds an Add todo field to every item about one of my open PRs or a ticket (the todo

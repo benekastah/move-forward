@@ -17,8 +17,8 @@ catch up.
 
 - **Who may hide by text**: `Entity.mentions_hide` (True by default) says whether a unit of
   work named only in its `mentions` can hide it, as an iced ticket hides a PR naming it. Set
-  it False where someone else wrote the text (a PR I'm asked to review); a kind whose
-  `tags_from_text` is False never lets its mentions hide.
+  it False where someone else wrote the text (a PR I'm asked to review). What the text names
+  is still linked to it.
 - **A tag's handle**: `api.tags.handle(text)` is the tag core makes of a label or a typed tag
   (`Garbage Day` → `garbage-day`), so a plugin can tell its own labels' tags from the others
   on an entity.

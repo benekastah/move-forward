@@ -50,7 +50,8 @@ class Entity(Model):
     mentions_hide: bool = True
     """Whether what its `mentions` name can hide it (see `Graph.hidden`): an iced ticket a PR
     of mine names. False where someone else wrote the text, as a PR I'm asked to review,
-    lest they decide what I see; never where its kind's `tags_from_text` is False."""
+    lest they decide what I see. Only hiding is held back: what it names is still linked to it
+    (`units`, `related`), and a priority on that still ranks it."""
     attrs: dict[str, JsonValue] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     """Tags its tool puts on it, e.g. a ticket's or PR's labels, as written there ("Garbage
@@ -185,7 +186,7 @@ class Graph:
         self._named_only: dict[Ref, set[Ref]] = {
             e.ref: set(m.refs) - set(e.refs)
             for e, m in zip(entities, mentioned, strict=True)
-            if not self._mentions_hide(e)
+            if not e.mentions_hide
         }
         """The refs an entity has only from its mentions, where those can't hide it."""
         entities = mentioned
@@ -263,12 +264,6 @@ class Graph:
         email = person.attrs.get("email")
         address = personal_email(email) if isinstance(email, str) else None
         return list(self._people_by_email[address]) if address else [person]
-
-    def _mentions_hide(self, entity: Entity) -> bool:
-        """Whether what an entity's mentions name may hide it: it says so, and its kind's text
-        isn't anyone's to write."""
-        spec = self.spec(entity.ref.kind)
-        return entity.mentions_hide and (spec is None or spec.tags_from_text)
 
     def spec(self, kind: str) -> KindSpec | None:
         """What the publisher of `kind` (a plugin, or core for `tag`) says of it; None for a

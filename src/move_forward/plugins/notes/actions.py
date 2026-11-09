@@ -109,8 +109,8 @@ def ice(req: ActionRequest[NotesConfig]) -> str:
 
 def ice_item(req: ActionRequest[NotesConfig]) -> str:
     """Put a PR, ticket or work entry on ice, by `kind` and `id`, with what it links: an
-    entry its PRs and tickets, a ticket the PRs that mention it. An optional `note` says
-    why."""
+    entry its PRs and tickets, a ticket the PRs that mention it (whose publisher lets their
+    text hide them: mine, not those I'm asked to review). An optional `note` says why."""
     ctx, graph, fields = req.ctx, req.graph, req.fields
     kind, given = req.field("kind"), req.field("id")
     ref_id = graph.identify(kind, given)  # a ticket by its key, too
