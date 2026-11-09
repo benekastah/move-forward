@@ -97,7 +97,7 @@ Each plugin's page has its config, setup, panels, commands and buttons:
 | [git](docs/plugins/git.md) | `[git]` | each repo's worktrees and branches |
 | [git_stack](docs/plugins/git_stack.md) | `[git_stack]`, needs `[git]` | stacks from git stack, in git's repos |
 | [jira](docs/plugins/jira.md) | `[jira]` | my open tickets |
-| [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages; connects to the workspace's Slack app |
+| [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages |
 | [mail](docs/plugins/mail.md) | `[mail]` | unread and flagged mail over IMAP, by subject and sender, the people who matter first |
 | [notes](docs/plugins/notes.md) | `[notes]`, optional: always on | the skill's work notes (entries and todos) and what's on ice, in the database |
 
@@ -249,7 +249,7 @@ aren't changed here, since changing them moves the server. Nor are the settings 
 say where a credential goes or comes from, whom mail trusts, or where commands run: `email`,
 `[github] host`, `[jira] site`/`token_env`/`keychain_service`, `[mail]`
 `host`/`port`/`token_env`/`keychain_service`/`message_url`/`auth_servers`, `[slack]`
-`client_id`/`workspace_url`/`token_env`/`keychain_service` and `[git]` `repos`/`github_hosts`.
+`workspace_url`/`token_env`/`keychain_service` and `[git]` `repos`/`github_hosts`.
 They're shown read-only; edit the file.
 
 ## Notifications
@@ -293,7 +293,7 @@ same data as JSON.
 Every request must carry the dashboard's token, so other programs and users on the machine
 can't read the page or press its buttons, but `/login` and its handshake
 (`/login/challenge`, `/login/code`), the static files, and a plugin's sign-in pages (where a
-tool's sign-in returns, e.g. `/slack/callback`, which check their own single-use proof). The
+tool's sign-in returns, which check their own single-use proof). The
 token is in `token` next to the database (`~/.local/share/move-forward/token`), made on first
 start and readable only by you. Scripts send it as `Authorization: Bearer <token>`; it never
 goes in a URL. Browsers never hold it: `mfd open` signs the browser in, through the

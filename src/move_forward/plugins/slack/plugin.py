@@ -38,7 +38,7 @@ from ...api import (
     html,
 )
 from ...api.kinds import PULL_REQUEST as PR
-from . import account, cli, contacts, oauth
+from . import cli, contacts
 from .config import SlackConfig
 from .models import Ping, TeamChannel
 from .pings import Pinger, PingTarget, PrPing
@@ -152,11 +152,10 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     config_model = SlackConfig
     api_version = API_VERSION
     teams_field = "teams"
-    locked_settings: ClassVar[frozenset[str]] = frozenset({"client_id", "workspace_url"})
-    """The app its sign-in grants a token to, and the workspace its links go to."""
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"workspace_url"})
+    """The workspace its links go to."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     cli_help = "see and set where review pings go, or import them from the skill's markdown"
-    sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK})
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
@@ -212,9 +211,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         return {
             PING: ping,
             contacts.CONTACTS: where_pings_go,
-            "": account.page,
-            oauth.CONNECT: account.connect,
-            oauth.CALLBACK: account.callback,
         }
 
     def after_collect(self, req: AfterCollectRequest[SlackConfig]) -> None:
@@ -252,8 +248,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             "set_team_channel": contacts.set_team_channel_action,
             "clear_team_channel": contacts.clear_team_channel_action,
             "clear_contact": contacts.clear_contact_action,
-            "connect": account.connect_action,
-            "disconnect": account.disconnect_action,
         }
 
     def prune(self, req: PruneRequest[SlackConfig]) -> list[str]:

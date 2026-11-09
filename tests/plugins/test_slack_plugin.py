@@ -230,6 +230,11 @@ def test_the_workspace_url_must_be_https() -> None:
             SlackConfig(workspace_url=bad)
 
 
+def test_a_config_still_setting_client_id_is_told_its_gone() -> None:
+    with pytest.raises(ValueError, match="`client_id` is gone.*mfd token set slack"):
+        SlackConfig.model_validate({"client_id": "123.456"})
+
+
 def test_open_slack_is_only_a_link_for_an_http_url() -> None:
     def form(link: str | None) -> str:
         target = slack_plugin.PingTarget(

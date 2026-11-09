@@ -3,31 +3,20 @@
 import io
 import json
 import urllib.request
-from collections.abc import Callable
 from dataclasses import replace
 from datetime import timedelta
 
 import pytest
 from conftest import NOW, Reviewer, pr, snapshot, stored
 
-from move_forward import https
+from move_forward import https, keychain
 from move_forward.https import RequestError
-from move_forward.plugin import Context, PageRequest, PruneRequest
-from move_forward.plugins.slack import account, client, contacts, oauth
-from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugin import PruneRequest
+from move_forward.plugins.slack import client, contacts
 from move_forward.plugins.slack.models import Contact
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.refresh import stored_graph
 from move_forward.registry import enabled
-
-
-def _token(value: str | None) -> Callable[[Context[SlackConfig]], str | None]:
-    """Stands in for `oauth.token`: the token found, whatever the context."""
-
-    def token(ctx: Context[SlackConfig]) -> str | None:
-        return value
-
-    return token
 
 
 def _lookups(monkeypatch: pytest.MonkeyPatch, ids: dict[str, str | None]) -> list[str]:
@@ -38,7 +27,7 @@ def _lookups(monkeypatch: pytest.MonkeyPatch, ids: dict[str, str | None]) -> lis
         asked.append(email)
         return ids.get(email)
 
-    monkeypatch.setattr(oauth, "token", _token("xoxb-test"))
+    monkeypatch.setenv("SLACK_API_TOKEN", "xoxb-test")
     monkeypatch.setattr(client, "lookup_by_email", lookup)
     return asked
 
@@ -88,7 +77,7 @@ def test_requested_reviewers_are_looked_up_once_each(monkeypatch: pytest.MonkeyP
         (RequestError("https://slack.com/api/users.lookupByEmail", "no network"), "no network"),
     ],
 )
-def test_a_lookup_that_fails_is_said_on_slacks_page_until_the_next_refresh(
+def test_a_lookup_that_fails_is_said_on_the_contacts_page_until_the_next_refresh(
     monkeypatch: pytest.MonkeyPatch, failure: Exception, said: str
 ) -> None:
     failing = [True]
@@ -98,7 +87,7 @@ def test_a_lookup_that_fails_is_said_on_slacks_page_until_the_next_refresh(
             raise failure
         return "U111111"
 
-    monkeypatch.setattr(oauth, "token", _token("xoxb-test"))
+    monkeypatch.setenv("SLACK_API_TOKEN", "xoxb-test")
     monkeypatch.setattr(client, "lookup_by_email", lookup)
     config, db = stored(
         github=snapshot(mine=[pr(1, requested_users=["alice"])]),
@@ -109,25 +98,37 @@ def test_a_lookup_that_fails_is_said_on_slacks_page_until_the_next_refresh(
     [slack] = [e for e in plugins if e.name == "slack"]
 
     def page() -> str:
-        return account.page(PageRequest(slack.ctx, graph, {}, "/slack"))
+        return contacts.contacts_page(slack.ctx, graph)
 
     assert contacts.look_up_requested(slack.ctx, graph) == []  # no refresh's traceback
     shown = page()
     assert said in shown
     assert ("token needs" in shown) == ("token needs" in said)  # only for a missing scope
-    # Reconnected with the scope, say, but nobody left to look up: the notice still goes.
+    # The token given the scope, say, but nobody left to look up: the notice still goes.
     SlackRepository(db).save_looked_up("alice", None, NOW)
     assert contacts.look_up_requested(slack.ctx, graph) == []
     assert "failed" not in page()
 
 
 def test_without_a_token_nothing_is_looked_up(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(oauth, "token", _token(None))
-    config, db = stored(github=snapshot(mine=[pr(1, requested_users=["alice"])]), slack=True)
+    def nothing_stored(service: str, account: str) -> None:
+        return None
+
+    def lookup(api_token: str, email: str) -> str | None:
+        raise AssertionError("looked up without a token")
+
+    monkeypatch.delenv("SLACK_API_TOKEN", raising=False)
+    monkeypatch.setattr(keychain, "read", nothing_stored)
+    monkeypatch.setattr(client, "lookup_by_email", lookup)
+    config, db = stored(
+        github=snapshot(mine=[pr(1, requested_users=["alice"])]),
+        users={"alice": Reviewer(login="alice", email="a@x")},
+    )
     plugins = enabled(config, db, NOW)
     graph, _ = stored_graph(db, plugins)
     [slack] = [e for e in plugins if e.name == "slack"]
     assert contacts.look_up_requested(slack.ctx, graph) == []
+    assert "failed" not in contacts.contacts_page(slack.ctx, graph)
 
 
 def test_the_client_reads_slacks_answers(monkeypatch: pytest.MonkeyPatch) -> None:

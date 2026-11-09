@@ -165,7 +165,7 @@ def test_settings_that_choose_where_a_credential_goes_are_only_changed_in_the_fi
     text = (
         'email = "me@x"\n\n[github]\norg = "acme"\nhost = "github.com"\n\n'
         '[jira]\nsite = "https://acme.atlassian.net"\ntoken_env = "JIRA_API_TOKEN"\n\n'
-        '[slack]\nworkspace_url = "https://acme.slack.com"\nclient_id = "C1"\n\n'
+        '[slack]\nworkspace_url = "https://acme.slack.com"\n\n'
         '[git]\nrepos = ["/src/app"]\n'
     )
     path = tmp_path / "config.toml"
@@ -181,17 +181,17 @@ def test_settings_that_choose_where_a_credential_goes_are_only_changed_in_the_fi
             "jira:token_env": "AWS_SECRET_ACCESS_KEY",
             "jira:keychain_service": "login",
             "slack:workspace_url": "https://evil.example",
-            "slack:client_id": "EVIL",
+            "slack:token_env": "AWS_SECRET_ACCESS_KEY",
             "git:repos": "/tmp/evil",
         },
     )
     assert settings.save(path, config, form) == "nothing changed"
     assert path.read_text() == text
     shown = settings.page(config)
-    for name in (":email", "github:host", "jira:site", "slack:client_id", "git:repos"):
+    for name in (":email", "github:host", "jira:site", "slack:workspace_url", "git:repos"):
         assert f"name='{name}'" in shown  # still shown, read-only
-    # email; host; site, token_env, keychain_service; four of slack's; repos, github_hosts
-    assert shown.count("only the config file sets it") == 11
+    # email; host; site, token_env, keychain_service; three of slack's; repos, github_hosts
+    assert shown.count("only the config file sets it") == 10
 
 
 def test_where_mails_password_goes_and_where_its_items_link_are_read_only() -> None:

@@ -29,41 +29,29 @@ remove, merge or move:
 
 ## Slack as a source of work
 
-Slack becomes a source of work, not just a place pings go. The workspace's Slack app and
-signing in to it are built (`/slack`; see `docs/plugins/slack.md`); the features that use
-it aren't.
+Slack becomes a source of work, not just a place pings go, through the token given slack
+(`mfd token set slack`), a user token with each feature's scopes.
 
-### First, try it with a real app
+### First, try it with a real token
 
-Nothing so far has met a real Slack app. Before building features on it, someone makes
-the app from `manifest.json`, connects, and checks:
+Before building features on it, check, with a real user token:
 
-- Connect completes, with the `http://localhost:<port>/slack/callback` redirect.
-- A refresh works without the client secret (Slack's PKCE guide says so; its token
-  rotation guide says the secret is still needed), and whether the refreshed user token
-  comes back at the top level or in `authed_user` (slack takes either). Leave it connected
-  past 12 hours to see one.
-- Disconnect revokes the token.
-- For the first features: how `search.messages` finds messages that @-mention me, and the
-  rate limits an internal app gets on `conversations.history` and `conversations.replies`.
+- how `search.messages` finds messages that @-mention me, and the rate limits an internal
+  app gets on `conversations.history` and `conversations.replies`.
 
 ### How every feature works
 
-- Each feature adds its user scopes to `scopes.py` and `manifest.json` (a test keeps them
-  the same) and runs only when the connection was granted them; `/slack` (and `mfd check`)
-  names the scope a feature lacks instead of failing in the log.
-- Each is a setting in `[slack]`: those that read are on by default once connected
+- Each feature names the user scopes it needs, and `/slack/contacts` (and `mfd check`) names
+  the scope the token lacks instead of failing in the log.
+- Each is a setting in `[slack]`: those that read are on by default once there's a token
   (`mentions`, `threads`, `saved`, `discussions`, `recognize_pings`, `availability`,
   `reactions`, `rebump_after_changes`); those that send or change something are off by
   default (`summary`, with where it goes and an optional schedule, and `focus_status`).
-  Like every config key, each goes in the model, slack's page and `mfd init`'s commented
-  defaults.
+  Like every config key, each goes in its four places.
 - Messages are kept as ids, who, when, the channel and a short snippet only, in kept
   tables pruned after `prune_days`. Nothing is ever sent without a click.
 - Slack is polled, on slack's own `refresh_seconds`, with `changed` checking cheaply in
-  between. Socket Mode can't serve one app shared by many people's dashboards: an app has
-  at most 10 connections, each event goes to any one of them, and connecting takes the
-  app-level token, a secret everyone would share.
+  between. Socket Mode would need an app of its own, with an app-level token.
 
 ### Features
 
@@ -196,7 +184,7 @@ Confluence, Notion, Figma). In order:
    dependencies, so each plugin would write its own paging, retries with backoff and
    rate-limit waits over `api.http.request` (which sends one request, with its timeout,
    and raises one `RequestError` when there's no answer). Do it once, with OAuth's
-   token refresh (slack does its own today) beside `sign_in_pages`, and API tokens through
+   token refresh beside `sign_in_pages`, and API tokens through
    `api.keychain` as now.
 7. **Richer buttons.** Several fields on one form (today one text field and one drop-down),
    a text area (replying to a ticket), and a date (snooze until, follow up on).
@@ -233,7 +221,7 @@ set of tables, pages and actions, and settles what two of them both see the way 
   password or OAuth's `https://mail.google.com/` scope, and either can send and delete mail;
   mail only promises, in its own code, to read headers. Gmail's API has a scope Google enforces
   as read-only, `gmail.metadata` (headers and labels, never bodies), which fits mail exactly. A
-  Gmail account would read through the API, signing in with OAuth as slack does; other servers
+  Gmail account would read through the API, signing in with OAuth; other servers
   stay on IMAP. The cost: `gmail.metadata` is a restricted scope, so a personal Google Cloud
   project with an OAuth client and myself as a test user, whose sign-in Google lets last about
   a week while the app is in testing (or the app goes through Google's verification).

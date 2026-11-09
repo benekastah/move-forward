@@ -5,6 +5,20 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Slack's sign-in is gone
+
+slack no longer connects to a Slack app: `[slack] client_id`, the `/slack`, `/slack/connect` and
+`/slack/callback` pages, and the `/actions/slack/connect` and `/actions/slack/disconnect`
+buttons are gone (the pages answer `404`). A config that still sets `client_id` is refused,
+saying it's gone: delete the line. To keep looking up reviewers' Slack ids by email, give slack
+a token with the `users:read.email` scope, with `mfd token set slack` or `$SLACK_API_TOKEN`.
+Why a lookup failed is now said on `/slack/contacts`. If you had connected, the app's tokens
+stay in the system's secret store under `move-forward-slack-app` and `move-forward-slack-refresh`
+(your `keychain_service`, then `-app` and `-refresh`): delete them, and remove the app from
+the workspace if nobody uses it. A connection made before the app had entries of its own kept
+its token under `keychain_service` itself, where slack now reads it as the token given by hand:
+replace it with `mfd token set slack`.
+
 ### A page load no longer refreshes
 
 `refresh_on_load_seconds` is gone, and with it the refresh a page load asked for of every

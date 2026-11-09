@@ -3,9 +3,19 @@ what `mfd slack` shares with them."""
 
 import re
 
-from ...api import Action, ActionError, ActionRequest, Context, Graph, Model, html, http
+from ...api import (
+    Action,
+    ActionError,
+    ActionRequest,
+    Context,
+    Graph,
+    Model,
+    SourceError,
+    html,
+    http,
+)
 from ...api.kinds import PERSON
-from . import client, oauth, scopes
+from . import client
 from .config import SlackConfig
 from .pings import my_open_prs
 from .repository import DASHBOARD, IMPORTED, LOOKED_UP, SlackRepository
@@ -16,6 +26,8 @@ CONTACTS_PATH = f"/slack/{CONTACTS}"
 SLACK_ID_RE = re.compile(r"^[UW][A-Z0-9]{6,}$")
 CHANNEL_ID_RE = re.compile(r"^[CG][A-Z0-9]{6,}$")
 CHANNEL_NAME_RE = re.compile(r"^#[\w-]+$")
+LOOKUPS_FAILED = "lookups_failed"
+"""The kv key of why looking up Slack ids by email last failed, for the contacts page."""
 
 
 class _PersonView(Model):
@@ -115,7 +127,8 @@ def _form(action: str, hidden: dict[str, str], inputs: list[tuple[str, str, str]
 
 def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
     """Everyone and every team pings can go to: the ones my open PRs ask for, and the ones
-    imported or set, with where their pings go and an edit form each."""
+    imported or set, with where their pings go and an edit form each; and why the last
+    lookup by email failed, if it did."""
     e = html.e
     slack = SlackRepository(ctx.db)
     contacts, channels, sources = slack.contacts(), slack.team_channels(), slack.sources()
@@ -187,8 +200,16 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
             )
             + "</td></tr>"
         )
+    failed = ctx.kv.get(LOOKUPS_FAILED)
     body = (
-        "<article class='panel padded'><h2>People</h2>"
+        "<article class='panel padded'>"
+        + (
+            "<p class='notice warn'>Looking up reviewers' Slack ids by email failed:"
+            f" {e(failed)}.</p>"
+            if failed
+            else ""
+        )
+        + "<h2>People</h2>"
         "<p class='target-note'>Their Slack member id links the ping page to a DM.</p>"
         f"<table>{people_rows}</table>"
         "<h2>Teams</h2><p class='target-note'>The channel a team's pings go to;"
@@ -198,23 +219,17 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
     return html.page("Where pings go", "where pings go", body)
 
 
-LOOKUPS_FAILED = "lookups_failed"
-"""The kv key of why looking up Slack ids by email last failed, for Slack's page."""
-
-
 def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
     """Find, through Slack's API, the Slack ids of people my open PRs ask to review whom
     nothing names a Slack id for, by the email github knows for them. Each is looked up once:
-    a miss is remembered too. Returns whom it found. Without a token, or with the app
-    connected without the scopes, does nothing. A lookup that fails (a token without
-    `users:read.email`, a rate limit, no network) stops this refresh's, and why is kept for
-    Slack's page (`LOOKUPS_FAILED`) until the next refresh's."""
+    a miss is remembered too. Returns whom it found. Without a token, does nothing. A lookup
+    that fails (a token without `users:read.email`, a rate limit, no network) stops this
+    refresh's, and why is kept for the contacts page (`LOOKUPS_FAILED`) until the next
+    refresh's."""
     ctx.kv.delete(LOOKUPS_FAILED)  # said again below if it fails again
-    found_connection = oauth.connection(ctx)
-    if found_connection and scopes.missing("lookups", found_connection.scopes):
-        return []
-    api_token = oauth.token(ctx)
-    if api_token is None:
+    try:
+        api_token = ctx.token()
+    except SourceError:  # none given: no lookups
         return []
     slack = SlackRepository(ctx.db)
     known = slack.contacts()

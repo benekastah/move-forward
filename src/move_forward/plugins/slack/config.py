@@ -1,9 +1,9 @@
 """`[slack]`."""
 
 from string import Formatter
-from typing import ClassVar
+from typing import ClassVar, cast
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from ...api.keychain import TokenFields
 
@@ -17,8 +17,8 @@ class SlackConfig(TokenFields):
     """`[slack]`: where review pings go.
 
     Its token (`token_env`, else the system's secret store) is one with the
-    `users:read.email` scope, for finding requested reviewers' Slack ids by their email when
-    the app isn't connected. No token, no lookups.
+    `users:read.email` scope, for finding requested reviewers' Slack ids by their email. No
+    token, no lookups.
     """
 
     default_token_env: ClassVar[str] = DEFAULT_SLACK_TOKEN_ENV
@@ -26,18 +26,13 @@ class SlackConfig(TokenFields):
 
     token_env: str = ""
     """The environment variable holding a Slack token with the `users:read.email` scope, for
-    finding requested reviewers' Slack ids by their email, when the app isn't connected. No
-    token, no lookups. `SLACK_API_TOKEN` unless set."""
+    finding requested reviewers' Slack ids by their email. No token, no lookups. `SLACK_API_TOKEN` unless set."""
     keychain_service: str = ""
     """The service that token is stored under in the system's secret store (the macOS
     keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;
     its account is the top-level `email`. `move-forward-slack` unless set."""
     workspace_url: str = ""
     """Base URL for Slack links, e.g. https://example.slack.com. Empty means no links."""
-    client_id: str = ""
-    """The workspace's Slack app's client id (Basic Information), to connect to it from
-    slack's page; empty until someone has made the app (see docs/plugins/slack.md). It isn't
-    a secret: the app signs in with PKCE, and has no client secret to share."""
     ping_first: str = DEFAULT_PING_FIRST
     """The first review reminder; `{url}` is the PR, and a brace of its own is written `{{` or
     `}}`."""
@@ -50,6 +45,17 @@ class SlackConfig(TokenFields):
     team_channel: str = ""
     """The channel of a team nothing else names one for, from its name: e.g. `#team-{team}`.
     Empty means no guess."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_client_id(cls, data: object) -> object:
+        if isinstance(data, dict) and "client_id" in cast(dict[str, object], data):
+            raise ValueError(
+                "`client_id` is gone, with the Slack app's sign-in: delete the line; for"
+                " looking up reviewers' Slack ids, give a token with users:read.email"
+                " (`mfd token set slack`, or $SLACK_API_TOKEN)"
+            )
+        return cast(object, data)
 
     @field_validator("workspace_url")
     @classmethod
