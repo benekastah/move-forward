@@ -392,18 +392,12 @@ def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[An
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> None:
     """`mfd init --example` shows each plugin's keys too, in its section."""
-    lines = cli.EXAMPLE_CONFIG.splitlines()
-    header = re.compile(r"^(# )?\[([a-z_]+)\]")
-    start = next(
-        (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),
-        None,
-    )
+    section = _example_section(plugin)
     keys = [key for key in plugin.config_model.model_fields if key != "teams"]
-    if start is None:
+    if section is None:
         assert keys == [], f"the example has no [{plugin.name}]"
         return
-    end = next((n for n in range(start + 1, len(lines)) if header.match(lines[n])), len(lines))
-    shown = "\n".join(lines[start:end])
+    shown = "\n".join(section)
     missing = [
         key
         for key in keys
@@ -414,18 +408,46 @@ def test_every_key_of_a_plugin_is_in_the_example(plugin: Plugin[Any, Any]) -> No
     assert missing == []
 
 
-@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
-def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, Any]) -> None:
-    """Uncommenting `mfd init --example`'s section for a plugin gives a section it accepts; what
-    is instead of something else in it stays commented, behind `##`."""
-    lines = cli.EXAMPLE_CONFIG.splitlines()
+def _example_section(plugin: Plugin[Any, Any]) -> list[str] | None:
+    """`mfd init --example`'s lines for a plugin's section, up to the next section's; None
+    when it has none."""
+    lines = [str(line) for line in cli.EXAMPLE_CONFIG.splitlines()]
     header = re.compile(r"^(# )?\[([a-z_]+)\]")
     start = next(
         (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),
         None,
     )
     if start is None:
-        return  # no section to give (notes: always on)
+        return None
     end = next((n for n in range(start + 1, len(lines)) if header.match(lines[n])), len(lines))
-    text = "\n".join(line.removeprefix("# ") for line in lines[start:end])
+    return lines[start:end]
+
+
+_KEY = re.compile(r"^([a-z_]+) =")
+
+
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
+def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, Any]) -> None:
+    """Uncommenting `mfd init --example`'s section for a plugin gives a section it accepts, and
+    so does taking what's behind `##` instead (several mailboxes, say): its tables, each a
+    mailbox of its own, and what every one of them sets moved out of the section."""
+    section = _example_section(plugin)
+    if section is None:
+        return  # no section to give (notes: always on)
+    base = [line.removeprefix("# ") for line in section if not line.startswith("##")]
+    plugin.config_model.model_validate(tomllib.loads("\n".join(base))[plugin.name])
+    instead = [line.removeprefix("## ") for line in section if line.startswith("## ")]
+    if not instead:
+        return
+    tables: list[set[str]] = []
+    for line in instead:
+        if line.startswith("["):
+            tables.append(set())
+        elif tables and (m := _KEY.match(line)):
+            tables[-1].add(m[1])
+    moved: set[str] = tables[0].intersection(*tables[1:]) if tables else set()
+    kept = [line for line in base if not ((m := _KEY.match(line)) and m[1] in moved)]
+    text = "\n".join(
+        [*kept, *(line for line in instead if line.startswith("[") or _KEY.match(line))]
+    )
     plugin.config_model.model_validate(tomllib.loads(text)[plugin.name])

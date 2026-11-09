@@ -140,7 +140,8 @@ class MailConfig(Strict):
     the authserv-id), e.g. `mx.google.com`: a sender counts as who `From` says only when that
     server found it authentic (DMARC passed), since anyone can write any `From`. Unset, it's
     known for Gmail; for another server, look for the name in a message's source. Empty, no
-    sender is verified."""
+    sender is verified. With accounts, only those on this `host` (whatever its case) without
+    their own take them, and the config is refused when none does."""
     token_env: str = DEFAULT_MAIL_TOKEN_ENV
     """The environment variable holding `[mail]`'s own password; an account has its own."""
     keychain_service: str = DEFAULT_MAIL_KEYCHAIN_SERVICE
@@ -190,11 +191,15 @@ class MailConfig(Strict):
 
     @model_validator(mode="after")
     def _complete(self) -> Self:
-        if self.accounts and not self.host and self.auth_servers is not None:
-            # They're for [mail]'s host: an account on its own keeps to its own.
+        if (
+            self.accounts
+            and self.auth_servers is not None
+            and not any(self._takes_auth_servers(a) for a in self.accounts.values())
+        ):
+            # They're for [mail]'s host: an account on another keeps to its own.
             raise ValueError(
-                "[mail] sets auth_servers but no host, so no account takes them: set them in each"
-                " account, or give [mail] the host they're for"
+                "[mail] sets auth_servers, but no account is on [mail]'s host to take them: set"
+                " them in the accounts they're for"
             )
         if self.accounts and self.username:
             # Its own mailbox would stop being read, unnoticed, once accounts come.
@@ -226,6 +231,12 @@ class MailConfig(Strict):
     def _valid_message_url(cls, value: str) -> str:
         return _message_url(value)
 
+    def _takes_auth_servers(self, account: MailAccount) -> bool:
+        """Whether `account` trusts `[mail]`'s `auth_servers`: it sets none of its own, and it's on
+        `[mail]`'s host (whose results headers they are), whatever its case."""
+        host = account.host if account.host is not None else self.host
+        return account.auth_servers is None and bool(host) and host.lower() == self.host.lower()
+
     def _mailbox(self, name: str, account: MailAccount) -> Mailbox:
         def said[T](mine: T | None, shared: T) -> T:
             return mine if mine is not None else shared
@@ -245,10 +256,9 @@ class MailConfig(Strict):
             mailbox=said(account.mailbox, self.mailbox),
             sent_mailbox=said(account.sent_mailbox, self.sent_mailbox),
             message_url=said(account.message_url, self.message_url),
-            # Whose results headers count depends on the server: another trusts its own.
-            auth_servers=account.auth_servers
-            if account.auth_servers is not None or host.lower() != self.host.lower()
-            else self.auth_servers,
+            auth_servers=self.auth_servers
+            if self._takes_auth_servers(account)
+            else account.auth_servers,
             # A password is never shared: an account's isn't [mail]'s.
             token_env=account.token_env or f"{DEFAULT_MAIL_TOKEN_ENV}_{name.upper()}"
             if name
