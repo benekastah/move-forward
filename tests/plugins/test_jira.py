@@ -120,13 +120,16 @@ def test_tickets_are_fetched_open_or_resolved_and_their_projects_remembered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     resolved = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j").model_copy(
-        update={"resolved": datetime(2026, 6, 1, tzinfo=UTC)}
+        update={"resolved": datetime(2026, 6, 1, tzinfo=UTC), "status_category": "done"}
     )
-    open_one = resolved.model_copy(update={"key": "OPS-2", "resolved": None})
+    open_one = resolved.model_copy(
+        update={"key": "OPS-2", "resolved": None, "status_category": "indeterminate"}
+    )
+    undated = resolved.model_copy(update={"key": "OPS-3", "resolved": None})  # done all the same
 
     def tickets(config: JiraConfig, email: str, keys: list[str], api_token: str) -> list[JiraIssue]:
-        assert api_token == "t" and keys == ["APP-1", "OPS-2"]
-        return [resolved, open_one]
+        assert api_token == "t" and keys == ["APP-1", "OPS-2", "OPS-3"]
+        return [resolved, open_one, undated]
 
     def token(config: JiraConfig, email: str) -> str:
         return "t"
@@ -136,13 +139,15 @@ def test_tickets_are_fetched_open_or_resolved_and_their_projects_remembered(
     db = Database(":memory:")
     db.migrate("jira", MIGRATIONS)
     ctx = _ctx(db)
-    urls = ["https://j/browse/APP-1", "https://j/browse/OPS-2"]
+    urls = ["https://j/browse/APP-1", "https://j/browse/OPS-2", "https://j/browse/OPS-3"]
     elsewhere = ["https://other/browse/APP-3", "https://j/browse/not a key", "APP-4"]
     fetched = JiraPlugin().fetch(FetchRequest(ctx, "ticket", [*urls, *elsewhere]))
     assert [(e.ref.id, e.url, e.attrs) for e in fetched] == [
         (resolved.url, resolved.url, {"resolved_at": "2026-06-01T00:00:00+00:00"}),
         (open_one.url, open_one.url, {"resolved_at": None}),
+        (undated.url, undated.url, {"resolved_at": None}),
     ]
+    assert [e.lifecycle for e in fetched] == ["done", "open", "done"]
     assert IssueRepository(db).projects() == ["APP", "OPS"]
     assert JiraPlugin().fetch(FetchRequest(ctx, "pr", ["x"])) == []
     assert JiraPlugin().fetch(FetchRequest(ctx, "ticket", elsewhere)) == []  # without asking Jira

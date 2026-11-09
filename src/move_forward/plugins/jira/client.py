@@ -181,9 +181,10 @@ def to_issue(
         updated=f.updated,
         parent=f.parent.key if f.parent else None,
         open_blockers=open_blockers,
-        # Done by its status, whether or not its workflow sets a resolution: when it was
-        # resolved, else when it moved into Done.
-        resolved=(f.resolutiondate or f.statuscategorychangedate)
+        # Done by its status, whether or not its workflow sets a resolution: the later of when
+        # it was resolved and when it moved into Done (a reopened ticket's resolution can be
+        # stale).
+        resolved=max((d for d in (f.resolutiondate, f.statuscategorychangedate) if d), default=None)
         if f.status.status_category.key == "done"
         else None,
         due=f.duedate,

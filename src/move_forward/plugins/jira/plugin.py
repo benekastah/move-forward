@@ -137,7 +137,6 @@ def _state_link(pr: _PrView) -> Link:
 def _abandoned_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView]) -> Item:
     """The item for a ticket in rollout whose PRs were all closed without merging: back to
     work, as nothing of it is out."""
-    back = config.status_in_progress
     return Item(
         title=f"{issue.key} {issue.summary}",
         url=issue.url,
@@ -148,13 +147,19 @@ def _abandoned_rollout(config: JiraConfig, issue: JiraIssue, prs: list[_PrView])
         actions=[
             Action(
                 name="jira/transition",
-                label=f"Move to {back[0]}",
-                fields={"key": issue.key, "to": back[0]}
-                | ({"also": "\n".join(back[1:])} if back[1:] else {}),
+                label=f"Move to {targets[0]}",
+                fields={"key": issue.key, "to": targets[0]}
+                | ({"also": "\n".join(targets[1:])} if targets[1:] else {}),
             )
-        ]
-        if back
-        else [],
+            for targets in (config.status_in_progress, config.status_closed)
+            if targets
+        ],
+        signals=Signals(
+            verb="Take the rollout back",
+            task="take_the_rollout_back",
+            importance=-1,
+            effort="minutes",
+        ),
     )
 
 
@@ -510,7 +515,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 title=f"{i.key} {i.summary}",
                 url=i.url,
                 state=i.status,
-                lifecycle="done" if i.resolved else "open",
+                lifecycle="done" if i.status_category == "done" else "open",
                 attrs={"resolved_at": i.resolved.isoformat() if i.resolved else None},
             )
             for i in found

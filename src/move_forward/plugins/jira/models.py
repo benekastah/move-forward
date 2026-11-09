@@ -38,7 +38,8 @@ class JiraIssue(Model):
     open_blockers: list[str] = Field(default_factory=list)
     """Keys of unfinished issues this one "is blocked by"."""
     resolved: datetime | None = None
-    """Jira's resolution date, once the ticket is done."""
+    """When it was done: the later of its resolution date and when it moved into a done
+    status; None while its status isn't done."""
     due: date | None = None
     """Its due date, if it has one."""
     url: str

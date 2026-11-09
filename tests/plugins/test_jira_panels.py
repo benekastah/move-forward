@@ -328,7 +328,11 @@ def test_a_rollout_whose_prs_all_closed_unmerged_goes_back_to_work() -> None:
     )
     [item] = panel(dashboard, "jira.rollouts").items
     assert item.subtitle == "Rollout: all PRs closed without merging"
-    assert [a.fields["to"] for a in item.actions if a.name == "jira/transition"] == ["In Progress"]
+    assert [a.fields["to"] for a in item.actions if a.name == "jira/transition"] == [
+        "In Progress",
+        "Closed",
+    ]
+    assert "Take the rollout back: APP-1 Do the thing" in [i.title for i in dashboard.act_now()]
 
 
 def test_priorities_rank_whatever_their_case_and_a_ticket_without_one_has_no_empty_slot() -> None:
