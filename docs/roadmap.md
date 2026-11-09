@@ -221,6 +221,14 @@ set of tables, pages and actions, and settles what two of them both see the way 
 
 ### mail
 
+- **Read Gmail without a password that can do more.** IMAP signs in to Gmail with an app
+  password or OAuth's `https://mail.google.com/` scope, and either can send and delete mail;
+  mail only promises, in its own code, to read headers. Gmail's API has a scope Google enforces
+  as read-only, `gmail.metadata` (headers and labels, never bodies), which fits mail exactly. A
+  Gmail account would read through the API, signing in with OAuth as slack does; other servers
+  stay on IMAP. The cost: `gmail.metadata` is a restricted scope, so a personal Google Cloud
+  project with an OAuth client and myself as a test user, whose sign-in Google lets last about
+  a week while the app is in testing (or the app goes through Google's verification).
 - **A forged reply on its own, if it's ever abused.** A stranger's reply takes on the priority,
   pin and tags set on its conversation, a known limitation (see
   [plugins/mail.md](plugins/mail.md)). If that's ever abused, give a message whose sender the
