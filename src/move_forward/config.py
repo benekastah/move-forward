@@ -206,6 +206,6 @@ class Config(Strict):
 
 
 def load(path: Path = DEFAULT_CONFIG_PATH) -> Config:
-    """Load the config file."""
-    with open(path, "rb") as f:
-        return Config.model_validate(tomllib.load(f))
+    """Load the config file, which may start with a byte-order mark (Notepad's "UTF-8 with
+    BOM"), as TOML itself may not."""
+    return Config.model_validate(tomllib.loads(path.read_text(encoding="utf-8-sig")))

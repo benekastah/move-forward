@@ -55,7 +55,7 @@ def _draft(path: Path) -> Path:
     made private before the token is written to it."""
     fd, draft = tempfile.mkstemp(dir=path.parent, prefix=f".{TOKEN_FILE}.")
     make_private(Path(draft))
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(secrets.token_urlsafe(TOKEN_BYTES) + "\n")
     return Path(draft)
 
@@ -77,12 +77,14 @@ def load_or_create(path: Path) -> str:
             pass
         finally:
             os.unlink(draft)
-    if not path.read_text().strip():  # left empty by a crash: replace it, in one step
+    if not path.read_text(
+        encoding="utf-8"
+    ).strip():  # left empty by a crash: replace it, in one step
         os.replace(_draft(path), path)
     if not is_private(path):
         log.warning("%s was readable by others; making it private", path)
         make_private(path)
-    return path.read_text().strip()
+    return path.read_text(encoding="utf-8").strip()
 
 
 def matches(token: str, given: str | None) -> bool:
@@ -206,7 +208,7 @@ class Handshake:
 def rotate(path: Path) -> str:
     """Replace the token in `path` with a new one, in one step; the new token."""
     os.replace(_draft(path), path)
-    return path.read_text().strip()
+    return path.read_text(encoding="utf-8").strip()
 
 
 class TokenFile:
@@ -222,7 +224,7 @@ class TokenFile:
         stat = self._path.stat()
         stamp = (stat.st_mtime_ns, stat.st_ino)  # a replaced file has another inode
         if stamp != self._stamp:
-            self._token = self._path.read_text().strip()
+            self._token = self._path.read_text(encoding="utf-8").strip()
             self._stamp = stamp
         return self._token
 

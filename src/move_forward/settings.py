@@ -196,7 +196,7 @@ def save(path: Path, config: Config, form: dict[str, str]) -> str:
         changes[(NOTIFICATIONS, SUBSCRIBE)] = subscribed
     if not changes:
         return "nothing changed"
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8-sig")  # a BOM, as `config.load` takes; written without
     for (section, key), new in changes.items():
         if key.startswith(f"{WEIGHTS}."):
             text = tomledit.set_key(text, section, WEIGHTS, weights)
@@ -231,7 +231,7 @@ def _write(path: Path, text: str) -> None:
     mode = path.stat().st_mode
     handle, draft = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
-        with os.fdopen(handle, "w") as f:
+        with os.fdopen(handle, "w", encoding="utf-8") as f:
             f.write(text)
         os.chmod(draft, mode)
         os.replace(draft, path)

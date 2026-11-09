@@ -200,7 +200,7 @@ FIELDS_PATH = QUERIES / "pr_fields.graphql"
 
 
 def _query_text() -> str:
-    return QUERY_PATH.read_text() + FIELDS_PATH.read_text()
+    return QUERY_PATH.read_text(encoding="utf-8") + FIELDS_PATH.read_text(encoding="utf-8")
 
 
 class _RawRepoPr(_Raw):
@@ -245,7 +245,7 @@ def fetch_prs(host: str, ids: list[PrId]) -> list[PullRequest]:
         f"query($withFiles: Boolean!, {', '.join(params)}) {{\n  "
         + "\n  ".join(parts)
         + "\n}\n"
-        + FIELDS_PATH.read_text()
+        + FIELDS_PATH.read_text(encoding="utf-8")
     )
     response = RawPrsResponse.model_validate_json(_run_with_retry([*args, "-f", f"query={query}"]))
     return [

@@ -104,7 +104,7 @@ def install() -> None:
     bin_dir.mkdir(parents=True, exist_ok=True)
     if WINDOWS:
         shim = bin_dir / "mfd.cmd"
-        shim.write_text(f'@"{tool("mfd")}" %*\r\n')
+        shim.write_text(f'@"{tool("mfd")}" %*\r\n', encoding="utf-8")
         print(f"wrote {shim}")
     else:
         link = bin_dir / "mfd"

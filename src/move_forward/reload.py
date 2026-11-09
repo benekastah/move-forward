@@ -85,6 +85,7 @@ def passes_check(argv: list[str] | None = None) -> bool:
             check=False,
             capture_output=True,
             text=True,
+            errors="replace",  # what it prints is only logged
             timeout=CHECK_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:

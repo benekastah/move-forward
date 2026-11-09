@@ -22,12 +22,16 @@ def common_dir(repo: Path) -> Path | None:
         return dot
     if not dot.is_file():
         return None
-    text = dot.read_text().strip()
+    text = dot.read_text(encoding="utf-8").strip()
     if not text.startswith("gitdir:"):
         return None
     own = (repo / text.removeprefix("gitdir:").strip()).resolve()
     commondir = own / "commondir"
-    return (own / commondir.read_text().strip()).resolve() if commondir.is_file() else own
+    return (
+        (own / commondir.read_text(encoding="utf-8").strip()).resolve()
+        if commondir.is_file()
+        else own
+    )
 
 
 def _ref_files(common: Path) -> list[Path]:

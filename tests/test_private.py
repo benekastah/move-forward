@@ -11,7 +11,7 @@ def _explain(path: Path) -> str:
     """What the system says of `path`'s access, for a failure's message."""
     if not private.WINDOWS:
         return oct(path.stat().st_mode)
-    return f"{private._me()!r}: {private.run(['icacls', str(path)])!r}"  # pyright: ignore[reportPrivateUsage]
+    return f"{private._me()!r}: {private.run(['icacls', str(path)], encoding='oem')!r}"  # pyright: ignore[reportPrivateUsage]
 
 
 def test_a_file_made_private_is_mine_alone(tmp_path: Path) -> None:
@@ -52,7 +52,8 @@ def test_on_windows_only_me_and_the_system_may_hold_access(monkeypatch: pytest.M
         "shared": listing("shared", "ACME\\jane", "BUILTIN\\Users"),
     }
 
-    def icacls(args: list[str]) -> str:
+    def icacls(args: list[str], encoding: str = "utf-8") -> str:
+        assert encoding == "oem"  # Windows' own tools write in the OEM code page
         return answers[args[1]]
 
     def me() -> str:

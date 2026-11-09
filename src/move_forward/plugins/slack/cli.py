@@ -18,7 +18,7 @@ def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> str:
 
     def read(name: str) -> str:
         path = notes_dir / name
-        return path.read_text() if path.exists() else ""
+        return path.read_text(encoding="utf-8-sig", errors="replace") if path.exists() else ""
 
     if not notes_dir.is_dir():
         raise ValueError(f"{notes_dir} isn't a directory")

@@ -78,7 +78,7 @@ def git_dir(worktree: Path) -> Path | None:
         return dot
     if not dot.is_file():
         return None
-    text = dot.read_text().strip()
+    text = dot.read_text(encoding="utf-8").strip()
     if not text.startswith("gitdir:"):
         return None
     return (worktree / text.removeprefix("gitdir:").strip()).resolve()

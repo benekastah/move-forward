@@ -28,7 +28,9 @@ def value(new: object) -> str:
         return "[" + ", ".join(value(v) for v in cast(list[object], new)) + "]"
     if isinstance(new, Path):
         new = str(new)
-    return json.dumps(new)  # JSON's strings, numbers, true and false are TOML's too
+    # JSON's strings, numbers, true and false are TOML's too, but for escaping what isn't
+    # ASCII: an emoji would be a surrogate pair, which TOML refuses. Written as itself, it isn't.
+    return json.dumps(new, ensure_ascii=False).replace("\x7f", "\\u007f")  # DEL, TOML refuses
 
 
 def _comment_start(text: str) -> int:

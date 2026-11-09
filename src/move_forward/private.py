@@ -37,7 +37,7 @@ def make_private(path: Path) -> None:
         path.chmod(0o700 if path.is_dir() else 0o600)
         return
     grant = f"{_me()}:(OI)(CI)F" if path.is_dir() else f"{_me()}:F"
-    run(["icacls", str(path), "/inheritance:r", "/grant:r", grant])
+    run(["icacls", str(path), "/inheritance:r", "/grant:r", grant], encoding="oem")
 
 
 def is_private(path: Path) -> bool:
@@ -45,7 +45,7 @@ def is_private(path: Path) -> bool:
     list naming no other user (see `SYSTEM_HOLDERS`)."""
     if not WINDOWS:
         return stat.S_IMODE(path.stat().st_mode) & 0o077 == 0
-    holders = set(_holders(run(["icacls", str(path)]), str(path)))
+    holders = set(_holders(run(["icacls", str(path)], encoding="oem"), str(path)))
     return holders <= {_me().lower(), *SYSTEM_HOLDERS}
 
 

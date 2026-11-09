@@ -41,7 +41,7 @@ def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> s
 
     def read(name: str) -> str:
         path = notes_dir / name
-        return path.read_text() if path.exists() else ""
+        return path.read_text(encoding="utf-8-sig", errors="replace") if path.exists() else ""
 
     names = (markdown.WORK_NOTES_FILE, markdown.ON_ICE_FILE)
     if not any((notes_dir / name).exists() for name in names):
@@ -72,12 +72,13 @@ def export_notes(ctx: Context[NotesConfig], notes_dir: Path, force: bool) -> str
         raise ValueError(f"{', '.join(existing)} exists; pass --force to overwrite")
     notes_dir.mkdir(parents=True, exist_ok=True)
     entries = repo.entries()
-    targets[0].write_text(markdown.write_work_notes(entries, repo.sections()))
+    targets[0].write_text(markdown.write_work_notes(entries, repo.sections()), encoding="utf-8")
     last_asked = ctx.kv.get(LAST_ASKED_ICE)
     ices = repo.ices()
     stacks = [i for i in ices if all(item.kind == markdown.BRANCH for item in i.items)]
     targets[1].write_text(
-        markdown.write_on_ice(stacks, date.fromisoformat(last_asked) if last_asked else None)
+        markdown.write_on_ice(stacks, date.fromisoformat(last_asked) if last_asked else None),
+        encoding="utf-8",
     )
     left_out = len(ices) - len(stacks)
     return f"wrote {len(entries)} entries and {len(stacks)} stacks on ice to {notes_dir}" + (

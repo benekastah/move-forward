@@ -3,6 +3,7 @@
 import argparse
 import errno
 import getpass
+import io
 import json
 import logging
 import os
@@ -386,6 +387,11 @@ def _open_signed_in(config: config_module.Config, token: str, port: int) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        # Printed as UTF-8, redirected or not: Windows' default is its code page, which can't
+        # write an emoji in a note's title, and would fail after the command did its work.
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     parser, plugin_commands = _parser()
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -400,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if args.example:
             config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(EXAMPLE_CONFIG)
+            config_path.write_text(EXAMPLE_CONFIG, encoding="utf-8")
             print(f"wrote {config_path}; edit it, then run `mfd serve --open`")
             return 0
         try:

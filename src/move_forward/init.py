@@ -8,14 +8,13 @@ setup. Plugins left out are written as commented-out sections. The answers are v
 as a `Config` before the file is written.
 """
 
-import json
 import tomllib
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
-from . import asking, registry
+from . import asking, registry, tomledit
 from . import config as config_module
 from .asking import Asker, Complete, InitSetup, Prompt, choices, quiet
 from .config import Config
@@ -93,16 +92,11 @@ def offered() -> list[Plugin[Any, Any]]:
     return [p for p in registry.PLUGINS if not p.always_on]
 
 
-def _toml_value(value: object) -> str:
-    """TOML for a string, int, or list of strings (JSON's quoting is valid TOML)."""
-    return json.dumps(value)
-
-
 def _table(name: str, values: dict[str, object], optional: str = "") -> str:
     """A section: its keys, its optional settings commented out, then its own tables (a dict
     value, e.g. `teams` for `[slack.teams]`)."""
     body = "".join(
-        f"{k} = {_toml_value(v)}\n" for k, v in values.items() if not isinstance(v, dict)
+        f"{k} = {tomledit.value(v)}\n" for k, v in values.items() if not isinstance(v, dict)
     )
     text = f"\n[{name}]\n{body}{optional}"
     for key, table in values.items():
@@ -128,7 +122,7 @@ def render_config(
     chosen ones' with their `sections` values and the others commented out, each with its
     optional settings as comments."""
     lines = ["# move-forward configuration. Paths may start with ~.", ""]
-    lines += [f"{key} = {_toml_value(value)}" for key, value in answers.items()]
+    lines += [f"{key} = {tomledit.value(value)}" for key, value in answers.items()]
     text = "\n".join(lines) + "\n" + OPTIONAL_SETTINGS
     for plugin in offered():
         if plugin.name in sections:
@@ -206,7 +200,7 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
     """Interview, write the file, and return what to do next."""
     text = interview(prompt, cwd or Path.cwd())
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
     next_steps = f"wrote {path}\nrun `mfd serve --open` to start"
     if "\n[jira]\n" in text:
         next_steps += (

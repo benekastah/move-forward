@@ -20,7 +20,7 @@ DISCONNECT = Action(
 
 def manifest() -> str:
     """The app's manifest, as checked in next to this module."""
-    return resources.files(__package__ or "").joinpath(MANIFEST).read_text()
+    return resources.files(__package__ or "").joinpath(MANIFEST).read_text(encoding="utf-8")
 
 
 def _setup(ctx: Context[SlackConfig]) -> str:
