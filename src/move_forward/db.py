@@ -298,6 +298,18 @@ UPDATE act_now_feedback SET action = 'snooze', until = NULL WHERE action = 'dism
 """A dismissal was a snooze with no end: it's kept as one now, a snooze until the item
 changes (`until` NULL)."""
 
+_V18_PROBLEMS = """
+CREATE TABLE problems (                -- kept: what a plugin reports wrong that isn't a failed
+                                       -- refresh, until it says it's gone (`Context.problem`)
+    plugin TEXT NOT NULL,
+    key TEXT NOT NULL,                 -- the plugin's name for it, e.g. email_lookups
+    text TEXT NOT NULL,                -- what's wrong, as the page shows it
+    PRIMARY KEY (plugin, key)
+);
+"""
+"""Problems the plugins report besides a failed refresh, kept across restarts so they're
+shown, and logged, once rather than again after each."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -316,6 +328,7 @@ CORE_MIGRATIONS = [
     Migration("0015_tags", _V15_TAGS),
     Migration("0016_no_unimportant_priority", _V16_NO_UNIMPORTANT_PRIORITY),
     Migration("0017_dismiss_is_a_snooze", _V17_DISMISS_IS_A_SNOOZE),
+    Migration("0018_problems", _V18_PROBLEMS),
 ]
 
 _SCHEMA_VERSIONS = """

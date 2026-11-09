@@ -79,6 +79,10 @@ CHANGED = "prs_changed"
 EVERYTHING = "*"
 LAST_FULL = "last_full_collect"
 """The kv key of when every search last ran."""
+NOTIFICATIONS_FAILED = "notifications"
+"""The problem (`Context.problem`) of why the notifications can't be polled."""
+EMAIL_LOOKUPS_FAILED = "email_lookups"
+"""The problem of which reviewers' commit emails couldn't be looked up, and why."""
 
 
 def _pr_id(changed: str) -> client.PrId:
@@ -128,10 +132,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
     watches: ClassVar[list[str]] = ["git"]
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
-
-    def __init__(self) -> None:
-        self._poll_failed: str | None = None
-        """Why the last poll of the notifications failed, warned of once while it lasts."""
 
     def init_suggested(self) -> bool:
         """Always: init guesses its org from the checkout it runs in."""
@@ -252,8 +252,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         comment, a review), newer than the last look. A CI run names only its repo, so it stands
         for my open PRs there; what no search shows (an issue, a release, an alert) for nothing;
         and anything else for `EVERYTHING`. A "not modified" answer is cheap, and GitHub's poll
-        interval is kept to. A poll that fails finds nothing, warning once while the same reason
-        lasts, and is tried again after the default interval."""
+        interval is kept to. A poll that fails finds nothing, is reported as the problem
+        `NOTIFICATIONS_FAILED` until one works, and is tried again after the default interval."""
         wait = ctx.kv.get(NOTIFICATIONS_WAIT)
         if wait and ctx.now < datetime.fromisoformat(wait):
             return set()
@@ -263,13 +263,11 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         except (CommandError, subprocess.SubprocessError, OSError, KeyError, ValueError) as e:
             # A token that can't read notifications (a fine-grained one can't), `gh` hanging
             # or a blip: the branch moves found with it still count.
-            if self._poll_failed != str(e):
-                ctx.log.warning("can't read GitHub notifications: %s", e)
-                self._poll_failed = str(e)
+            ctx.problem(NOTIFICATIONS_FAILED, f"can't read GitHub notifications: {e}")
             retry = ctx.now + timedelta(seconds=notifications.DEFAULT_POLL_SECONDS)
             ctx.kv.set(NOTIFICATIONS_WAIT, retry.isoformat())
             return set()
-        self._poll_failed = None
+        ctx.problem(NOTIFICATIONS_FAILED, None)
         if found is None:
             return set()
         ctx.kv.set(NOTIFICATIONS_SEEN, found.last_modified)
@@ -315,23 +313,35 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return [ctx.email.rsplit("@", 1)[1]] if "@" in ctx.email else []
 
     def _lookup_emails(self, ctx: Context[GitHubConfig], gh: GitHubSnapshot) -> None:
-        """Cache the commit email of every requested reviewer we don't know yet."""
+        """Cache the commit email of every requested reviewer we don't know yet. A lookup that
+        fails is tried again at the next refresh; those that failed this time are one problem
+        (`EMAIL_LOOKUPS_FAILED`), with the first's reason, until none do."""
         domains = self._email_domains(ctx)
         if not domains:
+            ctx.problem(EMAIL_LOOKUPS_FAILED, None)  # nothing to look up
             return
         people = PeopleRepository(ctx.db)
         known = people.emails()
+        failed: dict[str, Exception] = {}
         for pr in gh.mine:
             for login in pr.requested_users:
                 if login in known:
                     continue
-                try:
+                try:  # in each repo asking for them, until one answers
                     email = client.commit_email(ctx.config.host, pr.repo, login, domains)
-                except Exception as e:  # noqa: BLE001
-                    ctx.log.warning("email lookup for %s failed: %s", login, e)
+                except Exception as e:  # noqa: BLE001 - one lookup must not stop the others
+                    failed.setdefault(login, e)
                     continue
                 people.save_looked_up(login, email, ctx.now)
                 known[login] = email
+                failed.pop(login, None)
+        ctx.problem(
+            EMAIL_LOOKUPS_FAILED,
+            f"looking up the commit emails of {', '.join(sorted(failed))} failed:"
+            f" {next(iter(failed.values()))}"
+            if failed
+            else None,
+        )
 
     def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the

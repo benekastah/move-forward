@@ -27,7 +27,7 @@ from .keychain import TokenSettings
 from .kinds import Family
 from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
-from .repositories import KvRepository, SnapshotRepository
+from .repositories import KvRepository, ProblemRepository, SnapshotRepository
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +83,20 @@ class Context[C: BaseModel]:
         """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
         as `github.derived` (see `collect_into`)."""
         return f"{self.name}.{name}"
+
+    def problem(self, key: str, text: str | None) -> None:
+        """Report something wrong that isn't the plugin's refresh failing (a lookup its token
+        isn't allowed, two clones of one repository) as its problem `key`, or with None that
+        it's gone. Core shows it with the plugin's state on the page (its group's summary, or
+        the footer) and keeps it across restarts until it's cleared; it's logged only when it
+        changes, so a plugin can report it on every refresh."""
+        before = ProblemRepository(self.db).set(self.name, key, text)
+        if text == before:
+            return
+        if text is not None:
+            self.log.warning("%s", text)
+        else:
+            self.log.info("no longer: %s", before)
 
     def token(self, account: str | None = None, *, secret: str = "token") -> str:
         """The plugin's token, or that of its account `account` (see `Plugin.tokens`; `""` is

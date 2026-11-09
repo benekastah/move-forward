@@ -279,6 +279,44 @@ class ContactRepository:
             return conn.execute("DELETE FROM contacts WHERE who = ?", (who,)).rowcount > 0
 
 
+class ProblemRepository:
+    """What the plugins report wrong besides a failed refresh (`problems`), by plugin and the
+    plugin's key: kept until the plugin clears it (`Context.problem`)."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def set(self, plugin: str, key: str, text: str | None) -> str | None:
+        """Keep `text` as the plugin's problem `key`, or forget it with None; returns what it
+        was before."""
+        with self._db.transaction() as conn:
+            row = conn.execute(
+                "SELECT text FROM problems WHERE plugin = ? AND key = ?", (plugin, key)
+            ).fetchone()
+            if text is None:
+                conn.execute("DELETE FROM problems WHERE plugin = ? AND key = ?", (plugin, key))
+            elif row is None or row["text"] != text:
+                conn.execute(
+                    "INSERT OR REPLACE INTO problems VALUES (?, ?, ?)", (plugin, key, text)
+                )
+        return None if row is None else row["text"]
+
+    def of(self, plugins: Collection[str]) -> dict[str, list[str]]:
+        """The problems of `plugins`, by plugin, each's in the order of their keys: not those
+        of a plugin since taken out of the config."""
+        names = list(plugins)
+        if not names:
+            return {}
+        found: dict[str, list[str]] = {}
+        for row in self._db.query(
+            f"SELECT plugin, text FROM problems WHERE plugin IN ({', '.join('?' * len(names))})"
+            " ORDER BY plugin, key",
+            tuple(names),
+        ):
+            found.setdefault(row["plugin"], []).append(row["text"])
+        return found
+
+
 class FeedbackRepository:
     """What I said of Act now's items (`act_now_feedback`): kept, pruned with `prune`."""
 

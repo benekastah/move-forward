@@ -64,6 +64,7 @@ from .repositories import (
     KvRepository,
     LayoutRepository,
     PriorityRepository,
+    ProblemRepository,
     SnapshotRepository,
     TagRepository,
 )
@@ -524,7 +525,12 @@ def build_dashboard(
         graph.hides,
         contacts.importance,
     )
-    return built.model_copy(update={"problems": list(registry.DISCOVERY_ERRORS)})
+    return built.model_copy(
+        update={
+            "problems": list(registry.DISCOVERY_ERRORS),
+            "plugin_problems": ProblemRepository(db).of([e.name for e in plugins]),
+        }
+    )
 
 
 def _failed(e: Enabled) -> Panel:

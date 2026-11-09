@@ -15,7 +15,7 @@ It also refreshes soon after I get a notification about something in the org (an
 with `search_scope = "everywhere"`): a review requested, a review, a comment, CI. It polls my
 notifications as often as GitHub allows (every 60 seconds, usually), and GitHub answers "not
 modified" cheaply when there's nothing new. A token that can't read notifications (a
-fine-grained one can't) logs a warning, and only the background refresh and pushes below
+fine-grained one can't) is a problem on GitHub's group until a poll works, and only the background refresh and pushes below
 refresh it. And it refreshes within seconds of a commit or push on the local branch of one of my
 open PRs: GitHub notifies nobody of their own pushes, so github watches git, and after each
 refresh of git it compares where `git.branch` entities for those PRs' heads stand (their
@@ -42,7 +42,8 @@ reviews, like a policy bot's, aren't feedback; other bots' are), `required_owner
 CODEOWNERS comment such as `#!required`), `ticket_link_prefixes` (the words a PR body line linking
 the ticket can start with, e.g. `["Link", "Closes"]`, followed by a key or a Jira URL) and `placeholder_labels` (template labels to replace).
 `email_domains` picks reviewers' emails from their commits (default: your email's domain;
-an email found is kept, and a lookup that found none is tried again after `prune_days`),
+an email found is kept, and a lookup that found none is tried again after `prune_days`; those
+that fail are tried again at the next refresh, and are one problem on GitHub's group until none do),
 `stale_review_hours` says when a review request can be nudged,
 `quick_review_max_lines`/`_files` and `hour_review_max_lines`/`_files` size a review (minutes
 within the quick limits, an hour within the hour ones, else a day; they grow slowly because

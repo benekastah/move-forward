@@ -157,6 +157,11 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, its database (`ctx.db`) and key/value
   state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
   and a logger named for it (`ctx.log`).
+- Something wrong that isn't a failed refresh (a lookup the token isn't allowed, two
+  clones of one repo) is a problem: `ctx.problem(key, text)` reports it, and
+  `ctx.problem(key, None)` says it's gone. Core keeps it across restarts, shows it in the
+  plugin's group (or the footer) until it's gone, and logs it only when it changes, so report
+  it each time it's checked rather than warning of it yourself.
 
 - A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it

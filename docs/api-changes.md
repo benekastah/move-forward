@@ -14,6 +14,14 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **Reporting a problem**: `ctx.problem(key, text)` reports something wrong that isn't the
+  plugin's refresh failing (a lookup its token isn't allowed, a notifications poll refused,
+  two clones of one repo) as its problem `key`, and `ctx.problem(key, None)` says it's gone.
+  Core keeps it across restarts, shows it with the plugin's state on the page (its group's
+  summary, or the footer) and in `mfd dump` (`plugin_problems`), and logs it only when it
+  changes, so a plugin can report it on every refresh rather than remembering what it warned
+  of.
+
 - **Importing**: `import_dir(req: ImportRequest)` reads what the plugin recognises in
   `req.dir` for `mfd import <dir>` and says what, one line each; `req.replace` is
   `--replace`; what it won't overwrite without it, it skips with a line saying so, as
