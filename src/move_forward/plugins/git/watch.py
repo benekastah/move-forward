@@ -17,8 +17,9 @@ at once, it's the worktree, recursively.
 An edit only says a worktree may have changed: `changed` asks its `git status` whether the
 counts the page shows did. Each set of paths is watched by one `RustNotify` read by one
 thread, however many paths: one for the git directories, recursively, and on Linux one for
-the worktrees' directories. When either can't be watched (inotify's watch limit, say),
-what it covers is left to the polling in `changes` and `status_seconds`.
+the worktrees' directories. When either can't be watched (inotify's watch limit, say), or
+its thread stops on an error, what it covers is left to the polling in `changes` and
+`status_seconds`: the git directories' watch covers the worktrees' indexes too.
 """
 
 import logging
@@ -162,7 +163,8 @@ class Watcher:
 
     def _dead(self, recursive: bool) -> bool:
         # `_watches` changes under `_sync_lock`, not `_lock`: a read racing a `sync` sees the
-        # watch before or after it, either of which is a fair answer.
+        # old watch, the new one, or none between them (taken as not dead), each a fair answer
+        # for the moment.
         watch = self._watches.get(recursive)
         return watch is not None and watch.dead
 
@@ -174,7 +176,8 @@ class Watcher:
 
     @property
     def worktrees(self) -> set[Path]:
-        """The worktrees watched; none while the watch of them is dead, so they're polled."""
+        """The worktrees watched; none while a watch they need is dead (the git directories',
+        which sees their indexes, or on Linux their own), so they're polled."""
         with self._lock:
             # The recursive watch sees every worktree's index; on Linux the other its files.
             dead = self._dead(True) or (PER_DIRECTORY and self._dead(False))

@@ -107,8 +107,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         by_name: dict[str, list[str]] = {}
         for repo in found.repos:
-            if repo.github_repo:  # as the graph matches its id: exactly
-                by_name.setdefault(repo.github_repo, []).append(repo.dir)
+            if repo.github_repo:  # GitHub's names ignore case, though the graph's ids don't
+                by_name.setdefault(repo.github_repo.casefold(), []).append(repo.dir)
         for name, dirs in by_name.items():
             if len(dirs) > 1 and tuple(dirs) not in self._clones_warned:
                 self._clones_warned.add(tuple(dirs))
