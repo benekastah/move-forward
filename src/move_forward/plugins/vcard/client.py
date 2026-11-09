@@ -116,26 +116,25 @@ def decode(raw: bytes) -> str:
     found: list[str] = []
     i = 0
     while i < len(lines):
-        line = lines[i]
-        i += 1
-        try:
-            found.append(line.decode("utf-8"))
-            continue
-        except UnicodeDecodeError:
-            pass
-        joined, j = line, i
-        while j < len(lines) and lines[j][:1] in (b" ", b"\t"):
-            joined = joined.removesuffix(b"\r") + lines[j][1:]
-            j += 1
-            try:
-                found.append(joined.decode("utf-8"))
-            except UnicodeDecodeError:
-                continue
-            i = j
-            break
-        else:
-            found.append(line.decode("cp1252", errors="replace"))
+        text, i = _decoded_lines(lines, i)
+        found.append(text)
     return "\n".join(found)
+
+
+def _decoded_lines(lines: list[bytes], i: int) -> tuple[str, int]:
+    """Line `i` decoded, and the index of the next line to read: UTF-8, joined with the lines
+    folded after it while it ends cut inside a character, else Windows-1252 alone."""
+    joined, j = lines[i], i + 1
+    while True:
+        body = joined.removesuffix(b"\r")  # the CR of a CRLF ends it, not a character
+        try:
+            return body.decode("utf-8") + ("\r" if body != joined else ""), j
+        except UnicodeDecodeError as e:
+            cut = e.reason == "unexpected end of data"
+            if not cut or j >= len(lines) or lines[j][:1] not in (b" ", b"\t"):
+                return lines[i].decode("cp1252", errors="replace"), i + 1
+        joined = body + lines[j][1:]
+        j += 1
 
 
 def _uid(text: str) -> str:
@@ -201,6 +200,8 @@ def _read_property(card: Card, name: str, value: str) -> None:
         card.uid = _unescape(value).strip() or None
     elif name in _KINDS:
         card.kind = value.strip().lower() or card.kind
+    elif name == "X-ABSHOWAS" and value.strip().upper() == "COMPANY":  # Apple's company card
+        card.kind = "org"
     elif name in _MEMBERS:
         card.members.append(value.strip())
 

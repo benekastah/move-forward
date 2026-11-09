@@ -30,12 +30,14 @@ group_types = {Clients = "customer"}
 A group is a card's category (`CATEGORIES`), or a group's own card naming its members: vCard
 4's `KIND:group` with `MEMBER`s (by `UID` or `mailto:` address), or Apple's
 `X-ADDRESSBOOKSERVER-KIND` (what iCloud syncs). Only a person's card (no `KIND`, or
-`KIND:individual`) gives contacts: an organisation's or a place's doesn't. It reads vCard 4, 3 and 2.1 (quoted-printable
-values too); of a card, only its name, addresses, categories and `UID`.
+`KIND:individual`) gives contacts: not a group's, an organisation's (or Apple's company card,
+`X-ABShowAs:COMPANY`), a place's or any other kind's. It reads vCard 4, 3 and 2.1
+(quoted-printable values too); of a card, only its name, addresses, categories, `UID` and
+kind.
 
 ## Publishes
 
-A `person` for each address in the address book, `vcard/<address>`, titled by their name, with
+A `person` for each address on a person's card, `vcard/<address>`, titled by their name, with
 the `importance` and `contact_type` their groups give and the `groups` they're in; see
 [entities.md](../entities.md). Core joins them with the same person in other tools by email
 (mail's senders, github's committers), so their items rank and are badged by it. A card with

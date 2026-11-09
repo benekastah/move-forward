@@ -207,6 +207,8 @@ def test_a_file_is_read_by_its_encoding() -> None:
     # A simple writer folds inside a character (RFC 6350 3.2): unfolded, it's UTF-8 again.
     folded = b"BEGIN:VCARD\r\nFN:Jos\xc3\r\n \xa9 Garc\xc3\xada\r\nEND:VCARD\r\n"
     assert client.parse(client.decode(folded))[0].name == "José García"
+    old = b"BEGIN:VCARD\r\nVERSION:2.1\r\nFN:Ren\xe9\r\n Dupont\r\nEND:VCARD\r\n"
+    assert client.parse(client.decode(old))[0].name == "René Dupont"  # 8-bit, then folded
     qp = b"BEGIN:VCARD\r\nVERSION:2.1\r\nFN;ENCODING=QUOTED-PRINTABLE:Jos=E9\r\nEND:VCARD\r\n"
     assert client.parse(client.decode(qp))[0].name == "José"  # no CHARSET: Windows-1252
 
@@ -280,6 +282,7 @@ def test_an_organisations_or_a_places_card_is_no_person(tmp_path: Path) -> None:
     (tmp_path / "a.vcf").write_text(
         card("KIND:org", "FN:Acme", "EMAIL:info@acme.com")
         + card("KIND:location", "FN:Office", "EMAIL:office@acme.com")
+        + card("X-ABShowAs:COMPANY", "FN:Acme Sales", "EMAIL:sales@acme.com")
         + card("KIND:individual", "FN:Ann", "EMAIL:ann@acme.com")
     )
     assert [c.email for c in client.collect(config(tmp_path)).contacts] == ["ann@acme.com"]
