@@ -193,15 +193,54 @@ Confluence, Notion, Figma). In order:
    a text area (replying to a ticket), and a date (snooze until, follow up on).
 8. **Customer data.** A kind can say it's sensitive, and `mfd dump`, logs, notifications and
    exports leave out or redact its entities' text; `prune` drops them once they're done.
-9. **More than one of a plugin.** A plugin has one config section, so a work and a personal
-   mailbox, or a CRM in two orgs, can't both be read. Instances (`[mail.work]`,
-   `[mail.personal]`) need, per instance: kind names and their ids (mail's threads are
-   Message-IDs, which two mailboxes can share), table prefixes and the migrations ledger,
-   `/<plugin>/<key>` pages, `requires` and `watches`, and keychain defaults. Without that,
-   each plugin builds accounts of its own.
+9. **More than one of a plugin**: see [Plugin instances](#plugin-instances), below.
 
 Table-shaped settings (a support plugin's views, a CRM's tiers) belong to "First-run setup
 in the browser", below, which already plans tables on the settings page.
+
+### Plugin instances
+
+A plugin reads one login: github many repos but one account (unless `gh` can switch), jira one
+site, mail one mailbox. A second login (a personal and a work GitHub, two Jira sites, a home and
+a work mailbox) is a second instance of the plugin, which core runs as it runs a plugin: its own
+config, refreshes, failures, snapshot, tables, kv, token and pages. Until then, one dashboard
+reads one mailbox.
+
+- **Config.** A lone `[github]` stays as it is: the instance `github`. Several are an array of
+  tables, each named, the first too: `[[github]]` with `name = "work"` is the instance
+  `github.work`; a sub-table (`[github.merge]`) belongs to the entry above it. A plugin allows
+  it with `instances = True`; the config refuses an array for one that doesn't.
+- **What an instance's name keys.** Its kv, its refresh state and failure, its pages
+  (`/github.work/<key>`) and action paths (`/actions/github.work/...`), `mfd token set
+  github.work`, and its database file. `ctx.instance` gives it to the plugin.
+- **Tables.** Each extra instance keeps its tables in a SQLite file of its own beside the main
+  one, opened as its own connection's main database, so a plugin's migrations and queries stay
+  as written; the file keeps its own migrations ledger. Core's tables (kv, feedback,
+  priorities, tags) stay in the main file, reached through core. Backups and `mfd check` cover
+  every file.
+- **Kinds and ids.** Kind names stay the plugin's (`mail.thread`), so a consumer reading one
+  sees every instance's. A plugin allowing instances makes its own kinds' ids unique per
+  instance (from `ctx.instance`, e.g. a mailbox's threads); core refuses an id two instances
+  publish of a plugin's own kind.
+- **The same family entity from several.** Two logins can see one public PR (one URL): it's one
+  entity, with its attributes from the first instance in config order, and its refs, mentions
+  and tags from all of them.
+- **`requires` and `watches`** name a plugin, meaning any of its instances: satisfied by one
+  enabled, a watcher asked after any of them refreshes, and a plugin collecting after the graph
+  waiting for all of them.
+- **Tokens.** An instance's `keychain_service` and `token_env` default to the plugin's with its
+  name (`move-forward-github-work`, `GITHUB_TOKEN_WORK`), so two can't share a store by
+  accident; `mfd token set` refuses to store one whose service another shares.
+- **Renaming.** Turning a lone `[github]` into named entries leaves what `github` kept under
+  its old name: `mfd instance rename github github.personal` moves its database file, kv and
+  stored token, and says what it moved. Entity ids don't change, so priorities, tags and
+  snoozes stay. Fetched tables would refill anyway; kept ones (pings sent, looked-up emails)
+  need the move.
+
+In order, each its own PR: the config and `ctx.instance`; an instance's database file; its kv,
+refresh state, pages, actions and tokens; the graph's rules for instances' entities; `mfd
+instance rename`; then, one PR each, mail, github, jira and slack allowing instances (mail's
+thread ids, its `[mail]` panel naming each mailbox).
 
 ### mail
 
