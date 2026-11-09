@@ -1,6 +1,7 @@
 """The GitHub plugin."""
 
 import argparse
+import subprocess
 from datetime import datetime, timedelta
 from typing import ClassVar, cast
 from urllib.parse import urlsplit
@@ -71,8 +72,6 @@ NOTIFICATIONS_SEEN = "notifications_last_modified"
 """The kv key of the notifications' last `Last-Modified`, for `changed`."""
 NOTIFICATIONS_WAIT = "notifications_poll_after"
 """The kv key of when GitHub lets `changed` poll the notifications again."""
-NOTIFICATIONS_FAILED = "notifications_failed"
-"""The kv key of why the last poll of the notifications failed, warned of once."""
 BRANCHES_SEEN = "pr_branches_seen"
 """The kv key of where my open PRs' local branches were at the last check (`pushes.tips`)."""
 CHANGED = "prs_changed"
@@ -120,6 +119,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
     watches: ClassVar[list[str]] = ["git"]
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
+
+    def __init__(self) -> None:
+        self._poll_failed: str | None = None
+        """Why the last poll of the notifications failed, warned of once while it lasts."""
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
@@ -212,7 +215,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed is
         kept for `collect`, to fetch just those, and asks for a refresh until it has."""
         ctx, graph = req.ctx, req.graph
-        changed = self._branches_moved(ctx, graph) | self._notified(ctx)
+        # Polled first: anything it raises leaves the branches' tips to be compared next time.
+        notified = self._notified(ctx)
+        changed = self._branches_moved(ctx, graph) | notified
         # Pending until `collect` fetches them: what's seen in the check core makes right
         # after a refresh (whose answer it ignores) still asks for a refresh at the next one.
         pending = self._note_changed(ctx, changed)
@@ -234,25 +239,24 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         comment, a review), newer than the last look. A CI run names only its repo, so it stands
         for my open PRs there; what no search shows (an issue, a release, an alert) for nothing;
         and anything else for `EVERYTHING`. A "not modified" answer is cheap, and GitHub's poll
-        interval is kept to. A poll that fails finds nothing, warning once per new reason, and
-        is tried again after the default interval."""
+        interval is kept to. A poll that fails finds nothing, warning once while the same reason
+        lasts, and is tried again after the default interval."""
         wait = ctx.kv.get(NOTIFICATIONS_WAIT)
         if wait and ctx.now < datetime.fromisoformat(wait):
             return set()
         seen = ctx.kv.get(NOTIFICATIONS_SEEN)
         try:
             found = notifications.fetch(ctx.config.host, seen)
-        except (CommandError, KeyError, ValueError) as e:
-            # A token that can't read notifications (a fine-grained one can't) or a blip: the
-            # branch moves found with it still count.
-            if ctx.kv.get(NOTIFICATIONS_FAILED) != str(e):
+        except (CommandError, subprocess.SubprocessError, OSError, KeyError, ValueError) as e:
+            # A token that can't read notifications (a fine-grained one can't), `gh` hanging
+            # or a blip: the branch moves found with it still count.
+            if self._poll_failed != str(e):
                 ctx.log.warning("can't read GitHub notifications: %s", e)
-                ctx.kv.set(NOTIFICATIONS_FAILED, str(e))
+                self._poll_failed = str(e)
             retry = ctx.now + timedelta(seconds=notifications.DEFAULT_POLL_SECONDS)
             ctx.kv.set(NOTIFICATIONS_WAIT, retry.isoformat())
             return set()
-        if ctx.kv.get(NOTIFICATIONS_FAILED) is not None:
-            ctx.kv.delete(NOTIFICATIONS_FAILED)
+        self._poll_failed = None
         if found is None:
             return set()
         ctx.kv.set(NOTIFICATIONS_SEEN, found.last_modified)

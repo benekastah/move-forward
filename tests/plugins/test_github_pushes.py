@@ -1,5 +1,7 @@
 """github telling that a branch of one of my PRs moved, from git's branches in the graph."""
 
+import subprocess
+
 import pytest
 from conftest import NOW, local_branch, local_snapshot, pr, snapshot, stored
 
@@ -49,11 +51,18 @@ def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
     )
 
 
+@pytest.mark.parametrize(
+    "failure",
+    [
+        CommandError("gh api: HTTP 403: Resource not accessible by personal access token"),
+        subprocess.TimeoutExpired(["gh", "api"], 120),
+    ],
+)
 def test_a_push_counts_when_the_notifications_cant_be_read(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, failure: Exception
 ) -> None:
     def refused(host: str, if_modified_since: str | None) -> None:
-        raise CommandError("gh api: HTTP 403: Resource not accessible by personal access token")
+        raise failure
 
     monkeypatch.setattr(notifications, "fetch", refused)
     mine = pr(1)
