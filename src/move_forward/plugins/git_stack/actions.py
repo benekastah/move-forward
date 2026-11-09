@@ -184,7 +184,8 @@ def untrack(req: ActionRequest[GitStackConfig]) -> str:
 
 
 def untracked(found: _Report) -> str:
-    """What an untrack that failed had done first; nothing when it had untracked nothing."""
+    """What an untrack that failed had done first in its repo (earlier repos' aren't said);
+    nothing when it had untracked nothing."""
     return untracked_words(found.untracked) if found.untracked else ""
 
 

@@ -611,3 +611,18 @@ def test_no_pr_is_said_only_of_a_branch_without_one_open_or_merged() -> None:
         "me/APP-3-branch: needs-restack",
         "me/gone: merged",
     ]
+
+
+def test_a_merged_branch_links_its_merged_pr_even_with_an_open_one_of_its_name() -> None:
+    merged = pr(3, state="MERGED")
+    reopened = pr(4, head=merged.head)  # the branch name used again
+    built = dashboard(
+        github=snapshot(mine=[reopened], merged_recent=[merged]),
+        local=local_snapshot(branches=[local_branch("main"), local_branch(merged.head)]),
+        stacks=stacks(
+            StackBranch(name="main"), StackBranch(name=merged.head, parent="main", status="merged")
+        ),
+    )
+    [item] = panel(built, "git_stack.stacks").items
+    assert item.url == merged.url
+    assert Ref(kind="pull_request", id=reopened.url) not in item.subjects
