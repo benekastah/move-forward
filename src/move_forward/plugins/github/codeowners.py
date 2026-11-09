@@ -2,10 +2,10 @@
 
 Follows GitHub's rules: the last matching line wins, patterns behave like .gitignore
 (a leading or inner `/` anchors to the repo root, `*` stays within a path segment, `**` as
-a whole segment crosses segments, a `**/` one matching no directory too, and is a `*`
-inside one), and a pattern that names a directory owns everything below it, but one ending
-in a bare `*`, which GitHub reads as what's directly there: `docs/*` owns `docs/a.md`, not
-`docs/sub/b.md`.
+a whole segment crosses segments (and a `**/` one also matches no directory), while a `**`
+within a segment, like `foo**`, is just a `*`), and a pattern that names a directory owns
+everything below it, but one ending in a bare `*`, which GitHub reads as what's directly
+there: `docs/*` owns `docs/a.md`, not `docs/sub/b.md`.
 """
 
 import re
@@ -38,7 +38,8 @@ def _glob_to_regex(pattern: str) -> str:
             i += 3
             continue
         if pattern.startswith("**", i):
-            whole = (i == 0 or pattern[i - 1] == "/") and pattern[i + 2 : i + 3] in ("", "/")
+            # A whole last segment (`docs/**`, or `**` alone); a `**/` one was taken above.
+            whole = (i == 0 or pattern[i - 1] == "/") and i + 2 == len(pattern)
             out.append(".*" if whole else "[^/]*")
             i += 2
             continue
