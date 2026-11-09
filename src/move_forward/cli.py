@@ -447,9 +447,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         buttons = snooze.snooze_buttons(build_dashboard(config, db, now), ref, args.task)
         if not buttons:
-            again = f"mfd unsnooze {ref.id} --kind {ref.kind}" + (
-                f" --task {args.task}" if args.task else ""
-            )
+            # Double-quoted where it has a space (an entry's id is its title): what cmd,
+            # PowerShell and POSIX shells all read as one word.
+            words = ["mfd", "unsnooze", ref.id, "--kind", ref.kind]
+            words += ["--task", args.task] if args.task else []
+            again = " ".join(f'"{w}"' if " " in w else w for w in words)
             print(
                 f"nothing about {ref.id} is shown with a Snooze button: it may be snoozed or"
                 f" dismissed already (`{again}` first), or not shown at all",

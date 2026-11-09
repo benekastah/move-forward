@@ -142,20 +142,24 @@ def test_mfd_snooze_takes_any_entity_and_refuses_one_it_cannot_snooze(
     config = tmp_path / "config.toml"
     db_path = tmp_path / "dashboard.db"
     config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
-    assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
+    assert cli.main(["-c", str(config), "notes", "add-entry", "Home chores"]) == 0
     assert (
-        cli.main(["-c", str(config), "notes", "todo", "add", "Chores", "sweep", "--size", "quick"])
+        cli.main(
+            ["-c", str(config), "notes", "todo", "add", "Home chores", "sweep", "--size", "quick"]
+        )
         == 0
     )
     capsys.readouterr()
-    assert cli.main(["-c", str(config), "snooze", "Chores", "2d"]) == 0
+    assert cli.main(["-c", str(config), "snooze", "Home chores", "2d"]) == 0
     assert "snoozed 1 item(s) until " in capsys.readouterr().out
     [(kind, id, _)] = FeedbackRepository(Database(db_path)).all()
-    assert (kind, id) == ("notes.entry", "Chores")
-    assert cli.main(["-c", str(config), "snooze", "Chores"]) == 1  # snoozed: no Snooze button
-    assert "nothing about Chores" in capsys.readouterr().err
+    assert (kind, id) == ("notes.entry", "Home chores")
+    assert cli.main(["-c", str(config), "snooze", "Home chores"]) == 1  # snoozed: no Snooze button
+    said = capsys.readouterr().err
+    assert "nothing about Home chores" in said
+    assert '`mfd unsnooze "Home chores" --kind notes.entry` first' in said  # one word to a shell
     assert cli.main(["-c", str(config), "snooze", "Nothing"]) == 1
-    assert cli.main(["-c", str(config), "snooze", "Chores", "1w"]) == 1
+    assert cli.main(["-c", str(config), "snooze", "Home chores", "1w"]) == 1
 
 
 def test_a_snooze_ends_at_the_configured_local_hour_of_its_last_day() -> None:
