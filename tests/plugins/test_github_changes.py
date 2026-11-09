@@ -181,6 +181,10 @@ def test_a_review_asked_of_a_draft_is_said_once_it_is_ready_and_asked_of_me_afte
     # asked of me, then of my team too: nothing new
     me_then_both = snapshot(direct_requests=[asked], team_requests=[asked])
     assert _kinds(snapshot(direct_requests=[asked]), me_then_both) == []
+    both = pr(10, author="alice")
+    assert _kinds(snapshot(), snapshot(direct_requests=[both], team_requests=[both])) == [
+        ("review_requested_me", "review requested of you")
+    ]
 
 
 def test_new_commits_and_the_authors_comments_on_a_reviewed_pr_are_said() -> None:

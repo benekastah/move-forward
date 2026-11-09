@@ -185,7 +185,7 @@ notification unless a review, check, or commit changed.
 | `merge_queue_removed` | my PR leaves the queue without merging, with GitHub's reason |
 | `thread_reply` | a review thread on my PR, or one I reviewed, gains comments |
 | `review_requested_me` | a review is requested of me, including asked again, after my team was, or while a draft once it's ready |
-| `review_requested_team` | a review is requested of my team (while a draft: once it's ready), unless I was asked already |
+| `review_requested_team` | a review is requested of my team (while a draft: once it's ready), unless I'm asked too |
 | `new_push` | new commits on a PR I reviewed |
 | `author_replied` | the author comments on a PR I reviewed |
 
