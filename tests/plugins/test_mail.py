@@ -24,7 +24,7 @@ from move_forward.plugin import (
 from move_forward.plugins.mail import client
 from move_forward.plugins.mail.config import GMAIL_MESSAGE_URL, Mailbox, MailConfig
 from move_forward.plugins.mail.kinds import THREAD
-from move_forward.plugins.mail.models import MailSnapshot, Message
+from move_forward.plugins.mail.models import MAX_SUBJECT, MailSnapshot, Message
 from move_forward.plugins.mail.panels import message_url, says
 from move_forward.plugins.mail.panels import panels as mail_panels
 from move_forward.plugins.mail.plugin import MailPlugin, merged
@@ -89,6 +89,14 @@ def test_a_message_is_read_from_its_headers() -> None:
         verified=False,
         date=datetime(2026, 11, 7, 18, tzinfo=UTC),
     )
+
+
+def test_what_a_sender_writes_badly_is_read_as_little_as_it_can_be() -> None:
+    meta = b"1 (UID 7 FLAGS ())"
+    found = client.message(meta, headers(sender=", :", subject="x" * 400), {ME})
+    assert found is not None and (found.sender_name, found.sender_email) == ("someone", None)
+    assert len(found.subject) == MAX_SUBJECT and found.subject.endswith("…")
+    assert client.message(b"1 (FLAGS ())", headers(), {ME}) is None  # no UID to keep it by
 
 
 def test_its_date_is_the_servers_not_what_the_sender_says() -> None:
@@ -417,6 +425,19 @@ def test_collect_reads_headers_only_without_marking_anything_read(
     assert server.calls[-1] == ("logout",)
 
 
+def test_the_newest_are_kept_however_the_server_orders_its_search(
+    imap: Callable[..., FakeImap],
+) -> None:
+    imap(  # IMAP doesn't promise SEARCH answers in UID order
+        [
+            (6, "", headers(subject="Newer", message_id="new@acme.com")),
+            (5, "", headers(subject="Older", message_id="old@acme.com")),
+        ]
+    )
+    snapshot = client.collect(_mailbox(max_messages=1), ME, NOW)
+    assert [m.subject for m in snapshot.messages] == ["Newer"]
+
+
 def test_a_refused_sign_in_says_what_to_do(imap: Callable[..., FakeImap]) -> None:
     imap([], refuse=True)
     with pytest.raises(SourceError, match="app password"):
@@ -724,6 +745,16 @@ def test_mail_answering_mine_replies_to_me(imap: Callable[..., FakeImap]) -> Non
     assert ("select", '"Sent Items"', True) in server.calls  # read-only, found by its \\Sent
 
 
+def test_my_newest_sent_mail_is_read_however_the_server_orders_its_search(
+    imap: Callable[..., FakeImap], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(client, "SENT_CAP", 1)
+    server = imap([(1, "", headers(message_id="r1@acme.com", references="<mine@me>"))])
+    server.sent = {11: "mine@me", 10: "old@me"}  # answered out of UID order
+    [found] = client.collect(_mailbox(), ME, NOW).messages
+    assert found.replies_to_me
+
+
 def test_a_reply_to_me_is_important() -> None:
     harness = mailbox(message(2, subject="New", thread="n"), message(1, replies_to_me=True))
     items = {i.title: i for i in _items(harness)}
@@ -854,12 +885,16 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
     server.aside = {1}
     found = {m.message_id: m.bulk for m in client.collect(_mailbox(), ME, NOW).messages}
     assert found == {"sale@shop": True, "hi@friend": False}
-    # A reply to me filed under Promotions is still a person writing to me.
-    misfiled = imap([(1, "", headers(message_id="r@contractor", extra="In-Reply-To: <mine@me>"))])
-    misfiled.capabilities = ("IMAP4REV1", client.GMAIL)
-    misfiled.aside, misfiled.sent = {1}, {10: "mine@me"}
-    [reply] = client.collect(_mailbox(), ME, NOW).messages
-    assert reply.replies_to_me and not reply.bulk
+    # A reply to me filed under Promotions is still a person writing to me, verified; one who
+    # isn't verified could name my Message-ID to escape it, and is put aside.
+    vouched = "Authentication-Results: mx.google.com; dmarc=pass header.from=acme.com"
+    for extra, aside in ((vouched, False), ("", True)):
+        raw = headers(message_id="r@contractor", extra=f"In-Reply-To: <mine@me>\r\n{extra}")
+        misfiled = imap([(1, "", raw)])
+        misfiled.capabilities = ("IMAP4REV1", client.GMAIL)
+        misfiled.aside, misfiled.sent = {1}, {10: "mine@me"}
+        [reply] = client.collect(_mailbox(), ME, NOW).messages
+        assert (reply.replies_to_me, reply.bulk) == (True, aside)
     # Nor is someone I know, verified; one who isn't verified is put aside.
     for verified, aside in ((True, False), (False, True)):
         results = "Authentication-Results: mx.google.com; dmarc=pass header.from=friend.com"
@@ -1120,6 +1155,14 @@ def test_two_mailboxes_keep_their_messages_apart_and_say_whose_they_are() -> Non
     assert identity is not None and identity.login == "me@gmail.com, me@work.example"
 
 
+def test_an_unverified_message_in_two_mailboxes_is_one_conversation_counted_once() -> None:
+    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    copies = [message(1, account=a, verified=False) for a in ("home", "work")]
+    harness.store(MailSnapshot(messages=[*copies, message(2, account="work", verified=False)]))
+    [item] = _items(harness)
+    assert "2 unread" in item.badges and "3 unread" not in item.badges
+
+
 def test_a_mailbox_changing_refreshes_it(monkeypatch: pytest.MonkeyPatch) -> None:
     counts = {"home": "1", "work": "1"}
 
@@ -1227,3 +1270,43 @@ def test_an_account_on_mails_own_host_keeps_mails_auth_servers() -> None:
     assert [m.trusted_auth_servers() for m in config.mailboxes()] == [{"mx.example.com"}] * 2
     cased = config.model_copy(update={"host": "IMAP.Example.com"})
     assert [m.trusted_auth_servers() for m in cased.mailboxes()] == [{"mx.example.com"}] * 2
+
+
+def test_gmails_own_labels_make_a_thread_about_nothing() -> None:
+    harness = mailbox(
+        message(1, subject="Hello", thread="a", labels=["\\Inbox", "\\Starred"]),
+        message(2, subject="Hi", thread="b", labels=["\\Inbox", "\\Starred"]),
+    )
+    harness.with_entities(
+        [Entity(ref=Ref(kind="notes.todo", id="8"), title="clear the #inbox, #starred too")]
+    )
+    items = _items(harness)
+    assert len(items) == 2  # each has #inbox, as does the other and the todo
+    assert not any(d.startswith("about") for item in items for d in item.details)
+    assert all(item.signals is not None and item.signals.importance == 0 for item in items)
+
+
+def test_a_label_of_mine_or_the_subject_names_what_others_carry() -> None:
+    todo = Entity(ref=Ref(kind="notes.todo", id="7"), title="take the #garbage-day bins out")
+    labelled = mailbox(message(1, subject="Hello", labels=["\\Inbox", "Garbage Day"]))
+    labelled.with_entities([todo])
+    named = mailbox(message(1, subject="Garbage day moved", labels=["Garbage Day"]))
+    named.with_entities([todo])
+    for harness in (labelled, named):
+        [item] = _items(harness)
+        assert "about #garbage-day" in item.details
+
+
+def test_an_unverified_reply_to_my_mail_lifts_nothing() -> None:
+    harness = mailbox(message(1, replies_to_me=True, verified=False))
+    [item] = _items(harness)
+    assert "replies to me" not in item.badges
+    assert item.signals is not None and item.signals.importance == 0
+
+
+def test_a_message_id_shaped_like_one_given_to_mail_without_one_is_ignored(
+    imap: Callable[..., FakeImap],
+) -> None:
+    imap([(4, "", headers(message_id="uid:5", references="<uid:5>"))])
+    [found] = client.collect(_mailbox(), ME, NOW).messages
+    assert (found.message_id, found.thread) == (None, "uid:4")
