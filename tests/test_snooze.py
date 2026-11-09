@@ -164,6 +164,10 @@ def test_a_local_time_on_a_day_takes_that_days_offset_through_a_gap_and_a_fold(
     assert localtime.at(date(2026, 11, 1), dt_time(1, 30)).astimezone(UTC) == datetime(
         2026, 11, 1, 5, 30, tzinfo=UTC
     )
+    ends = ActNowConfig(snooze_until_hour=9).snooze_until(
+        "pull_request", datetime(2026, 10, 31, 16, tzinfo=UTC)
+    )
+    assert ends.astimezone(UTC) == datetime(2026, 11, 1, 14, tzinfo=UTC)  # a snooze across it
     # 02:30 doesn't happen on the day they go forward: read as an hour on, not refused.
     assert localtime.at(date(2026, 3, 8), dt_time(2, 30)).astimezone(UTC) == datetime(
         2026, 3, 8, 7, 30, tzinfo=UTC
