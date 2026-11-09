@@ -378,4 +378,4 @@ def test_a_tag_written_and_labelled_is_written() -> None:
 
 
 def test_a_plugin_names_a_tag_as_core_does() -> None:
-    assert api_handle("Garbage Day") == tags.handle("Garbage Day") == "garbage-day"
+    assert api_handle is tags.handle

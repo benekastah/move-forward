@@ -2,6 +2,7 @@
 
 import ast
 import importlib
+import tomllib
 from pathlib import Path
 
 import move_forward
@@ -62,3 +63,12 @@ def test_plugins_import_core_only_through_the_api() -> None:
                     and not a.name.startswith(("move_forward.api", "move_forward.plugins"))
                 ]
     assert reached == []
+
+
+def test_ruff_bans_every_core_module_in_plugins() -> None:
+    """So a plugin importing core's own modules fails `ruff check` as I write it."""
+    pyproject = PACKAGE.parents[1] / "pyproject.toml"
+    lint = tomllib.loads(pyproject.read_text(encoding="utf-8"))["tool"]["ruff"]["lint"]
+    banned = set(lint["flake8-tidy-imports"]["banned-api"])
+    core = {f"move_forward.{f.stem}" for f in PACKAGE.glob("*.py") if f.stem != "__init__"}
+    assert core - banned == set()

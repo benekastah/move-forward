@@ -72,7 +72,7 @@ catch up.
   `person` entities with the same email. A publisher may set `Person.contact_type`, and point
   an entity at its person: core ranks and badges items about them.
 - **Imports.** Core is `move_forward.api` (with `api.html`, `api.shell`, `api.http`,
-  `api.localtime`, `api.keychain`, `api.kinds` and `api.ids`) and nothing else.
+  `api.localtime`, `api.keychain`, `api.kinds`, `api.ids` and `api.tags`) and nothing else.
 - **Hooks take one request object** (`PanelsRequest(ctx, snapshot, graph)` and so on).
   `ItemActionsRequest` says whose item it is and where it's shown; `ActionRequest` reads a
   required field with `req.field(name)`.
