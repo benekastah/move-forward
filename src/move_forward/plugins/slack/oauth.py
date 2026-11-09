@@ -100,7 +100,8 @@ class Connection(Model):
     """When the access token runs out; None for one that doesn't (no rotation)."""
     own_entry: bool = False
     """Its access token is under `app_service`; a connection made before that kept it under
-    `keychain_service`, where it stays, read and revoked there, until its next refresh."""
+    `keychain_service`, where it's read and revoked until a refresh stores the new one under
+    `app_service` (and deletes the spent one). One whose token doesn't run out stays so."""
 
 
 def app_service(config: SlackConfig) -> str:
@@ -298,16 +299,18 @@ def _app_service(ctx: Context[SlackConfig], found: Connection) -> str:
 def _lose(ctx: Context[SlackConfig], why: str) -> None:
     """Forget the connection, keeping why for slack's page. Its tokens are deleted if the
     secret store lets them be: they're of no use now either way."""
+    found = connection(ctx)  # before it's gone: where an old one's token is depends on it
     ctx.kv.delete(CONNECTION)
     ctx.kv.set(LOST, why)
     with contextlib.suppress(CommandError, OSError):
-        forget(ctx)
+        forget(ctx, found)
 
 
-def forget(ctx: Context[SlackConfig]) -> None:
+def forget(ctx: Context[SlackConfig], found: Connection | None = None) -> None:
     """Drop the connection and its tokens from the secret store; a token stored by hand
-    stays (but a connection made before the app had its own entry kept its token there)."""
-    found = connection(ctx)
+    stays (but a connection made before the app had its own entry kept its token there).
+    `found` is the connection, when the caller has forgotten it already."""
+    found = found or connection(ctx)
     ctx.kv.delete(CONNECTION)
     keychain.delete(_app_service(ctx, found) if found else app_service(ctx.config), ctx.email)
     keychain.delete(refresh_service(ctx.config), ctx.email)

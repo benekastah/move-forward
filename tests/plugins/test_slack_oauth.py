@@ -327,3 +327,13 @@ def test_an_app_token_that_cant_be_read_never_takes_one_given_by_hand(
     oauth.disconnect(_ctx(db))
     assert slack.asked == []  # nothing of the app's to revoke; the hand one isn't it
     assert secrets.stored == {SERVICE: "xoxb-by-hand"}
+
+
+def test_an_old_connection_lost_on_refresh_leaves_no_token_behind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secrets, slack, db = _connected(monkeypatch)
+    _old_style(db, secrets)
+    slack.answers.append(client.SlackError("oauth.v2.access", "invalid_refresh_token"))
+    assert oauth.token(_ctx(db, 24 * 60)) is None
+    assert secrets.stored == {}  # not its dead token, posing as one given by hand
