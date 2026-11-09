@@ -1,4 +1,4 @@
-"""Running external commands (git, gh, security)."""
+"""Running external commands (git, gh, security), and finding a git checkout's repository."""
 
 import subprocess
 import threading
@@ -70,3 +70,24 @@ def run(
 def git(repo: Path, *args: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> str:
     """Run `git -C <repo> <args>` and return its stdout."""
     return run(["git", "-C", str(repo), *args], timeout=timeout)
+
+
+def git_common_dir(repo: Path) -> Path | None:
+    """The directory holding a checkout's refs and config: its `.git`, or for a linked
+    worktree (whose `.git` is a file naming its own git directory) the main repository's.
+    None when `repo` isn't a checkout. Read from the files, without running git."""
+    dot = repo / ".git"
+    if dot.is_dir():
+        return dot
+    if not dot.is_file():
+        return None
+    text = dot.read_text(encoding="utf-8").strip()
+    if not text.startswith("gitdir:"):
+        return None
+    own = (repo / text.removeprefix("gitdir:").strip()).resolve()
+    commondir = own / "commondir"
+    return (
+        (own / commondir.read_text(encoding="utf-8").strip()).resolve()
+        if commondir.is_file()
+        else own
+    )

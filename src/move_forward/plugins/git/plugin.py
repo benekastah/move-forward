@@ -28,7 +28,7 @@ from ...api import (
     StoreRequest,
     attrs,
 )
-from ...api.shell import CommandError
+from ...api.shell import CommandError, git_common_dir
 from . import actions, changes, client, events, watch
 from .config import GitConfig
 from .kinds import BranchAttrs, RepoAttrs
@@ -154,7 +154,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         assert self._watcher is not None
         worktrees: dict[Path, Path] = {}
         for repo in snapshot.repos:
-            if (common := changes.common_dir(Path(repo.dir))) is None:
+            if (common := git_common_dir(Path(repo.dir))) is None:
                 continue
             self._ids[common.resolve()] = str(common)
             for wt in repo.worktrees:
@@ -176,7 +176,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         moved = {self._ids[c] for c in moved_now if c in self._ids}
 
         before = ctx.kv.get_json(FINGERPRINTS, dict[str, str])
-        polled = [repo for repo in ctx.config.repos if str(changes.common_dir(repo)) not in watched]
+        polled = [repo for repo in ctx.config.repos if str(git_common_dir(repo)) not in watched]
         now = changes.fingerprints(polled)
         now.update({k: v for k, v in (before or {}).items() if k in watched})
         if now != before:
@@ -217,7 +217,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 except CommandError:  # gone since; the next read finds out
                     continue
                 if status != (wt.modified, wt.untracked):
-                    found.add(str(changes.common_dir(Path(repo.dir))))
+                    found.add(str(git_common_dir(Path(repo.dir))))
         return found
 
     def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:

@@ -25,7 +25,7 @@ from move_forward.plugins.git.models import LocalRepo
 from move_forward.plugins.git.plugin import LAST_FULL, MOVED, GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.repositories import KvRepository
-from move_forward.shell import CommandError, git
+from move_forward.shell import CommandError, git, git_common_dir
 
 
 def _repo(path: Path) -> Path:
@@ -70,9 +70,7 @@ def test_commits_checkouts_branches_and_config_change_the_fingerprint_but_status
 def test_a_worktree_is_watched_through_its_main_repository(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r")
     git(repo, "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "other")
-    assert changes.common_dir(tmp_path / "wt") == changes.common_dir(repo)
     assert changes.fingerprint([repo, tmp_path / "wt"]) == changes.fingerprint([repo])
-    assert changes.common_dir(tmp_path) is None  # not a checkout
 
 
 def test_the_plugin_says_changed_after_a_move_until_a_refresh_reads_it(tmp_path: Path) -> None:
@@ -170,7 +168,7 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
     assert not plugin.changed(ChangedRequest(ctx(10), Graph([])))  # status_seconds not up yet
     assert not plugin.changed(ChangedRequest(ctx(40, status_seconds=0), Graph([])))  # off
     assert plugin.changed(ChangedRequest(ctx(40), Graph([])))
-    assert KvRepository(db, "git").get(MOVED) == json.dumps([str(changes.common_dir(repo))])
+    assert KvRepository(db, "git").get(MOVED) == json.dumps([str(git_common_dir(repo))])
     plugin.store(
         StoreRequest(ctx(40), plugin.collect(CollectRequest(ctx(40))))
     )  # reads it, untracked file and all
