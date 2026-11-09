@@ -1,6 +1,9 @@
+import sys
+import time
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 import pytest
 from conftest import NOW, pr, snapshot, stored
@@ -128,3 +131,28 @@ def test_unsnooze_from_a_stale_page_leaves_a_pin_made_since() -> None:
     fields = {"kind": key[0], "id": key[1], "task": key[2], "fingerprint": "f"}
     assert refresh.run_action(config, db, "act_now/unsnooze", fields) == "back"
     assert feedback.all()[key].action == "pin"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no time.tzset to set the zone")
+def test_a_snooze_across_a_clock_change_ends_at_its_hour_in_the_systems_zone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(localtime, "zone", None)  # the system's, as `mfd serve` runs
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    try:
+        before = datetime(2026, 10, 31, 16, tzinfo=UTC)  # Saturday, summer time
+        ends = ActNowConfig(snooze_until_hour=9).snooze_until("pull_request", before)
+        assert ends == datetime(2026, 11, 1, 14, tzinfo=UTC)  # 09:00 EST, the day it ends
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+
+
+def test_a_snooze_across_a_clock_change_ends_at_its_hour_in_a_set_zone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(localtime, "zone", ZoneInfo("America/New_York"))
+    before = datetime(2026, 10, 31, 16, tzinfo=UTC)
+    ends = ActNowConfig(snooze_until_hour=9).snooze_until("pull_request", before)
+    assert ends == datetime(2026, 11, 1, 14, tzinfo=UTC)

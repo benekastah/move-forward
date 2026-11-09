@@ -10,7 +10,7 @@ from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
 from move_forward.page import Badge, Item, ItemAdditions, Panel
-from move_forward.plugin import ActionError
+from move_forward.plugin import ActionError, SourceError
 from move_forward.registry import enabled
 from move_forward.repositories import TagRepository
 
@@ -250,6 +250,23 @@ def test_tags_on_gone_entities_are_forgotten_and_finished_work_keeps_them() -> N
     notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
     assert "tags: took my tags off 1 entity(ies) that are gone" in notices
     assert repo.all() == {merged: ["chores"]}
+
+
+def test_a_failing_fetch_in_cores_clean_up_leaves_the_rest_of_it_to_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, db = stored(github=snapshot(mine=[pr(1)]))
+    gone = Ref(kind="notes.entry", id="Chores")
+    TagRepository(db).add(gone, "chores", NOW)
+
+    def failing(repo: object, graph: object) -> int:
+        raise SourceError("the token can't fetch")
+
+    monkeypatch.setattr(refresh.priority, "forget_finished", failing)
+    plugins = enabled(config, db, NOW)
+    graph, _ = refresh.stored_graph(db, plugins)
+    notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
+    assert "tags: took my tags off 1 entity(ies) that are gone" in notices
 
 
 def test_untag_takes_the_tag_however_its_written() -> None:
