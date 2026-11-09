@@ -7,7 +7,7 @@ import pytest
 from conftest import section
 from pydantic.fields import FieldInfo
 
-from move_forward import asking, cli, config, init, registry
+from move_forward import asking, cli, config, init, keychain, registry
 from move_forward.plugin import Plugin
 from move_forward.plugins.git import setup as git_setup
 from move_forward.plugins.git.config import GitConfig
@@ -15,6 +15,7 @@ from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.github import setup as github_setup
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.shell import git
 
@@ -123,6 +124,11 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
         "a": "#team-a"
     }
     assert loaded.email == "jane@other.com"
+    # Each token chosen is named, or its plugin says what to do instead.
+    assert "For Jira: `mfd token set jira` (or export JIRA_API_TOKEN) stores its token" in message
+    assert message.endswith(
+        "For Slack: `mfd token set slack` (or export SLACK_API_TOKEN) stores its token"
+    )
     assert section(loaded, "git", GitConfig).repos == [tmp_path / "x", tmp_path / "y"]
     assert section(loaded, "slack", SlackConfig).workspace_url == "https://o.slack.com"
     assert section(loaded, "git", GitConfig).my_branch_prefixes == ["jane/"] and loaded.port == 9000
@@ -461,3 +467,38 @@ def _check_uncommented(plugin: Plugin[Any, Any], section: list[str]) -> None:
         [*kept, *(line for line in instead if line.startswith("[") or _KEY.match(line))]
     )
     plugin.config_model.model_validate(tomllib.loads(text)[plugin.name])
+
+
+def test_a_plugins_token_help_is_its_next_step(
+    tmp_path: Path, no_machine_guesses: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(JiraPlugin, "token_help", "make one at https://id.example/tokens")
+    message = init.init(
+        tmp_path / "config.toml",
+        scripted({"Plugins": "jira", "Jira site": "https://o.atlassian.net"}),
+        cwd=tmp_path,
+    )
+    assert message.endswith("For Jira: make one at https://id.example/tokens")
+
+
+def test_a_plugin_with_several_tokens_names_them_on_one_line(
+    tmp_path: Path, no_machine_guesses: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def tokens(self: JiraPlugin, config: JiraConfig) -> dict[str, keychain.TokenSettings]:
+        return {"home": _Token("A_TOKEN", "a"), "work": _Token("B_TOKEN", "b")}
+
+    monkeypatch.setattr(JiraPlugin, "tokens", tokens)
+    message = init.init(
+        tmp_path / "config.toml",
+        scripted({"Plugins": "jira", "Jira site": "https://o.atlassian.net"}),
+        cwd=tmp_path,
+    )
+    assert message.endswith(
+        "For Jira: `mfd token set jira.home` (or export A_TOKEN) and `mfd token set jira.work`"
+        " (or export B_TOKEN) store its tokens"
+    )
+
+
+class _Token:
+    def __init__(self, env: str, service: str) -> None:
+        self.token_env, self.keychain_service = env, service

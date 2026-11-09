@@ -19,7 +19,6 @@ from . import config as config_module
 from .asking import Asker, Complete, InitSetup, Prompt, choices, quiet
 from .config import Config
 from .plugin import Plugin
-from .plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV
 
 OPTIONAL_SETTINGS = """\
 # Optional settings, with their defaults. Uncomment to change.
@@ -202,10 +201,19 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     next_steps = f"wrote {path}\nrun `mfd serve --open` to start"
-    if "\n[jira]\n" in text:
-        next_steps += (
-            "\n\nFor Jira, create an API token at"
-            " https://id.atlassian.com/manage-profile/security/api-tokens, then store it"
-            f" with `mfd token set jira` (or export {DEFAULT_JIRA_TOKEN_ENV})"
+    config = Config.model_validate(tomllib.loads(text))
+    for plugin in registry.PLUGINS:
+        section = config.section(plugin.name)
+        if section is None or not (tokens := plugin.tokens(section)):
+            continue
+        names = [f"{plugin.name}.{a}" if a else plugin.name for a in tokens]
+        stores = " and ".join(
+            f"`mfd token set {name}` (or export {t.token_env})"
+            for name, t in zip(names, tokens.values(), strict=True)
         )
+        if plugin.token_help:
+            next_steps += f"\n\nFor {plugin.title}: {plugin.token_help}"
+        else:
+            verb = "stores its token" if len(names) == 1 else "store its tokens"
+            next_steps += f"\n\nFor {plugin.title}: {stores} {verb}"
     return next_steps

@@ -15,6 +15,11 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
+- **Settings a plugin locks**: `Plugin.locked_settings` names the settings the settings page
+  shows but won't change (a site, a host), and a section's `token_env` and
+  `keychain_service` are locked without naming them (other settings a token's place is read
+  from or built from, the plugin names). `Plugin.token_help` is `mfd init`'s next
+  step for its token (where to get one, another way to sign in).
 - **Names and loads**: a plugin named for a prefix of one of core's tables or indexes (`team`
   of `team_channels`) is refused, and a plugin's migration may not touch another plugin's
   tables whose name starts with its own (`git_stack_` for `git`). Core holds the database

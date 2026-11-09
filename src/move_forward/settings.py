@@ -11,7 +11,8 @@ kinds a form can hold (numbers, true or false, text, lists); tables such as
 `[github.teams]` stay for editing by hand. `db_path`, `port` and `https` are shown but not
 changed here: changing them moves the server. Nor are the settings that choose where a
 credential is sent or which one is read, where items link, whom mail trusts, or what runs
-where (see `SECRET_LOCKED`): the page is reached with the dashboard's cookie, and a page that
+where (see `SECRET_LOCKED`, a plugin's `locked_settings`, and its token's `token_env` and
+`keychain_service`): the page is reached with the dashboard's cookie, and a page that
 could point the Jira site, say, at another server could send it the API token.
 """
 
@@ -21,13 +22,14 @@ import tempfile
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal, cast, get_args, get_origin
+from typing import Any, Literal, cast, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 from pydantic_core import PydanticUndefined
 
 from . import registry, render, tomledit
 from .config import Config
+from .plugin import Plugin
 
 PATH = "/settings"
 Kind = Literal["int", "float", "bool", "text", "list"]
@@ -41,11 +43,14 @@ SECRET_LOCKED: dict[str | None, set[str]] = {
     "slack": {"client_id", "workspace_url", "token_env", "keychain_service"},
     "git": {"repos", "github_hosts"},
 }
-"""Settings, by section, only the file changes: where a credential goes (a host, a site, a
+"""Settings of core's and the built-in plugins, by section, only the file changes (a plugin
+of its own says which of its are, `Plugin.locked_settings`): where a credential goes (a host, a site, a
 client id, the account a token is keyed by) or comes from (an environment variable, a
 keychain service), where items link with my login in the link (mail's `message_url`), whose
 word decides a sender is who they claim (mail's `auth_servers`, though a form can't hold it
 yet), and which checkouts `git` runs commands in."""
+TOKEN_KEYS = frozenset({"token_env", "keychain_service"})
+"""A plugin section's keys saying where its token is read from: locked whatever it says."""
 NOTIFICATIONS = "notifications"
 SUBSCRIBE = "subscribe"
 """`[notifications]`'s list of kinds, shown as a checkbox each."""
@@ -118,16 +123,29 @@ def _kind(annotation: object) -> Kind | None:
     return None
 
 
-def _fields(model: BaseModel, section: str | None, skip: set[str]) -> list[Setting]:
+def _fields(
+    model: BaseModel, section: str | None, skip: set[str], locked_keys: frozenset[str] = frozenset()
+) -> list[Setting]:
     found: list[Setting] = []
     for key, field in type(model).model_fields.items():
         if key in skip or (kind := _kind(field.annotation)) is None:
             continue
         help = " ".join((field.description or "").split())
-        locked = (section is None and key in LOCKED) or key in SECRET_LOCKED.get(section, set())
+        locked = (
+            (section is None and key in LOCKED)
+            or key in SECRET_LOCKED.get(section, set())
+            or key in locked_keys
+        )
         default = field.get_default(call_default_factory=True)
         found.append(Setting(section, key, kind, getattr(model, key), help, locked, default))
     return found
+
+
+def _locked_by(plugin: Plugin[Any, Any], section: BaseModel) -> frozenset[str]:
+    """A plugin section's keys only the file changes: those it names in `locked_settings`, and
+    `token_env` and `keychain_service` when it keeps a token. A plugin keeping its token's
+    settings under other names, or building them from other keys, names those."""
+    return plugin.locked_settings | (TOKEN_KEYS if plugin.tokens(section) else frozenset[str]())
 
 
 def settings(config: Config) -> list[Setting]:
@@ -144,7 +162,7 @@ def settings(config: Config) -> list[Setting]:
     for plugin in registry.PLUGINS:
         section = config.section(plugin.name)
         if section is not None:
-            found += _fields(section, plugin.name, set())
+            found += _fields(section, plugin.name, set(), _locked_by(plugin, section))
     return found
 
 
