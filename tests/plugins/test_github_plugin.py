@@ -38,7 +38,14 @@ from move_forward.plugins.github.models import (
     TimelineEvent,
 )
 from move_forward.plugins.github.people import PeopleRepository
-from move_forward.plugins.github.plugin import CHANGED, EVERYTHING, LAST_FULL, GitHubPlugin
+from move_forward.plugins.github.plugin import (
+    CHANGED,
+    EVERYTHING,
+    LAST_FULL,
+    GitHubPlugin,
+    pr_id_of,
+    wants_reviewer,
+)
 from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository
 from move_forward.plugins.github.tables import MIGRATIONS
 from move_forward.repositories import KvRepository
@@ -401,6 +408,28 @@ def test_a_refresh_of_one_pr_keeps_the_rest_of_its_lists(
     kept = PrRepository(db).load()
     assert kept is not None
     assert [(p.number, p.title) for p in kept.mine] == [(1, "Fixed it"), (2, pr(2).title)]
+
+
+def test_a_url_that_isnt_one_of_the_hosts_prs_isnt_fetched() -> None:
+    assert pr_id_of("github.com", pr(1).url) == client.PrId(repo="acme/widgets", number=1)
+    assert pr_id_of("github.com", "https://github.acme.com/a/b/pull/1") is None
+    assert pr_id_of("github.com", "https://github.com/a/b/issues/1") is None
+
+
+@pytest.mark.parametrize(
+    ("fields", "repos", "wanted"),
+    [
+        ({}, [], True),
+        ({"in_merge_queue": True}, [], False),
+        ({"is_draft": True}, [], False),
+        ({"is_draft": True}, ["ACME/widgets"], True),  # a draft may get its primary reviewer
+    ],
+)
+def test_reviewers_are_suggested_where_one_may_yet_be_picked(
+    fields: dict[str, object], repos: list[str], wanted: bool
+) -> None:
+    config = GitHubConfig(org="acme", primary_reviewer_repos=repos)
+    assert wants_reviewer(config, pr(1, **fields)) is wanted
 
 
 def test_refreshing_subjects_fetches_those_prs_into_their_lists(

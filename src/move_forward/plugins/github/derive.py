@@ -75,8 +75,10 @@ def suggest_reviewers(
     """People who recently committed to the PR's directories, by commit count.
 
     Only authors whose email is known (so they map to a GitHub login) are suggested;
-    `emails` are by login.
+    `emails` are by login. Logins in `exclude` are left out whatever their case, as GitHub's
+    ignore it.
     """
+    excluded = {login.lower() for login in exclude}
     dirs = sorted({str(PurePosixPath(path).parent) for path in files}) or ["."]
     if not repo.default_refs:
         return []
@@ -97,7 +99,7 @@ def suggest_reviewers(
     counts: Counter[str] = Counter()
     for email, count in by_email.items():
         login = login_by_email.get(email)
-        if login and login not in exclude:
+        if login and login.lower() not in excluded:
             counts[login] += count
     return [
         ReviewerSuggestion(login=login, commits=count)
@@ -115,9 +117,9 @@ def collect(
     required_owner_marker: str = "",
     wants_reviewer: Callable[[PullRequest], bool] = lambda pr: True,
 ) -> DerivedSnapshot:
-    """`teams` are slugs, as PRs' requested teams have them. Reviewers are suggested for my
-    PRs `wants_reviewer` says a reviewer may yet be picked for, each a `git log`. A checkout's repo is matched to a
-    PR's whatever case the remote names it in, as GitHub's names ignore case."""
+    """`teams` are slugs, as PRs' requested teams have them. Reviewers are suggested, a
+    `git log` each, for those of my PRs `wants_reviewer` picks. A checkout's repo is matched
+    to a PR's whatever case the remote names it in, as GitHub's names ignore case."""
     repos = {r.github_repo.lower(): r for r in checkouts}
     owners = {
         name: codeowners.load(Path(r.dir), required_owner_marker) for name, r in repos.items()

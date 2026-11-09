@@ -72,6 +72,8 @@ def test_suggest_reviewers_counts_recent_committers_with_known_logins(tmp_path: 
     }
     suggestions = derive.suggest_reviewers(local, ["api/new.py"], 30, emails, exclude={"me"})
     assert [(s.login, s.commits) for s in suggestions] == [("alice", 2), ("bob", 1)]
+    asked = derive.suggest_reviewers(local, ["api/new.py"], 30, emails, exclude={"Me", "BOB"})
+    assert [s.login for s in asked] == ["alice"]  # logins ignore case
 
 
 def test_a_checkout_scores_its_prs_whatever_case_its_remote_names_the_repo_in(

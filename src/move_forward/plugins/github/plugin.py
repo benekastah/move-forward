@@ -97,6 +97,13 @@ def pr_id_of(host: str, url: str) -> client.PrId | None:
     return client.PrId(repo=f"{path[0]}/{path[1]}", number=int(path[3]))
 
 
+def wants_reviewer(config: GitHubConfig, pr: PullRequest) -> bool:
+    """Whether a reviewer may yet be picked for one of my PRs, where a reviewer field or Needs
+    a reviewer can show suggestions: not in the merge queue, and a draft only for its primary
+    reviewer."""
+    return not pr.in_merge_queue and (not pr.is_draft or config.has_primary_reviewer(pr.repo))
+
+
 def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
     return [ctx.config.slug(team) for team in ctx.teams]
 
@@ -344,12 +351,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 _team_slugs(ctx),
                 ctx.config.reviewer_history_days,
                 ctx.config.required_owner_marker,
-                # Where a reviewer field or Needs a reviewer can show them: not in the merge
-                # queue, and a draft only for its primary reviewer.
-                lambda pr: (
-                    not pr.in_merge_queue
-                    and (not pr.is_draft or ctx.config.has_primary_reviewer(pr.repo))
-                ),
+                lambda pr: wants_reviewer(ctx.config, pr),
             ),
             DerivedRepository(ctx.db).replace,
         )
