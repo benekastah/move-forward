@@ -228,7 +228,7 @@ entry points at.
 linking entity next to it: icing a ticket hides the PRs that mention it, icing a work entry
 hides the PRs it names. It doesn't go the other way: icing a PR leaves its ticket alone. A
 ticket found only in text someone else wrote hides nothing: an entity with
-`mentions_hide=False` (a PR I'm asked to review, a mail thread) is hidden only through refs
+`mentions_hide=False` (a PR I'm asked to review) is hidden only through refs
 its plugin gave it. Only hiding is held back: what its text names is still linked to it, and a
 priority on that still ranks it.
 
