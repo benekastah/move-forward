@@ -11,7 +11,8 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
 ## Version 2
 
-Fewer things to know: what no plugin used is gone.
+Fewer things to know: what no plugin used is gone, and what several plugins wrote each
+for themselves (a token, a request, an example config) is core's.
 
 - **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
   return the snapshot, and core calls each once per refresh.
@@ -40,6 +41,29 @@ Fewer things to know: what no plugin used is gone.
 - **`api.http` is `request` and `RequestError`**: `api.http.opener` and
   `api.http.require_https` have left `api`. Send a request with `api.http.request`, which
   checks for HTTPS and refuses redirects itself.
+- **The example config is the plugins'**: `mfd init --example` is built from each offered
+  plugin's `init_example` and `init_template`, as `mfd init` writes them, installed plugins'
+  too. A plugin setting `init_example_on` has its section on there, with `init_example`
+  uncommented; any other's is commented out.
+- **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
+  its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;
+  with neither, it raises `SourceError` with core's message ("no token: run `mfd token set
+  <plugin>`, or set $<token_env>", naming it `secret`, e.g. "password"), which `Graph.fetch`
+  passes on. `Context` gains `tokens`, which core fills from `Plugin.tokens`.
+- **Token fields**: `api.keychain.TokenFields` is a `Strict` base for a section keeping one
+  token, with `token_env` and `keychain_service`, defaulting to the class's
+  `default_token_env` and `default_keychain_service`.
+- **Text as shown**: `api.html.shown(text)` drops what could make text a stranger wrote read
+  as something else (bidi controls, the zero-width space and zero-width no-break space, the
+  word joiner, the soft hyphen, Hangul fillers, tag characters outside a flag; not ZWJ and
+  ZWNJ), turns control characters into spaces, and collapses its whitespace. Core shows
+  every item's title, subtitle, details, badges and links' text through it; use it for such
+  text on a plugin's own pages.
+- **One HTTP request**: `api.http.request(url, *, secret_name, headers, json, form, method,
+  timeout)` sends a request carrying a secret (https only, no redirects) with a JSON or form
+  body, and returns the answer's body. When there's no answer (no network, a timeout, a cut
+  or garbled response) or an error status, it raises `api.http.RequestError`, whose `status`
+  is the HTTP status, or None without one.
 
 ## Version 1
 
@@ -47,15 +71,6 @@ The first version. While the built-ins are its only plugins, changes go into it 
 raising the version; it's listed so a plugin written against an earlier checkout can
 catch up.
 
-- **Text as shown**: `api.html.shown(text)` drops control characters, bidi controls and
-  the zero-width space from text a stranger wrote, which could make it read as something
-  else, and collapses its whitespace. Core shows every item's title, subtitle, details,
-  badges and links' text through it; use it for such text on a plugin's own pages.
-- **One HTTP request**: `api.http.request(url, *, secret_name, headers, json, form, method,
-  timeout)` sends a request carrying a secret (https only, no redirects, through
-  `api.http.opener`) with a JSON or form body, and returns the answer's body. When there's
-  no answer (no network, a timeout, a cut or garbled response) or an error status, it raises
-  `api.http.RequestError`, whose `status` is the HTTP status, or None without one.
 - **A checkout's git directory**: `api.shell.git_common_dir(repo)` is the directory holding a
   checkout's refs and config (its `.git`, or a linked worktree's main repository's), read
   from the files without running git; None when `repo` isn't a checkout.

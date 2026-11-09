@@ -35,20 +35,13 @@ PATH = "/settings"
 Kind = Literal["int", "float", "bool", "text", "list"]
 LOCKED = {"db_path", "port"}
 """Top-level settings shown but not changed here: changing them moves the server."""
-SECRET_LOCKED: dict[str | None, set[str]] = {
-    None: {"email"},
-    "github": {"host"},
-    "jira": {"site", "token_env", "keychain_service"},
-    "mail": {"host", "port", "token_env", "keychain_service", "message_url", "auth_servers"},
-    "slack": {"client_id", "workspace_url", "token_env", "keychain_service"},
-    "git": {"repos", "github_hosts"},
-}
-"""Settings of core's and the built-in plugins, by section, only the file changes (a plugin
-of its own says which of its are, `Plugin.locked_settings`): where a credential goes (a host, a site, a
-client id, the account a token is keyed by) or comes from (an environment variable, a
-keychain service), where items link with my login in the link (mail's `message_url`), whose
-word decides a sender is who they claim (mail's `auth_servers`, though a form can't hold it
-yet), and which checkouts `git` runs commands in."""
+SECRET_LOCKED = {"email"}
+"""Top-level settings only the file changes: the account every token is keyed by. A plugin
+names its own in `Plugin.locked_settings`: where a credential goes (a host, a site, a client
+id), where items link with my login in the link (mail's `message_url`), whose word decides a
+sender is who they claim (mail's `auth_servers`, though a form can't hold it yet), and which
+checkouts `git` runs commands in; where its token comes from is locked whatever it names
+(see `_locked_by`)."""
 TOKEN_KEYS = frozenset({"token_env", "keychain_service"})
 """A plugin section's keys saying where its token is read from: locked whatever it says."""
 NOTIFICATIONS = "notifications"
@@ -131,11 +124,7 @@ def _fields(
         if key in skip or (kind := _kind(field.annotation)) is None:
             continue
         help = " ".join((field.description or "").split())
-        locked = (
-            (section is None and key in LOCKED)
-            or key in SECRET_LOCKED.get(section, set())
-            or key in locked_keys
-        )
+        locked = (section is None and key in LOCKED | SECRET_LOCKED) or key in locked_keys
         default = field.get_default(call_default_factory=True)
         found.append(Setting(section, key, kind, getattr(model, key), help, locked, default))
     return found

@@ -45,132 +45,6 @@ from .repositories import (
 from .server import serve
 from .shell import CommandError
 
-EXAMPLE_CONFIG = """\
-# move-forward configuration. Paths may start with ~. A plugin is enabled by its
-# section: leave one out to turn the plugin off.
-
-email = "me@example.com"              # Jira logs in with it; its domain finds reviewers' emails
-teams = ["my-team"]                   # the teams I'm on or review for, by name
-# db_path = "~/.local/share/move-forward/dashboard.db"
-# db_backups = 10                        # copies kept in backups/, taken before migrations
-# port = 8765
-# prune_days = 90                         # clear work finished this long ago from the notes
-
-[github]
-org = "example-org"
-# host = "github.com"                    # a GitHub Enterprise Server's host instead
-# refresh_seconds = 300
-# search_scope = "org"                 # my PR searches: "org" (this org's repos) or "everywhere"
-# history_days = 14
-# policy_checks = []                     # checks that enforce PR policy, not CI
-# ignored_reviewers = []                 # logins whose comments aren't review feedback
-# primary_reviewer_repos = []            # repos whose PRs have a primary reviewer as an assignee
-# required_owner_marker = ""             # CODEOWNERS comment marking required owners
-# ticket_link_prefixes = []             # PR body lines that link the ticket start with one, e.g. ["Link", "Closes"]
-# placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
-# default_team_reviewer_assignment = "team" # team requests count without an individual
-# team_reviewer_assignment = {}          # by slug, e.g. { bacon = "individual" }
-# email_domains = []                     # reviewers' email domains, if not just your email's
-# stale_review_hours = 24
-# merge_queue_eviction_days = 2        # how long a merge-queue removal stays in CI failures
-# stale_draft_days = 14                # my drafts untouched this long get a housekeeping line (0: off)
-# quick_review_max_lines = 100           # a review within these limits takes minutes
-# quick_review_max_files = 5
-# hour_review_max_lines = 300            # within these, an hour; beyond, a day
-# hour_review_max_files = 12
-# split_pr_suggest_lines = 600           # my PRs this big "may need splitting"
-# split_pr_lines = 800                   # ...and this big are "worth splitting"
-# split_pr_labels = []                   # labels that mean worth splitting, e.g. ["size/XL"]
-
-# [github.merge]
-# method = "squash"                     # where a repo allows several; else GitHub's pick for me
-
-# [github.teams]                        # a team's slug, where it isn't the team's name
-# my-team = "my-team-reviewers"
-
-[git]
-repos = ["~/src/app", "~/src/infra"]  # main checkouts; other worktrees are found from them
-# refresh_seconds = 1800
-# status_seconds = 30
-# my_branch_prefixes = ["me/"]            # besides branches with my commits or PRs
-# ignored_worktree_globs = ["*/.claude/worktrees/*"]
-# commit_history_days = 180
-# github_hosts = ["github.com"]           # remote hosts that are GitHub: an Enterprise server, ~/.ssh/config aliases
-
-[git_stack]                           # stacks from git stack, in [git]'s repos
-# refresh_seconds = 1800                 # how often it refreshes regardless of git's changes
-
-[slack]
-workspace_url = "https://example.slack.com"
-# client_id = ""                          # the workspace's Slack app, to connect on slack's page
-# ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
-# ping_follow_up = "Gentle bump on this review request"
-# token_env = "SLACK_API_TOKEN"           # a token with users:read.email, to find Slack ids by email
-# keychain_service = "move-forward-slack"
-# team_channel = "#team-{team}"           # a team's channel when none is set
-
-[slack.teams]                         # where review pings to a team go
-my-team = "#team-my-team"
-
-# [mail]                                # unread and flagged mail, over IMAP; the password: `mfd token set mail`
-# host = "imap.gmail.com"
-# username = "me@example.com"
-# message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"  # a link to a message
-# refresh_seconds = 900
-# port = 993
-# mailbox = "INBOX"
-# sent_mailbox = ""                     # where my sent mail is; empty: the one the server marks sent
-# known_days = 90                       # my sent mail read this far back: whom I know
-# urgent_words = ["outage"]             # in a subject, critical, from someone I know
-# low_words = ["digest"]                # in a subject, ranked with lists' mail, not from someone I know
-# since_days = 14                       # older mail is left out, flagged or not
-# max_messages = 200                    # the most unread read; flagged: all
-# auth_servers = ["mx.google.com"]      # who stamps Authentication-Results (known for Gmail); senders are verified by them
-# token_env = "MAIL_PASSWORD"           # else the system's secret store, for my email
-# keychain_service = "move-forward-mail"
-## Several mailboxes instead: no username above, but a table each, taking from [mail] the rest
-## [mail.home]
-## username = "me@example.com"          # its password: `mfd token set mail.home`
-## [mail.work]
-## host = "imap.work.example"
-## username = "me@work.example"         # its password: `mfd token set mail.work`
-
-# [jira]
-# site = "https://example.atlassian.net"
-# refresh_seconds = 900
-# token_env = "JIRA_API_TOKEN"            # else the system's secret store, for my email
-# keychain_service = "move-forward-jira"
-# status_in_progress = ["In Progress"]    # workflow names the transitions panel uses; a ticket matches any, a move goes to the first it can
-# status_in_review = ["In Review"]        # e.g. ["In Review", "Code Review"]
-# status_closed = ["Closed"]
-# status_blocked = ["Blocked"]           # tickets in it count as blocked, with or without blocker links
-# status_rollout = ["Rollout"]         # merged, waiting on monitoring: never proposed for closing until its PRs merge (empty: off)
-# blocked_by_links = []                  # more link names meaning "blocked by", e.g. ["depends on"]
-# escalation_label_prefix = ""            # labels that rank incidents, e.g. "escalated-to-"
-# escalation_levels = []                  # what follows it, lowest first, e.g. ["manager", "director", "vp"]
-# priorities = ["Lowest", "Low", "Medium", "High", "Highest"]  # Jira's priority names, lowest first
-# incident_types = ["incident"]           # issue types (substrings, lower-case)
-# bug_types = ["bug"]
-
-# [people]                              # what people are to me
-# contact_types = { customer = 1, partner = 1, vendor = 0 }  # the types offered, each with the importance it gives (0 to 2)
-
-# [act_now]                             # how Act now ranks what the plugins nominate
-# size = 7                               # items shown
-# per_plugin = 3                         # so one busy tool can't fill the list
-# weights = { closes = 3, minutes = 2, hour = 1, waiting = 2, importance = 3, due = 1, blocked = -4 }  # what each signal adds
-# blocked_stale_days = 3                 # a blocked item untouched this long stops being ranked down (0: never)
-# due_warning_days = 7                  # a due date starts raising an item this many days ahead
-# default_snooze_days = 1                # days a snooze lasts (1 = until tomorrow)
-# snooze_until_hour = 0                # the local hour a snooze ends at on its last day (9: 9am)
-# snooze_days = { pull_request = 7 }     # ...for a kind of subject, e.g. a PR's review for a week
-
-# [notifications]                       # browser notifications; none until you subscribe
-# subscribe = []                         # kinds, e.g. "dashboard.source_failing"; see the settings page
-# failing_minutes = 15                   # how long a plugin fails before `source_failing` says so
-# keep_hours = 24                        # events older than this are dropped untold
-"""
-
 
 def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     parser = argparse.ArgumentParser(prog="mfd", description="Local dashboard of work in flight.")
@@ -387,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if args.example:
             config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(EXAMPLE_CONFIG, encoding="utf-8")
+            config_path.write_text(init.example(), encoding="utf-8")
             print(f"wrote {config_path}; edit it, then run `mfd serve --open`")
             return 0
         try:

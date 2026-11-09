@@ -14,7 +14,7 @@ def transition(req: ActionRequest[JiraConfig]) -> str:
     if not client.is_key(key):
         raise ActionError(f"not a ticket key: {key}")
     try:
-        moved = client.transition(ctx.config, ctx.email, key, names)
+        moved = client.transition(ctx.config, ctx.email, ctx.token(), key, names)
     except LookupError as e:
         raise ActionError(str(e)) from e
     except http.RequestError as e:

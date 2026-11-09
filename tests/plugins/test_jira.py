@@ -9,7 +9,7 @@ from typing import Self, cast
 import pytest
 from legacy import save_json_snapshot
 
-from move_forward import https
+from move_forward import https, keychain
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.https import RequestError
@@ -142,11 +142,8 @@ def test_tickets_are_fetched_open_or_resolved_and_their_projects_remembered(
         assert api_token == "t" and keys == ["APP-1", "OPS-2", "OPS-3"]
         return [resolved, open_one, undated]
 
-    def token(config: JiraConfig, email: str) -> str:
-        return "t"
-
-    monkeypatch.setattr(jira, "token", token)
     monkeypatch.setattr(jira, "tickets", tickets)
+    monkeypatch.setenv("JIRA_API_TOKEN", "t")
     db = Database(":memory:")
     db.migrate("jira", MIGRATIONS)
     ctx = _ctx(db)
@@ -216,6 +213,7 @@ def _ctx(db: Database) -> Context[JiraConfig]:
         now=datetime(2026, 10, 30, tzinfo=UTC),
         db=db,
         kv=KvRepository(db, "jira"),
+        name="jira",
     )
 
 
@@ -338,10 +336,6 @@ def _jira_replies(monkeypatch: pytest.MonkeyPatch, offered: str) -> list[tuple[s
         sent.append((path, body))
         return offered.encode()
 
-    def token(config: JiraConfig, email: str) -> str:
-        return "t"
-
-    monkeypatch.setattr(jira, "token", token)
     monkeypatch.setattr(jira, "_request", request)
     return sent
 
@@ -352,7 +346,7 @@ def test_a_ticket_moves_by_the_transition_into_its_status(monkeypatch: pytest.Mo
         '{"transitions": [{"id": "11", "to": {"name": "In Progress"}},'
         ' {"id": "21", "to": {"name": "In Review"}}]}',
     )
-    jira.transition(CONFIG, "me@x.com", "APP-1", ["in review"])
+    jira.transition(CONFIG, "me@x.com", "t", "APP-1", ["in review"])
     assert sent == [
         ("/rest/api/3/issue/APP-1/transitions", None),
         ("/rest/api/3/issue/APP-1/transitions", {"transition": {"id": "21"}}),
@@ -363,14 +357,14 @@ def test_a_ticket_moves_to_the_first_of_several_statuses_it_can(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sent = _jira_replies(monkeypatch, '{"transitions": [{"id": "31", "to": {"name": "Done"}}]}')
-    assert jira.transition(CONFIG, "me@x.com", "APP-1", ["Closed", "done"]) == "Done"
+    assert jira.transition(CONFIG, "me@x.com", "t", "APP-1", ["Closed", "done"]) == "Done"
     assert sent[-1] == ("/rest/api/3/issue/APP-1/transitions", {"transition": {"id": "31"}})
 
 
 def test_a_ticket_that_cant_go_there_says_where_it_can(monkeypatch: pytest.MonkeyPatch) -> None:
     sent = _jira_replies(monkeypatch, '{"transitions": [{"id": "11", "to": {"name": "Done"}}]}')
     with pytest.raises(LookupError, match="can't move to In Review; it can go to: Done"):
-        jira.transition(CONFIG, "me@x.com", "APP-1", ["In Review"])
+        jira.transition(CONFIG, "me@x.com", "t", "APP-1", ["In Review"])
     assert len(sent) == 1  # nothing was changed
 
 
@@ -387,13 +381,30 @@ def test_a_ticket_that_cant_go_there_says_where_it_can(monkeypatch: pytest.Monke
 def test_a_transition_that_fails_says_whether_jira_refused_or_wasnt_reached(
     monkeypatch: pytest.MonkeyPatch, failure: RequestError, said: str
 ) -> None:
-    def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> str:
+    def transition(
+        config: JiraConfig, email: str, api_token: str, key: str, statuses: list[str]
+    ) -> str:
         raise failure
 
     monkeypatch.setattr(jira, "transition", transition)
+    monkeypatch.setenv("JIRA_API_TOKEN", "t")
     request = ActionRequest(_ctx(Database(":memory:")), Graph([]), {"key": "APP-1", "to": "Done"})
     with pytest.raises(ActionError, match=re.escape(said)):
         actions.transition(request)
+
+
+def test_fetching_without_a_token_says_how_to_give_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The daily prune fetches tickets: `Graph.fetch` passes a SourceError on, so its command
+    says what to fix rather than reporting the tickets as unknown."""
+    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+
+    def nothing_stored(service: str, account: str) -> None:
+        return None
+
+    monkeypatch.setattr(keychain, "read", nothing_stored)
+    request = FetchRequest(_ctx(Database(":memory:")), "ticket", ["https://j/browse/APP-1"])
+    with pytest.raises(SourceError, match="mfd token set jira"):
+        JiraPlugin().fetch(request)
 
 
 def test_a_ticket_done_without_a_resolution_is_resolved_when_it_moved_to_done() -> None:
@@ -461,12 +472,8 @@ def test_collecting_asks_only_the_search(monkeypatch: pytest.MonkeyPatch) -> Non
         sent.append(cast(dict[str, object], body))
         return json.dumps({"issues": [RAW]}).encode()
 
-    def fake_token(_config: JiraConfig, _email: str) -> str:
-        return "t"
-
-    monkeypatch.setattr(jira, "token", fake_token)
     monkeypatch.setattr(jira, "_request", fake_request)
-    snapshot = jira.collect(JiraConfig(site="https://j"), "me@x")
+    snapshot = jira.collect(JiraConfig(site="https://j"), "me@x", "t")
     assert [i.key for i in snapshot.issues] == ["APP-1"]
     assert asked == [jira.SEARCH_PATH]  # not `/myself`: a found ticket shows the token works
     assert "comment" not in cast(list[str], sent[0]["fields"])

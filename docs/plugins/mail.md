@@ -21,7 +21,7 @@ which asks for it without showing it and keeps it in your system's secret store 
 keychain, Windows' Credential Manager, or on Linux the desktop keyring through `secret-tool`)
 under `keychain_service`, with your top-level `email` as the account. Or export
 `MAIL_PASSWORD` (or the variable `token_env` names), which wins over the store.
-`mfd token check` says where it was found.
+`mfd token check` says where it was found. Without one, a refresh fails saying how to give it.
 
 A password is all it signs in with for now, so a mailbox that allows only OAuth (Microsoft 365)
 can't be read yet.

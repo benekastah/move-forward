@@ -3,7 +3,7 @@
 import sys
 import tomllib
 from pathlib import Path
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 
 import pytest
 from pydantic import BaseModel
@@ -200,6 +200,50 @@ def test_where_mails_password_goes_and_where_its_items_link_are_read_only() -> N
     )
     locked = {s.key for s in settings.settings(config) if s.section == "mail" and s.locked}
     assert locked == {"host", "port", "token_env", "keychain_service", "message_url"}
+
+
+BUILT_IN_SECTIONS: dict[str, dict[str, object]] = {
+    "github": {"org": "acme"},
+    "git": {"repos": ["/src/app"]},
+    "git_stack": {},
+    "jira": {"site": "https://acme.atlassian.net"},
+    "mail": {"host": "imap.gmail.com", "username": "me@x"},
+    "notes": {},
+    "slack": {"workspace_url": "https://acme.slack.com"},
+}
+"""A section each built-in takes."""
+
+
+def _changed(setting: settings.Setting) -> object:
+    """Another value for `setting`, of its kind."""
+    value = setting.value
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, int | float):
+        return value + 1
+    if isinstance(value, list):
+        return [*cast(list[object], value), "other"]
+    return f"{value}-other"
+
+
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
+def test_no_setting_the_page_changes_moves_a_plugins_token(plugin: Plugin[Any, Any]) -> None:
+    """Every key a plugin's tokens are read by (`Plugin.tokens`) is locked: changing any
+    setting the page can change leaves where each token comes from as it was."""
+    sections = {name: BUILT_IN_SECTIONS[name] for name in [plugin.name, *plugin.requires]}
+    config = config_module.Config.model_validate({"email": "me@x", **sections})
+    section = config.section(plugin.name)
+    assert section is not None
+
+    def places(section: BaseModel) -> dict[str, tuple[str, str]]:
+        tokens = plugin.tokens(section)
+        return {name: (t.token_env, t.keychain_service) for name, t in tokens.items()}
+
+    before = places(section)
+    for setting in settings.settings(config):
+        if setting.section == plugin.name and not setting.locked:
+            changed = section.model_copy(update={setting.key: _changed(setting)})
+            assert places(changed) == before, setting.key
 
 
 class _SiteConfig(Strict):

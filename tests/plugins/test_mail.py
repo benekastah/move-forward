@@ -10,6 +10,7 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
+from move_forward import keychain
 from move_forward.asking import Asker, InitSetup
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref, attrs
@@ -35,6 +36,7 @@ from move_forward.testing import Harness
 
 NOW = datetime(2026, 11, 7, 12, tzinfo=UTC)
 ME = "me@gmail.com"
+PASSWORD = "app-password"
 SECTION = {"host": "imap.gmail.com", "username": ME, "message_url": GMAIL_MESSAGE_URL}
 SHARED = {"host": "imap.gmail.com", "message_url": GMAIL_MESSAGE_URL}
 """[mail] with accounts: no username of its own."""
@@ -412,7 +414,7 @@ def test_collect_reads_headers_only_without_marking_anything_read(
             (6, "", headers(subject="Newer", message_id="new@acme.com")),
         ]
     )
-    snapshot = client.collect(_mailbox(since_days=7, max_messages=1), "me@work.com", NOW)
+    snapshot = client.collect(_mailbox(since_days=7, max_messages=1), PASSWORD, "me@work.com", NOW)
     # The newest unread, at most one, and every flagged one, however old.
     assert sorted(m.subject for m in snapshot.messages) == ["Marked", "Newer"]
     assert ("connect", "imap.gmail.com", 993, client.TIMEOUT_SECONDS) in server.calls
@@ -434,34 +436,46 @@ def test_the_newest_are_kept_however_the_server_orders_its_search(
             (5, "", headers(subject="Older", message_id="old@acme.com")),
         ]
     )
-    snapshot = client.collect(_mailbox(max_messages=1), ME, NOW)
+    snapshot = client.collect(_mailbox(max_messages=1), PASSWORD, ME, NOW)
     assert [m.subject for m in snapshot.messages] == ["Newer"]
 
 
 def test_a_refused_sign_in_says_what_to_do(imap: Callable[..., FakeImap]) -> None:
     imap([], refuse=True)
     with pytest.raises(SourceError, match="app password"):
-        client.collect(_mailbox(), "me@work.com", NOW)
+        client.collect(_mailbox(), PASSWORD, "me@work.com", NOW)
 
 
-def test_a_password_imap_cant_send_says_so(
-    imap: Callable[..., FakeImap], monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_password_imap_cant_send_says_so(imap: Callable[..., FakeImap]) -> None:
     imap([])
-    monkeypatch.setenv("MAIL_PASSWORD", "pässword")
     with pytest.raises(SourceError, match="ASCII"):
-        client.collect(_mailbox(), ME, NOW)
+        client.collect(_mailbox(), "pässword", ME, NOW)
 
 
-def test_no_password_says_how_to_set_one(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MAIL_PASSWORD", raising=False)
+def test_no_password_says_how_to_set_that_mailboxs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MAIL_PASSWORD_HOME", "home-password")
+    monkeypatch.delenv("MAIL_PASSWORD_WORK", raising=False)
 
     def nothing_stored(service: str, account: str) -> None:
         return None
 
-    monkeypatch.setattr(client.keychain, "read", nothing_stored)
-    with pytest.raises(SourceError, match="mfd token set mail"):
-        client.collect(_mailbox(), "me@work.com", NOW)
+    monkeypatch.setattr(keychain, "read", nothing_stored)
+    monkeypatch.setattr(client, "collect", _collect_nothing)
+    harness = Harness(MailPlugin(), {**SHARED, "home": HOME, "work": WORK}, now=NOW)
+    with pytest.raises(
+        SourceError, match=r"mfd token set mail\.work`, or set \$MAIL_PASSWORD_WORK"
+    ):
+        harness.plugin.collect(CollectRequest(harness.ctx))
+
+
+def _passwords(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A password for `[mail]`'s own mailbox, home's and work's, in their variables."""
+    for variable in ("MAIL_PASSWORD", "MAIL_PASSWORD_HOME", "MAIL_PASSWORD_WORK"):
+        monkeypatch.setenv(variable, f"{variable.lower()}-secret")
+
+
+def _collect_nothing(mailbox: Mailbox, password: str, email: str, now: datetime) -> MailSnapshot:
+    return MailSnapshot(messages=[])
 
 
 @pytest.mark.parametrize(
@@ -657,7 +671,7 @@ def test_many_messages_are_fetched_in_chunks(
 ) -> None:
     monkeypatch.setattr(client, "FETCH_CHUNK", 2)
     server = imap([(uid, "\\Flagged", headers(message_id=f"m{uid}@x")) for uid in range(1, 6)])
-    snapshot = client.collect(_mailbox(), ME, NOW)
+    snapshot = client.collect(_mailbox(), PASSWORD, ME, NOW)
     fetches = [c[2] for c in server.calls if c[:2] == ("uid", "FETCH")]
     assert fetches == ["1,2", "3,4", "5"] and len(snapshot.messages) == 5
 
@@ -714,11 +728,11 @@ def test_a_threads_labels_are_its_tags_and_kept_between_refreshes() -> None:
 
 def test_labels_are_asked_for_only_from_gmail(imap: Callable[..., FakeImap]) -> None:
     server = imap([(1, "", headers())])
-    client.collect(_mailbox(), ME, NOW)
+    client.collect(_mailbox(), PASSWORD, ME, NOW)
     assert "X-GM-LABELS" not in str([c for c in server.calls if c[:2] == ("uid", "FETCH")])
     server = imap([(1, "", headers())])
     server.capabilities = ("IMAP4REV1", client.GMAIL)
-    client.collect(_mailbox(), ME, NOW)
+    client.collect(_mailbox(), PASSWORD, ME, NOW)
     assert "X-GM-LABELS" in str([c for c in server.calls if c[:2] == ("uid", "FETCH")])
 
 
@@ -744,7 +758,7 @@ def test_mail_answering_mine_replies_to_me(imap: Callable[..., FakeImap]) -> Non
         ]
     )
     server.sent = {10: "mine@me"}
-    snapshot = client.collect(_mailbox(), ME, NOW)
+    snapshot = client.collect(_mailbox(), PASSWORD, ME, NOW)
     assert {m.message_id: m.replies_to_me for m in snapshot.messages} == {
         "r1@acme.com": True,
         "n1@acme.com": False,
@@ -758,7 +772,7 @@ def test_my_newest_sent_mail_is_read_however_the_server_orders_its_search(
     monkeypatch.setattr(client, "SENT_CAP", 1)
     server = imap([(1, "", headers(message_id="r1@acme.com", references="<mine@me>"))])
     server.sent = {11: "mine@me", 10: "old@me"}  # answered out of UID order
-    [found] = client.collect(_mailbox(), ME, NOW).messages
+    [found] = client.collect(_mailbox(), PASSWORD, ME, NOW).messages
     assert found.replies_to_me
 
 
@@ -776,11 +790,11 @@ def test_reading_my_sent_mail_finds_it_by_its_flag_or_config_and_never_fails_the
     server = imap([(1, "", reply)])
     server.sent = {10: "mine@me"}
     server.listed = [b'(\\HasNoChildren) "/" "INBOX"']  # nothing marked \\Sent
-    assert not client.collect(_mailbox(), ME, NOW).messages[0].replies_to_me
+    assert not client.collect(_mailbox(), PASSWORD, ME, NOW).messages[0].replies_to_me
     server = imap([(1, "", reply)])
     server.sent = {10: "mine@me"}
     server.listed = []
-    configured = client.collect(_mailbox(sent_mailbox="Sent Items"), ME, NOW)
+    configured = client.collect(_mailbox(sent_mailbox="Sent Items"), PASSWORD, ME, NOW)
     assert configured.messages[0].replies_to_me  # sent_mailbox needs no LIST
     for broken in ("closed", "list", "fetch"):
         server = imap([(1, "", reply)])
@@ -791,7 +805,7 @@ def test_reading_my_sent_mail_finds_it_by_its_flag_or_config_and_never_fails_the
             server.listed = None
         else:
             server.sent_fails = True  # a timeout fetching my sent mail
-        [found] = client.collect(_mailbox(), ME, NOW).messages  # the inbox still comes
+        [found] = client.collect(_mailbox(), PASSWORD, ME, NOW).messages  # the inbox still comes
         assert not found.replies_to_me
 
 
@@ -864,7 +878,9 @@ def test_someone_i_wrote_to_twice_is_known(imap: Callable[..., FakeImap]) -> Non
         11: f"carol@y.com, {ME}\r\nCc: alice@acme.com, bob@x.com",
         12: "carol@y.com",
     }
-    found = {m.sender_email: m.known for m in client.collect(_mailbox(), ME, NOW).messages}
+    found = {
+        m.sender_email: m.known for m in client.collect(_mailbox(), PASSWORD, ME, NOW).messages
+    }
     # Alice twice (To and Cc), bob once, and me never, however often I'm copied.
     assert found == {"alice@acme.com": True, "bob@x.com": False, ME: False}
 
@@ -890,7 +906,7 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
     )
     server.capabilities = ("IMAP4REV1", client.GMAIL)
     server.aside = {1}
-    found = {m.message_id: m.bulk for m in client.collect(_mailbox(), ME, NOW).messages}
+    found = {m.message_id: m.bulk for m in client.collect(_mailbox(), PASSWORD, ME, NOW).messages}
     assert found == {"sale@shop": True, "hi@friend": False}
     # A reply to me filed under Promotions is still a person writing to me, verified; one who
     # isn't verified could name my Message-ID to escape it, and is put aside.
@@ -900,7 +916,7 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
         misfiled = imap([(1, "", raw)])
         misfiled.capabilities = ("IMAP4REV1", client.GMAIL)
         misfiled.aside, misfiled.sent = {1}, {10: "mine@me"}
-        [reply] = client.collect(_mailbox(), ME, NOW).messages
+        [reply] = client.collect(_mailbox(), PASSWORD, ME, NOW).messages
         assert (reply.replies_to_me, reply.bulk) == (True, aside)
     # Nor is someone I know, verified; one who isn't verified is put aside.
     for verified, aside in ((True, False), (False, True)):
@@ -913,14 +929,14 @@ def test_gmails_promotions_and_social_read_like_lists(imap: Callable[..., FakeIm
             {10: "a@me", 11: "b@me"},
             {10: "pal@friend.com", 11: "pal@friend.com"},
         )
-        [found] = client.collect(_mailbox(), ME, NOW).messages
+        [found] = client.collect(_mailbox(), PASSWORD, ME, NOW).messages
         assert (found.known, found.bulk) == (True, aside)
     failing = imap([(1, "", headers(message_id="sale@shop"))])
     failing.capabilities, failing.aside = ("IMAP4REV1", client.GMAIL), None
-    assert not client.collect(_mailbox(), ME, NOW).messages[0].bulk  # nothing put aside
+    assert not client.collect(_mailbox(), PASSWORD, ME, NOW).messages[0].bulk  # nothing put aside
     plain = imap([(1, "", headers(message_id="sale@shop"))])
     plain.aside = {1}  # not Gmail: not asked
-    assert not client.collect(_mailbox(), ME, NOW).messages[0].bulk
+    assert not client.collect(_mailbox(), PASSWORD, ME, NOW).messages[0].bulk
     assert not any("X-GM-RAW" in c for c in plain.calls)
 
 
@@ -1105,7 +1121,12 @@ def test_a_mailbox_needs_a_host_and_a_username_and_an_account_a_name(
 def test_every_mailbox_is_read_and_a_message_in_two_is_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def collect(mailbox: Mailbox, email: str, now: datetime) -> MailSnapshot:
+    monkeypatch.setenv("MAIL_PASSWORD_HOME", "home-password")
+    monkeypatch.setenv("MAIL_PASSWORD_WORK", "work-password")
+    signed_in: list[tuple[str, str]] = []
+
+    def collect(mailbox: Mailbox, password: str, email: str, now: datetime) -> MailSnapshot:
+        signed_in.append((mailbox.name, password))
         both = message(2, subject="To both", account=mailbox.name, flagged=mailbox.name == "work")
         own = message(
             3 if mailbox.name == "home" else 1, subject=f"For {mailbox.name}", account=mailbox.name
@@ -1120,15 +1141,15 @@ def test_every_mailbox_is_read_and_a_message_in_two_is_one(
         ("To both", "home", True),  # home's copy, flagged in work
         ("For work", "work", False),
     ]
+    assert signed_in == [("home", "home-password"), ("work", "work-password")]  # each its own
 
 
 def test_a_message_without_a_message_id_is_its_mailboxs_own_conversation(
-    imap: Callable[..., FakeImap], monkeypatch: pytest.MonkeyPatch
+    imap: Callable[..., FakeImap],
 ) -> None:
-    monkeypatch.setenv("MAIL_PASSWORD_WORK", "app-password")
     imap([(4, "", headers(message_id=""))])
     work = MailConfig.model_validate({**SHARED, "work": HOME}).mailboxes()[0]
-    [found] = client.collect(work, ME, NOW).messages
+    [found] = client.collect(work, PASSWORD, ME, NOW).messages
     assert (found.account, found.thread) == ("work", "uid:work:4")
 
 
@@ -1172,8 +1193,10 @@ def test_an_unverified_message_in_two_mailboxes_is_one_conversation_counted_once
 
 def test_a_mailbox_changing_refreshes_it(monkeypatch: pytest.MonkeyPatch) -> None:
     counts = {"home": "1", "work": "1"}
+    monkeypatch.setenv("MAIL_PASSWORD_HOME", "home-password")
+    monkeypatch.setenv("MAIL_PASSWORD_WORK", "work-password")
 
-    def status(mailbox: Mailbox, email: str) -> str:
+    def status(mailbox: Mailbox, password: str) -> str:
         return counts[mailbox.name]
 
     monkeypatch.setattr(client, "status", status)
@@ -1205,7 +1228,9 @@ def test_a_message_claiming_anothers_message_id_takes_nothing_from_it(
     forged = message(2, subject="Pay now", sender="evil@evil.com", verified=False)
     forged = forged.model_copy(update={"message_id": real.message_id})
 
-    def collect(mailbox: Mailbox, email: str, now: datetime) -> MailSnapshot:
+    _passwords(monkeypatch)
+
+    def collect(mailbox: Mailbox, password: str, email: str, now: datetime) -> MailSnapshot:
         return MailSnapshot(messages=[forged, real])
 
     monkeypatch.setattr(client, "collect", collect)
@@ -1220,7 +1245,9 @@ def test_a_message_claiming_anothers_message_id_takes_nothing_from_it(
 def test_a_copy_in_another_mailbox_adds_whats_about_me_there_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def collect(mailbox: Mailbox, email: str, now: datetime) -> MailSnapshot:
+    _passwords(monkeypatch)
+
+    def collect(mailbox: Mailbox, password: str, email: str, now: datetime) -> MailSnapshot:
         if mailbox.name == "home":
             return MailSnapshot(messages=[message(1, account="home", to_me=False)])
         copy = message(1, account="work", to_me=True, replies_to_me=True)
@@ -1315,5 +1342,16 @@ def test_a_message_id_shaped_like_one_given_to_mail_without_one_is_ignored(
     imap: Callable[..., FakeImap],
 ) -> None:
     imap([(4, "", headers(message_id="uid:5", references="<uid:5>"))])
-    [found] = client.collect(_mailbox(), ME, NOW).messages
+    [found] = client.collect(_mailbox(), PASSWORD, ME, NOW).messages
     assert (found.message_id, found.thread) == (None, "uid:4")
+
+
+def test_no_password_is_called_a_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    def read(service: str, account: str) -> None:
+        return None
+
+    monkeypatch.delenv("MAIL_PASSWORD", raising=False)
+    monkeypatch.setattr(keychain, "read", read)
+    harness = Harness(MailPlugin(), SECTION, now=NOW)
+    with pytest.raises(SourceError, match=r"^no password: run `mfd token set mail`"):
+        MailPlugin().collect(CollectRequest(harness.ctx))

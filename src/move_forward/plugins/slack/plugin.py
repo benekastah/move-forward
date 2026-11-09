@@ -148,9 +148,12 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     title = "Slack"
     init_template = TEMPLATE
     init_example = EXAMPLE
+    init_example_on = True
     config_model = SlackConfig
     api_version = API_VERSION
     teams_field = "teams"
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"client_id", "workspace_url"})
+    """The app its sign-in grants a token to, and the workspace its links go to."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     cli_help = "see and set where review pings go, or import them from the skill's markdown"
     sign_in_pages: ClassVar[frozenset[str]] = frozenset({oauth.CALLBACK})

@@ -8,7 +8,7 @@ from http import HTTPStatus
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...api import SourceError, http, keychain
+from ...api import SourceError, http
 from .config import JiraConfig
 from .models import JiraIssue, JiraSnapshot
 
@@ -92,15 +92,6 @@ class RawIssue(_Raw):
 class RawSearchResponse(_Raw):
     issues: list[RawIssue] = []
     next_page_token: str | None = Field(default=None, alias="nextPageToken")
-
-
-def token(config: JiraConfig, email: str) -> str:
-    """The API token from the configured env var, else the system's secret store (the macOS
-    keychain, Windows' Credential Manager, the desktop keyring) under `keychain_service` for
-    `email`."""
-    if value := keychain.token(config, email):
-        return value
-    raise RuntimeError(f"no Jira token: run `mfd token set jira`, or set ${config.token_env}")
 
 
 def to_issue(
@@ -239,7 +230,7 @@ class _Keys(_Raw):
     issues: list[dict[str, object]] = []
 
 
-def updated_within(config: JiraConfig, email: str, minutes: int) -> bool:
+def updated_within(config: JiraConfig, email: str, api_token: str, minutes: int) -> bool:
     """Whether a ticket assigned to me, open or not, was updated in the last `minutes`:
     a search for one ticket's key, cheap enough to run every minute. Jira takes a relative
     time (`-5m`), so no time zone is involved."""
@@ -248,9 +239,7 @@ def updated_within(config: JiraConfig, email: str, minutes: int) -> bool:
         "fields": ["key"],
         "maxResults": 1,
     }
-    page = _Keys.model_validate_json(
-        _request(config, email, token(config, email), SEARCH_PATH, body)
-    )
+    page = _Keys.model_validate_json(_request(config, email, api_token, SEARCH_PATH, body))
     return bool(page.issues)
 
 
@@ -263,11 +252,12 @@ class _Transitions(_Raw):
     transitions: list[_Transition] = []
 
 
-def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) -> str:
+def transition(
+    config: JiraConfig, email: str, api_token: str, key: str, statuses: list[str]
+) -> str:
     """Move the ticket `key` to the first of `statuses` (matched without regard to case) that
     its workflow offers a transition into, and say which, as Jira names it; raises
     `LookupError` naming the statuses it can go to when there is none."""
-    api_token = token(config, email)
     path = f"/rest/api/3/issue/{key}/transitions"
     offered = _Transitions.model_validate_json(_request(config, email, api_token, path))
     wanted = next(
@@ -286,6 +276,5 @@ def transition(config: JiraConfig, email: str, key: str, statuses: list[str]) ->
     return wanted.to.name
 
 
-def collect(config: JiraConfig, email: str) -> JiraSnapshot:
-    api_token = token(config, email)
+def collect(config: JiraConfig, email: str, api_token: str) -> JiraSnapshot:
     return JiraSnapshot(issues=search(config, email, MY_OPEN_ISSUES_JQL, api_token))

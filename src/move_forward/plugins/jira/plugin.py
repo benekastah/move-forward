@@ -409,6 +409,8 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     config_model = JiraConfig
     api_version = API_VERSION
     snapshot_model = JiraSnapshot
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"site"})
+    """Where its token is sent."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         TICKET: KindSpec(JiraTicket, linking=True, fetchable=True, resolvable=True)
@@ -441,7 +443,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
 
     def collect(self, req: CollectRequest[JiraConfig]) -> JiraSnapshot:
         ctx = req.ctx
-        return client.collect(ctx.config, ctx.email)
+        return client.collect(ctx.config, ctx.email, ctx.token())
 
     def store(self, req: StoreRequest[JiraConfig, JiraSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
@@ -456,7 +458,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         if checked is not None:
             seconds = (ctx.now - datetime.fromisoformat(checked)).total_seconds()
             minutes = math.ceil(seconds / 60) + 1
-            found = client.updated_within(ctx.config, ctx.email, minutes)
+            found = client.updated_within(ctx.config, ctx.email, ctx.token(), minutes)
         ctx.kv.set(CHECKED, ctx.now.isoformat())
         return Changed(found, "a ticket of mine was updated")
 
@@ -502,8 +504,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         keys = [k for id in ids if (k := client.key_of(ctx.config.site, id))]
         if kind != TICKET or not keys:
             return []
-        token = client.token(ctx.config, ctx.email)
-        found = client.tickets(ctx.config, ctx.email, keys, token)
+        found = client.tickets(ctx.config, ctx.email, keys, ctx.token())
         IssueRepository(ctx.db).remember_projects([i.key for i in found])
         return [
             Entity(

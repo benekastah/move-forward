@@ -60,7 +60,7 @@ from .prs import (
     review_blockers,
     reviewer_assignment_reasons,
 )
-from .setup import TEMPLATE, questions
+from .setup import EXAMPLE, TEMPLATE, questions
 from .snapshots import DerivedRepository, PrRepository
 from .tables import MIGRATIONS
 
@@ -112,10 +112,14 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     name = "github"
     title = "GitHub"
     init_template = TEMPLATE
+    init_example = EXAMPLE
+    init_example_on = True
     init_finds_teams = True
     config_model = GitHubConfig
     api_version = API_VERSION
     teams_field = "teams"
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"host"})
+    """Its token, `gh`'s, goes to `host`."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),

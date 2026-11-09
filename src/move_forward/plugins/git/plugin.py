@@ -36,7 +36,7 @@ from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
 from .panels import Builder, branch_ref, delete_iced_action, restore_iced_action
 from .repository import MIGRATIONS, LocalRepository
-from .setup import TEMPLATE, questions
+from .setup import EXAMPLE, TEMPLATE, questions
 
 REPO = "git.repo"
 BRANCH = "git.branch"
@@ -54,9 +54,13 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     name = "git"
     title = "Git"
     init_template = TEMPLATE
+    init_example = EXAMPLE
+    init_example_on = True
     config_model = GitConfig
     api_version = API_VERSION
     snapshot_model = LocalSnapshot
+    locked_settings: ClassVar[frozenset[str]] = frozenset({"repos", "github_hosts"})
+    """Where it runs git, and which remotes it takes for GitHub's (whose PRs it links)."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         REPO: KindSpec(RepoAttrs),

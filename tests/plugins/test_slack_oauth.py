@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from conftest import NOW
 
+from move_forward import keychain
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.https import RequestError
@@ -200,12 +201,20 @@ def test_a_refresh_that_cant_reach_slack_keeps_the_token_while_it_lasts(
 
 def test_without_the_app_the_token_set_by_hand_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
     secrets, db = FakeSecrets(monkeypatch), Database(":memory:")
-
-    def by_hand(config: SlackConfig, email: str) -> str:
-        return "xoxb-by-hand"
-
-    monkeypatch.setattr(oauth.keychain, "token", by_hand)
+    monkeypatch.setenv("SLACK_API_TOKEN", "xoxb-by-hand")
     assert oauth.token(_ctx(db)) == "xoxb-by-hand" and secrets.stored == {}
+
+
+def test_without_the_app_or_a_token_by_hand_there_is_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeSecrets(monkeypatch)
+
+    def nothing_stored(service: str, account: str) -> None:
+        return None
+
+    monkeypatch.setattr(keychain, "read", nothing_stored)
+    assert oauth.token(_ctx(Database(":memory:"))) is None
 
 
 def test_disconnecting_revokes_and_forgets_the_token(monkeypatch: pytest.MonkeyPatch) -> None:

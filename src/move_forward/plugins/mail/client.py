@@ -15,7 +15,7 @@ from email.parser import BytesHeaderParser
 from email.policy import default
 from email.utils import getaddresses, parsedate_to_datetime
 
-from ...api import SourceError, keychain
+from ...api import SourceError
 from ...api.html import shown
 from .config import Mailbox
 from .models import MAX_SUBJECT, MailSnapshot, Message
@@ -49,15 +49,6 @@ _INTERNALDATE = re.compile(
     rb'\bINTERNALDATE "\s*(\d{1,2})-([A-Za-z]{3})-(\d{4}) (\d\d):(\d\d):(\d\d) ([+-])(\d\d)(\d\d)"'
 )
 _QUOTED = re.compile(r'"(?:[^"\\]|\\.)*"')
-
-
-def password(config: Mailbox, email: str) -> str:
-    """The password from the configured env var, else the system's secret store under
-    `keychain_service` for `email`."""
-    if value := keychain.token(config, email):
-        return value
-    token = f"mail.{config.name}" if config.name else "mail"
-    raise SourceError(f"no mail password: run `mfd token set {token}`, or set ${config.token_env}")
 
 
 def _quoted(mailbox: str) -> str:
@@ -118,13 +109,12 @@ def _fetched(data: Sequence[object]) -> Iterator[tuple[bytes, bytes]]:
         yield pending
 
 
-def collect(config: Mailbox, email: str, now: datetime) -> MailSnapshot:
+def collect(config: Mailbox, password: str, email: str, now: datetime) -> MailSnapshot:
     """The mailbox's unread and flagged messages since `since_days` ago, newest first: at most
     `max_messages` unread, and every flagged one, each saying which account it's in. Opened
     read-only, and the headers fetched with `BODY.PEEK`, so nothing is marked read."""
-    secret = password(config, email)
     me = {a.lower() for a in (config.username, email) if "@" in a}
-    with _signed_in(config, secret) as imap:
+    with _signed_in(config, password) as imap:
         try:
             _ok(imap.select(_quoted(config.mailbox), readonly=True), "EXAMINE")
         except UnicodeEncodeError as err:
@@ -285,10 +275,10 @@ def _referenced(raw: bytes) -> set[str]:
         return set()
 
 
-def status(config: Mailbox, email: str) -> str:
+def status(config: Mailbox, password: str) -> str:
     """What changes when mail comes, goes or is read: the mailbox's message count, next UID,
     UID validity and unread count, as the server says them."""
-    with _signed_in(config, password(config, email)) as imap:
+    with _signed_in(config, password) as imap:
         [line] = _ok(
             imap.status(_quoted(config.mailbox), "(MESSAGES UIDNEXT UIDVALIDITY UNSEEN)"),
             "STATUS",

@@ -3,16 +3,20 @@ the macOS keychain, Windows' Credential Manager, or the desktop keyring on Linux
 `secret-tool`, where it's installed).
 
 Each is keyed by a service (e.g. `move-forward-jira`) and an account (my email).
-`mfd token set` stores a plugin's token with `write`; the plugin reads it with `token`.
+`mfd token set` stores a plugin's token with `write`; the plugin reads it with its
+context's `token` (`Context.token`), which calls `token` here.
 """
 
 import contextlib
 import ctypes
 import os
 import sys
-from typing import Protocol, runtime_checkable
+from typing import Any, ClassVar, Protocol, cast, runtime_checkable
+
+from pydantic import model_validator
 
 from .shell import CommandError, run
+from .strict import Strict
 
 
 @runtime_checkable
@@ -25,6 +29,45 @@ class TokenSettings(Protocol):
     def token_env(self) -> str: ...
     @property
     def keychain_service(self) -> str: ...
+
+
+class TokenFields(Strict):
+    """The base of a config section keeping one token (`TokenSettings`): its `token_env` and
+    `keychain_service`, defaulting to the section's `default_token_env` and
+    `default_keychain_service`, which a subclass sets (`JIRA_API_TOKEN`,
+    `move-forward-jira`)."""
+
+    default_token_env: ClassVar[str]
+    """`token_env` when the section doesn't set it."""
+    default_keychain_service: ClassVar[str]
+    """`keychain_service` when the section doesn't set it."""
+    token_env: str = ""
+    """The environment variable holding the token, read before the secret store."""
+    keychain_service: str = ""
+    """The service the token is stored under in the system's secret store (the macOS
+    keychain, Windows' Credential Manager, the desktop keyring) by `mfd token set`, when
+    `token_env` isn't set; its account is the top-level `email`."""
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        """Refuse a section that doesn't say its defaults, when it's defined rather than when a
+        config is first loaded."""
+        super().__pydantic_init_subclass__(**kwargs)
+        for name in ("default_token_env", "default_keychain_service"):
+            if not isinstance(getattr(cls, name, None), str):
+                raise TypeError(f"{cls.__name__} must set {name}, a TokenFields class variable")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_token_place(cls, data: Any) -> Any:
+        """The section's own defaults for what it leaves out."""
+        if not isinstance(data, dict):
+            return data
+        defaults = {
+            "token_env": cls.default_token_env,
+            "keychain_service": cls.default_keychain_service,
+        }
+        return defaults | cast(dict[str, Any], data)
 
 
 def token(settings: TokenSettings, account: str) -> str | None:

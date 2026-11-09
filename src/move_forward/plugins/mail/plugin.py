@@ -8,6 +8,7 @@ from ...api import (
     Changed,
     ChangedRequest,
     CollectRequest,
+    Context,
     EntitiesRequest,
     Entity,
     Identity,
@@ -29,7 +30,7 @@ from ...api import (
 from ...api.keychain import TokenSettings
 from ...api.kinds import PERSON
 from . import client
-from .config import MailConfig
+from .config import Mailbox, MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
@@ -44,6 +45,12 @@ def person_id(email: str) -> str:
     """The id of the `person` with address `email`: `mail/<address>`, the same whichever mail
     plugin publishes them, and apart from any code host's `<host>/<login>`."""
     return f"mail/{email}"
+
+
+def password(ctx: Context[MailConfig], mailbox: Mailbox) -> str:
+    """`mailbox`'s password (`ctx.token`, which says "no password" and how to give one when
+    there's none)."""
+    return ctx.token(mailbox.name, secret="password")
 
 
 def merged(read: list[Message], more: list[Message]) -> list[Message]:
@@ -86,6 +93,11 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     config_model = MailConfig
     api_version = API_VERSION
     snapshot_model = MailSnapshot
+    locked_settings: ClassVar[frozenset[str]] = frozenset(
+        {"host", "port", "message_url", "auth_servers"}
+    )
+    """Where its passwords are sent, where its items link (with my username in the link), and
+    whose word decides a sender is who they claim."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         # Its title is a subject anyone can write: a #tag in it puts no tag on it.
@@ -108,7 +120,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         ctx = req.ctx
         messages: list[Message] = []
         for mailbox in ctx.config.mailboxes():
-            messages = merged(messages, client.collect(mailbox, ctx.email, ctx.now).messages)
+            found = client.collect(mailbox, password(ctx, mailbox), ctx.email, ctx.now)
+            messages = merged(messages, found.messages)
         return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
     def store(self, req: StoreRequest[MailConfig, MailSnapshot]) -> None:
@@ -121,7 +134,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         """Whether a mailbox's counts moved since the last look: mail came, went or was
         read. One `STATUS` each, without opening the mailbox."""
         ctx = req.ctx
-        now = "\n".join(client.status(m, ctx.email) for m in ctx.config.mailboxes())
+        now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
         before = ctx.kv.get(STATUS)
         ctx.kv.set(STATUS, now)
         return Changed(before is not None and before != now, "the mailbox changed")

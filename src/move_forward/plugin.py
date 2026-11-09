@@ -10,14 +10,14 @@ what it uses.
 import argparse
 import logging
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
-from . import localtime, shell
+from . import keychain, localtime, shell
 from .act_now import DUE_HORIZON
 from .asking import Asker, InitSetup
 from .db import Database, Migration
@@ -63,6 +63,9 @@ class Context[C: BaseModel]:
     machine; the dashboard sends it on to `mfd.localhost`, where its sign-in cookie is."""
     name: str = ""
     """The plugin's name, as `Plugin.name`."""
+    tokens: Mapping[str, TokenSettings] | None = None
+    """Where each of the plugin's tokens is, as `Plugin.tokens` says, for `token`; None for
+    its default: the section's own, when it says where a token is."""
 
     @property
     def log(self) -> logging.Logger:
@@ -88,6 +91,30 @@ class Context[C: BaseModel]:
         """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
         as `github.derived` (see `collect_into`)."""
         return f"{self.name}.{name}"
+
+    def token(self, account: str | None = None, *, secret: str = "token") -> str:
+        """The plugin's token, or that of its account `account` (see `Plugin.tokens`; `""` is
+        the plugin's own too): from its `token_env`, else from the system's secret store under
+        its `keychain_service` for `email`. Raises SourceError, saying how to give one and
+        calling it `secret` (mail's is a "password"), when neither has it, and LookupError for
+        an account the plugin keeps no token for."""
+        kept = self.tokens if self.tokens is not None else _section_token(self.config)
+        name = account or ""
+        settings = kept.get(name)
+        if settings is None:
+            raise LookupError(f"{self.name} keeps no token for {name!r}")
+        if value := keychain.token(settings, self.email):
+            return value
+        stored = f"{self.name}.{name}" if name else self.name
+        raise SourceError(
+            f"no {secret}: run `mfd token set {stored}`, or set ${settings.token_env}"
+        )
+
+
+def _section_token(config: BaseModel) -> dict[str, TokenSettings]:
+    """A plugin's tokens by default (`Plugin.tokens`): its section's own, as `""`, when the
+    section has `token_env` and `keychain_service`; else none."""
+    return {"": config} if isinstance(config, TokenSettings) else {}
 
 
 @dataclass(frozen=True)
@@ -436,8 +463,14 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The section's optional settings with their defaults, commented out, as `mfd init`
     writes them under the section."""
     init_example: ClassVar[str] = ""
-    """The section's required settings, commented out, for a section `mfd init` writes
-    commented out because the plugin wasn't chosen."""
+    """The section's required settings with example values, commented out, for a section `mfd
+    init` writes commented out because the plugin wasn't chosen. `mfd init --example` writes
+    them uncommented for a plugin `init_example_on`."""
+    init_example_on: ClassVar[bool] = False
+    """`mfd init --example` writes the section on, with `init_example`'s values, rather than
+    commented out like a plugin `mfd init` wasn't asked for: for a tool most use. Off by
+    default, so a plugin whose `init_example` lacks a required key can't make the example
+    a config that won't load."""
     init_finds_teams: ClassVar[bool] = False
     """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
     locked_settings: ClassVar[frozenset[str]] = frozenset()
@@ -466,8 +499,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
         account for a plugin reading several (several mailboxes, say), stored as
         `<plugin>.<name>`. By default its section is its own token's place, when that has
         `token_env` and `keychain_service`. Each needs a `keychain_service` of its own: the
-        config is refused when two tokens share one."""
-        return {"": config} if isinstance(config, TokenSettings) else {}
+        config is refused when two tokens share one. Its context's `token` reads them."""
+        return _section_token(config)
 
     # Refresh
 
