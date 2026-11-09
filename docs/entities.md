@@ -31,8 +31,8 @@ in, e.g. `APP-12`, so `UTF-8` isn't one) is found in other entities'
 ## Families
 
 Core models what more than one tool may represent, in `move_forward.api.kinds`: the
-`pull_request` family (`PullRequest`, shown as "PR"), `ticket` (`Ticket`), `person`
-(`Person`) and `organisation` (`Organisation`). A plugin may declare more (`Plugin.families`, see
+`pull_request` family (`PullRequest`, shown as "PR"), `ticket` (`Ticket`) and `person`
+(`Person`). A plugin may declare more (`Plugin.families`, see
 [writing-a-plugin.md](writing-a-plugin.md)), each with a `handle` in its model, and publishes
 kinds only of core's families and those it declares. A plugin's kind named for a family must extend its model, adding its own fields
 (github's `number`, jira's `status`); the registry refuses one that doesn't. Refs to a
@@ -51,7 +51,6 @@ breaks its family's rule:
 | `pull_request` | its URL | `#7`, `!12` |
 | `ticket` | its URL | its key, `APP-12` |
 | `person` | `<host>/<login>`, e.g. `github.com/alice`; mail's are `mail/<address>` | the login, or the address |
-| `organisation` | `<host>/<its id there>`, e.g. `crm.example.com/acme` | its name |
 
 What the dashboard kept by a handle before (a priority on `APP-12`, a todo linked to it)
 gets the entity's id at each refresh, once the graph can say it (`Graph.identify`); until
@@ -143,26 +142,9 @@ points at a person is about them, so core ranks and badges its items by their co
 | `me` | bool | (github's) the person using the dashboard |
 | `email` | string or null | their address; github's is their commit email, imported or looked up from commits |
 | `contact_type` | string or null | what they are to me, when the tool knows, e.g. `customer`; one I set beats it |
-| `importance` | 0, 1, 2 or null | how much they matter to me, when the tool knows (a CRM's VIP, a starred contact); the highest of it and their type's counts, but a type I set on their address wins |
 
-No built-in plugin gives a person a `contact_type` or an `importance` yet: today both come
-from what I set (see the README's People).
-
-A person points at the `organisation`s they're at.
-
-### `organisation`
-
-The organisation family, modeled in core (`api.kinds.Organisation`): a CRM's account, a support
-tool's organisation, a company in an address book. No built-in plugin publishes one yet. What it
-is to me counts for the people pointing at it: its type when neither a tool nor I give the
-person one (a type I set on their address or domain, or a tool's on them, beats it), and its
-importance as a tool's on the person would, which only a type I set on their address beats.
-
-| Attribute | Type | Meaning |
-| --- | --- | --- |
-| `handle` | string | its name in the tool |
-| `contact_type` | string or null | what it is to me, when the tool knows, e.g. `customer` |
-| `importance` | 0, 1, 2 or null | how much it matters to me, when the tool knows (a key account); its people's items rank by the highest of it, their type's and what a tool says of them, unless I set a type on their address. Badged "key account" when it's the highest |
+No built-in plugin gives a person a `contact_type` yet: today it comes from what I set (see
+the README's People).
 
 ### `mail.thread`
 

@@ -210,12 +210,7 @@ An item about a person shows their contact type as a badge, and a Set type butto
 for that address or for everyone at its domain (not for a domain anyone can have an address at,
 like gmail.com). Once one is set, a Clear type button goes with it, asking first; one set on a
 domain says so, as it clears everyone there. A type I set beats one a tool gives, and one on an
-address beats one on its domain. A tool can also say outright how much someone matters (a CRM's
-VIP, a starred contact; no built-in plugin does yet), badged "VIP" when it's above their type's; a type I set on their
-address still wins, one on their domain doesn't. Someone a tool says works at an organisation
-(a CRM's account) takes its type when nothing else gives them one, and its importance as a
-tool's on them, badged "key account" when it's the highest; an item about the organisation
-itself shows the same, without Set type. The highest of that and their type's importance
+address beats one on its domain. Their type's importance (`[people] contact_types`)
 raises the item in Act now and in panels ordered by importance. It never lowers what a plugin
 said, and a priority I set on the item replaces it.
 

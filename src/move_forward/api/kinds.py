@@ -3,14 +3,12 @@ plugins to publish and read."""
 
 from ..kinds import (
     FAMILIES,
-    ORGANISATION,
     PERSON,
     PULL_REQUEST,
     REVIEW,
     TAG,
     TICKET,
     Family,
-    Organisation,
     Person,
     PullRequest,
     PullRequestFetched,
@@ -22,14 +20,12 @@ from ..kinds import (
 
 __all__ = [
     "FAMILIES",
-    "ORGANISATION",
     "PERSON",
     "PULL_REQUEST",
     "REVIEW",
     "TAG",
     "TICKET",
     "Family",
-    "Organisation",
     "Person",
     "PullRequest",
     "PullRequestFetched",
