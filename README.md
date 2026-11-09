@@ -120,7 +120,7 @@ before the command's name.
 | `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <PR URL> [7d\|12h]` | Snooze a PR's review until its head commit moves or the time is up (default: `[act_now]` `snooze_days` for PRs). `mfd unsnooze <entity> [--kind K] [--task T]` brings back anything snoozed or dismissed (named as for `mfd priority`; all its tasks, or `--task`'s). |
-| `mfd priority <entity> <0\|1\|2\|clear> [--kind K]` | Set how much an entity matters: 0 not important, 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
+| `mfd priority <entity> <1\|2\|clear> [--kind K]` | Set how much an entity matters: 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
 | `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one I put there off; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
 | `mfd snoozes` | Print the Act now items snoozed now as JSON (kind, id, task, until, fingerprint), for the skill. |
@@ -174,8 +174,9 @@ now stays first); the order is kept in the database, and focus mode follows
 it. A group or panel new since then goes after the one it followed by default.
 Panels that order by importance use the priority set on an item's subject first, then
 their own rank for ties.
-Every item with an entity subject but what's on ice, including a todo in the Notes panel or Focus mode, shows Not important,
-Important and Critical as one group of buttons (❕ / ❗️ / ‼️), highlighting the selected level. For an
+Every item with an entity subject but what's on ice, including a todo in the Notes panel or Focus mode, shows
+Important and Critical as one group of buttons (❗️ / ‼️), highlighting the selected level. To set
+something aside rather than raise it, Snooze, Dismiss or put it on ice. For an
 item about several entities, the choice applies to its first subject. Once one is set, a Clear priority button goes with them. Act now groups
 its Snooze, Dismiss, Pin and Put on ice choices too, with emoji icons. Emoji buttons show
 their text in a hover title and an accessible name.
@@ -355,7 +356,7 @@ over 64 KiB:
 | `/refresh` | `plugin` (optional) | Starts a background refresh of every plugin, or of `plugin` and those that collect after it; `400` for a plugin that isn't enabled or doesn't collect. |
 | `/layout/reset` | | Forgets the dragged order of groups and panels. |
 | `/actions/act_now/<snooze\|unsnooze\|dismiss\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`) | Snoozes an Act now item (and what's shown with it) until tomorrow, dismisses it, or pins or unpins it; `unsnooze` brings back what's snoozed or dismissed; `opened` dims it until it changes, or for a day (never replacing a pin or a snooze). |
-| `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 0 not important, 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
+| `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
 | `/actions/act_now/tag` | `kind`, `id` (the entity), `input` (the tag: `garbage-day`, `#Garbage Day`) | Puts the tag on the entity, as `mfd tag` does. |
 | `/actions/act_now/untag` | `kind`, `id`, `tag` (its handle) | Takes off a tag I put on it. |
 | `/actions/act_now/contact` | `choice` (an address or `@domain`), `input` (the type) | Sets what someone is to me, as `mfd contact` does. |

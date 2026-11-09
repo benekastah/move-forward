@@ -136,8 +136,8 @@ class Signals(Model):
     stale."""
     importance: int = Field(default=0, ge=-1, le=2)
     """-1 not important, 0 normal, 1 high, 2 critical: how much it matters beyond its size.
-    The plugin maps its tool's idea of it (an escalation, a priority) onto 0 to 2; -1 and a
-    replacement of the rest come from a priority I set (see `Nomination.prioritized`)."""
+    The plugin maps its tool's idea of it (an escalation, a priority) onto these; a priority I
+    set (1 or 2) replaces it (see `act_now.prioritized`)."""
     waiting_since: datetime | None = None
     """Since when `waiting` have waited (a review requested, a question unanswered): the
     longer, the higher it ranks."""

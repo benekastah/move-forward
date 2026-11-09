@@ -197,7 +197,7 @@ def _sorted(
 
     def importance(item: Item) -> int:
         assigned = [priority_of(ref) for ref in item.subjects]
-        levels = [act_now.PRIORITY_IMPORTANCE[level] for level in assigned if level is not None]
+        levels = [level for level in assigned if level is not None]
         own = [item.signals.importance if item.signals else 0]
         own += [contact_importance(ref) for ref in item.subjects]
         return max(levels, default=max(own))

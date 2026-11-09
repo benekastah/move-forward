@@ -598,8 +598,8 @@ _MEMBERS = TypeAdapter(
 
 
 def _set_priority(db: Database, fields: dict[str, str], now: datetime) -> ActionResult:
-    """The priority buttons on items: set the priority (`level`, 0 to 2) of the entity, or
-    clear it when there's no level."""
+    """The priority buttons on items: set the priority (`level`, 1 important or 2 critical)
+    of the entity, or clear it when there's no level."""
     ref = Ref(kind=fields["kind"], id=fields["id"])
     priorities = PriorityRepository(db)
     if "level" not in fields:

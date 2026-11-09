@@ -282,6 +282,23 @@ def test_feedback_kept_by_verb_is_kept_by_task(tmp_path: Path) -> None:
     )  # a new kind of feedback needs no rebuild
 
 
+def test_a_not_important_priority_is_dropped_and_the_others_kept(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE schema_versions (plugin TEXT PRIMARY KEY, version INTEGER)")
+    for migration in CORE_MIGRATIONS[:15]:
+        conn.executescript(str(migration.run))
+    conn.execute("INSERT INTO schema_versions VALUES ('core', 15)")
+    for id, level in (("a", 0), ("b", 1), ("c", 2)):
+        conn.execute("INSERT INTO priorities VALUES ('k', ?, ?, '2026-10-30')", (id, level))
+    conn.commit()
+    conn.close()
+
+    db = Database(path)
+    levels = {r["id"]: r["level"] for r in db.query("SELECT * FROM priorities")}
+    assert levels == {"b": 1, "c": 2}
+
+
 def test_a_database_from_before_the_ledger_gets_its_migrations_names(tmp_path: Path) -> None:
     path = tmp_path / "old.db"
     conn = sqlite3.connect(path)
@@ -354,7 +371,7 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
     db.execute("DROP TABLE tags")
     db.execute(
         "DELETE FROM migrations WHERE owner = 'core'"
-        " AND name IN ('0013_opened', '0014_contacts', '0015_tags')"
+        " AND name IN ('0013_opened', '0014_contacts', '0015_tags', '0016_no_unimportant_priority')"
     )
     db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
     db.execute(

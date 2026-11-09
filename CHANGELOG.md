@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### No "Not important" priority
+
+A priority is now important (1) or critical (2). `mfd priority <entity> 0` and
+`POST /actions/act_now/priority` with `level` 0 are refused, and the Not important button (❕) is
+gone. Priorities already set to 0 are deleted when the dashboard next starts. To set work
+aside, snooze, dismiss or put it on ice instead; a script that set 0 should do one of those.
+
 ### No more vcard plugin
 
 The vcard plugin, which read an address book's vCard files, is gone. A config with a `[vcard]`

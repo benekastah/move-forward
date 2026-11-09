@@ -40,7 +40,8 @@ MAX_MEMBERS = 20
 Units = Callable[[Ref], list[Ref]]
 """The units of work a subject is part of (see `Graph.units`)."""
 PriorityOf = Callable[[Ref], int | None]
-"""The priority I set on what a subject is, is part of or contains, 0 to 2; None if none."""
+"""The priority I set on what a subject is, is part of or contains, 1 important or 2
+critical; None if none."""
 FeedbackKey = tuple[str, str, str]
 """An item's main subject's kind and id, and its task (`Signals.task`): what feedback is kept
 by."""
@@ -214,7 +215,7 @@ def prioritized(nomination: Nomination, priority_of: PriorityOf) -> tuple[Nomina
     if not levels:
         return nomination, None
     level = max(levels)
-    signals = nomination.signals.model_copy(update={"importance": PRIORITY_IMPORTANCE[level]})
+    signals = nomination.signals.model_copy(update={"importance": level})
     return Nomination(
         nomination.plugin, nomination.item.model_copy(update={"signals": signals})
     ), level
@@ -293,12 +294,11 @@ def score(
 
 
 IMPORTANCE_WORDS = {-1: "not important", 1: "important", 2: "critical"}
-PRIORITIES = {0: "Not important", 1: "Important", 2: "Critical"}
-"""The priorities I can set, by level, as the buttons say them."""
-PRIORITY_ICONS = {0: "❕", 1: "❗️", 2: "‼️"}
+PRIORITIES = {1: "Important", 2: "Critical"}
+"""The priorities I can set, by level, as the buttons say them; a level is also the
+`Signals.importance` it stands for."""
+PRIORITY_ICONS = {1: "❗️", 2: "‼️"}
 """The visual icon beside each priority's unchanged label."""
-PRIORITY_IMPORTANCE = {0: -1, 1: 1, 2: 2}
-"""The `Signals.importance` each priority stands for."""
 
 
 def why(
@@ -508,7 +508,7 @@ def _member_fields(
 
 
 def importance_actions(subject: Ref, level: int | None) -> list[Action]:
-    """The three importance choices for a subject, with its current choice highlighted, and
+    """The importance choices for a subject (`PRIORITIES`), with its current choice highlighted, and
     a way to clear it once there is one."""
     fields = {"kind": subject.kind, "id": subject.id}
     return [

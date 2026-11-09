@@ -222,12 +222,12 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     priority_parser = commands.add_parser(
         "priority",
-        help="set how much an entity matters: 0 not important, 1 important, 2 critical, or clear",
+        help="set how much an entity matters: 1 important, 2 critical, or clear",
     )
     priority_parser.add_argument(
         "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
     )
-    priority_parser.add_argument("level", choices=["0", "1", "2", "clear"])
+    priority_parser.add_argument("level", choices=["1", "2", "clear"])
     priority_parser.add_argument("--kind", help="the entity's kind, e.g. notes.todo")
     tag_parser = commands.add_parser(
         "tag", help="put a #tag on an entity, or take one I put there off"

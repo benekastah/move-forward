@@ -283,16 +283,16 @@ def _ranked(importance: act_now.ContactImportance, priority: act_now.PriorityOf)
     return sorted((i for p in shown for i in p.items), key=lambda i: -i.rank)
 
 
-def test_act_now_ranks_a_customer_higher_unless_i_said_otherwise() -> None:
+def test_act_now_ranks_a_customer_higher_unless_i_set_a_priority_higher() -> None:
     contacts = _contacts(SENDER, _thread(SENDER), labels={"@acme.com": "customer"})
     shown = _ranked(contacts.importance, act_now.no_priority)
     assert [i.title for i in shown] == ["customer", "someone else"]
     assert shown[0].details[0] == "why: important"
 
-    def not_important(ref: Ref) -> int | None:
-        return 0 if ref == THREAD else None
+    def critical(ref: Ref) -> int | None:
+        return 2 if ref != THREAD else None
 
-    assert [i.title for i in _ranked(contacts.importance, not_important)] == [
+    assert [i.title for i in _ranked(contacts.importance, critical)] == [
         "someone else",
         "customer",
     ]
