@@ -62,7 +62,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   needs other plugins' entities to know what to fetch; `changed`, polled
   every `change_check_seconds` and right after each refresh of a plugin it
   `watches`, is a cheap check that its tool has something new, so the plugin
-  refreshes sooner. Rare work (the daily
+  refreshes sooner; it compares other plugins' entities with `previous_graph`, the graph
+  its last check was given, which core keeps. Rare work (the daily
   prune) can ask the owning plugin for entities its snapshot no longer holds
   with `graph.fetch`. Buttons, badges, details and links on other plugins' items
   come from `item_actions`, called per item with whose item it is and where it's

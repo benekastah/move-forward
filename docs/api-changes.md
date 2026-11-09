@@ -14,6 +14,10 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **The previous graph for a change check**: `ChangedRequest` gains `previous_graph`, the
+  graph the plugin's last change check was given (unless it raised), or None at the first
+  since the server started. A plugin that `watches` another compares it with `graph` to see
+  what that one's refresh moved, rather than keeping a digest of its entities in `ctx.kv`.
 - **Reporting a problem**: `ctx.problem(key, text)` reports something wrong that isn't the
   plugin's refresh failing (a lookup its token isn't allowed, a notifications poll refused,
   two clones of one repo) as its problem `key`, and `ctx.problem(key, None)` says it's gone.
