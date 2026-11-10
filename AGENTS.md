@@ -49,9 +49,14 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   until a collect started after stores (`change_checks.py`); and what else a plugin reports wrong with
   `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its state on
   the page and logged when it changes, rather than each plugin warning in its own way.
-- Every plugin hook that runs with the plugin's context takes one request object
-  (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
-  breaking its overrides. Those called before there's a context take what they need:
+- Every plugin hook that runs with the plugin's context takes one request object, so a hook
+  can gain an input without breaking its overrides. Most take one of four shapes, named for
+  what they carry: `ContextRequest(ctx)` (`load`, `linking_patterns`), `GraphRequest(ctx,
+  graph)` (`relate`, `after_collect`, `item_actions`, `prune`), `RefRequest(ctx, kind, id)`
+  (`url_for`, `handle_for`) and `SnapshotRequest(ctx, snapshot)` (`entities`, `identity`,
+  `store`). A hook with inputs of its own takes a request extending one of them with only
+  those (`PanelsRequest` is a `SnapshotRequest` with `graph`); add a field to it, or give a
+  hook that gains its first input of its own such a request. Those called before there's a context take what they need:
   `init_suggested()`, `init_questions(ask, setup)` and `init_shown(section)` (`mfd init`),
   `tokens(config)` (`mfd token`, and loading the config), `cli(parser)`, `pages()` and
   `actions()`.

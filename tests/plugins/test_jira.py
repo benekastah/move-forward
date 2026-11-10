@@ -17,8 +17,8 @@ from move_forward.plugin import (
     ActionError,
     ActionRequest,
     Context,
+    ContextRequest,
     FetchRequest,
-    LinkingRequest,
     SourceError,
 )
 from move_forward.plugins.jira import actions
@@ -221,13 +221,13 @@ def test_ticket_keys_are_only_those_of_projects_my_tickets_have_been_in() -> Non
     db = Database(":memory:")
     db.migrate("jira", MIGRATIONS)
     plugin = JiraPlugin()
-    assert plugin.linking_patterns(LinkingRequest(_ctx(db))) == {"ticket": None}  # nothing seen yet
+    assert plugin.linking_patterns(ContextRequest(_ctx(db))) == {"ticket": None}  # nothing seen yet
     first = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
     repo = IssueRepository(db)
     repo.replace(JiraSnapshot(issues=[first.model_copy(update={"key": "OPS_2-7"})]))
     repo.replace(JiraSnapshot(issues=[first]))  # OPS_2's last ticket is gone: still known
     assert repo.projects() == ["APP", "OPS_2"]
-    graph = Graph(linking=plugin.linking_patterns(LinkingRequest(_ctx(db))))
+    graph = Graph(linking=plugin.linking_patterns(ContextRequest(_ctx(db))))
     found = graph.named("APP-1, OPS_2-9, UTF-8, SHA-256, XAPP-3")
     assert [r.id for r in found] == ["APP-1", "OPS_2-9"]
 

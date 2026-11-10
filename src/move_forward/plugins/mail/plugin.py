@@ -10,13 +10,11 @@ from ...api import (
     ChangedRequest,
     CollectRequest,
     Context,
-    EntitiesRequest,
+    ContextRequest,
     Entity,
     Identity,
-    IdentityRequest,
     InitSetup,
     KindSpec,
-    LoadRequest,
     Migration,
     PageHandler,
     PageRequest,
@@ -25,7 +23,7 @@ from ...api import (
     Plugin,
     Ref,
     Response,
-    StoreRequest,
+    SnapshotRequest,
     attrs,
 )
 from ...api.keychain import TokenSettings
@@ -129,10 +127,10 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
             messages = merged(messages, found.messages)
         return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
-    def store(self, req: StoreRequest[MailConfig, MailSnapshot]) -> None:
+    def store(self, req: SnapshotRequest[MailConfig, MailSnapshot]) -> None:
         MessageRepository(req.ctx.db).replace(req.snapshot)
 
-    def load(self, req: LoadRequest[MailConfig]) -> MailSnapshot | None:
+    def load(self, req: ContextRequest[MailConfig]) -> MailSnapshot | None:
         return MessageRepository(req.ctx.db).load()
 
     def changed(self, req: ChangedRequest[MailConfig]) -> Changed:
@@ -142,12 +140,12 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
         return Changed(fingerprint=now, reason="the mailbox changed")
 
-    def identity(self, req: IdentityRequest[MailConfig, MailSnapshot]) -> Identity | None:
+    def identity(self, req: SnapshotRequest[MailConfig, MailSnapshot | None]) -> Identity | None:
         return Identity(
             tool=self.title, login=", ".join(m.username for m in req.ctx.config.mailboxes())
         )
 
-    def entities(self, req: EntitiesRequest[MailConfig, MailSnapshot]) -> list[Entity]:
+    def entities(self, req: SnapshotRequest[MailConfig, MailSnapshot | None]) -> list[Entity]:
         found: list[Entity] = []
         people: dict[str, Entity] = {}
         for thread in threads(req.snapshot):

@@ -24,7 +24,7 @@ from conftest import (
 
 from move_forward import render, server
 from move_forward.graph import Graph
-from move_forward.plugin import Context, PageRequest, PruneRequest
+from move_forward.plugin import Context, GraphRequest, PageRequest
 from move_forward.plugins.github.models import Check
 from move_forward.plugins.slack import plugin as slack_plugin
 from move_forward.plugins.slack.config import (
@@ -165,7 +165,7 @@ def test_old_pings_are_pruned() -> None:
     for when in (NOW - timedelta(days=100), NOW - timedelta(days=10)):
         repo.add_ping(Ping(pr_url="https://pr/1", target="user:a", kind="first", sent_at=when))
     [slack] = [e for e in enabled(config, db, NOW) if e.name == "slack"]
-    assert slack.plugin.prune(PruneRequest(slack.ctx, Graph())) == ["deleted 1 old ping(s)"]
+    assert slack.plugin.prune(GraphRequest(slack.ctx, Graph())) == ["deleted 1 old ping(s)"]
     assert [p.sent_at for p in repo.pings()] == [NOW - timedelta(days=10)]
 
 

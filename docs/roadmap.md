@@ -11,19 +11,6 @@ salesperson on a CRM and a calendar) can run the dashboard with only the plugins
 and new tools can be added without touching the others. Plugins interact only through a
 small shared entity graph.
 
-## First: finish simplifying
-
-The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but for the last of
-its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api), in one PR, as each changes
-the hooks a plugin implements:
-
-- **B2:** call `url_for`, `handle_for` and `fetch` only on the plugin whose `kinds` include
-  the kind, and default `url_for` to the id for families whose ids are URLs.
-- **B3:** one item-actions hook (`prepare_item_actions`, renamed) instead of it and
-  `item_actions`.
-- **B7:** merge the hooks' request types into about four shapes (context; context and graph;
-  context, kind and id; context and snapshot).
-
 ## Next, in this order
 
 1. **[Buttons and consistency](#buttons-and-consistency)**, below.

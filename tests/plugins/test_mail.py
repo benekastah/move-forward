@@ -17,8 +17,8 @@ from move_forward.graph import Entity, Graph, Ref, attrs
 from move_forward.kinds import PERSON, Person
 from move_forward.plugin import (
     CollectRequest,
-    IdentityRequest,
     Response,
+    SnapshotRequest,
     SourceError,
 )
 from move_forward.plugins.mail import client
@@ -1260,7 +1260,7 @@ def test_two_mailboxes_keep_their_messages_apart_and_say_whose_they_are() -> Non
     plugin = MailPlugin()
     config = cast(MailConfig, harness.ctx.config)
     assert sorted(plugin.tokens(config)) == ["home", "work"]
-    identity = plugin.identity(IdentityRequest(harness.ctx, snapshot))
+    identity = plugin.identity(SnapshotRequest(harness.ctx, snapshot))
     assert identity is not None and identity.login == "me@gmail.com, me@work.example"
 
 

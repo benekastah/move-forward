@@ -8,12 +8,11 @@ from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ActionRequest,
-    EntitiesRequest,
+    ContextRequest,
     Entity,
     Item,
     KindModel,
     KindSpec,
-    LoadRequest,
     Model,
     Notify,
     PageHandler,
@@ -23,7 +22,7 @@ from move_forward.api import (
     Plugin,
     Ref,
     Signals,
-    StoreRequest,
+    SnapshotRequest,
     attrs,
 )
 from move_forward.api.kinds import FAMILIES, PULL_REQUEST, Family, PullRequest, is_url
@@ -66,14 +65,14 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     kinds: ClassVar[dict[str, KindSpec]] = {ISSUE: KindSpec(IssueAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = {"to_triage": "an issue is to triage"}
 
-    def store(self, req: StoreRequest[LinearConfig, LinearSnapshot]) -> None:
+    def store(self, req: SnapshotRequest[LinearConfig, LinearSnapshot]) -> None:
         req.ctx.kv.set("snapshot", req.snapshot.model_dump_json())
 
-    def load(self, req: LoadRequest[LinearConfig]) -> LinearSnapshot | None:
+    def load(self, req: ContextRequest[LinearConfig]) -> LinearSnapshot | None:
         kept = req.ctx.kv.get("snapshot")
         return LinearSnapshot.model_validate_json(kept) if kept else None
 
-    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
+    def entities(self, req: SnapshotRequest[LinearConfig, LinearSnapshot | None]) -> list[Entity]:
         issues = req.snapshot.issues if req.snapshot else []
         team = req.ctx.config.team
         return [
@@ -215,7 +214,7 @@ class CrmPlugin(Plugin[LinearConfig, LinearSnapshot]):
     families = (Family("deal", "deal", Deal, is_url),)
     kinds: ClassVar[dict[str, KindSpec]] = {"deal": KindSpec(Deal)}
 
-    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
+    def entities(self, req: SnapshotRequest[LinearConfig, LinearSnapshot | None]) -> list[Entity]:
         return [
             Entity(ref=Ref(kind="deal", id=id), title="Big", attrs=attrs(Deal(handle="D-1")))
             for id in ("https://crm/deals/1", "D-1")  # the second breaks the family's rule

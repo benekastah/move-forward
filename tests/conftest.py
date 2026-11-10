@@ -15,7 +15,7 @@ from move_forward.domain import Model
 from move_forward.notifications import Event
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
-from move_forward.plugin import AfterCollectRequest
+from move_forward.plugin import GraphRequest
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
@@ -270,7 +270,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     plugins = enabled(config, db, NOW)
     notes = next(e for e in plugins if e.name == "notes")
     notes.plugin.after_collect(
-        AfterCollectRequest(notes.ctx, stored_graph(db, plugins)[0])
+        GraphRequest(notes.ctx, stored_graph(db, plugins)[0])
     )  # what ice covers
     if derived is not None:
         DerivedRepository(db).replace(derived)
