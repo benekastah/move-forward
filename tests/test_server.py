@@ -724,8 +724,9 @@ def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
     assert app.check_for_changes(1060.0) == set()  # the check failed; tried again later
     assert app.check_for_changes(1120.0) == {"github"}
     assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
-    # A refresh asks once more, to forget what it changed itself, and starts the wait over.
-    monkeypatch.setattr(_GitHubWithChecks, "answers", [True, True])
+    # A refresh starts the wait over, and asks nothing itself: its collect is asked as it
+    # starts (see `refresh`), and what moves after that counts at the next check.
+    monkeypatch.setattr(_GitHubWithChecks, "answers", [True])
     monkeypatch.setattr(server.time, "monotonic", lambda: 2000.0)
     app.refresh_now({"github"})
     assert _GitHubWithChecks.answers == [True]
@@ -812,11 +813,11 @@ def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     app.config = app.config.with_section("git", GitConfig(repos=[]))
     migrate(app.config, app.db)
-    monkeypatch.setattr(_GitHubWatchingGit, "answers", [True, False, False])
+    monkeypatch.setattr(_GitHubWatchingGit, "answers", [True, False])
     app.refresh_now({"git"})
     assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
     app._pending = set()  # pyright: ignore[reportPrivateUsage]
-    app.refresh_now({"github"})  # its own refresh: asked only to forget what it did
+    app.refresh_now({"github"})  # its own refresh: not asked here (its collect is)
     app.refresh_now({"git"})  # nothing of github's moved
     assert app._pending == set() and _GitHubWatchingGit.answers == []  # pyright: ignore[reportPrivateUsage]
     assert app.check_for_changes() == set()  # no change_check_seconds: never polled

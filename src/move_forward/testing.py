@@ -21,6 +21,7 @@ from typing import Any, ClassVar
 from pydantic import BaseModel, ConfigDict
 
 from . import refresh, registry, render
+from .change_checks import ChangeChecks
 from .config import Config
 from .db import Database
 from .domain import KindModel
@@ -31,6 +32,9 @@ from .page import Item, Panel, Surface
 from .panels import Dashboard
 from .plugin import (
     API_VERSION,
+    Changed,
+    CollectAfterRequest,
+    CollectRequest,
     Context,
     EntitiesRequest,
     PanelsRequest,
@@ -112,6 +116,8 @@ class Harness:
         self._seeds: list[_Seed] = []
         self._events: list[Event] | None = None
         """The events of the last `store`; None before the first."""
+        self._checks = ChangeChecks()
+        """What the plugin's change checks said moved, as the server keeps it."""
         with self._installed():
             registry.check_plugins([plugin])
             self.config = self._config()
@@ -153,6 +159,31 @@ class Harness:
             self._events = refresh.events_of(
                 me, before.snapshots[self.name], me.snapshot(), before.graph, self.graph()
             )
+
+    def collect(self) -> BaseModel:
+        """Collect and keep the snapshot as a refresh of the server does: the plugin asked what
+        moved first (with a change check), its `collect` (or `collect_after`) given what moved
+        since its last collect that stored, and then `store`d. Returns the snapshot."""
+        with self._installed():
+            me = self._enabled()
+            graph = self.graph()
+            taken = self._checks.take(me, graph)
+            if self.plugin.collects_after_graph:
+                snapshot = self.plugin.collect_after(
+                    CollectAfterRequest(me.ctx, graph, taken.full, taken.subjects)
+                )
+            else:
+                snapshot = self.plugin.collect(CollectRequest(me.ctx, taken.full, taken.subjects))
+        self.store(snapshot)
+        with self._installed():
+            self._checks.stored(self._enabled(), taken)
+        return snapshot
+
+    def changed(self) -> Changed | None:
+        """Ask the plugin's change check, as the server does every `change_check_seconds`:
+        its answer when something new moved, so the server would refresh it, else None."""
+        with self._installed():
+            return self._checks.check(self._enabled(), self.graph())
 
     def tick(self, seconds: float) -> None:
         """Move the harness's clock on."""

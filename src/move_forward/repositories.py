@@ -279,6 +279,82 @@ class ContactRepository:
             return conn.execute("DELETE FROM contacts WHERE who = ?", (who,)).rowcount > 0
 
 
+class ChangeState(BaseModel):
+    """What core holds of a plugin's change checks (`change_checks`, `change_subjects`)."""
+
+    fingerprint: str | None = None
+    """The last answer's fingerprint; None before the first, or from a plugin without one."""
+    checked_at: datetime | None = None
+    """When core took that answer."""
+    subjects: frozenset[str] = frozenset()
+    """What moved, by the checks since, that no collect given it has stored."""
+    everything: bool = False
+    """Whether something moved that no subject names, since the last full collect stored."""
+    full_at: datetime | None = None
+    """When the last full collect that stored started."""
+
+
+class ChangeRepository:
+    """What each plugin's change checks said moved, for the next check and collect (see
+    `change_checks.ChangeChecks`)."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def get(self, plugin: str) -> ChangeState:
+        rows = self._db.query("SELECT * FROM change_checks WHERE plugin = ?", (plugin,))
+        subjects = self._db.query("SELECT subject FROM change_subjects WHERE plugin = ?", (plugin,))
+        found = frozenset(r["subject"] for r in subjects)
+        if not rows:
+            return ChangeState(subjects=found)
+        row = rows[0]
+        return ChangeState(
+            fingerprint=row["fingerprint"],
+            checked_at=row["checked_at"],
+            subjects=found,
+            everything=bool(row["everything"]),
+            full_at=row["full_at"],
+        )
+
+    def checked(
+        self,
+        plugin: str,
+        fingerprint: str | None,
+        at: datetime,
+        subjects: Collection[str],
+        everything: bool,
+    ) -> None:
+        """Keep an answer taken `at`: its fingerprint in place of the last, and what it says
+        moved with what's pending."""
+        with self._db.transaction() as conn:
+            conn.execute(
+                "INSERT INTO change_checks (plugin, fingerprint, checked_at, everything)"
+                " VALUES (?, ?, ?, ?) ON CONFLICT (plugin) DO UPDATE SET"
+                " fingerprint = excluded.fingerprint, checked_at = excluded.checked_at,"
+                " everything = max(everything, excluded.everything)",
+                (plugin, fingerprint, at.isoformat(), int(everything)),
+            )
+            conn.executemany(
+                "INSERT OR IGNORE INTO change_subjects VALUES (?, ?)",
+                [(plugin, s) for s in subjects],
+            )
+
+    def collected(self, plugin: str, subjects: Collection[str], full_at: datetime | None) -> None:
+        """A collect given `subjects` stored: they're no longer pending, and when it was a
+        full one (it started at `full_at`), neither is everything."""
+        with self._db.transaction() as conn:
+            conn.executemany(
+                "DELETE FROM change_subjects WHERE plugin = ? AND subject = ?",
+                [(plugin, s) for s in subjects],
+            )
+            if full_at is not None:
+                conn.execute(
+                    "INSERT INTO change_checks (plugin, full_at) VALUES (?, ?)"
+                    " ON CONFLICT (plugin) DO UPDATE SET everything = 0, full_at = excluded.full_at",
+                    (plugin, full_at.isoformat()),
+                )
+
+
 class ProblemRepository:
     """What the plugins report wrong besides a failed refresh (`problems`), by plugin and the
     plugin's key: kept until the plugin clears it (`Context.problem`), or `prune` finds it

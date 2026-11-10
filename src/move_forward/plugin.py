@@ -239,6 +239,15 @@ class KeptItemRequest[C: BaseModel]:
 @dataclass(frozen=True)
 class CollectRequest[C: BaseModel]:
     ctx: Context[C]
+    full: bool = True
+    """Whether to fetch everything: when the plugin's `refresh_seconds` have passed since the
+    last full collect that stored, when its change checks saw something move that no subject
+    names, and when they named nothing. Otherwise fetching `subjects` is enough, keeping the
+    rest as stored."""
+    subjects: frozenset[str] = frozenset()
+    """What the plugin's change checks said moved (`Changed.subjects`) since a collect given
+    it last stored: core keeps it until one does, so a collect that fails, or a store that
+    does, loses none of it."""
 
 
 @dataclass(frozen=True)
@@ -246,6 +255,10 @@ class CollectAfterRequest[C: BaseModel]:
     ctx: Context[C]
     graph: Graph
     """The graph with what the plugins collecting first just stored."""
+    full: bool = True
+    """As `CollectRequest.full`."""
+    subjects: frozenset[str] = frozenset()
+    """As `CollectRequest.subjects`."""
 
 
 @dataclass(frozen=True)
@@ -288,15 +301,29 @@ class ChangedRequest[C: BaseModel]:
     """The graph as it was at the plugin's last change check that didn't raise, to compare
     with `graph` for what other plugins' refreshes moved since (a plugin that `watches`
     them); None at the first check since the dashboard started."""
+    fingerprint: str | None = None
+    """The fingerprint of the last answer core took (`Changed.fingerprint`), for a plugin
+    that tells what moved by comparing its parts; None before the first."""
+    checked_at: datetime | None = None
+    """When core took that answer, for a tool asked what moved since a time; None before the
+    first."""
 
 
 @dataclass(frozen=True)
 class Changed:
-    """`changed`'s answer, with why, for the log."""
+    """`changed`'s answer: what moved in the plugin's tool, which core keeps (see
+    `Plugin.changed`)."""
 
-    changed: bool
+    changed: bool = False
+    """Something moved that `subjects` doesn't name, so the next collect is a full one."""
     reason: str = ""
     """What changed, e.g. "notifications about 2 PRs"; it goes into the log line."""
+    fingerprint: str | None = None
+    """The tool's state now, as text that changes whenever it moves (a digest, a mailbox's
+    counts); None for a plugin that has none. Core keeps it and compares the next with it."""
+    subjects: frozenset[str] = frozenset()
+    """What moved, in the plugin's own terms (repos, PRs), for `collect` to fetch just
+    those (`CollectRequest.subjects`)."""
 
     def __bool__(self) -> bool:
         return self.changed
@@ -458,7 +485,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
     `github.pr_mergeable`."""
     change_check_seconds: ClassVar[int | None] = None
-    """How often `mfd serve` asks `changed`; None for a plugin without such a check."""
+    """How often `mfd serve` asks `changed`; None for a plugin without such a check. It's
+    asked as each collect starts too, whether it's set or the plugin `watches` another."""
     watches: ClassVar[list[str]] = []
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
@@ -516,8 +544,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     # Refresh
 
     def collect(self, req: CollectRequest[C]) -> S:
-        """Fetch the plugin's snapshot. Runs in parallel with other plugins' and may raise;
-        the error is shown and the last good snapshot kept. It has five minutes
+        """Fetch the plugin's snapshot: everything, or with `req.full` False just what its
+        change checks said moved (`req.subjects`). Runs in parallel with other plugins' and
+        may raise; the error is shown and the last good snapshot kept. It has five minutes
         (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
         failed and goes on, and leaves it out of refreshes until its collect returns (a thread
         can't be stopped)."""
@@ -558,16 +587,20 @@ class Plugin[C: BaseModel, S: BaseModel]:
         caching lookups in the plugin's tables."""
 
     def changed(self, req: ChangedRequest[C]) -> Changed:
-        """Whether what the plugin collects has changed since this was last asked, by a check
-        far cheaper than `collect` (files' times, a request answered "not modified", other
-        plugins' entities in `graph`, built from what's stored), so the plugin refreshes soon
-        after a change rather than at its next `refresh_seconds`. Other plugins' entities are
-        compared with `previous_graph`, which core keeps; keep anything else it compares
-        against in `ctx.kv`, and with nothing to compare with yet, say `Changed(False)`. Say
-        why it changed in `Changed.reason`, for the log. Core asks once more after each
-        refresh of the plugin and ignores the answer, so what the refresh did itself (`git
-        status` rewriting the index) doesn't count. May raise; the error is logged and the
-        next check tries again."""
+        """What moved in the plugin's tool, by a check far cheaper than `collect` (files'
+        times, a request answered "not modified", other plugins' entities in `graph`, built
+        from what's stored), so the plugin refreshes soon after a change rather than at its
+        next `refresh_seconds`. Say it as a `fingerprint` of the tool's state, which core
+        compares with the last (`req.fingerprint`), the `subjects` that moved, or that
+        something moved that no subject names (`changed`); or both. Other plugins' entities
+        are compared with `previous_graph`, which core keeps too. Say why in `reason`, for the
+        log.
+
+        Core asks again as each collect of the plugin starts, so what moves while it runs is
+        compared with what it read, and gives `collect` what moved since a collect last
+        stored. It asks for a refresh only when something new moved: a different
+        fingerprint, a subject not yet pending, or `changed`. May raise; the error is logged
+        and the next check tries again."""
         return Changed(False)
 
     # Reading

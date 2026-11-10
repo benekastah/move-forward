@@ -327,6 +327,25 @@ CREATE TABLE problems (                -- kept: what a plugin reports wrong that
 """Problems the plugins report besides a failed refresh, kept across restarts so they're
 shown, and logged, once rather than again after each."""
 
+_V20_CHANGE_CHECKS = """
+CREATE TABLE change_checks (           -- kept: what each plugin's change check (`changed`) last
+    plugin TEXT PRIMARY KEY,           -- said, for the next to be compared with, and when it
+                                       -- last collected everything
+    fingerprint TEXT,                  -- the last answer's fingerprint (`Changed.fingerprint`)
+    checked_at TEXT,                   -- when core took that answer
+    everything INTEGER NOT NULL DEFAULT 0, -- 1: something moved that no subject names, so the
+                                       -- next collect is a full one
+    full_at TEXT                       -- when the last full collect that stored started
+);
+CREATE TABLE change_subjects (         -- kept: what a change check said moved
+    plugin TEXT NOT NULL,              -- (`Changed.subjects`), until a collect given it stores
+    subject TEXT NOT NULL,
+    PRIMARY KEY (plugin, subject)
+);
+"""
+"""Core's record of what moved in each plugin's tool, which the plugins each kept in their kv
+before: kept across restarts, so a move seen before one is still collected after it."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -347,6 +366,7 @@ CORE_MIGRATIONS = [
     Migration("0017_dismiss_is_a_snooze", _V17_DISMISS_IS_A_SNOOZE),
     Migration("0018_shown_notices", _V18_SHOWN_NOTICES),
     Migration("0019_problems", _V19_PROBLEMS),
+    Migration("0020_change_checks", _V20_CHANGE_CHECKS),
 ]
 
 _SCHEMA_VERSIONS = """
