@@ -14,6 +14,8 @@ stays off until the plugin that publishes the item next refreshes, which puts it
 tool or the text still has it. A script reading items' buttons in `mfd dump` sees an Untag per
 tag; `mfd tag --remove` says "had no #tag" (no longer "of mine") when the tag wasn't on it.
 A tool's label is named by its words in text, as other tags are, rather than only with its `#`.
+Its badge is a plain string, `"#bug"`, like every tag's, no longer `{"text": "#bug", "tone":
+"label"}`: a script reading badges reads a tag's as a string.
 
 ### The page filters by tag
 
