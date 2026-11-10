@@ -366,11 +366,15 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
         stacks=stacks(StackBranch(name="me/a", parent="main"), dir=str(repo)),
     )
 
+    checked: list[Graph] = []  # as core keeps them, for the next check
+
     def changed() -> bool:
         plugins = enabled(config, db, NOW)
         e = next(e for e in plugins if e.name == "git_stack")
         graph = refresh.stored_graph(db, plugins)[0]
-        return GitStackPlugin().changed(ChangedRequest(e.ctx, graph)).changed
+        previous = checked[-1] if checked else None
+        checked.append(graph)
+        return GitStackPlugin().changed(ChangedRequest(e.ctx, graph, previous)).changed
 
     assert not changed()  # the first look notes where things stand
     assert not changed()
@@ -583,9 +587,9 @@ def test_a_linked_worktrees_config_is_its_main_repositorys(tmp_path: Path) -> No
     )
     linked = tmp_path / "linked"
     git(repo, "worktree", "add", "-q", "-b", "side", str(linked))
-    before = changes.fingerprint(Graph(), [str(linked)])
+    before = changes.configs([str(linked)])
     git(repo, "config", "branch.side.stackParent", "main")  # as `git stack` records it
-    assert changes.fingerprint(Graph(), [str(linked)]) != before
+    assert changes.configs([str(linked)]) != before
 
 
 def test_the_branches_kept_before_current_was_dropped_are_kept() -> None:

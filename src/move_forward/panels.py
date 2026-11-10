@@ -123,6 +123,9 @@ class Dashboard(Model):
     sources: dict[str, SourceStatus]
     problems: list[str] = Field(default_factory=list[str])
     """What's wrong with the installed plugins: those left out, and why."""
+    plugin_problems: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
+    """What each enabled plugin reports wrong besides a failed refresh (`Context.problem`), by
+    plugin; a plugin without any isn't there."""
 
     def panel(self, key: str) -> Panel:
         return next(p for p in self.panels if p.key == key)

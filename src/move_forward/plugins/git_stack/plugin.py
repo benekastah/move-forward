@@ -34,8 +34,8 @@ from .panels import CLEAN, STACK_BRANCH, Builder, entities, repo_dirs, untrack_i
 from .repository import MIGRATIONS, StackRepository
 from .setup import TEMPLATE
 
-FINGERPRINT = "stacks_fingerprint"
-"""The kv key of the last `changes.fingerprint`."""
+CONFIGS = "configs_fingerprint"
+"""The kv key of the last `changes.configs`: what git stack recorded, which no graph shows."""
 
 
 class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
@@ -67,13 +67,20 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
 
     def changed(self, req: ChangedRequest[GitStackConfig]) -> Changed:
         """Whether a stack may have moved since the last look (see `changes`): asked right
-        after each refresh of git, rather than collecting with every one."""
-        ctx, graph = req.ctx, req.graph
-        now = changes.fingerprint(graph, repo_dirs(graph))
-        before = ctx.kv.get(FINGERPRINT)
+        after each refresh of git, rather than collecting with every one. Its branches are
+        compared with the graph at the last look, and the config files with what's kept of
+        them in `CONFIGS`."""
+        ctx, graph, previous = req.ctx, req.graph, req.previous_graph
+        dirs = repo_dirs(graph)
+        now = changes.configs(dirs)
+        before = ctx.kv.get(CONFIGS)
         if now != before:
-            ctx.kv.set(FINGERPRINT, now)
-        return Changed(before is not None and now != before, "a stack may have moved")
+            ctx.kv.set(CONFIGS, now)
+        moved = previous is not None and (
+            changes.branches(previous, dirs) != changes.branches(graph, dirs)
+        )
+        recorded = before is not None and now != before
+        return Changed(moved or recorded, "a stack may have moved")
 
     def load(self, req: LoadRequest[GitStackConfig]) -> GitStackSnapshot | None:
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""

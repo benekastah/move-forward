@@ -99,6 +99,13 @@ sequenceDiagram
     R->>P: daily prune, then after_collect(graph)
 ```
 
+`mfd serve` also builds it from what's stored for each round of change checks (`changed`),
+and keeps the one each plugin's last check was given (unless that check raised), to give it
+to the next as `previous_graph`. A plugin that `watches` another compares the two to see
+what that one's refresh moved: github sees a branch of one of my PRs move from git's
+`git.branch` entities, without keeping where they stood itself. The first check since the
+server started has none to compare with.
+
 ## Reading it
 
 ```python
