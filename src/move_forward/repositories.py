@@ -279,6 +279,101 @@ class ContactRepository:
             return conn.execute("DELETE FROM contacts WHERE who = ?", (who,)).rowcount > 0
 
 
+class ChangeState(BaseModel):
+    """What core holds of a plugin's change checks (`change_checks`, `change_subjects`)."""
+
+    fingerprint: str | None = None
+    """The last answer's fingerprint; None before the first, or from a plugin without one."""
+    checked_at: datetime | None = None
+    """When core took that answer."""
+    checks: int = 0
+    """How many answers core has taken: the last one's number, which a collect starting now
+    has seen everything up to."""
+    subjects: frozenset[str] = frozenset()
+    """What moved, by the checks since, that no collect started after has stored."""
+    everything: bool = False
+    """Whether something moved that no subject names, and no full collect started after has
+    stored."""
+    full_at: datetime | None = None
+    """When the last full collect that stored started."""
+
+
+class ChangeRepository:
+    """What each plugin's change checks said moved, for the next check and collect (see
+    `change_checks.ChangeChecks`). Each answer is numbered, and what it said moved is kept
+    with its number, so a collect that stores settles only what moved before it started."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def get(self, plugin: str) -> ChangeState:
+        # The count before the subjects: a subject numbered past the count read would be taken
+        # as settled by a collect that didn't see it. Read in this order, one written between
+        # the two queries is only ever newer than the count, so it stays pending.
+        with self._db.reading():
+            rows = self._db.query("SELECT * FROM change_checks WHERE plugin = ?", (plugin,))
+            subjects = self._db.query(
+                "SELECT subject FROM change_subjects WHERE plugin = ?", (plugin,)
+            )
+        found = frozenset(r["subject"] for r in subjects)
+        if not rows:
+            return ChangeState(subjects=found)
+        row = rows[0]
+        return ChangeState(
+            fingerprint=row["fingerprint"],
+            checked_at=row["checked_at"],
+            checks=row["checks"],
+            subjects=found,
+            everything=row["everything"] is not None,
+            full_at=row["full_at"],
+        )
+
+    def checked(
+        self,
+        plugin: str,
+        fingerprint: str | None,
+        at: datetime,
+        subjects: Collection[str],
+        everything: bool,
+    ) -> None:
+        """Keep an answer taken `at`, numbered after the last: its fingerprint in place of the
+        last, and what it says moved with what's pending, by its number."""
+        with self._db.transaction() as conn:
+            conn.execute(
+                "INSERT INTO change_checks (plugin, fingerprint, checked_at, checks, everything)"
+                " VALUES (?1, ?2, ?3, 1, CASE WHEN ?4 THEN 1 END) ON CONFLICT (plugin) DO UPDATE"
+                " SET fingerprint = excluded.fingerprint, checked_at = excluded.checked_at,"
+                " checks = checks + 1,"
+                " everything = CASE WHEN ?4 THEN checks + 1 ELSE everything END",
+                (plugin, fingerprint, at.isoformat(), int(everything)),
+            )
+            [(number,)] = conn.execute(
+                "SELECT checks FROM change_checks WHERE plugin = ?", (plugin,)
+            ).fetchall()
+            conn.executemany(
+                "INSERT INTO change_subjects VALUES (?, ?, ?)"
+                " ON CONFLICT (plugin, subject) DO UPDATE SET check_number = excluded.check_number",
+                [(plugin, s, number) for s in subjects],
+            )
+
+    def collected(self, plugin: str, seen: int, full_at: datetime | None) -> None:
+        """A collect that started once the answers up to number `seen` were taken stored: what
+        they said moved is no longer pending, and when it was a full one (it started at
+        `full_at`), neither is what no subject names."""
+        with self._db.transaction() as conn:
+            conn.execute(
+                "DELETE FROM change_subjects WHERE plugin = ? AND check_number <= ?",
+                (plugin, seen),
+            )
+            if full_at is not None:
+                conn.execute(
+                    "INSERT INTO change_checks (plugin, full_at) VALUES (?1, ?2)"
+                    " ON CONFLICT (plugin) DO UPDATE SET full_at = excluded.full_at,"
+                    " everything = CASE WHEN everything <= ?3 THEN NULL ELSE everything END",
+                    (plugin, full_at.isoformat(), seen),
+                )
+
+
 class ProblemRepository:
     """What the plugins report wrong besides a failed refresh (`problems`), by plugin and the
     plugin's key: kept until the plugin clears it (`Context.problem`), or `prune` finds it

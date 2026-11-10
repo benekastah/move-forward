@@ -16,7 +16,6 @@ from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref, attrs
 from move_forward.kinds import PERSON, Person
 from move_forward.plugin import (
-    ChangedRequest,
     CollectRequest,
     IdentityRequest,
     Response,
@@ -638,15 +637,28 @@ def test_without_a_message_url_mail_is_not_linked() -> None:
 def test_changed_says_so_when_the_mailbox_counts_move(imap: Callable[..., FakeImap]) -> None:
     server = imap([(1, "", headers())])
     harness = mailbox()
-    plugin = MailPlugin()
 
     def changed() -> bool:
-        return plugin.changed(ChangedRequest(harness.ctx, harness.graph())).changed
+        return harness.changed() is not None
 
     assert not changed()  # the first look has nothing to compare with
     assert not changed()
     server.messages.append((2, "", headers(message_id="m2@acme.com")))
     assert changed()
+
+
+def test_mail_that_comes_while_a_collect_runs_is_seen_and_mail_it_read_isnt_seen_again(
+    imap: Callable[..., FakeImap],
+) -> None:
+    server = imap([(1, "", headers())])
+    harness = mailbox()
+    assert harness.changed() is None  # the first look
+    server.messages.append((2, "", headers(message_id="m2@acme.com")))
+    harness.collect()  # reads it
+    assert harness.changed() is None
+    harness.collect()
+    server.messages.append((3, "", headers(message_id="m3@acme.com")))  # after it read
+    assert harness.changed() is not None
 
 
 def test_init_guesses_gmail_from_my_email() -> None:
@@ -1239,10 +1251,9 @@ def test_a_mailbox_changing_refreshes_it(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(client, "status", status)
     harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
-    plugin = MailPlugin()
-    assert not plugin.changed(ChangedRequest(harness.ctx, harness.graph())).changed
+    assert harness.changed() is None
     counts["work"] = "2"
-    assert plugin.changed(ChangedRequest(harness.ctx, harness.graph())).changed
+    assert harness.changed() is not None
 
 
 def test_the_messages_kept_before_accounts_are_kept_as_mails_own() -> None:

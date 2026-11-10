@@ -14,6 +14,22 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **Core keeps what moved**: `changed` says what moved in the tool, and core keeps it, not
+  the plugin. `Changed` takes keywords only: `fingerprint` (the tool's state as text, which
+  core compares with the last), `subjects` (what moved since the last check, in the
+  plugin's own terms),
+  `everything` (something moved that no subject names; it was `changed`) and `reason`;
+  `Changed()` says nothing moved, and an answer is no longer true or false. `ChangedRequest` gains `fingerprint` and
+  `checked_at`, the last answer's fingerprint and when it was taken, and `CollectRequest`
+  and `CollectAfterRequest` gain `subjects` (what moved since a collect last stored, which
+  core keeps until a collect started after it stores) and `full` (whether to fetch
+  everything: the plugin's first collect since the dashboard started, `refresh_seconds`
+  since the last full collect that stored, something unnamed moved, or nothing's pending).
+  Core asks `changed` as each collect starts, and no longer once more after a refresh,
+  ignoring the answer; it asks for a refresh whenever a check says something moved since
+  the last, so a check names a subject only when it moved again, and what's pending after a
+  collect that fails no longer asks for one at every check. A plugin drops the
+  fingerprints, pending sets and full-collect times it kept in `ctx.kv`.
 - **The previous graph for a change check**: `ChangedRequest` gains `previous_graph`, the
   graph the plugin's last change check was given (unless it raised), or None at the first
   since the server started. A plugin that `watches` another compares it with `graph` to see
@@ -54,8 +70,7 @@ for themselves (a token, a request, an example config) is core's.
 - **Two hooks no plugin overrode are gone**: `refresh_seconds(ctx)` (a plugin refreshes on
   its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
   place under other names overrides `tokens(config)`, returning `{"": settings}`).
-- **`changed` returns a `Changed`**, never a bare bool: `Changed(True, "why")` or
-  `Changed(False)`.
+- **`changed` returns a `Changed`**, never a bare bool (see "Core keeps what moved" above).
 - **`init_suggested()` is False by default**: `mfd init` suggests a plugin only when it
   overrides it to say True.
 - **`api.http` is `request` and `RequestError`**: `api.http.opener` and

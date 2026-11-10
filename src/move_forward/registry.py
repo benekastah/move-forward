@@ -249,6 +249,15 @@ class Enabled:
     def name(self) -> str:
         return self.plugin.name
 
+    @property
+    def refresh_seconds(self) -> int | None:
+        """How often the plugin refreshes on its own: its section's `refresh_seconds`; None
+        for one that doesn't collect, or has no such setting."""
+        if not self.plugin.collects:
+            return None
+        seconds: object = getattr(self.ctx.config, "refresh_seconds", None)
+        return seconds if isinstance(seconds, int) else None
+
     def snapshot(self) -> BaseModel | None:
         """What the plugin last stored; None when it has nothing, or its `load` fails."""
         with self.ctx.db.reading():  # all of one refresh's, never half of the next's
