@@ -45,8 +45,8 @@ class TokenFields(Strict):
     """The environment variable holding the token, read before the secret store."""
     keychain_service: str = ""
     """The service the token is stored under in the system's secret store (the macOS
-    keychain, Windows' Credential Manager, the desktop keyring) by `mfd token set`, when
-    `token_env` isn't set; its account is the top-level `email`."""
+    keychain, Windows' Credential Manager, the desktop keyring) by `mfd token set <plugin>`,
+    when `token_env` isn't set; its account is the top-level `email`."""
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:

@@ -2,12 +2,9 @@
 
 from ...api import Asker, InitSetup, channel, url
 
-TEMPLATE = """\
-# ping_first = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
-# ping_follow_up = "Gentle bump on this review request"
-# token_env = "SLACK_API_TOKEN"          # a token with users:read.email, to find Slack ids by email
-# keychain_service = "move-forward-slack" # else the system's secret store, for your email
-# [slack.teams]                         # where review pings to a team go, by its name in `teams`
+TABLES = """\
+# Where review pings to a team go, by its name in `teams`.
+# [slack.teams]
 # my-team = "#team-my-team"
 """
 EXAMPLE = '# workspace_url = "https://example.slack.com"\n'

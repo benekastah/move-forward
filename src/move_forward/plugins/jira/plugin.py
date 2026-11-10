@@ -51,7 +51,7 @@ from .config import JiraConfig
 from .kinds import JiraTicket
 from .models import JiraIssue, JiraSnapshot
 from .repository import MIGRATIONS, IssueRepository
-from .setup import EXAMPLE, TEMPLATE, questions
+from .setup import EXAMPLE, questions
 
 CHECKED = "changes_checked_at"
 """The kv key of when `changed` last looked."""
@@ -402,7 +402,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         " then store it with `mfd token set jira` (or export it as JIRA_API_TOKEN)"
     )
     title = "Jira"
-    init_template = TEMPLATE
     init_example = EXAMPLE
     config_model = JiraConfig
     api_version = API_VERSION

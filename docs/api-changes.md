@@ -62,9 +62,19 @@ for themselves (a token, a request, an example config) is core's.
   `api.http.require_https` have left `api`. Send a request with `api.http.request`, which
   checks for HTTPS and refuses redirects itself.
 - **The example config is the plugins'**: `mfd init --example` is built from each offered
-  plugin's `init_example` and `init_template`, as `mfd init` writes them, installed plugins'
-  too. A plugin setting `init_example_on` has its section on there, with `init_example`
-  uncommented; any other's is commented out.
+  plugin's section as `mfd init` writes it, installed plugins' too. A plugin setting
+  `init_example_on` has its section on there, with `init_example` uncommented; any other's
+  is commented out.
+- **Commented defaults come from the model**: `init_template` is gone, and a plugin still
+  setting it is refused (`mfd check` says why). `mfd init` writes
+  each optional key of `config_model` itself, commented out, with its default (a
+  `TokenFields` section's `default_token_env` and `default_keychain_service` for an empty
+  `token_env` and `keychain_service`) and its docstring's first sentence as its comment. A
+  plugin keeps what the model can't say: `init_tables`, commented tables of example entries
+  (`[github.teams]`), whose keys aren't written again (nor the tables, when the section's
+  answers have one), and `init_shown(section)`, the method giving an example value, for that
+  section's values, for a key whose default is None or says less. A field marked
+  `json_schema_extra={"tables": True}` is left to `init_tables`.
 - **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
   its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;
   with neither, it raises `SourceError` with core's message ("no token: run `mfd token set

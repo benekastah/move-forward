@@ -61,7 +61,7 @@ to expect, and each reads all of its part.
 - **The parts**, each with the prefix its findings are numbered by:
   - **every plugin** (its name: `mail`, `github`): `src/move_forward/plugins/<name>/`, its tests
     in `tests/plugins/` and its page in `docs/plugins/`: its bugs, what it publishes against
-    `docs/entities.md`, its config keys in their three places, its use of `move_forward.api`
+    `docs/entities.md`, its config keys in their two places, its use of `move_forward.api`
     alone;
   - **core** (`core`): `src/move_forward/` but the plugins, and core's tests (`tests/` but
     `tests/plugins/`): the graph, Act now, panels, rendering, the server and the CLI;

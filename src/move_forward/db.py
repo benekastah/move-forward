@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .private import make_private
+from .shell import CommandError
 
 log = logging.getLogger(__name__)
 
@@ -371,9 +372,22 @@ def _private(path: Path) -> None:
     """Make `path` a file only I can read, creating it empty if it isn't there: the notes and
     what the plugins fetched are mine, not other users' of this machine. On Unix SQLite gives
     its -wal and -shm files the database's permissions; on Windows they'd take their folder's,
-    so `Database` makes them first (see `_side_files`)."""
-    os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
-    make_private(path)
+    so `Database` makes them first (see `_side_files`). Another connection closing can delete
+    a side file between its making and its access list's (the last one out of a WAL database
+    removes them): then it's made again. One deleted after it was made private, and made again
+    by SQLite with its folder's access, is made private once the connection holds them open
+    (see `Database`); a handle another user opened in between keeps its access, which matters
+    only where `db_path`'s folder lets other users in."""
+    for attempt in range(3):
+        os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
+        try:
+            make_private(path)
+            return
+        except CommandError:
+            # Still there (or made again by another connection's SQLite): a failure of its
+            # own, such as access denied, which must not be passed over.
+            if path.exists() or attempt == 2:
+                raise
 
 
 def _side_files(path: Path) -> list[Path]:
@@ -410,6 +424,14 @@ class Database:
         """Held by whoever uses the connection; re-entered by `reading`'s holder's queries."""
         with self._lock:
             self._conn.executescript(_SCHEMA_VERSIONS)
+        if self._path and sys.platform == "win32":
+            # Held open by this connection now, so no other's closing can delete them: one
+            # deleted while the other was being made, which SQLite made again with its
+            # folder's access, is made private from here on (a handle opened before keeps
+            # its access, as an access list only checks new ones).
+            for side in _side_files(self._path):
+                if side.exists():
+                    make_private(side)
         self.migrate(CORE, CORE_MIGRATIONS)
 
     def migrate(

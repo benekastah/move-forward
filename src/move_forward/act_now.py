@@ -113,6 +113,8 @@ class ActNowConfig(Strict):
     per_plugin: int = Field(default=3, ge=1)
     """How many of them one plugin may fill, so one busy tool can't take the whole list."""
     weights: Weights = Field(default_factory=Weights)
+    """What each signal adds to an item's score, e.g. `{ waiting = 5 }`; a weight left out
+    keeps its default."""
     blocked_stale_days: int = Field(default=3, ge=0)
     """Days a blocked item can go untouched before Act now stops ranking it down, since
     something blocked this long is worth chasing; 0 ranks blocked items down always."""

@@ -8,34 +8,10 @@ from .client import api
 from .config import DEFAULT_HOST
 
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
-TEMPLATE = """\
-# host = "github.com"                   # a GitHub Enterprise Server's host instead
-# refresh_seconds = 300                 # how often it refreshes (GitHub's API is rate-limited)
-# search_scope = "org"                 # my PR searches: "org" (this org's repos) or "everywhere"
-# history_days = 14                      # how far back merged and closed PRs are fetched
-# policy_checks = []                     # checks that enforce PR policy, not CI, e.g. ["pr-policy"]
-# ignored_reviewers = []                 # logins whose comments aren't feedback, e.g. a policy bot
-# required_owner_marker = ""             # CODEOWNERS comment marking required owners, e.g. "#!required"
-# ticket_link_prefixes = []             # PR body lines that link the ticket start with one, e.g. ["Link", "Closes"]
-# placeholder_labels = []                # template labels to replace, e.g. ["needs-team"]
-# default_team_reviewer_assignment = "team" # team requests count without an individual
-# team_reviewer_assignment = {}          # by slug, e.g. { bacon = "individual" }
-# primary_reviewer_repos = []            # repos whose PRs have a primary reviewer as an assignee, e.g. ["acme/widgets"]
-# email_domains = []                     # reviewers' email domains, if not just your email's
-# stale_review_hours = 24                # a review request this old can be nudged
-# merge_queue_eviction_days = 2        # how long a merge-queue removal stays in CI failures
-# stale_draft_days = 14                # my drafts untouched this long get a housekeeping line (0: off)
-# quick_review_max_lines = 100           # a review of at most this many lines (and files below) takes minutes
-# quick_review_max_files = 5
-# hour_review_max_lines = 300            # within these, an hour; beyond, a day
-# hour_review_max_files = 12
-# split_pr_suggest_lines = 600           # my PRs this big "may need splitting"
-# split_pr_lines = 800                   # ...and this big are "worth splitting"
-# split_pr_labels = []                   # labels that mean worth splitting, e.g. ["size/XL"]
-# [github.merge]
-# method = "squash"                      # where a repo allows several; else GitHub's pick for me
-# [github.teams]                         # a team's slug, where it isn't the team's name
-# web = "web-reviewers"
+TABLES = """\
+# A team's slug, by its name in `teams`, where it isn't the team's name.
+# [github.teams]
+# my-team = "my-team-reviewers"
 """
 EXAMPLE = '# org = "example-org"\n'
 

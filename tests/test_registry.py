@@ -301,3 +301,14 @@ def test_a_plugin_named_for_a_core_indexs_prefix_is_refused() -> None:
 
     with pytest.raises(RuntimeError, match="would own core's pings_"):
         registry.check_plugins([Pings()])
+
+
+def test_a_plugin_setting_the_removed_init_template_is_told_what_replaced_it() -> None:
+    class Old(Plugin[Strict, KindModel]):
+        name = "old"
+        config_model = Strict
+        api_version = API_VERSION
+        init_template = "# [old.teams]\n# web = 'web'\n"
+
+    with pytest.raises(RuntimeError, match="old sets init_template.*init_tables.*init_shown"):
+        registry.check_plugins([Old()])
