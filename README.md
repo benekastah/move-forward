@@ -125,7 +125,7 @@ before the command's name.
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <entity> [7d\|12h\|changed] [--kind K] [--task T]` | Snooze the items about an entity (named as for `mfd priority`; all its tasks, or `--task`'s), as their Snooze button does: each until it changes or the time is up (default: `[act_now]` `snooze_days` for its kind); with `changed`, only until it changes. It snoozes what has a Snooze button, in Act now or a panel, and says so when nothing does. `mfd unsnooze <entity> [--kind K] [--task T]` brings back anything snoozed (named as for `mfd priority`; all its tasks, or `--task`'s). |
 | `mfd priority <entity> <1\|2\|clear> [--kind K]` | Set how much an entity matters: 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
-| `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one I put there off; see [Tags](#tags). |
+| `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one off it, whatever put it there; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
 | `mfd snoozes` | Print the Act now items snoozed now, as the page has them (the snooze's time isn't up and the item hasn't changed since), including items on ice, which the page hides, as JSON (kind, id, task, until, fingerprint; `until` is null for a snooze until it changes), for the skill. |
 | `mfd import <dir> [--replace]` | Read the move-forward skill's markdown notes (`work-notes.md`, `on-ice.md`, `reviewer-map.md`) from `<dir>`: each enabled plugin imports what it knows of them, saying what, prefixed with its name. Notes already holding notes skip them, saying so, unless `--replace`, which overwrites the notes. One failing (a file it can't read) doesn't stop the others; the command fails then, and when nothing in `<dir>` is imported. See each plugin's page for what it reads. |
@@ -226,19 +226,22 @@ said, and a priority I set on the item replaces it.
 
 ## Tags
 
-A `#tag` in an item's title or description (a PR's, a todo's; not in code or an HTML comment)
-puts the tag on it, as does a label its tool gives it (where its plugin says so: a tag only
-labels give, often a common word like `bug`, is named only with its `#`), and so does
-its Tag field, on any item about something (a mail, a ticket, a branch), or `mfd tag`. Items
-show their tags as badges: those put on by hand first, each with an Untag button, then those in
-their text, then their tool's labels, coloured apart since only the tool takes them off. One
-put on by hand is kept until I take it off, or the item is gone (a deleted entry, a ticked-off todo, a mail once read); it stays
-on finished work, a merged PR or a done ticket. Text that names
-it, in a title or a description, however its words are spaced, hyphenated or cased ("Garbage day
-moved" names `#garbage-day`), points at it. A tag's words are separated by `-` or `_`; it needs
-a letter (`#7` is a PR's number), and one word shorter than three letters is named only with
-its `#`. Tags relate items without making them one piece of work: icing
-one, or setting its priority, doesn't touch the others. Core publishes each as a `tag` entity
+An item's tags come from its tool (a PR's or a ticket's labels: each plugin's page says
+which), from a `#tag` in its title or description (a PR's, a todo's; not in code or an HTML
+comment), and from me: its Tag field, on any item about something (a mail, a ticket, a branch),
+or `mfd tag`. All tags are alike: each is a `#tag` badge, filters the page (below), and has an
+Untag button, which takes it off whatever put it there. One I put on goes for good; one from its
+tool or text stays off until the plugin the item is from next refreshes, which puts it back if
+the tool or the text still has it (notes never refreshes: there it stays off until I Tag it
+again). A tag I put on stays on finished work (a merged PR, a done ticket); what I put on or
+took off is forgotten once the item is gone (a deleted entry, a ticked-off todo, a mail once
+read).
+
+A tag's words are separated by `-` or `_`, and it needs a letter (`#7` is a PR's number). Text
+that names a tag, in a title or a description, however its words are spaced, hyphenated or cased
+("Garbage day moved" names `#garbage-day`), points at it; a one-word tag shorter than three
+letters is named only with its `#`. Tags relate items without making them one piece of work:
+icing one, or setting its priority, doesn't touch the others. Core publishes each as a `tag` entity
 (see [entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
 shows.
 
@@ -382,7 +385,7 @@ over 64 KiB:
 | `/actions/act_now/<snooze\|unsnooze\|pin\|unpin\|opened>` | `kind`, `id` (the item's main subject), `task` (what doing it is, e.g. `review`), `fingerprint`; `also` (optional: what's shown with it, as a JSON list of `[kind, id, task, fingerprint]`); for `snooze`, `choice` (optional: `changed` for until it changes, else empty or left out for `[act_now]` `snooze_days`) | Snoozes an Act now item (and what's shown with it) for `snooze_days` (until tomorrow by default) or until it changes, or pins or unpins it; `unsnooze` brings back what's snoozed; `opened` dims it until it changes, or for a day (never replacing a pin, or a snooze still in force). |
 | `/actions/act_now/priority` | `kind`, `id` (the entity), `level` (optional: 1 important, 2 critical) | Sets how much the entity matters, as `mfd priority` does; without `level`, clears it. |
 | `/actions/act_now/tag` | `kind`, `id` (the entity), `input` (the tag: `garbage-day`, `#Garbage Day`) | Puts the tag on the entity, as `mfd tag` does. |
-| `/actions/act_now/untag` | `kind`, `id`, `tag` (its handle) | Takes off a tag I put on it. |
+| `/actions/act_now/untag` | `kind`, `id`, `tag` (its handle) | Takes the tag off it, whatever put it there (see [Tags](#tags)). |
 | `/actions/act_now/contact` | `choice` (an address or `@domain`), `input` (the type) | Sets what someone is to me, as `mfd contact` does. |
 | `/actions/act_now/contact_clear` | `who` (an address or `@domain`) | Clears the type I set. |
 
@@ -405,7 +408,7 @@ entry on ice comes off it once its work is over the same way (a stack stays
 until it's reopened), what the notes remembered (`mfd notes remember`) as happening that long ago is forgotten,
 pings that old leave the database, and so do Act now's
 snoozes once over, and its other snoozes and pins that old. A priority set on work that's since
-finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. A plugin's problem it
+finished is cleared, and so is a tag I put on, or took off, a work entry, todo or mail thread that's gone. A plugin's problem it
 hasn't reported for that long is forgotten (the plugin was taken out of the config, or no
 longer checks for it). Reviewer email and Slack id
 lookups that found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
@@ -416,8 +419,8 @@ Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 `dashboard.db` holds what each plugin last fetched, in that plugin's own
 tables (kept when a refresh fails, with the error shown alongside), the
 notes in the notes plugin's tables, the page's dragged order (core's `layout`), what you
-snoozed or pinned in Act now (core's `act_now_feedback`), the priorities, tags and
-contact types you set, the sign-in sessions, the notifications waiting to be told, what
+snoozed or pinned in Act now (core's `act_now_feedback`), the priorities, tags (those you put
+on, and those you took off until their plugin refreshes) and contact types you set, the sign-in sessions, the notifications waiting to be told, what
 the panels last showed that notifies when new and the problems the plugins report (core's too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
 plugin's (from `mfd import`, or looked up from commits), and the messages
 mail reads in its own. It's the

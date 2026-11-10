@@ -119,15 +119,17 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     )
     priority_parser.add_argument("level", choices=["1", "2", "clear"])
     priority_parser.add_argument("--kind", help="the entity's kind, e.g. notes.todo")
-    tag_parser = commands.add_parser(
-        "tag", help="put a #tag on an entity, or take one I put there off"
-    )
+    tag_parser = commands.add_parser("tag", help="put a #tag on an entity, or take one off it")
     tag_parser.add_argument(
         "entity", help="a PR's URL, a ticket's key, an entry's title, or (with --kind) an id"
     )
     tag_parser.add_argument("tag", help="e.g. garbage-day or #garbage-day")
     tag_parser.add_argument("--kind", help="the entity's kind, e.g. mail.thread")
-    tag_parser.add_argument("--remove", action="store_true", help="take the tag off")
+    tag_parser.add_argument(
+        "--remove",
+        action="store_true",
+        help="take the tag off: one from a tool or text comes back at its plugin's next refresh",
+    )
     contact_parser = commands.add_parser(
         "contact", help="set what someone is to me, e.g. a customer, or clear it"
     )
@@ -421,8 +423,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         repo = TagRepository(db)
         if args.remove:
-            removed = repo.remove(ref, tag)
-            print(f"#{tag} taken off {ref.id}" if removed else f"{ref.id} had no #{tag} of mine")
+            removed = tags.take_off(repo, graph, ref, tag, datetime.now(UTC))
+            print(f"#{tag} taken off {ref.id}" if removed else f"{ref.id} had no #{tag}")
         else:
             added = repo.add(ref, tag, datetime.now(UTC))
             print(f"{ref.id}: #{tag}" if added else f"{ref.id} has #{tag} already")

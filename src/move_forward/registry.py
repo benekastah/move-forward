@@ -7,6 +7,7 @@ import pkgutil
 import threading
 import time
 from collections.abc import Callable, Mapping
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import entry_points
@@ -393,6 +394,7 @@ def build_graph(
     plugins: list[Enabled],
     snapshots: dict[str, BaseModel | None],
     tagged: Mapping[Ref, list[str]] | None = None,
+    untagged: Mapping[Ref, AbstractSet[str]] | None = None,
 ) -> Graph:
     """The graph of every plugin's entities. A plugin publishes only the kinds it declares;
     each entity must fit its kind's model, and be the only one of its ref (the first
@@ -400,8 +402,9 @@ def build_graph(
     (`kinds.Family.id_rule`). One that isn't is a plugin bug:
     it's logged and left out, and the page goes on without it. So is a plugin whose
     `entities`, `url_for` or `linking_patterns` raises: the graph is built without its
-    answer. Core adds the `tag`s on the entities, in their titles or `tagged` by hand, and
-    points those whose text names one at it (see `tags`)."""
+    answer. Core adds the `tag`s on the entities, from their tools and text but those
+    `untagged`, and those `tagged` by hand, and points those whose text names one at it (see
+    `tags`)."""
     entities: list[Entity] = []
     seen: set[Ref] = set()
     for e in plugins:
@@ -491,7 +494,7 @@ def build_graph(
     for e in plugins:
         for kind, spec in e.plugin.kinds.items():
             specs.setdefault(kind, spec)  # a family's first publisher's
-    entities = tags.tagged(entities, specs, tagged)
+    entities = tags.tagged(entities, specs, tagged, untagged)
     hiding = [kind for kind, spec in specs.items() if spec.hides]
     graph = Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
     related = _relations(plugins, graph)

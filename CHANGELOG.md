@@ -5,6 +5,16 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Any tag can be taken off
+
+Every tag on an item is alike, and has its Untag button: a tool's label and a `#tag` in the
+item's text as well as one I put on. `POST /actions/act_now/untag` and `mfd tag <entity> <tag>
+--remove` take off any tag, not only mine. One I put on goes for good; one from a tool or text
+stays off until the plugin that publishes the item next refreshes, which puts it back if the
+tool or the text still has it. A script reading items' buttons in `mfd dump` sees an Untag per
+tag; `mfd tag --remove` says "had no #tag" (no longer "of mine") when the tag wasn't on it.
+A tool's label is named by its words in text, as other tags are, rather than only with its `#`.
+
 ### The page filters by tag
 
 `/` and `/focus` take `tag` query parameters, repeated for several (`/?tag=chores&tag=bins`),

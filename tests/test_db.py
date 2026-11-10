@@ -446,6 +446,7 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
     db.execute("DROP TABLE shown_notices")
     db.execute("DROP TABLE shown_plugins")
     db.execute("DROP TABLE problems")
+    db.execute("DROP TABLE tag_removals")
     db.execute("DELETE FROM migrations WHERE owner = 'core' AND name >= '0013'")
     db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
     db.execute(
@@ -467,6 +468,7 @@ def test_a_dismissal_is_kept_as_a_snooze_until_it_changes(tmp_path: Path) -> Non
     db.execute("DROP TABLE shown_notices")
     db.execute("DROP TABLE shown_plugins")
     db.execute("DROP TABLE problems")
+    db.execute("DROP TABLE tag_removals")
     db.execute("DELETE FROM migrations WHERE owner = 'core' AND name >= '0017'")
     db.execute("UPDATE schema_versions SET version = 16 WHERE plugin = 'core'")
     rows = [

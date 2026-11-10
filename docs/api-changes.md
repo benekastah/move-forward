@@ -14,6 +14,10 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **One kind of tag**: a tag from `Entity.tags` (a tool's labels) is like any other. Text
+  names it by its words, not only with its `#`, and I can take it off (Untag), as I can a
+  `#tag` in an entity's text; either comes back at the plugin's next refresh if the tool or
+  the text still has it. A plugin that reads `tag` entities sees one only while it's on.
 - **The previous graph for a change check**: `ChangedRequest` gains `previous_graph`, the
   graph the plugin's last change check was given (unless it raised), or None at the first
   since the server started. A plugin that `watches` another compares it with `graph` to see

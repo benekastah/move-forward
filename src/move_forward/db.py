@@ -327,6 +327,20 @@ CREATE TABLE problems (                -- kept: what a plugin reports wrong that
 """Problems the plugins report besides a failed refresh, kept across restarts so they're
 shown, and logged, once rather than again after each."""
 
+_V20_TAG_REMOVALS = """
+CREATE TABLE tag_removals (            -- kept until its plugin next refreshes: a tag from a tool
+                                       -- or text I took off an entity (see `tags.take_off`)
+    kind TEXT NOT NULL,
+    id TEXT NOT NULL,
+    tag TEXT NOT NULL,                 -- its handle, e.g. garbage-day
+    plugin TEXT NOT NULL,              -- what publishes the entity: its next refresh puts it back
+    removed_at TEXT NOT NULL,
+    PRIMARY KEY (kind, id, tag)
+);
+"""
+"""Any tag can be taken off. One I put on goes from `tags`; one its tool or text gives the
+entity is kept off here, until the refresh that would find it again."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -347,6 +361,7 @@ CORE_MIGRATIONS = [
     Migration("0017_dismiss_is_a_snooze", _V17_DISMISS_IS_A_SNOOZE),
     Migration("0018_shown_notices", _V18_SHOWN_NOTICES),
     Migration("0019_problems", _V19_PROBLEMS),
+    Migration("0020_tag_removals", _V20_TAG_REMOVALS),
 ]
 
 _SCHEMA_VERSIONS = """

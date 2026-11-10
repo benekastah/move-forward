@@ -220,13 +220,16 @@ class PriorityRepository:
 
 
 class TagRepository:
-    """The `#tags` I put on entities (`tags`), by handle: kept until I take them off, or the
-    entity is gone where gone means done (`tags.forget_gone`)."""
+    """The `#tags` I put on entities (`tags`), by handle, kept until I take them off; and those
+    from a tool or text I took off (`tag_removals`), kept until the plugin that published the
+    entity next refreshes. Both go when the entity is gone where gone means done
+    (`tags.forget_gone`)."""
 
     def __init__(self, db: Database):
         self._db = db
 
     def all(self) -> dict[Ref, list[str]]:
+        """The tags I put on entities."""
         found: dict[Ref, list[str]] = {}
         for row in self._db.query("SELECT * FROM tags ORDER BY created_at, tag"):
             found.setdefault(Ref(kind=row["kind"], id=row["id"]), []).append(row["tag"])
@@ -242,16 +245,43 @@ class TagRepository:
             return cursor.rowcount == 1
 
     def clear(self, ref: Ref) -> None:
-        """Take every tag off the entity."""
-        self._db.execute("DELETE FROM tags WHERE kind = ? AND id = ?", (ref.kind, ref.id))
+        """Forget every tag I put on the entity or took off it."""
+        with self._db.transaction() as conn:
+            for table in ("tags", "tag_removals"):
+                conn.execute(f"DELETE FROM {table} WHERE kind = ? AND id = ?", (ref.kind, ref.id))
 
     def remove(self, ref: Ref, tag: str) -> bool:
-        """Whether it was on the entity."""
+        """Take a tag I put on the entity off it; whether it was on it."""
         with self._db.transaction() as conn:
             cursor = conn.execute(
                 "DELETE FROM tags WHERE kind = ? AND id = ? AND tag = ?", (ref.kind, ref.id, tag)
             )
             return cursor.rowcount == 1
+
+    def taken_off(self) -> dict[Ref, set[str]]:
+        """The tags from a tool or text I took off entities, until their plugins refresh."""
+        found: dict[Ref, set[str]] = {}
+        for row in self._db.query("SELECT kind, id, tag FROM tag_removals"):
+            found.setdefault(Ref(kind=row["kind"], id=row["id"]), set()).add(row["tag"])
+        return found
+
+    def take_off(self, ref: Ref, tag: str, plugin: str, now: datetime) -> None:
+        """Keep `tag` off the entity, which `plugin` publishes, until the plugin next refreshes
+        (`put_back`)."""
+        self._db.execute(
+            "INSERT OR REPLACE INTO tag_removals VALUES (?, ?, ?, ?, ?)",
+            (ref.kind, ref.id, tag, plugin, now.isoformat()),
+        )
+
+    def put_back(self, plugin: str, refreshed: datetime) -> int:
+        """Let the tags I took off what `plugin` publishes come back, now that its refresh,
+        started at `refreshed`, has found them again (or not); one taken off since stays off.
+        How many."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM tag_removals WHERE plugin = ? AND removed_at < ?",
+                (plugin, refreshed.isoformat()),
+            ).rowcount
 
 
 class ContactRepository:
