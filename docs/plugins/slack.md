@@ -25,7 +25,7 @@ up the Slack id of every reviewer my open PRs ask for whom nothing names one for
 github knows for them. The token needs the `users:read.email` scope; a lookup that finds nobody
 is tried again once it's `prune_days` old (they may have joined Slack since), and an import or
 a value set by hand wins over a lookup. A lookup that fails (a token without the scope, a rate
-limit, no network) stops that refresh's, and is a problem, in the page's footer, until a
+limit, no network) stops that refresh's, and is a problem, on Slack's group, until a
 refresh's lookups don't fail.
 
 ## Panels

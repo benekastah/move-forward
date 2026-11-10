@@ -131,6 +131,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     watches: ClassVar[list[str]] = ["git"]
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
 
+    def __init__(self) -> None:
+        self._refusal_logged = False
+        """Whether the token's refusal to read the notifications was logged this run."""
+
     def init_suggested(self) -> bool:
         """Always: init guesses its org from the checkout it runs in."""
         return True
@@ -249,17 +253,27 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         comment, a review), newer than the last look. A CI run names only its repo, so it stands
         for my open PRs there; what no search shows (an issue, a release, an alert) for nothing;
         and anything else for `EVERYTHING`. A "not modified" answer is cheap, and GitHub's poll
-        interval is kept to. A poll that fails finds nothing, is reported as the problem
-        `NOTIFICATIONS_FAILED` until one works, and is tried again after the default interval."""
+        interval is kept to. A poll that fails finds nothing and is tried again after the
+        default interval; it's the problem `NOTIFICATIONS_FAILED` until one works, but for a
+        token that can't read notifications (`notifications.Refused`), logged once a run."""
         wait = ctx.kv.get(NOTIFICATIONS_WAIT)
         if wait and ctx.now < datetime.fromisoformat(wait):
             return set()
         seen = ctx.kv.get(NOTIFICATIONS_SEEN)
         try:
             found = notifications.fetch(ctx.config.host, seen)
+        except notifications.Refused as e:
+            # A fine-grained token, which the docs allow: no problem to fix, so not one shown
+            # for as long as that's the token. The branch moves found with it still count.
+            ctx.problem(NOTIFICATIONS_FAILED, None)
+            if not self._refusal_logged:
+                ctx.log.warning("can't read GitHub notifications (it takes a classic token): %s", e)
+                self._refusal_logged = True
+            retry = ctx.now + timedelta(seconds=notifications.DEFAULT_POLL_SECONDS)
+            ctx.kv.set(NOTIFICATIONS_WAIT, retry.isoformat())
+            return set()
         except (CommandError, subprocess.SubprocessError, OSError, KeyError, ValueError) as e:
-            # A token that can't read notifications (a fine-grained one can't), `gh` hanging
-            # or a blip: the branch moves found with it still count.
+            # `gh` hanging or a blip: the branch moves found with it still count.
             ctx.problem(NOTIFICATIONS_FAILED, f"can't read GitHub notifications: {e}")
             retry = ctx.now + timedelta(seconds=notifications.DEFAULT_POLL_SECONDS)
             ctx.kv.set(NOTIFICATIONS_WAIT, retry.isoformat())

@@ -24,7 +24,7 @@ for themselves (a token, a request, an example config) is core's.
   Core keeps it across restarts, shows it with the plugin's state on the page (its group's
   summary, or the footer) and in `mfd dump` (`plugin_problems`), and logs it only when it
   changes, so a plugin can report it on every refresh rather than remembering what it warned
-  of.
+  of. One the plugin hasn't reported for `prune_days` is forgotten in the daily clean-up.
 
 - **Importing**: `import_dir(req: ImportRequest)` reads what the plugin recognises in
   `req.dir` for `mfd import <dir>` and says what, one line each; `req.replace` is

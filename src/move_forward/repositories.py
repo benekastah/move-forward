@@ -281,25 +281,36 @@ class ContactRepository:
 
 class ProblemRepository:
     """What the plugins report wrong besides a failed refresh (`problems`), by plugin and the
-    plugin's key: kept until the plugin clears it (`Context.problem`)."""
+    plugin's key: kept until the plugin clears it (`Context.problem`), or `prune` finds it
+    hasn't been reported for a while."""
 
     def __init__(self, db: Database):
         self._db = db
 
-    def set(self, plugin: str, key: str, text: str | None) -> str | None:
-        """Keep `text` as the plugin's problem `key`, or forget it with None; returns what it
-        was before."""
+    def set(self, plugin: str, key: str, text: str | None, now: datetime) -> str | None:
+        """Keep `text` as the plugin's problem `key`, seen `now`, or forget it with None;
+        returns what it was before."""
         with self._db.transaction() as conn:
             row = conn.execute(
                 "SELECT text FROM problems WHERE plugin = ? AND key = ?", (plugin, key)
             ).fetchone()
             if text is None:
                 conn.execute("DELETE FROM problems WHERE plugin = ? AND key = ?", (plugin, key))
-            elif row is None or row["text"] != text:
+            else:
                 conn.execute(
-                    "INSERT OR REPLACE INTO problems VALUES (?, ?, ?)", (plugin, key, text)
+                    "INSERT OR REPLACE INTO problems VALUES (?, ?, ?, ?)",
+                    (plugin, key, text, now.isoformat()),
                 )
         return None if row is None else row["text"]
+
+    def prune(self, before: datetime) -> int:
+        """Forget the problems last reported before `before`: those of a plugin since taken out
+        of the config, or under a key it no longer uses; how many went."""
+        with self._db.transaction() as conn:
+            return conn.execute(
+                "DELETE FROM problems WHERE julianday(seen_at) < julianday(?)",
+                (before.isoformat(),),
+            ).rowcount
 
     def of(self, plugins: Collection[str]) -> dict[str, list[str]]:
         """The problems of `plugins`, by plugin, each's in the order of their keys: not those

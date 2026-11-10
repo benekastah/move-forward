@@ -314,10 +314,12 @@ after a restart too."""
 
 _V19_PROBLEMS = """
 CREATE TABLE problems (                -- kept: what a plugin reports wrong that isn't a failed
-                                       -- refresh, until it says it's gone (`Context.problem`)
+                                       -- refresh, until it says it's gone (`Context.problem`),
+                                       -- or prune_days after it last said it
     plugin TEXT NOT NULL,
     key TEXT NOT NULL,                 -- the plugin's name for it, e.g. email_lookups
     text TEXT NOT NULL,                -- what's wrong, as the page shows it
+    seen_at TEXT NOT NULL,             -- when the plugin last reported it, changed or not
     PRIMARY KEY (plugin, key)
 );
 """

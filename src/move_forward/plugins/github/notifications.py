@@ -13,6 +13,14 @@ from ...api.shell import CommandError, run
 
 DEFAULT_POLL_SECONDS = 60
 _HEAD_END = re.compile(r"\r?\n\r?\n")
+_NOT_FOR_THIS_TOKEN = "Resource not accessible by personal access token"
+"""What GitHub answers (HTTP 403) a token that can't be given access to the notifications:
+a fine-grained one."""
+
+
+class Refused(CommandError):
+    """GitHub won't let the token read the notifications, and won't while it's the token: a
+    fine-grained one can't (only a classic token with the `notifications` scope can)."""
 
 
 class _Owner(BaseModel):
@@ -113,7 +121,8 @@ def _notification(raw: _Notification) -> Notification:
 
 def fetch(host: str, if_modified_since: str | None) -> Notifications | None:
     """My unread notifications on `host`, or None when nothing changed since
-    `if_modified_since`."""
+    `if_modified_since`. Raises `Refused` when the token can't read them, and CommandError
+    when GitHub fails otherwise."""
     args = ["gh", "api", "--hostname", host, "--include", "notifications"]
     if if_modified_since:
         args += ["-H", f"If-Modified-Since: {if_modified_since}"]
@@ -122,6 +131,8 @@ def fetch(host: str, if_modified_since: str | None) -> Notifications | None:
     except CommandError as e:
         if str(e).endswith("HTTP 304"):  # gh exits 1 on it
             return None
+        if "HTTP 403" in str(e) and _NOT_FOR_THIS_TOKEN in str(e):
+            raise Refused(str(e), e.stdout) from e
         raise
     head, body = _HEAD_END.split(out, maxsplit=1)
     headers = {

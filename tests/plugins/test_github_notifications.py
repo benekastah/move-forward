@@ -144,12 +144,12 @@ def test_a_poll_that_fails_is_a_problem_until_one_works_and_tries_again_later(
     calls: list[str] = []
     answers: list[str] = []
 
-    refused = "gh api: HTTP 403: Resource not accessible by personal access token"
+    failed = "gh api: HTTP 502: Bad Gateway"
 
     def run(args: list[str]) -> str:
         calls.append("poll")
         if not answers:
-            raise CommandError(refused)
+            raise CommandError(failed)
         return answers.pop(0)
 
     monkeypatch.setattr(notifications, "run", run)
@@ -159,7 +159,7 @@ def test_a_poll_that_fails_is_a_problem_until_one_works_and_tries_again_later(
     for minutes in (0, 0, 1, 2):
         assert not plugin.changed(ChangedRequest(_context(db, minutes), Graph([])))
     assert calls == ["poll", "poll", "poll"]  # not again within the minute
-    said = f"can't read GitHub notifications: {refused}"
+    said = f"can't read GitHub notifications: {failed}"
     assert ProblemRepository(db).of([""]) == {"": [said]}
     # Kept across a restart, so it isn't warned of again.
     assert not GitHubPlugin().changed(ChangedRequest(_context(db, 3), Graph([])))
@@ -186,3 +186,26 @@ def test_searching_everywhere_hears_of_every_owners_prs(monkeypatch: pytest.Monk
     found = plugin.changed(ChangedRequest(_context(db, 2, search_scope="everywhere"), Graph([])))
     assert found
     assert json.loads(KvRepository(db, "github").get(CHANGED) or "[]") == ["someone-else/widgets#7"]
+
+
+def test_a_token_that_cant_read_notifications_is_logged_once_a_run_not_a_problem(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    refused = "gh: Resource not accessible by personal access token (HTTP 403)"
+
+    def run(args: list[str]) -> str:
+        raise CommandError(refused)
+
+    monkeypatch.setattr(notifications, "run", run)
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    ProblemRepository(db).set("", "notifications", "can't read GitHub notifications: blip", NOW)
+    plugin = GitHubPlugin()
+    for minutes in (0, 1, 2):
+        assert not plugin.changed(ChangedRequest(_context(db, minutes), Graph([])))
+    assert ProblemRepository(db).of([""]) == {}  # nothing I can fix but the token
+    said = f"can't read GitHub notifications (it takes a classic token): {refused}"
+    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
+    # Once each run, as the log of a run is read on its own.
+    assert not GitHubPlugin().changed(ChangedRequest(_context(db, 3), Graph([])))
+    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said] * 2

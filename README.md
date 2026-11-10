@@ -383,7 +383,9 @@ entry on ice comes off it once its work is over the same way (a stack stays
 until it's reopened), what the notes remembered (`mfd notes remember`) as happening that long ago is forgotten,
 pings that old leave the database, and so do Act now's
 snoozes once over, and its other snoozes and pins that old. A priority set on work that's since
-finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. Reviewer email and Slack id
+finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. A plugin's problem it
+hasn't reported for that long is forgotten (the plugin was taken out of the config, or no
+longer checks for it). Reviewer email and Slack id
 lookups that found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
