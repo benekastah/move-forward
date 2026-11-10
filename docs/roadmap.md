@@ -27,6 +27,29 @@ remove, merge or move:
   sanitizing what a stranger wrote, item actions), or a plugin working around core.
 - **Anything overcomplicated**: code, config keys or docs that cost more than they give.
 
+What's left of that pass, as of 2026-11-10:
+
+- **Core owns change detection** (the review's A1a): PR #227, open. Its review's six findings
+  are fixed in c43cb2d, which needs a fresh review of `c314020..c43cb2d`; then answer review
+  5835061071 and merge. Its migration is `0020_change_checks`: whichever of #227 and #228
+  merges second renumbers its own.
+- **The new tag model** (C5, as decided): PR #228, open, with review 5835094199 unanswered.
+  Decided since the review:
+  - a tool's labels link only where text writes them with their `#`, as before, not by
+    their words;
+  - Gmail's own labels (Inbox, Starred, Important) come back as tags, which the PR dropped.
+
+  Its other findings to fix:
+  - `api.tags.handle`, now unused, and its stale docstring;
+  - the prune notice's count;
+  - a test that a refresh puts back only its own plugin's removals, and that
+    `forget_gone`'s test can fail;
+  - Untag saying a tool's tag comes back at the next refresh;
+  - `take_off` sharing `refresh.publishers` rather than guessing the plugin;
+  - long lines.
+- **Fewer request types** (B7): merge the request types into about four shapes. Not started;
+  it touches every plugin, so it goes after the two above.
+
 ## Slack as a source of work
 
 Slack becomes a source of work, not just a place pings go, through the token given slack
