@@ -1047,6 +1047,37 @@ def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt()
     assert about("m1@acme.com") == []
 
 
+@pytest.mark.parametrize(("body", "about"), [("", []), ("Needs #help-wanted", ["#help-wanted"])])
+def test_mail_names_a_label_by_its_words_only_where_someone_wrote_it(
+    body: str, about: list[str]
+) -> None:
+    harness = mailbox(message(1, subject="Help wanted at the school fair", sender="pta@school.org"))
+    harness.with_entities(  # a label is often common words: "help wanted" alone names nothing
+        [
+            Entity(
+                ref=Ref(kind="pull_request", id="https://github.com/o/r/pull/1"),
+                title="Fix the build",
+                mentions=[body],
+                tags=["help wanted"],
+                attrs={
+                    "handle": "#1",
+                    "repo": "o/r",
+                    "head": "fix",
+                    "draft": False,
+                    "mine": False,
+                    "changes_requested": False,
+                    "created_at": NOW.isoformat(),
+                    "merged_at": None,
+                },
+            )
+        ]
+    )
+    assert harness.graph().get("pull_request", "https://github.com/o/r/pull/1") is not None
+    [item] = _items(harness)
+    assert [d for d in item.details if d.startswith("about")] == [f"about {t}" for t in about]
+    assert item.signals is not None and item.signals.importance == len(about)
+
+
 def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
     harness = mailbox(message(1, subject="Garbage day moved", sender="city@town.example"))
     thread = Ref(kind=THREAD, id="root@acme.com")

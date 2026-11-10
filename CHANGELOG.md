@@ -5,6 +5,19 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Any tag can be taken off
+
+Every tag on an item looks alike, and has its Untag button: a tool's label and a `#tag` in the
+item's text as well as one I put on. `POST /actions/act_now/untag` and `mfd tag <entity> <tag>
+--remove` take off any tag, not only mine. One I put on goes for good; one from a tool or text
+stays off until the plugin that publishes the item next refreshes, which puts it back if the
+tool or the text still has it. A script reading items' buttons in `mfd dump` sees an Untag per
+tag; `mfd tag --remove` says "had no #tag" (no longer "of mine") when the tag wasn't on it.
+When the tag will come back, both say so after "taken off": `#bug taken off; it comes back with
+the next refresh if GitHub still has it` (or "its text"). A label's badge is a plain string,
+`"#bug"`, like every tag's, no longer `{"text": "#bug", "tone": "label"}`: a script reading
+badges reads a tag's as a string.
+
 ### Discover missing teams' Slack destinations
 
 Run `mfd slack destinations bacon ai-agents --discover --json` to look up several GitHub

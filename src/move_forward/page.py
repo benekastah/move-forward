@@ -60,9 +60,9 @@ class Badge(Model):
     """A badge with a tone; a plain string is a `plain` one."""
 
     text: str
-    tone: Literal["plain", "warn", "good", "label"] = "plain"
+    tone: Literal["plain", "warn", "good"] = "plain"
     """`warn` for what needs attention (conflicts, failing CI, blocked), `good` for what's
-    going well, `label` for a tag its tool put on it (a label), which only the tool takes off."""
+    going well."""
 
 
 class Action(Model):

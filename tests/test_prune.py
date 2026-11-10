@@ -53,7 +53,7 @@ def test_a_failing_fetch_in_cores_clean_up_leaves_the_rest_of_it_and_the_plugins
     plugins = enabled(config, db, NOW)
     graph, _ = refresh.stored_graph(db, plugins)
     notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
-    assert "tags: took my tags off 1 entity(ies) that are gone" in notices
+    assert "tags: forgot what I tagged or untagged on 1 gone entity(ies)" in notices
     assert ran == ["notes"]
 
 

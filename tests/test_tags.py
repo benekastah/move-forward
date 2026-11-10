@@ -1,5 +1,6 @@
 """`#tags`: what carries one is related to it, and what names it points at it."""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,8 @@ from conftest import NOW, pr, snapshot, stored
 
 from move_forward import cli, panels, refresh, tags
 from move_forward.api.tags import handle as api_handle
+from move_forward.change_checks import ChangeChecks
+from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.kinds import TAG, Family, Person, declaring, is_url
@@ -244,13 +247,16 @@ def test_tags_on_gone_entities_are_forgotten_and_finished_work_keeps_them() -> N
     gone_entry = Ref(kind="notes.entry", id="Chores")  # deleted: a new "Chores" starts clean
     merged = Ref(kind="pull_request", id=pr(2).url)
     repo = TagRepository(db)
+    untagged = Ref(kind="notes.entry", id="Errand #errand")  # gone, with only a tag taken off
     for ref in (gone_entry, merged):
         repo.add(ref, "chores", NOW)
+    repo.take_off(untagged, "errand", "notes", NOW)
     plugins = enabled(config, db, NOW)
     graph, _ = refresh.stored_graph(db, plugins)
     notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
-    assert "tags: took my tags off 1 entity(ies) that are gone" in notices
+    assert "tags: forgot what I tagged or untagged on 2 gone entity(ies)" in notices
     assert repo.all() == {merged: ["chores"]}
+    assert repo.taken_off() == {}
 
 
 def test_untag_takes_the_tag_however_its_written() -> None:
@@ -263,7 +269,7 @@ def test_untag_takes_the_tag_however_its_written() -> None:
 
 def test_ice_gets_no_tags_and_focus_parts_do() -> None:
     graph = Graph(hiding=["notes.iced"])
-    tagging = tags.Tags(graph, {})
+    tagging = tags.Tags(graph)
     assert tagging.additions(Item(title="iced", subjects=[Ref(kind="notes.iced", id="1")])) == (
         ItemAdditions()
     )
@@ -359,23 +365,106 @@ def test_a_labels_tag_i_put_on_by_hand_is_named_by_its_words() -> None:
     assert found["3"].refs == [Ref(kind=TAG, id="garbage-day")]
 
 
-def test_my_tags_come_first_and_a_tools_labels_are_coloured_apart() -> None:
+def test_a_plugin_names_a_tag_as_core_does() -> None:
+    assert api_handle is tags.handle
+
+
+def test_every_tag_looks_alike_and_any_can_be_taken_off() -> None:
     ref = Ref(kind="x.a", id="1")
     added = {ref: ["chores"]}
     carrier = Entity(ref=ref, title="#errand", tags=["Garbage Day", "chores"])
     graph = Graph(tags.tagged([carrier], {}, added))
-    found = tags.Tags(graph, added).additions(Item(title="t", subjects=[ref]))
-    assert found.badges == ["#chores", "#errand", Badge(text="#garbage-day", tone="label")]
-    assert [a.label for a in found.actions] == ["Tag", "Untag #chores"]  # a label isn't mine
+    found = tags.Tags(graph).additions(Item(title="t", subjects=[ref]))
+    assert found.badges == ["#errand", "#garbage-day", "#chores"]
+    assert [a.label for a in found.actions] == [
+        "Tag",
+        "Untag #errand",
+        "Untag #garbage-day",
+        "Untag #chores",
+    ]
 
 
-def test_a_tag_written_and_labelled_is_written() -> None:
+def test_a_tag_taken_off_leaves_what_carried_it_but_text_naming_it_still_does() -> None:
     ref = Ref(kind="x.a", id="1")
-    carrier = Entity(ref=ref, title="Fix #bug", tags=["bug"])
-    graph = Graph(tags.tagged([carrier], {}))
-    found = tags.Tags(graph, {}).additions(Item(title="t", subjects=[ref]))
-    assert found.badges == ["#bug"]  # it stays when the label goes: not coloured as one
+    found = {
+        e.ref.id: e
+        for e in tags.tagged(
+            [Entity(ref=ref, title="#errand", tags=["bug"]), _entity("2", "#errand too")],
+            {},
+            removed={ref: {"errand", "bug"}},
+        )
+    }
+    assert "bug" not in found
+    assert found["errand"].refs == [Ref(kind="x.a", id="2")]
+    assert found["1"].refs == [Ref(kind=TAG, id="errand")]  # its title names it all the same
 
 
-def test_a_plugin_names_a_tag_as_core_does() -> None:
-    assert api_handle is tags.handle
+def _shown(config: Config, db: Database, url: str) -> list[list[str | Badge]]:
+    return [
+        i.badges
+        for p in refresh.build_dashboard(config, db, NOW).panels
+        for i in p.items
+        if i.subjects and i.subjects[0].id == url
+    ]
+
+
+def test_a_label_taken_off_stays_off_until_its_plugin_refreshes() -> None:
+    labelled = snapshot(mine=[pr(1, labels=["bug"])])
+    config, db = stored(github=labelled)
+    fields = {"kind": "pull_request", "id": pr(1).url, "tag": "bug"}
+    assert all("#bug" in badges for badges in _shown(config, db, pr(1).url))
+    assert refresh.run_action(config, db, "act_now/untag", fields) == (
+        "#bug taken off; it comes back with the next refresh if GitHub still has it"
+    )
+    assert refresh.run_action(config, db, "act_now/untag", fields) == "#bug wasn't on it"
+    shown = _shown(config, db, pr(1).url)
+    assert shown and all("#bug" not in badges for badges in shown)
+    [github] = [e for e in enabled(config, db, NOW) if e.name == "github"]
+    collect = refresh._collect_all  # pyright: ignore[reportPrivateUsage]
+    # A refresh that started before I took it off doesn't put it back.
+    collect(db, [github], NOW, lambda e, taken: labelled, ChangeChecks(), None)
+    assert all("#bug" not in badges for badges in _shown(config, db, pr(1).url))
+    collect(db, [github], datetime.now(UTC), lambda e, taken: labelled, ChangeChecks(), None)
+    assert all("#bug" in badges for badges in _shown(config, db, pr(1).url))
+
+
+def test_a_refresh_puts_back_only_its_own_plugins_tags() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1, labels=["bug"])]))
+    repo = TagRepository(db)
+    entry = Ref(kind="notes.entry", id="Chores #errand")
+    repo.take_off(Ref(kind="pull_request", id=pr(1).url), "bug", "github", NOW)
+    repo.take_off(entry, "errand", "notes", NOW)  # notes never refreshes: it stays off
+    [github] = [e for e in enabled(config, db, NOW) if e.name == "github"]
+    collect = refresh._collect_all  # pyright: ignore[reportPrivateUsage]
+    collect(
+        db, [github], NOW + timedelta(minutes=1), lambda e, taken: snapshot(), ChangeChecks(), None
+    )
+    assert repo.taken_off() == {entry: {"errand"}}
+
+
+def test_taking_off_a_tag_mine_and_in_its_text_takes_off_both() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1, title="Fix #chores")]))
+    fields = {"kind": "pull_request", "id": pr(1).url}
+    refresh.run_action(config, db, "act_now/tag", {**fields, "input": "chores"})
+    assert refresh.run_action(config, db, "act_now/untag", {**fields, "tag": "chores"}) == (
+        "#chores taken off; it comes back with the next refresh if its text still has it"
+    )
+    assert TagRepository(db).all() == {}
+    shown = _shown(config, db, pr(1).url)
+    assert shown and all("#chores" not in badges for badges in shown)
+
+
+def test_the_tag_command_takes_off_a_tag_from_text(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = tmp_path / "config.toml"
+    db_path = tmp_path / "dashboard.db"
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
+    assert cli.main(["-c", str(config), "notes", "add-entry", "Chores #errand"]) == 0
+    assert cli.main(["-c", str(config), "tag", "Chores #errand", "errand", "--remove"]) == 0
+    assert cli.main(["-c", str(config), "tag", "Chores #errand", "errand", "--remove"]) == 0
+    entry = Ref(kind="notes.entry", id="Chores #errand")
+    assert TagRepository(Database(db_path)).taken_off() == {entry: {"errand"}}
+    out = capsys.readouterr().out.splitlines()
+    # Notes never refreshes, so it doesn't come back.
+    assert out[-2:] == ["#errand taken off Chores #errand", "Chores #errand had no #errand"]

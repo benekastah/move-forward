@@ -349,6 +349,20 @@ CREATE TABLE change_subjects (         -- kept: what a change check said moved
 """Core's record of what moved in each plugin's tool, which the plugins each kept in their kv
 before: kept across restarts, so a move seen before one is still collected after it."""
 
+_V21_TAG_REMOVALS = """
+CREATE TABLE tag_removals (            -- kept until its plugin next refreshes: a tag from a tool
+                                       -- or text I took off an entity (see `tags.take_off`)
+    kind TEXT NOT NULL,
+    id TEXT NOT NULL,
+    tag TEXT NOT NULL,                 -- its handle, e.g. garbage-day
+    plugin TEXT NOT NULL,              -- what publishes the entity: its next refresh puts it back
+    removed_at TEXT NOT NULL,
+    PRIMARY KEY (kind, id, tag)
+);
+"""
+"""Any tag can be taken off. One I put on goes from `tags`; one its tool or text gives the
+entity is kept off here, until the refresh that would find it again."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -370,6 +384,7 @@ CORE_MIGRATIONS = [
     Migration("0018_shown_notices", _V18_SHOWN_NOTICES),
     Migration("0019_problems", _V19_PROBLEMS),
     Migration("0020_change_checks", _V20_CHANGE_CHECKS),
+    Migration("0021_tag_removals", _V21_TAG_REMOVALS),
 ]
 
 _SCHEMA_VERSIONS = """

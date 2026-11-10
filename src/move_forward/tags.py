@@ -1,21 +1,26 @@
-"""`#tags`: put on an entity by a `#tag` in its title or `mentions` (out of code), by its tool
-(`Entity.tags`: a ticket's labels), or by hand (`TagRepository`, and the Tag field core adds to
-items: `Tags`), they relate everything carrying them. Core publishes a `tag` entity for each (`kinds.TAG`), pointing at what
+"""`#tags`: put on an entity by its tool (`Entity.tags`: a PR's or a ticket's labels), by a
+`#tag` in its title or `mentions` (out of code), or by hand (`TagRepository`, and the Tag field
+core adds to items: `Tags`), they relate everything carrying them. All tags look alike, and any
+can be taken off: one I put on for good, one from its tool or text until its plugin next
+refreshes (`take_off`). Core publishes a `tag` entity for each (`kinds.TAG`), pointing at what
 carries it, and points at it every entity whose text (title or `mentions`) names it, as
 "Garbage day" names `#garbage-day`. A tag's words are separated by `-` or `_`, and text names it
-however it spaces, hyphenates or cases them. Tags aren't units of work: ice, priorities and Act
-now's joins don't pass through them."""
+however it spaces, hyphenates or cases them; one only labels give, only by its `#`. Tags aren't
+units of work: ice, priorities and Act now's joins don't pass through them."""
 
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
+from datetime import datetime
 from itertools import pairwise
 
 from . import act_now
 from .domain import KindModel
-from .graph import Entity, Graph, KindSpec, Ref
+from .graph import Entity, Graph, KindSpec, Ref, publisher
 from .kinds import TAG
-from .page import Action, Badge, Item, ItemAdditions
+from .page import Action, Item, ItemAdditions
 from .repositories import TagRepository
 
 TAG_ACTION = f"{act_now.ACTIONS}/tag"
@@ -158,29 +163,41 @@ def _by_words(handles: Iterable[str]) -> ByWords:
     return {word: sorted(tags, key=lambda kt: -len(kt[0])) for word, tags in found.items()}
 
 
+def _written(entity: Entity, spec: KindSpec | None) -> list[str]:
+    """The `#tags` in `entity`'s title or mentions, out of their code, where its kind's
+    `tags_from_text`."""
+    texts = [entity.title, *entity.mentions] if spec is None or spec.tags_from_text else []
+    return [t for text in texts for t in tags(prose(text))]
+
+
+def _labels(entity: Entity) -> list[str]:
+    """The tags `entity`'s tool gives it (`Entity.tags`: labels), by handle."""
+    return [h for h in map(handle, entity.tags) if any(c.isalpha() for c in h)]
+
+
 def tagged(
     entities: list[Entity],
     specs: Mapping[str, KindSpec],
     added: Mapping[Ref, list[str]] | None = None,
+    removed: Mapping[Ref, AbstractSet[str]] | None = None,
 ) -> list[Entity]:
     """The entities, each pointing too at the tags its text names (but one it carries), then a
-    `tag` per tag on any of them, in its title or mentions out of their code (where its kind's
-    `tags_from_text`), stated by its tool (`Entity.tags`: labels), or `added` by hand, pointing
-    at what carries it: open while one of those is. A tag only labels give is named only with
-    its `#`."""
+    `tag` per tag on any of them, pointing at what carries it: open while one of those is. An
+    entity carries the tags it has from its text (a `#tag` in its title or mentions, out of their
+    code, where its kind's `tags_from_text`) and its tool (`Entity.tags`: labels), each refresh
+    of its plugin finding them again, but those `removed` from it; and those `added` to it by
+    hand. A tag only labels give is named only with its `#`."""
     carrying: dict[str, list[Entity]] = {}
     chosen: set[str] = set()
     """The tags someone wrote or put on by hand, not only a tool's labels."""
     for entity in entities:
         spec = specs.get(entity.ref.kind)
-        texts = [prose(text) for text in [entity.title, *entity.mentions]]
-        own = (
-            [t for text in texts for t in tags(text)] if spec is None or spec.tags_from_text else []
-        )
-        own += (added or {}).get(entity.ref, [])
-        chosen.update(own)
-        labels = [h for h in map(handle, entity.tags) if any(c.isalpha() for c in h)]
-        for tag in dict.fromkeys([*own, *labels]):
+        gone = (removed or {}).get(entity.ref, set[str]())
+        written = [t for t in _written(entity, spec) if t not in gone]
+        labels = [t for t in _labels(entity) if t not in gone]
+        mine = (added or {}).get(entity.ref, [])
+        chosen.update(written, mine)
+        for tag in dict.fromkeys([*written, *labels, *mine]):
             carrying.setdefault(tag, []).append(entity)
     if not carrying:
         return entities
@@ -212,15 +229,55 @@ def tagged(
     ]
 
 
+@dataclass(frozen=True)
+class TakenOff:
+    """What Untag did: whether the tag was on the entity, and, when its tool or its text gives
+    it the tag, the plugin whose next refresh puts it back if they still do."""
+
+    on: bool
+    plugin: str | None = None
+    from_tool: bool = False
+    from_text: bool = False
+
+    def back(self, refreshing: Mapping[str, str]) -> str:
+        """When the tag comes back, to follow "#tag taken off", given the titles of the plugins
+        that refresh, by name. Empty for one gone for good: mine, or one from a plugin that never
+        refreshes (notes), which stays off until I tag it again."""
+        title = refreshing.get(self.plugin) if self.plugin else None
+        if title is None:
+            return ""
+        who = [*([title] if self.from_tool else []), *(["its text"] if self.from_text else [])]
+        return f"; it comes back with the next refresh if {' or '.join(who)} still has it"
+
+
+def take_off(repo: TagRepository, graph: Graph, ref: Ref, tag: str, now: datetime) -> TakenOff:
+    """Untag: take `tag` off the entity, whatever put it there. Mine is gone for good; one its
+    tool or text gives it stays off until the plugin that published it next refreshes, which
+    puts it back if the tool or the text still has it. `graph` is the stored one: only the
+    entity as its plugin publishes it says whether its tool or text gives it the tag, and, for a
+    family's entity, which plugin that is."""
+    mine = repo.remove(ref, tag)
+    entity = graph.get(ref.kind, ref.id)
+    name = publisher(graph, ref)
+    if entity is None or name is None:
+        return TakenOff(mine)
+    from_text = tag in _written(entity, graph.spec(ref.kind))
+    from_tool = tag in _labels(entity)
+    if not (from_text or from_tool):
+        return TakenOff(mine)
+    on = (found := graph.get(TAG, tag)) is not None and ref in found.refs
+    repo.take_off(ref, tag, name, now)
+    return TakenOff(mine or on, name, from_tool, from_text)
+
+
 def forget_gone(repo: TagRepository, graph: Graph) -> int:
-    """Take my tags off entities that are gone where gone means done (`KindSpec.gone_means_done`:
-    a deleted entry, a ticked-off todo, a mail thread once read), so a new one with the same id
-    starts clean. A tag stays
-    on finished work (a merged PR, a done ticket): it's a label, not a ranking. How many
-    entities lost their tags."""
+    """Forget the tags I put on, or took off, entities that are gone where gone means done
+    (`KindSpec.gone_means_done`: a deleted entry, a ticked-off todo, a mail thread once read),
+    so a new one with the same id starts clean. A tag stays on finished work (a merged PR, a
+    done ticket): it's a label, not a ranking. How many entities lost their tags."""
     gone = [
         ref
-        for ref in repo.all()
+        for ref in dict.fromkeys([*repo.all(), *repo.taken_off()])
         if graph.get(ref.kind, ref.id) is None
         and (spec := graph.spec(ref.kind)) is not None
         and spec.gone_means_done
@@ -231,59 +288,41 @@ def forget_gone(repo: TagRepository, graph: Graph) -> int:
 
 
 class Tags:
-    """The tags on what items are about: shown on them, with buttons to add and take off mine."""
+    """The tags on what items are about: shown on them, with buttons to add one and take each
+    off."""
 
-    def __init__(self, graph: Graph, added: Mapping[Ref, list[str]]):
+    def __init__(self, graph: Graph):
         self._graph = graph
-        self._added = added
         self._carried: dict[Ref, list[str]] = {}
         for tag in graph.of_kind(TAG):
             for ref in tag.refs:
                 self._carried.setdefault(ref, []).append(tag.ref.id)
         self._known = sorted(t.ref.id for t in graph.of_kind(TAG))
 
-    def _shown(self, item: Item) -> tuple[list[str], list[str], list[str]] | None:
-        """The tags on what `item` is mainly about: those I added, those in its text, and its
-        tool's labels; None for an item about nothing, or about what hides things (ice)."""
+    def _subject(self, item: Item) -> Ref | None:
+        """What `item` is mainly about, if it can carry tags: None for an item about nothing,
+        or about what hides things (ice)."""
         if not item.subjects or self._graph.hides(item.subjects[0].kind):
             return None
-        subject = item.subjects[0]
-        carried = self._carried.get(subject, [])
-        mine = [tag for tag in self._added.get(subject, []) if tag in carried]
-        entity = self._graph.get(subject.kind, subject.id)
-        spec = self._graph.spec(subject.kind)
-        in_text = (
-            {t for text in [entity.title, *entity.mentions] for t in tags(prose(text))}
-            if entity and (spec is None or spec.tags_from_text)
-            else set[str]()
-        )
-        # In its text, a tag stays when its label goes: it's written, whatever the tool says.
-        written = [tag for tag in carried if tag not in mine and tag in in_text]
-        labels = [tag for tag in carried if tag not in mine and tag not in in_text]
-        return mine, written, labels
+        return item.subjects[0]
 
     def of(self, item: Item) -> list[str]:
         """The tags whose badges `item` shows (`additions`), in their order: what the tag view
         keeps it by."""
-        shown = self._shown(item)
-        return [*shown[0], *shown[1], *shown[2]] if shown else []
+        subject = self._subject(item)
+        return list(self._carried.get(subject, [])) if subject else []
 
     def additions(self, item: Item) -> ItemAdditions:
-        """A `#tag` badge per tag on what `item` is mainly about, those I added first, then those
-        in its text, then its tool's labels, coloured apart as only the tool takes them off; a
-        Tag field to add one, and an Untag button per tag I added. Nothing for an item about
-        nothing, or about what hides things (ice)."""
-        shown = self._shown(item)
-        if shown is None:
+        """A `#tag` badge per tag on what `item` is mainly about, a Tag field to add one, and an
+        Untag button per tag. Nothing for an item about nothing, or about what hides things
+        (ice)."""
+        subject = self._subject(item)
+        if subject is None:
             return ItemAdditions()
-        mine, written, labels = shown
-        subject = item.subjects[0]
         fields = {"kind": subject.kind, "id": subject.id}
+        on = self.of(item)
         return ItemAdditions(
-            badges=[
-                *(f"#{tag}" for tag in [*mine, *written]),
-                *(Badge(text=f"#{tag}", tone="label") for tag in labels),
-            ],
+            badges=[f"#{tag}" for tag in on],
             actions=[
                 Action(
                     name=TAG_ACTION,
@@ -300,7 +339,7 @@ class Tags:
                         fields={**fields, "tag": tag},
                         group="Tags",
                     )
-                    for tag in self._added.get(subject, [])
+                    for tag in on
                 ),
             ],
         )

@@ -29,7 +29,7 @@ from .act_now import Feedback
 from .change_checks import ChangeChecks, Taken
 from .config import Config
 from .db import CORE, Database
-from .graph import Graph, Ref
+from .graph import Graph, Ref, publisher
 from .kinds import FAMILIES
 from .notifications import Event, NotificationRepository
 from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
@@ -93,9 +93,10 @@ class PageFailed(Exception):
 
 def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str, BaseModel | None]]:
     """The graph over what's stored, with the snapshots it was built from, and the tags I put on
-    entities."""
+    entities or took off them."""
     snapshots = {e.name: e.snapshot() for e in plugins}
-    return build_graph(plugins, snapshots, TagRepository(db).all()), snapshots
+    repo = TagRepository(db)
+    return build_graph(plugins, snapshots, repo.all(), repo.taken_off()), snapshots
 
 
 STORED = "stored:"
@@ -199,7 +200,9 @@ def _collect_all(
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, given what moved since its
     last collect (`ChangeChecks.take`, asking its check with `graph` first when there is one),
-    and keep it with the plugin's `store`, which settles what it was given. Each plugin has
+    and keep it with the plugin's `store`, which settles what it was given and lets the tags I
+    took off what it publishes come back (`TagRepository.put_back`): it has found them again,
+    or not. Each plugin has
     `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh
     goes on without it; one still running from an earlier refresh is left out."""
     started = time.monotonic()
@@ -225,6 +228,7 @@ def _collect_all(
                     store_snapshot(e, snapshot)
                     assert taken is not None  # the collector took it
                     checks.stored(e, taken)
+                    TagRepository(db).put_back(e.name, now)
 
                 collect_into(db, e.name, now, collector, store)
             finally:
@@ -328,13 +332,12 @@ def _identify_kept(db: Database, graph: Graph) -> None:
 
 
 def publishers(graph: Graph, refs: list[Ref]) -> dict[str, list[Ref]]:
-    """`refs` by the plugin that published each: a family's by whoever published that id, a
-    plugin's own kind by that plugin. Refs the graph doesn't have are left out."""
+    """`refs` by the plugin that published each (see `move_forward.graph.publisher`). Refs the
+    graph doesn't have are left out."""
     found: dict[str, list[Ref]] = {}
     for ref in dict.fromkeys(refs):
-        entity = graph.get(ref.kind, ref.id)
-        if entity is not None and entity.kind:
-            found.setdefault(entity.kind.split(".", 1)[0], []).append(ref)
+        if (name := publisher(graph, ref)) is not None:
+            found.setdefault(name, []).append(ref)
     return found
 
 
@@ -418,7 +421,7 @@ def _prune_plugins(
 ) -> list[str]:
     """Every plugin's daily prune, and core's (Act now's feedback that's over or older than
     `days`, problems no plugin has reported for `days`, finished work's priorities, gone
-    entities' tags), each failing on its own; what they did, by plugin."""
+    entities' tags and untags), each failing on its own; what they did, by plugin."""
     notices: list[str] = []
     if dropped := FeedbackRepository(db).prune(now, now - timedelta(days=days)):
         notices.append(f"act_now: forgot {dropped} snooze(s) or pin(s)")
@@ -431,7 +434,7 @@ def _prune_plugins(
         log.exception("act_now: forgetting finished work's priorities failed")
     try:
         if cleared := tags.forget_gone(TagRepository(db), graph):
-            notices.append(f"tags: took my tags off {cleared} entity(ies) that are gone")
+            notices.append(f"tags: forgot what I tagged or untagged on {cleared} gone entity(ies)")
     except Exception:
         log.exception("tags: forgetting gone entities' tags failed")
     for e in plugins:
@@ -546,7 +549,7 @@ def build_dashboard(
     ]
 
     contacts = people.Contacts(ContactRepository(db).all(), graph, config.people)
-    tagging = tags.Tags(graph, TagRepository(db).all())
+    tagging = tags.Tags(graph)
 
     def item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
         found = _merged(contacts.additions(item), tagging.additions(item))
@@ -687,19 +690,31 @@ def _set_contact(db: Database, fields: dict[str, str], now: datetime) -> ActionR
     return ActionResult(f"{who}: {contact_type}")
 
 
-def _tag(db: Database, action: str, fields: dict[str, str], now: datetime) -> ActionResult:
-    """Tag: put the tag typed as `input` on the entity; Untag: take `tag` off it."""
-    ref = Ref(kind=fields["kind"], id=fields["id"])
-    repo = TagRepository(db)
+def _tag(config: Config, db: Database, action: str, fields: dict[str, str]) -> ActionResult:
+    """Tag: put the tag typed as `input` on the entity; Untag: take `tag` off it, whatever put
+    it there (see `tags.take_off`)."""
     try:
+        ref = Ref(kind=fields["kind"], id=fields["id"])
         tag = tags.tag_key(fields["tag" if action == "untag" else "input"])
+    except KeyError as err:
+        raise ActionError(f"missing field {err}") from err
     except ValueError as err:
         raise ActionError(str(err)) from err
-    if action == "untag":
-        return ActionResult(
-            f"#{tag} taken off" if repo.remove(ref, tag) else f"#{tag} wasn't on it"
-        )
-    return ActionResult(f"tagged #{tag}" if repo.add(ref, tag, now) else f"already #{tag}")
+    now = datetime.now(UTC)
+    repo = TagRepository(db)
+    if action == "tag":
+        return ActionResult(f"tagged #{tag}" if repo.add(ref, tag, now) else f"already #{tag}")
+    plugins = enabled(config, db, now)
+    graph, _ = stored_graph(db, plugins)  # what the entity's plugin gives it (see `take_off`)
+    taken = tags.take_off(repo, graph, ref, tag, now)
+    if not taken.on:
+        return ActionResult(f"#{tag} wasn't on it")
+    return ActionResult(f"#{tag} taken off{taken.back(refreshing(plugins))}")
+
+
+def refreshing(plugins: list[Enabled]) -> dict[str, str]:
+    """The titles of the plugins that refresh (collect), by name."""
+    return {e.name: e.plugin.title for e in plugins if e.plugin.collects}
 
 
 def _members(fields: dict[str, str]) -> list[tuple[str, str, str, str]]:
@@ -751,14 +766,12 @@ def _act_now_action(
     """Act now's own buttons, on any surface: snooze an item (for as long as `config` says, or
     until it changes, by its `choice`), bring it back (unsnooze), or pin or unpin it, by its
     main subject and task, and the items joined to it (`also`) alike; set or clear the
-    priority of its main subject; tag it; and set or clear who someone is to me."""
+    priority of its main subject; and set or clear who someone is to me."""
     now = datetime.now(UTC)
-    if action in ("priority", "contact", "contact_clear", "tag", "untag"):
+    if action in ("priority", "contact", "contact_clear"):
         try:
             if action == "priority":
                 return _set_priority(db, fields, now)
-            if action in ("tag", "untag"):
-                return _tag(db, action, fields, now)
             if action == "contact":
                 return _set_contact(db, fields, now)
             try:
@@ -831,6 +844,8 @@ def perform_action(
     dashboard."""
     surface: Surface = "focus" if back and back.startswith("/focus") else "dashboard"
     plugin_name, _, action_name = name.partition("/")
+    if plugin_name == act_now.ACTIONS and action_name in ("tag", "untag"):
+        return _tag(config, db, action_name, fields)
     if plugin_name == act_now.ACTIONS:
         return _act_now_action(config.act_now, db, action_name, fields)
     opened = fields.get(act_now.OPENED_FIELD)

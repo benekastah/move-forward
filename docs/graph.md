@@ -78,8 +78,9 @@ flowchart TB
    one, should two), and only it publishes them, each ref once. Core checks every entity
    for that and against its kind's model; one that fails is left out and logged, so the
    page goes on without it.
-3. Core adds a `tag` per `#tag` in a title or mentions (or put on by hand), pointing at what carries
-   it, and points each entity whose title or mentions name one at it (see `move_forward.tags`).
+3. Core adds a `tag` per tag on an entity (its tool's, a `#tag` in its title or mentions, or put
+   on by hand; but one I took off), pointing at what carries it, and points each entity whose
+   title or mentions name one at it (see `move_forward.tags`).
 4. Text an entity `mentions` that matches a linking kind's id pattern becomes a ref to it
    (see [related entities](#related-entities)).
 5. The graph indexes entities by ref, by kind, and by the refs pointing at each, for the
@@ -173,12 +174,13 @@ class NotesPlugin(Plugin[NotesConfig]):
     kinds = {"notes.entry": KindSpec(EntryAttrs, linking=True)}  # it points at what it links
 ```
 
-Core adds a kind of its own, `tag` (see `move_forward.tags`): one per `#tag` in an entity's
-title or mentions (out of code), or put on it by hand, pointing at what carries it, while each entity whose title or mentions name a tag points
-at it. It isn't linking, so it relates nothing through it: `related(ref, "tag")` gives the tags
-on or named by `ref`, and by the tickets or entries it belongs to (one hop through a linking
-entity, as for any kind), and a tag's `refs` what carries it. A one-word tag shorter than
-three letters is named only with its `#`.
+Core adds a kind of its own, `tag` (see `move_forward.tags`): one per tag an entity carries,
+from its tool (`Entity.tags`), a `#tag` in its title or mentions (out of code), or put on it by
+hand, but one I took off, pointing at what carries it, while each entity whose title or mentions
+name a tag points at it. It isn't linking, so it relates nothing through it: `related(ref,
+"tag")` gives the tags on or named by `ref`, and by the tickets or entries it belongs to (one
+hop through a linking entity, as for any kind), and a tag's `refs` what carries it. A one-word
+tag shorter than three letters, or one only labels give, is named only with its `#`.
 
 `related(ref, kind)` finds entities of `kind` one hop from `ref`, in either direction, or
 linked with it by a linking entity that's one hop from both:

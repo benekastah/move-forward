@@ -345,8 +345,10 @@ class LinearPlugin(...):
   makes them tags. Put only labels no outsider can set (people with a say in the tool, or the
   tool itself), even on a kind whose text anyone can write, and decide whether the tool's own
   (Gmail's `\Inbox`) are tags too: mail's are. A tag only labels give is named only with its
-  `#`, as a label is often a common word. A kind whose text anyone can write (mail's subjects) is `KindSpec(..., tags_from_text=False)`. Read the tags on
-  or named by an entity with `graph.related(ref, TAG)` (`api.kinds.TAG`).
+  `#`, as a label is often a common word. I can take a label's tag off, until your plugin next
+  refreshes. A kind whose text anyone can write (mail's subjects) is
+  `KindSpec(..., tags_from_text=False)`. Read the tags on or named by an entity with
+  `graph.related(ref, TAG)` (`api.kinds.TAG`).
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
   graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune; what a fetched entity must carry is in
@@ -394,7 +396,7 @@ def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel
 - Each `Item` names its `subjects`, the entities it's about, main one first. Other plugins
   add their buttons by them, and core hides items whose subject is on ice.
 - A badge is a string, or `Badge(text, tone="warn")` for one that needs attention (`good`
-  for one going well; `label` is core's, for a tag a tool's label puts on an item). A link to what's over sets `done`, and is struck through. An item
+  for one going well). A link to what's over sets `done`, and is struck through. An item
   that's not for now (a draft) is `deferred`: it sorts last, and Act now leaves it out
   unless the plugin's `act_now` nominates it.
 - An item or part whose work is done but kept a while to undo (a todo ticked off today) is

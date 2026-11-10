@@ -56,9 +56,10 @@ class Entity(Model):
     tags: list[str] = Field(default_factory=list)
     """Tags its tool puts on it, e.g. a ticket's or PR's labels, as written there ("Garbage
     Day"): core counts them as `#tags` (see `tags`), whatever its kind's `tags_from_text`, but
-    names one only labels give only by its `#`. Put only labels no outsider can set (people with
-    a say in the tool, or the tool itself), even on a kind whose text anyone can write; the
-    plugin decides whether the tool's own (Gmail's `\\Inbox`) are tags too."""
+    names one only labels give only by its `#`; one I take off comes back at the plugin's next
+    refresh, if the tool still has it. Put only labels no outsider can set (people with a say in
+    the tool, or the tool itself), even on a kind whose text anyone can write; the plugin decides
+    whether the tool's own (Gmail's `\\Inbox`) are tags too."""
     family: str | None = None
     """The family of kinds it's in (a pull request, a ticket), set by core; None for a kind
     that's a plugin's own."""
@@ -92,8 +93,8 @@ class KindSpec:
     """Whether `mfd priority <id>`, given no kind, looks among its entities by id."""
     tags_from_text: bool = True
     """Whether a `#tag` in its entities' text, their title or `mentions` (a PR's body, out of its
-    code), puts the tag on them (see `tags`). False where anyone can write it, as mail's
-    senders write its subjects: their text still names tags."""
+    code), puts the tag on them (see `tags`). False where anyone can write it, as mail's senders
+    write its subjects: their text still names tags."""
 
 
 def _no_url(kind: str, id: str) -> str | None:
@@ -374,6 +375,14 @@ def _as[V: BaseModel](entity: Entity, model: type[V]) -> V:
         "lifecycle": entity.lifecycle,
     }
     return model.model_validate({**entity.attrs, **fields})
+
+
+def publisher(graph: Graph, ref: Ref) -> str | None:
+    """The plugin that published `ref`'s entity: a family's by whoever published that id, a
+    plugin's own kind by that plugin. None when the graph doesn't have it, or core made it (a
+    `tag`)."""
+    entity = graph.get(ref.kind, ref.id)
+    return entity.kind.split(".", 1)[0] if entity is not None and entity.kind else None
 
 
 def attrs(model: BaseModel) -> dict[str, JsonValue]:

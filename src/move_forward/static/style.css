@@ -12,8 +12,6 @@
   --warn-bg: #fff4e5;
   --good: #15803d;
   --good-bg: #ecfdf3;
-  --label: #6d28d9;
-  --label-bg: #f3e8ff;
   color-scheme: light dark;
 }
 
@@ -31,8 +29,6 @@
     --warn-bg: #2a2410;
     --good: #4ade80;
     --good-bg: #12261a;
-    --label: #c4b5fd;
-    --label-bg: #241a3a;
   }
 }
 
@@ -200,7 +196,6 @@ main.single { max-width: 720px; margin: 0 auto; padding-top: 16px; }
 }
 .badge.warn { background: var(--warn-bg); color: var(--warn); }
 .badge.good { background: var(--good-bg); color: var(--good); }
-.badge.label { background: var(--label-bg); color: var(--label); }
 /* A tag's badge links to the page filtered by it (the tag view). */
 a.badge.tag { text-decoration: none; }
 a.badge.tag:hover { text-decoration: underline; }

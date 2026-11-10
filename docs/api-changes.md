@@ -30,6 +30,11 @@ for themselves (a token, a request, an example config) is core's.
   the last, so a check names a subject only when it moved again, and what's pending after a
   collect that fails no longer asks for one at every check. A plugin drops the
   fingerprints, pending sets and full-collect times it kept in `ctx.kv`.
+- **One kind of tag**: a tag from `Entity.tags` (a tool's labels) looks like any other, and
+  I can take it off (Untag), as I can a `#tag` in an entity's text; either comes back at the
+  plugin's next refresh if the tool or the text still has it. One only labels give is still
+  named only with its `#`. A plugin that reads `tag` entities sees one only while it's on.
+  Every tag's badge looks alike, so `Badge`'s `label` tone, which only core used, is gone.
 - **The previous graph for a change check**: `ChangedRequest` gains `previous_graph`, the
   graph the plugin's last change check was given (unless it raised), or None at the first
   since the server started. A plugin that `watches` another compares it with `graph` to see
