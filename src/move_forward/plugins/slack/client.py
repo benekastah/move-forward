@@ -3,11 +3,54 @@
 import json
 from typing import Any
 
-from ...api import http
+from ...api import Model, http
 
 API = "https://slack.com/api/"
 NOT_FOUND = "users_not_found"
 TIMEOUT_SECONDS = 30
+
+
+class Channel(Model):
+    """A channel visible to the token, with text that may identify its GitHub team."""
+
+    id: str
+    name: str
+    topic: str = ""
+    purpose: str = ""
+
+
+def channels(api_token: str) -> list[Channel]:
+    """List active public and accessible private channels, following every cursor.
+    Requires channels:read and groups:read; never reads messages or joins channels."""
+    found: dict[str, Channel] = {}
+    cursor = ""
+    seen: set[str] = set()
+    while True:
+        answer = call(
+            "conversations.list",
+            api_token,
+            {
+                "types": "public_channel,private_channel",
+                "exclude_archived": "true",
+                "limit": "200",
+                "cursor": cursor,
+            },
+        )
+        for channel in answer.get("channels", []):
+            if not channel.get("is_archived"):
+                item = Channel(
+                    id=channel["id"],
+                    name=channel["name"],
+                    topic=channel.get("topic", {}).get("value", ""),
+                    purpose=channel.get("purpose", {}).get("value", ""),
+                )
+                found[item.id] = item
+        cursor = answer.get("response_metadata", {}).get("next_cursor", "").strip()
+        if not cursor:
+            return list(found.values())
+        if cursor in seen:
+            raise ValueError("Slack repeated a channel-list cursor")
+        seen.add(cursor)
 
 
 class SlackError(RuntimeError):
