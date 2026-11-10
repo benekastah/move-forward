@@ -59,18 +59,19 @@ class GitHubConfig(Strict):
     comments count as feedback."""
     required_owner_marker: str = ""
     """A comment marker on a CODEOWNERS line whose owners' approval is required, e.g.
-    `#!required`. Such files count first in team PR scores. Empty: no such convention."""
+    `#!required`; empty: no such convention. Such files count first in team PR scores."""
     ticket_link_prefixes: list[str] = Field(default_factory=list)
     """The words a PR description line can start with to link its ticket, e.g.
-    `["Link", "Closes"]`; the ticket follows as a key or a Jira URL. PR housekeeping flags
-    PRs with a ticket key but no such line. Empty: no such convention."""
+    `["Link", "Closes"]`, the ticket following as a key or a Jira URL; empty: no such
+    convention. PR housekeeping flags PRs with a ticket key but no such line."""
     placeholder_labels: list[str] = Field(default_factory=lambda: list(DEFAULT_PLACEHOLDER_LABELS))
     """PR labels the template leaves to be replaced, e.g. `needs-team`; PR housekeeping
     flags them."""
     teams: dict[str, str] = Field(default_factory=dict)
     """A team's slug, by its name in the top-level `teams`, where the slug isn't the name."""
     merge: MergeConfig = Field(default_factory=MergeConfig)
-    """`[github.merge]`: how I like PRs merged."""
+    """`[github.merge]`: how I like PRs merged, where a repo allows several methods; unset,
+    GitHub picks for me."""
     default_team_reviewer_assignment: ReviewerAssignment = "team"
     """Whether a requested team alone is enough (`team`), or each requested team also
     needs a requested member (`individual`). A PR with no reviewer request still needs one."""
@@ -82,8 +83,8 @@ class GitHubConfig(Strict):
     who must approve, e.g. `["acme/widgets"]`. My PRs there get a field to pick one. GitHub
     enforces the approval; the dashboard doesn't check it."""
     email_domains: list[str] = Field(default_factory=list)
-    """Domains of work emails, to pick a reviewer's email from their commits. Default: the
-    domain of the top-level `email`; set this when the organisation uses several."""
+    """Domains of work emails, to pick a reviewer's email from their commits; empty: the
+    domain of the top-level `email`. Set this when the organisation uses several."""
     stale_review_hours: int = DEFAULT_STALE_REVIEW_HOURS
     """A review request with no review activity for this long is nudgeable."""
     quick_review_max_lines: int = Field(default=DEFAULT_QUICK_REVIEW_MAX_LINES, ge=0)
@@ -94,7 +95,7 @@ class GitHubConfig(Strict):
     quick_review_max_files: int = Field(default=DEFAULT_QUICK_REVIEW_MAX_FILES, ge=0)
     """The most files a quick (minutes) review can change, e.g. `5`."""
     hour_review_max_lines: int = Field(default=DEFAULT_HOUR_REVIEW_MAX_LINES, ge=0)
-    """The most lines an hour's review can change, e.g. `300`."""
+    """The most lines an hour's review can change, e.g. `300`; beyond these, it takes a day."""
     hour_review_max_files: int = Field(default=DEFAULT_HOUR_REVIEW_MAX_FILES, ge=0)
     """The most files an hour's review can change, e.g. `12`."""
     split_pr_suggest_lines: int = Field(default=DEFAULT_SPLIT_PR_SUGGEST_LINES, ge=0)
@@ -110,7 +111,7 @@ class GitHubConfig(Strict):
     the PR is back in the queue, was queued again, or its checks pass now."""
     stale_draft_days: int = Field(default=DEFAULT_STALE_DRAFT_DAYS, ge=0)
     """My draft PRs untouched for this many days, e.g. `14`, get a "stale draft" line in PR
-    housekeeping. 0: never."""
+    housekeeping; 0: never."""
 
     def slug(self, team: str) -> str:
         return self.teams.get(team, team)

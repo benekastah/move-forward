@@ -16,11 +16,11 @@ class GitConfig(Strict):
     """`[git]`: the repos I work in on this machine."""
 
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
-    """How often the dashboard reads every repo anyway, a backstop: changes are seen as they
-    happen (see `watch`)."""
+    """How often the dashboard reads every repo anyway, a backstop, as it watches them for
+    changes."""
     status_seconds: int = Field(default=DEFAULT_STATUS_SECONDS, ge=0)
-    """For a worktree that can't be watched (see `watch`), how often its `git status` is
-    checked for uncommitted edits, refreshing its repo when they changed; 0 leaves them to
+    """For a worktree it can't watch for changes, how often its `git status` is checked for
+    uncommitted edits, refreshing its repo when they changed; 0 leaves them to
     `refresh_seconds`."""
 
     repos: list[Path]
@@ -31,8 +31,9 @@ class GitConfig(Strict):
     Enterprise Server's host, or an alias for either in ~/.ssh/config (`github-work` in
     `git@github-work:acme/widgets.git`)."""
     my_branch_prefixes: list[str] = Field(default_factory=list)
-    """Branch name prefixes that mark a branch as mine, e.g. `["jane/"]`. A branch with a PR
-    of mine, or commits of mine off the default branch, is mine whatever its name."""
+    """Branch name prefixes that mark a branch as mine, e.g. `["jane/"]`, besides the branches
+    with my commits or PRs. A branch with a PR of mine, or commits of mine off the default
+    branch, is mine whatever its name."""
     ignored_worktree_globs: list[str] = Field(
         default_factory=lambda: list(DEFAULT_IGNORED_WORKTREE_GLOBS)
     )

@@ -2,14 +2,6 @@
 
 from ...api import Asker, InitSetup, branch_prefix, checkout, directories, path
 
-TEMPLATE = """\
-# refresh_seconds = 1800               # how often it reads every repo anyway (it watches them)
-# status_seconds = 30                  # how often edits are polled where watching fails (0: off)
-# ignored_worktree_globs = ["*/.claude/worktrees/*"]
-# commit_history_days = 180              # how far back commits count: my directories, reviewer suggestions
-# my_branch_prefixes = []               # besides branches with my commits or PRs, e.g. ["me/"]
-# github_hosts = ["github.com"]          # remote hosts that are GitHub: an Enterprise server, ~/.ssh/config aliases
-"""
 EXAMPLE = '# repos = ["~/src/app", "~/src/infra"]\n'
 
 

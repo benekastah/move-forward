@@ -51,8 +51,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 - Every plugin hook that runs with the plugin's context takes one request object
   (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
   breaking its overrides. Those called before there's a context take what they need:
-  `init_suggested()` and `init_questions(ask, setup)` (`mfd init`), `tokens(config)` (`mfd
-  token`, and loading the config), `cli(parser)`, `pages()` and `actions()`.
+  `init_suggested()`, `init_questions(ask, setup)` and `init_shown(section)` (`mfd init`),
+  `tokens(config)` (`mfd token`, and loading the config), `cli(parser)`, `pages()` and
+  `actions()`.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.
@@ -123,11 +124,16 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 
   Before committing, look for docs the change made untrue: search the docs
   and docstrings for the names you renamed, moved or removed.
-- **Every config key appears in three places**: its model (with a docstring),
-  the README (core's) or the plugin's page in `docs/plugins/`, and `mfd init`'s rendered config
-  (core's in `init.py`; a plugin's in its `setup.py`, an optional key as a commented default in
-  its `init_template`, a required one with an example value in its `init_example`), which
-  `mfd init --example` is built from too. Config models reject unknown
+- **Every config key appears in two places**: its model (with a docstring), and the README
+  (core's) or the plugin's page in `docs/plugins/`. `mfd init` (and `mfd init --example`,
+  built the same way) writes each optional key from its model, commented out with its default
+  and its docstring's first sentence. A plugin writes by hand, in its `setup.py`, only what
+  its model can't say: a required key with an example value in its `init_example`, a table of
+  example entries (`[github.teams]`, `[mail.<name>]`) in its `init_tables`, and from its
+  `init_shown(section)` an example value for a key whose default says less (or is None),
+  where it's right for that section. A key's comment goes above it, after a blank line, wrapped
+  to 100 columns (never inside a code span); write `init_tables`' comments the same way.
+  Core's `[notifications]` is still written by hand, in `init.py`. Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
   `MOVED_SETTINGS` in `config.py`), and a removed plugin's section says it's gone
   (`REMOVED_PLUGINS`).

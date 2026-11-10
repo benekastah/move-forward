@@ -40,7 +40,7 @@ from .panels import (
     restore_iced_action,
 )
 from .repository import MIGRATIONS, LocalRepository
-from .setup import EXAMPLE, TEMPLATE, questions
+from .setup import EXAMPLE, questions
 
 REPO = "git.repo"
 BRANCH = "git.branch"
@@ -59,7 +59,6 @@ CLONES = "clones"
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     name = "git"
     title = "Git"
-    init_template = TEMPLATE
     init_example = EXAMPLE
     init_example_on = True
     config_model = GitConfig

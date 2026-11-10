@@ -1,14 +1,16 @@
 import re
 import tomllib
+from datetime import date
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import pytest
 from conftest import section
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic.fields import FieldInfo
 
-from move_forward import asking, cli, config, init, keychain, registry
+from move_forward import asking, cli, config, init, keychain, registry, tomledit
 from move_forward.plugin import Plugin
 from move_forward.plugins.git import setup as git_setup
 from move_forward.plugins.git.config import GitConfig
@@ -380,19 +382,275 @@ def _tables(field: FieldInfo) -> bool:
     return field.json_schema_extra == {"tables": True}
 
 
-@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
-def test_every_optional_key_of_a_plugin_is_a_commented_default(plugin: Plugin[Any, Any]) -> None:
-    written = plugin.init_template + plugin.init_example
+LEFT_OUT = init.render_config(init.EXAMPLE_ANSWERS, {})
+"""What `mfd init` writes when asked for no plugin: every offered plugin's section commented
+out."""
+_COMMENTED_KEY = re.compile(r"^# ([a-z_]+) = (.*)$")
+"""A commented-out key as `mfd init` writes it: its name and value."""
+
+
+@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+def test_every_key_of_a_plugin_left_out_is_a_commented_line(plugin: Plugin[Any, Any]) -> None:
+    """A plugin's required keys (with its example values), its optional keys (with their
+    defaults), and its tables (with an example), each commented out."""
+    shown = "\n".join(_section_lines(LEFT_OUT, plugin.name) or [])
     missing = [
         key
         for key, field in plugin.config_model.model_fields.items()
-        if not field.is_required()
-        and key != "teams"
-        and f"# {key} =" not in written
-        and f"[{plugin.name}.{key}]" not in written  # a table of its own
-        and not (_tables(field) and f"# [{plugin.name}." in written)  # tables by name
+        if f"\n# {key} =" not in f"\n{shown}"
+        and f"# [{plugin.name}.{key}]" not in shown  # a table of its own
+        and not (_tables(field) and f"# [{plugin.name}." in shown)  # tables by name
     ]
     assert missing == []
+
+
+@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+def test_what_mfd_init_writes_for_a_plugin_loads_uncommented(plugin: Plugin[Any, Any]) -> None:
+    """Its section left out, uncommented, and its section chosen (with its example's
+    values), its commented defaults uncommented, are each a section it takes."""
+    left_out = _section_lines(LEFT_OUT, plugin.name)
+    assert left_out is not None
+    _check_uncommented(plugin, left_out)
+    values = tomllib.loads(_uncomment(plugin.init_example))
+    text = init.render_config(init.EXAMPLE_ANSWERS, {plugin.name: values})
+    chosen = _section_lines(text, plugin.name)
+    assert chosen is not None and not chosen[0].startswith("#")
+    _check_uncommented(plugin, chosen)
+
+
+@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+def test_a_plugins_commented_defaults_are_its_defaults(plugin: Plugin[Any, Any]) -> None:
+    """Uncommenting a left-out section's optional keys changes nothing, but for the keys it
+    shows an example of instead (`init_shown`) and its example tables (`init_tables`)."""
+    lines = _section_lines(LEFT_OUT, plugin.name) or []
+    uncommented = _uncomment("\n".join(line for line in lines if not line.startswith("##")))
+    loaded = plugin.config_model.model_validate(tomllib.loads(uncommented)[plugin.name])
+    bare = plugin.config_model.model_validate(tomllib.loads(_uncomment(plugin.init_example)))
+    fields = plugin.config_model.model_fields
+    examples = {
+        *plugin.init_shown(tomllib.loads(_uncomment(plugin.init_example))),
+        *(k for k in fields if f"[{plugin.name}.{k}]" in plugin.init_tables),
+    }
+    assert loaded.model_dump(exclude=examples) == bare.model_dump(exclude=examples)
+
+
+def test_cores_commented_defaults_are_its_defaults() -> None:
+    """Uncommenting core's top-level keys and its own tables changes nothing."""
+    top = LEFT_OUT.split("\n# [", 1)[0]  # up to the first section, a plugin's
+    loaded = config.Config.model_validate(
+        tomllib.loads(_uncomment(top) + "\n" + _uncomment(init.core_tables()))
+    )
+    assert loaded == config.Config.model_validate(init.EXAMPLE_ANSWERS)
+    assert "# prune_days = 90" in top and "# [act_now]" in init.core_tables()
+
+
+def _uncomment(text: str) -> str:
+    """`text` with its commented-out keys and tables uncommented, but not its prose."""
+    return "\n".join(
+        line[2:] if re.match(r"# (\[|[a-z_-]+ =)", line) else line for line in text.splitlines()
+    )
+
+
+def test_a_keys_comment_is_the_first_sentence_of_its_docstring() -> None:
+    assert init.summary("Worktrees to leave out, e.g. ones agents\n    create. More.") == (
+        "Worktrees to leave out, e.g. ones agents create."
+    )
+    assert init.summary("`[act_now]`: how core ranks. More.") == "How core ranks."
+    assert init.summary("No sentence") == "No sentence"
+    assert init.summary("Is it on? More.") == "Is it on?"
+    assert init.summary("Never! More.") == "Never!"
+    assert init.summary("Ends here (see `x`.) Next.") == "Ends here (see `x`.)"
+    assert init.summary('Says "stale." Next.') == 'Says "stale."'
+    assert init.summary("Repos, tickets, etc. are kept. More.") == (
+        "Repos, tickets, etc. are kept."
+    )
+    assert init.summary("E.g. `14` days. More.") == "E.g. `14` days."
+    assert init.summary("That is, i.e. none. More.") == "That is, i.e. none."
+
+
+def test_every_commented_key_has_its_docstrings_first_sentence() -> None:
+    """Each optional key `mfd init` writes, core's and the plugins', has a docstring, whose
+    first sentence is its comment."""
+    models: dict[str, type[BaseModel]] = {"": config.Config}
+    models |= {
+        key: field.annotation
+        for key, field in config.Config.model_fields.items()
+        if isinstance(field.annotation, type)
+        and issubclass(field.annotation, BaseModel)
+        and key not in init.HAND_WRITTEN
+    }
+    models |= {plugin.name: plugin.config_model for plugin in init.offered()}
+    examples = {p.name: tomllib.loads(_uncomment(p.init_example)) for p in init.offered()}
+    table = ""
+    checked: list[str] = []
+    lines = LEFT_OUT.splitlines()
+    for n, line in enumerate(lines):
+        if header := re.match(r"^# \[([a-z_]+)\]", line):
+            table = header[1]
+        elif (key := _COMMENTED_KEY.match(line)) and table in models:
+            field = models[table].model_fields.get(key[1])
+            if field is None or key[1] in examples.get(table, {}):
+                continue  # an example table's key (`[github.teams]`'s), or the init_example's
+            assert field.description, f"{table}.{key[1]} has no docstring"
+            comment, start = _comment_above(lines, n)
+            assert comment == init.summary(field.description), f"{table}.{key[1]}"
+            assert lines[start - 1] == "", f"{table}.{key[1]} runs on from the line before"
+            checked.append(f"{table}.{key[1]}")
+    names = {name.removeprefix(".") for name in checked}
+    assert {"prune_days", "db_path", "act_now.size", "act_now.weights", "mail.port"} <= names
+
+
+def _comment_above(lines: list[str], n: int) -> tuple[str, int]:
+    """The comment written above line `n`, a key: the `# ` lines before it, back to one that
+    isn't prose, joined; and the line it starts on. None of them reads as a key or a table,
+    uncommented, so uncommenting the file can't take one for one."""
+    start = n
+    while start > 0 and (line := lines[start - 1]).startswith("# "):
+        if _COMMENTED_KEY.match(line) or line.startswith("# ["):
+            break
+        assert not re.match(r"# (\[|[A-Za-z0-9_\"'-]+ *=)", line), line
+        start -= 1
+    return " ".join(line[2:] for line in lines[start:n]), start
+
+
+class _Color(Enum):
+    RED = 1
+
+
+class _Odd(BaseModel):
+    """Defaults that need pydantic's JSON mode or quoting: an enum that isn't a `str`, keys
+    TOML takes only quoted, a date, a path."""
+
+    color: _Color = _Color.RED
+    snooze: dict[str, int] = Field(default_factory=lambda: {"notes.entry": 2, "my key": 1, "a": 3})
+    when: date = date(2026, 1, 2)
+    where: Path = Path("~/data/dashboard.db")
+
+
+def test_any_default_is_written_as_its_model_reads_it() -> None:
+    text = _uncomment(init.commented_defaults(_Odd))
+    assert tomllib.loads(text) == {
+        "color": 1,
+        "snooze": {"notes.entry": 2, "my key": 1, "a": 3},
+        "when": "2026-01-02",
+        "where": "~/data/dashboard.db",
+    }
+    assert _Odd.model_validate(tomllib.loads(text)) == _Odd()
+
+
+WRITTEN = {
+    "left out": LEFT_OUT,
+    "example": init.example(),
+    "chosen": init.render_config(
+        init.EXAMPLE_ANSWERS,
+        {p.name: tomllib.loads(_uncomment(p.init_example)) for p in init.offered()},
+        ["github.pr_mergeable"],
+    ),
+}
+"""What `mfd init` can write: every plugin left out, the example, and every plugin chosen
+(with its example's values) and a notification subscribed to."""
+
+
+@pytest.mark.parametrize("name", list(WRITTEN))
+def test_no_line_mfd_init_writes_is_wider_than_its_width(name: str) -> None:
+    """A comment is wrapped to it. A line wider still is a key whose value alone makes it so
+    (act_now's `weights`): written whole, as a value can't be cut."""
+    for line in WRITTEN[name].splitlines():
+        if len(line) <= init.LINE_WIDTH:
+            continue
+        key = _COMMENTED_KEY.match(line)
+        assert key is not None, line
+        assert tomledit.value(tomllib.loads(f"v = {key[2]}")["v"]) == key[2], line
+
+
+@pytest.mark.parametrize("name", list(WRITTEN))
+def test_every_comment_is_above_its_key_or_table(name: str) -> None:
+    """No key or table, commented out or not, has a comment beside it: one form throughout."""
+    for line in WRITTEN[name].splitlines():
+        if re.match(r"^(# )?\[", line):
+            assert line.endswith("]"), line
+        elif key := re.match(r"^(?:# )?[a-z_-]+ = (.*)$", line):
+            assert tomledit.value(tomllib.loads(f"v = {key[1]}")["v"]) == key[1], line
+
+
+@pytest.mark.parametrize("name", list(WRITTEN))
+def test_every_table_starts_after_a_blank_line(name: str) -> None:
+    """A table, commented out or not, with the comment above it, reads as a section of its
+    own: the line before them is blank."""
+    lines = WRITTEN[name].splitlines()
+    for i, line in enumerate(lines):
+        if not re.match(r"^(#+ )?\[", line):
+            continue
+        start = i
+        while start > 0 and re.match(r"^#+ (?![a-z_-]+ = |\[)", lines[start - 1]):
+            start -= 1  # its comment, prose rather than a key or another table
+        assert start == 0 or lines[start - 1].strip("#").strip() == "", (name, line)
+
+
+class _Spanned(BaseModel):
+    key: int = 0
+    """A comment whose code span would straddle the wrap, as it starts near its end: word word
+    then `a code span with spaces` ends."""
+
+
+@pytest.mark.parametrize("name", list(WRITTEN))
+def test_wrapping_never_splits_a_code_span(name: str) -> None:
+    """jira's `blocked_by_links` example, `["depends on"]`, stays on one line, as does every
+    code span in a comment."""
+    comments = [line for line in WRITTEN[name].splitlines() if line.startswith("# ")]
+    comments += init.commented_defaults(_Spanned).splitlines()
+    assert [line for line in comments if line.count("`") % 2] == []
+
+
+def test_a_whole_float_is_written_as_an_int() -> None:
+    """JSON mode gives act_now's weights as floats; a whole one reads better as 3 than 3.0."""
+    assert "\n# weights = { closes = 3, minutes = 2, hour = 1," in LEFT_OUT
+
+
+class _Holes(BaseModel):
+    maybe: list[int | None] = Field(default_factory=lambda: [1, None, 2])
+
+
+def test_none_is_left_out_of_a_list() -> None:
+    """TOML has no None, so a list's are dropped rather than written as an invalid `null`."""
+    assert tomllib.loads(_uncomment(init.commented_defaults(_Holes))) == {"maybe": [1, 2]}
+
+
+def test_a_tokens_place_shows_the_sections_own_default() -> None:
+    lines = _section_lines(LEFT_OUT, "jira") or []
+    assert any(line.startswith('# token_env = "JIRA_API_TOKEN"') for line in lines)
+    assert any(line.startswith('# keychain_service = "move-forward-jira"') for line in lines)
+
+
+def test_answered_keys_are_not_commented_defaults_too() -> None:
+    text = init.render_config(
+        {"email": "e@x.y", "teams": ["web"], "port": 9000},
+        {
+            "github": {"org": "a", "host": "h", "teams": {"web": "web-reviewers"}},
+            "slack": {"teams": {"web": "#web"}},
+        },
+    )
+    top = text.split("\n# [", 1)[0]
+    github = "\n".join(_section_lines(text, "github") or [])
+    slack = "\n".join(_section_lines(text, "slack") or [])
+    assert "# port =" not in top and "\nport = 9000" in top
+    assert "# host =" not in github and 'host = "h"' in github
+    assert "# [github.teams]" not in github and "\n[github.teams]\n" in github
+    assert "# [slack.teams]" not in slack and "\n[slack.teams]\n" in slack
+    tomllib.loads(_uncomment(text))  # no table twice
+
+
+def test_mails_auth_servers_are_shown_as_unset_reads_them() -> None:
+    """For Gmail, the servers unset stands for; for another host, none, which unset means
+    there too, so whoever must set it still sees the key and its comment."""
+
+    def mail(host: str) -> str:
+        values: dict[str, object] = {"host": host, "username": "me@x.y"}
+        text = init.render_config(init.EXAMPLE_ANSWERS, {"mail": values})
+        return "\n".join(_section_lines(text, "mail") or [])
+
+    assert '\n# auth_servers = ["mx.google.com"]\n' in mail("imap.gmail.com")
+    assert "\n# auth_servers = []\n" in mail("imap.work.example")
 
 
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
@@ -429,7 +687,8 @@ def test_every_key_of_core_is_in_the_example() -> None:
             continue
         model = field.annotation
         if isinstance(model, type) and issubclass(model, BaseModel):
-            section = re.search(rf"^# \[{name}\][^\n]*\n((?:#[^\n]*\n)*)", example, re.MULTILINE)
+            pattern = rf"^# \[{name}\]\n((?:(?!# \[)#[^\n]*\n|\n)*)"
+            section = re.search(pattern, example, re.MULTILINE)
             shown = section[1] if section else ""
             missing += [f"{name}.{key}" for key in model.model_fields if not has(key, shown)]
         elif not has(name, top):
@@ -450,12 +709,17 @@ def test_mfd_init_example_writes_a_config_with_the_plugins_their_examples_turn_o
 
 
 def _example_section(plugin: Plugin[Any, Any]) -> list[str] | None:
-    """`mfd init --example`'s lines for a plugin's section, up to the next section's; None
-    when it has none."""
-    lines = [str(line) for line in init.example().splitlines()]
+    """`mfd init --example`'s lines for a plugin's section; None when it has none."""
+    return _section_lines(init.example(), plugin.name)
+
+
+def _section_lines(text: str, name: str) -> list[str] | None:
+    """The lines of `text`, a config `mfd init` wrote, for the section `name` (commented out or
+    not), with its own tables, up to the next section's; None when it has none."""
+    lines = text.splitlines()
     header = re.compile(r"^(# )?\[([a-z_]+)\]")
     start = next(
-        (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == plugin.name),
+        (n for n, line in enumerate(lines) if (m := header.match(line)) and m[2] == name),
         None,
     )
     if start is None:
@@ -476,16 +740,13 @@ def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, 
     if section is None:
         return  # no section to give (notes: always on)
     _check_uncommented(plugin, section)
-    if "\n##" in f"\n{plugin.init_template}":
-        # And `mfd init`'s copy of the alternative, with its required keys as in the example.
-        written = f"[{plugin.name}]\n{plugin.init_example}{plugin.init_template}"
-        _check_uncommented(plugin, written.splitlines())
 
 
 def _check_uncommented(plugin: Plugin[Any, Any], section: list[str]) -> None:
     """`section`, a plugin's commented config, uncommented, is a config the plugin takes, and
     so is what's behind `##` instead (see the test above)."""
-    base = [line.removeprefix("# ") for line in section if not line.startswith("##")]
+    base = _uncomment("\n".join(line for line in section if not line.startswith("##")))
+    base = base.splitlines()
     plugin.config_model.model_validate(tomllib.loads("\n".join(base))[plugin.name])
     instead = [line.removeprefix("## ") for line in section if line.startswith("## ")]
     if not instead:

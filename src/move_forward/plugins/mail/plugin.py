@@ -1,5 +1,6 @@
 """The mail plugin: unread and flagged mail, so the people who matter get answered first."""
 
+from collections.abc import Mapping
 from typing import ClassVar
 
 from ...api import (
@@ -30,12 +31,12 @@ from ...api import (
 from ...api.keychain import TokenSettings
 from ...api.kinds import PERSON
 from . import client
-from .config import Mailbox, MailConfig
+from .config import KNOWN_AUTH_SERVERS, Mailbox, MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
 from .repository import MIGRATIONS, MessageRepository
-from .setup import EXAMPLE, TEMPLATE, questions
+from .setup import EXAMPLE, TABLES, questions
 
 STATUS = "status"
 """The kv key of the mailbox's status at the last look, for `changed`."""
@@ -88,7 +89,7 @@ def merged(read: list[Message], more: list[Message]) -> list[Message]:
 class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     name = "mail"
     title = "Mail"
-    init_template = TEMPLATE
+    init_tables = TABLES
     init_example = EXAMPLE
     config_model = MailConfig
     api_version = API_VERSION
@@ -109,6 +110,13 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
+
+    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
+        """`auth_servers` as the host's known ones (Gmail's), or `[]` for another server,
+        which reads the same as unset there: uncommenting it changes nothing, and its comment
+        says what to put in."""
+        host = str(section.get("host", "")).lower()
+        return {"auth_servers": KNOWN_AUTH_SERVERS.get(host, [])}
 
     def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
         """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""
