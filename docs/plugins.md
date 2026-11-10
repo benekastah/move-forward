@@ -109,8 +109,7 @@ flowchart TB
     git -- "Delete branches" --> icedItems
     git_stack -- "Untrack" --> icedItems
 
-    github -. "url_for(pr)" .-> urls{{graph.url_for}}
-    jira -. "url_for(ticket)" .-> urls
+    jira -. "url_for(ticket)" .-> urls{{graph.url_for}}
     urls -. "ticket links" .-> notes
 ```
 

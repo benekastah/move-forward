@@ -14,6 +14,11 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **Asked only about its own kinds**: core calls `url_for`, `handle_for` and `fetch` only on
+  the plugins whose `kinds` include `req.kind` (each publisher of a family's), so a plugin
+  drops its `if req.kind != ...` check. `url_for` gives the id by default where its family's
+  ids are URLs (a pull request's, a ticket's), so a plugin whose `url_for` only did that
+  drops it.
 - **Core keeps what moved**: `changed` says what moved in the tool, and core keeps it, not
   the plugin. `Changed` takes keywords only: `fingerprint` (the tool's state as text, which
   core compares with the last), `subjects` (what moved since the last check, in the

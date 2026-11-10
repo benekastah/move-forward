@@ -248,16 +248,18 @@ stay. So plugins never check for ice themselves.
 
 ### URLs, and entities not in the graph
 
-`url_for(kind, id)` gives an entity's URL from the graph, else asks the plugins: github
-answers for any PR URL, jira makes a ticket's link from its key alone. `handle(kind, id)`
-gives what to call it the same way: its `handle` from the graph, else the plugins'
-`handle_for` (jira's: a ticket's key from its URL), else the id.
+`url_for(kind, id)` gives an entity's URL from the graph, else asks the plugins that publish
+`kind` (each of a family's publishers, in turn): a PR's id is its URL, which every plugin's
+`url_for` gives by default for a family whose ids are URLs, and jira makes a ticket's link
+from its key alone. `handle(kind, id)` gives what to call it the same way: its `handle` from
+the graph, else its publishers' `handle_for` (jira's: a ticket's key from its URL), else the
+id. A plugin is never asked about a kind it doesn't publish.
 
 `identify(kind, id)` gives the id an entity of a family has, for an id kept before the
 family's ids were what they are: a ticket kept by its key gets the ticket with that handle,
 or else the URL jira makes. Core and notes run what they keep through it at each refresh.
 
-`fetch(kind, ids)` asks the plugin that owns a kind to fetch entities now, from its tool,
+`fetch(kind, ids)` asks the plugins that publish a kind (and only those) to fetch entities now, from its tool,
 even ones long gone from its tables: notes' daily prune asks when old PRs closed and tickets
 were resolved. It's slow, so it's only for work that runs rarely; a plugin that fails is
 left out, and what it would have answered counts as unknown.

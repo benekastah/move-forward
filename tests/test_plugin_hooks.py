@@ -24,6 +24,7 @@ from move_forward.plugin import (
     Context,
     EntitiesRequest,
     FetchRequest,
+    HandleRequest,
     ItemActionsRequest,
     LinkingRequest,
     PageHandler,
@@ -31,6 +32,7 @@ from move_forward.plugin import (
     Plugin,
     PrepareItemActionsRequest,
     RelateRequest,
+    UrlRequest,
 )
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
@@ -190,7 +192,57 @@ def test_the_graph_fetches_through_the_plugin_that_owns_the_kind(
     assert list(graph.fetch("ticket", ["APP-1", "APP-2", "APP-3"])) == ["APP-1", "APP-2"]
     assert graph.fetch("ticket", []) == {}
     assert graph.fetch("pull_request", ["https://pr/1"]) == {}
-    assert _Fetching.asked == [["APP-1", "APP-2", "APP-3"], ["https://pr/1"]]
+    assert _Fetching.asked == [["APP-1", "APP-2", "APP-3"]]  # not about PRs: not its kind
+
+
+class _Asked(JiraPlugin):
+    """Jira, noting each kind core asks it about, by hook."""
+
+    asked: ClassVar[list[tuple[str, str]]] = []
+
+    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
+        self.asked.append(("fetch", req.kind))
+        return []
+
+    def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
+        self.asked.append(("url_for", req.kind))
+        return super().url_for(req)
+
+    def handle_for(self, req: HandleRequest[JiraConfig]) -> str | None:
+        self.asked.append(("handle_for", req.kind))
+        return super().handle_for(req)
+
+
+def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
+    plugins = [_Asked() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config, db = stored(github=snapshot(), jira_site="https://j")
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    _Asked.asked.clear()
+    for kind, id in [("pull_request", "https://github.com/o/r/pull/9"), ("git.branch", "b")]:
+        graph.url_for(kind, id)
+        graph.handle(kind, id)
+        graph.fetch(kind, [id])
+    assert _Asked.asked == []
+    graph.url_for("ticket", "APP-9")
+    graph.handle("ticket", "https://j/browse/APP-9")
+    graph.fetch("ticket", ["https://j/browse/APP-9"])
+    assert _Asked.asked == [("url_for", "ticket"), ("handle_for", "ticket"), ("fetch", "ticket")]
+
+
+def test_url_for_is_by_default_the_id_where_the_familys_ids_are_urls() -> None:
+    config, db = stored(github=snapshot())
+    [github] = [e for e in registry.enabled(config, db, NOW) if e.name == "github"]
+    default = Plugin[GitHubConfig, GitHubSnapshot]()
+    url = "https://github.com/o/r/pull/9"
+
+    def url_for(kind: str, id: str) -> str | None:
+        return default.url_for(UrlRequest(github.ctx, kind, id))
+
+    assert url_for("pull_request", url) == url
+    assert url_for("pull_request", "#9") is None  # not a URL
+    assert url_for("person", "github.com/alice") is None  # a family whose ids aren't URLs
+    assert url_for("git.branch", "https://x/y") is None  # not a family's
 
 
 class _Failing(JiraPlugin):

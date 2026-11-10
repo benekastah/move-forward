@@ -40,7 +40,6 @@ from ...api import (
     StoreRequest,
     Subjects,
     SubjectsRequest,
-    UrlRequest,
     attrs,
     collect_into,
 )
@@ -487,9 +486,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def fetch(self, req: FetchRequest[GitHubConfig]) -> list[Entity]:
         """PRs by URL, with their state and `closed_at`: when they were merged or closed."""
-        ctx, kind, ids = req.ctx, req.kind, req.ids
-        if kind != PR:
-            return []
+        ctx, ids = req.ctx, req.ids
         found: list[Entity] = []
         for url in ids:
             try:
@@ -508,10 +505,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 )
             )
         return found
-
-    def url_for(self, req: UrlRequest[GitHubConfig]) -> str | None:
-        kind, id = req.kind, req.id
-        return id if kind == PR else None
 
     def import_dir(self, req: ImportRequest[GitHubConfig]) -> list[str]:
         """Reviewers' emails from `reviewer-map.md`, replacing what an earlier import read."""

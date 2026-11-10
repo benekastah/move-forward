@@ -24,7 +24,7 @@ from .asking import Asker, InitSetup
 from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
-from .kinds import Family
+from .kinds import FAMILIES, Family, is_url
 from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, ProblemRepository, SnapshotRepository
@@ -638,18 +638,21 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return []
 
     def fetch(self, req: FetchRequest[C]) -> list[Entity]:
-        """Entities of a kind the plugin publishes, by id, fetched from its tool now, even ones
-        its snapshot doesn't hold; `Graph.fetch` asks. [] for a kind it doesn't know."""
+        """Entities of one of its `kinds`, by id, fetched from its tool now, even ones its
+        snapshot doesn't hold; `Graph.fetch` asks. Core asks only about the plugin's own kinds
+        (a family's of each plugin that publishes it), so `req.kind` is one of them."""
         return []
 
     def url_for(self, req: UrlRequest[C]) -> str | None:
-        """A URL for an entity of a kind the plugin knows, even one not in the graph, e.g. a
-        ticket's from its key."""
-        return None
+        """A URL for an entity of one of its `kinds`, even one not in the graph, e.g. a
+        ticket's from its key. Core asks only about the plugin's own kinds. By default, the id
+        itself where it's a URL of a family whose ids are URLs (a pull request's), else None."""
+        family = FAMILIES.get(req.kind)
+        return req.id if family and family.id_rule(req.id) and is_url(req.id) else None
 
     def handle_for(self, req: HandleRequest[C]) -> str | None:
-        """The `handle` of an entity of a kind the plugin knows, by id, even one not in the
-        graph, e.g. a ticket's key from its URL."""
+        """The `handle` of an entity of one of its `kinds`, by id, even one not in the graph,
+        e.g. a ticket's key from its URL. Core asks only about the plugin's own kinds."""
         return None
 
     # Page

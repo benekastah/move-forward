@@ -446,8 +446,13 @@ def build_graph(
             kind = f"{e.name}.{family}" if family else ref.kind
             entities.append(entity.model_copy(update={"family": family, "kind": kind}))
 
+    def owners(kind: str) -> list[Enabled]:
+        """The plugins that publish `kind`, whom alone core asks about it: a family's every
+        publisher, in plugin order."""
+        return [e for e in plugins if kind in e.plugin.kinds]
+
     def url_for(kind: str, id: str) -> str | None:
-        for e in plugins:
+        for e in owners(kind):
             url: str | None = call(
                 e.name, "url_for", lambda e=e: e.plugin.url_for(UrlRequest(e.ctx, kind, id)), None
             )
@@ -456,7 +461,7 @@ def build_graph(
         return None
 
     def handle_for(kind: str, id: str) -> str | None:
-        for e in plugins:
+        for e in owners(kind):
             handle: str | None = call(
                 e.name,
                 "handle_for",
@@ -468,11 +473,11 @@ def build_graph(
         return None
 
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
-        """Each plugin's answer; one that fails is logged and left out, so its entities just
+        """Each publisher's answer; one that fails is logged and left out, so its entities just
         aren't known (the prune keeps what it can't check). So is an entity that doesn't fit
         what its kind's fetched entities carry (see `_unfit_fetched`)."""
         found: list[Entity] = []
-        for e in plugins:
+        for e in owners(kind):
             try:
                 answer = e.plugin.fetch(FetchRequest(e.ctx, kind, ids))
             except SourceError:
