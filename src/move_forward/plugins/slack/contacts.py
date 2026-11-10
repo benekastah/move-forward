@@ -29,8 +29,8 @@ CONTACTS_PATH = f"/slack/{CONTACTS}"
 SLACK_ID_RE = re.compile(r"^[UW][A-Z0-9]{6,}$")
 CHANNEL_ID_RE = re.compile(r"^[CG][A-Z0-9]{6,}$")
 CHANNEL_NAME_RE = re.compile(r"^#[\w-]+$")
-LOOKUPS_FAILED = "lookups_failed"
-"""The kv key of why looking up Slack ids by email last failed, for the contacts page."""
+LOOKUPS_FAILED = "lookups"
+"""The problem (`Context.problem`) of why looking up Slack ids by email last failed."""
 BAD_TOKEN = {
     "invalid_auth",
     "not_authed",
@@ -212,16 +212,9 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
             )
             + "</td></tr>"
         )
-    failed = ctx.kv.get(LOOKUPS_FAILED)
     body = (
         "<article class='panel padded'>"
-        + (
-            "<p class='notice warn'>Looking up reviewers' Slack ids by email failed:"
-            f" {e(failed)}.</p>"
-            if failed
-            else ""
-        )
-        + "<h2>People</h2>"
+        "<h2>People</h2>"
         "<p class='target-note'>Their Slack member id links the ping page to a DM.</p>"
         f"<table>{people_rows}</table>"
         "<h2>Teams</h2><p class='target-note'>The channel a team's pings go to;"
@@ -248,12 +241,11 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
     nothing names a Slack id for, by the email github knows for them. Each is looked up once:
     a miss is remembered too. Returns whom it found. Without a token, does nothing. A lookup
     that fails (a token without `users:read.email`, a rate limit, no network) stops this
-    refresh's, and why is kept for the contacts page (`LOOKUPS_FAILED`) until the next
-    refresh's."""
-    ctx.kv.delete(LOOKUPS_FAILED)  # said again below if it fails again
+    refresh's, and is the problem `LOOKUPS_FAILED` until a refresh's lookups don't fail."""
     try:
         api_token = ctx.token()
     except SourceError:  # none given: no lookups
+        ctx.problem(LOOKUPS_FAILED, None)
         return []
     slack = SlackRepository(ctx.db)
     known = slack.contacts()
@@ -268,9 +260,14 @@ def look_up_requested(ctx: Context[SlackConfig], graph: Graph) -> list[str]:
             slack_id = client.lookup_by_email(api_token, email)
         # Slack's refusal, no network or a cut answer, or one that isn't JSON.
         except (client.SlackError, http.RequestError, ValueError) as e:
-            ctx.kv.set(LOOKUPS_FAILED, f"{e}{_hint(e, ctx.config.token_env)}")
+            ctx.problem(
+                LOOKUPS_FAILED,
+                "looking up reviewers' Slack ids by email failed:"
+                f" {e}{_hint(e, ctx.config.token_env)}",
+            )
             return found
         slack.save_looked_up(login, slack_id, ctx.now)
         if slack_id:
             found.append(login)
+    ctx.problem(LOOKUPS_FAILED, None)
     return found

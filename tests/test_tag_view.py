@@ -101,12 +101,16 @@ def test_focus_mode_steps_only_through_the_parts_carrying_a_tag() -> None:
 
 def test_a_plugin_whose_group_is_left_off_keeps_its_status_in_the_footer() -> None:
     board = dashboard(github=snapshot(mine=[pr(1)]), work_items=_ERRANDS).model_copy(
-        update={"sources": {"github": SourceStatus(fetched_at=NOW, error="boom")}}
+        update={
+            "sources": {"github": SourceStatus(fetched_at=NOW, error="boom")},
+            "plugin_problems": {"github": ["no notifications"]},
+        }
     )
     unfiltered = render.dashboard_page(board, set()).split("<footer>")[1]
-    assert "boom" not in unfiltered  # its group's summary says
+    assert "boom" not in unfiltered and "no notifications" not in unfiltered  # its group says
     footer = render.dashboard_page(board, set(), tags=["chores"]).split("<footer>")[1]
     assert "<strong>GitHub:</strong>" in footer and "boom" in footer
+    assert "<strong>github:</strong> no notifications" in footer
     assert "<form method='post' action='/refresh?tag=chores' class='refresh'>" in footer
     assert "<input type='hidden' name='plugin' value='github'>" in footer
 

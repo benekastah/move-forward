@@ -63,6 +63,7 @@ from .repositories import (
     KvRepository,
     LayoutRepository,
     PriorityRepository,
+    ProblemRepository,
     SnapshotRepository,
     TagRepository,
 )
@@ -402,11 +403,13 @@ def _prune_plugins(
     plugins: list[Enabled], graph: Graph, db: Database, now: datetime, days: int
 ) -> list[str]:
     """Every plugin's daily prune, and core's (Act now's feedback that's over or older than
-    `days`, finished work's priorities, gone entities' tags), each failing on its own; what
-    they did, by plugin."""
+    `days`, problems no plugin has reported for `days`, finished work's priorities, gone
+    entities' tags), each failing on its own; what they did, by plugin."""
     notices: list[str] = []
     if dropped := FeedbackRepository(db).prune(now, now - timedelta(days=days)):
         notices.append(f"act_now: forgot {dropped} snooze(s) or pin(s)")
+    if dropped := ProblemRepository(db).prune(now - timedelta(days=days)):
+        notices.append(f"problems: forgot {dropped} not reported for {days} days")
     try:  # it asks plugins for what they no longer hold, which can fail (a token gone bad)
         if cleared := priority.forget_finished(PriorityRepository(db), graph):
             notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")
@@ -567,6 +570,7 @@ def _builder(
     feedback = FeedbackRepository(db).all()
     priority_of = priority.level_of(PriorityRepository(db).all(), graph)
     known = _known_action(plugins)
+    problems = ProblemRepository(db).of([e.name for e in plugins])
 
     def build(selected: Sequence[str]) -> panels.Dashboard:
         built = panels.build(
@@ -588,7 +592,12 @@ def _builder(
             tagging.of,
             selected,
         )
-        return built.model_copy(update={"problems": list(registry.DISCOVERY_ERRORS)})
+        return built.model_copy(
+            update={
+                "problems": list(registry.DISCOVERY_ERRORS),
+                "plugin_problems": problems,
+            }
+        )
 
     return build
 

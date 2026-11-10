@@ -755,7 +755,8 @@ def _group(
     spot: Spot | None = None,
 ) -> str:
     """A group section; panel keys the dashboard left out (e.g. Stacks without git stack) are
-    skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click."""
+    skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click,
+    and how many problems it reports (`Context.problem`), each said above its panels."""
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
     count = sum(_live(panel) for panel in panels)
     status = _status_of(group.key, dashboard.sources)
@@ -764,12 +765,24 @@ def _group(
         if status
         else ""
     )
+    problems = dashboard.plugin_problems.get(group.key, [])
+    counted = said = ""
+    if problems:
+        counted = (
+            f"<span class='problems' title='{_e('; '.join(problems))}'>"
+            f"{len(problems)} problem{'' if len(problems) == 1 else 's'}</span>"
+        )
+        said = (
+            "<div class='problems'>"
+            + "".join(f"<p class='notice warn'>{_e(problem)}</p>" for problem in problems)
+            + "</div>"
+        )
     return (
         f"<details class='group' data-key='{_e(group.key)}'"
         + (" data-drag" if group.key != ACT_NOW and not where.tags else "")
         + f"{_open(group.open)}>"
-        f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span>{refreshed}"
-        "</summary>"
+        f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span>{counted}"
+        f"{refreshed}</summary>{said}"
         "<div class='panels'>"
         + "".join(_panel(panel, spot, where) for panel in panels)
         + "</div></details>"
@@ -824,10 +837,10 @@ def _nothing_carries(where: _Where) -> str:
 def _sources(
     dashboard: Dashboard, shown: Dashboard, refreshing: AbstractSet[str], tags: Sequence[str]
 ) -> str:
-    """The footer: how fresh the data of plugins without a group of their own is (the
-    others' summaries say), who I am, and the installed plugins left out. A plugin whose group
-    the tag view leaves off (`shown`, filtered by `tags`) has its summary's refresh status and
-    Refresh button here instead."""
+    """The footer: how fresh the data of plugins without a group of their own is, and the
+    problems they report (the others' summaries say both), who I am, and the installed plugins
+    left out. A plugin whose group the tag view leaves off (`shown`, filtered by `tags`) has its
+    summary's refresh status, Refresh button and problems here instead."""
     grouped = {group.key for group in dashboard.groups}
     visible = {group.key for group in shown.groups}
     spans: list[str] = []
@@ -851,6 +864,12 @@ def _sources(
                 f"<span><strong>{_e(name)}:</strong>"
                 f" {age(dashboard.generated_at, status.fetched_at)} ago</span>"
             )
+    for name, problems in dashboard.plugin_problems.items():
+        if name not in visible:
+            spans += [
+                f"<span class='error'><strong>{_e(name)}:</strong> {_e(problem)}</span>"
+                for problem in problems
+            ]
     if dashboard.identities:
         who = " · ".join(f"{_e(i.tool)}: {_e(i.login)}" for i in dashboard.identities)
         spans.append(f"<span>as {who}</span>")

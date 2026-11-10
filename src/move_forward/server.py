@@ -150,6 +150,9 @@ class App:
         `_pending_lock`."""
         self._last_checked: dict[str, float] = {}
         """`time.monotonic()` when each plugin was last asked whether it `changed`."""
+        self._checked_graphs: dict[str, Graph] = {}
+        """The graph each plugin's last change check that didn't fail was given: the next
+        one's `previous_graph`."""
 
     @property
     def token(self) -> str:
@@ -226,11 +229,14 @@ class App:
     def _changed(self, e: Enabled, graph: Graph) -> str | None:
         """Why `e.plugin.changed` says its tool has something new ("" when it doesn't say);
         None when it hasn't, or the check fails (raises, or answers with something that isn't
-        a `Changed`): logged at debug and tried again next time, so one plugin's check can't
-        stop the others'."""
+        a `Changed`): logged at debug and tried again next time, against the same previous
+        graph, so one plugin's check can't stop the others' and what it missed isn't lost."""
         try:  # reading the answer too, so a malformed one counts as a failed check
-            answer = e.plugin.changed(ChangedRequest(e.ctx, graph))
-            return answer.reason if answer.changed else None
+            previous = self._checked_graphs.get(e.name)
+            answer = e.plugin.changed(ChangedRequest(e.ctx, graph, previous))
+            why = answer.reason if answer.changed else None
+            self._checked_graphs[e.name] = graph
+            return why
         except Exception:
             log.debug("%s: change check failed", e.name, exc_info=True)
             return None

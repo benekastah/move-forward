@@ -199,9 +199,11 @@ JavaScript, their normal form redirects still work.
 
 A group's title bar also says when its plugin last refreshed (in local time,
 with the date when it wasn't today), "refreshing…" while it does, or "refresh
-failed" with the reason on hover. Its Refresh button refreshes just that plugin,
+failed" with the reason on hover, and how many problems the plugin reports besides a failed
+refresh (a lookup its token isn't allowed, say), each said above its panels until it's
+gone. Its Refresh button refreshes just that plugin,
 and then the plugins that watch it (git_stack watches git) if what they read
-changed; the header's Refresh refreshes them all. The footer lists only plugins without a group.
+changed; the header's Refresh refreshes them all. The footer lists only plugins without a group, and their problems.
 While any plugin refreshes, the tab icon shows a dotted version of the
 dashboard arrow, highlighting one dot at a time. If the browser pauses the
 animation in a background tab, it still shows a complete refresh icon. The
@@ -247,8 +249,8 @@ the tags its badges show. On the page, one with parts (an entry's todos) is kept
 and all, when it or one of its parts carries one; focus mode, which steps through a panel's parts
 one at a time, skips those carrying none (unless their item does). Act now ranks only what
 carries one, so it shows the most urgent of those, numbered from #1. Panels and groups left empty
-are left off; a plugin whose group is left off says when it last refreshed, or why it failed, in
-the footer, with its Refresh button. While tags are selected, groups and panels can't be dragged.
+are left off; a plugin whose group is left off says when it last refreshed, or why it failed, and
+its problems, in the footer, with its Refresh button. While tags are selected, groups and panels can't be dragged.
 Each selected tag has a link clearing it, beside one
 clearing them all, and one that nothing carries any more stays there to clear. The selection is
 in the page's address (`/?tag=chores&tag=garbage-day`), so it can be bookmarked, and the page's
@@ -400,7 +402,9 @@ entry on ice comes off it once its work is over the same way (a stack stays
 until it's reopened), what the notes remembered (`mfd notes remember`) as happening that long ago is forgotten,
 pings that old leave the database, and so do Act now's
 snoozes once over, and its other snoozes and pins that old. A priority set on work that's since
-finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. Reviewer email and Slack id
+finished is cleared, and so is a tag I put on a work entry, todo or mail thread that's gone. A plugin's problem it
+hasn't reported for that long is forgotten (the plugin was taken out of the config, or no
+longer checks for it). Reviewer email and Slack id
 lookups that found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
 Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 
@@ -410,8 +414,8 @@ Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 tables (kept when a refresh fails, with the error shown alongside), the
 notes in the notes plugin's tables, the page's dragged order (core's `layout`), what you
 snoozed or pinned in Act now (core's `act_now_feedback`), the priorities, tags and
-contact types you set, the sign-in sessions, the notifications waiting to be told and what
-the panels last showed that notifies when new (core's too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
+contact types you set, the sign-in sessions, the notifications waiting to be told, what
+the panels last showed that notifies when new and the problems the plugins report (core's too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
 plugin's (from `mfd import`, or looked up from commits), and the messages
 mail reads in its own. It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.

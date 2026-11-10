@@ -18,7 +18,7 @@ from conftest import ME, NOW, pr, snapshot
 from move_forward import auth, registry, server, settings
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.graph import Ref
+from move_forward.graph import Graph, Ref
 from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Action, Item
 from move_forward.panels import Layout
@@ -745,6 +745,35 @@ def test_why_a_plugin_changed_is_logged(
         assert app.check_for_changes(1000.0) == {"github"}
         assert app.check_for_changes(1060.0) == set()  # said no, whatever its reason
     assert "changed: github (2 PRs notified); refreshing" in caplog.messages
+
+
+class _GitHubComparingGraphs(GitHubPlugin):
+    """github whose change check notes the graphs it's given, and raises while `failing`."""
+
+    change_check_seconds: ClassVar[int | None] = 60
+    given: ClassVar[list[tuple[Graph | None, Graph]]] = []
+    failing: ClassVar[list[bool]] = []
+
+    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
+        self.given.append((req.previous_graph, req.graph))
+        if self.failing.pop(0):
+            raise RuntimeError("offline")
+        return Changed(False)
+
+
+def test_a_change_check_is_given_the_graph_of_the_last_that_didnt_fail(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    swap = {"github": _GitHubComparingGraphs()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    monkeypatch.setattr(_GitHubComparingGraphs, "given", [])
+    monkeypatch.setattr(_GitHubComparingGraphs, "failing", [False, True, False])
+    for now in (1000.0, 1060.0, 1120.0):
+        app.check_for_changes(now)
+    [(first, seen), (second, failed), (third, _)] = _GitHubComparingGraphs.given
+    assert first is None  # nothing to compare with since the start
+    assert second is seen and failed is not seen  # a graph built for each check
+    assert third is seen  # the failed check's graph isn't the one compared with
 
 
 class _SlackChanging(SlackPlugin):
