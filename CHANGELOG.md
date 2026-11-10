@@ -16,6 +16,8 @@ tag; `mfd tag --remove` says "had no #tag" (no longer "of mine") when the tag wa
 A tool's label is named by its words in text, as other tags are, rather than only with its `#`.
 Its badge is a plain string, `"#bug"`, like every tag's, no longer `{"text": "#bug", "tone":
 "label"}`: a script reading badges reads a tag's as a string.
+Mail's threads no longer carry Gmail's own labels as tags (`#inbox`, `#starred`, `#important`),
+only those I or my filters put on them: a link to `/?tag=inbox` shows what I tagged so.
 
 ### The page filters by tag
 

@@ -223,7 +223,7 @@ The ticket family, modeled in core (`api.kinds.Ticket`); jira adds `status`,
 
 Published by core, not a plugin, for each tag some entity carries: stated by its tool
 (`Entity.tags`: labels; jira's, but escalation labels, github's, but `placeholder_labels` and
-`split_pr_labels`, and mail's, a conversation's Gmail labels, Gmail's own included), a `#tag` in
+`split_pr_labels`, and mail's, a conversation's Gmail labels, but Gmail's own), a `#tag` in
 its title or mentions, out of code (unless its kind says `KindSpec(tags_from_text=False)`), or
 put on it by hand (`mfd tag`), but one I took off (until its plugin next refreshes). They're all
 alike. Titled `#garbage-day`, open while something carrying it is. A tag needs a letter (`#7` is

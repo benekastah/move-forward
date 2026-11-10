@@ -719,7 +719,7 @@ def test_a_threads_labels_are_its_tags_and_kept_between_refreshes() -> None:
         message(1, labels=["Garbage"], sender="x@spam.com", verified=False),
     )
     [thread] = [e for e in harness.entities() if e.ref.kind == THREAD]
-    assert thread.tags == ["Garbage", "Bills", "\\Inbox"]  # whoever sent the mail
+    assert thread.tags == ["Garbage", "Bills"]  # whoever sent the mail; not Gmail's own
     kept = MessageRepository(harness.db).load().messages
     assert [m.labels for m in kept] == [["Garbage", "Bills", "\\Inbox"], ["Garbage"]]
     assert MessageRepository(harness.db).latest("root@acme.com") == kept[0]
@@ -1344,7 +1344,7 @@ def test_gmails_own_labels_make_a_thread_about_nothing() -> None:
         [Entity(ref=Ref(kind="notes.todo", id="8"), title="clear the #inbox, #starred too")]
     )
     items = _items(harness)
-    assert len(items) == 2  # each has #inbox, as does the other and the todo
+    assert len(items) == 2  # each is in Gmail's \\Inbox, as the other is, and the todo says #inbox
     assert not any(d.startswith("about") for item in items for d in item.details)
     assert all(item.signals is not None and item.signals.importance == 0 for item in items)
 

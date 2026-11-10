@@ -40,8 +40,8 @@ class Message(Model):
     known: bool = False
     """I've written to its sender at least twice in the last `known_days`."""
     labels: list[str] = Field(default_factory=list[str])
-    """Its Gmail labels (`X-GM-LABELS`), Gmail's own (`\\Inbox`, `\\Starred`) and those I put
-    on it: its tags. None from other servers."""
+    """Its Gmail labels (`X-GM-LABELS`): Gmail's own (`\\Inbox`, `\\Starred`), and those I put
+    on it, which are its tags. None from other servers."""
     replies_to_me: bool = False
     """It answers mail I sent (its `In-Reply-To`, else the last of its `References`, names one):
     the newest 1000 I sent within `known_days`."""

@@ -7,7 +7,6 @@ from urllib.parse import quote
 
 from ...api import Badge, Band, Graph, Item, Panel, Ref, Signals
 from ...api.kinds import TAG
-from ...api.tags import handle as tag_handle
 from .config import APP_SCHEMES, MailConfig
 from .kinds import THREAD
 from .models import MailSnapshot, Message
@@ -96,24 +95,19 @@ def about(graph: Graph, thread: Thread) -> list[str]:
 
 def named_tags(graph: Graph, thread: Thread) -> list[str]:
     """The `#tags` a conversation is about, by handle, when its latest sender is verified: those
-    its subject names, and those I put on it, each while something else open carries it, so a
-    tag only it has isn't news. The labels I or my filters put on it count, but not Gmail's own
-    (`\\Inbox`, `\\Starred`), which say nothing of what it's about and are on most mail, nor a
-    tag named as one of those on it (its subject's or mine, which the graph can't tell apart).
-    Anyone can write a subject, and reply into a conversation by naming it (`References`),
-    taking on what I put on it: an unverified sender gets none."""
+    its subject names, and those on it (my labels, and what I tagged it with), each while
+    something else open carries it, so a tag only it has isn't news. Anyone can write a subject,
+    and reply into a conversation by naming it (`References`), taking on what I put on it: an
+    unverified sender gets none."""
     ref = Ref(kind=THREAD, id=thread.id)
     entity = graph.get(THREAD, thread.id)
     if entity is None or not thread.latest.verified:
         return []
-    gmails = {tag_handle(label) for m in thread.messages for label in m.labels if label[:1] == "\\"}
     named = [r.id for r in entity.refs if r.kind == TAG]
-    mine = [
-        tag.ref.id for tag in graph.of_kind(TAG) if ref in tag.refs and tag.ref.id not in gmails
-    ]
+    on = [tag.ref.id for tag in graph.of_kind(TAG) if ref in tag.refs]
     return [
         handle
-        for handle in dict.fromkeys([*named, *mine])
+        for handle in dict.fromkeys([*named, *on])
         if (tag := graph.get(TAG, handle)) is not None
         and any(
             (carrier := graph.get(r.kind, r.id)) is not None and carrier.lifecycle == "open"

@@ -115,8 +115,8 @@ keeping what was read last.
 with (`uid:<uid>` for a message with none, `uid:<account>:<uid>` in an account's mailbox),
 pointing at the `person` who wrote its latest message and, when its sender is verified,
 mentioning its subject (so a ticket key in it relates the two, but a ticket on ice it names
-doesn't hide it: its sender wrote that). Its Gmail labels, Gmail's own
-(`#inbox`, `#starred`) and mine, are its tags, whoever sent it. A `#tag` in a subject puts no
+doesn't hide it: its sender wrote that). The Gmail labels I or my filters put on it are its
+tags, whoever sent it; Gmail's own (`\Inbox`, `\Starred`), on most mail, aren't. A `#tag` in a subject puts no
 tag on the thread (`tags_from_text=False`): anyone can write one. A subject still names tags in
 the graph whoever sent it; only what mail says it's about, and how it ranks, waits for a
 verified sender. That `person` is `mail/<address>`, with the address as its `handle` and
@@ -161,9 +161,7 @@ several words something open carries (see the README's Tags), and its sender is 
 (shown as "about APP-12 …" or "about #garbage-day"; a priority I set on that ticket counts for
 it too; a one-word tag, like `#invoice`, any stranger may write, so it's shown but raises
 nothing; a tag or label I put on the mail counts too, while something else open has it and its
-latest sender is verified, since anyone can reply into a conversation, but not Gmail's own
-labels, `#inbox`, `#starred`, `#important` and the like, which say nothing of what it's about,
-nor a tag of the same name on a thread that has one), when its latest message,
+latest sender is verified, since anyone can reply into a conversation), when its latest message,
 from a verified sender (anyone can name a Message-ID of mine), answers mail I sent (the newest 1000 within `known_days`; its
 `In-Reply-To`, else the last of its `References`, names one of my sent Message-IDs; badged
 "replies to me"; if my sent mail can't be read, nothing counts as replying), when it's from
