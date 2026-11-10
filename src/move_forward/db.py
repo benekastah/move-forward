@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .private import make_private
+from .shell import CommandError
 
 log = logging.getLogger(__name__)
 
@@ -356,9 +357,17 @@ def _private(path: Path) -> None:
     """Make `path` a file only I can read, creating it empty if it isn't there: the notes and
     what the plugins fetched are mine, not other users' of this machine. On Unix SQLite gives
     its -wal and -shm files the database's permissions; on Windows they'd take their folder's,
-    so `Database` makes them first (see `_side_files`)."""
-    os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
-    make_private(path)
+    so `Database` makes them first (see `_side_files`). Another connection closing can delete
+    a side file between its making and its access list's (the last one out of a WAL database
+    removes them): then it's made again, so it's never left to SQLite to make."""
+    for attempt in range(3):
+        os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
+        try:
+            make_private(path)
+            return
+        except CommandError:
+            if path.exists() or attempt == 2:
+                raise
 
 
 def _side_files(path: Path) -> list[Path]:

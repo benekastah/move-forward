@@ -14,6 +14,7 @@ from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.private import is_private
 from move_forward.repositories import KvRepository
+from move_forward.shell import CommandError
 
 CREATE_A = Migration("0001_a", "CREATE TABLE p_a (x INTEGER);")
 CREATE_B = Migration("0002_b", "CREATE TABLE p_b (x INTEGER);")
@@ -207,6 +208,36 @@ def test_on_windows_the_side_files_are_made_private_before_sqlite_opens_them(
     monkeypatch.setattr(db_module, "_private", recording)
     Database(tmp_path / "dashboard.db")
     assert made == ["dashboard.db", "dashboard.db-wal", "dashboard.db-shm"]
+
+
+def test_a_side_file_deleted_before_it_is_made_private_is_made_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another connection closing deletes the side files; icacls then finds nothing."""
+    tried: list[bool] = []
+
+    def make_private(path: Path) -> None:
+        if not tried:
+            path.unlink()  # gone before its access list is set
+        tried.append(path.exists())
+        if not path.exists():
+            raise CommandError(f"icacls {path}: The system cannot find the file specified.")
+
+    monkeypatch.setattr(db_module, "make_private", make_private)
+    side = tmp_path / "dashboard.db-shm"
+    db_module._private(side)  # pyright: ignore[reportPrivateUsage]
+    assert tried == [False, True] and side.exists()
+
+
+def test_a_side_file_that_cant_be_made_private_still_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def make_private(path: Path) -> None:
+        raise CommandError(f"icacls {path}: Access is denied.")
+
+    monkeypatch.setattr(db_module, "make_private", make_private)
+    with pytest.raises(CommandError, match="Access is denied"):
+        db_module._private(tmp_path / "dashboard.db-shm")  # pyright: ignore[reportPrivateUsage]
 
 
 def test_kinds_kept_by_core_are_renamed_for_the_plugins_that_publish_them(tmp_path: Path) -> None:
