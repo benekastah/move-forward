@@ -1,10 +1,12 @@
 """Files only I can read, on every system."""
 
+import sys
 from pathlib import Path
 
 import pytest
 
 from move_forward import private
+from move_forward.shell import CommandError
 
 
 def _explain(path: Path) -> str:
@@ -64,3 +66,16 @@ def test_on_windows_only_me_and_the_system_may_hold_access(monkeypatch: pytest.M
     monkeypatch.setattr(private, "run", icacls)
     assert private.is_private(Path("mine"))
     assert not private.is_private(Path("shared"))  # the Users group can read it
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="icacls is Windows' own")
+def test_on_windows_a_missing_file_cant_be_made_private(tmp_path: Path) -> None:
+    """What `db._private` retries on: icacls failing as a `CommandError`."""
+    with pytest.raises(CommandError):
+        private.make_private(tmp_path / "gone")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows sets access lists, not modes")
+def test_elsewhere_a_missing_file_cant_be_made_private(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        private.make_private(tmp_path / "gone")
