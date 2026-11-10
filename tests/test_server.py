@@ -21,10 +21,8 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.notifications import Event, NotificationRepository
-from move_forward.page import Action, Item
 from move_forward.panels import Layout
 from move_forward.plugin import (
-    KEPT,
     ActionError,
     ActionResult,
     Changed,
@@ -36,6 +34,7 @@ from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.github.snapshots import PrRepository
+from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.plugin import SlackPlugin
 from move_forward.plugins.slack.repository import SlackRepository
@@ -332,7 +331,9 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
 
     monkeypatch.setattr(server, "perform_action", _results(fake_run))
     response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dact%26i%3D0", {})
-    assert (response.getheader("Location"), notice_of(response)) == ("/focus?cat=act&i=0", "did it")
+    assert notice_of(response) == "did it"
+    # With the item it was on remembered, to show should it leave Act now.
+    assert (response.getheader("Location") or "").startswith("/focus?cat=act&i=0&kept=")
     # Only local paths; anything else goes to the dashboard.
     response = post(client, "/actions/x?back=//evil.example", {})
     assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
@@ -395,49 +396,45 @@ def test_a_buttons_redirect_keeps_the_tags_the_page_is_filtered_by(
     response.read()
 
 
-def test_ticking_a_todo_off_redirects_back_with_it(
-    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+def test_a_todo_ticked_off_in_focus_mode_stays_there_ticked_to_untick(
+    app: server.App, client: HTTPConnection
 ) -> None:
-    def fake_perform(
-        _config: object, _db: object, name: str, fields: dict[str, str], back: str | None = None
-    ) -> ActionResult:
-        params = {KEPT: "notes:7"} if name == "notes/todo_done" else {}
-        return ActionResult(f"{name} {fields['todo']}", params)
+    notes = NotesRepository(app.db)
+    entry = notes.add_entry("Chores", NOW.date())
+    dishes, laundry = notes.add_todo(entry, "dishes"), notes.add_todo(entry, "laundry")
+    back = quote("/focus?cat=notes.todos&i=0", safe="")
+    response = post(client, f"/actions/notes/todo_done?back={back}", {"todo": str(dishes)})
+    assert notice_of(response) == "done: dishes"
+    page = response.getheader("Location") or ""
+    assert page.startswith("/focus?cat=notes.todos&i=0&kept=")
+    body = get(client, page).read().decode()
+    # The todo it was on, as it is now: ticked, to untick; the next is laundry.
+    assert "dishes" in body and "<input type='checkbox' checked" in body
+    assert "/actions/notes/todo_undone?" in body and "done · 1 to go" in body
+    kept = page.rpartition("kept=")[2]
+    back = quote(page, safe="")
+    response = post(client, f"/actions/notes/todo_undone?back={back}", {"todo": str(dishes)})
+    assert notice_of(response) == "reopened: dishes"
+    again = response.getheader("Location") or ""
+    assert again.count("kept=") == 1 and f"kept={kept}" not in again  # the new one, alone
+    body = get(client, again).read().decode()
+    assert "1 of 2" in body and "dishes" in body  # back as a step, as it was
+    assert laundry
 
-    monkeypatch.setattr(server, "perform_action", fake_perform)
-    kept = Item(
-        title="x y",
-        actions=[
-            Action(
-                name="notes/todo_undone",
-                label="Done",
-                fields={"todo": "7"},
-                checkbox=True,
-                checked=True,
-            )
-        ],
-    )
 
-    def fake_kept(*_: object) -> tuple[str, Item]:
-        return "notes.todos", kept
-
-    monkeypatch.setattr(server, "kept_item", fake_kept)
-    response = post(
-        client,
-        "/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0",
-        {"todo": "7"},
-    )
-    assert response.getheader("Location") == "/focus?cat=notes.todos&i=0&kept=notes%3A7"
-    assert notice_of(response) == "notes/todo_done 7"
-    body = get(client, "/focus?cat=notes.todos&i=0&kept=notes%3A7").read().decode()
-    assert "<input type='checkbox' checked" in body and "x y" in body
-    response = post(
-        client,
-        "/actions/notes/todo_undone?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0",
-        {"todo": "7"},
-    )
-    assert response.getheader("Location") == "/focus?cat=notes.todos&i=0"
-    assert notice_of(response) == "notes/todo_undone 7"
+def test_an_item_gone_from_the_page_is_shown_as_it_was_without_its_buttons(
+    app: server.App, client: HTTPConnection
+) -> None:
+    notes = NotesRepository(app.db)
+    entry = notes.add_entry("Chores", NOW.date())
+    dishes = notes.add_todo(entry, "dishes")
+    notes.add_todo(entry, "laundry")
+    back = quote("/focus?cat=notes.todos&i=0", safe="")
+    response = post(client, f"/actions/notes/todo_delete?back={back}", {"todo": str(dishes)})
+    response.read()
+    body = get(client, response.getheader("Location") or "").read().decode()
+    assert "dishes" in body and "done · 1 to go" in body
+    assert "/actions/notes/" not in body.split("focus-panel", 1)[1].split("laundry")[0]
 
 
 def test_being_stopped_shuts_down_quietly(

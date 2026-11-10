@@ -76,11 +76,6 @@ class Context[C: BaseModel]:
         """Today where I am: the local date, for what's recorded as done or changed today."""
         return localtime.day(self.now)
 
-    def kept(self, key: str) -> dict[str, str]:
-        """An action result's parameters keeping the plugin's item `key` on the focus page
-        (`ActionResult.params`); `Plugin.kept_item` gets `key` back."""
-        return {KEPT: f"{self.name}:{key}"}
-
     def part(self, name: str) -> str:
         """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
         as `github.derived` (see `collect_into`)."""
@@ -286,14 +281,6 @@ def adds_nothing(req: ItemRequest) -> ItemAdditions:
     return ItemAdditions()
 
 
-@dataclass(frozen=True)
-class KeptItemRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-    key: str
-    """What the action put after `<plugin>:` in its `KEPT` parameter."""
-
-
 @dataclass(frozen=True, kw_only=True)
 class Changed:
     """`changed`'s answer: what moved in the plugin's tool, which core keeps (see
@@ -341,19 +328,13 @@ API_VERSION = 2
 """The version of `move_forward.api` this dashboard offers. A change that would break a
 plugin built against it (a hook's request losing a field, a name leaving `api`) raises it;
 see `docs/api-changes.md`."""
-KEPT = "kept"
-"""The redirect parameter naming an item to keep on the focus page: `<plugin>:<key>`."""
 
 
 @dataclass(frozen=True)
 class ActionResult:
-    """What an action did: the notice for the page, and parameters for the page it redirects
-    back to."""
+    """What an action did: the notice for the page, and what else it changed."""
 
     notice: str
-    params: dict[str, str] = field(default_factory=dict[str, str])
-    """e.g. `{KEPT: "notes:12"}`, to keep a todo just ticked off on the focus page; see
-    `Plugin.kept_item`."""
     touched: list[Ref] = field(default_factory=list[Ref])
     """What the action changed outside its own plugin's tool, e.g. a PR it reacted to: the
     server refreshes the plugin that publishes each, as well as the acting plugin."""
@@ -599,13 +580,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         what needs the plugin's tables or a pass over the graph is done here, once, not per
         item. Adds nothing by default."""
         return adds_nothing
-
-    def kept_item(self, req: KeptItemRequest[C]) -> tuple[str, Item] | None:
-        """An item one of this plugin's actions asked to keep on the focus page after changing
-        it (its result's `KEPT` parameter, `<plugin>:<key>`), e.g. a todo just ticked off,
-        shown with its box ticked so the tick can be undone; with the key of the plugin's
-        panel it belongs to."""
-        return None
 
     def pages(self) -> dict[str, PageHandler]:
         """Extra pages by key, served at `/<plugin>/<key>` (`page_path`): "ping" is

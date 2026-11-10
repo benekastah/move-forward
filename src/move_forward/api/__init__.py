@@ -40,7 +40,6 @@ from ..page import (
 )
 from ..plugin import (
     API_VERSION,
-    KEPT,
     ActionError,
     ActionHandler,
     ActionResult,
@@ -53,7 +52,6 @@ from ..plugin import (
     InputRequest,
     ItemAdditionsFor,
     ItemRequest,
-    KeptItemRequest,
     Page,
     PageHandler,
     Plugin,
@@ -73,7 +71,6 @@ __all__ = [
     "API_VERSION",
     "BY_HAND",
     "IMPORTED",
-    "KEPT",
     "LOOKED_UP",
     "Action",
     "ActionError",
@@ -100,7 +97,6 @@ __all__ = [
     "ItemAdditions",
     "ItemAdditionsFor",
     "ItemRequest",
-    "KeptItemRequest",
     "KindModel",
     "KindSpec",
     "KvRepository",

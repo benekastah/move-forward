@@ -17,10 +17,6 @@ The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but f
 its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened from the
 review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
-- **Hooks removed:**
-  - `kept_item`: core keeps the focused item in memory across a button, so a todo just
-    ticked shows as it is now, its box ticked, with its buttons but those that can't act
-    from the remembered copy.
 - **Hooks merged:**
   - `init_suggested` becomes a class variable;
   - `url_for` and `handle_for` become one hook, answering both for an entity by id;

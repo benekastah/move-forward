@@ -11,7 +11,6 @@ from pathlib import Path
 from ...api import (
     ActionError,
     ActionHandler,
-    ActionResult,
     Graph,
     InputRequest,
     Model,
@@ -180,14 +179,14 @@ def _todo(notes: NotesRepository, req: InputRequest[NotesConfig], done: bool) ->
     raise ActionError(f"no todo {todo_id}")
 
 
-def todo_done(req: InputRequest[NotesConfig]) -> ActionResult:
-    """Record an open todo as done today, and keep it on the focus page to undo."""
+def todo_done(req: InputRequest[NotesConfig]) -> str:
+    """Record an open todo as done today."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, req, done=False)
     notes.set_done(todo.id, ctx.today)
     notes.touch(entry.id, ctx.today)
-    return ActionResult(f"done: {todo.text}", ctx.kept(str(todo.id)))
+    return f"done: {todo.text}"
 
 
 def todo_undone(req: InputRequest[NotesConfig]) -> str:

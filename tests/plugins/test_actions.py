@@ -8,7 +8,7 @@ from move_forward import refresh
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
-from move_forward.plugin import KEPT, ActionError, SourceError
+from move_forward.plugin import ActionError, SourceError
 from move_forward.plugins.git import client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
@@ -477,7 +477,6 @@ def test_todo_done_and_undone(config: Config, work_notes: None) -> None:
     fields = _todo(config, "reply to the thread")
     result = refresh.perform_action(config, _stored(config), "notes/todo_done", fields)
     assert result.notice == "done: reply to the thread"
-    assert result.params == {KEPT: f"notes:{fields['todo']}"}  # kept on the focus page
     entry = _entry(config)
     assert _open(config) == ["[big] get it merged", "[None] no size here"]
     assert [t.done_on for t in entry.todos if t.text == "reply to the thread"] == [

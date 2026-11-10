@@ -925,9 +925,11 @@ def dashboard_page(
     )
 
 
-def focus_url(category: str, index: int, tags: Sequence[str] = ()) -> str:
-    """Focus mode's page of a category's item at `index`, filtered by `tags`."""
-    return tag_view.url("/focus", tags, {"cat": category, "i": str(index)})
+def focus_url(category: str, index: int, tags: Sequence[str] = (), kept: str = "") -> str:
+    """Focus mode's page of a category's item at `index`, filtered by `tags`, showing the item
+    `kept` names in its place (see `server.App.focus_page`)."""
+    params = {"cat": category, "i": str(index)} | ({"kept": kept} if kept else {})
+    return tag_view.url("/focus", tags, params)
 
 
 def _focus_category(
@@ -984,13 +986,16 @@ def focus_page(
     notice: str = "",
     done: tuple[str, Item] | None = None,
     tags: Sequence[str] = (),
+    kept: str = "",
 ) -> str | None:
     """One item of a focus category with previous and next links; None for an unknown category.
 
     An index past the end (the list shrank since the link was made) shows the last item.
     `notice` is the outcome of an action just run from this page. `done` is an item an action
-    just changed, e.g. a todo ticked off, with its panel's key: it's shown in place of the
-    item at `index` (which is now the one after it), so the change can be undone. With `tags`,
+    just took out of the category, e.g. a todo ticked off, with its panel's key: it's shown in
+    place of the item at `index` (which is now the one after it), so the change can be undone,
+    and its buttons come back to this page as `kept` names it (see `server.App.run_action`).
+    With `tags`,
     it steps through only what carries one (see `tag_view` and `dashboard_page`).
     """
     where = _Where("/focus", (("cat", category),), tuple(tags))
@@ -1016,7 +1021,7 @@ def focus_page(
         )
         return head + header + empty + "</main></body></html>"
     index = max(0, min(index, len(items) - (0 if done else 1)))
-    here = focus_url(category, index, tags)
+    here = focus_url(category, index, tags, kept)
     if done is not None:
         done_panel, item = done
         panel = shown.find_panel(done_panel)

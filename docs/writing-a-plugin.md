@@ -475,9 +475,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 - **Actions.** `actions()` maps names to handlers `(req: InputRequest) -> str |
   ActionResult`; a button posts to `/actions/<plugin>/<name>`, which is its `Action.name`.
   Core leaves out (and logs) a button whose name no enabled plugin's `actions()` has, so a
-  typo can't post to a 404. An action that keeps its item on the focus page returns
-  `ActionResult(notice, req.ctx.kept(key))`, and `kept_item` gets `key` back.
-  `req.form` is the form posted: `req.form.fields` its
+  typo can't post to a 404. `req.form` is the form posted: `req.form.fields` its
   fields, `req.form.surface` where the button was (`dashboard` or `focus`). A button with an
   `input` has a text field, posted as `input`; `suggestions` lists what it offers to pick
   from, and `choices` adds a drop-down beside it (label to value), posted as `choice`. Check every field: they
@@ -503,8 +501,10 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   does (github fetches the PRs in one request); one that can't, or gets a subject it doesn't
   know, fetches everything. Failing, or taking longer than `collect` may, refreshes the
   plugin whole.
-- **Keeping an item on the focus page** after an action changes it: return
-  `ActionResult(notice, req.ctx.kept(key))` and implement `kept_item`.
+- **Focus mode keeps the item** a button was pressed on, should the button take it out of
+  the category (a todo ticked off): core remembers it and shows it as the page now has it (the
+  todo ticked, to untick), found by its main subject, so give what an action leaves on the
+  page (a ticked todo) the same subject it had.
 - **Pages.** `pages()` maps keys to handlers `(req: InputRequest) -> str | Response | None`
   (with `req.page.query` and `req.page.path`); core serves each at `/<plugin>/<key>`, and `""` at
   `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML (use

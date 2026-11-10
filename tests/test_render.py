@@ -8,7 +8,7 @@ from move_forward import page, panels, render
 from move_forward.graph import Ref
 from move_forward.page import Identity
 from move_forward.plugins.notes.repository import NotesRepository
-from move_forward.refresh import build_dashboard, kept_item
+from move_forward.refresh import build_dashboard
 from move_forward.repositories import SnapshotRepository
 
 
@@ -361,8 +361,11 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
     # `a` was ticked off: it stays on the page, ticked, and Next goes to what is now item 0.
     config, db = stored(work_items=[entry("APP-2", [todo("a", "quick"), todo("b", "big")])])
     todo_a = next(t.id for e in NotesRepository(db).entries() for t in e.todos if t.text == "a")
+    steps = build_dashboard(config, db, NOW, surface="focus").focus_items("notes.todos")
+    assert steps is not None
+    on, step_a = steps[0]
     NotesRepository(db).set_done(todo_a, NOW.date())
-    done = kept_item(config, db, f"notes:{todo_a}")
+    done = build_dashboard(config, db, NOW, surface="focus").kept("notes.todos", (on.key, step_a))
     assert done is not None
     html = render.focus_page(built, "notes.todos", 0, done=done)
     assert html is not None

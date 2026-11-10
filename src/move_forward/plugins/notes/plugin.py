@@ -17,7 +17,6 @@ from ...api import (
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
-    KeptItemRequest,
     KindSpec,
     Migration,
     Panel,
@@ -102,12 +101,6 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
             return ItemAdditions(actions=[a for a in found if a])
 
         return additions
-
-    def kept_item(self, req: KeptItemRequest[NotesConfig]) -> tuple[str, Item] | None:
-        """The todo `todo_done` just ticked off, by id, with its box ticked."""
-        ctx, graph, key = req.ctx, req.graph, req.key
-        todo = _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
-        return (TODOS, todo) if todo else None
 
     def prune(self, req: Request[NotesConfig, BaseModel]) -> list[str]:
         ctx, graph = req.ctx, req.graph

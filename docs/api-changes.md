@@ -91,6 +91,12 @@ for themselves (a token, a request, an example config) is core's.
   nothing are tried again after a cutoff.
 - **No collecting in pieces**: `Collected` has left `api`. `collect` returns the snapshot,
   and core calls it once per refresh.
+- **Focus mode keeps the item itself**: `kept_item`, `KeptItemRequest`, `ctx.kept(key)`,
+  `KEPT` and `ActionResult.params` are gone. Core remembers the item a focus page was on when
+  a button there was pressed, and once the button has taken it out of the category shows it as
+  the page has it now, found by its main subject (or, gone from the page, as it was, without
+  its buttons). A plugin whose action leaves its item on the page changed (a todo ticked off)
+  gives it the same main subject it had; core adds nothing to an item that's `done`.
 - **Fetching some entities again is a collect**: `refresh_subjects`, `SubjectsRequest`,
   `Subjects` and `MAX_SUBJECTS` are gone. An action's `touched` refs, ↻ and `mfd refresh
   --subject` call the publisher's `collect` with `full` False and their ids as `subjects`; one

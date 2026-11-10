@@ -308,7 +308,10 @@ Prev and Next (or the left and right arrow keys). Act now goes through its items
 order overall; a panel, in its own. Work entries are split into their todos
 ([notes](docs/plugins/notes.md#panels) says how). With tags selected (see [Tags](#tags)), it goes
 through only what carries one.
-Buttons on a focused item come back to the same item afterwards.
+Buttons on a focused item come back to the same item afterwards: one that takes it out of
+the category (a todo ticked off, an item snoozed) leaves it shown as the page has it now (the
+todo ticked, the item with Unsnooze), so what it did can be undone, or, when the page no longer
+shows it at all, as it was, without its buttons.
 
 ## API
 
@@ -342,7 +345,7 @@ Pages (GET, HTML):
 | `/` | The dashboard. `?tag=<tag>`, repeated for several, shows only what carries one of them (see [Tags](#tags)). |
 | `/settings` | The config's settings as a form (see [Settings](#settings)). |
 | `/focus` | Focus mode's category list. |
-| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `act` (Act now) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
+| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `act` (Act now) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<token>` (set by the redirect of a button pressed on a focus page) names the item it was on, which the server remembers, to show in place of item `n` once it's left the category. |
 
 Both focus pages take `tag` as `/` does.
 

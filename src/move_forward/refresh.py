@@ -39,7 +39,6 @@ from .plugin import (
     Form,
     InputRequest,
     ItemRequest,
-    KeptItemRequest,
     Page,
     Previous,
     RefreshRequest,
@@ -650,24 +649,6 @@ def run_action(config: Config, db: Database, name: str, fields: dict[str, str]) 
     """Run a plugin's action, `<plugin>/<action>`, for its notice; raises `ActionError` when
     it can't."""
     return perform_action(config, db, name, fields).notice
-
-
-def kept_item(config: Config, db: Database, kept: str) -> tuple[str, Item] | None:
-    """The item an action asked to keep on the focus page, by its `KEPT` parameter, with the
-    key of its panel."""
-    plugin_name, _, key = kept.partition(":")
-    plugins = enabled(config, db, datetime.now(UTC))
-    e = next((e for e in plugins if e.name == plugin_name), None)
-    if e is None:
-        return None
-    graph, _ = stored_graph(db, plugins)
-    kept_item = call(
-        e.name, "kept_item", lambda: e.plugin.kept_item(KeptItemRequest(e.ctx, graph, key)), None
-    )
-    if kept_item is None:
-        return None
-    panel, item = kept_item
-    return panels.panel_key(e.name, panel), item
 
 
 _MEMBERS = TypeAdapter(

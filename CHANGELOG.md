@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### A focus page's `kept` is the server's token
+
+After a button pressed on a focus page, the redirect's `kept` parameter is a token the server
+remembers the item by (its last 50), no longer `<plugin>:<key>`, and every button there sets it,
+not only Done: a script following the redirect needs no change, but one that built `kept=notes:<id>`
+itself can't; it loads `/focus?cat=…&i=…` and finds the todo, ticked, in its panel instead.
+
 ### No more `mfd import` or `mfd notes export`
 
 `mfd import <dir>` and `mfd notes export <dir>` are gone, with the reading and writing of the

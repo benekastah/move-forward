@@ -18,8 +18,7 @@ names are related through it.
   the PRs and tickets it's linked to; entries with several show each todo below the entry
   with its own, and Add todo on the entry (and on its last todo in focus mode). Its New todo
   field, with a size drop-down (or a leading `[quick]` or `[big]`), starts a todo from nothing, as an entry
-  of its own titled by it; the empty panel says so. A title with a line break, or the work
-  notes' "Reviews requested of me", is refused, as is a todo for an entry on ice. A todo ticked
+  of its own titled by it; the empty panel says so. A title with a line break is refused, as is a todo for an entry on ice. A todo ticked
   off today stays listed, ticked and dimmed, to untick, as focus mode keeps it, but isn't a step
   in focus mode nor counted; an entry with nothing left but those goes last, and isn't a
   close-out.
@@ -72,7 +71,7 @@ are done it's badged as probably done, which brings it back if it was snoozed.
 | `/actions/notes/todo_new` | `input` (the todo; a leading `[quick]` or `[big]` sizes it), optional `choice` (`quick` or `big`) | Starts a todo from nothing: an entry titled by it, with it as its one todo; an entry of that title gets the todo instead (not one on ice, nor the same todo twice). |
 | `/actions/notes/todo_add` | `entry`, `text` (or `input`; a leading `[quick]` or `[big]` sizes it), optional `size` (or `choice`: `quick` or `big`), optional `create=1` and `where` (PR or ticket URL) | Adds an open todo at the end of the entry's; with `create`, a missing entry is created first, with `where` as its `Where`. |
 | `/actions/notes/todo_size` | `todo`, `size` (`quick` or `big`) | Says how big an open todo is. |
-| `/actions/notes/todo_done` | `todo` (its id) | Records the todo as done today; redirects with `kept=notes:<id>`, so the focus page keeps it, ticked, to undo. |
+| `/actions/notes/todo_done` | `todo` (its id) | Records the todo as done today; focus mode keeps showing it, ticked, to undo. |
 | `/actions/notes/todo_undone` | `todo` | Reopens a done todo. |
 | `/actions/notes/todo_delete` | `todo` | Drops the todo without recording it. |
 | `/actions/notes/todo_link` | `todo`, `input` (Jira key or PR URL) | Links the todo to the ticket or PR; a key in a project jira hasn't seen yet is looked up in Jira. |

@@ -112,7 +112,7 @@ def test_a_todo_ticked_off_today_stays_listed_ticked_to_untick() -> None:
     assert "taxes" in shown and "notes/todo_undone" in shown
     assert "notes/todo_add" in [a.name for a in done_today.actions]  # a follow-up, all the same
     assert chores.details == [] and chores.parts[1].badges == ["done"]
-    assert chores.parts[1].subjects == []  # nothing to rank or tag on what's done
+    assert not [a for a in chores.parts[1].actions if a.group == "Importance"]  # nothing to rank
     stepped = [part.title for _, part in built.focus_items("notes.todos") or []]
     assert stepped == ["dishes"]  # what's ticked off isn't a step
     assert list(items) == ["Chores", "Done today"]  # all ticked off: last

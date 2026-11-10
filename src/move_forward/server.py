@@ -3,16 +3,18 @@
 import json
 import logging
 import re
+import secrets
 import sys
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 from typing import Annotated, cast
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit
 
 from pydantic import Field, TypeAdapter, ValidationError
 
@@ -22,12 +24,12 @@ from .config import Config
 from .db import Database
 from .graph import Graph, Ref
 from .notifications import NotificationRepository
+from .page import Item
 from .panels import Layout
-from .plugin import KEPT, ActionError, Response
+from .plugin import ActionError, Response
 from .refresh import (
     PageFailed,
     build_dashboard,
-    kept_item,
     perform_action,
     plugin_page,
     refresh,
@@ -154,6 +156,10 @@ class App:
         """`time.monotonic()` when each plugin was last asked whether it `changed`."""
         self.checks = ChangeChecks()
         """What moved in each plugin's tool, as its change checks said."""
+        self._kept: OrderedDict[str, tuple[str, Item]] = OrderedDict()
+        """The item each focus page was on when a button there was pressed, with its panel's
+        key, by the `KEPT` parameter the button's redirect carries: the last `MAX_KEPT`."""
+        self._kept_lock = threading.Lock()
 
     @property
     def token(self) -> str:
@@ -338,8 +344,11 @@ class App:
         through its publisher's `collect` (see `refresh.refresh_subjects`).
         `back` is the page the button was on, when it wasn't the dashboard.
 
-        Returns the notice for the page and, when it succeeded, its redirect parameters.
+        Returns the notice for the page and, when it succeeded, its redirect parameters: on
+        a focus page, the item it was on is remembered (`KEPT`), to show in its place once the
+        action has taken it out of the category (see `Dashboard.kept`).
         """
+        shown = self._focused(back) if back else None
         try:
             result = perform_action(self.config, self.db, name, fields, back)
         except ActionError as e:
@@ -349,7 +358,38 @@ class App:
             self.request_refresh({plugin})
             if result.touched:
                 self.request_refresh_subjects(result.touched)
-        return result.notice, result.params
+        if shown is None:
+            return result.notice, {}
+        token = secrets.token_urlsafe(8)
+        with self._kept_lock:
+            self._kept[token] = shown
+            while len(self._kept) > MAX_KEPT:
+                self._kept.popitem(last=False)
+        return result.notice, {KEPT: token}
+
+    def _remembered(self, kept: str) -> tuple[str, Item] | None:
+        with self._kept_lock:
+            return self._kept.get(kept) if kept else None
+
+    def _focused(self, page: str) -> tuple[str, Item] | None:
+        """The item the focus page at `page` (a path with its query) shows, with its panel's
+        key; None for another page, or a category with nothing in it."""
+        url = urlsplit(page)
+        params = parse_qs(url.query, keep_blank_values=True)
+        category = params.get("cat", [""])[0]
+        if url.path != "/focus" or not category:
+            return None
+        tags = tag_view.selected(params)
+        built = build_dashboard(self.config, self.db, surface="focus", selected=tags)
+        shown = tag_view.focused(built, tags)
+        remembered = self._remembered(params.get(KEPT, [""])[0])
+        if remembered is not None and (stand_in := shown.kept(category, remembered)):
+            return stand_in
+        items = shown.focus_items(category)
+        if not items:
+            return None
+        panel, item = items[max(0, min(_int(params, "i"), len(items) - 1))]
+        return panel.key, item
 
     def take_notifications(self) -> str:
         """The events waiting to be told, as the JSON list of notifications the page shows
@@ -378,14 +418,17 @@ class App:
         """The category list without a category, else that category's item at `index`; with
         `tags`, of only what carries one of them (see `tag_view`).
 
-        `kept` names an item an action asked to keep on the page, e.g. a todo just ticked off,
-        so it can be undone; see `Plugin.kept_item`.
+        `kept` names the item the page was on when a button there was pressed (`run_action`):
+        once the button has taken it out of the category (a todo ticked off), it's shown in
+        place of the item at `index`, as it is now, so what the button did can be undone (see
+        `Dashboard.kept`).
         """
         built = build_dashboard(self.config, self.db, surface="focus", selected=tags)
         if not category:
             return render.focus_categories_page(built, tags)
-        done_item = kept_item(self.config, self.db, kept) if kept else None
-        return render.focus_page(built, category, index, notice, done_item, tags)
+        remembered = self._remembered(kept)
+        done = tag_view.focused(built, tags).kept(category, remembered) if remembered else None
+        return render.focus_page(built, category, index, notice, done, tags, kept if done else "")
 
 
 def _said(changed: dict[str, str]) -> str:
@@ -393,6 +436,11 @@ def _said(changed: dict[str, str]) -> str:
     return ", ".join(f"{name} ({why})" if why else name for name, why in sorted(changed.items()))
 
 
+KEPT = "kept"
+"""A focus page's parameter naming the item it was on when a button there was pressed (see
+`App.run_action`)."""
+MAX_KEPT = 50
+"""How many such items the server remembers: more than the focus pages anyone has open."""
 NOTICE = "notice"
 PAGE_FAILED = "<p>This page failed; the log says why.</p>"
 """What a plugin's page answers when its handler raised."""
@@ -402,7 +450,8 @@ PAGE_FAILED = "<p>This page failed; the log says why.</p>"
 def _back_to_page(query: str, extra: dict[str, str] | None = None) -> str:
     """Where a POST redirects: the request's `back` path (a focus page) if it's local, else the
     dashboard, at the panel the request's `at` names, filtered by the request's tags (see
-    `tag_view`; a `back` path has its own). The `extra` parameters ride along either way."""
+    `tag_view`; a `back` path has its own). The `extra` parameters ride along either way, in
+    place of a `back` path's own of the same name."""
     params: dict[str, str] = dict(extra or {})
     query_params = parse_qs(query, keep_blank_values=True)
     back = query_params.get("back", [""])[0]
@@ -414,9 +463,11 @@ def _back_to_page(query: str, extra: dict[str, str] | None = None) -> str:
             params |= {"at": spot[0], "pos": str(spot[1])}
             anchor = f"#{render.SPOT_ID}"
     if render.local_path(back):
-        return (
-            back + ("&" if "?" in back else "?") + urlencode(params) if params else back
-        ) + anchor
+        if not params:
+            return back + anchor
+        page = urlsplit(back)
+        kept = [(k, v) for k, v in parse_qsl(page.query, keep_blank_values=True) if k not in params]
+        return f"{page.path}?{urlencode([*kept, *params.items()])}{anchor}"
     return tag_view.url("/", tag_view.selected(query_params), params) + anchor
 
 

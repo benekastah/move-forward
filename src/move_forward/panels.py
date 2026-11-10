@@ -179,6 +179,47 @@ class Dashboard(Model):
             if not part.done
         ]
 
+    def kept(self, category: str, remembered: tuple[str, Item]) -> tuple[str, Item] | None:
+        """What focus mode shows in place of the item it was on when a button there was
+        pressed (`remembered`, with its panel's key), once that item has left the category (a
+        todo ticked off, an item snoozed), so what the button did can be seen and undone; None
+        while it's still a step there. That's the item as it is now, wherever the page still
+        shows it (the todo with its box ticked, the item with Unsnooze), with that panel's key;
+        else the remembered copy, without the buttons that post, as what they'd act on is
+        gone."""
+        key, item = remembered
+        steps = self.focus_items(category) or []
+        if any(_same(item, step) for _, step in steps):
+            return None
+        panels = sorted(self.panels, key=lambda p: p.key != key)  # its own panel first
+        for panel in panels:
+            if (now := _found(panel.items, item)) is not None:
+                return panel.key, now
+        return key, item.model_copy(
+            update={
+                "actions": [a for a in item.actions if a.href is not None],
+                "parts": [],
+            }
+        )
+
+
+def _same(remembered: Item, item: Item) -> bool:
+    """Whether `item` is the `remembered` one as it is now: about the same main subject, or,
+    without subjects, of the same title."""
+    if remembered.anchor is not None:
+        return item.anchor == remembered.anchor
+    return item.anchor is None and item.title == remembered.title
+
+
+def _found(items: list[Item], remembered: Item) -> Item | None:
+    """The item among `items`, or their parts, that is `remembered` as it is now."""
+    for item in items:
+        if _same(remembered, item):
+            return item
+        if (part := _found(item.parts, remembered)) is not None:
+            return part
+    return None
+
 
 def _sorted(
     panel: Panel,
@@ -350,10 +391,11 @@ def _with_item_actions(
 ) -> Panel:
     """Each item, and each of its focus-mode parts, with what the plugins add: buttons,
     badges, details and links, and the tags core's badges show (`tags_of`). `owner` is the
-    plugin whose panel it is. Buttons posting to no action `known` knows are left out."""
+    plugin whose panel it is. Buttons posting to no action `known` knows are left out. Nothing
+    is added to what's `done` (a todo ticked off): only its own buttons act on it."""
 
     def add(item: Item) -> Item:
-        added = item_actions(item, owner, surface)
+        added = ItemAdditions() if item.done else item_actions(item, owner, surface)
         actions = [a for a in [*item.actions, *added.actions] if _known(a, known)]
         return item.model_copy(
             update={
@@ -404,12 +446,14 @@ def _with_importance_actions(
 ) -> Panel:
     """Add core's importance choices to every shown entity, including focus parts. An
     item's first subject is its primary entity, as for its anchor and Act now. An item about
-    what hides things (ice) has none: it's parked, so nothing ranks it. With `parts_only`,
-    only to the parts: Act now gives its items their own."""
+    what hides things (ice) has none: it's parked, so nothing ranks it; nor has one that's
+    `done` (a todo ticked off), as finished work has nothing to rank. With `parts_only`, only
+    to the parts: Act now gives its items their own."""
 
     def add(item: Item, top: bool) -> Item:
         actions = list(item.actions)
-        if not (top and parts_only) and item.subjects and not hides(item.subjects[0].kind):
+        ranked = item.subjects and not item.done and not hides(item.subjects[0].kind)
+        if not (top and parts_only) and ranked:
             subject = item.subjects[0]
             actions.extend(act_now.importance_actions(subject, priority_of(subject)))
         return item.model_copy(

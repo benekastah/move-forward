@@ -28,7 +28,8 @@ from move_forward.plugins.git_stack.models import StackBranch
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes.models import Ice, IcedItem
 from move_forward.plugins.notes.panels import ADD_TODO_INPUT, TODO_SIZES
-from move_forward.refresh import kept_item
+from move_forward.plugins.notes.repository import NotesRepository
+from move_forward.refresh import build_dashboard
 
 build = dashboard
 
@@ -293,19 +294,6 @@ def test_todo_parts_carry_their_actions_and_a_done_todo_can_be_kept() -> None:
         )
         == 1
     )
-
-    config, db = stored(work_items=[noted])
-    kept = kept_item(config, db, f"notes:{todo_id}")
-    assert kept is not None
-    panel_key, done = kept
-    assert panel_key == "notes.todos"
-    assert (done.title, done.subtitle) == ("small", "APP-2 mixed")
-    assert done.url == "https://github.com/acme/widgets/pull/7"
-    assert [(a.name, a.checked) for a in done.actions] == [("notes/todo_done", False)] + [
-        (a.name, False) for a in done.actions[1:]
-    ]  # still open: only a ticked todo offers undo
-    assert kept_item(config, db, "notes:999") is None
-    assert kept_item(config, db, "notes:x") is None
 
 
 def test_notes_panel_shows_each_todo_with_its_done_checkbox() -> None:
@@ -1045,3 +1033,22 @@ def test_a_todo_mentions_a_pr_by_its_number_but_not_by_a_number_within_another(
     [item] = panel(built, "notes.todos").items
     assert any(link.strong for link in item.links if link.url == url) == mentioned
     assert ("its PRs are done" in item.badges) == mentioned
+
+
+def test_focus_mode_keeps_an_item_that_left_its_category_as_it_is_now() -> None:
+    config, db = stored(work_items=[entry("Chores", [todo("dishes"), todo("laundry")])])
+    before = build_dashboard(config, db, NOW, surface="focus")
+    [(on, dishes), _] = before.focus_items("notes.todos") or []
+    remembered = (on.key, dishes)
+    assert before.kept("notes.todos", remembered) is None  # still a step
+    [todo_id] = [t.id for e in NotesRepository(db).entries() for t in e.todos if t.text == "dishes"]
+    NotesRepository(db).set_done(todo_id, NOW.date())
+    after = build_dashboard(config, db, NOW, surface="focus")
+    kept = after.kept("notes.todos", remembered)
+    assert kept is not None and kept[0] == "notes.todos"
+    assert (kept[1].title, kept[1].done) == ("dishes", True)
+    assert [(a.name, a.checked) for a in kept[1].actions] == [("notes/todo_undone", True)]
+    NotesRepository(db).delete_todo(todo_id)
+    gone = build_dashboard(config, db, NOW, surface="focus").kept("notes.todos", remembered)
+    assert gone is not None and gone[1].title == "dishes"
+    assert [a for a in gone[1].actions if a.href is None] == []  # nothing left to act on
