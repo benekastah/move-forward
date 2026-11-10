@@ -11,21 +11,24 @@ salesperson on a CRM and a calendar) can run the dashboard with only the plugins
 and new tools can be added without touching the others. Plugins interact only through a
 small shared entity graph.
 
-## First: simplify
+## First: finish simplifying
 
-Before building more, a review pass for what can go or be made simpler, since the code has
-grown complicated. The first pass's findings and options are in
-[simplicity_review.md](simplicity_review.md). Questions to answer, each with what to
-remove, merge or move:
+The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but for the last of
+its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api), in one PR, as each changes
+the hooks a plugin implements:
 
-- **Features that do about the same thing**, where one would do (two ways of setting
-  something aside, of marking importance, of linking work, of telling me something changed).
-- **What in core makes writing a plugin hard**: hooks, request objects, flags and rules a
-  plugin must know about to do something simple.
-- **What makes the plugins complicated now**, and whether it could move to core: the same
-  work done in several plugins (keeping what moved, polling for changes, tokens and accounts,
-  sanitizing what a stranger wrote, item actions), or a plugin working around core.
-- **Anything overcomplicated**: code, config keys or docs that cost more than they give.
+- **B2:** call `url_for`, `handle_for` and `fetch` only on the plugin whose `kinds` include
+  the kind, and default `url_for` to the id for families whose ids are URLs.
+- **B3:** one item-actions hook (`prepare_item_actions`, renamed) instead of it and
+  `item_actions`.
+- **B7:** merge the hooks' request types into about four shapes (context; context and graph;
+  context, kind and id; context and snapshot).
+
+## Next, in this order
+
+1. **[Buttons and consistency](#buttons-and-consistency)**, below.
+2. **Gmail links that open the message**: see [mail](#mail), below.
+3. **Read the address book where it lives**: see [Contacts](#contacts), below.
 
 ## Slack as a source of work
 
