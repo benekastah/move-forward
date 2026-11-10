@@ -54,7 +54,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
   `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`,
   `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `changed`);
-  `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx, graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
+  `RefRequest(ctx, kind, ids)` (`address`, `fetch`); and `InputRequest(ctx, graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
   and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
   the snapshot and the graph then). Those called before there's a context take what they need:
   `init_questions(ask, setup)` (`mfd init`, returning an `InitSection`),

@@ -9,6 +9,7 @@ from ...api import (
     API_VERSION,
     Action,
     ActionHandler,
+    Address,
     Asker,
     Badge,
     Band,
@@ -17,7 +18,6 @@ from ...api import (
     Entity,
     Event,
     Graph,
-    HandleRequest,
     InitSection,
     InitSetup,
     Item,
@@ -33,7 +33,6 @@ from ...api import (
     RefreshRequest,
     Request,
     Signals,
-    UrlRequest,
     age,
     attrs,
     due_pressure,
@@ -498,16 +497,16 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for i in found
         ]
 
-    def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
-        """A ticket's URL, from its URL or its key alone."""
-        ctx, id = req.ctx, req.id
-        if client.key_of(ctx.config.site, id):
-            return id
-        return client.ticket_url(ctx.config.site, id) if client.is_key(id) else None
-
-    def handle_for(self, req: HandleRequest[JiraConfig]) -> str | None:
-        """A ticket's key, from its URL."""
-        return client.key_of(req.ctx.config.site, req.id)
+    def address(self, req: RefRequest[JiraConfig]) -> dict[str, Address]:
+        """A ticket's URL, from its URL or its key alone, and its key, from its URL."""
+        site = req.ctx.config.site
+        found: dict[str, Address] = {}
+        for id in req.ids:
+            if key := client.key_of(site, id):
+                found[id] = Address(url=id, handle=key)
+            elif client.is_key(id):
+                found[id] = Address(url=client.ticket_url(site, id))
+        return found
 
     def panels(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph

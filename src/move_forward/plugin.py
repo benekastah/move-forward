@@ -195,12 +195,23 @@ class RefreshRequest[C: BaseModel]:
 
 @dataclass(frozen=True)
 class RefRequest[C: BaseModel]:
-    """A hook asked about some of the plugin's entities by id: `fetch`."""
+    """A hook asked about some of the plugin's entities by id: `address` and `fetch`."""
 
     ctx: Context[C]
     kind: str
     """One of the plugin's `kinds` (of a family, each publisher's)."""
     ids: list[str]
+
+
+@dataclass(frozen=True)
+class Address:
+    """Where an entity is and what it's called, as `Plugin.address` knows them."""
+
+    url: str | None = None
+    """A link to it, e.g. a ticket's from its key; None when the plugin can't say."""
+    handle: str | None = None
+    """What text names it by (its family's `handle`), e.g. a ticket's key from its URL; None
+    when the plugin can't say."""
 
 
 @dataclass(frozen=True)
@@ -245,20 +256,6 @@ class InputRequest[C: BaseModel]:
             return self.form.fields[name]
         except KeyError:
             raise ActionError(f"missing field {name!r}") from None
-
-
-@dataclass(frozen=True)
-class UrlRequest[C: BaseModel]:
-    ctx: Context[C]
-    kind: str
-    id: str
-
-
-@dataclass(frozen=True)
-class HandleRequest[C: BaseModel]:
-    ctx: Context[C]
-    kind: str
-    id: str
 
 
 @dataclass(frozen=True)
@@ -545,17 +542,17 @@ class Plugin[C: BaseModel, S: BaseModel]:
         (about a family, each plugin that publishes it), so `req.kind` is one of them."""
         return []
 
-    def url_for(self, req: UrlRequest[C]) -> str | None:
-        """A URL for an entity of one of its `kinds`, even one not in the graph, e.g. a
-        ticket's from its key. Core asks only about the plugin's own kinds. By default, the id
-        itself where it's a URL of a family whose ids are URLs (a pull request's), else None."""
+    def address(self, req: RefRequest[C]) -> dict[str, Address]:
+        """Where each of these entities of one of its `kinds` is, and what it's called, by id,
+        even one not in the graph: a ticket's URL from its key, its key from its URL. Core asks
+        only about the plugin's own kinds. By default, its URL is its id where that's a URL of a
+        family whose ids are URLs (a pull request's), and nothing else is known."""
         family = FAMILIES.get(req.kind)
-        return req.id if family and family.id_rule(req.id) and is_url(req.id) else None
-
-    def handle_for(self, req: HandleRequest[C]) -> str | None:
-        """The `handle` of an entity of one of its `kinds`, by id, even one not in the graph,
-        e.g. a ticket's key from its URL. Core asks only about the plugin's own kinds."""
-        return None
+        return {
+            id: Address(url=id)
+            for id in req.ids
+            if family is not None and family.id_rule(id) and is_url(id)
+        }
 
     # Page
 

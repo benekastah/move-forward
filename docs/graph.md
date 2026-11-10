@@ -158,7 +158,7 @@ A view lists only what its consumer reads, so publishers can add attributes free
 Text names a family's entities by their `handle` (a ticket's key): a pattern's match is
 looked up among the entities with that handle (`graph.by_handle(kind, handle)`), all of
 them when two trackers share a key; a match no entity has yet becomes a ref with the id its
-plugin's `url_for` gives it (a ticket's URL, from its key), else with that text as its id.
+plugin's `address` gives it (a ticket's URL, from its key), else with that text as its id.
 
 Some kinds stand for a unit of work and link what's about it. A plugin declares them with
 `KindSpec(..., linking=True)`, and gives the pattern of its ids, if text can name them, in its
@@ -251,11 +251,11 @@ stay. So plugins never check for ice themselves.
 ### URLs, and entities not in the graph
 
 `url_for(kind, id)` gives an entity's URL from the graph, else asks the plugins that publish
-`kind` (each of a family's publishers, in turn): a PR's id is its URL, which every plugin's
-`url_for` gives by default for a family whose ids are URLs, and jira makes a ticket's link
-from its key alone. `handle(kind, id)` gives what to call it the same way: its `handle` from
-the graph, else its publishers' `handle_for` (jira's: a ticket's key from its URL), else the
-id. A plugin is never asked about a kind it doesn't publish.
+`kind` (each of a family's publishers, in turn) for its `address`: a PR's id is its URL,
+which every plugin's `address` gives by default for a family whose ids are URLs, and jira
+makes a ticket's link from its key alone. `handle(kind, id)` gives what to call it the same
+way: its `handle` from the graph, else the handle its publishers' `address` gives (jira's: a
+ticket's key from its URL), else the id. A plugin is never asked about a kind it doesn't publish.
 
 `identify(kind, id)` gives the id an entity of a family has, for an id kept before the
 family's ids were what they are: a ticket kept by its key gets the ticket with that handle,

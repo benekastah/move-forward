@@ -6,7 +6,7 @@ import logging
 import pkgutil
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -24,14 +24,13 @@ from .keychain import TokenSettings
 from .kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named_for
 from .plugin import (
     API_VERSION,
+    Address,
     Context,
     ContextRequest,
-    HandleRequest,
     Plugin,
     RefRequest,
     Request,
     SourceError,
-    UrlRequest,
 )
 from .repositories import KvRepository
 
@@ -408,7 +407,7 @@ def build_graph(
     stands when two plugins publish one entity of a family), with an id its family takes
     (`kinds.Family.id_rule`). One that isn't is a plugin bug:
     it's logged and left out, and the page goes on without it. So is a plugin whose
-    `entities`, `url_for` or `linking_patterns` raises: the graph is built without its
+    `entities`, `address` or `linking_patterns` raises: the graph is built without its
     answer. Core adds the `tag`s on the entities, from their tools and text but those
     `untagged`, and those `tagged` by hand, and points those whose text names one at it (see
     `tags`)."""
@@ -449,26 +448,20 @@ def build_graph(
         publisher, in plugin order."""
         return [e for e in plugins if kind in e.plugin.kinds]
 
-    def url_for(kind: str, id: str) -> str | None:
+    def addresses(kind: str, id: str) -> Iterator[Address]:
+        """What each publisher of `kind` knows of the entity `id`, in plugin order."""
         for e in owners(kind):
-            url: str | None = call(
-                e.name, "url_for", lambda e=e: e.plugin.url_for(UrlRequest(e.ctx, kind, id)), None
+            known: dict[str, Address] = call(
+                e.name, "address", lambda e=e: e.plugin.address(RefRequest(e.ctx, kind, [id])), {}
             )
-            if url:
-                return url
-        return None
+            if (found := known.get(id)) is not None:
+                yield found
+
+    def url_for(kind: str, id: str) -> str | None:
+        return next((a.url for a in addresses(kind, id) if a.url), None)
 
     def handle_for(kind: str, id: str) -> str | None:
-        for e in owners(kind):
-            handle: str | None = call(
-                e.name,
-                "handle_for",
-                lambda e=e: e.plugin.handle_for(HandleRequest(e.ctx, kind, id)),
-                None,
-            )
-            if handle:
-                return handle
-        return None
+        return next((a.handle for a in addresses(kind, id) if a.handle), None)
 
     def fetch(kind: str, ids: list[str]) -> list[Entity]:
         """Each publisher's answer; one that fails is logged and left out, so its entities just

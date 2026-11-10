@@ -14,11 +14,15 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **One `address` hook**: `url_for(req)` and `handle_for(req)` (and `UrlRequest` and
+  `HandleRequest`) are one hook, `address(req: RefRequest)`, answering a URL and a handle for
+  each of `req.ids` it knows as an `Address(url, handle)`, by id. By default it gives the id as
+  the URL where its family's ids are URLs, as `url_for` did.
 - **Five request types**: a hook's request is one of `ContextRequest(ctx)` (`load`,
   `linking_patterns`), `Request(ctx, graph, snapshot, previous, panels)` (`store`,
   `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`,
   `prune`, `events`), `RefreshRequest(ctx, graph, full, subjects, previous)` (`collect`,
-  `changed`), `RefRequest(ctx, kind, ids)` (`fetch`) and `InputRequest(ctx,
+  `changed`), `RefRequest(ctx, kind, ids)` (`address`, `fetch`) and `InputRequest(ctx,
   graph, page, form, args)` (pages, buttons and `mfd <plugin>`), in place of a type per hook
   (`EntitiesRequest`, `PanelsRequest`, `CollectRequest`, `ChangedRequest`, `ActionRequest`,
   `PageRequest`, `CliRequest` and the rest, named in the entries below, are gone). A field a
