@@ -90,8 +90,8 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
         return Enabled(plugin, _context(db, minutes))
 
     def taken() -> tuple[bool, set[str]]:
-        """Whether every search is asked for, and the PRs to fetch, as a collect given them
-        then stores."""
+        """Whether every search is asked for, and the PRs to fetch, as a collect that starts
+        now then stores."""
         held = ChangeRepository(db).get("github")
         checks.stored(github(0), checks.take(github(0), None))
         return held.everything, set(held.subjects)

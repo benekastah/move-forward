@@ -1,6 +1,6 @@
 """Core keeping what each plugin's change checks say moved: the fingerprint to compare the
-next with, the subjects pending until a collect given them stores, and when the last full
-collect was."""
+next with, the subjects pending until a collect that started after them stores, and when the
+last full collect was."""
 
 import sqlite3
 from datetime import datetime, timedelta
@@ -110,7 +110,7 @@ def test_each_subject_said_asks_for_a_refresh_and_is_pending_until_a_collect_aft
     refresh.refresh(config, db, _minutes(4), {"git"}, checks)
     assert git.given == [(True, frozenset()), (False, {"a"}), (False, {"a"})]  # a once
     e = _git(config, db, _minutes(5))
-    assert checks.take(e, None).subjects == set()  # gone once a collect given it stored
+    assert checks.take(e, None).subjects == set()  # gone once a collect started after it stored
     git.answers[:] = [
         Changed(subjects=frozenset({"c", "e"})),
         Changed(subjects=frozenset({"d", "e"})),

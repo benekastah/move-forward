@@ -239,6 +239,38 @@ def test_edits_after_a_collect_that_failed_ask_again_only_when_they_move_again(
     assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
 
 
+def test_edits_back_as_the_last_look_saw_them_after_a_newer_store_are_still_seen(
+    tmp_path: Path,
+) -> None:
+    """The last look is forgotten once a collect stores, so what's stored is what's compared."""
+    repo = _repo(tmp_path / "r")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    plugin = GitPlugin(watching=False)
+    server = _Server(plugin)
+
+    def ctx(seconds: int) -> Context[GitConfig]:
+        return Context(
+            config=GitConfig(repos=[repo], status_seconds=30),
+            email="me@example.com",
+            teams=[],
+            prune_days=90,
+            now=NOW + timedelta(seconds=seconds),
+            db=db,
+            kv=KvRepository(db, "git"),
+        )
+
+    server.refresh(ctx(0))
+    assert not server.changed(ctx(0))
+    (repo / "new.txt").write_text("x\n", encoding="utf-8")
+    assert server.changed(ctx(40))  # looked at: one untracked file
+    git(repo, "add", "new.txt")
+    git(repo, "commit", "-q", "-m", "new")
+    server.refresh(ctx(40))  # stores none untracked, with no look in between
+    (repo / "other.txt").write_text("x\n", encoding="utf-8")
+    assert server.changed(ctx(80))  # one untracked again, as the last look saw, but not stored
+
+
 def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

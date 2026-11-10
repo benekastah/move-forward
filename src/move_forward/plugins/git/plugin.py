@@ -126,9 +126,11 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
     def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
         """Keep the snapshot, and watch the worktrees it found (once `changed` has started
-        watching: only the server asks it)."""
+        watching: only the server asks it). The last looks at uncommitted edits are forgotten:
+        what's stored is now newer, and edits back as a look saw them may differ from it."""
         ctx, snapshot = req.ctx, req.snapshot
         LocalRepository(ctx.db).replace(snapshot)
+        self._statuses.clear()
         if self._watcher is not None:
             self._watch(snapshot)
 

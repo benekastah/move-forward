@@ -307,6 +307,9 @@ class ChangeRepository:
         self._db = db
 
     def get(self, plugin: str) -> ChangeState:
+        # The count before the subjects: a subject numbered past the count read would be taken
+        # as settled by a collect that didn't see it. Read in this order, one written between
+        # the two queries is only ever newer than the count, so it stays pending.
         with self._db.reading():
             rows = self._db.query("SELECT * FROM change_checks WHERE plugin = ?", (plugin,))
             subjects = self._db.query(
