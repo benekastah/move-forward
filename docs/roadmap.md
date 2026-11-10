@@ -11,15 +11,10 @@ salesperson on a CRM and a calendar) can run the dashboard with only the plugins
 and new tools can be added without touching the others. Plugins interact only through a
 small shared entity graph.
 
-## First: finish simplifying
+## First: a further look at the plugin API
 
-The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but for the last of
-its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened from the
-review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
-
-- **Hooks merged:**
-
-Then a further look at what's left: the hooks, and the class variables (about 21).
+The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done. Next, a further look
+at the hooks that are left (18), and the class variables (23).
 
 ## Next, in this order
 
