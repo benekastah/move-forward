@@ -75,7 +75,9 @@ flowchart TB
 2. A plugin declares the kinds it publishes in `kinds`, each with a model of its
    attributes, and builds its entities' attributes from those models (with `attrs` from
    `move_forward.graph`). A plugin owns the kinds it declares (the first plugin to declare
-   one, should two), and only it publishes them, each ref once. Core checks every entity
+   one, should two), and only it publishes them, each ref once. A family's entities (a
+   person, a pull request) come from each plugin whose own kind extends it, and core asks
+   each of them about one. Core checks every entity
    for that and against its kind's model; one that fails is left out and logged, so the
    page goes on without it.
 3. Core adds a `tag` per tag on an entity (its tool's, a `#tag` in its title or mentions, or put

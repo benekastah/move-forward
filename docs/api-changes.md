@@ -21,7 +21,8 @@ for themselves (a token, a request, an example config) is core's.
   returns; one that implemented `prepare_item_actions` renames it, and its function takes an
   `ItemRequest`.
 - **Asked only about its own kinds**: core calls `url_for`, `handle_for` and `fetch` only on
-  the plugins whose `kinds` include `req.kind` (each publisher of a family's), so a plugin
+  the plugins whose `kinds` include `req.kind` (about a family, each plugin that publishes
+  it), so a plugin
   drops its `if req.kind != ...` check. `url_for` gives the id by default where its family's
   ids are URLs (a pull request's, a ticket's), so a plugin whose `url_for` only did that
   drops it.

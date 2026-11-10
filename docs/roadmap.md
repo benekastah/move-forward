@@ -14,14 +14,15 @@ small shared entity graph.
 ## First: finish simplifying
 
 The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but for the last of
-its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api), B7, in one PR: fewer
-request types, and fewer hooks to learn.
+its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened from the
+review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
-- **Five request types**, each hook taking one:
+- **Five request types**, each hook taking one, with `Previous` a type of its own beside them
+  and `ItemRequest` (one item, given to what `item_actions` returns) kept as it is:
   - `ContextRequest` (ctx): `load`, `linking_patterns`;
-  - `Request` (ctx, graph, snapshot, and `panels` where it has them): `store`, `entities`,
-    `identity`, `panels`, `act_now`, `relate`, `after_collect`, `prune`, item actions and
-    `events`;
+  - `Request` (ctx, graph, snapshot): `store`, `entities`, `panels`, `relate`,
+    `after_collect`, `prune`, item actions and `events`, and `identity` and `act_now` (with
+    `panels`) unless they go, below;
   - `RefreshRequest` (ctx, graph, `full`, `subjects`): `collect` and `changed`;
   - `RefRequest` (ctx, kind, ids): `url_for`, `handle_for` and `fetch`;
   - `InputRequest` (ctx, graph, and one of a page's query and path, a form's fields,
