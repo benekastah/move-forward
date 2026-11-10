@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
@@ -41,11 +42,9 @@ from .plugin import (
     CollectAfterRequest,
     CollectRequest,
     EventsRequest,
-    GraphEventsRequest,
     IdentityRequest,
     ItemActionsRequest,
     KeptItemRequest,
-    LoadRequest,
     PageRequest,
     PanelsRequest,
     PrepareItemActionsRequest,
@@ -98,27 +97,89 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
     return build_graph(plugins, snapshots, TagRepository(db).all()), snapshots
 
 
-def _store(
-    e: Enabled, snapshot: BaseModel, subscribed: set[str], now: datetime, previous: Graph
-) -> None:
-    """Keep a plugin's new snapshot and, when I've subscribed to any of its events, store
-    those I subscribed to that changed since the last one. The first snapshot has nothing to
-    compare with, so it makes none (core's kv remembers that it has been stored). A plugin
-    that can't tell is logged, and never stops the refresh. `previous` is the graph from
-    before this refresh."""
-    wanted = _wants(e, subscribed)
-    kv = KvRepository(e.ctx.db, CORE)
-    key = f"stored:{e.name}"
-    before = e.plugin.load(LoadRequest(e.ctx)) if wanted and kv.get(key) else None
+STORED = "stored:"
+"""Core's kv key, `stored:<plugin>`, saying the plugin has stored a snapshot: until it has,
+its events have nothing to compare with."""
+
+
+def store_snapshot(e: Enabled, snapshot: BaseModel) -> None:
+    """Keep a plugin's new snapshot, and remember that it has one."""
     e.plugin.store(StoreRequest(e.ctx, snapshot))
-    kv.set(key, "1")
-    if before is None:
-        return
-    try:
-        events = e.plugin.events(EventsRequest(e.ctx, before, snapshot, previous))
-        _keep(e, events, subscribed, now)
-    except Exception:
-        log.exception("%s: finding events failed", e.name)
+    KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", "1")
+
+
+@dataclass(frozen=True)
+class Before:
+    """What held before a refresh, for its events to compare with."""
+
+    graph: Graph
+    snapshots: dict[str, BaseModel | None]
+    """Each plugin's snapshot; None for one that had never stored one."""
+
+
+def before_refresh(db: Database, plugins: list[Enabled]) -> Before:
+    """What's stored now, as a refresh about to start compares its events with."""
+    graph, snapshots = stored_graph(db, plugins)
+    kv = KvRepository(db, CORE)
+    return Before(
+        graph, {name: s if kv.get(f"{STORED}{name}") else None for name, s in snapshots.items()}
+    )
+
+
+def changes_of(
+    e: Enabled, before: BaseModel | None, after: BaseModel | None, previous: Graph, graph: Graph
+) -> list[Event]:
+    """The events a plugin's `events` makes of a refresh, subscribed to or not, from its
+    snapshot `before` and `after` and the graph `previous`ly and now; none while it has no
+    snapshot to compare with."""
+    if before is None or after is None:
+        return []
+    return e.plugin.events(EventsRequest(e.ctx, before, after, previous, graph))
+
+
+def newly_shown_of(e: Enabled, after: BaseModel | None, graph: Graph) -> list[Event]:
+    """The events of a plugin's items newly shown with a notification (`Item.notify`),
+    subscribed to or not, by `notifications.newly_shown`, which keeps what its panels show now
+    for the next refresh. Its panels are built whether or not it raises any kind this way."""
+    panels = e.plugin.panels(PanelsRequest(e.ctx, after, graph))
+    return notifications.newly_shown(e.ctx.db, e.name, panels)
+
+
+def events_of(
+    e: Enabled, before: BaseModel | None, after: BaseModel | None, previous: Graph, graph: Graph
+) -> list[Event]:
+    """Every event a plugin makes of a refresh, subscribed to or not: `changes_of`, then
+    `newly_shown_of`."""
+    return [*changes_of(e, before, after, previous, graph), *newly_shown_of(e, after, graph)]
+
+
+def _events(
+    db: Database,
+    plugins: list[Enabled],
+    before: Before,
+    graph: Graph,
+    snapshots: dict[str, BaseModel | None],
+    subscribed: set[str],
+    now: datetime,
+) -> None:
+    """Store the events of a refresh, of the kinds I've subscribed to, for every plugin I've
+    subscribed to some of: what changed since `before`, to the `graph` and `snapshots` now.
+    A plugin's `events` and its panels' items are each asked on their own, so one failing
+    loses only its own events: it's logged, and never stops the refresh. What the panels of
+    the others showed is forgotten."""
+    wanting = [e for e in plugins if _wants(e, subscribed)]
+    notifications.forget_shown(db, [e.name for e in wanting])
+    for e in wanting:
+        after = snapshots.get(e.name)
+        try:
+            found = changes_of(e, before.snapshots.get(e.name), after, before.graph, graph)
+            _keep(e, found, subscribed, now)
+        except Exception:
+            log.exception("%s: finding what changed failed", e.name)
+        try:
+            _keep(e, newly_shown_of(e, after, graph), subscribed, now)
+        except Exception:
+            log.exception("%s: finding items newly shown failed", e.name)
 
 
 def _keep(e: Enabled, events: list[Event], subscribed: set[str], now: datetime) -> None:
@@ -132,14 +193,11 @@ def _collect_all(
     plugins: list[Enabled],
     now: datetime,
     collect: Callable[[Enabled], BaseModel],
-    subscribed: set[str],
-    previous: Graph,
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
-    plugin's `store`. `subscribed` are the kinds I want events of (see `notifications`).
-    Each plugin has `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as
-    failed, and the refresh goes on without it; one still running from an earlier refresh
-    is left out."""
+    plugin's `store`. Each plugin has `COLLECT_TIMEOUT_SECONDS`: one that takes longer is
+    recorded as failed, and the refresh goes on without it; one still running from an earlier
+    refresh is left out."""
     started = time.monotonic()
     pool = ThreadPoolExecutor(max_workers=max(1, len(plugins)))
     running: list[tuple[Enabled, Future[None]]] = []
@@ -157,7 +215,7 @@ def _collect_all(
                     e.name,
                     now,
                     lambda: collect(e),
-                    lambda snapshot: _store(e, snapshot, subscribed, now, previous),
+                    lambda snapshot: store_snapshot(e, snapshot),
                 )
             finally:
                 with _collecting_lock:
@@ -207,36 +265,32 @@ def refresh(
     """Refresh every plugin, or `only` those. Each plugin fails on its own. After collecting,
     the graph is built again, the plugins' events found against what held before, the daily
     prune runs if due, and `after_collect` runs for the plugins collected and those that
-    collect nothing (they work from the others' data)."""
+    collect nothing (they work from the others' data). When the dashboard is stopping, it
+    collects no more, but still finds the events of what it stored, and ends there, as long as
+    it gets that far: the server runs it in a daemon thread, which its own shutdown may freeze
+    first, and then that refresh's events are lost (the next start compares with what it
+    stored). Run outside that thread (`mfd refresh`, a test), it always gets that far."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
-    previous, previous_snapshots = stored_graph(db, plugins)
+    before = before_refresh(db, plugins)
     first, after = to_collect(plugins, only)
     collected = {e.name for e in first + after}
-    subscribed = set(config.notifications.subscribe)
 
-    _collect_all(
-        db, first, now, lambda e: e.plugin.collect(CollectRequest(e.ctx)), subscribed, previous
-    )
-    if shell.stopping():
-        return
-    graph, _ = stored_graph(db, plugins)
-    if after:
+    _collect_all(db, first, now, lambda e: e.plugin.collect(CollectRequest(e.ctx)))
+    graph, snapshots = stored_graph(db, plugins)
+    if after and not shell.stopping():
         _collect_all(
             db,
             after,
             now,
             lambda e: e.plugin.collect_after(CollectAfterRequest(e.ctx, graph)),
-            subscribed,
-            previous,
         )
-        if shell.stopping():
-            return
-        graph, _ = stored_graph(db, plugins)
+        graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
-    snapshots = {e.name: e.snapshot() for e in plugins}
-    _graph_events(plugins, graph, snapshots, previous, previous_snapshots, subscribed, now)
-    _dashboard_events(config, db, plugins, subscribed, now)
+    _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)
+    if shell.stopping():  # what was stored is told above, if the thread got that far
+        return
+    _dashboard_events(config, db, plugins, set(config.notifications.subscribe), now)
     prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
     for e in plugins:
         if e.name not in collected and e.plugin.collects:
@@ -278,10 +332,10 @@ def refresh_subjects(
     plugins that couldn't, for a full refresh instead."""
     now = now or datetime.now(UTC)
     plugins = {e.name: e for e in enabled(config, db, now)}
-    graph, _ = stored_graph(db, list(plugins.values()))
-    subscribed = set(config.notifications.subscribe)
+    before = before_refresh(db, list(plugins.values()))
+    stored = False
     fallback: set[str] = set()
-    for name, mine in publishers(graph, refs).items():
+    for name, mine in publishers(before.graph, refs).items():
         e = plugins[name]
         if not e.plugin.collects:
             continue
@@ -291,11 +345,16 @@ def refresh_subjects(
                 fallback.add(name)
                 break
             try:
-                _store(e, result.snapshot, subscribed, now, graph)
+                store_snapshot(e, result.snapshot)
+                stored = True
             except Exception:
                 log.exception("%s: storing its subjects failed", name)
                 fallback.add(name)
                 break
+    if stored:
+        graph, snapshots = stored_graph(db, list(plugins.values()))
+        subscribed = set(config.notifications.subscribe)
+        _events(db, list(plugins.values()), before, graph, snapshots, subscribed, now)
     return fallback
 
 
@@ -314,29 +373,6 @@ def _subjects(e: Enabled, refs: list[Ref]) -> Subjects[BaseModel] | None:
     except Exception:
         log.exception("%s: refreshing subjects failed", e.name)
     return None
-
-
-def _graph_events(
-    plugins: list[Enabled],
-    graph: Graph,
-    snapshots: dict[str, BaseModel | None],
-    previous: Graph,
-    previous_snapshots: dict[str, BaseModel | None],
-    subscribed: set[str],
-    now: datetime,
-) -> None:
-    """Store the events plugins make from the graph (`Plugin.graph_events`), against what
-    held before this refresh, for those I've subscribed to some of."""
-    for e in plugins:
-        if not _wants(e, subscribed):
-            continue
-        req = GraphEventsRequest(
-            e.ctx, graph, snapshots.get(e.name), previous, previous_snapshots.get(e.name)
-        )
-        try:
-            _keep(e, e.plugin.graph_events(req), subscribed, now)
-        except Exception:
-            log.exception("%s: finding events from the graph failed", e.name)
 
 
 def _dashboard_events(

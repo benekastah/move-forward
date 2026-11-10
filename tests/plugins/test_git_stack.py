@@ -9,6 +9,7 @@ import pytest
 from conftest import (
     NOW,
     dashboard,
+    events_between,
     iced,
     local_branch,
     local_snapshot,
@@ -26,7 +27,7 @@ from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.plugin import ActionError, ChangedRequest, CollectAfterRequest
 from move_forward.plugins.git.repository import LocalRepository
-from move_forward.plugins.git_stack import actions, changes, client, events
+from move_forward.plugins.git_stack import actions, changes, client
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 from move_forward.plugins.git_stack.panels import repo_dirs, stack_of
 from move_forward.plugins.git_stack.plugin import GitStackPlugin
@@ -558,7 +559,10 @@ def test_a_branch_needing_a_restack_or_merged_is_said_once_and_a_new_one_not() -
 
     before = snap(a="up-to-date", b="up-to-date", c="needs-restack")
     after = snap(a="needs-restack", b="merged", c="needs-restack", d="needs-restack")
-    said = [(e.kind, e.title, e.text) for e in events.changes(before, after)]
+    said = [
+        (e.kind, e.title, e.text)
+        for e in events_between("git_stack", {"stacks": before}, {"stacks": after})
+    ]
     assert said == [
         ("needs_restack", "a in /src/widgets", "needs a restack"),
         ("merged", "b in /src/widgets", "was merged"),

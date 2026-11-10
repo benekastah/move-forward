@@ -298,7 +298,21 @@ UPDATE act_now_feedback SET action = 'snooze', until = NULL WHERE action = 'dism
 """A dismissal was a snooze with no end: it's kept as one now, a snooze until the item
 changes (`until` NULL)."""
 
-_V18_PROBLEMS = """
+_V18_SHOWN_NOTICES = """
+CREATE TABLE shown_notices (           -- derived, replaced after each refresh: the items with
+    plugin TEXT NOT NULL,              -- a notification (`Item.notify`) the plugin's panels
+    kind TEXT NOT NULL,                -- showed, by the plugin's kind (`branch_deletable`)
+    thing TEXT NOT NULL,               -- and what it's about
+    PRIMARY KEY (plugin, kind, thing)
+);
+CREATE TABLE shown_plugins (           -- derived: the plugins whose panels shown_notices
+    plugin TEXT PRIMARY KEY            -- holds, empty or not
+);
+"""
+"""What the plugins' panels showed at the last refresh, so the next tells what's newly shown,
+after a restart too."""
+
+_V19_PROBLEMS = """
 CREATE TABLE problems (                -- kept: what a plugin reports wrong that isn't a failed
                                        -- refresh, until it says it's gone (`Context.problem`)
     plugin TEXT NOT NULL,
@@ -328,7 +342,8 @@ CORE_MIGRATIONS = [
     Migration("0015_tags", _V15_TAGS),
     Migration("0016_no_unimportant_priority", _V16_NO_UNIMPORTANT_PRIORITY),
     Migration("0017_dismiss_is_a_snooze", _V17_DISMISS_IS_A_SNOOZE),
-    Migration("0018_problems", _V18_PROBLEMS),
+    Migration("0018_shown_notices", _V18_SHOWN_NOTICES),
+    Migration("0019_problems", _V19_PROBLEMS),
 ]
 
 _SCHEMA_VERSIONS = """

@@ -1,5 +1,6 @@
-"""What changed between two Jira snapshots, as notification events (`Plugin.events`), and
-which tickets can be closed now (`Plugin.graph_events`).
+"""What changed between two Jira snapshots, as notification events (`Plugin.events`).
+`closeable`, a ticket newly in the transitions panel to be closed, is the panel's
+(`Item.notify`).
 
 Each says something once, when a state changes; a ticket the earlier snapshot didn't hold
 only ever says it was assigned.
@@ -27,11 +28,6 @@ def _event(issue: JiraIssue, kind: str, text: str) -> Event:
         text=text,
         anchor=anchor(TICKET, issue.url),
     )
-
-
-def closeable(issue: JiraIssue) -> Event:
-    """The event for a ticket whose PRs are merged."""
-    return _event(issue, "closeable", "its PRs are merged: can be closed")
 
 
 def _raised(config: JiraConfig, before: JiraIssue, after: JiraIssue) -> bool:

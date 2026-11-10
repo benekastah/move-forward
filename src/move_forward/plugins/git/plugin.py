@@ -14,8 +14,6 @@ from ...api import (
     Context,
     EntitiesRequest,
     Entity,
-    Event,
-    GraphEventsRequest,
     InitSetup,
     ItemActionsRequest,
     ItemAdditions,
@@ -30,11 +28,17 @@ from ...api import (
     attrs,
 )
 from ...api.shell import CommandError, git_common_dir
-from . import actions, changes, client, events, watch
+from . import actions, changes, client, watch
 from .config import GitConfig
 from .kinds import BranchAttrs, RepoAttrs
 from .models import LocalSnapshot
-from .panels import Builder, branch_ref, delete_iced_action, restore_iced_action
+from .panels import (
+    NOTIFICATION_KINDS,
+    Builder,
+    branch_ref,
+    delete_iced_action,
+    restore_iced_action,
+)
 from .repository import MIGRATIONS, LocalRepository
 from .setup import EXAMPLE, TEMPLATE, questions
 
@@ -69,7 +73,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         BRANCH: KindSpec(BranchAttrs, resolvable=True),
     }
     change_check_seconds: ClassVar[int | None] = 2
-    notification_kinds: ClassVar[dict[str, str]] = events.KINDS
+    notification_kinds: ClassVar[dict[str, str]] = NOTIFICATION_KINDS
+    """`branch_deletable`: a branch newly in Cleanup (`Item.notify`)."""
 
     def __init__(self, watching: bool = True) -> None:
         self._watching = watching
@@ -289,16 +294,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     def panels(self, req: PanelsRequest[GitConfig, LocalSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
-
-    def graph_events(self, req: GraphEventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
-        """`branch_deletable`: a branch Cleanup lists now and didn't before this refresh."""
-        if req.previous_snapshot is None:
-            return []
-        config, now = req.ctx.config, req.ctx.now
-        before = Builder(config, now, req.previous_snapshot, req.previous_graph).cleanup()
-        return events.newly_deletable(
-            before, Builder(config, now, req.snapshot, req.graph).cleanup()
-        )
 
     def item_actions(self, req: ItemActionsRequest[GitConfig]) -> ItemAdditions:
         item, graph = req.item, req.graph
