@@ -53,9 +53,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   kinds, so a hook can gain an input without breaking its overrides: `ContextRequest(ctx)`
   (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
   `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`,
-  `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `collect_after`,
-  `changed`); `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx, graph)` with a
-  `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
+  `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `changed`);
+  `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx, graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
   and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
   the snapshot and the graph then). Those called before there's a context take what they need:
   `init_suggested()`, `init_questions(ask, setup)` and `init_shown(section)` (`mfd init`),
@@ -66,8 +65,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   `ctx.today`.
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database
   reads beyond what the plugin passes in. Everything slow happens in
-  `collect` or `after_collect`, or in `collect_after` for a plugin that
-  needs other plugins' entities to know what to fetch; `changed`, polled
+  `collect` or `after_collect` (a plugin whose `collect` needs other plugins' entities to
+  know what to fetch sets `collects_after`, and collects once they've stored); `changed`, polled
   every `change_check_seconds`, right after each refresh of a plugin it
   `watches` and as each of its own collects starts, is a cheap check of what moved in its
   tool, so the plugin refreshes sooner: a fingerprint, the subjects that moved, or both.

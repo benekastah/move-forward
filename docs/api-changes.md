@@ -18,7 +18,7 @@ for themselves (a token, a request, an example config) is core's.
   `linking_patterns`), `Request(ctx, graph, snapshot, previous, panels)` (`store`,
   `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`,
   `prune`, `events`), `RefreshRequest(ctx, graph, full, subjects, previous)` (`collect`,
-  `collect_after`, `changed`), `RefRequest(ctx, kind, ids)` (`fetch`) and `InputRequest(ctx,
+  `changed`), `RefRequest(ctx, kind, ids)` (`fetch`) and `InputRequest(ctx,
   graph, page, form, args)` (pages, buttons and `mfd <plugin>`), in place of a type per hook
   (`EntitiesRequest`, `PanelsRequest`, `CollectRequest`, `ChangedRequest`, `ActionRequest`,
   `PageRequest`, `CliRequest` and the rest, named in the entries below, are gone). A field a
@@ -89,18 +89,18 @@ for themselves (a token, a request, an example config) is core's.
   keeps a plugin's cache of looked-up values in its own table: by hand wins over a lookup,
   as does what an earlier version's `mfd import` read (`IMPORTED`), and lookups that found
   nothing are tried again after a cutoff.
-- **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
-  return the snapshot, and core calls each once per refresh.
-- **Collecting after the graph** is implementing `collect_after`: `collects_after_graph` is a
-  property saying whether the plugin does, no longer a class variable to set. Such a plugin
-  is refreshed on its own schedule, no longer with the plugins it `requires`; to refresh
-  soon after they change, it `watches` them.
+- **No collecting in pieces**: `Collected` has left `api`. `collect` returns the snapshot,
+  and core calls it once per refresh.
+- **Collecting after the graph** is `collects_after = True`, and `collect` reads the graph
+  (`req.graph`, which every collect gets): `collect_after` and `collects_after_graph` are
+  gone. Such a plugin is refreshed on its own schedule, no longer with the plugins it
+  `requires`; to refresh soon after they change, it `watches` them.
 - **No `ctx.data_dir`**: `Context` loses `data_dir` and `data_root`. A plugin keeps what it
   needs in its tables or `ctx.kv`.
 - **No `KindSpec.fetched_attrs`**: a fetched entity's attributes fit its family's fetched
   model, or else its kind's own attributes.
 - **Timeouts are core's**: the class variables `collect_timeout_seconds` and
-  `subjects_timeout_seconds` are gone. `collect` (and `collect_after`) has five minutes, and
+  `subjects_timeout_seconds` are gone. `collect` has five minutes, and
   `refresh_subjects` a minute, for every plugin.
 - **`KindSpec.linking` is a `bool`**: `linking=True` where it was `linking=None`. A pattern
   for its ids comes only from `linking_patterns`, which by default gives none: a kind that

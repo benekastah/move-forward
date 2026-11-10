@@ -73,8 +73,9 @@ flowchart LR
 
 ## Refresh, requirements and item actions
 
-Plugins collect in two phases: `collect` first, in parallel, then `collect_after` for
-plugins that need the others' entities to know what to fetch. A plugin's `requires` must
+Plugins collect in two phases: first those that don't need the others' entities, in
+parallel, then those that set `collects_after` (they need the others' entities to know what to
+fetch), with the graph the first made. A plugin's `requires` must
 be enabled too. Each plugin refreshes on its own schedule; one that `watches` another is
 asked whether it `changed` right after that one refreshes. Plugins add buttons to each other's items by the items' `subjects`.
 
@@ -86,7 +87,7 @@ flowchart TB
         jira([jira])
         mail([mail])
     end
-    subgraph Phase2["Phase 2: collect_after (sees the graph)"]
+    subgraph Phase2["Phase 2: collects_after (sees the new graph)"]
         git_stack([git_stack])
     end
     Phase1 --> Phase2

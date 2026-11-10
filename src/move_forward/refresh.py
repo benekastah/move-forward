@@ -68,7 +68,7 @@ from .shell import CommandError
 log = logging.getLogger(__name__)
 
 COLLECT_TIMEOUT_SECONDS = 300
-"""How long a plugin's `collect` (or `collect_after`) may take. Past it, the refresh records
+"""How long a plugin's `collect` may take. Past it, the refresh records
 the plugin as failed and goes on; the plugin is left out of refreshes until its collect
 returns (a thread can't be stopped)."""
 SUBJECTS_TIMEOUT_SECONDS = 60
@@ -266,8 +266,8 @@ def to_collect(
     """What a refresh of `only` (None: every plugin) collects: first the plugins that collect
     on their own, then those that collect after the graph."""
     due = [e for e in plugins if e.plugin.collects and (only is None or e.name in only)]
-    first = [e for e in due if not e.plugin.collects_after_graph]
-    after = [e for e in due if e.plugin.collects_after_graph]
+    first = [e for e in due if not e.plugin.collects_after]
+    after = [e for e in due if e.plugin.collects_after]
     return first, after
 
 
@@ -305,7 +305,7 @@ def refresh(
         given = graph
 
         def collect_after(e: Enabled, taken: Taken) -> BaseModel:
-            return e.plugin.collect_after(RefreshRequest(e.ctx, given, taken.full, taken.subjects))
+            return e.plugin.collect(RefreshRequest(e.ctx, given, taken.full, taken.subjects))
 
         _collect_all(db, after, now, collect_after, checks, given, asking)
         graph, snapshots = stored_graph(db, plugins)

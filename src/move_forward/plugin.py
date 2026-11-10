@@ -172,12 +172,12 @@ class Request[C: BaseModel, S: BaseModel]:
 
 @dataclass(frozen=True)
 class RefreshRequest[C: BaseModel]:
-    """A hook reading the plugin's tool: `collect`, `collect_after` and `changed`."""
+    """A hook reading the plugin's tool: `collect` and `changed`."""
 
     ctx: Context[C]
     graph: Graph
-    """Every plugin's entities, built from what's stored now: for `collect_after`, with what
-    the plugins collecting first just stored."""
+    """Every plugin's entities, built from what's stored now: for a plugin that
+    `collects_after` the others, with what they just stored."""
     full: bool = True
     """For `collect`: whether to fetch everything: at the plugin's first collect since the
     dashboard started, when its `refresh_seconds` have passed since the last full collect
@@ -437,6 +437,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
     change_check_seconds: ClassVar[int | None] = None
     """How often `mfd serve` asks `changed`; None for a plugin without such a check. It's
     asked as each collect starts too, whether it's set or the plugin `watches` another."""
+    collects_after: ClassVar[bool] = False
+    """Its `collect` needs other plugins' entities to know what to fetch, e.g. the repos git
+    found (git_stack's): a refresh collects it once the others due have stored their
+    snapshots, with the graph they make, in parallel with the other plugins that collect after.
+    It's refreshed on its own schedule, not with the plugins it reads: to refresh soon after
+    they change, it `watches` them."""
     watches: ClassVar[list[str]] = []
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
@@ -474,14 +480,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     @property
     def collects(self) -> bool:
         """Whether the plugin fetches anything: it has a `snapshot_model`, so a refresh
-        calls its `collect` (or `collect_after`) and it has a schedule."""
+        calls its `collect` and it has a schedule."""
         return self.snapshot_model is not None
-
-    @property
-    def collects_after_graph(self) -> bool:
-        """Whether the snapshot comes from `collect_after` instead of `collect`: the plugin
-        implements `collect_after`."""
-        return any("collect_after" in vars(c) for c in type(self).__mro__ if c is not Plugin)
 
     def tokens(self, config: C) -> dict[str, TokenSettings]:
         """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
@@ -495,7 +495,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def collect(self, req: RefreshRequest[C]) -> S:
         """Fetch the plugin's snapshot: everything, or with `req.full` False just what its
-        change checks said moved (`req.subjects`). Runs in parallel with other plugins' and
+        change checks said moved (`req.subjects`), from the graph (`req.graph`; see
+        `collects_after`). Runs in parallel with other plugins' and
         may raise; the error is shown and the last good snapshot kept. It has five minutes
         (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
         failed and goes on, and leaves it out of refreshes until its collect returns (a thread
@@ -524,14 +525,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         never about something new now that the snapshot before hasn't any state for. A failure
         is logged and the refresh goes on."""
         return []
-
-    def collect_after(self, req: RefreshRequest[C]) -> S:
-        """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
-        repos git found, in place of `collect`: a plugin that implements it collects after the
-        graph. Runs once the other plugins due have stored their snapshots, in parallel with
-        other `collect_after`s, and fails like `collect`. It's refreshed on its own schedule,
-        not with the plugins it reads: to refresh soon after they change, `watches` them."""
-        raise NotImplementedError(f"{self.name} doesn't collect after the graph")
 
     def after_collect(self, req: Request[C, S]) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.

@@ -19,7 +19,7 @@ hook's signature:
 | --- | --- | --- |
 | `ContextRequest` | `ctx` | `load`, `linking_patterns` |
 | `Request` | `ctx`, `graph`, `snapshot`, and `previous` or `panels` where a hook has them | `store`, `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`, `events` |
-| `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `collect_after`, `changed` |
+| `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `changed` |
 | `RefRequest` | `ctx`, `kind`, `ids` | `fetch` |
 | `InputRequest` | `ctx`, `graph`, and one of `page` (a `Page`: `query`, `path`), `form` (a `Form`: `fields`, `surface`, `back`) or `args` | pages, buttons (`actions`), `mfd <plugin>` (`cli`) |
 
@@ -223,7 +223,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   server asks it right after each refresh of that plugin (github watches git, to see my
   PRs' branches move), whether or not it also has `change_check_seconds`.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
-  the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
+  the only place a plugin talks to its tool, along with `after_collect`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with
   what it stored last. It has five minutes to finish: past that, the
   refresh records it as timed out and goes on, and leaves it out of later refreshes until
@@ -233,9 +233,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
 - `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
   the page's footer, which lists each plugin's.
-- A plugin that needs other plugins' entities to know what to fetch implements
-  `collect_after(req)` instead of `collect` (see git_stack): it runs once the others have
-  stored their snapshots, with the graph. It's refreshed on its own schedule, not with the
+- A plugin that needs other plugins' entities to know what to fetch sets `collects_after =
+  True` (see git_stack): its `collect` runs once the others have stored their snapshots, with
+  the graph they make (`req.graph`; every collect has the graph, built from what's stored). It's refreshed on its own schedule, not with the
   plugins it reads; to refresh soon after they change, it `watches` them.
 - `notification_kinds` and `events(req)` make browser notifications: when the user has
   subscribed to one of the kinds (`<plugin>.<kind>`), `events` is asked after every refresh,

@@ -154,7 +154,7 @@ def test_collects_in_the_repos_git_has_branches_in(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(client, "collect_repo", collect_repo)
     git_stack = next(e for e in plugins if e.name == "git_stack")
-    collected = git_stack.plugin.collect_after(RefreshRequest(git_stack.ctx, graph))
+    collected = git_stack.plugin.collect(RefreshRequest(git_stack.ctx, graph))
     assert isinstance(collected, GitStackSnapshot)
     assert asked == [Path("/src/widgets")]
     assert [r.dir for r in collected.repos] == [str(Path("/src/widgets"))]

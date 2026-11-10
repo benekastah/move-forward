@@ -97,7 +97,7 @@ sequenceDiagram
     participant G as graph
     R->>P: collect (in parallel), then store
     R->>G: build from what's stored
-    R->>P: collect_after(graph) for plugins that need it, e.g. git_stack
+    R->>P: collect(graph) for plugins that collects_after, e.g. git_stack
     R->>G: build again, now with their entities
     R->>P: daily prune, then after_collect(graph)
 ```
@@ -272,5 +272,5 @@ left out, and what it would have answered counts as unknown.
   [entities.md](entities.md) in the same commit as the change.
 - Plugins read each other only through the graph, through views.
 - Panels are pure: they read the graph and the plugin's own snapshot, nothing slow. Work
-  that needs the network happens in `collect`, `collect_after`, `after_collect` or (rarely)
+  that needs the network happens in `collect`, `after_collect` or (rarely)
   through `fetch`.
