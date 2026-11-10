@@ -327,7 +327,29 @@ CREATE TABLE problems (                -- kept: what a plugin reports wrong that
 """Problems the plugins report besides a failed refresh, kept across restarts so they're
 shown, and logged, once rather than again after each."""
 
-_V20_TAG_REMOVALS = """
+_V20_CHANGE_CHECKS = """
+CREATE TABLE change_checks (           -- kept: what each plugin's change check (`changed`) last
+    plugin TEXT PRIMARY KEY,           -- said, for the next to be compared with, and when it
+                                       -- last collected everything
+    fingerprint TEXT,                  -- the last answer's fingerprint (`Changed.fingerprint`)
+    checked_at TEXT,                   -- when core took that answer
+    checks INTEGER NOT NULL DEFAULT 0, -- how many answers core has taken: the last one's number
+    everything INTEGER,                -- the number of the last answer that said something moved
+                                       -- that no subject names, so the next collect is a full
+                                       -- one; NULL once a full collect started after it stores
+    full_at TEXT                       -- when the last full collect that stored started
+);
+CREATE TABLE change_subjects (         -- kept: what a change check said moved
+    plugin TEXT NOT NULL,              -- (`Changed.subjects`), until a collect started after
+    subject TEXT NOT NULL,             -- it stores
+    check_number INTEGER NOT NULL,     -- the number of the last answer that said it moved
+    PRIMARY KEY (plugin, subject)
+);
+"""
+"""Core's record of what moved in each plugin's tool, which the plugins each kept in their kv
+before: kept across restarts, so a move seen before one is still collected after it."""
+
+_V21_TAG_REMOVALS = """
 CREATE TABLE tag_removals (            -- kept until its plugin next refreshes: a tag from a tool
                                        -- or text I took off an entity (see `tags.take_off`)
     kind TEXT NOT NULL,
@@ -361,7 +383,8 @@ CORE_MIGRATIONS = [
     Migration("0017_dismiss_is_a_snooze", _V17_DISMISS_IS_A_SNOOZE),
     Migration("0018_shown_notices", _V18_SHOWN_NOTICES),
     Migration("0019_problems", _V19_PROBLEMS),
-    Migration("0020_tag_removals", _V20_TAG_REMOVALS),
+    Migration("0020_change_checks", _V20_CHANGE_CHECKS),
+    Migration("0021_tag_removals", _V21_TAG_REMOVALS),
 ]
 
 _SCHEMA_VERSIONS = """

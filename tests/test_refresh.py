@@ -295,7 +295,7 @@ def test_each_plugin_refreshes_on_its_own_setting() -> None:
         {"email": "me@x", "github": {"org": "acme"}, "git": {"repos": [], "refresh_seconds": 30}}
     )
     plugins = registry.enabled(config, Database(":memory:"), NOW)
-    seconds = {e.name: refresh.refresh_seconds(e) for e in plugins}
+    seconds = {e.name: e.refresh_seconds for e in plugins}
     assert seconds == {"github": 300, "git": 30, "notes": None}
 
 

@@ -8,6 +8,7 @@ from conftest import NOW, pr, snapshot, stored
 
 from move_forward import cli, panels, refresh, tags
 from move_forward.api.tags import handle as api_handle
+from move_forward.change_checks import ChangeChecks
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, KindSpec, Ref
@@ -420,9 +421,10 @@ def test_a_label_taken_off_stays_off_until_its_plugin_refreshes() -> None:
     assert shown and all("#bug" not in badges for badges in shown)
     [github] = [e for e in enabled(config, db, NOW) if e.name == "github"]
     collect = refresh._collect_all  # pyright: ignore[reportPrivateUsage]
-    collect(db, [github], NOW, lambda e: labelled)  # started before I took it off
+    # A refresh that started before I took it off doesn't put it back.
+    collect(db, [github], NOW, lambda e, taken: labelled, ChangeChecks(), None)
     assert all("#bug" not in badges for badges in _shown(config, db, pr(1).url))
-    collect(db, [github], datetime.now(UTC), lambda e: labelled)
+    collect(db, [github], datetime.now(UTC), lambda e, taken: labelled, ChangeChecks(), None)
     assert all("#bug" in badges for badges in _shown(config, db, pr(1).url))
 
 
@@ -434,7 +436,9 @@ def test_a_refresh_puts_back_only_its_own_plugins_tags() -> None:
     repo.take_off(entry, "errand", "notes", NOW)  # notes never refreshes: it stays off
     [github] = [e for e in enabled(config, db, NOW) if e.name == "github"]
     collect = refresh._collect_all  # pyright: ignore[reportPrivateUsage]
-    collect(db, [github], NOW + timedelta(minutes=1), lambda e: snapshot())
+    collect(
+        db, [github], NOW + timedelta(minutes=1), lambda e, taken: snapshot(), ChangeChecks(), None
+    )
     assert repo.taken_off() == {entry: {"errand"}}
 
 

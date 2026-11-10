@@ -35,6 +35,7 @@ extend-select = ["I", "UP", "B", "C4", "SIM", "TID251"]
 "move_forward.act_now".msg = "plugins import from move_forward.api"
 "move_forward.asking".msg = "plugins import from move_forward.api"
 "move_forward.auth".msg = "plugins import from move_forward.api"
+"move_forward.change_checks".msg = "plugins import from move_forward.api"
 "move_forward.cli".msg = "plugins import from move_forward.api"
 "move_forward.config".msg = "plugins import from move_forward.api"
 "move_forward.db".msg = "plugins import from move_forward.api"

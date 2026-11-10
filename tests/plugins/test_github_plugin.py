@@ -1,7 +1,6 @@
 """The GitHub plugin's contract with the others: the `pr` and `person` entities it
 publishes."""
 
-import json
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -11,6 +10,7 @@ from conftest import ME, NOW, pr, snapshot, stored
 from legacy import save_json_snapshot
 
 from move_forward import refresh
+from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.page import Identity
@@ -40,16 +40,15 @@ from move_forward.plugins.github.models import (
 )
 from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.github.plugin import (
-    CHANGED,
     EVERYTHING,
-    LAST_FULL,
     GitHubPlugin,
     pr_id_of,
     wants_reviewer,
 )
 from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository
 from move_forward.plugins.github.tables import MIGRATIONS
-from move_forward.repositories import KvRepository, ProblemRepository
+from move_forward.registry import Enabled
+from move_forward.repositories import ChangeRepository, KvRepository, ProblemRepository
 from move_forward.shell import CommandError
 
 _BEFORE_REBUILD = MIGRATIONS[: [m.name for m in MIGRATIONS].index("0009_account_again")]
@@ -329,12 +328,20 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
     monkeypatch.setattr(client, "collect", collect)
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
 
+    checks, changes = ChangeChecks(), ChangeRepository(ctx.db)
+
     def refresh(minutes: int, *changed: str) -> GitHubSnapshot:
+        """A refresh after a change check saw `changed`, with `EVERYTHING` for a change it
+        can't pin on a PR, as core gives it to `collect`."""
         at = replace(ctx, now=NOW + timedelta(minutes=minutes))
-        at.kv.set(CHANGED, json.dumps(list(changed)))
-        gh = plugin.collect(CollectRequest(at))
+        prs = [c for c in changed if c != EVERYTHING]
+        changes.checked("github", None, at.now, prs, EVERYTHING in changed)
+        e = Enabled(plugin, at)
+        taken = checks.take(e, None)
+        gh = plugin.collect(CollectRequest(at, taken.full, taken.subjects))
         plugin.store(StoreRequest(at, gh))
-        assert at.kv.get(CHANGED) is None
+        checks.stored(e, taken)
+        assert changes.get("github").subjects == set()
         return gh
 
     refresh(0, "acme/widgets#2")  # nothing stored to place them in yet: everything
@@ -360,8 +367,6 @@ def test_partial_collect_fetches_membership_for_a_new_individual_policy_team(
 ) -> None:
     ctx = _context(team_reviewer_assignment={"bacon": "individual"})
     PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
-    ctx.kv.set(LAST_FULL, NOW.isoformat())
-    ctx.kv.set(CHANGED, json.dumps(["acme/widgets#2"]))
 
     def fetch_prs(host: str, ids: list[client.PrId]) -> list[PullRequest]:
         return [pr(2, requested_teams=["bacon"], requested_users=["shared"])]
@@ -372,7 +377,7 @@ def test_partial_collect_fetches_membership_for_a_new_individual_policy_team(
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     monkeypatch.setattr(client, "team_members", team_members)
-    found = GitHubPlugin().collect(CollectRequest(ctx))
+    found = GitHubPlugin().collect(CollectRequest(ctx, False, frozenset({"acme/widgets#2"})))
     assert found.team_memberships["acme/bacon"] == ["shared"]
 
 
@@ -383,14 +388,12 @@ def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
     PrRepository(ctx.db).replace(
         snapshot(mine=[pr(1)], team_memberships={"acme/core-squad": ["ann"], "acme/x": ["zed"]})
     )
-    ctx.kv.set(LAST_FULL, NOW.isoformat())
-    ctx.kv.set(CHANGED, json.dumps(["acme/widgets#1"]))
 
     def fetch_prs(host: str, ids: list[client.PrId]) -> list[PullRequest]:
         return [pr(1)]
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
-    found = GitHubPlugin().collect(CollectRequest(ctx))
+    found = GitHubPlugin().collect(CollectRequest(ctx, False, frozenset({"acme/widgets#1"})))
     assert found.team_members == ["ann"]  # mine, not acme/x's
 
 

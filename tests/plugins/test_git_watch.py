@@ -1,6 +1,5 @@
 """git watching its repos as they change: refs moving and worktrees edited, without polling."""
 
-import json
 import sys
 import time
 from collections.abc import Callable, Iterator
@@ -11,14 +10,16 @@ from typing import Any
 import pytest
 from conftest import NOW
 
+from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import ChangedRequest, CollectRequest, Context, StoreRequest
+from move_forward.plugin import CollectRequest, Context, StoreRequest
 from move_forward.plugins.git import watch
 from move_forward.plugins.git.config import GitConfig
-from move_forward.plugins.git.plugin import MOVED, GitPlugin
+from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
-from move_forward.repositories import KvRepository
+from move_forward.registry import Enabled
+from move_forward.repositories import ChangeRepository, KvRepository
 from move_forward.shell import git, git_common_dir
 
 WAIT_SECONDS = 10.0
@@ -194,14 +195,14 @@ def test_the_plugin_refreshes_the_repo_an_edit_changed(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
-    plugin = GitPlugin()
+    plugin, checks = GitPlugin(), ChangeChecks()
     ctx = _plugin_context(repo, db)
     plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
     try:
-        assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # starts watching
+        assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None  # starts watching
         (repo / "src" / "deep" / "a.py").write_text("changed\n")
-        assert _until(lambda: plugin.changed(ChangedRequest(ctx(1), Graph([]))).changed)
-        assert KvRepository(db, "git").get(MOVED) == json.dumps([str(git_common_dir(repo))])
+        assert _until(lambda: checks.check(Enabled(plugin, ctx(1)), Graph([])) is not None)
+        assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
     finally:
         plugin.stop_watching()
 
@@ -210,16 +211,15 @@ def test_ignored_files_dont_refresh_the_repo(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "r")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
-    plugin = GitPlugin()
+    plugin, checks = GitPlugin(), ChangeChecks()
     ctx = _plugin_context(repo, db)
     plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
     try:
-        assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # starts watching
+        assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None  # starts watching
         (repo / "src" / "node_modules" / "dep" / "index.js").write_text("x\n")
         time.sleep(QUIET_SECONDS)
-        assert not plugin.changed(
-            ChangedRequest(ctx(1), Graph([]))
-        )  # git status counts nothing new
+        # git status counts nothing new
+        assert checks.check(Enabled(plugin, ctx(1)), Graph([])) is None
     finally:
         plugin.stop_watching()
 
