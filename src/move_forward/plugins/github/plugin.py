@@ -1,6 +1,7 @@
 """The GitHub plugin."""
 
 import subprocess
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import ClassVar, cast
 from urllib.parse import urlsplit
@@ -111,7 +112,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     name = "github"
     title = "GitHub"
     init_tables = TABLES
-    init_shown: ClassVar[dict[str, object]] = {"merge": {"method": "squash"}}
     init_example = EXAMPLE
     init_example_on = True
     init_finds_teams = True
@@ -140,6 +140,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
+
+    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
+        """`[github.merge]`'s method, whose default (GitHub's pick) TOML can't write."""
+        return {"merge": {"method": "squash"}}
 
     def collect(self, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, after `changed` saw only some PRs change, just those PRs, placed

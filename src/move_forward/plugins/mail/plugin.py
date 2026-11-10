@@ -1,5 +1,6 @@
 """The mail plugin: unread and flagged mail, so the people who matter get answered first."""
 
+from collections.abc import Mapping
 from typing import ClassVar
 
 from ...api import (
@@ -30,7 +31,7 @@ from ...api import (
 from ...api.keychain import TokenSettings
 from ...api.kinds import PERSON
 from . import client
-from .config import Mailbox, MailConfig
+from .config import KNOWN_AUTH_SERVERS, Mailbox, MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
@@ -89,7 +90,6 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     name = "mail"
     title = "Mail"
     init_tables = TABLES
-    init_shown: ClassVar[dict[str, object]] = {"auth_servers": ["mx.google.com"]}
     init_example = EXAMPLE
     config_model = MailConfig
     api_version = API_VERSION
@@ -110,6 +110,12 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
 
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
+
+    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
+        """`auth_servers` where the host's are known (Gmail's), so uncommenting it changes
+        nothing; another server's are for me to look up, so no value is suggested."""
+        known = KNOWN_AUTH_SERVERS.get(str(section.get("host", "")).lower())
+        return {"auth_servers": known} if known else {}
 
     def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
         """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""

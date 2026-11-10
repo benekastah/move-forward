@@ -101,14 +101,15 @@ class MailboxKeys(Strict):
     """A link to open a message, with `{message_id}` (its Message-ID, without `<>`) and
     `{username}` filled in: for Gmail,
     `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}`; for Apple
-    Mail, `message:%3C{message_id}%3E`; for Thunderbird, `mid:{message_id}`. An `https://`
-    link, or one of those schemes. Empty means mail isn't linked."""
+    Mail, `message:%3C{message_id}%3E`; for Thunderbird, `mid:{message_id}`; empty, mail
+    isn't linked. An `https://` link, or one of those schemes."""
     auth_servers: list[str] | None = None
-    """The names my mail server stamps its `Authentication-Results` with (their first word,
-    the authserv-id), e.g. `mx.google.com`: a sender counts as who `From` says only when that
-    server found it authentic (DMARC passed), since anyone can write any `From`. Unset, it's
-    known for Gmail; for another server, look for the name in a message's source. Empty, no
-    sender is verified."""
+    """The names my mail server stamps its `Authentication-Results` with: unset for Gmail
+    (`mx.google.com`, known), else the name a received message's `Authentication-Results`
+    header starts with (its authserv-id), e.g. `["mx.work.example"]`. A sender counts as who
+    `From` says only when that server found it authentic (DMARC passed), since anyone can
+    write any `From`. Empty, or unset for a server other than Gmail's, no sender is
+    verified."""
 
     @field_validator("host")
     @classmethod
@@ -167,8 +168,8 @@ class MailConfig(TokenFields, MailboxKeys):
     know, whose mail counts as important; mail answering any of it replies to me."""
     urgent_words: list[str] = Field(default_factory=list[str])
     """Words or phrases in a subject that make the conversation critical, above other important
-    mail, e.g. "outage", "action required": whole words, ignoring case. Only from someone I
-    know, verified, as anyone can write them."""
+    mail, when it's from someone I know, verified, e.g. "outage", "action required": whole
+    words, ignoring case. Mail from others doesn't count, as anyone can write them."""
     low_words: list[str] = Field(default_factory=list[str])
     """Words or phrases in a subject that rank the conversation with lists' mail, e.g.
     "digest", "FYI": whole words, ignoring case; not a reply to me or mail from someone I know,

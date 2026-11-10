@@ -12,13 +12,14 @@ answers without asking (`example`).
 """
 
 import re
+import textwrap
 import tomllib
 from collections.abc import Collection, Generator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from pydantic.fields import FieldInfo
 
 from . import asking, registry, tomledit
@@ -30,7 +31,12 @@ from .plugin import Plugin
 
 COMMENT_COLUMN = 40
 """Where a commented-out key's comment starts, when the key leaves room."""
-_SENTENCE = re.compile(r"(.*?(?<!e\.g)(?<!i\.e)\.)(?:\s|$)")
+LINE_WIDTH = 100
+"""The widest line `mfd init` writes: a comment that won't fit beside its key goes above it,
+wrapped to this. A key whose value is wider still is written whole."""
+_SENTENCE = re.compile(r"(.*?(?<![eE]\.g)(?<![iI]\.e)(?<!\betc)[.?!][)\]\"'`]*)(?=\s|$)")
+"""A docstring's first sentence: up to a `.`, `?` or `!` (and a closing bracket or quote)
+before a space, but not the `.` of `e.g.`, `i.e.` or `etc.`."""
 _TABLE_NAMED = re.compile(r"^`\[[^\]]+\]`: ")
 """A docstring's opening `[act_now]`: naming the table it's about, which its header says."""
 HAND_WRITTEN = frozenset({"notifications"})
@@ -39,8 +45,8 @@ which it writes uncommented instead when `mfd init` was asked to subscribe."""
 
 
 def summary(description: str | None) -> str:
-    """A key's comment: its docstring's first sentence on one line (an `e.g.` ends none), less
-    an opening `[table]`: naming the table; the whole docstring when it has no sentence."""
+    """A key's comment: its docstring's first sentence on one line (see `_SENTENCE`), less an
+    opening `[table]`: naming the table; the whole docstring when it has no sentence."""
     text = " ".join((description or "").split())
     if match := _SENTENCE.match(text):
         text = match[1]
@@ -51,26 +57,46 @@ def summary(description: str | None) -> str:
 
 
 def _commented(line: str, description: str | None) -> str:
-    """`line` with its docstring's `summary` as its comment, if it has one."""
-    if comment := summary(description):
-        return f"{line.ljust(COMMENT_COLUMN - 2)}  # {comment}\n"
-    return f"{line}\n"
+    """`line` with its docstring's `summary` as its comment, if it has one: beside it, or
+    above it, wrapped, when it won't fit in `LINE_WIDTH` there."""
+    if not (comment := summary(description)):
+        return f"{line}\n"
+    beside = f"{line.ljust(COMMENT_COLUMN - 2)}  # {comment}"
+    if len(beside) <= LINE_WIDTH:
+        return f"{beside}\n"
+    above = textwrap.wrap(
+        comment,
+        LINE_WIDTH,
+        initial_indent="# ",
+        subsequent_indent="# ",
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+    return "".join(f"{text}\n" for text in above) + f"{line}\n"
 
 
-def _plain(value: object) -> object:
-    """A default as TOML writes it: a model as the table of its keys that aren't None, a path
-    in `/`s, and a whole float as an int (a weight of 3, not 3.0)."""
-    if isinstance(value, BaseModel):
-        return {key: _plain(v) for key, v in value if v is not None}
+def _toml_ready(value: object) -> object:
+    """A value pydantic dumped as JSON, as TOML writes it: a whole float as an int (a weight
+    of 3, not 3.0), and None left out of tables and lists, as TOML has none."""
     if isinstance(value, dict):
-        return {key: _plain(v) for key, v in cast(dict[str, object], value).items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(v) for v in cast(list[object], value)]
-    if isinstance(value, Path):
-        return value.as_posix()
+        items = cast(dict[str, object], value).items()
+        return {key: _toml_ready(v) for key, v in items if v is not None}
+    if isinstance(value, list):
+        return [_toml_ready(v) for v in cast(list[object], value) if v is not None]
     if isinstance(value, float) and value.is_integer():
         return int(value)
     return value
+
+
+def _toml_value(field: FieldInfo, value: object) -> str:
+    """`value`, of `field`'s type, as a TOML value: through pydantic's JSON mode, so a model,
+    an enum or a date is written as its section would read it; a path in `/`s, on Windows
+    too."""
+    if isinstance(value, Path):
+        return tomledit.value(value.as_posix())
+    adapter: TypeAdapter[object] = TypeAdapter(field.annotation or Any)
+    dumped = adapter.dump_python(adapter.validate_python(value), mode="json", exclude_none=True)
+    return tomledit.value(_toml_ready(dumped))
 
 
 def _default(model: type[BaseModel], key: str, field: FieldInfo) -> object:
@@ -96,20 +122,23 @@ def commented_defaults(
             continue
         value = shown[key] if key in shown else _default(model, key, field)
         if value is not None:
-            text += _commented(f"# {key} = {tomledit.value(_plain(value))}", field.description)
+            text += _commented(f"# {key} = {_toml_value(field, value)}", field.description)
     return text
 
 
-def plugin_defaults(plugin: Plugin[Any, Any], skip: Collection[str] = ()) -> str:
-    """What `mfd init` writes, commented out, under the plugin's section: its optional keys but
-    `skip` (those it wrote already), then its `init_tables`, less the keys those write."""
+def plugin_defaults(plugin: Plugin[Any, Any], values: Mapping[str, object]) -> str:
+    """What `mfd init` writes, commented out, under the plugin's section of these `values`:
+    its optional keys but those in `values`, as `init_shown` shows them, then its
+    `init_tables`, less the keys those write, and none when `values` has one of those tables
+    (uncommented, it would be written twice)."""
     tables = {
         key
         for key in plugin.config_model.model_fields
         if f"[{plugin.name}.{key}]" in plugin.init_tables
     }
-    keys = commented_defaults(plugin.config_model, {*skip, *tables}, plugin.init_shown)
-    return keys + plugin.init_tables
+    shown = plugin.init_shown(values)
+    keys = commented_defaults(plugin.config_model, {*values, *tables}, shown)
+    return keys + ("" if tables & values.keys() else plugin.init_tables)
 
 
 def _core_table_names() -> list[str]:
@@ -204,9 +233,10 @@ def _table(name: str, values: dict[str, object], optional: str = "") -> str:
 
 OPTIONAL_NOTIFICATION_SETTINGS = """\
 # [notifications]                       # browser notifications; none until you subscribe
-# subscribe = []                         # kinds, e.g. "dashboard.source_failing"; see the settings page
-# failing_minutes = 15                   # how long a plugin fails before `source_failing` says so
-# keep_hours = 24                        # events older than this are dropped untold
+# kinds of event to be told of, e.g. "dashboard.source_failing"; the settings page lists them
+# subscribe = []
+# failing_minutes = 15                  # how long a plugin fails before `source_failing` says so
+# keep_hours = 24                       # events older than this are dropped untold
 """
 
 

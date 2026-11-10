@@ -92,7 +92,10 @@ class LinearConfig(TokenFields):
   `docs/plugins/`. A plugin from another package can't add to those pages: its model and its
   own docs are where its keys appear. `mfd init` (and `mfd init --example`) writes each
   optional key from the model, commented out, with its default and its docstring's first
-  sentence as its comment; so make that sentence say what the key is for.
+  sentence as its comment; so make that sentence say all a person needs to set it: what it's
+  for, its unit, the value that turns it off ("0: never", "empty: no such convention"), and
+  what an empty or unset value stands for where that isn't obvious. It ends at the first `.`,
+  `?` or `!` before a space, but not at `e.g.`, `i.e.` or `etc.`.
 - `mfd init` asks which plugins to set up (offering by default those whose
   `init_suggested()` is true; it's false unless a plugin overrides it), then each chosen one's `init_questions(ask, setup)`, which returns its section's
   values. `setup` has my email, where init runs and the teams found so far; a plugin that
@@ -103,9 +106,11 @@ class LinearConfig(TokenFields):
   on the first tab) or `asking.directories`. Keep the questions and guesses in a
   `setup.py` (see github's), with `init_example` (the required keys with example values,
   commented, written when the plugin isn't chosen) and what the model can't say: in
-  `init_tables`, commented tables of example entries (`[github.teams]`), and in `init_shown`,
-  an example value for a key whose default is None or says less than an example
-  (mail's `auth_servers`).
+  `init_tables`, commented tables of example entries (`[github.teams]`), and from
+  `init_shown(section)`, given the section's values, an example value for a key whose default
+  is None or says less than an example, where uncommenting it is right for that section
+  (mail's `auth_servers`, for a Gmail host only). A plugin still setting `init_template`
+  is refused, naming these.
   `mfd init --example` writes each plugin's section as `mfd init` does when it isn't
   chosen, or, with `init_example_on` (a tool most use: github, git), on, with
   `init_example` uncommented.
@@ -504,7 +509,7 @@ built-ins working together use `conftest.dashboard(...)` and `conftest.stored(..
 ## Docs to update in the same commit
 
 For a built-in, in this repository; a plugin from another package keeps the same in its own
-docs, and its `init_example`, `init_tables` and `init_shown`.
+docs, and its `init_example`, `init_tables` and `init_shown(section)`.
 
 - The plugin's page, `docs/plugins/<name>.md` (copy one of the others): its config and
   setup, what it publishes, its panels, what it nominates for Act now, its buttons, pages
@@ -512,4 +517,4 @@ docs, and its `init_example`, `init_tables` and `init_shown`.
 - [entities.md](entities.md) for its kinds, [plugins.md](plugins.md) for what it publishes
   and reads.
 - Its config keys' docstrings, which `mfd init` writes from, and what its model can't say:
-  its `init_example`, `init_tables` and `init_shown`.
+  its `init_example`, `init_tables` and `init_shown(section)`.

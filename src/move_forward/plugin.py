@@ -452,12 +452,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     them after its optional keys: a table keyed by name, with example entries (`[github.teams]`,
     `[mail.<name>]`). A key written here as `[<section>.<key>]` isn't written as a key too.
     `mfd init` writes each other optional key itself, from `config_model`: its default, and its
-    docstring's first sentence as its comment."""
-    init_shown: ClassVar[dict[str, object]] = {}
-    """Optional keys `mfd init` writes, commented out, with these values in place of their
-    defaults: where an example says more than the default (`auth_servers = ["mx.google.com"]`
-    for an unset one), or the default is None, which TOML can't write (such a key not here
-    isn't written)."""
+    docstring's first sentence as its comment (`init_shown` for one it shows otherwise)."""
     init_example: ClassVar[str] = ""
     """The section's required settings with example values, commented out, for a section `mfd
     init` writes commented out because the plugin wasn't chosen. `mfd init --example` writes
@@ -675,6 +670,15 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Ask for the `[name]` section's settings in `mfd init`; returns its values (a
         table's as a dict, e.g. `{"teams": {...}}` for `[name.teams]`). `setup` has what
         init knows so far; a plugin can add to its `teams`."""
+        return {}
+
+    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
+        """Optional keys `mfd init` writes, commented out, with these values in place of their
+        defaults, under a section of these `section` values (`init_questions`' answers, or
+        `init_example`'s for a section left out): where an example says more than the
+        default (github's `merge`), or the default is None, which TOML can't write (such a key
+        not here isn't written). Uncommenting one should be right for that section: mail
+        shows `auth_servers` only for a Gmail host, whose value it knows."""
         return {}
 
     def prune(self, req: PruneRequest[C]) -> list[str]:

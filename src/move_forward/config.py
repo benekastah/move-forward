@@ -83,8 +83,8 @@ class Config(Strict):
     """The SQLite database holding the plugins' tables (what they fetched, and the notes), and
     core's: when each plugin last fetched, priorities, tags, sessions and the like."""
     db_backups: int = DEFAULT_KEEP_BACKUPS
-    """How many copies of the database to keep in `backups/` next to it. One is taken before
-    migrations change the database; the oldest go first. 0 takes none."""
+    """How many copies of the database to keep in `backups/` next to it, one taken each time
+    before migrations change it; 0 takes none. The oldest go first."""
     port: int = DEFAULT_PORT
     """The localhost port `mfd serve` listens on."""
     prune_days: int = DEFAULT_PRUNE_DAYS

@@ -5,16 +5,18 @@ from .config import GMAIL_MESSAGE_URL
 
 TABLES = """\
 ## Several mailboxes instead: a table each, saying its own host, port, username, mailbox,
-## sent_mailbox, message_url and auth_servers (each with its default above), and its own
-## token_env and keychain_service, and none of them in [mail]
+## sent_mailbox, message_url and auth_servers (each with the same default as [mail]'s), and
+## its own token_env and keychain_service, and none of them in [mail]
 ## [mail.home]
 ## host = "imap.gmail.com"
-## username = "me@example.com"          # its password: `mfd token set mail.home`, or $MAIL_PASSWORD_HOME
+## # its password: `mfd token set mail.home`, or $MAIL_PASSWORD_HOME
+## username = "me@example.com"
 ## message_url = "https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}"
 ## [mail.work]
 ## host = "imap.work.example"
 ## port = 993
-## username = "me@work.example"         # its password: `mfd token set mail.work`, or $MAIL_PASSWORD_WORK
+## # its password: `mfd token set mail.work`, or $MAIL_PASSWORD_WORK
+## username = "me@work.example"
 ## mailbox = "INBOX"
 ## sent_mailbox = "Sent"
 ## message_url = "mid:{message_id}"

@@ -31,8 +31,9 @@ class GitConfig(Strict):
     Enterprise Server's host, or an alias for either in ~/.ssh/config (`github-work` in
     `git@github-work:acme/widgets.git`)."""
     my_branch_prefixes: list[str] = Field(default_factory=list)
-    """Branch name prefixes that mark a branch as mine, e.g. `["jane/"]`. A branch with a PR
-    of mine, or commits of mine off the default branch, is mine whatever its name."""
+    """Branch name prefixes that mark a branch as mine, e.g. `["jane/"]`, besides the branches
+    with my commits or PRs. A branch with a PR of mine, or commits of mine off the default
+    branch, is mine whatever its name."""
     ignored_worktree_globs: list[str] = Field(
         default_factory=lambda: list(DEFAULT_IGNORED_WORKTREE_GLOBS)
     )

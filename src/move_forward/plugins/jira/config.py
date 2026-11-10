@@ -37,8 +37,8 @@ class JiraConfig(TokenFields):
     """e.g. https://example.atlassian.net. Must be `https://`: requests carry the API token."""
     status_in_progress: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_IN_PROGRESS])
     """Workflow status names for "in progress", e.g. `["In Progress", "Doing"]`, for the
-    transitions the Jira panel proposes. A ticket is in one if its status is any of the names
-    (without regard to case); a move goes to the first name the ticket can move to. The
+    transitions the Jira panel proposes: a ticket is in one if its status is any of the names
+    (without regard to case), and a move goes to the first name the ticket can move to. The
     same goes for the other `status_*`."""
     status_in_review: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_IN_REVIEW])
     """Names for "in review", e.g. `["In Review", "Code Review"]`."""
@@ -48,10 +48,10 @@ class JiraConfig(TokenFields):
     """A ticket in one of these statuses counts as blocked in "What next" and Act now, even
     with no blocker links, e.g. `["Blocked", "On Hold"]`."""
     status_rollout: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_ROLLOUT])
-    """Names for a rollout, e.g. `["Rollout"]`: the code is merged and the ticket waits on
-    monitoring. Such a ticket is never proposed for closing when its PRs merge; once they
-    all have, one low-urgency Act now item asks to finish the rollout. It is never moved
-    into, and "What next" ranks it below unblocked work. Empty: no such status."""
+    """Names for a rollout, e.g. `["Rollout"]`, where the code is merged and the ticket waits
+    on monitoring, so it's never proposed for closing when its PRs merge; empty: no such
+    status. Once its PRs have all merged, one low-urgency Act now item asks to finish the
+    rollout. It is never moved into, and "What next" ranks it below unblocked work."""
     priorities: list[str] = Field(default_factory=lambda: list(DEFAULT_PRIORITIES))
     """Jira's priority names, lowest first, for `priority_raised` notifications: a priority
     not listed here is never counted as raised."""

@@ -16,13 +16,16 @@ from typing import cast
 _HEADER_RE = re.compile(r"^\s*\[\s*([^\[\]]+?)\s*\]\s*(?:#.*)?$")
 _COMMENTED_HEADER_RE = re.compile(r"^\s*#\s*\[")
 """A section `mfd init` wrote commented out, e.g. `# [jira]` for a plugin left out."""
+_BARE_KEY_RE = re.compile(r"[A-Za-z0-9_-]+")
+"""A key TOML takes unquoted; any other (`notes.entry`, `my key`) is quoted."""
 
 
 def value(new: object) -> str:
-    """`new` as a TOML value: a string, number, boolean, list, or table (written inline)."""
+    """`new` as a TOML value: a string, number, boolean, list, or table (written inline, its
+    keys quoted where TOML needs it)."""
     if isinstance(new, dict):
         table = cast(dict[object, object], new)
-        items = ", ".join(f"{key} = {value(v)}" for key, v in table.items())
+        items = ", ".join(f"{_key(str(key))} = {value(v)}" for key, v in table.items())
         return "{ " + items + " }" if items else "{}"
     if isinstance(new, (list, tuple)):
         return "[" + ", ".join(value(v) for v in cast(list[object], new)) + "]"
@@ -31,6 +34,11 @@ def value(new: object) -> str:
     # JSON's strings, numbers, true and false are TOML's too, but for escaping what isn't
     # ASCII: an emoji would be a surrogate pair, which TOML refuses. Written as itself, it isn't.
     return json.dumps(new, ensure_ascii=False).replace("\x7f", "\\u007f")  # DEL, TOML refuses
+
+
+def _key(key: str) -> str:
+    """`key` as a TOML key: bare if it can be, else quoted (a dot would make it dotted)."""
+    return key if _BARE_KEY_RE.fullmatch(key) else value(key)
 
 
 def _comment_start(text: str) -> int:
