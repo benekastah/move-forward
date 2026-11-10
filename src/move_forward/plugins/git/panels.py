@@ -7,7 +7,7 @@ name, its upstream's, or its commit).
 
 from datetime import datetime
 
-from ...api import Action, Badge, Band, Graph, Item, Model, Panel, Ref, Signals, age
+from ...api import Action, Badge, Band, Graph, Item, Model, Notify, Panel, Ref, Signals, age
 from ...api.ids import branch_id, branch_parts
 from ...api.kinds import PULL_REQUEST as PR
 from .config import GitConfig
@@ -17,6 +17,10 @@ BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"
 """git_stack's kind for a branch git stack tracks."""
 ICED = "notes.iced"
+NOTIFICATION_KINDS = {
+    "branch_deletable": "a local branch's PR is merged (or its remote branch is gone)",
+}
+"""The kinds of notification its panels raise, with what each says, for the settings page."""
 
 
 def action(
@@ -278,6 +282,11 @@ class Builder:
                         subjects=[merged.subject, branch_ref(repo.dir, b.name)]
                         if merged
                         else [branch_ref(repo.dir, b.name)],
+                        notify=Notify(
+                            kind="branch_deletable",
+                            text="can be deleted",
+                            thing=f"branch:{repo.dir}:{b.name}",
+                        ),
                     )
                 )
         actions = (

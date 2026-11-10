@@ -263,9 +263,11 @@ ticking kinds of events under Notifications on `/settings`, answering `mfd init`
 question, or listing them in `[notifications] subscribe` (for example
 `["dashboard.source_failing"]`). Press "Allow in this browser" on the settings page once.
 
-- Each plugin compares what it fetched with what it fetched last time (`Plugin.events`),
-  so the first fetch never notifies, and only a change does. Events of kinds you haven't
-  subscribed to are never stored.
+- Each plugin compares what it fetched, and what the others did, with what they had last
+  time (`Plugin.events`), and core compares the plugins' panels with the last refresh's for
+  what's newly in them (a branch joining Cleanup), so the first fetch never notifies, and
+  only a change does, after a restart too. Events of kinds you haven't subscribed to are never
+  stored.
 - Events wait on the server until a dashboard tab connects. The server streams them to open
   tabs without a browser timer; older browsers ask every 15 seconds instead. Events from
   while no tab was open are told when you open one. Events older than `keep_hours` (24)
@@ -390,8 +392,8 @@ Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 tables (kept when a refresh fails, with the error shown alongside), the
 notes in the notes plugin's tables, the page's dragged order (core's `layout`), what you
 snoozed or pinned in Act now (core's `act_now_feedback`), the priorities, tags and
-contact types you set, the sign-in sessions and the notifications waiting to be told (core's
-too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
+contact types you set, the sign-in sessions, the notifications waiting to be told and what
+the panels last showed that notifies when new (core's too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
 plugin's (from `mfd import`, or looked up from commits), and the messages
 mail reads in its own. It's the
 source of truth for the notes; `mfd notes export` writes them out as markdown.

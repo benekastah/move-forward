@@ -1,9 +1,10 @@
 """Browser notifications about things that changed: what to tell me, when to, and who keeps
 track of what I've been told.
 
-A plugin compares its snapshot from before a refresh with the one after (`Plugin.events`)
-and says what happened as `Event`s; core adds the ones about the dashboard itself (a plugin
-that keeps failing). Nothing is on until I subscribe to its kind
+A plugin compares its snapshot and the graph from before a refresh with the ones after
+(`Plugin.events`) and says what happened as `Event`s; core adds an event for each item with
+a notification (`Item.notify`) newly in the plugin's panels (`newly_shown`), and the ones
+about the dashboard itself (a plugin that keeps failing). Nothing is on until I subscribe to its kind
 (`[notifications] subscribe`, set on the settings page or by `mfd init`): events of kinds I
 haven't subscribed to are never stored. Stored events wait until a dashboard tab, with
 the browser's permission, asks for them; events about the same thing arrive as one
@@ -18,6 +19,7 @@ from pydantic import Field
 
 from .db import CORE, Database
 from .domain import Model
+from .page import Panel
 from .repositories import KvRepository, SnapshotRepository
 from .strict import Strict
 from .text import shown
@@ -149,6 +151,53 @@ def _notification(thing: str, events: list[tuple[str, str, str]]) -> Notificatio
         tag=thing,
         url=f"/#{anchor}" if anchor else "/",
     )
+
+
+def newly_shown(db: Database, plugin: str, panels: list[Panel]) -> list[Event]:
+    """An event for each item of the plugin's `panels` with a notification (`Item.notify`)
+    that they didn't show at the last refresh, by its kind and thing; none the first time,
+    which has nothing to compare with. What they show is kept (`shown_notices`) for the next,
+    after a restart too, so an item that leaves and comes back is told again."""
+    shown: dict[tuple[str, str], Event] = {}
+    for panel in panels:
+        for item in panel.items:
+            if (notify := item.notify) is None:
+                continue
+            thing = notify.thing if notify.thing is not None else item.subjects[0].id
+            event = Event(
+                kind=notify.kind,
+                thing=thing,
+                title=item.title,
+                text=notify.text,
+                anchor=item.anchor or "",
+            )
+            shown.setdefault((notify.kind, thing), event)
+    with db.transaction() as conn:
+        known = conn.execute("SELECT 1 FROM shown_plugins WHERE plugin = ?", (plugin,)).fetchone()
+        before = {
+            (row["kind"], row["thing"])
+            for row in conn.execute(
+                "SELECT kind, thing FROM shown_notices WHERE plugin = ?", (plugin,)
+            )
+        }
+        conn.execute("DELETE FROM shown_notices WHERE plugin = ?", (plugin,))
+        conn.executemany(
+            "INSERT INTO shown_notices (plugin, kind, thing) VALUES (?, ?, ?)",
+            [(plugin, kind, thing) for kind, thing in shown],
+        )
+        conn.execute("INSERT OR IGNORE INTO shown_plugins (plugin) VALUES (?)", (plugin,))
+    return [event for key, event in shown.items() if key not in before] if known else []
+
+
+def forget_shown(db: Database, keep: Collection[str]) -> None:
+    """Forget what the panels of every plugin but `keep` showed: those I've subscribed to
+    none of the events of, or that are off. One I subscribe to again starts afresh, telling
+    nothing the first time, rather than all that has shown since it was last compared."""
+    places = ", ".join("?" for _ in keep)
+    where = f"WHERE plugin NOT IN ({places})" if keep else ""
+    with db.transaction() as conn:
+        conn.execute(f"DELETE FROM shown_notices {where}", tuple(keep))
+        conn.execute(f"DELETE FROM shown_plugins {where}", tuple(keep))
 
 
 def available(plugin_kinds: dict[str, dict[str, str]]) -> dict[str, str]:

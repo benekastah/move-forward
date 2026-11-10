@@ -22,7 +22,6 @@ from ...api import (
     EventsRequest,
     FetchRequest,
     Graph,
-    GraphEventsRequest,
     HandleRequest,
     InitSetup,
     Item,
@@ -32,6 +31,7 @@ from ...api import (
     LoadRequest,
     Migration,
     Model,
+    Notify,
     Panel,
     PanelsRequest,
     Plugin,
@@ -285,6 +285,13 @@ def transitions(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> Pan
                         effort="minutes",
                         closes=issue.key if closing else None,
                     ),
+                    notify=Notify(
+                        kind="closeable",
+                        text="its PRs are merged: can be closed",
+                        thing=issue.key,
+                    )
+                    if closing and to
+                    else None,
                 )
             )
     return Panel(
@@ -388,15 +395,6 @@ def key_pattern(projects: list[str]) -> str | None:
     return rf"\b(?:{alternatives})-\d+\b"
 
 
-def _closing(config: JiraConfig, snapshot: JiraSnapshot, graph: Graph) -> set[str]:
-    """The tickets the transitions panel proposes closing."""
-    return {
-        item.actions[0].fields["key"]
-        for item in transitions(config, snapshot, graph).items
-        if item.actions and item.signals and item.signals.closes
-    }
-
-
 class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     name = "jira"
     token_help: ClassVar[str] = (
@@ -422,20 +420,10 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         return questions(ask, setup)
 
     def events(self, req: EventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
-        ctx, before, after = req.ctx, req.before, req.after
-        return changes.changes(ctx.config, before, after)
-
-    def graph_events(self, req: GraphEventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
-        """`closeable`: a ticket the transitions panel proposes closing (its PRs are merged)
-        now and didn't before this refresh."""
-        if req.previous_snapshot is None:
-            return []
-        config = req.ctx.config
-        before = _closing(config, req.previous_snapshot, req.previous_graph)
-        snapshot = req.snapshot or JiraSnapshot(issues=[])
-        issues = {i.key: i for i in snapshot.issues}
-        now = _closing(config, snapshot, req.graph)
-        return [changes.closeable(issues[key]) for key in sorted(now - before) if key in issues]
+        """What changed on my tickets. `closeable` is the transitions panel's
+        (`Item.notify`)."""
+        config, before, after = req.ctx.config, req.before, req.after
+        return changes.changes(config, before, after)
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS

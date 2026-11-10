@@ -33,12 +33,10 @@ from .plugin import (
     API_VERSION,
     Context,
     EntitiesRequest,
-    GraphEventsRequest,
     PanelsRequest,
     Plugin,
     PruneRequest,
     Response,
-    StoreRequest,
     page_path,
 )
 from .repositories import SnapshotRepository
@@ -112,7 +110,8 @@ class Harness:
         self._teams = list(teams)
         self._families = (*plugin.families, *families)
         self._seeds: list[_Seed] = []
-        self._previous: tuple[Graph, BaseModel | None] | None = None
+        self._events: list[Event] | None = None
+        """The events of the last `store`; None before the first."""
         with self._installed():
             registry.check_plugins([plugin])
             self.config = self._config()
@@ -142,10 +141,18 @@ class Harness:
 
     def store(self, snapshot: BaseModel) -> None:
         """Keep `snapshot` as a refresh would after collecting it: the plugin's `store`, and
-        when it was fetched. What the graph held before is kept for `graph_events`."""
-        self._previous = (self.graph(), self.snapshot())
-        self.plugin.store(StoreRequest(self.ctx, snapshot))
-        SnapshotRepository(self.db).save_fetched(self.plugin.name, self.now)
+        when it was fetched. Its events are found then, as the refresh would (see
+        `events`)."""
+        with self._installed():
+            before = refresh.before_refresh(
+                self.db, registry.enabled(self.config, self.db, self.now)
+            )
+            me = self._enabled()
+            refresh.store_snapshot(me, snapshot)
+            SnapshotRepository(self.db).save_fetched(self.plugin.name, self.now)
+            self._events = refresh.events_of(
+                me, before.snapshots[self.name], me.snapshot(), before.graph, self.graph()
+            )
 
     def tick(self, seconds: float) -> None:
         """Move the harness's clock on."""
@@ -157,10 +164,7 @@ class Harness:
     def ctx(self) -> Context[Any]:
         """The plugin's context, as core gives it at `now`."""
         with self._installed():
-            [enabled] = [
-                e for e in registry.enabled(self.config, self.db, self.now) if e.name == self.name
-            ]
-        return enabled.ctx
+            return self._enabled().ctx
 
     @property
     def name(self) -> str:
@@ -169,10 +173,7 @@ class Harness:
     def snapshot(self) -> BaseModel | None:
         """What the plugin last stored, through its `load`."""
         with self._installed():
-            [enabled] = [
-                e for e in registry.enabled(self.config, self.db, self.now) if e.name == self.name
-            ]
-            return enabled.snapshot()
+            return self._enabled().snapshot()
 
     def graph(self) -> Graph:
         """The graph core builds from the plugin's and the seeded entities."""
@@ -223,23 +224,26 @@ class Harness:
         with self._installed():
             return refresh.plugin_page(self.config, self.db, page_path(self.name, key), query or {})
 
-    def graph_events(self) -> list[Event]:
-        """What the plugin's `graph_events` says changed between the graph before the last
-        `store` and now."""
-        if self._previous is None:
+    def events(self) -> list[Event]:
+        """Every event the plugin made of the last `store`, subscribed to or not, as core finds
+        them after a refresh: what changed since the store before (none for the first), and
+        its items newly shown with a notification. Entities seeded since don't count."""
+        if self._events is None:
             raise RuntimeError("store a snapshot first: the events are of what it changed")
-        previous_graph, previous_snapshot = self._previous
-        return self.plugin.graph_events(
-            GraphEventsRequest(
-                self.ctx, self.graph(), self.snapshot(), previous_graph, previous_snapshot
-            )
-        )
+        return self._events
 
     def prune(self) -> list[str]:
         """Run the plugin's daily prune now; what it says it did."""
         return self.plugin.prune(PruneRequest(self.ctx, self.graph()))
 
     # Helpers
+
+    def _enabled(self) -> registry.Enabled:
+        """The plugin as core enables it; call it with the plugin `_installed`."""
+        [enabled] = [
+            e for e in registry.enabled(self.config, self.db, self.now) if e.name == self.name
+        ]
+        return enabled
 
     def _config(self) -> Config:
         return Config.model_validate(

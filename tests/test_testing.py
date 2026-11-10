@@ -15,6 +15,7 @@ from move_forward.api import (
     KindSpec,
     LoadRequest,
     Model,
+    Notify,
     PageHandler,
     PageRequest,
     Panel,
@@ -63,6 +64,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     config_model = LinearConfig
     snapshot_model = LinearSnapshot
     kinds: ClassVar[dict[str, KindSpec]] = {ISSUE: KindSpec(IssueAttrs)}
+    notification_kinds: ClassVar[dict[str, str]] = {"to_triage": "an issue is to triage"}
 
     def store(self, req: StoreRequest[LinearConfig, LinearSnapshot]) -> None:
         req.ctx.kv.set("snapshot", req.snapshot.model_dump_json())
@@ -88,6 +90,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
                 title=f"{issue.key} {issue.title}",
                 badges=[f"PR {prs.handle}"] if prs else [],
                 subjects=[Ref(kind=ISSUE, id=issue.key)],
+                notify=Notify(kind="to_triage", text="to triage"),
             )
 
         return [
@@ -169,12 +172,24 @@ def test_the_clock_moves_and_core_is_left_as_it_was() -> None:
     assert before == registry.PLUGINS
 
 
-def test_graph_events_need_a_store_first() -> None:
+def test_events_need_a_store_first() -> None:
     linear = Harness(LinearPlugin(), {"team": "ENG"})
     with pytest.raises(RuntimeError, match="store a snapshot first"):
-        linear.graph_events()
+        linear.events()
     linear.store(LinearSnapshot(issues=[]))
-    assert linear.graph_events() == []
+    assert linear.events() == []
+
+
+def test_events_are_those_of_the_last_store_and_include_items_newly_shown() -> None:
+    linear = Harness(LinearPlugin(), {"team": "ENG"})
+    linear.store(LinearSnapshot(issues=[Issue(key="ENG-1", title="Fix it")]))
+    assert linear.events() == []  # the first: nothing to compare with
+    two = [Issue(key="ENG-1", title="Fix it"), Issue(key="ENG-2", title="Ship it")]
+    linear.store(LinearSnapshot(issues=two))
+    assert [(e.kind, e.thing, e.title) for e in linear.events()] == [
+        ("to_triage", "ENG-2", "ENG-2 Ship it")
+    ]
+    assert [e.thing for e in linear.events()] == ["ENG-2"]  # asking again changes nothing
 
 
 def _config_error(section: dict[str, Any]) -> None:

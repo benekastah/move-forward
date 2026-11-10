@@ -6,9 +6,9 @@ Core and every plugin build these; `render` turns them into HTML.
 import re
 from datetime import UTC, datetime
 from enum import IntEnum
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .domain import Model
 from .graph import Ref
@@ -138,6 +138,20 @@ class Signals(Model):
     a count in it changing, keeps it. A nominated item must have one."""
 
 
+class Notify(Model):
+    """A notification to raise when an item first shows in its panel (`Item.notify`)."""
+
+    kind: str
+    """One of its plugin's `notification_kinds`, e.g. `branch_deletable`."""
+    text: str
+    """What happened, as a short phrase: "can be deleted"."""
+    thing: str | None = None
+    """What it's about, which core knows the item by from one refresh to the next (and the
+    plugin's events with the same thing are told as one). None for the id of the item's main
+    subject; an item without one must give it, as its title may change between refreshes (an
+    age in it) and would be told again."""
+
+
 class Item(Model):
     title: str
     url: str | None = None
@@ -165,6 +179,9 @@ class Item(Model):
     plugins add their buttons by them."""
     signals: Signals | None = None
     """What Act now ranks it by, should its plugin nominate it; None takes its panel's."""
+    notify: Notify | None = Field(default=None, exclude=True)
+    """The notification to raise when the item first shows in its panel, e.g. a branch
+    joining Cleanup: core compares each refresh's panels with the last's. None for none."""
     fingerprint: str | None = None
     """What would make it worth another look once snoozed in Act now, e.g. a
     PR's head and review count; None hashes its title, badges and details."""
@@ -190,6 +207,13 @@ class Item(Model):
     parts_listed: bool = False
     """List `parts` even when there's one: core sets it on an Act now item showing the parts of
     an item joined to it, whose buttons aren't its own."""
+
+    @model_validator(mode="after")
+    def _notify_names_its_thing(self) -> Self:
+        """An item without subjects must say what its notification is about (`Notify.thing`)."""
+        if self.notify is not None and self.notify.thing is None and not self.subjects:
+            raise ValueError(f"{self.title!r} has no subjects: its Notify must give a thing")
+        return self
 
     @property
     def anchor(self) -> str | None:

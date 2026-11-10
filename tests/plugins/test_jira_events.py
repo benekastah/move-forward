@@ -2,25 +2,28 @@
 
 from typing import cast
 
-from conftest import NOW, issue, pr, snapshot, stored
+from conftest import NOW, events_between, issue, pr, snapshot, stored
 
 from move_forward import refresh, registry
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import GraphEventsRequest
+from move_forward.notifications import Event
+from move_forward.page import anchor
 from move_forward.plugins.github.snapshots import PrRepository
-from move_forward.plugins.jira.changes import KINDS, changes
-from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.changes import KINDS
 from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
 
-CONFIG = JiraConfig(site="https://jira")
+
+def _events(before: list[JiraIssue], after: list[JiraIssue]) -> list[Event]:
+    return events_between(
+        "jira", {"jira": JiraSnapshot(issues=before)}, {"jira": JiraSnapshot(issues=after)}
+    )
 
 
 def _kinds(before: list[JiraIssue], after: list[JiraIssue]) -> list[tuple[str, str]]:
-    events = changes(CONFIG, JiraSnapshot(issues=before), JiraSnapshot(issues=after))
-    return [(e.kind, e.text) for e in events]
+    return [(e.kind, e.text) for e in _events(before, after)]
 
 
 def test_every_kind_the_plugin_offers_is_listed() -> None:
@@ -48,9 +51,18 @@ def test_the_last_blocker_finishing_is_said() -> None:
     assert _kinds([issue(open_blockers=["APP-9", "APP-8"])], [issue(open_blockers=["APP-8"])]) == []
 
 
+def test_an_unblocked_tickets_event_is_about_its_key_and_opens_at_it() -> None:
+    [event] = _events([issue(open_blockers=["APP-9"])], [issue()])
+    assert (event.thing, event.title, event.anchor) == (
+        "APP-1",
+        "APP-1 Do the thing",
+        anchor("ticket", "https://jira/browse/APP-1"),
+    )
+
+
 class _Refreshes:
-    """jira's `graph_events` over what's stored, as successive refreshes ask it: each against
-    what the one before saw (the first against nothing)."""
+    """What core finds of jira's events over what's stored, as successive refreshes do:
+    each against what the one before saw (the first against nothing)."""
 
     def __init__(self, pair: tuple[Config, Database]):
         self.pair = pair
@@ -63,9 +75,9 @@ class _Refreshes:
         jira = next(e for e in enabled if e.name == "jira")
         now = cast(JiraSnapshot | None, snapshots["jira"])
         before_graph, before = self.previous or (graph, None)
-        req = GraphEventsRequest(jira.ctx, graph, now, before_graph, before)
         self.previous = (graph, now)
-        return [e.thing for e in JiraPlugin().graph_events(req)]
+        events = refresh.events_of(jira, before, now, before_graph, graph)
+        return [e.thing for e in events if e.kind == "closeable"]
 
 
 def test_a_ticket_whose_prs_merge_is_closeable_once_and_not_the_first_time() -> None:

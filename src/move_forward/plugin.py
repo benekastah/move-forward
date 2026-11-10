@@ -248,24 +248,14 @@ class LoadRequest[C: BaseModel]:
 class EventsRequest[C: BaseModel, S: BaseModel]:
     ctx: Context[C]
     before: S
-    """The last good snapshot."""
-    after: S
-    """The one just collected."""
-    graph: Graph
-    """The graph as it was before this refresh."""
-
-
-@dataclass(frozen=True)
-class GraphEventsRequest[C: BaseModel, S: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-    snapshot: S | None
-    previous_graph: Graph
-    """The graph as it was before this refresh: after a start, what was stored when the
+    """The plugin's snapshot before this refresh: after a start, what was stored when the
     dashboard stopped."""
-    previous_snapshot: S | None
-    """The plugin's snapshot before this refresh; None when it had none (nothing to compare
-    with: say nothing yet)."""
+    after: S
+    """Its snapshot now: the same as `before` when this refresh didn't fetch it."""
+    previous_graph: Graph
+    """The graph as it was before this refresh."""
+    graph: Graph
+    """The graph now."""
 
 
 @dataclass(frozen=True)
@@ -531,19 +521,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return None
 
     def events(self, req: EventsRequest[C, S]) -> list[Event]:
-        """What happened between the last good snapshot (`before`) and the one just collected
-        (`after`), as events of its `notification_kinds`; only asked when I've subscribed to
-        one of them, and never for the first snapshot, which has nothing to compare with.
-        Say it only when the state changed (not mergeable to mergeable), and never about
-        something new in `after` that `before` hasn't any state for. A failure is logged and
-        the refresh goes on."""
-        return []
-
-    def graph_events(self, req: GraphEventsRequest[C, S]) -> list[Event]:
-        """Events from what other plugins' entities say, e.g. a ticket's PRs all merged,
-        asked after every refresh of anything, when I've subscribed to one of its kinds.
-        Compare what holds now (`graph`, `snapshot`) with what held before this refresh
-        (`previous_graph`, `previous_snapshot`), and say what became true."""
+        """What happened since the last refresh, as events of its `notification_kinds`:
+        compare its snapshot (`before`, `after`) and what other plugins' entities say
+        (`previous_graph`, `graph`) before and after it, and say what became true. Asked after
+        every refresh, of anything, when I've subscribed to one of its kinds, but never before
+        the plugin has stored a snapshot to compare with. Say it only when the state changed
+        (not mergeable to mergeable), and never about something new in `after` that `before`
+        hasn't any state for. A failure is logged and the refresh goes on."""
         return []
 
     def collect_after(self, req: CollectAfterRequest[C]) -> S:
