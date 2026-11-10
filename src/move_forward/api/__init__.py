@@ -5,6 +5,7 @@
 from ..act_now import due_pressure
 from ..asking import (
     Asker,
+    InitSection,
     InitSetup,
     branch_prefix,
     channel,
@@ -91,6 +92,7 @@ __all__ = [
     "Graph",
     "HandleRequest",
     "Identity",
+    "InitSection",
     "InitSetup",
     "InputRequest",
     "Item",

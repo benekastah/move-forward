@@ -18,6 +18,7 @@ from ...api import (
     Event,
     Graph,
     HandleRequest,
+    InitSection,
     InitSetup,
     Item,
     KindSpec,
@@ -407,7 +408,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
     change_check_seconds: ClassVar[int | None] = 60
 
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
         return questions(ask, setup)
 
     def events(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Event]:

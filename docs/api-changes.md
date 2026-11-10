@@ -121,8 +121,13 @@ for themselves (a token, a request, an example config) is core's.
   its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
   place under other names overrides `tokens(config)`, returning `{"": settings}`).
 - **`changed` returns a `Changed`**, never a bare bool (see "Core keeps what moved" above).
-- **`init_suggested()` is False by default**: `mfd init` suggests a plugin only when it
-  overrides it to say True.
+- **`init_suggested` is a class variable**, False by default: `mfd init` suggests a plugin
+  only when it sets `init_suggested = True` (git_stack's says whether git stack is
+  installed).
+- **An `InitSection`**: `init_questions` returns `InitSection(values, shown)`, and
+  `init_example` is one too (no longer commented TOML text). `init_shown(section)` is gone: what
+  it gave is the section's `shown`, the example values of optional keys, written commented
+  out.
 - **`api.http` is `request` and `RequestError`**: `api.http.opener` and
   `api.http.require_https` have left `api`. Send a request with `api.http.request`, which
   checks for HTTPS and refuses redirects itself.
@@ -137,8 +142,8 @@ for themselves (a token, a request, an example config) is core's.
   `token_env` and `keychain_service`) and its docstring's first sentence as its comment. A
   plugin keeps what the model can't say: `init_tables`, commented tables of example entries
   (`[github.teams]`), whose keys aren't written again (nor the tables, when the section's
-  answers have one), and `init_shown(section)`, the method giving an example value, for that
-  section's values, for a key whose default is None or says less. A field marked
+  answers have one), and a section's `shown` (see "An `InitSection`" above), an example value
+  for a key whose default is None or says less. A field marked
   `json_schema_extra={"tables": True}` is left to `init_tables`.
 - **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
   its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;

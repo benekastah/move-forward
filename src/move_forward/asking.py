@@ -27,6 +27,22 @@ Check = Callable[[str], str]
 MAX_RETRIES = 5
 
 
+@dataclass(frozen=True)
+class InitSection:
+    """A plugin's `[name]` section as `mfd init` writes it: what `Plugin.init_questions`
+    returns, and `Plugin.init_example`."""
+
+    values: dict[str, object] = field(default_factory=dict[str, object])
+    """Its settings (a table's as a dict, e.g. `{"teams": {...}}` for `[name.teams]`): written
+    as they are for a section `mfd init` sets up, commented out for one it leaves out."""
+    shown: dict[str, object] = field(default_factory=dict[str, object])
+    """Optional keys written commented out with these values in place of their defaults: where
+    an example says more than the default (github's `merge`), or the default is None, which
+    TOML can't write (such a key not here isn't written). Uncommenting one should be right for
+    the section: mail shows `auth_servers` as the host's known ones, or `[]`, which is what
+    unset means for another host."""
+
+
 @dataclass
 class InitSetup:
     """What `mfd init` knows so far, for the plugins' questions."""

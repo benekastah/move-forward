@@ -20,6 +20,7 @@ from ...api import (
     CliHandler,
     Context,
     Graph,
+    InitSection,
     InitSetup,
     InputRequest,
     ItemAdditions,
@@ -153,7 +154,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     cli_help = "see and set where review pings go"
 
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
         return questions(ask, setup)
 
     def panels(self, req: Request[SlackConfig, BaseModel]) -> list[Panel]:

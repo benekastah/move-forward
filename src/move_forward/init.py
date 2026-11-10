@@ -24,7 +24,7 @@ from pydantic.fields import FieldInfo
 
 from . import asking, registry, tomledit
 from . import config as config_module
-from .asking import Asker, Complete, InitSetup, Prompt, choices, quiet
+from .asking import Asker, Complete, InitSection, InitSetup, Prompt, choices, quiet
 from .config import Config
 from .keychain import TokenFields
 from .plugin import Plugin
@@ -132,18 +132,18 @@ def commented_defaults(
     return text
 
 
-def plugin_defaults(plugin: Plugin[Any, Any], values: Mapping[str, object]) -> str:
-    """What `mfd init` writes, commented out, under the plugin's section of these `values`:
-    its optional keys but those in `values`, as `init_shown` shows them, then its
-    `init_tables` after a blank line, less the keys those write, and none when `values` has
-    one of those tables (uncommented, it would be written twice)."""
+def plugin_defaults(plugin: Plugin[Any, Any], section: InitSection) -> str:
+    """What `mfd init` writes, commented out, under the plugin's `section`: its optional keys
+    but those in the section's values, as its `shown` shows them, then its `init_tables` after
+    a blank line, less the keys those write, and none when the values have one of those tables
+    (uncommented, it would be written twice)."""
+    values = section.values
     tables = {
         key
         for key in plugin.config_model.model_fields
         if f"[{plugin.name}.{key}]" in plugin.init_tables
     }
-    shown = plugin.init_shown(values)
-    keys = commented_defaults(plugin.config_model, {*values, *tables}, shown)
+    keys = commented_defaults(plugin.config_model, {*values, *tables}, section.shown)
     if not plugin.init_tables or tables & values.keys():
         return keys
     return f"{keys}\n{plugin.init_tables}"
@@ -257,7 +257,7 @@ OPTIONAL_NOTIFICATION_SETTINGS = """\
 
 def render_config(
     answers: dict[str, object],
-    sections: dict[str, dict[str, object]],
+    sections: dict[str, InitSection],
     subscribe: list[str] | None = None,
 ) -> str:
     """The config file: the top-level `answers`, then a section per offered plugin, the
@@ -268,12 +268,13 @@ def render_config(
     text = "\n".join(lines) + "\n" + core_defaults(answers)
     for plugin in offered():
         if plugin.name in sections:
-            values = sections[plugin.name]
-            text += _table(plugin.name, values, plugin_defaults(plugin, values))
+            section = sections[plugin.name]
+            text += _table(plugin.name, section.values, plugin_defaults(plugin, section))
         else:
             text += f"\n# Uncomment to turn {plugin.title} on.\n# [{plugin.name}]\n"
-            example = tomllib.loads(_uncommented(plugin.init_example))
-            text += plugin.init_example + plugin_defaults(plugin, example)
+            example = plugin.init_example
+            text += "".join(f"# {k} = {tomledit.value(v)}\n" for k, v in example.values.items())
+            text += plugin_defaults(plugin, example)
     text += core_tables() + "\n"
     if subscribe:
         return text + _table("notifications", {"subscribe": subscribe})
@@ -288,17 +289,8 @@ def example() -> str:
     """`mfd init --example`: the config `mfd init` would write for `EXAMPLE_ANSWERS`, with
     the section of each offered plugin `init_example_on` on, set to its `init_example`'s
     values, and the others commented out."""
-    sections = {
-        plugin.name: tomllib.loads(_uncommented(plugin.init_example))
-        for plugin in offered()
-        if plugin.init_example_on
-    }
+    sections = {plugin.name: plugin.init_example for plugin in offered() if plugin.init_example_on}
     return render_config(EXAMPLE_ANSWERS, sections)
-
-
-def _uncommented(text: str) -> str:
-    """`text`'s lines without the `# ` that comments each out."""
-    return "".join(line.removeprefix("# ") for line in text.splitlines(keepends=True))
 
 
 def _plugins(answer: str) -> str:
@@ -331,7 +323,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     setup = InitSetup(email=email, cwd=cwd)
     answer = ask(
         f"Plugins to set up, comma-separated ({', '.join(p.name for p in offered())})",
-        ", ".join(p.name for p in offered() if p.init_suggested()),
+        ", ".join(p.name for p in offered() if p.init_suggested),
         _plugins,
         choices([p.name for p in offered()]),
     )

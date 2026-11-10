@@ -36,6 +36,8 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     config_model = GitStackConfig
     api_version = API_VERSION
     init_example_on = True
+    init_suggested = shutil.which("git-stack") is not None
+    """Only when git stack is installed, i.e. `git stack` would run."""
     requires: ClassVar[list[str]] = ["git"]
     collects_after = True
     watches: ClassVar[list[str]] = ["git"]
@@ -43,10 +45,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
-
-    def init_suggested(self) -> bool:
-        """Only when git stack is installed, i.e. `git stack` would run."""
-        return shutil.which("git-stack") is not None
 
     def collect(self, req: RefreshRequest[GitStackConfig]) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""

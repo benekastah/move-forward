@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from . import keychain, localtime, shell
 from .act_now import DUE_HORIZON
-from .asking import Asker, InitSetup
+from .asking import Asker, InitSection, InitSetup
 from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
@@ -417,11 +417,15 @@ class Plugin[C: BaseModel, S: BaseModel]:
     them after its optional keys: a table keyed by name, with example entries (`[github.teams]`,
     `[mail.<name>]`). A key written here as `[<section>.<key>]` isn't written as a key too.
     `mfd init` writes each other optional key itself, from `config_model`: its default, and its
-    docstring's first sentence as its comment (`init_shown` for one it shows otherwise)."""
-    init_example: ClassVar[str] = ""
-    """The section's required settings with example values, commented out, for a section `mfd
-    init` writes commented out because the plugin wasn't chosen. `mfd init --example` writes
+    docstring's first sentence as its comment (a section's `shown` for one it shows
+    otherwise)."""
+    init_example: ClassVar[InitSection] = InitSection()
+    """The section with example values for its required settings (and its `shown`), which `mfd
+    init` writes commented out for a plugin that wasn't chosen. `mfd init --example` writes
     them uncommented for a plugin `init_example_on`."""
+    init_suggested: ClassVar[bool] = False
+    """Whether `mfd init` offers to set the plugin up by default: not unless the plugin says
+    so, as most need something of mine (a site, a mailbox) to be of use."""
     init_example_on: ClassVar[bool] = False
     """`mfd init --example` writes the section on, with `init_example`'s values, rather than
     commented out like a plugin `mfd init` wasn't asked for: for a tool most use. Off by
@@ -601,26 +605,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Set-up and upkeep
 
-    def init_suggested(self) -> bool:
-        """Whether `mfd init` offers to set the plugin up by default: not unless the plugin
-        says so, as most need something of mine (a site, a mailbox) to be of use."""
-        return False
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
-        """Ask for the `[name]` section's settings in `mfd init`; returns its values (a
-        table's as a dict, e.g. `{"teams": {...}}` for `[name.teams]`). `setup` has what
-        init knows so far; a plugin can add to its `teams`."""
-        return {}
-
-    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
-        """Optional keys `mfd init` writes, commented out, with these values in place of their
-        defaults, under a section of these `section` values (`init_questions`' answers, or
-        `init_example`'s for a section left out): where an example says more than the
-        default (github's `merge`), or the default is None, which TOML can't write (such a key
-        not here isn't written). Uncommenting one should be right for that section: mail
-        shows `auth_servers` as the host's known ones, or `[]`, which is what unset means for
-        another host."""
-        return {}
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
+        """Ask for the `[name]` section's settings in `mfd init`; returns the section to write.
+        `setup` has what init knows so far; a plugin can add to its `teams`."""
+        return InitSection()
 
     def prune(self, req: Request[C, S]) -> list[str]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns

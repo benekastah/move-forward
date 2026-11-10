@@ -1,6 +1,5 @@
 """The mail plugin: unread and flagged mail, so the people who matter get answered first."""
 
-from collections.abc import Mapping
 from typing import ClassVar
 
 from ...api import (
@@ -11,6 +10,7 @@ from ...api import (
     ContextRequest,
     Entity,
     Identity,
+    InitSection,
     InitSetup,
     InputRequest,
     KindSpec,
@@ -27,7 +27,7 @@ from ...api import (
 from ...api.keychain import TokenSettings
 from ...api.kinds import PERSON
 from . import client
-from .config import KNOWN_AUTH_SERVERS, Mailbox, MailConfig
+from .config import Mailbox, MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
@@ -101,15 +101,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     """Threads are published while they have unread or flagged mail: one that's gone is done."""
     change_check_seconds: ClassVar[int | None] = 120
 
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
         return questions(ask, setup)
-
-    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
-        """`auth_servers` as the host's known ones (Gmail's), or `[]` for another server,
-        which reads the same as unset there: uncommenting it changes nothing, and its comment
-        says what to put in."""
-        host = str(section.get("host", "")).lower()
-        return {"auth_servers": KNOWN_AUTH_SERVERS.get(host, [])}
 
     def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
         """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""

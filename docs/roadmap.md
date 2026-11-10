@@ -18,12 +18,10 @@ its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened 
 review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
 - **Hooks merged:**
-  - `init_suggested` becomes a class variable;
   - `url_for` and `handle_for` become one hook, answering both for an entity by id;
   - `identity` goes: core reads who I am from the `person` a plugin publishes marked as me;
   - `act_now` goes, if items can say they're candidates (with their `signals`) in place of
     the four plugins' overrides;
-  - `init_shown` folds into what `init_questions` returns;
   - `store` and `load` become one repository the plugin gives, if that spares a plugin
     keeping state between the two calls; otherwise they stay.
 

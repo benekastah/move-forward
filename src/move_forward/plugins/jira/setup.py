@@ -1,8 +1,8 @@
 """`mfd init`'s questions for `[jira]`."""
 
-from ...api import Asker, InitSetup, https_url
+from ...api import Asker, InitSection, InitSetup, https_url
 
-EXAMPLE = '# site = "https://example.atlassian.net"\n'
+EXAMPLE = InitSection({"site": "https://example.atlassian.net"})
 
 
 def _required(answer: str) -> str:
@@ -12,5 +12,7 @@ def _required(answer: str) -> str:
     return answer
 
 
-def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
-    return {"site": ask("Jira site URL (e.g. https://acme.atlassian.net)", "", _required)}
+def questions(ask: Asker, setup: InitSetup) -> InitSection:
+    return InitSection(
+        {"site": ask("Jira site URL (e.g. https://acme.atlassian.net)", "", _required)}
+    )

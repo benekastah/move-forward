@@ -1,7 +1,6 @@
 """The GitHub plugin."""
 
 import subprocess
-from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import ClassVar
 from urllib.parse import urlsplit
@@ -17,6 +16,7 @@ from ...api import (
     Event,
     Graph,
     Identity,
+    InitSection,
     InitSetup,
     Item,
     KindSpec,
@@ -99,6 +99,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     init_tables = TABLES
     init_example = EXAMPLE
     init_example_on = True
+    init_suggested = True
+    """Always: init guesses its org from the checkout it runs in."""
     init_finds_teams = True
     config_model = GitHubConfig
     api_version = API_VERSION
@@ -119,16 +121,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         self._refusal_logged = False
         """Whether the token's refusal to read the notifications was logged this run."""
 
-    def init_suggested(self) -> bool:
-        """Always: init guesses its org from the checkout it runs in."""
-        return True
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
         return questions(ask, setup)
-
-    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
-        """`[github.merge]`'s method, whose default (GitHub's pick) TOML can't write."""
-        return {"merge": {"method": "squash"}}
 
     def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, when only some PRs changed (`req.subjects`, by URL: those

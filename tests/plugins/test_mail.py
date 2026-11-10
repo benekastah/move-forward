@@ -666,7 +666,12 @@ def test_init_guesses_gmail_from_my_email() -> None:
         return check(default) if check else default
 
     found = questions(cast(Asker, ask), InitSetup(email=ME, cwd=Path()))
-    assert found == {"host": "imap.gmail.com", "username": ME, "message_url": GMAIL_MESSAGE_URL}
+    assert found.values == {
+        "host": "imap.gmail.com",
+        "username": ME,
+        "message_url": GMAIL_MESSAGE_URL,
+    }
+    assert found.shown == {"auth_servers": ["mx.google.com"]}
 
 
 def test_a_failed_store_leaves_what_was_kept() -> None:

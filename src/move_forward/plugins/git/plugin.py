@@ -14,6 +14,7 @@ from ...api import (
     Context,
     ContextRequest,
     Entity,
+    InitSection,
     InitSetup,
     ItemAdditions,
     ItemAdditionsFor,
@@ -73,6 +74,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     title = "Git"
     init_example = EXAMPLE
     init_example_on = True
+    init_suggested = True
+    """Always: init guesses its repo from the checkout it runs in."""
     config_model = GitConfig
     api_version = API_VERSION
     snapshot_model = LocalSnapshot
@@ -98,11 +101,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         """Each worktree's (modified, untracked) counts as `_edited` last saw them, by its
         resolved path."""
 
-    def init_suggested(self) -> bool:
-        """Always: init guesses its repo from the checkout it runs in."""
-        return True
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
         return questions(ask, setup)
 
     def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
