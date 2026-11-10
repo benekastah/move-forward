@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .private import make_private
+from .shell import CommandError
 
 log = logging.getLogger(__name__)
 
@@ -312,6 +313,20 @@ CREATE TABLE shown_plugins (           -- derived: the plugins whose panels show
 """What the plugins' panels showed at the last refresh, so the next tells what's newly shown,
 after a restart too."""
 
+_V19_PROBLEMS = """
+CREATE TABLE problems (                -- kept: what a plugin reports wrong that isn't a failed
+                                       -- refresh, until it says it's gone (`Context.problem`),
+                                       -- or prune_days after it last said it
+    plugin TEXT NOT NULL,
+    key TEXT NOT NULL,                 -- the plugin's name for it, e.g. email_lookups
+    text TEXT NOT NULL,                -- what's wrong, as the page shows it
+    seen_at TEXT NOT NULL,             -- when the plugin last reported it, changed or not
+    PRIMARY KEY (plugin, key)
+);
+"""
+"""Problems the plugins report besides a failed refresh, kept across restarts so they're
+shown, and logged, once rather than again after each."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -331,6 +346,7 @@ CORE_MIGRATIONS = [
     Migration("0016_no_unimportant_priority", _V16_NO_UNIMPORTANT_PRIORITY),
     Migration("0017_dismiss_is_a_snooze", _V17_DISMISS_IS_A_SNOOZE),
     Migration("0018_shown_notices", _V18_SHOWN_NOTICES),
+    Migration("0019_problems", _V19_PROBLEMS),
 ]
 
 _SCHEMA_VERSIONS = """
@@ -356,9 +372,22 @@ def _private(path: Path) -> None:
     """Make `path` a file only I can read, creating it empty if it isn't there: the notes and
     what the plugins fetched are mine, not other users' of this machine. On Unix SQLite gives
     its -wal and -shm files the database's permissions; on Windows they'd take their folder's,
-    so `Database` makes them first (see `_side_files`)."""
-    os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
-    make_private(path)
+    so `Database` makes them first (see `_side_files`). Another connection closing can delete
+    a side file between its making and its access list's (the last one out of a WAL database
+    removes them): then it's made again. One deleted after it was made private, and made again
+    by SQLite with its folder's access, is made private once the connection holds them open
+    (see `Database`); a handle another user opened in between keeps its access, which matters
+    only where `db_path`'s folder lets other users in."""
+    for attempt in range(3):
+        os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
+        try:
+            make_private(path)
+            return
+        except CommandError:
+            # Still there (or made again by another connection's SQLite): a failure of its
+            # own, such as access denied, which must not be passed over.
+            if path.exists() or attempt == 2:
+                raise
 
 
 def _side_files(path: Path) -> list[Path]:
@@ -395,6 +424,14 @@ class Database:
         """Held by whoever uses the connection; re-entered by `reading`'s holder's queries."""
         with self._lock:
             self._conn.executescript(_SCHEMA_VERSIONS)
+        if self._path and sys.platform == "win32":
+            # Held open by this connection now, so no other's closing can delete them: one
+            # deleted while the other was being made, which SQLite made again with its
+            # folder's access, is made private from here on (a handle opened before keeps
+            # its access, as an access list only checks new ones).
+            for side in _side_files(self._path):
+                if side.exists():
+                    make_private(side)
         self.migrate(CORE, CORE_MIGRATIONS)
 
     def migrate(

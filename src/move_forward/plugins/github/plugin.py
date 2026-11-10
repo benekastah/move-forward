@@ -3,7 +3,7 @@
 import subprocess
 from collections.abc import Mapping
 from datetime import datetime, timedelta
-from typing import ClassVar, cast
+from typing import ClassVar
 from urllib.parse import urlsplit
 
 from ...api import (
@@ -72,14 +72,16 @@ NOTIFICATIONS_SEEN = "notifications_last_modified"
 """The kv key of the notifications' last `Last-Modified`, for `changed`."""
 NOTIFICATIONS_WAIT = "notifications_poll_after"
 """The kv key of when GitHub lets `changed` poll the notifications again."""
-BRANCHES_SEEN = "pr_branches_seen"
-"""The kv key of where my open PRs' local branches were at the last check (`pushes.tips`)."""
 CHANGED = "prs_changed"
 """The kv key of the PRs (`owner/name#number`) `changed` saw change, for `collect`; with
 `EVERYTHING` among them when it saw a change it can't pin on a PR."""
 EVERYTHING = "*"
 LAST_FULL = "last_full_collect"
 """The kv key of when every search last ran."""
+NOTIFICATIONS_FAILED = "notifications"
+"""The problem (`Context.problem`) of why the notifications can't be polled."""
+EMAIL_LOOKUPS_FAILED = "email_lookups"
+"""The problem of which reviewers' commit emails couldn't be looked up, and why."""
 
 
 def _pr_id(changed: str) -> client.PrId:
@@ -131,8 +133,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
 
     def __init__(self) -> None:
-        self._poll_failed: str | None = None
-        """Why the last poll of the notifications failed, warned of once while it lasts."""
+        self._refusal_logged = False
+        """Whether the token's refusal to read the notifications was logged this run."""
 
     def init_suggested(self) -> bool:
         """Always: init guesses its org from the checkout it runs in."""
@@ -232,10 +234,15 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         refresh of git, which it watches), or I have a notification about something my
         searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed is
         kept for `collect`, to fetch just those, and asks for a refresh until it has."""
-        ctx, graph = req.ctx, req.graph
-        # Polled first: anything it raises leaves the branches' tips to be compared next time.
+        ctx, graph, previous = req.ctx, req.graph, req.previous_graph
         notified = self._notified(ctx)
-        changed = self._branches_moved(ctx, graph) | notified
+        # Against the graph at the last check that didn't raise: core keeps it for us.
+        moved = (
+            pushes.moved(self._tips(previous), self._tips(graph))
+            if previous is not None
+            else set[str]()
+        )
+        changed = moved | notified
         # Pending until `collect` fetches them: what's seen in the check core makes right
         # after a refresh (whose answer it ignores) still asks for a refresh at the next one.
         pending = self._note_changed(ctx, changed)
@@ -243,38 +250,42 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             return Changed(True, "every search")
         return Changed(bool(pending), f"{len(pending)} PR(s) to fetch")
 
-    def _branches_moved(self, ctx: Context[GitHubConfig], graph: Graph) -> set[str]:
-        now = pushes.tips(graph, f"{self.name}.{PR}")
-        before = ctx.kv.get_json(BRANCHES_SEEN, object)
-        if now != before:
-            ctx.kv.set_json(BRANCHES_SEEN, now)
-        if not isinstance(before, dict):  # the first look, or kept in an older form
-            return set()
-        return pushes.moved(cast(dict[str, str], before), now)
+    def _tips(self, graph: Graph) -> dict[str, str]:
+        return pushes.tips(graph, f"{self.name}.{PR}")
 
     def _notified(self, ctx: Context[GitHubConfig]) -> set[str]:
         """The PRs I have a notification about where my searches look (a review requested, a
         comment, a review), newer than the last look. A CI run names only its repo, so it stands
         for my open PRs there; what no search shows (an issue, a release, an alert) for nothing;
         and anything else for `EVERYTHING`. A "not modified" answer is cheap, and GitHub's poll
-        interval is kept to. A poll that fails finds nothing, warning once while the same reason
-        lasts, and is tried again after the default interval."""
+        interval is kept to. A poll that fails finds nothing and is tried again after the
+        default interval; it's the problem `NOTIFICATIONS_FAILED` until one works, but for a
+        token that can't read notifications (`notifications.Refused`), logged once a run."""
         wait = ctx.kv.get(NOTIFICATIONS_WAIT)
         if wait and ctx.now < datetime.fromisoformat(wait):
             return set()
         seen = ctx.kv.get(NOTIFICATIONS_SEEN)
         try:
             found = notifications.fetch(ctx.config.host, seen)
-        except (CommandError, subprocess.SubprocessError, OSError, KeyError, ValueError) as e:
-            # A token that can't read notifications (a fine-grained one can't), `gh` hanging
-            # or a blip: the branch moves found with it still count.
-            if self._poll_failed != str(e):
-                ctx.log.warning("can't read GitHub notifications: %s", e)
-                self._poll_failed = str(e)
+        except notifications.Refused as e:
+            # A fine-grained token, which the docs allow: no problem to fix, so not one shown
+            # for as long as that's the token. The branch moves found with it still count.
+            ctx.problem(NOTIFICATIONS_FAILED, None)
+            if not self._refusal_logged:
+                ctx.log.warning(
+                    "can't read GitHub notifications (a fine-grained token can't): %s", e
+                )
+                self._refusal_logged = True
             retry = ctx.now + timedelta(seconds=notifications.DEFAULT_POLL_SECONDS)
             ctx.kv.set(NOTIFICATIONS_WAIT, retry.isoformat())
             return set()
-        self._poll_failed = None
+        except (CommandError, subprocess.SubprocessError, OSError, KeyError, ValueError) as e:
+            # `gh` hanging or a blip: the branch moves found with it still count.
+            ctx.problem(NOTIFICATIONS_FAILED, f"can't read GitHub notifications: {e}")
+            retry = ctx.now + timedelta(seconds=notifications.DEFAULT_POLL_SECONDS)
+            ctx.kv.set(NOTIFICATIONS_WAIT, retry.isoformat())
+            return set()
+        ctx.problem(NOTIFICATIONS_FAILED, None)
         if found is None:
             return set()
         ctx.kv.set(NOTIFICATIONS_SEEN, found.last_modified)
@@ -320,23 +331,35 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return [ctx.email.rsplit("@", 1)[1]] if "@" in ctx.email else []
 
     def _lookup_emails(self, ctx: Context[GitHubConfig], gh: GitHubSnapshot) -> None:
-        """Cache the commit email of every requested reviewer we don't know yet."""
+        """Cache the commit email of every requested reviewer we don't know yet. A lookup that
+        fails is tried again at the next refresh; those that failed this time are one problem
+        (`EMAIL_LOOKUPS_FAILED`), with the first's reason, until none do."""
         domains = self._email_domains(ctx)
         if not domains:
+            ctx.problem(EMAIL_LOOKUPS_FAILED, None)  # nothing to look up
             return
         people = PeopleRepository(ctx.db)
         known = people.emails()
+        failed: dict[str, Exception] = {}
         for pr in gh.mine:
             for login in pr.requested_users:
                 if login in known:
                     continue
-                try:
+                try:  # in each repo asking for them, until one answers
                     email = client.commit_email(ctx.config.host, pr.repo, login, domains)
-                except Exception as e:  # noqa: BLE001
-                    ctx.log.warning("email lookup for %s failed: %s", login, e)
+                except Exception as e:  # noqa: BLE001 - one lookup must not stop the others
+                    failed.setdefault(login, e)
                     continue
                 people.save_looked_up(login, email, ctx.now)
                 known[login] = email
+                failed.pop(login, None)
+        ctx.problem(
+            EMAIL_LOOKUPS_FAILED,
+            f"looking up the commit emails of {', '.join(sorted(failed))} failed:"
+            f" {next(iter(failed.values()))}"
+            if failed
+            else None,
+        )
 
     def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the

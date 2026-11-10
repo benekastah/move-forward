@@ -166,6 +166,12 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, its database (`ctx.db`) and key/value
   state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
   and a logger named for it (`ctx.log`).
+- Something wrong that isn't a failed refresh (a lookup the token isn't allowed, two
+  clones of one repo) is a problem: `ctx.problem(key, text)` reports it, and
+  `ctx.problem(key, None)` says it's gone. Core keeps it across restarts, shows it in the
+  plugin's group (or the footer) until it's gone, and logs it only when it changes, so report
+  it each time it's checked rather than warning of it yourself: one not reported for
+  `prune_days` is forgotten.
 
 - A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it
@@ -174,7 +180,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   request answered "not modified", another plugin's entities in the graph) sets
   `change_check_seconds` and implements `changed(req)`: the server asks that often, and
   refreshes the plugin as soon as it says `Changed(True, reason)`, whose reason goes into
-  the log line. It keeps what it compares against in `ctx.kv`. After each refresh of the plugin
+  the log line. Other plugins' entities it compares with `req.previous_graph`, the graph its
+  last check was given (None at the first since the server started), which core keeps;
+  anything else it compares against it keeps in `ctx.kv`. After each refresh of the plugin
   the server asks once more and ignores the answer, so what the refresh did itself isn't
   taken for a change. With `changed`, `refresh_seconds` can be long. A `changed` that
   reads another plugin's entities from the graph names that plugin in `watches`: the

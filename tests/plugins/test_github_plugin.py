@@ -49,7 +49,7 @@ from move_forward.plugins.github.plugin import (
 )
 from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository
 from move_forward.plugins.github.tables import MIGRATIONS
-from move_forward.repositories import KvRepository
+from move_forward.repositories import KvRepository, ProblemRepository
 from move_forward.shell import CommandError
 
 _BEFORE_REBUILD = MIGRATIONS[: [m.name for m in MIGRATIONS].index("0009_account_again")]
@@ -450,6 +450,37 @@ def test_after_collect_suggests_reviewers_only_where_one_may_be_picked(
     PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
     GitHubPlugin().after_collect(AfterCollectRequest(ctx, Graph()))
     assert picked == [1]
+
+
+def test_reviewers_whose_email_lookup_fails_are_one_problem_until_none_does(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    failing = {"bob", "carol"}
+
+    def commit_email(host: str, repo: str, login: str, domains: list[str]) -> str | None:
+        if login in failing:
+            raise CommandError(f"no commits for {login}")
+        return f"{login}@acme.com"
+
+    monkeypatch.setattr(client, "commit_email", commit_email)
+
+    def derived(*args: object, **kwargs: object) -> DerivedSnapshot:
+        return DerivedSnapshot()
+
+    monkeypatch.setattr(derive, "collect", derived)
+    ctx = _context()
+    PrRepository(ctx.db).replace(
+        snapshot(mine=[pr(1, requested_users=["alice", "bob"]), pr(2, requested_users=["carol"])])
+    )
+    for _ in range(2):  # tried again each refresh, but said once
+        GitHubPlugin().after_collect(AfterCollectRequest(ctx, Graph()))
+    said = "looking up the commit emails of bob, carol failed: no commits for bob"
+    assert ProblemRepository(ctx.db).of([""]) == {"": [said]}
+    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
+    assert PeopleRepository(ctx.db).emails() == {"alice": "alice@acme.com"}
+    failing.clear()
+    GitHubPlugin().after_collect(AfterCollectRequest(ctx, Graph()))
+    assert ProblemRepository(ctx.db).of([""]) == {}
 
 
 def test_refreshing_subjects_fetches_those_prs_into_their_lists(

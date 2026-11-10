@@ -5,6 +5,17 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Plugins' problems are on the page and in `mfd dump`
+
+What a plugin finds wrong besides a failed refresh is said with its state: in its group's
+title bar and above its panels, or in the footer for a plugin without a group, until it's
+gone. `mfd dump` has them as `plugin_problems`, a list of texts by plugin. Slack's failed
+lookups by email moved there (Slack's group) from `/slack/contacts`; GitHub's failed
+notifications polls and email lookups, and Git's clones of one repo, which only went to the
+log, are there too. A script reading the log for them can read `plugin_problems` instead. A
+token that can't read notifications (a fine-grained one) still only goes to the log, once a
+run. A problem a plugin stops reporting without clearing it is forgotten after `prune_days`.
+
 ### Panels go by what kind they are
 
 Each panel's `priority`, in `mfd dump`, is now one of seven bands, saying what kind of panel

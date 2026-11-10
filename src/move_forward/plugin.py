@@ -27,7 +27,7 @@ from .keychain import TokenSettings
 from .kinds import Family
 from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
-from .repositories import KvRepository, SnapshotRepository
+from .repositories import KvRepository, ProblemRepository, SnapshotRepository
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +83,21 @@ class Context[C: BaseModel]:
         """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
         as `github.derived` (see `collect_into`)."""
         return f"{self.name}.{name}"
+
+    def problem(self, key: str, text: str | None) -> None:
+        """Report something wrong that isn't the plugin's refresh failing (a lookup its token
+        isn't allowed, two clones of one repository) as its problem `key`, or with None that
+        it's gone. Core shows it with the plugin's state on the page (its group's summary, or
+        the footer) and keeps it across restarts until it's cleared, or until it's gone
+        unreported for `prune_days` (a key the plugin no longer uses); it's logged only when it
+        changes, so a plugin can report it on every refresh."""
+        before = ProblemRepository(self.db).set(self.name, key, text, self.now)
+        if text == before:
+            return
+        if text is not None:
+            self.log.warning("%s", text)
+        else:
+            self.log.info("no longer: %s", before)
 
     def token(self, account: str | None = None, *, secret: str = "token") -> str:
         """The plugin's token, or that of its account `account` (see `Plugin.tokens`; `""` is
@@ -268,6 +283,11 @@ class AfterCollectRequest[C: BaseModel]:
 class ChangedRequest[C: BaseModel]:
     ctx: Context[C]
     graph: Graph
+    """Every plugin's entities, built from what's stored now."""
+    previous_graph: Graph | None = None
+    """The graph as it was at the plugin's last change check that didn't raise, to compare
+    with `graph` for what other plugins' refreshes moved since (a plugin that `watches`
+    them); None at the first check since the dashboard started."""
 
 
 @dataclass(frozen=True)
@@ -541,8 +561,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Whether what the plugin collects has changed since this was last asked, by a check
         far cheaper than `collect` (files' times, a request answered "not modified", other
         plugins' entities in `graph`, built from what's stored), so the plugin refreshes soon
-        after a change rather than at its next `refresh_seconds`. Keep what it compares
-        against in `ctx.kv`; with nothing kept yet, keep it and say `Changed(False)`. Say
+        after a change rather than at its next `refresh_seconds`. Other plugins' entities are
+        compared with `previous_graph`, which core keeps; keep anything else it compares
+        against in `ctx.kv`, and with nothing to compare with yet, say `Changed(False)`. Say
         why it changed in `Changed.reason`, for the log. Core asks once more after each
         refresh of the plugin and ignores the answer, so what the refresh did itself (`git
         status` rewriting the index) doesn't count. May raise; the error is logged and the

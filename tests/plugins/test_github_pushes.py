@@ -5,6 +5,7 @@ import subprocess
 import pytest
 from conftest import NOW, local_branch, local_snapshot, pr, snapshot, stored
 
+from move_forward.graph import Graph
 from move_forward.plugin import ChangedRequest
 from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.github import notifications
@@ -28,14 +29,17 @@ def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
         local=local_snapshot(branches=[local_branch(mine.head, sha="a", ahead=1)]),
     )
 
+    checked: list[Graph] = []  # as core keeps them, for the next check
+
     def changed_after(*branches: object) -> bool:
         if branches:
             LocalRepository(db).replace(local_snapshot(branches=list(branches)))
         plugins = enabled(config, db, NOW)
         github = next(e for e in plugins if e.name == "github")
-        return bool(
-            GitHubPlugin().changed(ChangedRequest(github.ctx, stored_graph(db, plugins)[0]))
-        )
+        graph = stored_graph(db, plugins)[0]
+        previous = checked[-1] if checked else None
+        checked.append(graph)
+        return bool(GitHubPlugin().changed(ChangedRequest(github.ctx, graph, previous)))
 
     assert not changed_after()  # the first look notes where things stand
     assert not changed_after()
@@ -71,12 +75,15 @@ def test_a_push_counts_when_the_notifications_cant_be_read(
         local=local_snapshot(branches=[local_branch(mine.head, sha="a", ahead=1)]),
     )
 
+    checked: list[Graph] = []
+
     def changed() -> bool:
         plugins = enabled(config, db, NOW)
         github = next(e for e in plugins if e.name == "github")
-        return bool(
-            GitHubPlugin().changed(ChangedRequest(github.ctx, stored_graph(db, plugins)[0]))
-        )
+        graph = stored_graph(db, plugins)[0]
+        previous = checked[-1] if checked else None
+        checked.append(graph)
+        return bool(GitHubPlugin().changed(ChangedRequest(github.ctx, graph, previous)))
 
     assert not changed()  # the first look notes where things stand
     LocalRepository(db).replace(local_snapshot(branches=[local_branch(mine.head, ahead=0)]))

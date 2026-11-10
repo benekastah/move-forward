@@ -14,6 +14,7 @@ from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.private import is_private
 from move_forward.repositories import KvRepository
+from move_forward.shell import CommandError
 
 CREATE_A = Migration("0001_a", "CREATE TABLE p_a (x INTEGER);")
 CREATE_B = Migration("0002_b", "CREATE TABLE p_b (x INTEGER);")
@@ -209,6 +210,79 @@ def test_on_windows_the_side_files_are_made_private_before_sqlite_opens_them(
     assert made == ["dashboard.db", "dashboard.db-wal", "dashboard.db-shm"]
 
 
+def test_a_side_file_deleted_before_it_is_made_private_is_made_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another connection closing deletes the side files; icacls then finds nothing."""
+    tried: list[bool] = []
+
+    def make_private(path: Path) -> None:
+        if not tried:
+            path.unlink()  # gone before its access list is set
+        tried.append(path.exists())
+        if not path.exists():
+            raise CommandError(f"icacls {path}: The system cannot find the file specified.")
+
+    monkeypatch.setattr(db_module, "make_private", make_private)
+    side = tmp_path / "dashboard.db-shm"
+    db_module._private(side)  # pyright: ignore[reportPrivateUsage]
+    assert tried == [False, True] and side.exists()
+
+
+def test_a_side_file_that_cant_be_made_private_still_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[Path] = []
+
+    def make_private(path: Path) -> None:
+        calls.append(path)
+        raise CommandError(f"icacls {path}: Access is denied.")
+
+    monkeypatch.setattr(db_module, "make_private", make_private)
+    with pytest.raises(CommandError, match="Access is denied"):
+        db_module._private(tmp_path / "dashboard.db-shm")  # pyright: ignore[reportPrivateUsage]
+    assert len(calls) == 1  # not retried: the file is there
+
+
+def test_a_side_file_that_keeps_vanishing_fails_after_three_tries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[Path] = []
+
+    def make_private(path: Path) -> None:
+        calls.append(path)
+        path.unlink()
+        raise CommandError(f"icacls {path}: The system cannot find the file specified.")
+
+    monkeypatch.setattr(db_module, "make_private", make_private)
+    with pytest.raises(CommandError, match="cannot find"):
+        db_module._private(tmp_path / "dashboard.db-shm")  # pyright: ignore[reportPrivateUsage]
+    assert len(calls) == 3
+
+
+def test_on_windows_the_side_files_are_made_private_again_once_held_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One deleted by another connection after it was made private, and made again by SQLite
+    with its folder's access, is caught once this connection holds it."""
+    made: list[tuple[str, bool]] = []
+    real = db_module.make_private
+
+    def recording(path: Path) -> None:
+        made.append((path.name, path.exists()))
+        real(path)
+
+    monkeypatch.setattr(db_module.sys, "platform", "win32")
+    monkeypatch.setattr(db_module, "make_private", recording)
+
+    def skipped(path: Path) -> None:  # as if deleted after it was made private
+        return None
+
+    monkeypatch.setattr(db_module, "_private", skipped)
+    Database(tmp_path / "dashboard.db")
+    assert made == [("dashboard.db-wal", True), ("dashboard.db-shm", True)]
+
+
 def test_kinds_kept_by_core_are_renamed_for_the_plugins_that_publish_them(tmp_path: Path) -> None:
     path = tmp_path / "old.db"
     conn = sqlite3.connect(path)
@@ -371,6 +445,7 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
     db.execute("DROP TABLE tags")
     db.execute("DROP TABLE shown_notices")
     db.execute("DROP TABLE shown_plugins")
+    db.execute("DROP TABLE problems")
     db.execute("DELETE FROM migrations WHERE owner = 'core' AND name >= '0013'")
     db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
     db.execute(
@@ -391,6 +466,7 @@ def test_a_dismissal_is_kept_as_a_snooze_until_it_changes(tmp_path: Path) -> Non
     db = Database(path)
     db.execute("DROP TABLE shown_notices")
     db.execute("DROP TABLE shown_plugins")
+    db.execute("DROP TABLE problems")
     db.execute("DELETE FROM migrations WHERE owner = 'core' AND name >= '0017'")
     db.execute("UPDATE schema_versions SET version = 16 WHERE plugin = 'core'")
     rows = [
