@@ -240,14 +240,15 @@ class KeptItemRequest[C: BaseModel]:
 class CollectRequest[C: BaseModel]:
     ctx: Context[C]
     full: bool = True
-    """Whether to fetch everything: when the plugin's `refresh_seconds` have passed since the
-    last full collect that stored, when its change checks saw something move that no subject
-    names, and when they named nothing. Otherwise fetching `subjects` is enough, keeping the
-    rest as stored."""
+    """Whether to fetch everything: at the plugin's first collect since the dashboard started,
+    when its `refresh_seconds` have passed since the last full collect that stored, when its
+    change checks saw something move that no subject names, and when they named nothing.
+    Otherwise fetching `subjects` is enough, keeping the rest as stored."""
     subjects: frozenset[str] = frozenset()
-    """What the plugin's change checks said moved (`Changed.subjects`) since a collect given
-    it last stored: core keeps it until one does, so a collect that fails, or a store that
-    does, loses none of it."""
+    """What the plugin's change checks said moved (`Changed.subjects`) since a collect last
+    stored: core keeps each until a collect that started after it was said stores, so a
+    collect that fails loses none of it, and what moves again while one runs stays for the
+    next."""
 
 
 @dataclass(frozen=True)
@@ -318,8 +319,9 @@ class Changed:
     """The tool's state now, as text that changes whenever it moves (a digest, a mailbox's
     counts); None for a plugin that has none. Core keeps it and compares the next with it."""
     subjects: frozenset[str] = frozenset()
-    """What moved, in the plugin's own terms (repos, PRs), for `collect` to fetch just
-    those (`CollectRequest.subjects`)."""
+    """What moved since the last check, in the plugin's own terms (repos, PRs), for
+    `collect` to fetch just those (`CollectRequest.subjects`). Each asks for a refresh, so
+    name a subject only when it moved again, not while it's still as the last check saw it."""
     everything: bool = False
     """Something moved that `subjects` doesn't name, so the next collect is a full one."""
     reason: str = ""
@@ -595,9 +597,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
         Core asks again as each collect of the plugin starts, so what moves while it runs is
         compared with what it read, and gives `collect` what moved since a collect last
-        stored. It asks for a refresh only when something new moved: a different
-        fingerprint, a subject not yet pending, or `everything`. May raise; the error is
-        logged and the next check tries again."""
+        stored. It asks for a refresh whenever something moved since the last check: a
+        different fingerprint, any subject (one still pending after a collect that failed
+        too), or `everything`. May raise; the error is logged and the next check tries
+        again."""
         return Changed()
 
     # Reading

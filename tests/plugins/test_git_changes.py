@@ -199,6 +199,46 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
     assert not server.changed(ctx(80))
 
 
+def test_edits_after_a_collect_that_failed_ask_again_only_when_they_move_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _repo(tmp_path / "r")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    plugin = GitPlugin(watching=False)
+    server = _Server(plugin)
+
+    def ctx(seconds: int) -> Context[GitConfig]:
+        return Context(
+            config=GitConfig(repos=[repo], status_seconds=30),
+            email="me@example.com",
+            teams=[],
+            prune_days=90,
+            now=NOW + timedelta(seconds=seconds),
+            db=db,
+            kv=KvRepository(db, "git"),
+        )
+
+    plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
+    assert not server.changed(ctx(0))
+    (repo / "new.txt").write_text("x\n", encoding="utf-8")
+    assert server.changed(ctx(40))
+
+    def failing(*args: Any, **kwargs: Any) -> LocalRepo:
+        raise CommandError("git: index.lock exists")
+
+    monkeypatch.setattr(client, "collect_repo", failing)
+    with pytest.raises(CommandError):
+        server.refresh(ctx(40))
+    assert not server.changed(ctx(80))  # as the last look saw it, though not as stored
+    (repo / "other.txt").write_text("x\n", encoding="utf-8")
+    assert server.changed(ctx(120))
+    (repo / "new.txt").unlink()
+    (repo / "other.txt").unlink()
+    assert not server.changed(ctx(160))  # back as stored: nothing to read again
+    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
+
+
 def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

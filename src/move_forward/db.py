@@ -333,13 +333,16 @@ CREATE TABLE change_checks (           -- kept: what each plugin's change check 
                                        -- last collected everything
     fingerprint TEXT,                  -- the last answer's fingerprint (`Changed.fingerprint`)
     checked_at TEXT,                   -- when core took that answer
-    everything INTEGER NOT NULL DEFAULT 0, -- 1: something moved that no subject names, so the
-                                       -- next collect is a full one
+    checks INTEGER NOT NULL DEFAULT 0, -- how many answers core has taken: the last one's number
+    everything INTEGER,                -- the number of the last answer that said something moved
+                                       -- that no subject names, so the next collect is a full
+                                       -- one; NULL once a full collect started after it stores
     full_at TEXT                       -- when the last full collect that stored started
 );
 CREATE TABLE change_subjects (         -- kept: what a change check said moved
-    plugin TEXT NOT NULL,              -- (`Changed.subjects`), until a collect given it stores
-    subject TEXT NOT NULL,
+    plugin TEXT NOT NULL,              -- (`Changed.subjects`), until a collect started after
+    subject TEXT NOT NULL,             -- it stores
+    check_number INTEGER NOT NULL,     -- the number of the last answer that said it moved
     PRIMARY KEY (plugin, subject)
 );
 """

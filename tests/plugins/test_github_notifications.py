@@ -114,6 +114,33 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
     assert answers == []
 
 
+def test_a_pr_still_pending_after_a_collect_that_failed_asks_again_when_it_moves_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answers = [
+        _answer(FIRST),
+        _answer(SECOND, _note("acme", "2026-10-30T12:01:30Z")),  # a comment on #7
+        _answer(THIRD, _note("acme", "2026-10-30T12:02:30Z")),  # then a review of it
+    ]
+
+    def run(args: list[str]) -> str:
+        return answers.pop(0)
+
+    monkeypatch.setattr(notifications, "run", run)
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    plugin, checks = GitHubPlugin(), ChangeChecks()
+
+    def changed(minutes: int) -> bool:
+        return checks.check(Enabled(plugin, _context(db, minutes)), Graph([])) is not None
+
+    assert not changed(0)  # the first look only notes where things stand
+    assert changed(2)
+    checks.take(Enabled(plugin, _context(db, 2)), None)  # a collect that then fails
+    assert changed(3)
+    assert ChangeRepository(db).get("github").subjects == {"acme/widgets#7"}
+
+
 def test_a_failure_other_than_not_modified_is_raised(monkeypatch: pytest.MonkeyPatch) -> None:
     def run(args: list[str]) -> str:
         raise CommandError("gh api: HTTP 401: Bad credentials")

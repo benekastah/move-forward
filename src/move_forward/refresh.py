@@ -214,13 +214,19 @@ def _collect_all(
 
         def run(e: Enabled = e) -> None:
             try:
-                taken = checks.take(e, graph)
+                taken: Taken | None = None
+
+                def collector() -> BaseModel:  # taking within, so its failure is the plugin's
+                    nonlocal taken
+                    taken = checks.take(e, graph)
+                    return collect(e, taken)
 
                 def store(snapshot: BaseModel) -> None:
                     store_snapshot(e, snapshot)
+                    assert taken is not None  # the collector took it
                     checks.stored(e, taken)
 
-                collect_into(db, e.name, now, lambda: collect(e, taken), store)
+                collect_into(db, e.name, now, collector, store)
             finally:
                 with _collecting_lock:
                     _collecting.discard(e.name)

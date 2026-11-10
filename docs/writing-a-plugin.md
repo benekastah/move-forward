@@ -183,16 +183,18 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   that moved in the plugin's own terms (repos, PRs), `everything=True` for something moved
   that no subject names, or more than one of these, and a `reason` for the log; `Changed()`
   says nothing moved. Core keeps the answer, not the plugin: the server asks that often,
-  compares each fingerprint with the last, and refreshes the plugin as soon as something new
-  moved (a different fingerprint, a subject not yet pending, or `everything`). It asks again as each collect of the plugin starts,
+  compares each fingerprint with the last, and refreshes the plugin as soon as something
+  moved since the last check (a different fingerprint, any subject, or `everything`), so name
+  a subject only when it moved again. It asks again as each collect of the plugin starts,
   so what moves while it runs is compared with what it read. The last fingerprint and when
   it was taken are `req.fingerprint` and `req.checked_at`, for a check that needs them
   (which repos moved, what was updated since); other plugins' entities it compares with
   `req.previous_graph`, the graph its last check was given (None at the first since the
-  server started). The subjects stay pending until a collect given them stores, so one that
-  fails loses none: `collect` gets them as `req.subjects`, with `req.full` saying whether
-  to fetch everything anyway (`refresh_seconds` since the last full collect that stored,
-  something unnamed moved, or nothing's pending). With `changed`, `refresh_seconds` can be
+  server started). The subjects stay pending until a collect that started after they moved
+  stores, so one that fails loses none: `collect` gets them as `req.subjects`, with
+  `req.full` saying whether to fetch everything anyway (its first collect since the server
+  started, `refresh_seconds` since the last full collect that stored, something unnamed
+  moved, or nothing's pending). With `changed`, `refresh_seconds` can be
   long. A `changed` that
   reads another plugin's entities from the graph names that plugin in `watches`: the
   server asks it right after each refresh of that plugin (github watches git, to see my

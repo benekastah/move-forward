@@ -2,6 +2,7 @@
 next with, the subjects pending until a collect given them stores, and when the last full
 collect was."""
 
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import pytest
 from conftest import NOW, local_snapshot
 
 from move_forward import refresh, registry
-from move_forward.change_checks import ChangeChecks
+from move_forward.change_checks import ChangeChecks, Taken
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
@@ -18,6 +19,7 @@ from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.registry import Enabled
+from move_forward.repositories import SnapshotRepository
 
 
 class _Git(GitPlugin):
@@ -88,7 +90,7 @@ def test_what_a_check_kept_survives_a_restart(git: _Git, tmp_path: Path) -> None
     assert ChangeChecks().take(_git(config, db, NOW), None).subjects == {"r"}
 
 
-def test_pending_subjects_ask_for_a_refresh_once_and_go_once_a_collect_given_them_stores(
+def test_each_subject_said_asks_for_a_refresh_and_is_pending_until_a_collect_after_it_stores(
     git: _Git, tmp_path: Path
 ) -> None:
     config, db, checks = _config(tmp_path / "x.db"), Database(":memory:"), ChangeChecks()
@@ -96,23 +98,28 @@ def test_pending_subjects_ask_for_a_refresh_once_and_go_once_a_collect_given_the
     refresh.refresh(config, db, _minutes(0), {"git"}, checks)  # the first: a full collect
     git.answers[:] = [Changed(subjects=frozenset({"a"}))] * 2
     assert checks.check(_git(config, db, _minutes(1)), Graph()) is not None
-    assert checks.check(_git(config, db, _minutes(1)), Graph()) is None  # not new: no refresh
+    assert checks.check(_git(config, db, _minutes(1)), Graph()) is not None  # it moved again
     git.failing = True
     refresh.refresh(config, db, _minutes(2), {"git"}, checks)
-    git.answers[:] = [Changed(subjects=frozenset({"a"}))]
-    # Still pending after a collect that failed, but nothing new moved: no refresh (#192).
+    # A check that says nothing moved asks for no refresh, though a is still pending (#192).
     assert checks.check(_git(config, db, _minutes(3)), Graph()) is None
+    # Still pending after a collect that failed, and it moved again: a refresh.
+    git.answers[:] = [Changed(subjects=frozenset({"a"}))]
+    assert checks.check(_git(config, db, _minutes(3)), Graph()) is not None
     git.failing = False
     refresh.refresh(config, db, _minutes(4), {"git"}, checks)
-    assert git.given == [(True, frozenset()), (False, {"a"}), (False, {"a"})]
+    assert git.given == [(True, frozenset()), (False, {"a"}), (False, {"a"})]  # a once
     e = _git(config, db, _minutes(5))
     assert checks.take(e, None).subjects == set()  # gone once a collect given it stored
-    git.answers[:] = [Changed(subjects=frozenset({"c"})), Changed(subjects=frozenset({"d"}))]
+    git.answers[:] = [
+        Changed(subjects=frozenset({"c", "e"})),
+        Changed(subjects=frozenset({"d", "e"})),
+    ]
     checks.check(e, Graph())
     taken = checks.take(e, None)
-    checks.check(e, Graph())  # while it collects
+    checks.check(e, Graph())  # while it collects: e moved again after the collect read it
     checks.stored(e, taken)
-    assert checks.take(e, None).subjects == {"d"}
+    assert checks.take(e, None).subjects == {"d", "e"}
 
 
 def test_what_moves_while_a_collect_runs_is_kept_and_what_moved_before_it_isnt_a_change(
@@ -164,5 +171,54 @@ def test_without_the_servers_checks_a_refresh_asks_nothing_but_gives_what_is_pen
     git.answers[:] = [Changed(subjects=frozenset({"a"}))]
     checks.check(_git(config, db, _minutes(1)), Graph())
     asked = len(git.asked)
-    refresh.refresh(config, db, _minutes(2), {"git"})  # `mfd refresh`
-    assert len(git.asked) == asked and git.given[-1] == (False, {"a"})
+    refresh.refresh(config, db, _minutes(2), {"git"})  # `mfd refresh`: its run's first, full
+    assert len(git.asked) == asked and git.given[-1] == (True, {"a"})
+
+
+def test_what_no_subject_names_said_while_a_full_collect_runs_makes_the_next_full_too(
+    git: _Git, tmp_path: Path
+) -> None:
+    config, db, checks = _config(tmp_path / "x.db"), Database(":memory:"), ChangeChecks()
+    registry.migrate(config, db)
+    refresh.refresh(config, db, _minutes(0), {"git"}, checks)  # full: the first of the run
+    git.answers[:] = [Changed(subjects=frozenset({"a"}), everything=True)]
+    e = _git(config, db, _minutes(1))
+    taken = checks.take(e, Graph())
+    assert taken.full
+    # A check while it collects (one past its timeout, left out of later refreshes) sees
+    # something no subject names, after the collect read it.
+    git.answers[:] = [Changed(subjects=frozenset({"b"}), everything=True)]
+    checks.check(_git(config, db, _minutes(2)), Graph())
+    checks.stored(e, taken)
+    assert checks.take(_git(config, db, _minutes(3)), None) == Taken(
+        True, frozenset({"b"}), _minutes(3), 3
+    )
+
+
+def test_the_first_collect_of_each_plugin_since_the_dashboard_started_is_full(
+    git: _Git, tmp_path: Path
+) -> None:
+    config, db = _config(tmp_path / "x.db"), Database(":memory:")
+    registry.migrate(config, db)
+    refresh.refresh(config, db, _minutes(0), {"git"}, ChangeChecks())
+    git.answers[:] = [Changed(subjects=frozenset({"a"}))]
+    restarted = ChangeChecks()  # a changed config, say: applied to every repo at once
+    refresh.refresh(config, db, _minutes(1), {"git"}, restarted)
+    git.answers[:] = [Changed(subjects=frozenset({"b"}))]
+    refresh.refresh(config, db, _minutes(2), {"git"}, restarted)
+    assert git.given[1:] == [(True, {"a"}), (False, {"b"})]
+
+
+def test_a_failure_to_take_what_moved_is_the_plugins_not_the_whole_refreshs(
+    git: _Git, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, db = _config(tmp_path / "x.db"), Database(":memory:")
+    registry.migrate(config, db)
+
+    def take(*_: object) -> Taken:
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(ChangeChecks, "take", take)
+    refresh.refresh(config, db, NOW, {"git"}, ChangeChecks())
+    [row] = SnapshotRepository(db).of(["git"]).values()
+    assert row.error == "OperationalError: database is locked" and git.given == []

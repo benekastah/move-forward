@@ -16,6 +16,7 @@ import pytest
 from conftest import ME, NOW, pr, snapshot
 
 from move_forward import auth, registry, server, settings
+from move_forward.change_checks import ChangeChecks
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
@@ -687,6 +688,26 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
     assert app.due() == {"git", "github"}
     app.refresh_now({"git"})
     assert app.due() == {"github"}
+
+
+def test_a_refresh_is_given_the_servers_change_checks(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    given: list[ChangeChecks | None] = []
+
+    def recording(
+        config: Config,
+        db: Database,
+        now: datetime | None = None,
+        only: set[str] | None = None,
+        checks: ChangeChecks | None = None,
+    ) -> None:
+        given.append(checks)
+
+    monkeypatch.setattr(server, "refresh", recording)
+    app.refresh_now({"github"})
+    # Its collects are asked what moved as they start, and kept with what its checks said.
+    assert len(given) == 1 and given[0] is app.checks
 
 
 def test_a_page_load_asks_for_no_refresh(app: server.App, monkeypatch: pytest.MonkeyPatch) -> None:

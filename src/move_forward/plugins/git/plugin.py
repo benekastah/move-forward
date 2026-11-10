@@ -80,6 +80,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         self._ids: dict[Path, str] = {}
         """Each watched repo's id, the common git directory `changes` and `collect` name it
         by, by its resolved path, as the watcher has it."""
+        self._statuses: dict[Path, tuple[int, int]] = {}
+        """Each worktree's (modified, untracked) counts as `_edited` last saw them, by its
+        resolved path."""
 
     def init_suggested(self) -> bool:
         """Always: init guesses its repo from the checkout it runs in."""
@@ -191,9 +194,12 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         )
 
     def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:
-        """The repos (common git directories) with a worktree whose uncommitted edits differ
-        from the last refresh's, asking `git status` of the worktrees the watcher saw edited,
-        and of those it doesn't watch once `status_seconds` have passed since the last look."""
+        """The repos (common git directories) with a worktree whose uncommitted edits moved
+        since the last look, asking `git status` of the worktrees the watcher saw edited, and
+        of those it doesn't watch once `status_seconds` have passed since the last look. Edits
+        that moved differ from the last look's and from what's stored: what's stored may be
+        older than the last look (after a collect that failed), and a worktree whose edits are
+        as stored needn't be read again."""
         seconds = ctx.config.status_seconds
         last = ctx.kv.get(LAST_STATUS)
         poll = bool(seconds) and (
@@ -214,7 +220,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                     status = client.worktree_status(path)
                 except CommandError:  # gone since; the next read finds out
                     continue
-                if status != (wt.modified, wt.untracked):
+                last = self._statuses.get(resolved)
+                self._statuses[resolved] = status
+                if status != (wt.modified, wt.untracked) and status != last:
                     found.add(str(git_common_dir(Path(repo.dir))))
         return found
 
