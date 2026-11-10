@@ -53,9 +53,6 @@ from .models import JiraIssue, JiraSnapshot
 from .repository import MIGRATIONS, IssueRepository
 from .setup import EXAMPLE, questions
 
-CHECKED = "changes_checked_at"
-"""The kv key of when `changed` last looked."""
-
 
 def ticket_ref(issue: JiraIssue) -> Ref:
     """A ticket's ref: by its URL, as the ticket family's ids are."""
@@ -437,16 +434,15 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         IssueRepository(ctx.db).replace(snapshot)
 
     def changed(self, req: ChangedRequest[JiraConfig]) -> Changed:
-        """Whether a ticket of mine was updated since the last look (and a minute before
-        it, as Jira counts in whole minutes): a one-result search."""
+        """Whether a ticket of mine was updated since the last look core took
+        (`req.checked_at`, and a minute before it, as Jira counts in whole minutes): a
+        one-result search."""
         ctx = req.ctx
-        checked = ctx.kv.get(CHECKED)
         found = False
-        if checked is not None:
-            seconds = (ctx.now - datetime.fromisoformat(checked)).total_seconds()
+        if req.checked_at is not None:
+            seconds = (ctx.now - req.checked_at).total_seconds()
             minutes = math.ceil(seconds / 60) + 1
             found = client.updated_within(ctx.config, ctx.email, ctx.token(), minutes)
-        ctx.kv.set(CHECKED, ctx.now.isoformat())
         return Changed(found, "a ticket of mine was updated")
 
     def load(self, req: LoadRequest[JiraConfig]) -> JiraSnapshot | None:
