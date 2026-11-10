@@ -18,7 +18,7 @@ class SlackConfig(TokenFields):
 
     Its token (`token_env`, else the system's secret store) is one with the
     `users:read.email` scope, for finding requested reviewers' Slack ids by their email. No
-    token, no lookups.
+    token, no lookups. Explicit channel discovery also needs channels:read and groups:read.
     """
 
     default_token_env: ClassVar[str] = DEFAULT_SLACK_TOKEN_ENV
@@ -27,7 +27,7 @@ class SlackConfig(TokenFields):
     token_env: str = ""
     """The environment variable holding a Slack token with the `users:read.email` scope, for
     finding requested reviewers' Slack ids by their email; no token, no lookups.
-    `SLACK_API_TOKEN` unless set."""
+    `SLACK_API_TOKEN` unless set. Channel discovery also needs channels:read and groups:read."""
     keychain_service: str = ""
     """The service that token is stored under, by `mfd token set slack`, in the system's
     secret store (the macOS keychain, Windows' Credential Manager, the desktop keyring), when
