@@ -5,7 +5,7 @@ import json
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
@@ -487,7 +487,28 @@ def build_dashboard(
     """The dashboard from whatever is stored; cheap, no network. `surface` is where the
     plugins' panels are shown (the dashboard or focus mode), for what other plugins add to
     their items."""
-    now = now or datetime.now(UTC)
+    return _builder(config, db, now or datetime.now(UTC), surface)(())
+
+
+def build_tag_view(
+    config: Config,
+    db: Database,
+    tags: Sequence[str],
+    now: datetime | None = None,
+    surface: Surface = "dashboard",
+) -> tuple[panels.Dashboard, panels.Dashboard]:
+    """`build_dashboard` with `tags` selected (see `panels.build`'s `selected`), and without,
+    for the tags the tag view's drop-down offers: the same dashboard twice when there are
+    none. The plugins' panels are made once for both."""
+    build = _builder(config, db, now or datetime.now(UTC), surface)
+    shown = build(tags)
+    return shown, (build(()) if tags else shown)
+
+
+def _builder(
+    config: Config, db: Database, now: datetime, surface: Surface
+) -> Callable[[Sequence[str]], panels.Dashboard]:
+    """What builds the dashboard with some tags selected, from what's stored now."""
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
     plugin_panels = _plugin_panels(config, plugins, graph, snapshots)
@@ -543,25 +564,33 @@ def build_dashboard(
         return any(graph.hidden(s) for s in item.subjects)
 
     layout = LayoutRepository(db).load()
-    built = panels.build(
-        now,
-        plugin_panels,
-        sources,
-        identities,
-        item_actions,
-        hidden,
-        layout,
-        config.act_now,
-        FeedbackRepository(db).all(),
-        graph.units,
-        priority.level_of(PriorityRepository(db).all(), graph),
-        surface,
-        _known_action(plugins),
-        graph.hides,
-        contacts.importance,
-        tagging.of,
-    )
-    return built.model_copy(update={"problems": list(registry.DISCOVERY_ERRORS)})
+    feedback = FeedbackRepository(db).all()
+    priority_of = priority.level_of(PriorityRepository(db).all(), graph)
+    known = _known_action(plugins)
+
+    def build(selected: Sequence[str]) -> panels.Dashboard:
+        built = panels.build(
+            now,
+            plugin_panels,
+            sources,
+            identities,
+            item_actions,
+            hidden,
+            layout,
+            config.act_now,
+            feedback,
+            graph.units,
+            priority_of,
+            surface,
+            known,
+            graph.hides,
+            contacts.importance,
+            tagging.of,
+            selected,
+        )
+        return built.model_copy(update={"problems": list(registry.DISCOVERY_ERRORS)})
+
+    return build
 
 
 def _failed(e: Enabled) -> Panel:

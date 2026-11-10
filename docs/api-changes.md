@@ -96,9 +96,7 @@ for themselves (a token, a request, an example config) is core's.
   panels in one band go in the order `panels` lists them, and groups whose most urgent
   panels share a band go by plugin name.
 - **An item's tags**: core sets `Item.tags`, the tags whose `#tag` badges the item shows, which
-  the page's tag view (`?tag=`) keeps it by; a plugin's are ignored. `api.html.buttons` takes
-  `tags`, the tags the dashboard its buttons go back to is filtered by; a plugin's page leaves
-  it out.
+  the page's tag view (`?tag=`) keeps it by; a plugin's are ignored.
 - **One events hook**: `graph_events` and `GraphEventsRequest` are gone, and `events` takes
   both inputs. `EventsRequest` has the plugin's snapshot `before` the refresh and `after` it,
   and the graph before it (`previous_graph`, where `graph` was) and now (`graph`). It's asked

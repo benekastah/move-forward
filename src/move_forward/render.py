@@ -22,8 +22,9 @@ OPEN_SECTIONS_SCRIPT = (
     # browser last saw, from localStorage, and keeps it current on each toggle. Only
     # sections it has a state for are touched, so a new panel keeps its default. Browsers
     # fire toggle at load for sections that start open, and for the ones restored here;
-    # saving then just writes the same state again. Saving keeps the state of sections not on
-    # the page (the tag view leaves some off). Without localStorage (a private window,
+    # saving then just writes the same state again. Saving replaces the state with the page's,
+    # dropping sections gone for good, but while the tag view leaves some off the page
+    # (`data-filtered` on `main`), it keeps theirs too. Without localStorage (a private window,
     # say) the sections stay as rendered. Runs again on `mfd:replaced`, when RELOAD_SCRIPT
     # swaps in a new page: it binds only the new elements, so nothing piles up.
     "const initOpenSections = () => {"
@@ -32,7 +33,8 @@ OPEN_SECTIONS_SCRIPT = (
     "  try { return JSON.parse(localStorage.getItem('mfd.open') || '{}'); } catch { return {}; } };"
     " const saved = read();"
     " for (const s of sections) if (s.dataset.key in saved) s.open = saved[s.dataset.key];"
-    " const save = () => { try { localStorage.setItem('mfd.open', JSON.stringify({ ...read(),"
+    " const kept = () => (document.querySelector('main[data-filtered]') ? read() : {});"
+    " const save = () => { try { localStorage.setItem('mfd.open', JSON.stringify({ ...kept(),"
     "  ...Object.fromEntries(sections.map((s) => [s.dataset.key, s.open])) })); }"
     "  catch {} };"
     " for (const s of sections) s.addEventListener('toggle', save);"
@@ -473,16 +475,22 @@ def _action(
     )
 
 
-def buttons(
+def buttons(actions: list[Action], back: str = "", at: str = "", pos: int | None = None) -> str:
+    """Buttons for `actions` (those that post, not links), each asking first if it has a
+    `confirm`, for plugins' pages as for the dashboard. `back` is where each redirects
+    afterwards; default the page they're on."""
+    return _buttons(actions, back, at, pos)
+
+
+def _buttons(
     actions: list[Action],
     back: str = "",
     at: str = "",
     pos: int | None = None,
     tags: Sequence[str] = (),
 ) -> str:
-    """Buttons for `actions` (those that post, not links), each asking first if it has a
-    `confirm`, for plugins' pages as for the dashboard. `back` is where each redirects
-    afterwards; default the dashboard, filtered by `tags`."""
+    """`buttons`, coming back to the dashboard filtered by `tags` (see `tag_view`) unless
+    `back` says where."""
     # A plugin may add an action after core's own groups. Keep the first position of
     # each named group and collect its later actions there as well.
     sequence: list[str | Action] = []
@@ -593,7 +601,7 @@ def _item(
     if item.links:
         links = "".join(_link(link) for link in item.links)
         parts.append(f"<div class='links'>{links}</div>")
-    parts.append(buttons(item.actions, back, at, pos, where.tags if where else ()))
+    parts.append(_buttons(item.actions, back, at, pos, where.tags if where else ()))
     if children:
         key = f"children:{item.anchor}"
         parts.append(
@@ -682,7 +690,7 @@ def _panel(panel: Panel, spot: Spot | None = None, where: _Where = _UNFILTERED) 
         f"{'' if where.tags else ' data-drag'}{open_attr}>"
         f"<summary><h2>{_e(panel.title)}</h2><span class='count'>{_live(panel)}</span>"
         f"<span class='description'>{_e(panel.description)}</span></summary>"
-        f"{buttons(panel.actions, at=panel.key, tags=where.tags)}"
+        f"{_buttons(panel.actions, at=panel.key, tags=where.tags)}"
         f"<ul class='items'>{items}</ul></details>"
     )
 
@@ -813,11 +821,24 @@ def _nothing_carries(where: _Where) -> str:
     )
 
 
-def _sources(dashboard: Dashboard) -> str:
+def _sources(
+    dashboard: Dashboard, shown: Dashboard, refreshing: AbstractSet[str], tags: Sequence[str]
+) -> str:
     """The footer: how fresh the data of plugins without a group of their own is (the
-    others' summaries say), who I am, and the installed plugins left out."""
+    others' summaries say), who I am, and the installed plugins left out. A plugin whose group
+    the tag view leaves off (`shown`, filtered by `tags`) has its summary's refresh status and
+    Refresh button here instead."""
     grouped = {group.key for group in dashboard.groups}
+    visible = {group.key for group in shown.groups}
     spans: list[str] = []
+    for group in dashboard.groups:
+        status = _status_of(group.key, dashboard.sources)
+        if group.key in visible or status is None:
+            continue
+        refreshed = _refreshed(group.key, status, dashboard.generated_at, refreshing, tags)
+        spans.append(
+            f"<span class='left-off'><strong>{_e(group.title)}:</strong>{refreshed}</span>"
+        )
     for name, status in dashboard.sources.items():
         if name in grouped or _plugin_of(name) in grouped:
             continue
@@ -843,12 +864,14 @@ def dashboard_page(
     notice: str = "",
     spot: Spot | None = None,
     tags: Sequence[str] = (),
+    everything: Dashboard | None = None,
 ) -> str:
     """The page. `spot` is where an action was just pressed (see `Spot`).
 
     `refreshing` are the plugins a refresh running now collects. `notice` is the outcome of
     an action just run, shown in the header. `tags` are those the page is filtered by (see
-    `tag_view`).
+    `tag_view`): `dashboard` is built with them selected (`panels.build`'s `selected`), and
+    `everything` without, for the tags the drop-down offers; `dashboard` when not given.
     """
     where = _Where(tags=tuple(tags))
     shown = tag_view.filtered(dashboard, tags)
@@ -865,14 +888,14 @@ def dashboard_page(
         "<a class='button secondary' href='/settings'>Settings</a>"
         f"<form method='post' action='{_e(tag_view.url('/refresh', tags))}'><button type='submit'"
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
-        + _tag_bar(tag_view.options(dashboard), where)
-        + "<main>"
+        + _tag_bar(tag_view.options(everything or dashboard), where)
+        + f"<main{' data-filtered' if tags else ''}>"
         + (
             "".join(_group(group, shown, refreshing, where, spot) for group in shown.groups)
             or (_nothing_carries(where) if tags else "")
         )
         + "</main>"
-        f"<footer>{_sources(dashboard)}"
+        f"<footer>{_sources(dashboard, shown, refreshing, tags)}"
         f"<form method='post' action='{_e(tag_view.url('/layout/reset', tags))}'>"
         "<button type='submit' class='secondary'>Reset layout</button></form></footer>"
         "</body></html>"
@@ -898,11 +921,14 @@ def _focus_category(
     )
 
 
-def focus_categories_page(dashboard: Dashboard, tags: Sequence[str] = ()) -> str:
+def focus_categories_page(
+    dashboard: Dashboard, tags: Sequence[str] = (), everything: Dashboard | None = None
+) -> str:
     """Focus mode's first page: Act now and its panels, then each group's title with its
-    panels, each to walk with a count; with `tags`, only what carries one (see `tag_view`)."""
+    panels, each to walk with a count; with `tags`, only what carries one (see `tag_view`,
+    and `dashboard_page` for `everything`)."""
     where = _Where("/focus", (), tuple(tags))
-    shown = tag_view.filtered(dashboard, tags)
+    shown = tag_view.focused(dashboard, tags)
     rows: list[str] = []
     for group in shown.groups:
         rows.append(
@@ -925,7 +951,7 @@ def focus_categories_page(dashboard: Dashboard, tags: Sequence[str] = ()) -> str
     return (
         _head("Focus", None)
         + f"<header><h1>{_logo(tags)} / focus</h1></header>"
-        + _tag_bar(tag_view.options(dashboard), where)
+        + _tag_bar(tag_view.options(everything or dashboard), where)
         + f"<main class='single'>{body}</main></body></html>"
     )
 
@@ -937,6 +963,7 @@ def focus_page(
     notice: str = "",
     done: tuple[str, Item] | None = None,
     tags: Sequence[str] = (),
+    everything: Dashboard | None = None,
 ) -> str | None:
     """One item of a focus category with previous and next links; None for an unknown category.
 
@@ -944,10 +971,11 @@ def focus_page(
     `notice` is the outcome of an action just run from this page. `done` is an item an action
     just changed, e.g. a todo ticked off, with its panel's key: it's shown in place of the
     item at `index` (which is now the one after it), so the change can be undone. With `tags`,
-    it steps through only what carries one (see `tag_view`).
+    it steps through only what carries one (see `tag_view`, and `dashboard_page` for
+    `everything`).
     """
     where = _Where("/focus", (("cat", category),), tuple(tags))
-    shown = tag_view.filtered(dashboard, tags)
+    shown = tag_view.focused(dashboard, tags)
     title = shown.focus_title(category)
     items = shown.focus_items(category)
     if title is None or items is None:
@@ -957,7 +985,7 @@ def focus_page(
     header = (
         f"<header><h1>{_logo(tags)} / <a href='{_e(tag_view.url('/focus', tags))}'>focus</a>"
         f" / {_e(title)}</h1>{notice_html}</header>"
-        + _tag_bar(tag_view.options(dashboard), where)
+        + _tag_bar(tag_view.options(everything or dashboard), where)
         + "<main class='single'>"
     )
     if not items and done is None:

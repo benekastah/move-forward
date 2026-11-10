@@ -6,7 +6,8 @@ other panel sits in its plugin's group. Panels and groups go in their bands' ord
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Annotated
@@ -223,6 +224,18 @@ def _no_tags(item: Item) -> list[str]:
     return []
 
 
+def _shown_tags(item: Item) -> list[str]:
+    return item.tags
+
+
+def carries(item: Item, tags: AbstractSet[str], tags_of: TagsOf = _shown_tags) -> bool:
+    """Whether `item`, or one of its parts, shows the badge of one of `tags`: those its `tags`
+    say, once built, or `tags_of` says, before."""
+    return any(t in tags for t in tags_of(item)) or any(
+        carries(part, tags, tags_of) for part in item.parts
+    )
+
+
 Hidden = Callable[[Item], bool]
 """Whether an item is about something hidden, e.g. on ice, and so left off the page."""
 
@@ -355,12 +368,12 @@ def _with_item_actions(
 
 def _as_given(item: Item) -> Item:
     """A plugin's item without what only core sets (`act_now_fields`, `opened_at`,
-    `parts_listed`, `set_aside`, `tags`)."""
+    `parts_listed`, `set_aside`). Its `tags` are set over by `_with_item_actions`, on every
+    item shown."""
     if (
         item.act_now_fields is None
         and item.opened_at is None
         and not item.set_aside
-        and not item.tags
         and not item.parts
     ):
         return item
@@ -369,7 +382,6 @@ def _as_given(item: Item) -> Item:
             "act_now_fields": None,
             "opened_at": None,
             "set_aside": False,
-            "tags": [],
             "parts_listed": False,
             "parts": [_as_given(part) for part in item.parts],
         }
@@ -441,6 +453,7 @@ def build(
     hides: HidesKind = _hides_nothing,
     contact_importance: act_now.ContactImportance = act_now.no_contact_importance,
     tags_of: TagsOf = _no_tags,
+    selected: Sequence[str] = (),
 ) -> Dashboard:
     """The dashboard: Act now, ranked from the plugins' nominations, then the plugins' panels in
     their groups, without hidden items, each item with the plugins' buttons, sorted, in the
@@ -449,7 +462,9 @@ def build(
     `priority_of` what I set as the priority of what an item is about; `known_action` says
     which buttons post to an action that's there, `hides` which kinds hide what they point
     at, `contact_importance` what who an item is about adds to it, and `tags_of` the tags
-    core's badges show on an item, kept in its `tags`. A panel's key is its
+    core's badges show on an item, kept in its `tags`. With tags `selected` (the tag view, see
+    `tag_view`), Act now ranks only the nominations carrying one, so it shows the top of those,
+    not those of its top that carry one. A panel's key is its
     plugin's name and its own, e.g. `github.conflicts`,
     so two plugins' panels never clash."""
     plugins = [
@@ -469,11 +484,14 @@ def build(
         )
         for plugin in plugins
     ]
+    wanted = set(selected)
     nominations = [
         act_now.Nomination(plugin.key, item)
         for plugin in plugins
         for item in plugin.nominations
-        if not hidden(item) and _tasked(plugin.key, item)
+        if not hidden(item)
+        and _tasked(plugin.key, item)
+        and (not wanted or carries(item, wanted, tags_of))
     ]
     nominated = fingerprints(plugins)
     titles = {plugin.key: plugin.title for plugin in plugins}

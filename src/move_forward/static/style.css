@@ -74,6 +74,9 @@ footer { color: var(--muted); font-size: 12px; flex-wrap: wrap; justify-content:
 footer .error { color: var(--warn); }
 footer form { margin: 0 0 0 auto; }
 footer button { font-size: 12px; }
+/* A plugin whose group the tag view leaves off: its summary's refresh status and button. */
+footer .left-off { display: inline-flex; align-items: baseline; gap: 6px; }
+footer .left-off form { margin: 0; }
 
 details[data-drag] > summary[draggable="true"] { cursor: grab; }
 

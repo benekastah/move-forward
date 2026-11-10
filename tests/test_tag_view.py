@@ -2,10 +2,14 @@
 
 import re
 
-from conftest import dashboard, entry, pr, snapshot, titles, todo
+from conftest import NOW, dashboard, entry, pr, snapshot, stored, titles, todo
 
 from move_forward import render, tag_view
+from move_forward.page import SourceStatus
 from move_forward.panels import ACT_NOW, Dashboard
+from move_forward.refresh import build_tag_view
+
+_ERRANDS = [entry("Errands", [todo("one #chores", "quick"), todo("two", "quick")])]
 
 
 def _board() -> Dashboard:
@@ -18,8 +22,15 @@ def _board() -> Dashboard:
                 pr(3, title="Other"),
             ]
         ),
-        work_items=[entry("Errands", [todo("one #chores", "quick"), todo("two", "quick")])],
+        work_items=_ERRANDS,
     )
+
+
+def _selecting(tags: list[str], **overrides: object) -> tuple[Dashboard, Dashboard]:
+    """What the page is built from with `tags` selected: the dashboard built with them, and the
+    one without, for the drop-down."""
+    config, db = stored(**overrides)
+    return build_tag_view(config, db, tags, NOW)
 
 
 def _hrefs(html: str, cls: str) -> list[str]:
@@ -57,8 +68,47 @@ def test_panels_and_groups_left_empty_leave_the_page_but_focus_mode_still_knows_
     assert board.focus_items("notes.todos") == []
     html = render.dashboard_page(_board(), set(), tags=["garbage-day"])
     assert "Todos from the work notes" not in html and "Other" not in html
+    # The sections' open state keeps those left off (see `OPEN_SECTIONS_SCRIPT`).
+    assert "<main data-filtered>" in html
+    assert "<main>" in render.dashboard_page(_board(), set())
     # An order dragged among only what's shown couldn't be saved whole.
     assert not re.search(r"<details[^>]* data-drag", html)
+
+
+def test_act_now_shows_the_top_of_what_carries_a_tag_not_what_of_its_top_does() -> None:
+    late = pr(50, title="Late #chores")
+    overrides = {"github": snapshot(mine=[*(pr(n) for n in range(1, 12)), late])}
+    assert "Late #chores" not in str(dashboard(**overrides).act_now())  # below Act now's cut
+    shown, everything = _selecting(["chores"], **overrides)
+    [item] = tag_view.filtered(shown, ["chores"]).act_now()
+    assert "Late #chores" in item.title and item.badges[0] == "#1"
+    assert len(everything.act_now()) > 1  # the drop-down's choices are the unfiltered page's
+    html = render.dashboard_page(shown, set(), tags=["chores"], everything=everything)
+    assert "<span class='badge'>#1</span>" in html and "Late #chores" in html
+
+
+def test_focus_mode_steps_only_through_the_parts_carrying_a_tag() -> None:
+    shown, everything = _selecting(["chores"], work_items=_ERRANDS)
+    page = render.focus_page(shown, "notes.todos", 0, tags=["chores"], everything=everything)
+    assert page is not None and "1 of 1" in page and "one #chores" in page
+    assert "two" not in page
+    focused = tag_view.focused(shown, ["chores"]).focus_items("notes.todos") or []
+    assert [item.title for _, item in focused] == ["one #chores"]
+    # Act now's item is a step whole, as on the dashboard.
+    [act] = tag_view.focused(shown, ["chores"]).act_now()
+    assert [part.title for part in act.parts] == ["one #chores", "two"]
+
+
+def test_a_plugin_whose_group_is_left_off_keeps_its_status_in_the_footer() -> None:
+    board = dashboard(github=snapshot(mine=[pr(1)]), work_items=_ERRANDS).model_copy(
+        update={"sources": {"github": SourceStatus(fetched_at=NOW, error="boom")}}
+    )
+    unfiltered = render.dashboard_page(board, set()).split("<footer>")[1]
+    assert "boom" not in unfiltered  # its group's summary says
+    footer = render.dashboard_page(board, set(), tags=["chores"]).split("<footer>")[1]
+    assert "<strong>GitHub:</strong>" in footer and "boom" in footer
+    assert "<form method='post' action='/refresh?tag=chores' class='refresh'>" in footer
+    assert "<input type='hidden' name='plugin' value='github'>" in footer
 
 
 def test_act_now_and_focus_mode_are_filtered() -> None:

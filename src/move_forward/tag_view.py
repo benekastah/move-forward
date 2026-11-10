@@ -3,17 +3,18 @@
 
 An item carries a tag when it shows the tag's `#tag` badge (`Item.tags`, set from the badges'
 own tags), and an item with parts (an entry's todos) when it or one of them does: it's kept
-whole, parts and all, in its panel, in Act now and in focus mode. A panel or a group left empty
-is left off the page. The selection is kept in every link and form that comes back to the page
+whole, parts and all, in its panel and in Act now. Focus mode, which steps through a panel's
+parts one at a time, skips those carrying none (unless their item does). Act now is ranked
+from only the nominations carrying one (`panels.build`'s `selected`), so it shows the top of
+those. A panel or a group left empty is left off the page. The selection is kept in every link and form that comes back to the page
 (see `render`), so it survives the page's reload, focus mode and a button's redirect."""
 
 from collections.abc import Mapping, Sequence
-from collections.abc import Set as AbstractSet
 from urllib.parse import urlencode
 
 from .graph import Ref
 from .page import Item
-from .panels import Dashboard
+from .panels import ACT_NOW, Dashboard, carries
 from .tags import handle
 
 PARAM = "tag"
@@ -43,11 +44,6 @@ def without(tags: Sequence[str], tag: str) -> list[str]:
     return [t for t in tags if t != tag]
 
 
-def carries(item: Item, tags: AbstractSet[str]) -> bool:
-    """Whether `item`, or one of its parts, shows the badge of one of `tags`."""
-    return any(t in tags for t in item.tags) or any(carries(part, tags) for part in item.parts)
-
-
 def filtered(dashboard: Dashboard, tags: Sequence[str]) -> Dashboard:
     """The dashboard with only the items carrying one of `tags`, every one without any. A panel
     left empty is kept, for focus mode to say so, but leaves its group's `panel_keys`, and a
@@ -66,6 +62,34 @@ def filtered(dashboard: Dashboard, tags: Sequence[str]) -> Dashboard:
     ]
     return dashboard.model_copy(
         update={"panels": panels, "groups": [g for g in groups if g.panel_keys]}
+    )
+
+
+def focused(dashboard: Dashboard, tags: Sequence[str]) -> Dashboard:
+    """`filtered`, for focus mode: an item in a panel that carries none of `tags` itself keeps
+    only its parts that carry one, as focus mode steps through each part alone. Act now's items
+    are steps whole, and keep theirs."""
+    shown = filtered(dashboard, tags)
+    if not tags:
+        return shown
+    wanted = set(tags)
+    act_now = shown.find_group(ACT_NOW)
+    whole = set(act_now.panel_keys) if act_now else set[str]()
+
+    def trimmed(item: Item) -> Item:
+        if any(t in wanted for t in item.tags) or not item.parts:
+            return item
+        return item.model_copy(update={"parts": [p for p in item.parts if carries(p, wanted)]})
+
+    return shown.model_copy(
+        update={
+            "panels": [
+                p
+                if p.key in whole
+                else p.model_copy(update={"items": [trimmed(i) for i in p.items]})
+                for p in shown.panels
+            ]
+        }
     )
 
 
