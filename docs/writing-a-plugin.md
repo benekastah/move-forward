@@ -496,13 +496,13 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in
   `ActionResult(notice, touched=[ref])`, and that entity is fetched again (below).
-- **Fetching a few entities again.** `refresh_subjects(req)` (`req.refs`, of kinds the
-  plugin publishes; `req.snapshot`, what it last stored) fetches just those entities now
-  and returns `Subjects(snapshot, updated)`, the snapshot with them folded in, which core
-  keeps as a refresh's would (events too). It's what an action's `touched` refs, a tab
-  coming back to focus and `mfd refresh --subject` use; returning None (the default), or
-  failing or taking longer than a minute, refreshes the plugin whole
-  instead. github fetches the PRs in one request.
+- **Fetching a few entities again.** An action's `touched` refs, a tab coming back to
+  focus and `mfd refresh --subject` call the publisher's `collect` with `req.full` False and
+  the entities' ids as `req.subjects`, and core keeps what it returns as a refresh's (events
+  too), without counting it as the plugin's refresh. A `collect` that can fetch just those
+  does (github fetches the PRs in one request); one that can't, or gets a subject it doesn't
+  know, fetches everything. Failing, or taking longer than `collect` may, refreshes the
+  plugin whole.
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, req.ctx.kept(key))` and implement `kept_item`.
 - **Pages.** `pages()` maps keys to handlers `(req: InputRequest) -> str | Response | None`

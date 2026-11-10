@@ -41,7 +41,6 @@ from ..page import (
 from ..plugin import (
     API_VERSION,
     KEPT,
-    MAX_SUBJECTS,
     ActionError,
     ActionHandler,
     ActionResult,
@@ -64,8 +63,6 @@ from ..plugin import (
     Request,
     Response,
     SourceError,
-    Subjects,
-    SubjectsRequest,
     UrlRequest,
     collect_into,
 )
@@ -78,7 +75,6 @@ __all__ = [
     "IMPORTED",
     "KEPT",
     "LOOKED_UP",
-    "MAX_SUBJECTS",
     "Action",
     "ActionError",
     "ActionHandler",
@@ -127,8 +123,6 @@ __all__ = [
     "Signals",
     "SourceError",
     "Strict",
-    "Subjects",
-    "SubjectsRequest",
     "Surface",
     "UrlRequest",
     "age",

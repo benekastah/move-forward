@@ -23,7 +23,7 @@ from .db import Database
 from .graph import Graph, Ref
 from .notifications import NotificationRepository
 from .panels import Layout
-from .plugin import KEPT, MAX_SUBJECTS, ActionError, Response
+from .plugin import KEPT, ActionError, Response
 from .refresh import (
     PageFailed,
     build_dashboard,
@@ -74,6 +74,8 @@ HANDSHAKE_PATHS = (LOGIN_CHALLENGE_PATH, LOGIN_CODE_PATH)
 NOTIFICATIONS_PATH = "/notifications"
 NOTIFICATIONS_STREAM_PATH = "/notifications/stream"
 SUBJECTS_PATH = "/refresh/subjects"
+MAX_SUBJECTS = 50
+"""How many entities one `POST /refresh/subjects` asks to fetch again, at most."""
 _SUBJECTS = TypeAdapter(Annotated[list[Ref], Field(max_length=MAX_SUBJECTS)])
 """`POST /refresh/subjects`'s body: the entities to fetch again, as `[{kind, id}]`."""
 RESERVED_PATHS = frozenset(
@@ -333,7 +335,7 @@ class App:
     ) -> tuple[str, dict[str, str]]:
         """Run a button's action and refresh afterwards, so the page reflects it soon: the
         acting plugin, and what it says it touched (`ActionResult.touched`), fetched again
-        through its publisher's `refresh_subjects`.
+        through its publisher's `collect` (see `refresh.refresh_subjects`).
         `back` is the page the button was on, when it wasn't the dashboard.
 
         Returns the notice for the page and, when it succeeded, its redirect parameters.

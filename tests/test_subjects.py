@@ -9,60 +9,75 @@ from conftest import NOW, issue, pr, snapshot, stored
 
 from move_forward import refresh, registry
 from move_forward.graph import Ref
-from move_forward.plugin import Subjects, SubjectsRequest
+from move_forward.plugin import ContextRequest, RefreshRequest
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
+from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
+from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.repositories import SnapshotRepository
 
 PR_1 = Ref(kind="pull_request", id=pr(1).url)
 APP_1 = Ref(kind="ticket", id="https://jira/browse/APP-1")
+ASKED: list[tuple[str, bool, frozenset[str]]] = []
+"""What each recording plugin's collect was asked: by whom, whether in full, and which
+subjects."""
 
 
-class _Recording(GitHubPlugin):
-    """github, recording what it's asked to fetch again and keeping its snapshot."""
+class _GitHub(GitHubPlugin):
+    """github, recording what it's asked to fetch and keeping its snapshot."""
 
-    asked: ClassVar[list[list[Ref]]] = []
     slow: ClassVar[bool] = False
 
-    def refresh_subjects(
-        self, req: SubjectsRequest[GitHubConfig, GitHubSnapshot]
-    ) -> Subjects[GitHubSnapshot] | None:
-        self.asked.append(req.refs)
+    def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
+        ASKED.append((self.name, req.full, req.subjects))
         if self.slow:
             time.sleep(0.5)
-        assert req.snapshot is not None
-        return Subjects(req.snapshot, req.refs)
+        kept = self.load(ContextRequest(req.ctx))
+        assert kept is not None
+        return kept
 
 
-@pytest.fixture
+class _Jira(JiraPlugin):
+    """jira, recording what it's asked to fetch and keeping its snapshot."""
+
+    def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
+        ASKED.append((self.name, req.full, req.subjects))
+        kept = self.load(ContextRequest(req.ctx))
+        assert kept is not None
+        return kept
+
+
+@pytest.fixture(autouse=True)
 def recording(monkeypatch: pytest.MonkeyPatch) -> None:
-    swap = {"github": _Recording()}
+    swap = {"github": _GitHub(), "jira": _Jira()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
-    monkeypatch.setattr(_Recording, "asked", [])
+    ASKED.clear()
 
 
-@pytest.mark.usefixtures("recording")
-def test_each_plugin_is_asked_for_its_own_and_one_that_cant_is_refreshed_whole() -> None:
+def test_each_plugin_collects_just_its_own_by_id() -> None:
     config, db = stored(github=snapshot(mine=[pr(1)]), jira=JiraSnapshot(issues=[issue("APP-1")]))
     unknown = Ref(kind="pull_request", id="https://github.com/acme/widgets/pull/99")
-    fallback = refresh.refresh_subjects(config, db, [PR_1, APP_1, unknown], NOW)
-    assert _Recording.asked == [[PR_1]]  # not the ticket, nor a PR the graph doesn't have
-    assert fallback == {"jira"}  # jira can't fetch one ticket: it's refreshed whole
+    assert refresh.refresh_subjects(config, db, [PR_1, APP_1, unknown], NOW) == set()
+    # Not a PR the graph doesn't have: no one publishes it.
+    assert sorted(ASKED) == [
+        ("github", False, frozenset({PR_1.id})),
+        ("jira", False, frozenset({APP_1.id})),
+    ]
 
 
-@pytest.mark.usefixtures("recording")
+def test_it_isnt_the_plugins_refresh() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1)]))
+    before = SnapshotRepository(db).of(["github"])["github"].fetched_at
+    refresh.refresh_subjects(config, db, [PR_1], NOW.replace(year=2030))
+    assert SnapshotRepository(db).of(["github"])["github"].fetched_at == before
+
+
 def test_a_plugin_taking_too_long_is_refreshed_whole(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(_Recording, "slow", True)
-    monkeypatch.setattr(refresh, "SUBJECTS_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(_GitHub, "slow", True)
+    monkeypatch.setattr(refresh, "COLLECT_TIMEOUT_SECONDS", 0.05)
+    # Its thread runs on after the test: it mustn't leave github collecting for the next.
+    monkeypatch.setattr(refresh, "_collecting", set[str]())
     config, db = stored(github=snapshot(mine=[pr(1)]))
     assert refresh.refresh_subjects(config, db, [PR_1], NOW) == {"github"}
-
-
-@pytest.mark.usefixtures("recording")
-def test_many_entities_are_fetched_fifty_at_a_time() -> None:
-    prs = [pr(n) for n in range(1, 56)]
-    config, db = stored(github=snapshot(mine=prs))
-    refs = [Ref(kind="pull_request", id=p.url) for p in prs]
-    assert refresh.refresh_subjects(config, db, refs, NOW) == set()
-    assert [len(asked) for asked in _Recording.asked] == [50, 5]

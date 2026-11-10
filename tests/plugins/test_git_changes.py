@@ -12,6 +12,7 @@ from conftest import NOW
 from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
 from move_forward.graph import Graph
+from move_forward.ids import branch_id
 from move_forward.plugin import (
     Context,
     ContextRequest,
@@ -338,3 +339,35 @@ def test_two_clones_of_one_github_repo_are_a_problem(
     assert warning == problem
     plugin.collect(RefreshRequest(replace(ctx, config=GitConfig(repos=clones[:1])), Graph()))
     assert ProblemRepository(db).of([""]) == {}  # one clone left: nothing wrong
+
+
+def test_a_collect_of_a_branch_reads_its_repo_alone_and_of_anything_else_every_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a, b = _repo(tmp_path / "a"), _repo(tmp_path / "b")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    ctx = Context(
+        config=GitConfig(repos=[a, b]),
+        email="me@example.com",
+        teams=[],
+        prune_days=90,
+        now=NOW,
+        db=db,
+        kv=KvRepository(db, "git"),
+    )
+    plugin = GitPlugin(watching=False)
+    plugin.store(Request(ctx, Graph(), plugin.collect(RefreshRequest(ctx, Graph()))))
+    read: list[str] = []
+    real = client.collect_repo
+
+    def counting(repo: Path, *args: Any) -> LocalRepo:
+        read.append(repo.name)
+        return real(repo, *args)
+
+    monkeypatch.setattr(client, "collect_repo", counting)
+    plugin.collect(RefreshRequest(ctx, Graph(), False, frozenset({branch_id(str(b), "main")})))
+    assert read == ["b"]
+    read.clear()
+    plugin.collect(RefreshRequest(ctx, Graph(), False, frozenset({"acme/widgets"})))
+    assert sorted(read) == ["a", "b"]

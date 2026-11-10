@@ -19,7 +19,6 @@ from move_forward.plugin import (
     RefRequest,
     RefreshRequest,
     Request,
-    SubjectsRequest,
 )
 from move_forward.plugins.github import client, derive
 from move_forward.plugins.github.config import GitHubConfig
@@ -341,20 +340,26 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
         assert changes.get("github").subjects == set()
         return gh
 
-    refresh(0, "acme/widgets#2")  # nothing stored to place them in yet: everything
+    refresh(
+        0, "https://github.com/acme/widgets/pull/2"
+    )  # nothing stored to place them in yet: everything
     assert len(searched) == 1 and fetched == []
-    gh = refresh(1, "acme/widgets#2")
+    gh = refresh(1, "https://github.com/acme/widgets/pull/2")
     assert fetched == [[client.PrId(repo="acme/widgets", number=2)]] and len(searched) == 1
     assert [p.number for p in gh.mine] == [1] and [p.number for p in gh.merged_recent] == [2]
-    refresh(2, "acme/widgets#2", EVERYTHING)  # a change not about a PR: everything
+    refresh(
+        2, "https://github.com/acme/widgets/pull/2", EVERYTHING
+    )  # a change not about a PR: everything
     assert len(searched) == 2 and len(fetched) == 1
     failing = True
-    refresh(3, "acme/widgets#2")  # fetching them failed: everything
+    refresh(3, "https://github.com/acme/widgets/pull/2")  # fetching them failed: everything
     assert len(searched) == 3 and len(fetched) == 2
     failing = False
-    refresh(9, "acme/widgets#2")  # refresh_seconds (300) since everything last ran
+    refresh(
+        9, "https://github.com/acme/widgets/pull/2"
+    )  # refresh_seconds (300) since everything last ran
     assert len(searched) == 4 and len(fetched) == 2
-    many = [f"acme/widgets#{n}" for n in range(client.PAGE_SIZE + 1)]
+    many = [f"https://github.com/acme/widgets/pull/{n}" for n in range(client.PAGE_SIZE + 1)]
     refresh(10, *many)  # more than one request should carry: everything
     assert len(searched) == 5 and len(fetched) == 2
 
@@ -375,7 +380,7 @@ def test_partial_collect_fetches_membership_for_a_new_individual_policy_team(
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     monkeypatch.setattr(client, "team_members", team_members)
     found = GitHubPlugin().collect(
-        RefreshRequest(ctx, Graph(), False, frozenset({"acme/widgets#2"}))
+        RefreshRequest(ctx, Graph(), False, frozenset({"https://github.com/acme/widgets/pull/2"}))
     )
     assert found.team_memberships["acme/bacon"] == ["shared"]
 
@@ -393,7 +398,7 @@ def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     found = GitHubPlugin().collect(
-        RefreshRequest(ctx, Graph(), False, frozenset({"acme/widgets#1"}))
+        RefreshRequest(ctx, Graph(), False, frozenset({"https://github.com/acme/widgets/pull/1"}))
     )
     assert found.team_members == ["ann"]  # mine, not acme/x's
 
@@ -487,7 +492,7 @@ def test_reviewers_whose_email_lookup_fails_are_one_problem_until_none_does(
     assert ProblemRepository(ctx.db).of([""]) == {}
 
 
-def test_refreshing_subjects_fetches_those_prs_into_their_lists(
+def test_a_collect_of_some_prs_fetches_those_into_their_lists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     asked: list[list[client.PrId]] = []
@@ -498,33 +503,42 @@ def test_refreshing_subjects_fetches_those_prs_into_their_lists(
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     ctx = _context()
-    stored = snapshot(mine=[pr(1), pr(2)])
-    refs = [Ref(kind="pull_request", id=pr(n).url) for n in (1, 3, 4)]  # 4: gone
-    found = GitHubPlugin().refresh_subjects(SubjectsRequest(ctx, refs, stored))
-    assert found is not None
+    PrRepository(ctx.db).replace(snapshot(mine=[pr(1), pr(2)]))
+    urls = frozenset(pr(n).url for n in (1, 3, 4))  # 4: gone
+    found = GitHubPlugin().collect(RefreshRequest(ctx, Graph(), False, urls))
     assert asked == [[client.PrId(repo="acme/widgets", number=n) for n in (1, 3, 4)]]
-    assert [(p.number, p.title) for p in found.snapshot.mine] == [(1, "Renamed"), (2, "PR 2")]
-    assert [p.number for p in found.snapshot.direct_requests] == [3]
-    assert found.updated == refs[:2]
+    assert [(p.number, p.title) for p in found.mine] == [(1, "Renamed"), (2, "PR 2")]
+    assert [p.number for p in found.direct_requests] == [3]
 
 
 @pytest.mark.parametrize(
-    "url",
+    ("url", "stored"),
     [
-        "https://github.example.com/acme/widgets/pull/1",  # another host
-        "https://github.com/acme/widgets/issues/1",
-        "https://github.com/acme/widgets/pull/x",
+        ("https://github.example.com/acme/widgets/pull/1", True),  # another host
+        ("https://github.com/acme/widgets/issues/1", True),
+        ("https://github.com/acme/widgets/pull/x", True),
+        (pr(1).url, False),  # nothing stored yet to place it in
     ],
 )
-def test_refreshing_what_isnt_one_of_the_hosts_prs_falls_back_to_a_refresh(url: str) -> None:
-    ref = Ref(kind="pull_request", id=url)
-    plugin = GitHubPlugin()
-    assert plugin.refresh_subjects(SubjectsRequest(_context(), [ref], snapshot())) is None
+def test_a_collect_of_what_it_cant_fetch_alone_searches_everything(
+    monkeypatch: pytest.MonkeyPatch, url: str, stored: bool
+) -> None:
+    searched: list[bool] = []
 
+    def collect(*args: object) -> object:
+        searched.append(True)
+        return snapshot()
 
-def test_refreshing_subjects_before_a_first_refresh_waits_for_it() -> None:
-    ref = Ref(kind="pull_request", id=pr(1).url)
-    assert GitHubPlugin().refresh_subjects(SubjectsRequest(_context(), [ref], None)) is None
+    def fetch_prs(host: str, ids: list[client.PrId]) -> list[object]:
+        raise AssertionError("fetched alone")
+
+    monkeypatch.setattr(client, "collect", collect)
+    monkeypatch.setattr(client, "fetch_prs", fetch_prs)
+    ctx = _context()
+    if stored:
+        PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
+    GitHubPlugin().collect(RefreshRequest(ctx, Graph(), False, frozenset({url})))
+    assert searched == [True]
 
 
 def test_the_daily_prune_looks_up_old_misses_again() -> None:

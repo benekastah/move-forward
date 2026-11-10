@@ -34,13 +34,13 @@ class _Branch(Model):
 
 def tips(graph: Graph, own_kind: str) -> dict[str, str]:
     """Where the local branch of each open PR of mine is, and how it stands against its
-    upstream, by the PR's `owner/name#number`: a value changes when its branch moves."""
+    upstream, by the PR's URL: a value changes when its branch moves."""
     seen: dict[str, str] = {}
     for pr in graph.view(own_kind, _MyPr):
         if not pr.mine or pr.state != "open":
             continue
         for branch in graph.view_related(Ref(kind=PR, id=pr.id), BRANCH, _Branch):
-            seen[f"{pr.repo}#{pr.number}"] = json.dumps([branch.sha, branch.ahead, branch.behind])
+            seen[pr.id] = json.dumps([branch.sha, branch.ahead, branch.behind])
     return seen
 
 

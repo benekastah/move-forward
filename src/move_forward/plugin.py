@@ -185,10 +185,13 @@ class RefreshRequest[C: BaseModel]:
     they named nothing. Otherwise fetching `subjects` is enough, keeping the rest as
     stored."""
     subjects: frozenset[str] = frozenset()
-    """For `collect`: what the plugin's change checks said moved (`Changed.subjects`) since a
-    collect last stored. Core keeps each until a collect that started after it was said
-    stores, so a collect that fails loses none of it, and what moves again while one runs
-    stays for the next."""
+    """For `collect`: what moved, in the plugin's own terms. What its change checks said
+    (`Changed.subjects`) since a collect last stored: core keeps each until a collect that
+    started after it was said stores, so a collect that fails loses none of it, and what moves
+    again while one runs stays for the next. Or, with `full` False and nothing pending, the ids
+    of its entities to fetch again now: those an action touched (`ActionResult.touched`), or
+    that I opened or asked for again (↻, `mfd refresh --subject`). A collect that can't fetch
+    just those fetches everything."""
     previous: Previous[BaseModel] = field(default_factory=Previous[BaseModel])
     """For `changed` only: when core took the plugin's last answer, its fingerprint, and the
     graph it was given, to compare with `graph` for what other plugins' refreshes moved since
@@ -247,29 +250,6 @@ class InputRequest[C: BaseModel]:
             return self.form.fields[name]
         except KeyError:
             raise ActionError(f"missing field {name!r}") from None
-
-
-@dataclass(frozen=True)
-class SubjectsRequest[C: BaseModel, S: BaseModel]:
-    ctx: Context[C]
-    refs: list[Ref]
-    """What to fetch again: entities the plugin publishes, at most `MAX_SUBJECTS`."""
-    snapshot: S | None
-    """What the plugin last stored, to fold them into; None before its first refresh."""
-
-
-@dataclass(frozen=True)
-class Subjects[S: BaseModel]:
-    """What `refresh_subjects` fetched: the plugin's snapshot with them folded in."""
-
-    snapshot: S
-    """Kept with `store`, as a refresh's would be."""
-    updated: list[Ref] = field(default_factory=list[Ref])
-    """The refs fetched; the rest the tool didn't know."""
-
-
-MAX_SUBJECTS = 50
-"""How many entities one refresh of subjects fetches at most."""
 
 
 @dataclass(frozen=True)
@@ -550,15 +530,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return Changed()
 
     # Reading
-
-    def refresh_subjects(self, req: SubjectsRequest[C, S]) -> Subjects[S] | None:
-        """Fetch just these of its entities again, now (an item I opened, a PR an action
-        touched), and fold them into its snapshot, rather than fetching everything. Core
-        keeps the result as a refresh would, events and all, but it doesn't count as the
-        plugin's refresh (`fetched_at` stays). None, by default, when the plugin can't:
-        core refreshes the whole plugin instead, as it does when this fails or takes longer
-        than a minute (`refresh.SUBJECTS_TIMEOUT_SECONDS`)."""
-        return None
 
     def relate(self, req: Request[C, S]) -> list[tuple[Ref, Ref]]:
         """Relations the plugin knows between one of its entities and another plugin's,

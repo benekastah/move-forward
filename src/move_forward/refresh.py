@@ -34,7 +34,6 @@ from .kinds import FAMILIES
 from .notifications import Event, NotificationRepository
 from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
 from .plugin import (
-    MAX_SUBJECTS,
     ActionError,
     ActionResult,
     Form,
@@ -46,8 +45,6 @@ from .plugin import (
     RefreshRequest,
     Request,
     Response,
-    Subjects,
-    SubjectsRequest,
     adds_nothing,
     collect_into,
 )
@@ -71,9 +68,6 @@ COLLECT_TIMEOUT_SECONDS = 300
 """How long a plugin's `collect` may take. Past it, the refresh records
 the plugin as failed and goes on; the plugin is left out of refreshes until its collect
 returns (a thread can't be stopped)."""
-SUBJECTS_TIMEOUT_SECONDS = 60
-"""How long a plugin's `refresh_subjects` may take before core refreshes the plugin
-instead."""
 
 _collecting: set[str] = set()
 """The plugins whose `collect` is still running, maybe past its timeout: a thread can't be
@@ -351,9 +345,11 @@ def publishers(graph: Graph, refs: list[Ref]) -> dict[str, list[Ref]]:
 def refresh_subjects(
     config: Config, db: Database, refs: list[Ref], now: datetime | None = None
 ) -> set[str]:
-    """Fetch these entities again through their plugins' `refresh_subjects`, `MAX_SUBJECTS`
-    at a time, keeping what each returns as a refresh would (its events too); returns the
-    plugins that couldn't, for a full refresh instead."""
+    """Fetch these entities again: each publisher's `collect`, given their ids as its
+    `subjects` and `full` False, kept as a refresh would (its events too). It doesn't count as
+    the plugin's refresh: `fetched_at` stays, and what its change checks said moved stays
+    pending. Returns the plugins whose collect failed, took longer than
+    `COLLECT_TIMEOUT_SECONDS` or was still running from a refresh, for a full refresh instead."""
     now = now or datetime.now(UTC)
     plugins = {e.name: e for e in enabled(config, db, now)}
     before = before_refresh(db, list(plugins.values()))
@@ -363,18 +359,15 @@ def refresh_subjects(
         e = plugins[name]
         if not e.plugin.collects:
             continue
-        for start in range(0, len(mine), MAX_SUBJECTS):
-            result = _subjects(e, mine[start : start + MAX_SUBJECTS])
-            if result is None:
-                fallback.add(name)
-                break
-            try:
-                store_snapshot(e, result.snapshot, before.graph)
-                stored = True
-            except Exception:
-                log.exception("%s: storing its subjects failed", name)
-                fallback.add(name)
-                break
+        snapshot = _collect_subjects(e, frozenset(ref.id for ref in mine), before.graph)
+        try:
+            if snapshot is None:
+                raise RuntimeError("no snapshot")
+            store_snapshot(e, snapshot, before.graph)
+            stored = True
+        except Exception:
+            log.debug("%s: fetching %s again failed", name, mine, exc_info=True)
+            fallback.add(name)
     if stored:
         graph, snapshots = stored_graph(db, list(plugins.values()))
         subscribed = set(config.notifications.subscribe)
@@ -382,20 +375,31 @@ def refresh_subjects(
     return fallback
 
 
-def _subjects(e: Enabled, refs: list[Ref]) -> Subjects[BaseModel] | None:
-    """The plugin's `refresh_subjects`, within `SUBJECTS_TIMEOUT_SECONDS`; None when it
-    can't, fails or takes longer (the thread is left to finish, as a collect's is)."""
+def _collect_subjects(e: Enabled, subjects: frozenset[str], graph: Graph) -> BaseModel | None:
+    """The plugin's `collect` of just `subjects`, within `COLLECT_TIMEOUT_SECONDS`; None when
+    it fails, takes longer (the thread is left to finish, as a refresh's is) or a collect of
+    the plugin is still running."""
+    with _collecting_lock:
+        if e.name in _collecting:
+            return None
+        _collecting.add(e.name)
+
+    def run() -> BaseModel:
+        try:
+            return e.plugin.collect(RefreshRequest(e.ctx, graph, False, subjects))
+        finally:
+            with _collecting_lock:
+                _collecting.discard(e.name)
+
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"subjects-{e.name}")
-    future = pool.submit(
-        lambda: e.plugin.refresh_subjects(SubjectsRequest(e.ctx, refs, e.snapshot()))
-    )
+    future = pool.submit(run)
     pool.shutdown(wait=False)
     try:
-        return future.result(timeout=SUBJECTS_TIMEOUT_SECONDS)
+        return future.result(timeout=COLLECT_TIMEOUT_SECONDS)
     except FutureTimeout:
-        log.warning("%s: refreshing %s subject(s) took too long", e.name, len(refs))
+        log.warning("%s: fetching %s subject(s) again took too long", e.name, len(subjects))
     except Exception:
-        log.exception("%s: refreshing subjects failed", e.name)
+        log.exception("%s: fetching subjects again failed", e.name)
     return None
 
 

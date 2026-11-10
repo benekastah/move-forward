@@ -27,6 +27,7 @@ from ...api import (
     Request,
     attrs,
 )
+from ...api.ids import branch_parts
 from ...api.shell import CommandError, git_common_dir
 from . import actions, changes, client, watch
 from .config import GitConfig
@@ -50,6 +51,21 @@ _FINGERPRINTS = TypeAdapter(dict[str, str])
 """`changes.fingerprints`, as the fingerprint core keeps (`Changed.fingerprint`)."""
 CLONES = "clones"
 """The problem (`Context.problem`) of the repos that are each a clone of one GitHub repo."""
+
+
+def _repos_of(repos: list[Path], subjects: frozenset[str]) -> set[str] | None:
+    """The common git directories of `repos` that `subjects` name, each by its own or by a
+    branch's id (`branch_id`); None when one names neither."""
+    known = {str(common) for repo in repos if (common := git_common_dir(repo)) is not None}
+    found: set[str] = set()
+    for subject in subjects:
+        repo_dir, branch = branch_parts(subject)
+        if branch and (common := git_common_dir(Path(repo_dir))) is not None:
+            subject = str(common)
+        if subject not in known:
+            return None
+        found.add(subject)
+    return found
 
 
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
@@ -90,20 +106,22 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         return questions(ask, setup)
 
     def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
-        """Every repo; or, after `changed` saw only some move (`req.subjects`, by common git
-        directory), just those, keeping the rest as stored, unless core asks for a full
-        collect (`refresh_seconds` since the last, so frequent changes can't put it off). What
-        was read before stands in for a repo git can't read now. Repos that are each a clone of
-        one GitHub repo are a problem (`CLONES`) until only one is left."""
+        """Every repo; or, when only some moved (`req.subjects`: the common git directories
+        `changed` saw move, or the branches an action touched or I opened, by id), just those,
+        keeping the rest as stored, unless core asks for a full collect (`refresh_seconds` since
+        the last, so frequent changes can't put it off) or a subject is neither. What was read
+        before stands in for a repo git can't read now. Repos that are each a clone of one
+        GitHub repo are a problem (`CLONES`) until only one is left."""
         ctx = req.ctx
         previous = self.load(ContextRequest(ctx))
-        partial = not req.full and previous is not None
+        only = _repos_of(ctx.config.repos, req.subjects)
+        partial = not req.full and previous is not None and only is not None
         found = client.collect(
             ctx.config.repos,
             ctx.now,
             ctx.config.commit_history_days,
             ctx.config.ignored_worktree_globs,
-            only=set(req.subjects) if partial else None,
+            only=only if partial else None,
             previous=previous,
             github_hosts=ctx.config.github_hosts,
         )

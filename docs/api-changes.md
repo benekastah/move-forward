@@ -91,6 +91,12 @@ for themselves (a token, a request, an example config) is core's.
   nothing are tried again after a cutoff.
 - **No collecting in pieces**: `Collected` has left `api`. `collect` returns the snapshot,
   and core calls it once per refresh.
+- **Fetching some entities again is a collect**: `refresh_subjects`, `SubjectsRequest`,
+  `Subjects` and `MAX_SUBJECTS` are gone. An action's `touched` refs, ↻ and `mfd refresh
+  --subject` call the publisher's `collect` with `full` False and their ids as `subjects`; one
+  that can fetch just those does (github, by PR URL; git, by a branch's id or a repo's common
+  git directory), and one that can't fetches everything, as `full` would. It isn't counted as
+  the plugin's refresh. github's change checks name PRs by URL now, as its entities' ids.
 - **Collecting after the graph** is `collects_after = True`, and `collect` reads the graph
   (`req.graph`, which every collect gets): `collect_after` and `collects_after_graph` are
   gone. Such a plugin is refreshed on its own schedule, no longer with the plugins it
@@ -100,8 +106,7 @@ for themselves (a token, a request, an example config) is core's.
 - **No `KindSpec.fetched_attrs`**: a fetched entity's attributes fit its family's fetched
   model, or else its kind's own attributes.
 - **Timeouts are core's**: the class variables `collect_timeout_seconds` and
-  `subjects_timeout_seconds` are gone. `collect` has five minutes, and
-  `refresh_subjects` a minute, for every plugin.
+  `subjects_timeout_seconds` are gone. `collect` has five minutes, for every plugin.
 - **`KindSpec.linking` is a `bool`**: `linking=True` where it was `linking=None`. A pattern
   for its ids comes only from `linking_patterns`, which by default gives none: a kind that
   gave `linking` a pattern string sets `linking=True` and returns the pattern from

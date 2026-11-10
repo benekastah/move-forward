@@ -18,7 +18,6 @@ its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened 
 review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
 - **Hooks removed:**
-  - `refresh_subjects`: ↻ calls `collect` with its subjects;
   - `kept_item`: core keeps the focused item in memory across a button, so a todo just
     ticked shows as it is now, its box ticked, with its buttons but those that can't act
     from the remembered copy.

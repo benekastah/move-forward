@@ -20,8 +20,6 @@ from move_forward.plugin import (
     ContextRequest,
     RefreshRequest,
     Request,
-    Subjects,
-    SubjectsRequest,
 )
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
@@ -490,12 +488,11 @@ def test_fetching_a_pr_again_tells_what_changed_once(monkeypatch: pytest.MonkeyP
     config, db = _merging(monkeypatch, subscribe, snapshot(mine=[_OPEN]), merged)
     refresh.refresh(config, db, NOW)
 
-    def again(
-        self: GitHubPlugin, req: SubjectsRequest[GitHubConfig, GitHubSnapshot]
-    ) -> Subjects[GitHubSnapshot]:
-        return Subjects(merged, req.refs)
+    def again(self: GitHubPlugin, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
+        assert not req.full and req.subjects == {_OPEN.url}
+        return merged
 
-    monkeypatch.setattr(GitHubPlugin, "refresh_subjects", again)
+    monkeypatch.setattr(GitHubPlugin, "collect", again)
     pr_ref = Ref(kind="pull_request", id=_OPEN.url)
     assert refresh.refresh_subjects(config, db, [pr_ref], NOW) == set()
     assert _told(db) == _MERGE_TOLD
