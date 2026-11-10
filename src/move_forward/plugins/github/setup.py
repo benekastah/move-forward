@@ -11,7 +11,7 @@ GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 TABLES = """\
 # A team's slug, by its name in `teams`, where it isn't the team's name.
 # [github.teams]
-# web = "web-reviewers"
+# my-team = "my-team-reviewers"
 """
 EXAMPLE = '# org = "example-org"\n'
 

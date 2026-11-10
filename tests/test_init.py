@@ -573,6 +573,20 @@ def test_every_comment_is_above_its_key_or_table(name: str) -> None:
             assert tomledit.value(tomllib.loads(f"v = {key[1]}")["v"]) == key[1], line
 
 
+@pytest.mark.parametrize("name", list(WRITTEN))
+def test_every_table_starts_after_a_blank_line(name: str) -> None:
+    """A table, commented out or not, with the comment above it, reads as a section of its
+    own: the line before them is blank."""
+    lines = WRITTEN[name].splitlines()
+    for i, line in enumerate(lines):
+        if not re.match(r"^(#+ )?\[", line):
+            continue
+        start = i
+        while start > 0 and re.match(r"^#+ (?![a-z_-]+ = |\[)", lines[start - 1]):
+            start -= 1  # its comment, prose rather than a key or another table
+        assert start == 0 or lines[start - 1].strip("#").strip() == "", (name, line)
+
+
 class _Spanned(BaseModel):
     key: int = 0
     """A comment whose code span would straddle the wrap, as it starts near its end: word word
