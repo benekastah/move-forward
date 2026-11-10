@@ -15,9 +15,10 @@ Fewer things to know: what no plugin used is gone, and what several plugins wrot
 for themselves (a token, a request, an example config) is core's.
 
 - **Core keeps what moved**: `changed` says what moved in the tool, and core keeps it, not
-  the plugin. `Changed` gains `fingerprint` (the tool's state as text, which core compares
-  with the last) and `subjects` (what moved, in the plugin's own terms); `changed=True` is
-  something moved that no subject names. `ChangedRequest` gains `fingerprint` and
+  the plugin. `Changed` takes keywords only: `fingerprint` (the tool's state as text, which
+  core compares with the last), `subjects` (what moved, in the plugin's own terms),
+  `everything` (something moved that no subject names; it was `changed`) and `reason`;
+  `Changed()` says nothing moved, and an answer is no longer true or false. `ChangedRequest` gains `fingerprint` and
   `checked_at`, the last answer's fingerprint and when it was taken, and `CollectRequest`
   and `CollectAfterRequest` gain `subjects` (what moved since a collect given it last
   stored, which core keeps until one does) and `full` (whether to fetch everything:
@@ -66,8 +67,7 @@ for themselves (a token, a request, an example config) is core's.
 - **Two hooks no plugin overrode are gone**: `refresh_seconds(ctx)` (a plugin refreshes on
   its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
   place under other names overrides `tokens(config)`, returning `{"": settings}`).
-- **`changed` returns a `Changed`**, never a bare bool: `Changed(True, "why")` or
-  `Changed(False)`.
+- **`changed` returns a `Changed`**, never a bare bool (see "Core keeps what moved" above).
 - **`init_suggested()` is False by default**: `mfd init` suggests a plugin only when it
   overrides it to say True.
 - **`api.http` is `request` and `RequestError`**: `api.http.opener` and

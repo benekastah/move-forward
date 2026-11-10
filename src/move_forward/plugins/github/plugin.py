@@ -220,8 +220,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         )
         prs = frozenset((moved | notified) - {EVERYTHING})
         if EVERYTHING in notified:
-            return Changed(True, "every search", subjects=prs)
-        return Changed(reason=f"{len(prs)} PR(s) changed", subjects=prs)
+            return Changed(subjects=prs, everything=True, reason="every search")
+        return Changed(subjects=prs, reason=f"{len(prs)} PR(s) changed")
 
     def _tips(self, graph: Graph) -> dict[str, str]:
         return pushes.tips(graph, f"{self.name}.{PR}")

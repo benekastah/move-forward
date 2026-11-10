@@ -443,7 +443,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             seconds = (ctx.now - req.checked_at).total_seconds()
             minutes = math.ceil(seconds / 60) + 1
             found = client.updated_within(ctx.config, ctx.email, ctx.token(), minutes)
-        return Changed(found, "a ticket of mine was updated")
+        return Changed(everything=found, reason="a ticket of mine was updated")
 
     def load(self, req: LoadRequest[JiraConfig]) -> JiraSnapshot | None:
         ctx = req.ctx

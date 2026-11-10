@@ -140,7 +140,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         when mail comes, goes or is read. One `STATUS` each, without opening the mailbox."""
         ctx = req.ctx
         now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
-        return Changed(reason="the mailbox changed", fingerprint=now)
+        return Changed(fingerprint=now, reason="the mailbox changed")
 
     def identity(self, req: IdentityRequest[MailConfig, MailSnapshot]) -> Identity | None:
         return Identity(

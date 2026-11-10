@@ -309,24 +309,21 @@ class ChangedRequest[C: BaseModel]:
     first."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Changed:
     """`changed`'s answer: what moved in the plugin's tool, which core keeps (see
-    `Plugin.changed`)."""
+    `Plugin.changed`). `Changed()` says nothing moved."""
 
-    changed: bool = False
-    """Something moved that `subjects` doesn't name, so the next collect is a full one."""
-    reason: str = ""
-    """What changed, e.g. "notifications about 2 PRs"; it goes into the log line."""
     fingerprint: str | None = None
     """The tool's state now, as text that changes whenever it moves (a digest, a mailbox's
     counts); None for a plugin that has none. Core keeps it and compares the next with it."""
     subjects: frozenset[str] = frozenset()
     """What moved, in the plugin's own terms (repos, PRs), for `collect` to fetch just
     those (`CollectRequest.subjects`)."""
-
-    def __bool__(self) -> bool:
-        return self.changed
+    everything: bool = False
+    """Something moved that `subjects` doesn't name, so the next collect is a full one."""
+    reason: str = ""
+    """What changed, e.g. "notifications about 2 PRs"; it goes into the log line."""
 
 
 @dataclass(frozen=True)
@@ -592,16 +589,16 @@ class Plugin[C: BaseModel, S: BaseModel]:
         from what's stored), so the plugin refreshes soon after a change rather than at its
         next `refresh_seconds`. Say it as a `fingerprint` of the tool's state, which core
         compares with the last (`req.fingerprint`), the `subjects` that moved, or that
-        something moved that no subject names (`changed`); or both. Other plugins' entities
-        are compared with `previous_graph`, which core keeps too. Say why in `reason`, for the
-        log.
+        something moved that no subject names (`everything`); or more than one of these.
+        Other plugins' entities are compared with `previous_graph`, which core keeps too. Say
+        why in `reason`, for the log; `Changed()` says nothing moved.
 
         Core asks again as each collect of the plugin starts, so what moves while it runs is
         compared with what it read, and gives `collect` what moved since a collect last
         stored. It asks for a refresh only when something new moved: a different
-        fingerprint, a subject not yet pending, or `changed`. May raise; the error is logged
-        and the next check tries again."""
-        return Changed(False)
+        fingerprint, a subject not yet pending, or `everything`. May raise; the error is
+        logged and the next check tries again."""
+        return Changed()
 
     # Reading
 

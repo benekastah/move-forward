@@ -135,6 +135,12 @@ def _context(db: Database, minutes: int = 0, **config: object) -> Context[GitHub
     )
 
 
+def _nothing(plugin: GitHubPlugin, ctx: Context[GitHubConfig]) -> bool:
+    """Whether the plugin's change check says nothing moved."""
+    answer = plugin.changed(ChangedRequest(ctx, Graph([])))
+    return not answer.subjects and not answer.everything
+
+
 def test_a_poll_that_fails_is_a_problem_until_one_works_and_tries_again_later(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -154,15 +160,15 @@ def test_a_poll_that_fails_is_a_problem_until_one_works_and_tries_again_later(
     db.migrate("github", MIGRATIONS)
     plugin = GitHubPlugin()
     for minutes in (0, 0, 1, 2):
-        assert not plugin.changed(ChangedRequest(_context(db, minutes), Graph([])))
+        assert _nothing(plugin, _context(db, minutes))
     assert calls == ["poll", "poll", "poll"]  # not again within the minute
     said = f"can't read GitHub notifications: {failed}"
     assert ProblemRepository(db).of([""]) == {"": [said]}
     # Kept across a restart, so it isn't warned of again.
-    assert not GitHubPlugin().changed(ChangedRequest(_context(db, 3), Graph([])))
+    assert _nothing(GitHubPlugin(), _context(db, 3))
     assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
     answers.append(_answer(FIRST))
-    assert not plugin.changed(ChangedRequest(_context(db, 4), Graph([])))
+    assert _nothing(plugin, _context(db, 4))
     assert ProblemRepository(db).of([""]) == {}
 
 
@@ -205,11 +211,11 @@ def test_a_token_that_cant_read_notifications_is_logged_once_a_run_not_a_problem
     ProblemRepository(db).set("", "notifications", "can't read GitHub notifications: blip", NOW)
     plugin = GitHubPlugin()
     for minutes in (0, 0, 1, 2):
-        assert not plugin.changed(ChangedRequest(_context(db, minutes), Graph([])))
+        assert _nothing(plugin, _context(db, minutes))
     assert calls == ["poll", "poll", "poll"]  # not again within the minute
     assert ProblemRepository(db).of([""]) == {}  # nothing I can fix but the token
     said = f"can't read GitHub notifications (a fine-grained token can't): {refused}"
     assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
     # Once each run, as the log of a run is read on its own.
-    assert not GitHubPlugin().changed(ChangedRequest(_context(db, 3), Graph([])))
+    assert _nothing(GitHubPlugin(), _context(db, 3))
     assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said] * 2

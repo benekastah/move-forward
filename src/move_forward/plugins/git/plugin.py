@@ -184,10 +184,10 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             moved |= changes.moved(before, now)
         moved |= self._edited(ctx, edited_now, watcher.worktrees if watcher else set())
         return Changed(
-            before is not None and set(before) != set(now),
-            "a repo moved or was edited",
             fingerprint=_FINGERPRINTS.dump_json(now).decode(),
             subjects=frozenset(moved),
+            everything=before is not None and set(before) != set(now),
+            reason="a repo moved or was edited",
         )
 
     def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:

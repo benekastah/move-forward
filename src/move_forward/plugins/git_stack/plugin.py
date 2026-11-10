@@ -70,7 +70,9 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         moved = previous is not None and (
             changes.branches(previous, dirs) != changes.branches(graph, dirs)
         )
-        return Changed(moved, "a stack may have moved", fingerprint=changes.configs(dirs))
+        return Changed(
+            fingerprint=changes.configs(dirs), everything=moved, reason="a stack may have moved"
+        )
 
     def load(self, req: LoadRequest[GitStackConfig]) -> GitStackSnapshot | None:
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""

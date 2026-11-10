@@ -710,7 +710,7 @@ class _GitHubWithChecks(GitHubPlugin):
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return answer if isinstance(answer, Changed) else Changed(answer)
+        return answer if isinstance(answer, Changed) else Changed(everything=answer)
 
 
 def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
@@ -740,7 +740,9 @@ def test_why_a_plugin_changed_is_logged(
     swap = {"github": _GitHubWithChecks()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     monkeypatch.setattr(
-        _GitHubWithChecks, "answers", [Changed(True, "2 PRs notified"), Changed(False, "x")]
+        _GitHubWithChecks,
+        "answers",
+        [Changed(everything=True, reason="2 PRs notified"), Changed(reason="x")],
     )
     with caplog.at_level(logging.INFO):
         assert app.check_for_changes(1000.0) == {"github"}
@@ -759,7 +761,7 @@ class _GitHubComparingGraphs(GitHubPlugin):
         self.given.append((req.previous_graph, req.graph))
         if self.failing.pop(0):
             raise RuntimeError("offline")
-        return Changed(False)
+        return Changed()
 
 
 def test_a_change_check_is_given_the_graph_of_the_last_that_didnt_fail(
@@ -781,7 +783,7 @@ class _SlackChanging(SlackPlugin):
     change_check_seconds: ClassVar[int | None] = 60
 
     def changed(self, req: ChangedRequest[SlackConfig]) -> Changed:
-        return Changed(True, "a message")
+        return Changed(everything=True, reason="a message")
 
 
 class _GitHubAnsweringBadly(GitHubPlugin):

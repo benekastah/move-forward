@@ -54,7 +54,7 @@ class ChangeChecks:
     def check(self, e: Enabled, graph: Graph) -> Changed | None:
         """Ask the plugin what moved, and keep the answer; the answer when something new
         moved (a fingerprint other than the last, a subject not pending yet, or
-        `Changed.changed`), for a refresh, else None. Raises when the check does, or answers
+        `Changed.everything`), for a refresh, else None. Raises when the check does, or answers
         with something that isn't a `Changed`: then nothing is kept, and the next check
         compares with the same as this one did."""
         repo = ChangeRepository(e.ctx.db)
@@ -66,10 +66,10 @@ class ChangeChecks:
         )
         if not isinstance(cast(object, answer), Changed):  # a plugin needn't be type-checked
             raise TypeError(f"changed answered {answer!r}, not a Changed")
-        repo.checked(e.name, answer.fingerprint, e.ctx.now, answer.subjects, answer.changed)
+        repo.checked(e.name, answer.fingerprint, e.ctx.now, answer.subjects, answer.everything)
         self._graphs[e.name] = graph
         moved = (
-            answer.changed
+            answer.everything
             or bool(answer.subjects - held.subjects)
             or (
                 held.fingerprint is not None

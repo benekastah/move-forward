@@ -147,7 +147,7 @@ def test_a_collect_is_full_when_due_when_something_unnamed_moved_or_nothing_is_p
     assert collect(0, a) == (True, {"a"})  # never collected in full
     assert collect(1, a) == (False, {"a"})
     assert collect(2) == (True, frozenset())  # nothing pending: a Refresh button
-    assert collect(3, Changed(True, subjects=frozenset({"a"}))) == (True, {"a"})
+    assert collect(3, Changed(subjects=frozenset({"a"}), everything=True)) == (True, {"a"})
     git.failing = True
     assert collect(13, a) == (True, {"a"})  # refresh_seconds since the last full one
     git.failing = False

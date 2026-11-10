@@ -180,11 +180,11 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   request answered "not modified", another plugin's entities in the graph) sets
   `change_check_seconds` and implements `changed(req)`, which says what moved in its tool
   (a `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the `subjects`
-  that moved in the plugin's own terms (repos, PRs), `changed=True` for something moved
-  that no subject names, or more than one of these, and a `reason` for the log. Core keeps
-  the answer, not the plugin: the server asks that often, compares each fingerprint with the
-  last, and refreshes the plugin as soon as something new moved (a different fingerprint, a
-  subject not yet pending, or `changed`). It asks again as each collect of the plugin starts,
+  that moved in the plugin's own terms (repos, PRs), `everything=True` for something moved
+  that no subject names, or more than one of these, and a `reason` for the log; `Changed()`
+  says nothing moved. Core keeps the answer, not the plugin: the server asks that often,
+  compares each fingerprint with the last, and refreshes the plugin as soon as something new
+  moved (a different fingerprint, a subject not yet pending, or `everything`). It asks again as each collect of the plugin starts,
   so what moves while it runs is compared with what it read. The last fingerprint and when
   it was taken are `req.fingerprint` and `req.checked_at`, for a check that needs them
   (which repos moved, what was updated since); other plugins' entities it compares with
