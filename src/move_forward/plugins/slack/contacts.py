@@ -9,9 +9,9 @@ from ...api import (
     LOOKED_UP,
     Action,
     ActionError,
-    ActionRequest,
     Context,
     Graph,
+    InputRequest,
     Model,
     SourceError,
     html,
@@ -79,7 +79,7 @@ def set_team_channel(slack: SlackRepository, team: str, name: str, channel_id: s
     return f"{team}'s pings go to {channel_name or channel}"
 
 
-def clear_team_channel_action(req: ActionRequest[SlackConfig]) -> str:
+def clear_team_channel_action(req: InputRequest[SlackConfig]) -> str:
     """Forget a team's channel, as `mfd slack team unset` does."""
     team = req.field("team")
     if not SlackRepository(req.ctx.db).unset_team_channel(team):
@@ -87,7 +87,7 @@ def clear_team_channel_action(req: ActionRequest[SlackConfig]) -> str:
     return f"forgot {team}'s channel"
 
 
-def clear_contact_action(req: ActionRequest[SlackConfig]) -> str:
+def clear_contact_action(req: InputRequest[SlackConfig]) -> str:
     """Forget where a person's pings go, as `mfd slack contact unset` does, so they're imported
     or looked up again."""
     login = req.field("login")
@@ -96,13 +96,13 @@ def clear_contact_action(req: ActionRequest[SlackConfig]) -> str:
     return f"forgot what was kept for {login}; they're looked up again"
 
 
-def set_contact_action(req: ActionRequest[SlackConfig]) -> str:
-    ctx, fields = req.ctx, req.fields
+def set_contact_action(req: InputRequest[SlackConfig]) -> str:
+    ctx, fields = req.ctx, req.form.fields
     return set_contact(SlackRepository(ctx.db), req.field("login"), fields.get("slack_id", ""))
 
 
-def set_team_channel_action(req: ActionRequest[SlackConfig]) -> str:
-    ctx, fields = req.ctx, req.fields
+def set_team_channel_action(req: InputRequest[SlackConfig]) -> str:
+    ctx, fields = req.ctx, req.form.fields
     return set_team_channel(
         SlackRepository(ctx.db),
         req.field("team"),

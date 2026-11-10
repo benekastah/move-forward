@@ -9,7 +9,7 @@ from conftest import NOW, pr, snapshot
 from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import ChangedRequest, Context
+from move_forward.plugin import Context, RefreshRequest
 from move_forward.plugins.github import notifications
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -164,7 +164,7 @@ def _context(db: Database, minutes: int = 0, **config: object) -> Context[GitHub
 
 def _nothing(plugin: GitHubPlugin, ctx: Context[GitHubConfig]) -> bool:
     """Whether the plugin's change check says nothing moved."""
-    answer = plugin.changed(ChangedRequest(ctx, Graph([])))
+    answer = plugin.changed(RefreshRequest(ctx, Graph([])))
     return not answer.subjects and not answer.everything
 
 

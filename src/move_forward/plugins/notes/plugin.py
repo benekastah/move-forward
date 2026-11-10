@@ -12,16 +12,12 @@ from pydantic import BaseModel
 from ...api import (
     API_VERSION,
     ActionHandler,
-    ActNowRequest,
-    AfterCollectRequest,
     CliHandler,
     Context,
-    EntitiesRequest,
     Entity,
     Graph,
     ImportRequest,
     Item,
-    ItemActionsRequest,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
@@ -29,9 +25,8 @@ from ...api import (
     KindSpec,
     Migration,
     Panel,
-    PanelsRequest,
     Plugin,
-    PruneRequest,
+    Request,
 )
 from ...api.kinds import FAMILIES
 from . import actions, cli, prune
@@ -68,12 +63,12 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     }
     cli_help = "read and change the notes, or export them as the skill's markdown"
 
-    def entities(self, req: EntitiesRequest[NotesConfig, BaseModel]) -> list[Entity]:
+    def entities(self, req: Request[NotesConfig, BaseModel]) -> list[Entity]:
         ctx = req.ctx
         notes = NotesRepository(ctx.db)
         return entities(notes.entries(), notes.ices(), notes.covers())
 
-    def after_collect(self, req: AfterCollectRequest[NotesConfig]) -> None:
+    def after_collect(self, req: Request[NotesConfig, BaseModel]) -> None:
         """Give links and what's on ice the ids their entities have now (a ticket kept by its
         key gets its URL once jira can say it), then find again what each act of icing
         covers besides its items, e.g. new PRs from its branches."""
@@ -84,7 +79,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         ices = notes.ices()
         notes.replace_covers([i.id for i in ices], covers(graph, ices))
 
-    def panels(self, req: PanelsRequest[NotesConfig, BaseModel]) -> list[Panel]:
+    def panels(self, req: Request[NotesConfig, BaseModel]) -> list[Panel]:
         ctx, graph = req.ctx, req.graph
         builder = _builder(ctx, graph)
         todos = builder.todos()
@@ -92,12 +87,12 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
             todos = todos.model_copy(update={"description": EMPTY_NOTES})
         return [todos, builder.iced()]
 
-    def act_now(self, req: ActNowRequest[NotesConfig, BaseModel]) -> list[Item]:
+    def act_now(self, req: Request[NotesConfig, BaseModel]) -> list[Item]:
         """Close-outs: entries whose open todos are all quick, finishing the entry."""
         panels = req.panels
         return [i for p in panels if p.key == TODOS for i in p.items if i.signals]
 
-    def item_actions(self, req: ItemActionsRequest[NotesConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[NotesConfig, BaseModel]) -> ItemAdditionsFor:
         """Put on ice and Add todo on other plugins' items, from the notes read once for the
         page."""
         builder = _builder(req.ctx, req.graph)
@@ -119,7 +114,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         todo = _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
         return (TODOS, todo) if todo else None
 
-    def prune(self, req: PruneRequest[NotesConfig]) -> list[str]:
+    def prune(self, req: Request[NotesConfig, BaseModel]) -> list[str]:
         ctx, graph = req.ctx, req.graph
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         return prune.prune(NotesRepository(ctx.db), graph, cutoff)

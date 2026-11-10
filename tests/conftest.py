@@ -12,10 +12,11 @@ from move_forward import auth, localtime
 from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
+from move_forward.graph import Graph
 from move_forward.notifications import Event
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
-from move_forward.plugin import AfterCollectRequest
+from move_forward.plugin import Previous, Request
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
@@ -265,13 +266,11 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         know_jira_projects(db, "APP")
     for e in enabled(config, db, NOW):  # kept as a refresh keeps them
         if e.name in snapshots:
-            store_snapshot(e, snapshots[e.name])
+            store_snapshot(e, snapshots[e.name], Graph())
             SnapshotRepository(db).save_fetched(e.name, NOW)
     plugins = enabled(config, db, NOW)
     notes = next(e for e in plugins if e.name == "notes")
-    notes.plugin.after_collect(
-        AfterCollectRequest(notes.ctx, stored_graph(db, plugins)[0])
-    )  # what ice covers
+    notes.plugin.after_collect(Request(notes.ctx, stored_graph(db, plugins)[0], None))  # ice covers
     if derived is not None:
         DerivedRepository(db).replace(derived)
         SnapshotRepository(db).save_fetched("github.derived", NOW)
@@ -301,7 +300,8 @@ def events_between(plugin: str, before: dict[str, object], after: dict[str, obje
     graph, snapshots = stored_graph(db, plugins)
     e = next(e for e in plugins if e.name == plugin)
     newly_shown_of(e, previous_snapshots[plugin], previous)  # what showed before, to compare
-    return events_of(e, previous_snapshots[plugin], snapshots[plugin], previous, graph)
+    was = Previous(snapshot=previous_snapshots[plugin], graph=previous)
+    return events_of(e, was, snapshots[plugin], graph)
 
 
 def pings(**overrides: object) -> dict[str, PrPing]:

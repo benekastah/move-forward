@@ -17,21 +17,17 @@ from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
 from move_forward.page import Action, Identity, Item, ItemAdditions
 from move_forward.plugin import (
-    ActNowRequest,
     CliHandler,
-    CliRequest,
     Context,
-    EntitiesRequest,
-    FetchRequest,
+    ContextRequest,
     HandleRequest,
-    ItemActionsRequest,
+    InputRequest,
     ItemAdditionsFor,
     ItemRequest,
-    LinkingRequest,
     PageHandler,
-    PageRequest,
     Plugin,
-    RelateRequest,
+    RefRequest,
+    Request,
     UrlRequest,
 )
 from move_forward.plugins.github.config import GitHubConfig
@@ -50,7 +46,7 @@ from move_forward.repositories import KvRepository
 class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /jira/hello."""
 
-    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[JiraConfig, BaseModel]) -> ItemAdditionsFor:
         def additions(each: ItemRequest) -> ItemAdditions:
             pr = each.item.subject("pull_request")
             if pr is None:
@@ -62,8 +58,8 @@ class Hooked(JiraPlugin):
         return additions
 
     def pages(self) -> dict[str, PageHandler]:
-        def hello(req: PageRequest[JiraConfig]) -> str | None:
-            graph, query = req.graph, req.query
+        def hello(req: InputRequest[JiraConfig]) -> str | None:
+            graph, query = req.graph, req.page.query
             pr_url = query.get("pr", [""])[0]
             entity = graph.get("pull_request", pr_url)
             return render.page("Hello", "hello", render.e(entity.title)) if entity else None
@@ -80,8 +76,8 @@ def hooked(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_act_now_tells_a_plugin_the_due_horizon(monkeypatch: pytest.MonkeyPatch) -> None:
     told: list[timedelta] = []
 
-    def act_now(self: GitHubPlugin, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
-        told.append(req.due_horizon)
+    def act_now(self: GitHubPlugin, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Item]:
+        told.append(req.ctx.due_horizon)
         return []
 
     monkeypatch.setattr(GitHubPlugin, "act_now", act_now)
@@ -139,7 +135,7 @@ class _Counted(JiraPlugin):
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         parser.add_argument("what")
 
-        def run(req: CliRequest[JiraConfig]) -> int:
+        def run(req: InputRequest[JiraConfig]) -> int:
             ctx, graph, args = req.ctx, req.graph, req.args
             print(f"{args.what}: {len(graph.of_kind('ticket'))} for {ctx.email}")
             return 3
@@ -168,7 +164,7 @@ class _Fetching(JiraPlugin):
 
     asked: ClassVar[list[list[str]]] = []
 
-    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
+    def fetch(self, req: RefRequest[JiraConfig]) -> list[Entity]:
         kind, ids = req.kind, req.ids
         self.asked.append(ids)
         if kind != "ticket":
@@ -204,7 +200,7 @@ class _Asked(JiraPlugin):
 
     asked: ClassVar[list[tuple[str, str]]] = []
 
-    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
+    def fetch(self, req: RefRequest[JiraConfig]) -> list[Entity]:
         self.asked.append(("fetch", req.kind))
         return []
 
@@ -249,7 +245,7 @@ class _GitHubPeople(GitHubPlugin):
         _family_asked.append((self.name, "handle_for"))
         return None
 
-    def fetch(self, req: FetchRequest[GitHubConfig]) -> list[Entity]:
+    def fetch(self, req: RefRequest[GitHubConfig]) -> list[Entity]:
         _family_asked.append((self.name, "fetch"))
         return [_person("github.com/alice", handle="alice", me=False)]
 
@@ -261,7 +257,7 @@ class _MailPeople(MailPlugin):
         _family_asked.append((self.name, "handle_for"))
         return "bob@x.org"
 
-    def fetch(self, req: FetchRequest[MailConfig]) -> list[Entity]:
+    def fetch(self, req: RefRequest[MailConfig]) -> list[Entity]:
         _family_asked.append((self.name, "fetch"))
         return [_person("mail/bob@x.org", handle="bob@x.org", email="bob@x.org")]
 
@@ -311,7 +307,7 @@ def test_url_for_is_by_default_the_id_where_the_familys_ids_are_urls() -> None:
 
 
 class _Failing(JiraPlugin):
-    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
+    def fetch(self, req: RefRequest[JiraConfig]) -> list[Entity]:
         raise RuntimeError("no Jira token")
 
 
@@ -334,7 +330,7 @@ class _Declaring(JiraPlugin):
 
     kinds: ClassVar[dict[str, KindSpec]] = {"ticket": KindSpec(_TicketAttrs)}
 
-    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Entity]:
         return [
             Entity(ref=Ref(kind="ticket", id="https://j/1"), title="good", attrs={"summary": "s"}),
             Entity(ref=Ref(kind="ticket", id="https://j/2"), title="bad", attrs={"summary": 3.5}),
@@ -366,7 +362,7 @@ class _Veiling(Hooked):
         "jira.veil": KindSpec(_VeilAttrs, hides=True),
     }
 
-    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Entity]:
         veil = Entity(
             ref=Ref(kind="jira.veil", id="1"),
             title="veil",
@@ -395,7 +391,7 @@ def test_core_leaves_out_items_about_what_a_hiding_kind_covers(
 class _Unruly(JiraPlugin):
     """Jira, publishing a ticket twice, one of github's PRs, and a kind it never declared."""
 
-    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Entity]:
         [ticket] = super().entities(req)
         return [
             ticket,
@@ -427,7 +423,7 @@ def test_a_plugin_publishes_only_the_kinds_it_declares_and_each_ref_once(
 class _Narrowed(JiraPlugin):
     """Jira, finding only OPS keys in text."""
 
-    def linking_patterns(self, req: LinkingRequest[JiraConfig]) -> dict[str, str | None]:
+    def linking_patterns(self, req: ContextRequest[JiraConfig]) -> dict[str, str | None]:
         return {"ticket": r"\bOPS-\d+\b"}
 
 
@@ -441,7 +437,7 @@ class _Prepared(JiraPlugin):
 
     prepared = 0
 
-    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[JiraConfig, BaseModel]) -> ItemAdditionsFor:
         _Prepared.prepared += 1
         prs = {e.ref.id for e in req.graph.of_kind("pull_request")}
 
@@ -511,7 +507,7 @@ def test_the_page_says_who_i_am_in_each_tool_that_knows() -> None:
 class _Relating(JiraPlugin):
     """Jira, relating its ticket to PR 1, and (wrongly) github's PR to its ticket."""
 
-    def relate(self, req: RelateRequest[JiraConfig]) -> list[tuple[Ref, Ref]]:
+    def relate(self, req: Request[JiraConfig, BaseModel]) -> list[tuple[Ref, Ref]]:
         [ticket] = req.graph.of_kind("ticket")
         the_pr = Ref(kind="pull_request", id=pr(1).url)
         return [(ticket.ref, the_pr), (the_pr, ticket.ref)]

@@ -9,35 +9,26 @@ from urllib.parse import urlsplit
 from ...api import (
     API_VERSION,
     ActionHandler,
-    ActNowRequest,
-    AfterCollectRequest,
     Asker,
     Changed,
-    ChangedRequest,
-    CollectRequest,
     Context,
-    EntitiesRequest,
+    ContextRequest,
     Entity,
     Event,
-    EventsRequest,
-    FetchRequest,
     Graph,
     Identity,
-    IdentityRequest,
     ImportRequest,
     InitSetup,
     Item,
     KindSpec,
-    LoadRequest,
     Migration,
     Panel,
-    PanelsRequest,
     Plugin,
-    PruneRequest,
     Ref,
-    RelateRequest,
+    RefRequest,
+    RefreshRequest,
+    Request,
     Signals,
-    StoreRequest,
     Subjects,
     SubjectsRequest,
     attrs,
@@ -142,7 +133,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         """`[github.merge]`'s method, whose default (GitHub's pick) TOML can't write."""
         return {"merge": {"method": "squash"}}
 
-    def collect(self, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
+    def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, after `changed` saw only some PRs (`owner/name#number`) change,
         just those PRs (`req.subjects`), placed in the stored lists as the searches would find
         them. Every search runs when core asks for a full collect (`refresh_seconds` since the
@@ -153,7 +144,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         config = ctx.config
         changed = req.subjects
         everything = req.full or len(changed) > client.PAGE_SIZE
-        previous = None if everything else self.load(LoadRequest(ctx))
+        previous = None if everything else self.load(ContextRequest(ctx))
         if previous is not None and changed:
             ids = [_pr_id(pr) for pr in sorted(changed)]
             try:
@@ -199,17 +190,18 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             ),
         )
 
-    def store(self, req: StoreRequest[GitHubConfig, GitHubSnapshot]) -> None:
+    def store(self, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
+        assert snapshot is not None
         PrRepository(ctx.db).replace(snapshot)
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
         refresh of git, which it watches), or I have a notification about something my
         searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed are
         the answer's subjects, which core keeps for `collect`, to fetch just those; a
         notification about something else asks for every search."""
-        ctx, graph, previous = req.ctx, req.graph, req.previous_graph
+        ctx, graph, previous = req.ctx, req.graph, req.previous.graph
         notified = self._notified(ctx)
         # Against the graph at the last check that didn't raise: core keeps it for us.
         moved = (
@@ -277,20 +269,21 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             elif n.kind not in notifications.UNRELATED:
                 prs.add(EVERYTHING)
         if ci_repos:
-            if (snapshot := self.load(LoadRequest(ctx))) is None:
+            if (snapshot := self.load(ContextRequest(ctx))) is None:
                 return prs | {EVERYTHING}
             prs |= {f"{pr.repo}#{pr.number}" for pr in snapshot.mine if pr.repo.lower() in ci_repos}
         return prs
 
-    def events(self, req: EventsRequest[GitHubConfig, GitHubSnapshot]) -> list[Event]:
-        ctx, before, after = req.ctx, req.before, req.after
+    def events(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Event]:
+        ctx, before, after = req.ctx, req.previous.snapshot, req.snapshot
+        assert before is not None and after is not None
         return changes.changes(before, after, ctx.config.ignored_reviewers)
 
-    def load(self, req: LoadRequest[GitHubConfig]) -> GitHubSnapshot | None:
+    def load(self, req: ContextRequest[GitHubConfig]) -> GitHubSnapshot | None:
         ctx = req.ctx
         return PrRepository(ctx.db).load()
 
-    def identity(self, req: IdentityRequest[GitHubConfig, GitHubSnapshot]) -> Identity | None:
+    def identity(self, req: Request[GitHubConfig, GitHubSnapshot]) -> Identity | None:
         """My GitHub login, as the last refresh found it."""
         snapshot = req.snapshot
         return (
@@ -333,11 +326,11 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             else None,
         )
 
-    def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
+    def after_collect(self, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the
         local checkouts the graph's `git.repo` entities describe."""
         ctx, graph = req.ctx, req.graph
-        gh = self.load(LoadRequest(ctx))
+        gh = self.load(ContextRequest(ctx))
         if gh is None:
             return
         self._lookup_emails(ctx, gh)
@@ -427,7 +420,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             attrs=attrs(pr_attrs),
         )
 
-    def entities(self, req: EntitiesRequest[GitHubConfig, GitHubSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Entity]:
         """A `pull_request` for every PR in the snapshot, and a `person` (`<host>/<login>`)
         for me and for everyone whose email github knows."""
         ctx, snapshot = req.ctx, req.snapshot
@@ -480,11 +473,11 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             [ref for ref in req.refs if ref.id in urls],
         )
 
-    def relate(self, req: RelateRequest[GitHubConfig]) -> list[tuple[Ref, Ref]]:
+    def relate(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[tuple[Ref, Ref]]:
         """Each of its PRs to the local branch it comes from (see `relations`)."""
         return relations.relations(req.graph, f"{self.name}.{PR}")
 
-    def fetch(self, req: FetchRequest[GitHubConfig]) -> list[Entity]:
+    def fetch(self, req: RefRequest[GitHubConfig]) -> list[Entity]:
         """PRs by URL, with their state and `closed_at`: when they were merged or closed."""
         ctx, ids = req.ctx, req.ids
         found: list[Entity] = []
@@ -515,14 +508,14 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         PeopleRepository(req.ctx.db).replace_imported(emails)
         return [f"imported {len(emails)} reviewers' emails"]
 
-    def prune(self, req: PruneRequest[GitHubConfig]) -> list[str]:
+    def prune(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[str]:
         """Forget email lookups that found none `prune_days` ago, to try them again."""
         ctx = req.ctx
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         retried = PeopleRepository(ctx.db).forget_misses_before(cutoff)
         return [f"will look up {retried} reviewer email(s) again"] if retried else []
 
-    def act_now(self, req: ActNowRequest[GitHubConfig, GitHubSnapshot]) -> list[Item]:
+    def act_now(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Item]:
         """The panels' items with signals, their own or their panel's (one with neither is
         listed only), the feedback on my drafts too, though a draft's item is
         deferred; but not a deferred review: a draft isn't ready for one. Asking for a reviewer
@@ -551,7 +544,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS
 
-    def panels(self, req: PanelsRequest[GitHubConfig, GitHubSnapshot]) -> list[Panel]:
+    def panels(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         derived = DerivedRepository(ctx.db).load()
         return Builder(ctx.config, ctx.teams, ctx.now, snapshot, derived, graph).panels()

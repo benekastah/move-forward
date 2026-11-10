@@ -252,8 +252,8 @@ def test_tags_on_gone_entities_are_forgotten_and_finished_work_keeps_them() -> N
         repo.add(ref, "chores", NOW)
     repo.take_off(untagged, "errand", "notes", NOW)
     plugins = enabled(config, db, NOW)
-    graph, _ = refresh.stored_graph(db, plugins)
-    notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
+    graph, snapshots = refresh.stored_graph(db, plugins)
+    notices = refresh._prune_plugins(plugins, graph, snapshots, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
     assert "tags: forgot what I tagged or untagged on 2 gone entity(ies)" in notices
     assert repo.all() == {merged: ["chores"]}
     assert repo.taken_off() == {}
@@ -422,9 +422,11 @@ def test_a_label_taken_off_stays_off_until_its_plugin_refreshes() -> None:
     [github] = [e for e in enabled(config, db, NOW) if e.name == "github"]
     collect = refresh._collect_all  # pyright: ignore[reportPrivateUsage]
     # A refresh that started before I took it off doesn't put it back.
-    collect(db, [github], NOW, lambda e, taken: labelled, ChangeChecks(), None)
+    collect(db, [github], NOW, lambda e, taken: labelled, ChangeChecks(), Graph(), False)
     assert all("#bug" not in badges for badges in _shown(config, db, pr(1).url))
-    collect(db, [github], datetime.now(UTC), lambda e, taken: labelled, ChangeChecks(), None)
+    collect(
+        db, [github], datetime.now(UTC), lambda e, taken: labelled, ChangeChecks(), Graph(), False
+    )
     assert all("#bug" in badges for badges in _shown(config, db, pr(1).url))
 
 
@@ -437,7 +439,13 @@ def test_a_refresh_puts_back_only_its_own_plugins_tags() -> None:
     [github] = [e for e in enabled(config, db, NOW) if e.name == "github"]
     collect = refresh._collect_all  # pyright: ignore[reportPrivateUsage]
     collect(
-        db, [github], NOW + timedelta(minutes=1), lambda e, taken: snapshot(), ChangeChecks(), None
+        db,
+        [github],
+        NOW + timedelta(minutes=1),
+        lambda e, taken: snapshot(),
+        ChangeChecks(),
+        Graph(),
+        False,
     )
     assert repo.taken_off() == {entry: {"errand"}}
 

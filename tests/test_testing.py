@@ -7,23 +7,20 @@ import pytest
 from move_forward.api import (
     API_VERSION,
     ActionHandler,
-    ActionRequest,
-    EntitiesRequest,
+    ContextRequest,
     Entity,
+    InputRequest,
     Item,
     KindModel,
     KindSpec,
-    LoadRequest,
     Model,
     Notify,
     PageHandler,
-    PageRequest,
     Panel,
-    PanelsRequest,
     Plugin,
     Ref,
+    Request,
     Signals,
-    StoreRequest,
     attrs,
 )
 from move_forward.api.kinds import FAMILIES, PULL_REQUEST, Family, PullRequest, is_url
@@ -66,14 +63,15 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     kinds: ClassVar[dict[str, KindSpec]] = {ISSUE: KindSpec(IssueAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = {"to_triage": "an issue is to triage"}
 
-    def store(self, req: StoreRequest[LinearConfig, LinearSnapshot]) -> None:
+    def store(self, req: Request[LinearConfig, LinearSnapshot]) -> None:
+        assert req.snapshot is not None
         req.ctx.kv.set("snapshot", req.snapshot.model_dump_json())
 
-    def load(self, req: LoadRequest[LinearConfig]) -> LinearSnapshot | None:
+    def load(self, req: ContextRequest[LinearConfig]) -> LinearSnapshot | None:
         kept = req.ctx.kv.get("snapshot")
         return LinearSnapshot.model_validate_json(kept) if kept else None
 
-    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Entity]:
         issues = req.snapshot.issues if req.snapshot else []
         team = req.ctx.config.team
         return [
@@ -81,7 +79,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
             for i in issues
         ]
 
-    def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel]:
+    def panels(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Panel]:
         issues = req.snapshot.issues if req.snapshot else []
 
         def item(issue: Issue) -> Item:
@@ -105,15 +103,15 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
         ]
 
     def actions(self) -> dict[str, ActionHandler]:
-        def close(req: ActionRequest[LinearConfig]) -> str:
+        def close(req: InputRequest[LinearConfig]) -> str:
             return f"closed {req.field('key')}"
 
         return {"close": close}
 
     def pages(self) -> dict[str, PageHandler]:
-        def issue(req: PageRequest[LinearConfig]) -> str | None:
-            key = req.query.get("key", [""])[0]
-            return f"<p>{key} at {req.path}</p>" if key else None
+        def issue(req: InputRequest[LinearConfig]) -> str | None:
+            key = req.page.query.get("key", [""])[0]
+            return f"<p>{key} at {req.page.path}</p>" if key else None
 
         return {"issue": issue}
 
@@ -215,7 +213,7 @@ class CrmPlugin(Plugin[LinearConfig, LinearSnapshot]):
     families = (Family("deal", "deal", Deal, is_url),)
     kinds: ClassVar[dict[str, KindSpec]] = {"deal": KindSpec(Deal)}
 
-    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Entity]:
         return [
             Entity(ref=Ref(kind="deal", id=id), title="Big", attrs=attrs(Deal(handle="D-1")))
             for id in ("https://crm/deals/1", "D-1")  # the second breaks the family's rule

@@ -104,7 +104,7 @@ sequenceDiagram
 
 `mfd serve` also builds it from what's stored for each round of change checks (`changed`),
 and keeps the one each plugin's last check was given (unless that check raised), to give it
-to the next as `previous_graph`; a plugin is asked as each of its collects starts too, with
+to the next as `req.previous.graph`; a plugin is asked as each of its collects starts too, with
 the graph that collect works from. A plugin that `watches` another compares the two to see
 what that one's refresh moved: github sees a branch of one of my PRs move from git's
 `git.branch` entities, without keeping where they stood itself. The first check since the

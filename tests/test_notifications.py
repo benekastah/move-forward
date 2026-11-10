@@ -15,7 +15,7 @@ from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.notifications import Event, NotificationRepository, NotificationsConfig
 from move_forward.page import Item, Notify, Panel, anchor
-from move_forward.plugin import CollectRequest, EventsRequest, LoadRequest, StoreRequest
+from move_forward.plugin import ContextRequest, RefreshRequest, Request
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
@@ -126,17 +126,17 @@ class _Git(GitPlugin):
     repos: ClassVar[list[str]] = ["one"]
     broken: ClassVar[bool] = False
 
-    def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+    def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         return local_snapshot()
 
-    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
+    def store(self, req: Request[GitConfig, LocalSnapshot]) -> None:
         req.ctx.kv.set("snapshot", json.dumps(self.repos))
 
-    def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:
+    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
         ctx = req.ctx
         return local_snapshot() if ctx.kv.get("snapshot") else None
 
-    def events(self, req: EventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
+    def events(self, req: Request[GitConfig, LocalSnapshot]) -> list[Event]:
         if self.broken:
             raise RuntimeError("no idea")
         return [Event(kind="changed", thing="git", title="git", text="changed")]
@@ -174,8 +174,8 @@ def test_events_are_asked_after_a_refresh_of_anything_with_the_graph_before_and_
     even when it wasn't fetched: its snapshot then is the same before and after."""
     asked: list[tuple[bool, bool]] = []
 
-    def record(self: _Git, req: EventsRequest[GitConfig, LocalSnapshot]) -> list[Event]:
-        asked.append((req.before == req.after, req.previous_graph is not req.graph))
+    def record(self: _Git, req: Request[GitConfig, LocalSnapshot]) -> list[Event]:
+        asked.append((req.previous.snapshot == req.snapshot, req.previous.graph is not req.graph))
         return []
 
     monkeypatch.setattr(_Git, "events", record)
@@ -187,6 +187,27 @@ def test_events_are_asked_after_a_refresh_of_anything_with_the_graph_before_and_
     refresh.refresh(config, db, NOW)  # the first store: nothing to compare with
     refresh.refresh(config, db, NOW, only=set())
     assert asked == [(True, True)]
+
+
+@pytest.mark.usefixtures("git")
+def test_events_are_told_when_the_plugins_last_refresh_ran(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    told: list[datetime | None] = []
+
+    def record(self: _Git, req: Request[GitConfig, LocalSnapshot]) -> list[Event]:
+        told.append(req.previous.at)
+        return []
+
+    monkeypatch.setattr(_Git, "events", record)
+    config = Config.model_validate(
+        {"email": "me@x", "git": {"repos": []}, "notifications": {"subscribe": ["git.changed"]}}
+    )
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    refresh.refresh(config, db, NOW)
+    refresh.refresh(config, db, NOW + timedelta(minutes=5))
+    assert told == [NOW]
 
 
 @pytest.mark.usefixtures("git")

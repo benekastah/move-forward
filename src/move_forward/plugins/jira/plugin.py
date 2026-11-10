@@ -9,35 +9,29 @@ from ...api import (
     API_VERSION,
     Action,
     ActionHandler,
-    ActNowRequest,
     Asker,
     Badge,
     Band,
     Changed,
-    ChangedRequest,
-    CollectRequest,
-    EntitiesRequest,
+    ContextRequest,
     Entity,
     Event,
-    EventsRequest,
-    FetchRequest,
     Graph,
     HandleRequest,
     InitSetup,
     Item,
     KindSpec,
     Link,
-    LinkingRequest,
-    LoadRequest,
     Migration,
     Model,
     Notify,
     Panel,
-    PanelsRequest,
     Plugin,
     Ref,
+    RefRequest,
+    RefreshRequest,
+    Request,
     Signals,
-    StoreRequest,
     UrlRequest,
     age,
     attrs,
@@ -416,46 +410,48 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 
-    def events(self, req: EventsRequest[JiraConfig, JiraSnapshot]) -> list[Event]:
+    def events(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Event]:
         """What changed on my tickets. `closeable` is the transitions panel's
         (`Item.notify`)."""
-        config, before, after = req.ctx.config, req.before, req.after
+        config, before, after = req.ctx.config, req.previous.snapshot, req.snapshot
+        assert before is not None and after is not None
         return changes.changes(config, before, after)
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS
 
-    def collect(self, req: CollectRequest[JiraConfig]) -> JiraSnapshot:
+    def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
         ctx = req.ctx
         return client.collect(ctx.config, ctx.email, ctx.token())
 
-    def store(self, req: StoreRequest[JiraConfig, JiraSnapshot]) -> None:
+    def store(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
+        assert snapshot is not None
         IssueRepository(ctx.db).replace(snapshot)
 
-    def changed(self, req: ChangedRequest[JiraConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
         """Whether a ticket of mine was updated since the last look core took
-        (`req.checked_at`, and a minute before it, as Jira counts in whole minutes): a
+        (`req.previous.at`, and a minute before it, as Jira counts in whole minutes): a
         one-result search."""
         ctx = req.ctx
         found = False
-        if req.checked_at is not None:
-            seconds = (ctx.now - req.checked_at).total_seconds()
+        if (at := req.previous.at) is not None:
+            seconds = (ctx.now - at).total_seconds()
             minutes = math.ceil(seconds / 60) + 1
             found = client.updated_within(ctx.config, ctx.email, ctx.token(), minutes)
         return Changed(everything=found, reason="a ticket of mine was updated")
 
-    def load(self, req: LoadRequest[JiraConfig]) -> JiraSnapshot | None:
+    def load(self, req: ContextRequest[JiraConfig]) -> JiraSnapshot | None:
         ctx = req.ctx
         return IssueRepository(ctx.db).load()
 
-    def linking_patterns(self, req: LinkingRequest[JiraConfig]) -> dict[str, str | None]:
+    def linking_patterns(self, req: ContextRequest[JiraConfig]) -> dict[str, str | None]:
         """Keys of the projects my tickets have been in, so `UTF-8` or `SHA-256` in a PR
         isn't taken for a ticket; none at all before jira has seen a ticket of mine."""
         ctx = req.ctx
         return {TICKET: key_pattern(IssueRepository(ctx.db).projects())}
 
-    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Entity]:
         """A `ticket` per issue, with its labels as its tags, except those that say how far it's
         escalated (`escalation_label_prefix`): they aren't what it's about."""
         snapshot, prefix = req.snapshot, req.ctx.config.escalation_label_prefix
@@ -480,7 +476,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for issue in (snapshot.issues if snapshot else [])
         ]
 
-    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
+    def fetch(self, req: RefRequest[JiraConfig]) -> list[Entity]:
         """Tickets by URL, open or resolved, with `resolved_at` (null while open). Their
         projects are remembered, so their keys link from then on (see `linking_patterns`)."""
         ctx, ids = req.ctx, req.ids
@@ -512,7 +508,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         """A ticket's key, from its URL."""
         return client.key_of(req.ctx.config.site, req.id)
 
-    def panels(self, req: PanelsRequest[JiraConfig, JiraSnapshot]) -> list[Panel]:
+    def panels(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         if snapshot is None:
             return []
@@ -522,9 +518,9 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             what_next(ctx.config, snapshot, ctx.now),
         ]
 
-    def act_now(self, req: ActNowRequest[JiraConfig, JiraSnapshot]) -> list[Item]:
+    def act_now(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Item]:
         """Its transitions, and the tickets in What next that matter now: important ones
-        (incidents, escalated bugs), those due within `req.due_horizon`, and blocked ones, which
+        (incidents, escalated bugs), those due within `ctx.due_horizon`, and blocked ones, which
         Act now ranks down until they've sat untouched for a while."""
         ctx, panels = req.ctx, req.panels
         nominated = super().act_now(req)
@@ -535,7 +531,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
                 signals = item.signals or Signals()
                 due_soon = (
                     signals.due is not None
-                    and due_pressure(signals.due, ctx.now, req.due_horizon) > 0
+                    and due_pressure(signals.due, ctx.now, ctx.due_horizon) > 0
                 )
                 if signals.importance or due_soon or signals.blocked:
                     nominated.append(item)

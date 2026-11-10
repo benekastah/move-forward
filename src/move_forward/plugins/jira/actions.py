@@ -1,14 +1,14 @@
 """Jira's buttons: change a ticket's status."""
 
-from ...api import ActionError, ActionHandler, ActionRequest, http
+from ...api import ActionError, ActionHandler, InputRequest, http
 from . import client
 from .config import JiraConfig
 
 
-def transition(req: ActionRequest[JiraConfig]) -> str:
+def transition(req: InputRequest[JiraConfig]) -> str:
     """Move the ticket `key` to the status `to`, or else one of the `also` names (one per
     line): the first its workflow offers."""
-    ctx, fields = req.ctx, req.fields
+    ctx, fields = req.ctx, req.form.fields
     key, to = req.field("key"), req.field("to")
     names = [to, *fields.get("also", "").splitlines()]
     if not client.is_key(key):

@@ -7,25 +7,21 @@ from ...api import (
     API_VERSION,
     Asker,
     Changed,
-    ChangedRequest,
-    CollectRequest,
     Context,
-    EntitiesRequest,
+    ContextRequest,
     Entity,
     Identity,
-    IdentityRequest,
     InitSetup,
+    InputRequest,
     KindSpec,
-    LoadRequest,
     Migration,
     PageHandler,
-    PageRequest,
     Panel,
-    PanelsRequest,
     Plugin,
     Ref,
+    RefreshRequest,
+    Request,
     Response,
-    StoreRequest,
     attrs,
 )
 from ...api.keychain import TokenSettings
@@ -119,7 +115,7 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""
         return {m.name: m for m in config.mailboxes()}
 
-    def collect(self, req: CollectRequest[MailConfig]) -> MailSnapshot:
+    def collect(self, req: RefreshRequest[MailConfig]) -> MailSnapshot:
         """Every mailbox's unread and flagged mail, newest first. A conversation is one whichever
         mailboxes have it, and a message sent to two of my addresses is one (`merged`)."""
         ctx = req.ctx
@@ -129,25 +125,26 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
             messages = merged(messages, found.messages)
         return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
-    def store(self, req: StoreRequest[MailConfig, MailSnapshot]) -> None:
+    def store(self, req: Request[MailConfig, MailSnapshot]) -> None:
+        assert req.snapshot is not None
         MessageRepository(req.ctx.db).replace(req.snapshot)
 
-    def load(self, req: LoadRequest[MailConfig]) -> MailSnapshot | None:
+    def load(self, req: ContextRequest[MailConfig]) -> MailSnapshot | None:
         return MessageRepository(req.ctx.db).load()
 
-    def changed(self, req: ChangedRequest[MailConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[MailConfig]) -> Changed:
         """The mailboxes' counts, as the fingerprint core compares with the last: they move
         when mail comes, goes or is read. One `STATUS` each, without opening the mailbox."""
         ctx = req.ctx
         now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
         return Changed(fingerprint=now, reason="the mailbox changed")
 
-    def identity(self, req: IdentityRequest[MailConfig, MailSnapshot]) -> Identity | None:
+    def identity(self, req: Request[MailConfig, MailSnapshot]) -> Identity | None:
         return Identity(
             tool=self.title, login=", ".join(m.username for m in req.ctx.config.mailboxes())
         )
 
-    def entities(self, req: EntitiesRequest[MailConfig, MailSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[MailConfig, MailSnapshot]) -> list[Entity]:
         found: list[Entity] = []
         people: dict[str, Entity] = {}
         for thread in threads(req.snapshot):
@@ -198,17 +195,17 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
             )
         return [*found, *people.values()]
 
-    def panels(self, req: PanelsRequest[MailConfig, MailSnapshot]) -> list[Panel]:
+    def panels(self, req: Request[MailConfig, MailSnapshot]) -> list[Panel]:
         return panels(req.ctx.config, self.name, req.snapshot, req.graph)
 
     def pages(self) -> dict[str, PageHandler]:
         return {OPEN_PAGE: self._open}
 
-    def _open(self, req: PageRequest[MailConfig]) -> Response:
+    def _open(self, req: InputRequest[MailConfig]) -> Response:
         """Send the browser to a thread's latest message in the mail app, for a `message_url`
         the page won't link to itself (`message:`, `mid:`). Only a thread the mailbox has, so
         the link is always one the config made."""
-        wanted = (req.query.get("thread") or [""])[0]
+        wanted = (req.page.query.get("thread") or [""])[0]
         latest = MessageRepository(req.ctx.db).latest(wanted)
         url = message_url(req.ctx.config, latest) if latest else None
         if url is None:

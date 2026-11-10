@@ -17,11 +17,9 @@ from move_forward.notifications import NotificationRepository
 from move_forward.page import Badge, Item
 from move_forward.plugin import (
     ActionError,
-    AfterCollectRequest,
-    CollectAfterRequest,
-    CollectRequest,
-    LoadRequest,
-    StoreRequest,
+    ContextRequest,
+    RefreshRequest,
+    Request,
     Subjects,
     SubjectsRequest,
 )
@@ -41,7 +39,7 @@ from move_forward.repositories import FeedbackRepository, SnapshotRepository
 
 
 class _Git(GitPlugin):
-    def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+    def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         return local_snapshot()
 
 
@@ -50,13 +48,13 @@ class _JiraAfterGit(JiraPlugin):
 
     seen_by_after_collect: ClassVar[list[str]] = []
 
-    def collect_after(self, req: CollectAfterRequest[JiraConfig]) -> JiraSnapshot:
+    def collect_after(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
         graph = req.graph
         return JiraSnapshot(
             issues=[issue(summary=f"about {r.ref.id}") for r in graph.of_kind("git.repo")]
         )
 
-    def after_collect(self, req: AfterCollectRequest[JiraConfig]) -> None:
+    def after_collect(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
         graph = req.graph
         self.seen_by_after_collect[:] = [t.ref.id for t in graph.of_kind("ticket")]
 
@@ -89,15 +87,16 @@ class _GitInKv(GitPlugin):
 
     broken: ClassVar[bool] = False
 
-    def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+    def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         if self.broken:
             raise RuntimeError("git is gone")
         return local_snapshot()
 
-    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
+    def store(self, req: Request[GitConfig, LocalSnapshot]) -> None:
+        assert req.snapshot is not None
         req.ctx.kv.set("snapshot", req.snapshot.model_dump_json())
 
-    def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:
+    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
         ctx = req.ctx
         stored = ctx.kv.get("snapshot")
         return LocalSnapshot.model_validate_json(stored) if stored else None
@@ -125,7 +124,7 @@ def test_a_plugin_can_keep_its_snapshot_itself(
 
 
 class _GitThatCantStore(_GitInKv):
-    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
+    def store(self, req: Request[GitConfig, LocalSnapshot]) -> None:
         raise RuntimeError("disk full")
 
 
@@ -246,26 +245,26 @@ def test_refreshing_some_plugins_refreshes_only_those(
     calls: list[str] = []
 
     class Git(GitPlugin):
-        def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+        def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
             calls.append("git")
             return local_snapshot()
 
     class JiraOnGit(JiraPlugin):
         requires: ClassVar[list[str]] = ["git"]
 
-        def collect_after(self, req: CollectAfterRequest[JiraConfig]) -> JiraSnapshot:
+        def collect_after(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
             calls.append("jira")
             return JiraSnapshot(issues=[])
 
-        def after_collect(self, req: AfterCollectRequest[JiraConfig]) -> None:
+        def after_collect(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
             calls.append("jira after")
 
     class GitHub(GitHubPlugin):
-        def collect(self, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
+        def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
             calls.append("github")
             return snapshot()
 
-        def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
+        def after_collect(self, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
             calls.append("github after")
 
     swap = {"git": Git(), "jira": JiraOnGit(), "github": GitHub()}
@@ -376,13 +375,13 @@ def _merging(
     )
     left = list(fetched)
 
-    def github_now(self: GitHubPlugin, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
+    def github_now(self: GitHubPlugin, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
         return left.pop(0)
 
-    def git_now(self: GitPlugin, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+    def git_now(self: GitPlugin, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         return local
 
-    def nothing_after(self: GitHubPlugin, req: AfterCollectRequest[GitHubConfig]) -> None:
+    def nothing_after(self: GitHubPlugin, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
         return None
 
     monkeypatch.setattr(GitHubPlugin, "collect", github_now)
@@ -456,7 +455,7 @@ def test_an_item_newly_shown_by_its_plugins_own_refresh_is_told_by_that_refresh(
         }
     )
 
-    def git_now(self: GitPlugin, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+    def git_now(self: GitPlugin, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         return fetched.pop(0)
 
     monkeypatch.setattr(_Git, "collect", git_now)

@@ -15,14 +15,10 @@ from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.page import Identity
 from move_forward.plugin import (
-    AfterCollectRequest,
-    CollectRequest,
     Context,
-    EntitiesRequest,
-    FetchRequest,
-    IdentityRequest,
-    PruneRequest,
-    StoreRequest,
+    RefRequest,
+    RefreshRequest,
+    Request,
     SubjectsRequest,
 )
 from move_forward.plugins.github import client, derive
@@ -80,7 +76,7 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
     entities = {
         e.ref.id: e
         for e in GitHubPlugin().entities(
-            EntitiesRequest(_context(teams={"web": "web-reviewers"}), gh)
+            Request(_context(teams={"web": "web-reviewers"}), Graph(), gh)
         )
         if e.ref.kind == "pull_request"
     }
@@ -107,7 +103,7 @@ def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
     PeopleRepository(ctx.db).replace_imported({"alice": "a@x", ME: "me@x"})
     people = {
         e.ref.id: e.attrs
-        for e in GitHubPlugin().entities(EntitiesRequest(ctx, snapshot()))
+        for e in GitHubPlugin().entities(Request(ctx, Graph(), snapshot()))
         if e.ref.kind == "person"
     }
     assert people == {
@@ -126,7 +122,7 @@ def test_pr_entity_review_blockers_check_the_requested_team_member() -> None:
     )
     entities = {
         e.ref.id: e
-        for e in GitHubPlugin().entities(EntitiesRequest(ctx, gh))
+        for e in GitHubPlugin().entities(Request(ctx, Graph(), gh))
         if e.ref.kind == "pull_request"
     }
     assert entities[missing.url].attrs["review_blockers"] == ["request a member of bacon"]
@@ -138,7 +134,7 @@ def test_an_approved_pr_says_so_in_its_review_blockers() -> None:
     approved = pr(1, review_decision="APPROVED")
     [entity] = [
         e
-        for e in GitHubPlugin().entities(EntitiesRequest(_context(), snapshot(mine=[approved])))
+        for e in GitHubPlugin().entities(Request(_context(), Graph(), snapshot(mine=[approved])))
         if e.ref.kind == "pull_request"
     ]
     assert entity.attrs["review_blockers"] == ["already approved"]
@@ -157,7 +153,7 @@ def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(client, "pr_state", pr_state)
     fetched = GitHubPlugin().fetch(
-        FetchRequest(_context(), "pull_request", ["https://pr/1", "https://pr/2", "https://gone"])
+        RefRequest(_context(), "pull_request", ["https://pr/1", "https://pr/2", "https://gone"])
     )
     assert [(e.ref.id, e.state, e.attrs["closed_at"]) for e in fetched] == [
         ("https://pr/1", "merged", "2026-06-01T00:00:00+00:00"),
@@ -291,10 +287,10 @@ def test_a_pr_a_search_found_twice_is_kept_once_at_its_first_place() -> None:
 
 
 def test_github_says_who_i_am_by_my_login() -> None:
-    assert GitHubPlugin().identity(IdentityRequest(_context(), snapshot())) == Identity(
+    assert GitHubPlugin().identity(Request(_context(), Graph(), snapshot())) == Identity(
         tool="GitHub", login=ME
     )
-    assert GitHubPlugin().identity(IdentityRequest(_context(), None)) is None
+    assert GitHubPlugin().identity(Request(_context(), Graph(), None)) is None
 
 
 def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
@@ -337,8 +333,8 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
         changes.checked("github", None, at.now, prs, EVERYTHING in changed)
         e = Enabled(plugin, at)
         taken = checks.take(e, None)
-        gh = plugin.collect(CollectRequest(at, taken.full, taken.subjects))
-        plugin.store(StoreRequest(at, gh))
+        gh = plugin.collect(RefreshRequest(at, Graph(), taken.full, taken.subjects))
+        plugin.store(Request(at, Graph(), gh))
         checks.stored(e, taken)
         assert changes.get("github").subjects == set()
         return gh
@@ -376,7 +372,9 @@ def test_partial_collect_fetches_membership_for_a_new_individual_policy_team(
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     monkeypatch.setattr(client, "team_members", team_members)
-    found = GitHubPlugin().collect(CollectRequest(ctx, False, frozenset({"acme/widgets#2"})))
+    found = GitHubPlugin().collect(
+        RefreshRequest(ctx, Graph(), False, frozenset({"acme/widgets#2"}))
+    )
     assert found.team_memberships["acme/bacon"] == ["shared"]
 
 
@@ -392,7 +390,9 @@ def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
         return [pr(1)]
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
-    found = GitHubPlugin().collect(CollectRequest(ctx, False, frozenset({"acme/widgets#1"})))
+    found = GitHubPlugin().collect(
+        RefreshRequest(ctx, Graph(), False, frozenset({"acme/widgets#1"}))
+    )
     assert found.team_members == ["ann"]  # mine, not acme/x's
 
 
@@ -450,7 +450,7 @@ def test_after_collect_suggests_reviewers_only_where_one_may_be_picked(
     monkeypatch.setattr(derive, "collect", collect)
     ctx = _context()
     PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
-    GitHubPlugin().after_collect(AfterCollectRequest(ctx, Graph()))
+    GitHubPlugin().after_collect(Request(ctx, Graph(), None))
     assert picked == [1]
 
 
@@ -475,13 +475,13 @@ def test_reviewers_whose_email_lookup_fails_are_one_problem_until_none_does(
         snapshot(mine=[pr(1, requested_users=["alice", "bob"]), pr(2, requested_users=["carol"])])
     )
     for _ in range(2):  # tried again each refresh, but said once
-        GitHubPlugin().after_collect(AfterCollectRequest(ctx, Graph()))
+        GitHubPlugin().after_collect(Request(ctx, Graph(), None))
     said = "looking up the commit emails of bob, carol failed: no commits for bob"
     assert ProblemRepository(ctx.db).of([""]) == {"": [said]}
     assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
     assert PeopleRepository(ctx.db).emails() == {"alice": "alice@acme.com"}
     failing.clear()
-    GitHubPlugin().after_collect(AfterCollectRequest(ctx, Graph()))
+    GitHubPlugin().after_collect(Request(ctx, Graph(), None))
     assert ProblemRepository(ctx.db).of([""]) == {}
 
 
@@ -530,7 +530,7 @@ def test_the_daily_prune_looks_up_old_misses_again() -> None:
     people = PeopleRepository(ctx.db)
     people.save_looked_up("bob", None, NOW.replace(year=2025))
     people.save_looked_up("alice", "a@x", NOW.replace(year=2025))
-    assert GitHubPlugin().prune(PruneRequest(ctx, Graph())) == [
+    assert GitHubPlugin().prune(Request(ctx, Graph(), None)) == [
         "will look up 1 reviewer email(s) again"
     ]
     assert people.emails() == {"alice": "a@x"}
@@ -571,8 +571,9 @@ def test_the_mentioned_list_round_trips_and_the_rebuild_asks_for_a_fresh_collect
 def test_a_prs_labels_are_its_tags_but_its_shapes() -> None:
     labelled = pr(1, labels=["Garbage Day", "needs-team", "too-big"])
     entities = GitHubPlugin().entities(
-        EntitiesRequest(
+        Request(
             _context(placeholder_labels=["needs-team"], split_pr_labels=["too-big"]),
+            Graph(),
             snapshot(mine=[labelled]),
         )
     )

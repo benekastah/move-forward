@@ -14,6 +14,29 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **Five request types**: a hook's request is one of `ContextRequest(ctx)` (`load`,
+  `linking_patterns`), `Request(ctx, graph, snapshot, previous, panels)` (`store`,
+  `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`,
+  `prune`, `events`), `RefreshRequest(ctx, graph, full, subjects, previous)` (`collect`,
+  `collect_after`, `changed`), `RefRequest(ctx, kind, ids)` (`fetch`) and `InputRequest(ctx,
+  graph, page, form, args)` (pages, buttons and `mfd <plugin>`), in place of a type per hook
+  (`EntitiesRequest`, `PanelsRequest`, `CollectRequest`, `ChangedRequest`, `ActionRequest`,
+  `PageRequest`, `CliRequest` and the rest, named in the entries below, are gone). A field a
+  hook doesn't get keeps its default. Every hook with a snapshot now has the graph and the
+  snapshot both: `entities` gets an empty graph, as the graph is built from it, and `store`
+  gets what `collect` fetched as `req.snapshot` (never None there). A page's query and path
+  are `req.page.query` and `req.page.path` (`Page`), a button's fields, surface and back
+  `req.form.fields`, `req.form.surface` and `req.form.back` (`Form`); `req.field(name)` still
+  reads a required field.
+- **`Previous`**: `changed` and `events` get what held before as `req.previous`: `at` (when
+  the last check or refresh ran), `fingerprint` (the last check's answer), `snapshot` (the
+  plugin's before this refresh) and `graph` (the graph then; None at the first check since
+  the dashboard started). It replaces `ChangedRequest`'s `previous_graph`, `fingerprint` and
+  `checked_at`, and `EventsRequest`'s `before` and `previous_graph` (`after` is
+  `req.snapshot`).
+- **The due horizon is the context's**: `ctx.due_horizon`, as `[act_now] due_warning_days`
+  says, in place of `ActNowRequest.due_horizon`.
+
 - **One item-actions hook**: `prepare_item_actions` is gone, and `item_actions(req)` has its
   shape: called once per page with `ItemActionsRequest(ctx, graph)`, it returns the function
   (`ItemAdditionsFor`) core calls for each item with an `ItemRequest(item, owner, surface)`.

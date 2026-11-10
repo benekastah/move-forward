@@ -15,12 +15,12 @@ from pathlib import Path
 
 from ...api import (
     ActionError,
-    ActionRequest,
     ActionResult,
     CliHandler,
-    CliRequest,
     Context,
+    Form,
     Graph,
+    InputRequest,
 )
 from ...api.kinds import TICKET
 from . import actions, markdown, panels
@@ -83,7 +83,7 @@ def export_notes(ctx: Context[NotesConfig], notes_dir: Path, force: bool) -> str
     )
 
 
-Command = Callable[[CliRequest[NotesConfig]], "Result"]
+Command = Callable[[InputRequest[NotesConfig]], "Result"]
 
 
 class Result:
@@ -151,26 +151,26 @@ def _notice(result: str | ActionResult) -> str:
     return result if isinstance(result, str) else result.notice
 
 
-def cmd_list(req: CliRequest[NotesConfig]) -> Result:
+def cmd_list(req: InputRequest[NotesConfig]) -> Result:
     ctx, args = req.ctx, req.args
     entries = [e for e in _entries(ctx) if e.open_todos or not args.open]
     text = "\n".join(_entry_line(e) for e in entries)
     return Result(text, [e.model_dump(mode="json") for e in entries])
 
 
-def cmd_show(req: CliRequest[NotesConfig]) -> Result:
+def cmd_show(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     entry = find_entry(_entries(ctx), args.entry, graph)
     return Result(_entry_text(entry), entry.model_dump(mode="json"))
 
 
-def cmd_ices(req: CliRequest[NotesConfig]) -> Result:
+def cmd_ices(req: InputRequest[NotesConfig]) -> Result:
     ctx = req.ctx
     ices = NotesRepository(ctx.db).ices()
     return Result("\n".join(_ice_text(i) for i in ices), [i.model_dump(mode="json") for i in ices])
 
 
-def cmd_add_entry(req: CliRequest[NotesConfig]) -> Result:
+def cmd_add_entry(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
     try:
@@ -186,7 +186,7 @@ def cmd_add_entry(req: CliRequest[NotesConfig]) -> Result:
     return Result(f"added entry {entry_id}", {"notice": f"added {title}", "id": entry_id})
 
 
-def cmd_remove(req: CliRequest[NotesConfig]) -> Result:
+def cmd_remove(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
@@ -194,7 +194,7 @@ def cmd_remove(req: CliRequest[NotesConfig]) -> Result:
     return Result(f"removed {entry.title}")
 
 
-def cmd_set(req: CliRequest[NotesConfig]) -> Result:
+def cmd_set(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
@@ -208,7 +208,7 @@ def cmd_set(req: CliRequest[NotesConfig]) -> Result:
     return Result(f"{entry.title}: {args.field} is now {args.text}")
 
 
-def cmd_link(req: CliRequest[NotesConfig]) -> Result:
+def cmd_link(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
@@ -219,7 +219,7 @@ def cmd_link(req: CliRequest[NotesConfig]) -> Result:
     return Result(f"{entry.title}: linked {args.ref}")
 
 
-def cmd_todo_add(req: CliRequest[NotesConfig]) -> Result:
+def cmd_todo_add(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
@@ -234,7 +234,7 @@ def cmd_todo_add(req: CliRequest[NotesConfig]) -> Result:
     return Result(f"added todo {todo_id}", {"notice": f"added: {text}", "id": todo_id})
 
 
-def cmd_todo(req: CliRequest[NotesConfig]) -> Result:
+def cmd_todo(req: InputRequest[NotesConfig]) -> Result:
     """`todo add`, or done, undone, delete or link on the todo `args.todo` by id."""
     ctx, graph, args = req.ctx, req.graph, req.args
     if args.todo_command == "add":
@@ -248,10 +248,10 @@ def cmd_todo(req: CliRequest[NotesConfig]) -> Result:
     fields = {"todo": str(args.todo)}
     if args.todo_command == "link":
         fields["input"] = args.ref
-    return Result(_notice(handlers[args.todo_command](ActionRequest(ctx, graph, fields))))
+    return Result(_notice(handlers[args.todo_command](InputRequest(ctx, graph, form=Form(fields)))))
 
 
-def cmd_condition(req: CliRequest[NotesConfig]) -> Result:
+def cmd_condition(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
@@ -270,7 +270,7 @@ def cmd_condition(req: CliRequest[NotesConfig]) -> Result:
     return Result(f"{entry.title}: {args.condition_command} merge condition")
 
 
-def cmd_remember(req: CliRequest[NotesConfig]) -> Result:
+def cmd_remember(req: InputRequest[NotesConfig]) -> Result:
     ctx, args = req.ctx, req.args
     key = _key(args.key)
     on = date.fromisoformat(args.on) if args.on else ctx.today
@@ -278,7 +278,7 @@ def cmd_remember(req: CliRequest[NotesConfig]) -> Result:
     return Result(f"remembered {key} on {on}", {"key": key, "on": on.isoformat()})
 
 
-def cmd_recall(req: CliRequest[NotesConfig]) -> Result:
+def cmd_recall(req: InputRequest[NotesConfig]) -> Result:
     ctx, args = req.ctx, req.args
     key = _key(args.key)
     on = NotesRepository(ctx.db).recall(key)
@@ -293,23 +293,25 @@ def _key(key: str) -> str:
     return stripped
 
 
-def cmd_ice(req: CliRequest[NotesConfig]) -> Result:
+def cmd_ice(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     if args.item:
         kind, ref_id = args.item
         fields = {"kind": kind, "id": ref_id, "note": args.note or ""}
-        return Result(_notice(actions.ice_item(ActionRequest(ctx, graph, fields))))
+        return Result(_notice(actions.ice_item(InputRequest(ctx, graph, form=Form(fields)))))
     repo, branch = args.branch
     fields = {"repo": str(Path(repo).expanduser()), "branch": branch, "note": args.note or ""}
-    return Result(_notice(actions.ice(ActionRequest(ctx, graph, fields))))
+    return Result(_notice(actions.ice(InputRequest(ctx, graph, form=Form(fields)))))
 
 
-def cmd_thaw(req: CliRequest[NotesConfig]) -> Result:
+def cmd_thaw(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
-    return Result(_notice(actions.thaw(ActionRequest(ctx, graph, {"ice": str(args.ice)}))))
+    return Result(
+        _notice(actions.thaw(InputRequest(ctx, graph, form=Form({"ice": str(args.ice)}))))
+    )
 
 
-def cmd_export(req: CliRequest[NotesConfig]) -> Result:
+def cmd_export(req: InputRequest[NotesConfig]) -> Result:
     ctx, args = req.ctx, req.args
     return Result(export_notes(ctx, Path(args.dir).expanduser(), args.force))
 
@@ -409,7 +411,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     export_parser.add_argument("--force", action="store_true", help="overwrite existing files")
     handlers = _commands()
 
-    def run(req: CliRequest[NotesConfig]) -> int:
+    def run(req: InputRequest[NotesConfig]) -> int:
         args = req.args
         try:
             result = handlers[args.notes_command](req)

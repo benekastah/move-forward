@@ -15,10 +15,11 @@ from move_forward.graph import Graph
 from move_forward.https import RequestError
 from move_forward.plugin import (
     ActionError,
-    ActionRequest,
     Context,
-    FetchRequest,
-    LinkingRequest,
+    ContextRequest,
+    Form,
+    InputRequest,
+    RefRequest,
     SourceError,
 )
 from move_forward.plugins.jira import actions
@@ -149,7 +150,7 @@ def test_tickets_are_fetched_open_or_resolved_and_their_projects_remembered(
     ctx = _ctx(db)
     urls = ["https://j/browse/APP-1", "https://j/browse/OPS-2", "https://j/browse/OPS-3"]
     elsewhere = ["https://other/browse/APP-3", "https://j/browse/not a key", "APP-4"]
-    fetched = JiraPlugin().fetch(FetchRequest(ctx, "ticket", [*urls, *elsewhere]))
+    fetched = JiraPlugin().fetch(RefRequest(ctx, "ticket", [*urls, *elsewhere]))
     assert [(e.ref.id, e.url, e.attrs) for e in fetched] == [
         (resolved.url, resolved.url, {"resolved_at": "2026-06-01T00:00:00+00:00"}),
         (open_one.url, open_one.url, {"resolved_at": None}),
@@ -157,7 +158,7 @@ def test_tickets_are_fetched_open_or_resolved_and_their_projects_remembered(
     ]
     assert [e.lifecycle for e in fetched] == ["done", "open", "done"]
     assert IssueRepository(db).projects() == ["APP", "OPS"]
-    assert JiraPlugin().fetch(FetchRequest(ctx, "ticket", elsewhere)) == []  # without asking Jira
+    assert JiraPlugin().fetch(RefRequest(ctx, "ticket", elsewhere)) == []  # without asking Jira
 
 
 def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
@@ -220,13 +221,13 @@ def test_ticket_keys_are_only_those_of_projects_my_tickets_have_been_in() -> Non
     db = Database(":memory:")
     db.migrate("jira", MIGRATIONS)
     plugin = JiraPlugin()
-    assert plugin.linking_patterns(LinkingRequest(_ctx(db))) == {"ticket": None}  # nothing seen yet
+    assert plugin.linking_patterns(ContextRequest(_ctx(db))) == {"ticket": None}  # nothing seen yet
     first = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
     repo = IssueRepository(db)
     repo.replace(JiraSnapshot(issues=[first.model_copy(update={"key": "OPS_2-7"})]))
     repo.replace(JiraSnapshot(issues=[first]))  # OPS_2's last ticket is gone: still known
     assert repo.projects() == ["APP", "OPS_2"]
-    graph = Graph(linking=plugin.linking_patterns(LinkingRequest(_ctx(db))))
+    graph = Graph(linking=plugin.linking_patterns(ContextRequest(_ctx(db))))
     found = graph.named("APP-1, OPS_2-9, UTF-8, SHA-256, XAPP-3")
     assert [r.id for r in found] == ["APP-1", "OPS_2-9"]
 
@@ -387,7 +388,9 @@ def test_a_transition_that_fails_says_whether_jira_refused_or_wasnt_reached(
 
     monkeypatch.setattr(jira, "transition", transition)
     monkeypatch.setenv("JIRA_API_TOKEN", "t")
-    request = ActionRequest(_ctx(Database(":memory:")), Graph([]), {"key": "APP-1", "to": "Done"})
+    request = InputRequest(
+        _ctx(Database(":memory:")), Graph([]), form=Form({"key": "APP-1", "to": "Done"})
+    )
     with pytest.raises(ActionError, match=re.escape(said)):
         actions.transition(request)
 
@@ -401,7 +404,7 @@ def test_fetching_without_a_token_says_how_to_give_one(monkeypatch: pytest.Monke
         return None
 
     monkeypatch.setattr(keychain, "read", nothing_stored)
-    request = FetchRequest(_ctx(Database(":memory:")), "ticket", ["https://j/browse/APP-1"])
+    request = RefRequest(_ctx(Database(":memory:")), "ticket", ["https://j/browse/APP-1"])
     with pytest.raises(SourceError, match="mfd token set jira"):
         JiraPlugin().fetch(request)
 

@@ -49,9 +49,15 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   until a collect started after stores (`change_checks.py`); and what else a plugin reports wrong with
   `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its state on
   the page and logged when it changes, rather than each plugin warning in its own way.
-- Every plugin hook that runs with the plugin's context takes one request object
-  (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
-  breaking its overrides. Those called before there's a context take what they need:
+- Every plugin hook that runs with the plugin's context takes one request object, of five
+  kinds, so a hook can gain an input without breaking its overrides: `ContextRequest(ctx)`
+  (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
+  `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`,
+  `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `collect_after`,
+  `changed`); `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx, graph)` with a
+  `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
+  and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
+  the snapshot and the graph then). Those called before there's a context take what they need:
   `init_suggested()`, `init_questions(ask, setup)` and `init_shown(section)` (`mfd init`),
   `tokens(config)` (`mfd token`, and loading the config), `cli(parser)`, `pages()` and
   `actions()`.
@@ -68,7 +74,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   Core keeps them (`change_checks.py`), never the plugin: it compares each fingerprint with
   the last, keeps the subjects pending until a collect started after they moved stores, owns the
   full-collect timer, and gives `collect` what's pending and whether it's a full one. A
-  check compares other plugins' entities with `previous_graph`, the graph its last check was
+  check compares other plugins' entities with `req.previous.graph`, the graph its last check was
   given, which core keeps too. Notifications come from two places: `events`,
   asked after every refresh with the plugin's snapshot and the graph before and after it, for
   what changed; and an item's `notify`, which core raises when the item is newly in its

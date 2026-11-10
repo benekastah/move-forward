@@ -11,7 +11,7 @@ from move_forward.act_now import Feedback, FeedbackKey, Nomination
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.page import Action, Item, Panel, Signals
-from move_forward.plugin import ActNowRequest, Context
+from move_forward.plugin import Context, Request
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.repositories import KvRepository
@@ -184,7 +184,7 @@ def test_by_default_a_plugin_nominates_its_act_now_panels_items_with_their_signa
         db=db,
         kv=KvRepository(db, "jira"),
     )
-    nominated = JiraPlugin().act_now(ActNowRequest(ctx, None, Graph(), panels))
+    nominated = JiraPlugin().act_now(Request(ctx, Graph(), None, panels=panels))
     assert [(i.title, i.signals) for i in nominated] == [
         ("own", Signals(verb="Merge", task="merge")),
         ("plain", Signals(verb="Review", task="review", effort="minutes")),

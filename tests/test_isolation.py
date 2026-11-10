@@ -9,7 +9,7 @@ import pytest
 from conftest import NOW, local_branch, local_snapshot, pr, snapshot, stored
 
 from move_forward import refresh, registry
-from move_forward.plugin import ActionError, ActionRequest, Context
+from move_forward.plugin import ActionError, Context, InputRequest
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -77,10 +77,10 @@ def test_an_action_that_raises_says_it_failed_not_that_a_field_is_missing(
 ) -> None:
     config, db = stored()
 
-    def needs_x(req: ActionRequest[Any]) -> str:
+    def needs_x(req: InputRequest[Any]) -> str:
         return req.field("x")
 
-    def looks_up(req: ActionRequest[Any]) -> str:
+    def looks_up(req: InputRequest[Any]) -> str:
         return {"a": "1"}["b"]  # the plugin's own bug
 
     def actions(self: NotesPlugin) -> dict[str, Any]:
