@@ -10,30 +10,34 @@ from ...api import (
     API_VERSION,
     ActionHandler,
     ActNowRequest,
+    AfterCollectRequest,
     Asker,
     Changed,
     ChangedRequest,
     CollectRequest,
     Context,
-    ContextRequest,
+    EntitiesRequest,
     Entity,
     Event,
     EventsRequest,
     FetchRequest,
     Graph,
-    GraphRequest,
     Identity,
+    IdentityRequest,
     ImportRequest,
     InitSetup,
     Item,
     KindSpec,
+    LoadRequest,
     Migration,
     Panel,
     PanelsRequest,
     Plugin,
+    PruneRequest,
     Ref,
+    RelateRequest,
     Signals,
-    SnapshotRequest,
+    StoreRequest,
     Subjects,
     SubjectsRequest,
     attrs,
@@ -149,7 +153,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         config = ctx.config
         changed = req.subjects
         everything = req.full or len(changed) > client.PAGE_SIZE
-        previous = None if everything else self.load(ContextRequest(ctx))
+        previous = None if everything else self.load(LoadRequest(ctx))
         if previous is not None and changed:
             ids = [_pr_id(pr) for pr in sorted(changed)]
             try:
@@ -195,7 +199,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             ),
         )
 
-    def store(self, req: SnapshotRequest[GitHubConfig, GitHubSnapshot]) -> None:
+    def store(self, req: StoreRequest[GitHubConfig, GitHubSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
         PrRepository(ctx.db).replace(snapshot)
 
@@ -273,7 +277,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             elif n.kind not in notifications.UNRELATED:
                 prs.add(EVERYTHING)
         if ci_repos:
-            if (snapshot := self.load(ContextRequest(ctx))) is None:
+            if (snapshot := self.load(LoadRequest(ctx))) is None:
                 return prs | {EVERYTHING}
             prs |= {f"{pr.repo}#{pr.number}" for pr in snapshot.mine if pr.repo.lower() in ci_repos}
         return prs
@@ -282,13 +286,11 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         ctx, before, after = req.ctx, req.before, req.after
         return changes.changes(before, after, ctx.config.ignored_reviewers)
 
-    def load(self, req: ContextRequest[GitHubConfig]) -> GitHubSnapshot | None:
+    def load(self, req: LoadRequest[GitHubConfig]) -> GitHubSnapshot | None:
         ctx = req.ctx
         return PrRepository(ctx.db).load()
 
-    def identity(
-        self, req: SnapshotRequest[GitHubConfig, GitHubSnapshot | None]
-    ) -> Identity | None:
+    def identity(self, req: IdentityRequest[GitHubConfig, GitHubSnapshot]) -> Identity | None:
         """My GitHub login, as the last refresh found it."""
         snapshot = req.snapshot
         return (
@@ -331,11 +333,11 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             else None,
         )
 
-    def after_collect(self, req: GraphRequest[GitHubConfig]) -> None:
+    def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the
         local checkouts the graph's `git.repo` entities describe."""
         ctx, graph = req.ctx, req.graph
-        gh = self.load(ContextRequest(ctx))
+        gh = self.load(LoadRequest(ctx))
         if gh is None:
             return
         self._lookup_emails(ctx, gh)
@@ -425,7 +427,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             attrs=attrs(pr_attrs),
         )
 
-    def entities(self, req: SnapshotRequest[GitHubConfig, GitHubSnapshot | None]) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[GitHubConfig, GitHubSnapshot]) -> list[Entity]:
         """A `pull_request` for every PR in the snapshot, and a `person` (`<host>/<login>`)
         for me and for everyone whose email github knows."""
         ctx, snapshot = req.ctx, req.snapshot
@@ -478,7 +480,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             [ref for ref in req.refs if ref.id in urls],
         )
 
-    def relate(self, req: GraphRequest[GitHubConfig]) -> list[tuple[Ref, Ref]]:
+    def relate(self, req: RelateRequest[GitHubConfig]) -> list[tuple[Ref, Ref]]:
         """Each of its PRs to the local branch it comes from (see `relations`)."""
         return relations.relations(req.graph, f"{self.name}.{PR}")
 
@@ -513,7 +515,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         PeopleRepository(req.ctx.db).replace_imported(emails)
         return [f"imported {len(emails)} reviewers' emails"]
 
-    def prune(self, req: GraphRequest[GitHubConfig]) -> list[str]:
+    def prune(self, req: PruneRequest[GitHubConfig]) -> list[str]:
         """Forget email lookups that found none `prune_days` ago, to try them again."""
         ctx = req.ctx
         cutoff = ctx.now - timedelta(days=ctx.prune_days)

@@ -14,24 +14,8 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
-- **Four request shapes**: most hooks take one of four requests, named for what they carry:
-  `ContextRequest(ctx)`, `GraphRequest(ctx, graph)`, `RefRequest(ctx, kind, id)` and
-  `SnapshotRequest(ctx, snapshot)`; a hook with inputs of its own takes a request extending
-  one with just those. Their fields keep their names. The requests that were one of the shapes
-  are gone, with no aliases (no plugin outside this repository was built against version 2):
-  `LoadRequest` and `LinkingRequest` are `ContextRequest`; `RelateRequest`,
-  `AfterCollectRequest`, `PruneRequest` and `ItemActionsRequest` are `GraphRequest`;
-  `UrlRequest` and `HandleRequest` are `RefRequest`; `StoreRequest[C, S]` is
-  `SnapshotRequest[C, S]`, and `EntitiesRequest[C, S]` and `IdentityRequest[C, S]` are
-  `SnapshotRequest[C, S | None]`. `CollectRequest`, `ImportRequest` and `FetchRequest` extend
-  `ContextRequest`; `CollectAfterRequest`, `ChangedRequest`, `EventsRequest`,
-  `KeptItemRequest`, `PageRequest`, `CliRequest` and `ActionRequest` extend `GraphRequest`;
-  `SubjectsRequest` and `PanelsRequest` extend `SnapshotRequest`, and `ActNowRequest`
-  extends `PanelsRequest`. Built positionally, a request takes its shape's fields first: it's
-  `SubjectsRequest(ctx, snapshot, refs)` and `EventsRequest(ctx, graph, before, after,
-  previous_graph)`.
 - **One item-actions hook**: `prepare_item_actions` is gone, and `item_actions(req)` has its
-  shape: called once per page with a `GraphRequest(ctx, graph)`, it returns the function
+  shape: called once per page with `ItemActionsRequest(ctx, graph)`, it returns the function
   (`ItemAdditionsFor`) core calls for each item with an `ItemRequest(item, owner, surface)`.
   A plugin that implemented the per-item `item_actions` wraps its body in a function it
   returns; one that implemented `prepare_item_actions` renames it, and its function takes an

@@ -9,7 +9,7 @@ from conftest import entry, pr, snapshot, stored
 from move_forward import prune, refresh
 from move_forward.db import Database
 from move_forward.graph import Ref
-from move_forward.plugin import Context, GraphRequest, SourceError
+from move_forward.plugin import Context, PruneRequest, SourceError
 from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.registry import enabled
@@ -44,7 +44,7 @@ def test_a_failing_fetch_in_cores_clean_up_leaves_the_rest_of_it_and_the_plugins
     def failing(repo: object, graph: object) -> int:
         raise SourceError("the token can't fetch")
 
-    def notes_prune(self: NotesPlugin, req: GraphRequest[NotesConfig]) -> list[str]:
+    def notes_prune(self: NotesPlugin, req: PruneRequest[NotesConfig]) -> list[str]:
         ran.append("notes")
         return []
 

@@ -9,39 +9,9 @@ This page walks through what a plugin is made of, using a made-up `linear` plugi
 from Linear) as the example. [AGENTS.md](../AGENTS.md) has the rules every change follows;
 this page explains them as they apply to a plugin.
 
-Every hook takes one argument, a request object whose fields are the hook's inputs, so core
-can give a hook a new input without changing its signature. Most hooks take one of four
-shapes, all in `move_forward.api` and named for what they carry:
-
-| Shape | Fields | Hooks |
-|---|---|---|
-| `ContextRequest[C]` | `ctx` | `load`, `linking_patterns` |
-| `GraphRequest[C]` | `ctx`, `graph` | `relate`, `after_collect`, `item_actions`, `prune` |
-| `RefRequest[C]` | `ctx`, `kind`, `id` | `url_for`, `handle_for` |
-| `SnapshotRequest[C, S]` | `ctx`, `snapshot` | `store` (`S`), `entities` and `identity` (`S \| None`) |
-
-`C` is the plugin's config model and `S` its snapshot's. A hook with inputs of its own takes a
-request extending one of the shapes with just those, so `req.ctx`, `req.graph` and
-`req.snapshot` are where you'd expect them; you'll meet each on its hook below:
-
-| Request | Extends | Adds | Hook |
-|---|---|---|---|
-| `CollectRequest[C]` | `ContextRequest` | `full`, `subjects` | `collect` |
-| `CollectAfterRequest[C]` | `GraphRequest` | `full`, `subjects` | `collect_after` |
-| `ChangedRequest[C]` | `GraphRequest` | `previous_graph`, `fingerprint`, `checked_at` | `changed` |
-| `EventsRequest[C, S]` | `GraphRequest` | `before`, `after`, `previous_graph` | `events` |
-| `FetchRequest[C]` | `ContextRequest` | `kind`, `ids` | `fetch` |
-| `SubjectsRequest[C, S]` | `SnapshotRequest` | `refs` | `refresh_subjects` |
-| `PanelsRequest[C, S]` | `SnapshotRequest` | `graph` | `panels` |
-| `ActNowRequest[C, S]` | `PanelsRequest` | `panels`, `due_horizon` | `act_now` |
-| `KeptItemRequest[C]` | `GraphRequest` | `key` | `kept_item` |
-| `ImportRequest[C]` | `ContextRequest` | `dir`, `replace` | `import_dir` |
-| `PageRequest[C]` | `GraphRequest` | `query`, `path` | a page's handler (`pages`) |
-| `CliRequest[C]` | `GraphRequest` | `args` | `mfd <plugin>`'s handler (`cli`) |
-| `ActionRequest[C]` | `GraphRequest` | `fields`, `surface`, `back` | a button's handler (`actions`) |
-
-The function `item_actions` returns is asked about each item with an `ItemRequest` (`item`,
-`owner`, `surface`): it already has the context and graph `item_actions` was given.
+Every hook takes one argument, a request object (`PanelsRequest`, `EntitiesRequest`, …,
+all in `move_forward.api`), whose fields are the hook's inputs: `req.ctx`, `req.snapshot`,
+`req.graph` and so on. Core can give a hook a new input without changing its signature.
 
 ## The pieces
 
@@ -180,10 +150,10 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     def collect(self, req: CollectRequest[LinearConfig]) -> LinearSnapshot:
         return client.collect(req.ctx.config, req.ctx.email)
 
-    def store(self, req: SnapshotRequest[LinearConfig, LinearSnapshot]) -> None:
+    def store(self, req: StoreRequest[LinearConfig, LinearSnapshot]) -> None:
         IssueRepository(req.ctx.db).replace(req.snapshot)
 
-    def load(self, req: ContextRequest[LinearConfig]) -> LinearSnapshot | None:
+    def load(self, req: LoadRequest[LinearConfig]) -> LinearSnapshot | None:
         return IssueRepository(req.ctx.db).load()
 ```
 
@@ -307,7 +277,7 @@ class LinearPlugin(...):
         ISSUE: KindSpec(IssueAttrs, linking=True, fetchable=True, resolvable=True)
     }
 
-    def entities(self, req: SnapshotRequest[LinearConfig, LinearSnapshot | None]) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
         snapshot = req.snapshot
         return [
             Entity(

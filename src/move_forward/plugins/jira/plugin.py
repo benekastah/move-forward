@@ -16,16 +16,19 @@ from ...api import (
     Changed,
     ChangedRequest,
     CollectRequest,
-    ContextRequest,
+    EntitiesRequest,
     Entity,
     Event,
     EventsRequest,
     FetchRequest,
     Graph,
+    HandleRequest,
     InitSetup,
     Item,
     KindSpec,
     Link,
+    LinkingRequest,
+    LoadRequest,
     Migration,
     Model,
     Notify,
@@ -33,9 +36,9 @@ from ...api import (
     PanelsRequest,
     Plugin,
     Ref,
-    RefRequest,
     Signals,
-    SnapshotRequest,
+    StoreRequest,
+    UrlRequest,
     age,
     attrs,
     due_pressure,
@@ -426,7 +429,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         ctx = req.ctx
         return client.collect(ctx.config, ctx.email, ctx.token())
 
-    def store(self, req: SnapshotRequest[JiraConfig, JiraSnapshot]) -> None:
+    def store(self, req: StoreRequest[JiraConfig, JiraSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
         IssueRepository(ctx.db).replace(snapshot)
 
@@ -442,17 +445,17 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             found = client.updated_within(ctx.config, ctx.email, ctx.token(), minutes)
         return Changed(everything=found, reason="a ticket of mine was updated")
 
-    def load(self, req: ContextRequest[JiraConfig]) -> JiraSnapshot | None:
+    def load(self, req: LoadRequest[JiraConfig]) -> JiraSnapshot | None:
         ctx = req.ctx
         return IssueRepository(ctx.db).load()
 
-    def linking_patterns(self, req: ContextRequest[JiraConfig]) -> dict[str, str | None]:
+    def linking_patterns(self, req: LinkingRequest[JiraConfig]) -> dict[str, str | None]:
         """Keys of the projects my tickets have been in, so `UTF-8` or `SHA-256` in a PR
         isn't taken for a ticket; none at all before jira has seen a ticket of mine."""
         ctx = req.ctx
         return {TICKET: key_pattern(IssueRepository(ctx.db).projects())}
 
-    def entities(self, req: SnapshotRequest[JiraConfig, JiraSnapshot | None]) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
         """A `ticket` per issue, with its labels as its tags, except those that say how far it's
         escalated (`escalation_label_prefix`): they aren't what it's about."""
         snapshot, prefix = req.snapshot, req.ctx.config.escalation_label_prefix
@@ -498,14 +501,14 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for i in found
         ]
 
-    def url_for(self, req: RefRequest[JiraConfig]) -> str | None:
+    def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
         """A ticket's URL, from its URL or its key alone."""
         ctx, id = req.ctx, req.id
         if client.key_of(ctx.config.site, id):
             return id
         return client.ticket_url(ctx.config.site, id) if client.is_key(id) else None
 
-    def handle_for(self, req: RefRequest[JiraConfig]) -> str | None:
+    def handle_for(self, req: HandleRequest[JiraConfig]) -> str | None:
         """A ticket's key, from its URL."""
         return client.key_of(req.ctx.config.site, req.id)
 

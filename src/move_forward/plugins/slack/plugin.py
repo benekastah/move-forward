@@ -17,13 +17,14 @@ from ...api import (
     ActionError,
     ActionHandler,
     ActionRequest,
+    AfterCollectRequest,
     Asker,
     CliHandler,
     Context,
     Graph,
-    GraphRequest,
     ImportRequest,
     InitSetup,
+    ItemActionsRequest,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
@@ -33,6 +34,7 @@ from ...api import (
     Panel,
     PanelsRequest,
     Plugin,
+    PruneRequest,
     age,
     html,
 )
@@ -164,7 +166,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         slack = pinger(ctx, graph)
         return [slack.nudges(slack.pings())]
 
-    def item_actions(self, req: GraphRequest[SlackConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: ItemActionsRequest[SlackConfig]) -> ItemAdditionsFor:
         """A Ping link on any item about one of my open PRs with someone to chase: Bump once a
         target was pinged, muted while the PR isn't in order. The pings are worked out once for
         the page."""
@@ -210,7 +212,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             contacts.CONTACTS: where_pings_go,
         }
 
-    def after_collect(self, req: GraphRequest[SlackConfig]) -> None:
+    def after_collect(self, req: AfterCollectRequest[SlackConfig]) -> None:
         """Look up the Slack ids of requested reviewers nothing names one for."""
         ctx, graph = req.ctx, req.graph
         found = contacts.look_up_requested(ctx, graph)
@@ -252,7 +254,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             "clear_contact": contacts.clear_contact_action,
         }
 
-    def prune(self, req: GraphRequest[SlackConfig]) -> list[str]:
+    def prune(self, req: PruneRequest[SlackConfig]) -> list[str]:
         ctx = req.ctx
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         slack = SlackRepository(ctx.db)

@@ -11,21 +11,22 @@ from ...api import (
     Changed,
     ChangedRequest,
     CollectAfterRequest,
-    ContextRequest,
+    EntitiesRequest,
     Entity,
     Event,
     EventsRequest,
-    GraphRequest,
     Item,
+    ItemActionsRequest,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
     KindSpec,
+    LoadRequest,
     Migration,
     Panel,
     PanelsRequest,
     Plugin,
-    SnapshotRequest,
+    StoreRequest,
 )
 from . import actions, changes, client, events
 from .config import GitStackConfig
@@ -57,7 +58,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
 
-    def store(self, req: SnapshotRequest[GitStackConfig, GitStackSnapshot]) -> None:
+    def store(self, req: StoreRequest[GitStackConfig, GitStackSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
         StackRepository(ctx.db).replace(snapshot)
 
@@ -75,14 +76,12 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
             fingerprint=changes.configs(dirs), everything=moved, reason="a stack may have moved"
         )
 
-    def load(self, req: ContextRequest[GitStackConfig]) -> GitStackSnapshot | None:
+    def load(self, req: LoadRequest[GitStackConfig]) -> GitStackSnapshot | None:
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""
         ctx = req.ctx
         return StackRepository(ctx.db).load()
 
-    def entities(
-        self, req: SnapshotRequest[GitStackConfig, GitStackSnapshot | None]
-    ) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[GitStackConfig, GitStackSnapshot]) -> list[Entity]:
         snapshot = req.snapshot
         return entities(snapshot)
 
@@ -118,7 +117,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         before, after = req.before, req.after
         return events.changes(before, after)
 
-    def item_actions(self, req: GraphRequest[GitStackConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: ItemActionsRequest[GitStackConfig]) -> ItemAdditionsFor:
         """Untrack the branches an On ice item put on ice."""
         graph = req.graph
 

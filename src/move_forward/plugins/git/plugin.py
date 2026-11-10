@@ -14,20 +14,21 @@ from ...api import (
     ChangedRequest,
     CollectRequest,
     Context,
-    ContextRequest,
+    EntitiesRequest,
     Entity,
-    GraphRequest,
     InitSetup,
+    ItemActionsRequest,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
     KindSpec,
+    LoadRequest,
     Migration,
     Panel,
     PanelsRequest,
     Plugin,
     Ref,
-    SnapshotRequest,
+    StoreRequest,
     attrs,
 )
 from ...api.shell import CommandError, git_common_dir
@@ -99,7 +100,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         was read before stands in for a repo git can't read now. Repos that are each a clone of
         one GitHub repo are a problem (`CLONES`) until only one is left."""
         ctx = req.ctx
-        previous = self.load(ContextRequest(ctx))
+        previous = self.load(LoadRequest(ctx))
         partial = not req.full and previous is not None
         found = client.collect(
             ctx.config.repos,
@@ -125,7 +126,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         ctx.problem(CLONES, "; ".join(clones) or None)
         return found
 
-    def store(self, req: SnapshotRequest[GitConfig, LocalSnapshot]) -> None:
+    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
         """Keep the snapshot, and watch the worktrees it found (once `changed` has started
         watching: only the server asks it). The last looks at uncommitted edits are forgotten:
         what's stored is now newer, and edits back as a look saw them may differ from it."""
@@ -145,7 +146,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 ctx.log.warning("can't watch the repos, so polling them: %s", e)
                 self._watching = False
                 return None
-            if snapshot := self.load(ContextRequest(ctx)):
+            if snapshot := self.load(LoadRequest(ctx)):
                 self._watch(snapshot)
         return self._watcher
 
@@ -213,7 +214,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         if not poll and not edited:
             return set()
         found: set[str] = set()
-        for repo in snapshot.repos if (snapshot := self.load(ContextRequest(ctx))) else []:
+        for repo in snapshot.repos if (snapshot := self.load(LoadRequest(ctx))) else []:
             for wt in repo.worktrees:
                 path = Path(wt.path)
                 resolved = path.resolve()
@@ -229,11 +230,11 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                     found.add(str(git_common_dir(Path(repo.dir))))
         return found
 
-    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
+    def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:
         ctx = req.ctx
         return LocalRepository(ctx.db).load()
 
-    def entities(self, req: SnapshotRequest[GitConfig, LocalSnapshot | None]) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[GitConfig, LocalSnapshot]) -> list[Entity]:
         """A `repo` per GitHub repo checked out (the first checkout of it, when two clones are,
         which `collect` warns of), and a `branch` per local branch."""
         snapshot = req.snapshot
@@ -287,7 +288,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
 
-    def item_actions(self, req: GraphRequest[GitConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: ItemActionsRequest[GitConfig]) -> ItemAdditionsFor:
         """Delete or restore the branches an On ice item put on ice."""
         graph = req.graph
 

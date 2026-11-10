@@ -15,7 +15,7 @@ from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.notifications import Event, NotificationRepository, NotificationsConfig
 from move_forward.page import Item, Notify, Panel, anchor
-from move_forward.plugin import CollectRequest, ContextRequest, EventsRequest, SnapshotRequest
+from move_forward.plugin import CollectRequest, EventsRequest, LoadRequest, StoreRequest
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
@@ -129,10 +129,10 @@ class _Git(GitPlugin):
     def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         return local_snapshot()
 
-    def store(self, req: SnapshotRequest[GitConfig, LocalSnapshot]) -> None:
+    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
         req.ctx.kv.set("snapshot", json.dumps(self.repos))
 
-    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
+    def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:
         ctx = req.ctx
         return local_snapshot() if ctx.kv.get("snapshot") else None
 

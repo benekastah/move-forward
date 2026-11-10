@@ -12,7 +12,7 @@ from move_forward.domain import KindModel, Model
 from move_forward.graph import Entity, Graph, KindSpec, Ref, attrs
 from move_forward.ids import branch_id, branch_parts
 from move_forward.kinds import PULL_REQUEST, TICKET, PullRequest, Ticket
-from move_forward.plugin import API_VERSION, Plugin, SnapshotRequest
+from move_forward.plugin import API_VERSION, EntitiesRequest, Plugin
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
@@ -108,7 +108,7 @@ class _GitLab(JiraPlugin):
 
     kinds: ClassVar[dict[str, KindSpec]] = {**JiraPlugin.kinds, PULL_REQUEST: KindSpec(PullRequest)}
 
-    def entities(self, req: SnapshotRequest[JiraConfig, JiraSnapshot | None]) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
         def merge_request(url: str) -> Entity:
             model = PullRequest(
                 handle="!2",

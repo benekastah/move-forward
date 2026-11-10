@@ -25,13 +25,15 @@ from .kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named
 from .plugin import (
     API_VERSION,
     Context,
-    ContextRequest,
+    EntitiesRequest,
     FetchRequest,
-    GraphRequest,
+    HandleRequest,
+    LinkingRequest,
+    LoadRequest,
     Plugin,
-    RefRequest,
-    SnapshotRequest,
+    RelateRequest,
     SourceError,
+    UrlRequest,
 )
 from .repositories import KvRepository
 
@@ -260,7 +262,7 @@ class Enabled:
     def snapshot(self) -> BaseModel | None:
         """What the plugin last stored; None when it has nothing, or its `load` fails."""
         with self.ctx.db.reading():  # all of one refresh's, never half of the next's
-            return call(self.name, "load", lambda: self.plugin.load(ContextRequest(self.ctx)), None)
+            return call(self.name, "load", lambda: self.plugin.load(LoadRequest(self.ctx)), None)
 
 
 def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:
@@ -418,7 +420,7 @@ def build_graph(
         published: list[Entity] = call(
             e.name,
             "entities",
-            lambda e=e: e.plugin.entities(SnapshotRequest(e.ctx, snapshots.get(e.name))),
+            lambda e=e: e.plugin.entities(EntitiesRequest(e.ctx, snapshots.get(e.name))),
             [],
         )
         for entity in published:
@@ -452,7 +454,7 @@ def build_graph(
     def url_for(kind: str, id: str) -> str | None:
         for e in owners(kind):
             url: str | None = call(
-                e.name, "url_for", lambda e=e: e.plugin.url_for(RefRequest(e.ctx, kind, id)), None
+                e.name, "url_for", lambda e=e: e.plugin.url_for(UrlRequest(e.ctx, kind, id)), None
             )
             if url:
                 return url
@@ -463,7 +465,7 @@ def build_graph(
             handle: str | None = call(
                 e.name,
                 "handle_for",
-                lambda e=e: e.plugin.handle_for(RefRequest(e.ctx, kind, id)),
+                lambda e=e: e.plugin.handle_for(HandleRequest(e.ctx, kind, id)),
                 None,
             )
             if handle:
@@ -498,7 +500,7 @@ def build_graph(
         patterns: dict[str, str | None] = call(
             e.name,
             "linking_patterns",
-            lambda e=e: e.plugin.linking_patterns(ContextRequest(e.ctx)),
+            lambda e=e: e.plugin.linking_patterns(LinkingRequest(e.ctx)),
             {},
         )
         linking.update(patterns)
@@ -528,7 +530,7 @@ def _relations(plugins: list[Enabled], graph: Graph) -> dict[Ref, list[Ref]]:
     found: dict[Ref, list[Ref]] = {}
     for e in plugins:
         pairs: list[tuple[Ref, Ref]] = call(
-            e.name, "relate", lambda e=e: e.plugin.relate(GraphRequest(e.ctx, graph)), []
+            e.name, "relate", lambda e=e: e.plugin.relate(RelateRequest(e.ctx, graph)), []
         )
         for mine, theirs in pairs:
             if mine.kind not in e.plugin.kinds or graph.get(mine.kind, mine.id) is None:

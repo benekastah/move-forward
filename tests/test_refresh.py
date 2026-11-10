@@ -17,11 +17,11 @@ from move_forward.notifications import NotificationRepository
 from move_forward.page import Badge, Item
 from move_forward.plugin import (
     ActionError,
+    AfterCollectRequest,
     CollectAfterRequest,
     CollectRequest,
-    ContextRequest,
-    GraphRequest,
-    SnapshotRequest,
+    LoadRequest,
+    StoreRequest,
     Subjects,
     SubjectsRequest,
 )
@@ -56,7 +56,7 @@ class _JiraAfterGit(JiraPlugin):
             issues=[issue(summary=f"about {r.ref.id}") for r in graph.of_kind("git.repo")]
         )
 
-    def after_collect(self, req: GraphRequest[JiraConfig]) -> None:
+    def after_collect(self, req: AfterCollectRequest[JiraConfig]) -> None:
         graph = req.graph
         self.seen_by_after_collect[:] = [t.ref.id for t in graph.of_kind("ticket")]
 
@@ -94,10 +94,10 @@ class _GitInKv(GitPlugin):
             raise RuntimeError("git is gone")
         return local_snapshot()
 
-    def store(self, req: SnapshotRequest[GitConfig, LocalSnapshot]) -> None:
+    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
         req.ctx.kv.set("snapshot", req.snapshot.model_dump_json())
 
-    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
+    def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:
         ctx = req.ctx
         stored = ctx.kv.get("snapshot")
         return LocalSnapshot.model_validate_json(stored) if stored else None
@@ -125,7 +125,7 @@ def test_a_plugin_can_keep_its_snapshot_itself(
 
 
 class _GitThatCantStore(_GitInKv):
-    def store(self, req: SnapshotRequest[GitConfig, LocalSnapshot]) -> None:
+    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
         raise RuntimeError("disk full")
 
 
@@ -257,7 +257,7 @@ def test_refreshing_some_plugins_refreshes_only_those(
             calls.append("jira")
             return JiraSnapshot(issues=[])
 
-        def after_collect(self, req: GraphRequest[JiraConfig]) -> None:
+        def after_collect(self, req: AfterCollectRequest[JiraConfig]) -> None:
             calls.append("jira after")
 
     class GitHub(GitHubPlugin):
@@ -265,7 +265,7 @@ def test_refreshing_some_plugins_refreshes_only_those(
             calls.append("github")
             return snapshot()
 
-        def after_collect(self, req: GraphRequest[GitHubConfig]) -> None:
+        def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
             calls.append("github after")
 
     swap = {"git": Git(), "jira": JiraOnGit(), "github": GitHub()}
@@ -382,7 +382,7 @@ def _merging(
     def git_now(self: GitPlugin, req: CollectRequest[GitConfig]) -> LocalSnapshot:
         return local
 
-    def nothing_after(self: GitHubPlugin, req: GraphRequest[GitHubConfig]) -> None:
+    def nothing_after(self: GitHubPlugin, req: AfterCollectRequest[GitHubConfig]) -> None:
         return None
 
     monkeypatch.setattr(GitHubPlugin, "collect", github_now)

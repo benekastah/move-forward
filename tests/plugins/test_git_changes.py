@@ -15,8 +15,9 @@ from move_forward.graph import Graph
 from move_forward.plugin import (
     CollectRequest,
     Context,
-    ContextRequest,
-    SnapshotRequest,
+    EntitiesRequest,
+    LoadRequest,
+    StoreRequest,
 )
 from move_forward.plugins.git import changes, client
 from move_forward.plugins.git.config import GitConfig
@@ -45,7 +46,7 @@ class _Server:
         e = Enabled(self.plugin, ctx)
         taken = self.checks.take(e, Graph([]))
         found = self.plugin.collect(CollectRequest(ctx, taken.full, taken.subjects))
-        self.plugin.store(SnapshotRequest(ctx, found))
+        self.plugin.store(StoreRequest(ctx, found))
         self.checks.stored(e, taken)
 
 
@@ -160,7 +161,7 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     read.clear()
     refresh(1)
     assert read == ["b"]  # a is kept as stored
-    stored = server.plugin.load(ContextRequest(ctx(1)))
+    stored = server.plugin.load(LoadRequest(ctx(1)))
     assert stored is not None and [r.dir for r in stored.repos] == [str(a), str(b)]
     git(a, "commit", "-q", "--allow-empty", "-m", "second")
     assert server.changed(ctx(11))
@@ -187,7 +188,7 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
             kv=KvRepository(db, "git"),
         )
 
-    plugin.store(SnapshotRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
+    plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
     assert not server.changed(ctx(0))  # as stored
     (repo / "new.txt").write_text("x\n")
     assert not server.changed(ctx(10))  # status_seconds not up yet
@@ -218,7 +219,7 @@ def test_edits_after_a_collect_that_failed_ask_again_only_when_they_move_again(
             kv=KvRepository(db, "git"),
         )
 
-    plugin.store(SnapshotRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
+    plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
     assert not server.changed(ctx(0))
     (repo / "new.txt").write_text("x\n", encoding="utf-8")
     assert server.changed(ctx(40))
@@ -323,10 +324,10 @@ def test_two_clones_of_one_github_repo_are_a_problem(
     )
     plugin = GitPlugin(watching=False)
     found = plugin.collect(CollectRequest(ctx))
-    repos = [e for e in plugin.entities(SnapshotRequest(ctx, found)) if e.ref.kind == "git.repo"]
+    repos = [e for e in plugin.entities(EntitiesRequest(ctx, found)) if e.ref.kind == "git.repo"]
     assert [(e.ref.id, e.attrs["dir"]) for e in repos] == [("Acme/widgets", str(clones[0]))]
     branches = [
-        e for e in plugin.entities(SnapshotRequest(ctx, found)) if e.ref.kind == "git.branch"
+        e for e in plugin.entities(EntitiesRequest(ctx, found)) if e.ref.kind == "git.branch"
     ]
     assert {r.id for b in branches for r in b.refs} == {"Acme/widgets"}  # the one published
     [problem] = ProblemRepository(db).of([""])[""]

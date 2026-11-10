@@ -39,16 +39,19 @@ from .plugin import (
     ActionRequest,
     ActionResult,
     ActNowRequest,
+    AfterCollectRequest,
     CollectAfterRequest,
     CollectRequest,
     EventsRequest,
-    GraphRequest,
+    IdentityRequest,
+    ItemActionsRequest,
     ItemRequest,
     KeptItemRequest,
     PageRequest,
     PanelsRequest,
+    PruneRequest,
     Response,
-    SnapshotRequest,
+    StoreRequest,
     Subjects,
     SubjectsRequest,
     collect_into,
@@ -103,7 +106,7 @@ its events have nothing to compare with."""
 
 def store_snapshot(e: Enabled, snapshot: BaseModel) -> None:
     """Keep a plugin's new snapshot, and remember that it has one."""
-    e.plugin.store(SnapshotRequest(e.ctx, snapshot))
+    e.plugin.store(StoreRequest(e.ctx, snapshot))
     KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", "1")
 
 
@@ -133,7 +136,7 @@ def changes_of(
     snapshot to compare with."""
     if before is None or after is None:
         return []
-    return e.plugin.events(EventsRequest(e.ctx, graph, before, after, previous))
+    return e.plugin.events(EventsRequest(e.ctx, before, after, previous, graph))
 
 
 def newly_shown_of(e: Enabled, after: BaseModel | None, graph: Graph) -> list[Event]:
@@ -311,7 +314,7 @@ def refresh(
         if e.name not in collected and e.plugin.collects:
             continue
         try:
-            e.plugin.after_collect(GraphRequest(e.ctx, graph))
+            e.plugin.after_collect(AfterCollectRequest(e.ctx, graph))
         except Exception:
             log.exception("%s: after_collect failed", e.name)
 
@@ -377,7 +380,7 @@ def _subjects(e: Enabled, refs: list[Ref]) -> Subjects[BaseModel] | None:
     can't, fails or takes longer (the thread is left to finish, as a collect's is)."""
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"subjects-{e.name}")
     future = pool.submit(
-        lambda: e.plugin.refresh_subjects(SubjectsRequest(e.ctx, e.snapshot(), refs))
+        lambda: e.plugin.refresh_subjects(SubjectsRequest(e.ctx, refs, e.snapshot()))
     )
     pool.shutdown(wait=False)
     try:
@@ -436,7 +439,7 @@ def _prune_plugins(
         log.exception("tags: forgetting gone entities' tags failed")
     for e in plugins:
         try:
-            notices += [f"{e.name}: {n}" for n in e.plugin.prune(GraphRequest(e.ctx, graph))]
+            notices += [f"{e.name}: {n}" for n in e.plugin.prune(PruneRequest(e.ctx, graph))]
         except Exception:
             log.exception("%s: prune failed", e.name)
     return notices
@@ -519,7 +522,7 @@ def build_dashboard(
             found := call(
                 e.name,
                 "identity",
-                lambda e=e: e.plugin.identity(SnapshotRequest(e.ctx, snapshots[e.name])),
+                lambda e=e: e.plugin.identity(IdentityRequest(e.ctx, snapshots[e.name])),
                 None,
             )
         )
@@ -538,7 +541,7 @@ def build_dashboard(
             call(
                 e.name,
                 "item_actions",
-                lambda e=e: e.plugin.item_actions(GraphRequest(e.ctx, graph)),
+                lambda e=e: e.plugin.item_actions(ItemActionsRequest(e.ctx, graph)),
                 nothing,
             ),
         )

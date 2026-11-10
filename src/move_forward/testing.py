@@ -36,11 +36,11 @@ from .plugin import (
     CollectAfterRequest,
     CollectRequest,
     Context,
-    GraphRequest,
+    EntitiesRequest,
     PanelsRequest,
     Plugin,
+    PruneRequest,
     Response,
-    SnapshotRequest,
     page_path,
 )
 from .repositories import SnapshotRepository
@@ -72,7 +72,7 @@ class _Seed(Plugin[BaseModel, BaseModel]):
     def __init__(self, name: str, entities: Sequence[Entity]):
         self.seeded = list(entities)
 
-    def entities(self, req: SnapshotRequest[BaseModel, BaseModel | None]) -> list[Entity]:
+    def entities(self, req: EntitiesRequest[BaseModel, BaseModel]) -> list[Entity]:
         return list(self.seeded)
 
 
@@ -265,7 +265,7 @@ class Harness:
 
     def prune(self) -> list[str]:
         """Run the plugin's daily prune now; what it says it did."""
-        return self.plugin.prune(GraphRequest(self.ctx, self.graph()))
+        return self.plugin.prune(PruneRequest(self.ctx, self.graph()))
 
     # Helpers
 
