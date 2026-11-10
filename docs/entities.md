@@ -225,8 +225,9 @@ Published by core, not a plugin, for each tag some entity carries: stated by its
 (`Entity.tags`: labels; jira's, but escalation labels, github's, but `placeholder_labels` and
 `split_pr_labels`, and mail's, a conversation's Gmail labels, Gmail's own included), a `#tag` in
 its title or mentions, out of code (unless its kind says `KindSpec(tags_from_text=False)`), or
-put on it by hand (`mfd tag`), but one I took off (until its plugin next refreshes). They're all
-alike. Titled `#garbage-day`, open while something carrying it is. A tag needs a letter (`#7` is
+put on it by hand (`mfd tag`), but one I took off (until its plugin next refreshes). They look
+alike, but one only labels give is named only with its `#`. Titled `#garbage-day`, open while
+something carrying it is. A tag needs a letter (`#7` is
 a PR's number). It isn't a linking kind: what it relates isn't one piece of work.
 
 | Attribute | Type | Meaning |
