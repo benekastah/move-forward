@@ -15,6 +15,24 @@ ping says only `team <name>`. `mfd import <dir>` sets the channels of the teams 
 `reviewer-map.md` as if by hand, but for teams that have one set already, and names those it
 left whose channel differs from the map's.
 
+For missing destinations, `mfd slack destinations bacon ai-agents --discover --json`
+searches active Slack channels by exact team/channel name or the team's words in a topic
+or purpose. It lists public and accessible private channels through
+[`conversations.list`](https://docs.slack.dev/reference/methods/conversations.list/),
+which needs `channels:read` and `groups:read` on the token in addition to the email lookup
+scope. It reads channel metadata only. No token is needed when all requested teams
+already have destinations. Known mappings win; discovery never overwrites or saves them.
+
+Pass several GitHub team slugs to limit the result to those teams (and omit people).
+Without team arguments, `--discover` checks the top-level teams plus known mappings;
+without `--discover`, the command stays offline. Discovery lists Slack channels once for
+the whole batch, following pagination. A single match has `source: "discovered"`; missing
+and ambiguous mappings have null channel fields and source. Each attempted discovery
+adds `status` (`discovered`, `ambiguous`, `missing`) and `candidates` (name, id, topic,
+purpose and `matched_on`). A matching phrase is evidence, not a verified team mapping:
+inspect the candidates and save a chosen destination with `mfd slack team set`. Nothing
+is sent to Slack. A team whose channel uses unrelated words needs an explicit mapping.
+
 People's Slack ids come from the skill's `reviewer-map.md`, read with `mfd import <dir>`
 (which also picks up the nudges the skill logged in `work-notes.md`), or are set by hand on
 `/slack/contacts` or with `mfd slack contact set`; what's set by hand wins over a later
@@ -65,7 +83,7 @@ slack nominates the reviews to nudge: a quick ping, or a bump.
 
 | Command | Does |
 | --- | --- |
-| `mfd slack destinations [--json]` | Where people's and teams' pings go, and whether each was imported, set by hand or looked up by email (a team's is always set by hand, `dashboard`). |
+| `mfd slack destinations [TEAM ...] [--discover] [--json]` | Where people's and teams' pings go, with their source (`config` for a configured team); optional team slugs filter to just those teams. `--discover` searches channel metadata for missing mappings, returning candidates without saving them. |
 | `mfd slack contact set <login> <slack id>` / `unset <login>` | Set or forget a person's Slack member id. |
 | `mfd slack team set <team> <#channel> [--id C…]` / `unset <team>` | Set or forget a team's channel. |
 | `mfd import <dir>` | Core's command; slack reads people's Slack ids from the skill's `reviewer-map.md` in `<dir>`, and the nudges it logged in `work-notes.md`, replacing what the last import read; and sets its teams' channels as if by hand, but for teams that have one set already, naming those whose channel differs from the map's. Run it again, without `--replace`, whenever the map changes: `--replace` would overwrite the notes too. |

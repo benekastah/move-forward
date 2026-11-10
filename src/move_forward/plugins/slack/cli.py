@@ -3,11 +3,12 @@ the reviewer map and logged nudges from the skill's markdown."""
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
-from ...api import ActionError, CliHandler, CliRequest, Context
-from . import contacts, markdown
+from ...api import ActionError, CliHandler, CliRequest, Context, SourceError, http
+from . import client, contacts, discovery, markdown
 from .config import SlackConfig
 from .repository import SlackRepository
 
@@ -42,25 +43,78 @@ def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> list[str]:
     )
 
 
-def list_destinations(ctx: Context[SlackConfig], as_json: bool) -> str:
-    """People's Slack ids and teams' channels, each with where it came from."""
+def list_destinations(
+    ctx: Context[SlackConfig], as_json: bool, teams: list[str], discover: bool
+) -> str:
+    """Known destinations, or selected teams; optionally discover only missing mappings.
+    Discovery is read-only, and ambiguous matches stay candidates rather than being saved."""
     slack = SlackRepository(ctx.db)
     sources = slack.sources()
     people = [
         {**c.model_dump(), "source": sources.get(f"user:{c.login}")}
         for c in slack.contacts().values()
     ]
-    teams = [
+    team_rows: list[dict[str, object]] = [
         {**t.model_dump(), "source": sources.get(f"team:{t.slug}")}
         for t in slack.team_channels().values()
     ]
+    known = {str(t["slug"]): t for t in team_rows}
+    for team, name in ctx.config.teams.items():
+        current = known.get(team, {})
+        known[team] = {
+            "slug": team,
+            "channel_name": name,
+            "channel_id": current.get("channel_id")
+            if current.get("channel_name") == name
+            else None,
+            "source": "config",
+        }
+    selected = (
+        list(dict.fromkeys(teams))
+        if teams
+        else sorted(set(known) | (set(ctx.teams) if discover else set()))
+    )
+    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", t) for t in selected):
+        raise ValueError("use GitHub team slugs, e.g. bacon ai-agents")
+    missing = [t for t in selected if t not in known]
+    channels = client.channels(ctx.token()) if discover and missing else []
+    team_rows = []
+    for team in selected:
+        if team in known:
+            team_rows.append(known[team])
+            continue
+        row: dict[str, object] = {
+            "slug": team,
+            "channel_name": None,
+            "channel_id": None,
+            "source": None,
+        }
+        if discover:
+            matches = discovery.candidates(team, channels)
+            row["candidates"] = matches
+            row["status"] = (
+                "discovered" if len(matches) == 1 else "ambiguous" if matches else "missing"
+            )
+            if len(matches) == 1:
+                row.update({k: matches[0][k] for k in ("channel_name", "channel_id")})
+                row["source"] = "discovered"
+        team_rows.append(row)
+    if teams:
+        people = []
     if as_json:
-        return json.dumps({"people": people, "teams": teams}, indent=2)
+        return json.dumps({"people": people, "teams": team_rows}, indent=2)
     lines = [f"{p['login']}  {p['slack_id'] or '-'}  ({p['source']})" for p in people]
     lines += [
         f"team {t['slug']}  {t['channel_name'] or ''} {t['channel_id'] or ''}  ({t['source']})"
-        for t in teams
+        + (f" [{t['status']}]" if "status" in t else "")
+        for t in team_rows
     ]
+    for row in team_rows:
+        if row.get("status") == "ambiguous":
+            for match in discovery.candidates(str(row["slug"]), channels):
+                lines.append(
+                    f"  {match['channel_name']} ({match['channel_id']}); {match['matched_on']}"
+                )
     return "\n".join(lines)
 
 
@@ -68,7 +122,7 @@ def run_command(ctx: Context[SlackConfig], args: argparse.Namespace) -> str:
     slack = SlackRepository(ctx.db)
     command = args.slack_command
     if command == "destinations":
-        return list_destinations(ctx, args.json)
+        return list_destinations(ctx, args.json, args.teams, args.discover)
     if command == "contact" and args.contact_command == "set":
         return contacts.set_contact(slack, args.login, args.slack_id)
     if command == "contact":
@@ -84,9 +138,14 @@ def run_command(ctx: Context[SlackConfig], args: argparse.Namespace) -> str:
 
 def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     commands = parser.add_subparsers(dest="slack_command", required=True)
-    commands.add_parser("destinations", help="where people's and teams' pings go").add_argument(
-        "--json", action="store_true", help="print JSON, for scripts"
+    destinations = commands.add_parser("destinations", help="where people's and teams' pings go")
+    destinations.add_argument("teams", nargs="*", help="GitHub team slugs to look up")
+    destinations.add_argument(
+        "--discover",
+        action="store_true",
+        help="find missing teams' channels by name, topic and purpose (read-only)",
     )
+    destinations.add_argument("--json", action="store_true", help="print JSON, for scripts")
     contact = commands.add_parser("contact", help="set or forget a person's Slack id")
     contact_commands = contact.add_subparsers(dest="contact_command", required=True)
     contact_set = contact_commands.add_parser("set")
@@ -105,8 +164,13 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
         ctx, args = req.ctx, req.args
         try:
             print(run_command(ctx, args))
-        except (ValueError, ActionError) as e:
-            print(f"mfd slack {args.slack_command}: {e}", file=sys.stderr)
+        except (ValueError, ActionError, SourceError, client.SlackError, http.RequestError) as e:
+            hint = (
+                "; channel discovery needs channels:read and groups:read on the Slack token"
+                if isinstance(e, client.SlackError) and e.error == "missing_scope"
+                else ""
+            )
+            print(f"mfd slack {args.slack_command}: {e}{hint}", file=sys.stderr)
             return 1
         return 0
 

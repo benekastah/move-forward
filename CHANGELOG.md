@@ -19,6 +19,17 @@ Its badge is a plain string, `"#bug"`, like every tag's, no longer `{"text": "#b
 Mail's threads no longer carry Gmail's own labels as tags (`#inbox`, `#starred`, `#important`),
 only those I or my filters put on them: a link to `/?tag=inbox` shows what I tagged so.
 
+### Discover missing teams' Slack destinations
+
+Run `mfd slack destinations bacon ai-agents --discover --json` to look up several GitHub
+teams at once, searching Slack channel names, topics and purposes only for missing
+mappings. Discovery needs a token with `channels:read` and `groups:read`; known
+destinations and commands without `--discover` work offline. One match is returned with
+source `discovered`; ambiguous matches remain `candidates`, with no destination chosen.
+Discovery doesn't save mappings: use `mfd slack team set` after checking a candidate.
+Configured teams now appear in destinations too, with source `config` and precedence over
+hand-set destinations. See the Slack plugin docs for the extra discovery JSON fields.
+
 ### The page filters by tag
 
 `/` and `/focus` take `tag` query parameters, repeated for several (`/?tag=chores&tag=bins`),
