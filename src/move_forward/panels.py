@@ -466,10 +466,10 @@ def build(
     which buttons post to an action that's there, `hides` which kinds hide what they point
     at, `contact_importance` what who an item is about adds to it, and `tags_of` the tags
     core's badges show on an item, kept in its `tags`. With tags `selected` (the tag view, see
-    `tag_view`), Act now ranks only the nominations carrying one, so it shows the top of those,
-    not those of its top that carry one. A panel's key is its
-    plugin's name and its own, e.g. `github.conflicts`,
-    so two plugins' panels never clash."""
+    `tag_view`), Act now shows only its items with a member carrying one, so it shows the top
+    of those, not those of its top that carry one, each with all its members. A panel's key is
+    its plugin's name and its own, e.g. `github.conflicts`, so two plugins' panels never
+    clash."""
     plugins = [
         PluginPanels(
             plugin.key,
@@ -487,15 +487,17 @@ def build(
         )
         for plugin in plugins
     ]
-    wanted = set(selected)
     nominations = [
         act_now.Nomination(plugin.key, item)
         for plugin in plugins
         for item in plugin.nominations
-        if not hidden(item)
-        and _tasked(plugin.key, item)
-        and (not wanted or carries(item, wanted, tags_of))
+        if not hidden(item) and _tasked(plugin.key, item)
     ]
+    wanted = set(selected)
+
+    def shows(item: Item) -> bool:
+        return not wanted or carries(item, wanted, tags_of)
+
     nominated = fingerprints(plugins)
     titles = {plugin.key: plugin.title for plugin in plugins}
     # Act now has a panel per plugin, keyed by the plugin's name: that's whose its items are.
@@ -509,7 +511,15 @@ def build(
             parts_only=True,
         ).model_copy(update={"key": panel_key(ACT_NOW, p.key)})
         for p in act_now.panels(
-            nominations, ranking, feedback, now, titles, units, priority_of, contact_importance
+            nominations,
+            ranking,
+            feedback,
+            now,
+            titles,
+            units,
+            priority_of,
+            contact_importance,
+            shows,
         )
     ]
     return Dashboard(

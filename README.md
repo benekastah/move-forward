@@ -247,10 +247,12 @@ item's `#tag` badge, adds it to the selection, and the page then shows only the 
 at least one of the tags selected: in Act now, in every panel and in focus mode. An item carries
 the tags its badges show. On the page, one with parts (an entry's todos) is kept whole, parts
 and all, when it or one of its parts carries one; focus mode, which steps through a panel's parts
-one at a time, skips those carrying none (unless their item does). Act now ranks only what
-carries one, so it shows the most urgent of those, numbered from #1. Panels and groups left empty
-are left off; a plugin whose group is left off says when it last refreshed, or why it failed, and
-its problems, in the footer, with its Refresh button. While tags are selected, groups and panels can't be dragged.
+one at a time, skips those carrying none (unless their item does). Act now shows the most urgent
+of what carries one, numbered from #1; an item joining a ticket's move to its PR's step is shown
+whole when either carries it, so its Snooze sets aside both, as unfiltered. Panels and groups left
+empty are left off; a plugin whose group is left off says when it last refreshed, or why it
+failed, and its problems, in the footer, with its Refresh button. While tags are selected, groups
+and panels can't be dragged.
 Each selected tag has a link clearing it, beside one
 clearing them all, and one that nothing carries any more stays there to clear. The selection is
 in the page's address (`/?tag=chores&tag=garbage-day`), so it can be bookmarked, and the page's

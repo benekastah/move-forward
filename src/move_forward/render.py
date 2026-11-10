@@ -883,14 +883,12 @@ def dashboard_page(
     notice: str = "",
     spot: Spot | None = None,
     tags: Sequence[str] = (),
-    everything: Dashboard | None = None,
 ) -> str:
     """The page. `spot` is where an action was just pressed (see `Spot`).
 
     `refreshing` are the plugins a refresh running now collects. `notice` is the outcome of
     an action just run, shown in the header. `tags` are those the page is filtered by (see
-    `tag_view`): `dashboard` is built with them selected (`panels.build`'s `selected`), and
-    `everything` without, for the tags the drop-down offers; `dashboard` when not given.
+    `tag_view`): `dashboard` is built with them selected (`panels.build`'s `selected`).
     """
     where = _Where(tags=tuple(tags))
     shown = tag_view.filtered(dashboard, tags)
@@ -907,7 +905,7 @@ def dashboard_page(
         "<a class='button secondary' href='/settings'>Settings</a>"
         f"<form method='post' action='{_e(tag_view.url('/refresh', tags))}'><button type='submit'"
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
-        + _tag_bar(tag_view.options(everything or dashboard), where)
+        + _tag_bar(tag_view.options(dashboard), where)
         + f"<main{' data-filtered' if tags else ''}>"
         + (
             "".join(_group(group, shown, refreshing, where, spot) for group in shown.groups)
@@ -940,12 +938,10 @@ def _focus_category(
     )
 
 
-def focus_categories_page(
-    dashboard: Dashboard, tags: Sequence[str] = (), everything: Dashboard | None = None
-) -> str:
+def focus_categories_page(dashboard: Dashboard, tags: Sequence[str] = ()) -> str:
     """Focus mode's first page: Act now and its panels, then each group's title with its
-    panels, each to walk with a count; with `tags`, only what carries one (see `tag_view`,
-    and `dashboard_page` for `everything`)."""
+    panels, each to walk with a count; with `tags`, only what carries one (see `tag_view`
+    and `dashboard_page`)."""
     where = _Where("/focus", (), tuple(tags))
     shown = tag_view.focused(dashboard, tags)
     rows: list[str] = []
@@ -970,7 +966,7 @@ def focus_categories_page(
     return (
         _head("Focus", None)
         + f"<header><h1>{_logo(tags)} / focus</h1></header>"
-        + _tag_bar(tag_view.options(everything or dashboard), where)
+        + _tag_bar(tag_view.options(dashboard), where)
         + f"<main class='single'>{body}</main></body></html>"
     )
 
@@ -982,7 +978,6 @@ def focus_page(
     notice: str = "",
     done: tuple[str, Item] | None = None,
     tags: Sequence[str] = (),
-    everything: Dashboard | None = None,
 ) -> str | None:
     """One item of a focus category with previous and next links; None for an unknown category.
 
@@ -990,8 +985,7 @@ def focus_page(
     `notice` is the outcome of an action just run from this page. `done` is an item an action
     just changed, e.g. a todo ticked off, with its panel's key: it's shown in place of the
     item at `index` (which is now the one after it), so the change can be undone. With `tags`,
-    it steps through only what carries one (see `tag_view`, and `dashboard_page` for
-    `everything`).
+    it steps through only what carries one (see `tag_view` and `dashboard_page`).
     """
     where = _Where("/focus", (("cat", category),), tuple(tags))
     shown = tag_view.focused(dashboard, tags)
@@ -1004,7 +998,7 @@ def focus_page(
     header = (
         f"<header><h1>{_logo(tags)} / <a href='{_e(tag_view.url('/focus', tags))}'>focus</a>"
         f" / {_e(title)}</h1>{notice_html}</header>"
-        + _tag_bar(tag_view.options(everything or dashboard), where)
+        + _tag_bar(tag_view.options(dashboard), where)
         + "<main class='single'>"
     )
     if not items and done is None:

@@ -25,7 +25,7 @@ from .panels import Layout
 from .plugin import KEPT, MAX_SUBJECTS, ActionError, ChangedRequest, Response
 from .refresh import (
     PageFailed,
-    build_tag_view,
+    build_dashboard,
     kept_item,
     perform_action,
     plugin_page,
@@ -334,8 +334,8 @@ class App:
         self, notice: str = "", spot: render.Spot | None = None, tags: Sequence[str] = ()
     ) -> str:
         """The page from stored data, filtered by `tags` (see `tag_view`)."""
-        shown, everything = build_tag_view(self.config, self.db, tags)
-        return render.dashboard_page(shown, self.refreshing, notice, spot, tags, everything)
+        built = build_dashboard(self.config, self.db, selected=tags)
+        return render.dashboard_page(built, self.refreshing, notice, spot, tags)
 
     def run_action(
         self, name: str, fields: dict[str, str], back: str | None = None
@@ -388,11 +388,11 @@ class App:
         `kept` names an item an action asked to keep on the page, e.g. a todo just ticked off,
         so it can be undone; see `Plugin.kept_item`.
         """
-        shown, everything = build_tag_view(self.config, self.db, tags, surface="focus")
+        built = build_dashboard(self.config, self.db, surface="focus", selected=tags)
         if not category:
-            return render.focus_categories_page(shown, tags, everything)
+            return render.focus_categories_page(built, tags)
         done_item = kept_item(self.config, self.db, kept) if kept else None
-        return render.focus_page(shown, category, index, notice, done_item, tags, everything)
+        return render.focus_page(built, category, index, notice, done_item, tags)
 
 
 def _said(changed: dict[str, str]) -> str:

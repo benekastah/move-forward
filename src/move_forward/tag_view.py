@@ -3,11 +3,13 @@
 
 An item carries a tag when it shows the tag's `#tag` badge (`Item.tags`, set from the badges'
 own tags), and an item with parts (an entry's todos) when it or one of them does: it's kept
-whole, parts and all, in its panel and in Act now. Focus mode, which steps through a panel's
-parts one at a time, skips those carrying none (unless their item does). Act now is ranked
-from only the nominations carrying one (`panels.build`'s `selected`), so it shows the top of
-those. A panel or a group left empty is left off the page. The selection is kept in every link and form that comes back to the page
-(see `render`), so it survives the page's reload, focus mode and a button's redirect."""
+whole, parts and all, in its panel. Focus mode, which steps through a panel's parts one at a
+time, skips those carrying none (unless their item does). Act now is filtered as it's built
+(`panels.build`'s `selected`), so it shows the top of what carries one, each item with all its
+members (a PR's with its ticket's move), as one member carrying it is enough. A panel or a
+group left empty is left off the page. The selection is kept in every link and form that comes
+back to the page (see `render`), so it survives the page's reload, focus mode and a button's
+redirect."""
 
 from collections.abc import Mapping, Sequence
 from urllib.parse import urlencode
@@ -45,14 +47,19 @@ def without(tags: Sequence[str], tag: str) -> list[str]:
 
 
 def filtered(dashboard: Dashboard, tags: Sequence[str]) -> Dashboard:
-    """The dashboard with only the items carrying one of `tags`, every one without any. A panel
-    left empty is kept, for focus mode to say so, but leaves its group's `panel_keys`, and a
-    group left with none leaves the page. No `tags`, no filter."""
+    """The dashboard, built with `tags` selected, with only the items carrying one of them in
+    its plugins' panels, every one without any; Act now's are left as built, filtered already.
+    A panel left empty is kept, for focus mode to say so, but leaves its group's `panel_keys`,
+    and a group left with none leaves the page. No `tags`, no filter."""
     if not tags:
         return dashboard
     wanted = set(tags)
+    act_now = dashboard.find_group(ACT_NOW)
+    built = set(act_now.panel_keys) if act_now else set[str]()
     panels = [
-        panel.model_copy(update={"items": [i for i in panel.items if carries(i, wanted)]})
+        panel
+        if panel.key in built
+        else panel.model_copy(update={"items": [i for i in panel.items if carries(i, wanted)]})
         for panel in dashboard.panels
     ]
     shown = {panel.key for panel in panels if panel.items}
@@ -96,7 +103,8 @@ def focused(dashboard: Dashboard, tags: Sequence[str]) -> Dashboard:
 def options(dashboard: Dashboard) -> list[tuple[str, int]]:
     """Every tag an item on the page carries, by handle, with how many things carry it (an
     entity shown in two panels, or in Act now and its panel, counts once). Give it the
-    dashboard before `filtered`, so every tag can be added."""
+    dashboard before `filtered`, so every tag can be added: its plugins' panels are whole, and
+    Act now's items, however it was filtered, are made of their items."""
     carriers: dict[str, set[Ref]] = {}
 
     def visit(item: Item) -> None:
