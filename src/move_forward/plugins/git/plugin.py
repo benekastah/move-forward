@@ -52,6 +52,8 @@ LAST_FULL = "last_full_collect"
 """The kv key of when every repo was last read."""
 LAST_STATUS = "last_status_check"
 """The kv key of when `changed` last checked the worktrees' status."""
+CLONES = "clones"
+"""The problem (`Context.problem`) of the repos that are each a clone of one GitHub repo."""
 
 
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
@@ -81,8 +83,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         self._ids: dict[Path, str] = {}
         """Each watched repo's id, the common git directory `changes` and `collect` name it
         by, by its resolved path, as the watcher has it."""
-        self._clones_warned: set[tuple[str, ...]] = set()
-        """The clones of one GitHub repo already warned of, so each is warned of once a run."""
 
     def init_suggested(self) -> bool:
         """Always: init guesses its repo from the checkout it runs in."""
@@ -96,7 +96,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         as stored, unless a full collect is due (`refresh_seconds` since the last), so
         frequent changes can't put it off. What moved is taken as the collect starts: one that
         fails waits for the next refresh rather than asking again at once, and isn't counted
-        as a full collect. What was read before stands in for a repo git can't read now."""
+        as a full collect. What was read before stands in for a repo git can't read now.
+        Repos that are each a clone of one GitHub repo are a problem (`CLONES`) until only one
+        is left."""
         ctx = req.ctx
         moved = set(ctx.kv.get_json(MOVED, list[str]) or [])
         ctx.kv.delete(MOVED)
@@ -125,15 +127,13 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 by_name.setdefault(repo.github_repo.casefold(), (repo.github_repo, []))[1].append(
                     repo.dir
                 )
-        for name, dirs in by_name.values():
-            if len(dirs) > 1 and tuple(dirs) not in self._clones_warned:
-                self._clones_warned.add(tuple(dirs))
-                ctx.log.warning(
-                    "%s are each a clone of %s: only the first's branches meet its PRs; make the"
-                    " others worktrees of it (git worktree add)",
-                    ", ".join(dirs),
-                    name,
-                )
+        clones = [
+            f"{', '.join(dirs)} are each a clone of {name}: only the first's branches meet its"
+            " PRs; make the others worktrees of it (git worktree add)"
+            for name, dirs in by_name.values()
+            if len(dirs) > 1
+        ]
+        ctx.problem(CLONES, "; ".join(clones) or None)
         return found
 
     def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:

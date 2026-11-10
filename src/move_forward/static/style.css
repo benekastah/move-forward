@@ -120,6 +120,10 @@ main.single { max-width: 720px; margin: 0 auto; padding-top: 16px; }
 .group > summary .refreshed { margin-left: auto; color: var(--muted); font-size: 12px; }
 .group > summary .refreshed.error { color: var(--warn); }
 .group > summary form.refresh { margin: 0; }
+/* What the plugin reports wrong besides a failed refresh: how many in the summary, and each
+   above its panels. */
+.group > summary .problems { color: var(--warn); font-size: 12px; }
+.group > .problems p { margin: 0 0 8px; }
 /* Panels flow down columns (CSS multi-column), so a short panel is followed by the next one
    instead of blank space. */
 .panels {

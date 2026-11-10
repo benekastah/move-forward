@@ -14,7 +14,7 @@ from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import CHANGED, EVERYTHING, GitHubPlugin
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.github.tables import MIGRATIONS
-from move_forward.repositories import KvRepository
+from move_forward.repositories import KvRepository, ProblemRepository
 from move_forward.shell import CommandError
 
 FIRST = "Fri, 30 Oct 2026 11:00:00 GMT"
@@ -138,16 +138,19 @@ def _context(db: Database, minutes: int = 0, **config: object) -> Context[GitHub
     )
 
 
-def test_a_poll_that_fails_finds_nothing_warns_once_and_tries_again_later(
+def test_a_poll_that_fails_is_a_problem_until_one_works_and_tries_again_later(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     calls: list[str] = []
+    answers: list[str] = []
 
-    refused = "gh api: HTTP 403: Resource not accessible by personal access token"
+    failed = "gh api: HTTP 502: Bad Gateway"
 
     def run(args: list[str]) -> str:
         calls.append("poll")
-        raise CommandError(refused)
+        if not answers:
+            raise CommandError(failed)
+        return answers.pop(0)
 
     monkeypatch.setattr(notifications, "run", run)
     db = Database(":memory:")
@@ -156,9 +159,14 @@ def test_a_poll_that_fails_finds_nothing_warns_once_and_tries_again_later(
     for minutes in (0, 0, 1, 2):
         assert not plugin.changed(ChangedRequest(_context(db, minutes), Graph([])))
     assert calls == ["poll", "poll", "poll"]  # not again within the minute
-    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [
-        f"can't read GitHub notifications: {refused}"
-    ]
+    said = f"can't read GitHub notifications: {failed}"
+    assert ProblemRepository(db).of([""]) == {"": [said]}
+    # Kept across a restart, so it isn't warned of again.
+    assert not GitHubPlugin().changed(ChangedRequest(_context(db, 3), Graph([])))
+    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
+    answers.append(_answer(FIRST))
+    assert not plugin.changed(ChangedRequest(_context(db, 4), Graph([])))
+    assert ProblemRepository(db).of([""]) == {}
 
 
 def test_searching_everywhere_hears_of_every_owners_prs(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -178,3 +186,29 @@ def test_searching_everywhere_hears_of_every_owners_prs(monkeypatch: pytest.Monk
     found = plugin.changed(ChangedRequest(_context(db, 2, search_scope="everywhere"), Graph([])))
     assert found
     assert json.loads(KvRepository(db, "github").get(CHANGED) or "[]") == ["someone-else/widgets#7"]
+
+
+def test_a_token_that_cant_read_notifications_is_logged_once_a_run_not_a_problem(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    refused = "gh: Resource not accessible by personal access token (HTTP 403)"
+    calls: list[str] = []
+
+    def run(args: list[str]) -> str:
+        calls.append("poll")
+        raise CommandError(refused)
+
+    monkeypatch.setattr(notifications, "run", run)
+    db = Database(":memory:")
+    db.migrate("github", MIGRATIONS)
+    ProblemRepository(db).set("", "notifications", "can't read GitHub notifications: blip", NOW)
+    plugin = GitHubPlugin()
+    for minutes in (0, 0, 1, 2):
+        assert not plugin.changed(ChangedRequest(_context(db, minutes), Graph([])))
+    assert calls == ["poll", "poll", "poll"]  # not again within the minute
+    assert ProblemRepository(db).of([""]) == {}  # nothing I can fix but the token
+    said = f"can't read GitHub notifications (a fine-grained token can't): {refused}"
+    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
+    # Once each run, as the log of a run is read on its own.
+    assert not GitHubPlugin().changed(ChangedRequest(_context(db, 3), Graph([])))
+    assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said] * 2

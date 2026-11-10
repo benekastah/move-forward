@@ -2,6 +2,7 @@
 edits changed, from `git status`."""
 
 import json
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,7 @@ from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalRepo
 from move_forward.plugins.git.plugin import LAST_FULL, MOVED, GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
-from move_forward.repositories import KvRepository
+from move_forward.repositories import KvRepository, ProblemRepository
 from move_forward.shell import CommandError, git, git_common_dir
 
 
@@ -206,7 +207,7 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
 
 
 @pytest.mark.parametrize("second", ["Acme/widgets", "acme/WIDGETS"])
-def test_two_clones_of_one_github_repo_are_warned_of(
+def test_two_clones_of_one_github_repo_are_a_problem(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, second: str
 ) -> None:
     """Published once, by the first's name, and warned of: GitHub's names ignore case, so remotes
@@ -233,6 +234,12 @@ def test_two_clones_of_one_github_repo_are_warned_of(
         e for e in plugin.entities(EntitiesRequest(ctx, found)) if e.ref.kind == "git.branch"
     ]
     assert {r.id for b in branches for r in b.refs} == {"Acme/widgets"}  # the one published
-    plugin.collect(CollectRequest(ctx))  # warned of once a run, not every collect
+    [problem] = ProblemRepository(db).of([""])[""]
+    assert problem.startswith(f"{clones[0]}, {clones[1]} are each a clone of Acme/widgets")
+    # Warned of once, not at every collect, nor again after a restart.
+    plugin.collect(CollectRequest(ctx))
+    GitPlugin(watching=False).collect(CollectRequest(ctx))
     [warning] = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
-    assert f"{clones[0]}, {clones[1]} are each a clone of Acme/widgets" in warning
+    assert warning == problem
+    plugin.collect(CollectRequest(replace(ctx, config=GitConfig(repos=clones[:1]))))
+    assert ProblemRepository(db).of([""]) == {}  # one clone left: nothing wrong

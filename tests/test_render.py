@@ -101,6 +101,27 @@ def test_a_part_of_a_plugins_refresh_shows_in_its_header_not_the_footer() -> Non
     assert "<footer>" in html and "github.derived" not in html.split("<footer>")[1]
 
 
+def test_a_plugins_problems_are_counted_in_its_header_and_said_above_its_panels() -> None:
+    problems = {"github": ["can't read <notifications>", "lookups failed"], "jira": ["no team"]}
+    built = _dashboard().model_copy(update={"plugin_problems": problems})
+    html = render.dashboard_page(built, refreshing=frozenset())
+    github = html.split("data-key='github'")[1].split("<div class='panels'>")[0]
+    summary, body = github.split("</summary>")
+    assert (
+        "<span class='problems' title='can&#x27;t read &lt;notifications&gt;; lookups failed'>"
+        "2 problems</span>" in summary
+    )
+    assert body == (
+        "<div class='problems'><p class='notice warn'>can&#x27;t read &lt;notifications&gt;</p>"
+        "<p class='notice warn'>lookups failed</p></div>"
+    )
+    footer = html.split("<footer>")[1]
+    assert "can&#x27;t read" not in footer  # the group says it
+    # A plugin without a group of its own says its problems in the footer.
+    assert "<span class='error'><strong>jira:</strong> no team</span>" in footer
+    assert "problem" not in render.dashboard_page(_dashboard(), refreshing=frozenset())
+
+
 def test_refreshing_disables_the_buttons_and_reloads_sooner() -> None:
     html = render.dashboard_page(_dashboard(), refreshing=frozenset({"github"}))
     assert ">refreshing…</span>" in html.split("data-key='github'")[1].split("</summary>")[0]

@@ -45,7 +45,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   plugins don't filter them out themselves.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
-  plugin last fetched, and why it failed.
+  plugin last fetched, and why it failed; and what else a plugin reports wrong with
+  `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its state on
+  the page and logged when it changes, rather than each plugin warning in its own way.
 - Every plugin hook that runs with the plugin's context takes one request object
   (`PanelsRequest(ctx, snapshot, graph)` and so on), so a hook can gain an input without
   breaking its overrides. Those called before there's a context take what they need:
@@ -60,9 +62,11 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   needs other plugins' entities to know what to fetch; `changed`, polled
   every `change_check_seconds` and right after each refresh of a plugin it
   `watches`, is a cheap check that its tool has something new, so the plugin
-  refreshes sooner. Notifications come from two places: `events`, asked after every refresh
-  with the plugin's snapshot and the graph before and after it, for what changed; and an
-  item's `notify`, which core raises when the item is newly in its plugin's panels. Rare work (the daily
+  refreshes sooner; it compares other plugins' entities with `previous_graph`, the graph
+  its last check was given, which core keeps. Notifications come from two places: `events`,
+  asked after every refresh with the plugin's snapshot and the graph before and after it, for
+  what changed; and an item's `notify`, which core raises when the item is newly in its
+  plugin's panels. Rare work (the daily
   prune) can ask the owning plugin for entities its snapshot no longer holds
   with `graph.fetch`. Buttons, badges, details and links on other plugins' items
   come from `item_actions`, called per item with whose item it is and where it's
