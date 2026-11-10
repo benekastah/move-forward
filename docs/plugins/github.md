@@ -31,7 +31,9 @@ lists the searches fill (mine, merged or closed; requesting my review or my team
 reviewed by me; mentioning me), keeping the rest as they were. A CI run's notification names its repo,
 not its PR, so it fetches my open PRs in that repo; one about what no search shows (an
 issue, a discussion, a release, a commit comment, a security alert) fetches nothing. Every
-search runs instead when `refresh_seconds` have passed since they last did, for a
+search runs instead when `refresh_seconds` have passed since the last refresh due to run them
+all that worked (as core times it: one that ran them all only because fetching the PRs
+failed, or too many changed, doesn't count), for a
 notification about anything else, when more PRs changed than a search page holds (20), and
 when fetching the PRs fails. A PR that newly concerns me without a notification (one I
 just opened, say) waits for that.

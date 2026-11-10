@@ -45,7 +45,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   plugins don't filter them out themselves.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
-  plugin last fetched, and why it failed; and what else a plugin reports wrong with
+  plugin last fetched, and why it failed; what its change checks last saw and said moved,
+  until a collect started after stores (`change_checks.py`); and what else a plugin reports wrong with
   `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its state on
   the page and logged when it changes, rather than each plugin warning in its own way.
 - Every plugin hook that runs with the plugin's context takes one request object
@@ -61,10 +62,14 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   reads beyond what the plugin passes in. Everything slow happens in
   `collect` or `after_collect`, or in `collect_after` for a plugin that
   needs other plugins' entities to know what to fetch; `changed`, polled
-  every `change_check_seconds` and right after each refresh of a plugin it
-  `watches`, is a cheap check that its tool has something new, so the plugin
-  refreshes sooner; it compares other plugins' entities with `previous_graph`, the graph
-  its last check was given, which core keeps. Notifications come from two places: `events`,
+  every `change_check_seconds`, right after each refresh of a plugin it
+  `watches` and as each of its own collects starts, is a cheap check of what moved in its
+  tool, so the plugin refreshes sooner: a fingerprint, the subjects that moved, or both.
+  Core keeps them (`change_checks.py`), never the plugin: it compares each fingerprint with
+  the last, keeps the subjects pending until a collect started after they moved stores, owns the
+  full-collect timer, and gives `collect` what's pending and whether it's a full one. A
+  check compares other plugins' entities with `previous_graph`, the graph its last check was
+  given, which core keeps too. Notifications come from two places: `events`,
   asked after every refresh with the plugin's snapshot and the graph before and after it, for
   what changed; and an item's `notify`, which core raises when the item is newly in its
   plugin's panels. Rare work (the daily

@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
+from pydantic import TypeAdapter
+
 from ...api import (
     API_VERSION,
     ActionHandler,
@@ -44,14 +46,10 @@ from .setup import EXAMPLE, questions
 
 REPO = "git.repo"
 BRANCH = "git.branch"
-FINGERPRINTS = "refs_fingerprints"
-"""The kv key of the last `changes.fingerprints` of the repos."""
-MOVED = "repos_moved"
-"""The kv key of the repos (common git directories) `changed` saw move, for `collect`."""
-LAST_FULL = "last_full_collect"
-"""The kv key of when every repo was last read."""
 LAST_STATUS = "last_status_check"
 """The kv key of when `changed` last checked the worktrees' status."""
+_FINGERPRINTS = TypeAdapter(dict[str, str])
+"""`changes.fingerprints`, as the fingerprint core keeps (`Changed.fingerprint`)."""
 CLONES = "clones"
 """The problem (`Context.problem`) of the repos that are each a clone of one GitHub repo."""
 
@@ -82,6 +80,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         self._ids: dict[Path, str] = {}
         """Each watched repo's id, the common git directory `changes` and `collect` name it
         by, by its resolved path, as the watcher has it."""
+        self._statuses: dict[Path, tuple[int, int]] = {}
+        """Each worktree's (modified, untracked) counts as `_edited` last saw them, by its
+        resolved path."""
 
     def init_suggested(self) -> bool:
         """Always: init guesses its repo from the checkout it runs in."""
@@ -91,35 +92,23 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         return questions(ask, setup)
 
     def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
-        """Every repo; or, after `changed` saw only some move, just those, keeping the rest
-        as stored, unless a full collect is due (`refresh_seconds` since the last), so
-        frequent changes can't put it off. What moved is taken as the collect starts: one that
-        fails waits for the next refresh rather than asking again at once, and isn't counted
-        as a full collect. What was read before stands in for a repo git can't read now.
-        Repos that are each a clone of one GitHub repo are a problem (`CLONES`) until only one
-        is left."""
+        """Every repo; or, after `changed` saw only some move (`req.subjects`, by common git
+        directory), just those, keeping the rest as stored, unless core asks for a full
+        collect (`refresh_seconds` since the last, so frequent changes can't put it off). What
+        was read before stands in for a repo git can't read now. Repos that are each a clone of
+        one GitHub repo are a problem (`CLONES`) until only one is left."""
         ctx = req.ctx
-        moved = set(ctx.kv.get_json(MOVED, list[str]) or [])
-        ctx.kv.delete(MOVED)
-        last_full = ctx.kv.get(LAST_FULL)
-        full_due = (
-            last_full is None
-            or (ctx.now - datetime.fromisoformat(last_full)).total_seconds()
-            >= ctx.config.refresh_seconds
-        )
         previous = self.load(LoadRequest(ctx))
-        partial = bool(moved) and not full_due and previous is not None
+        partial = not req.full and previous is not None
         found = client.collect(
             ctx.config.repos,
             ctx.now,
             ctx.config.commit_history_days,
             ctx.config.ignored_worktree_globs,
-            only=moved if partial else None,
+            only=set(req.subjects) if partial else None,
             previous=previous,
             github_hosts=ctx.config.github_hosts,
         )
-        if not partial:
-            ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         by_name: dict[str, tuple[str, list[str]]] = {}  # GitHub's names ignore case
         for repo in found.repos:
             if repo.github_repo:
@@ -137,9 +126,11 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
     def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
         """Keep the snapshot, and watch the worktrees it found (once `changed` has started
-        watching: only the server asks it)."""
+        watching: only the server asks it). The last looks at uncommitted edits are forgotten:
+        what's stored is now newer, and edits back as a look saw them may differ from it."""
         ctx, snapshot = req.ctx, req.snapshot
         LocalRepository(ctx.db).replace(snapshot)
+        self._statuses.clear()
         if self._watcher is not None:
             self._watch(snapshot)
 
@@ -178,8 +169,10 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a
         worktree's uncommitted edits changed. Watched repos say so as it happens (see
         `watch`); the rest are polled, their refs by their files' times (see `changes`) and
-        their edits every `status_seconds` by `git status`. Which repos moved is kept for
-        `collect`, to read just those, and asks for a refresh until a collect takes them."""
+        their edits every `status_seconds` by `git status`. The polled repos' refs are the
+        fingerprint, by repo, which core keeps and gives back (`req.fingerprint`) to tell which
+        moved; the repos that moved are the answer's subjects, which core keeps for `collect`,
+        to read just those, and a repo found or gone asks for every repo."""
         ctx = req.ctx
         watcher = self._watcher_for(ctx)
         moved_now, edited_now = watcher.take() if watcher else (set[Path](), set[Path]())
@@ -188,30 +181,27 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         )
         moved = {self._ids[c] for c in moved_now if c in self._ids}
 
-        before = ctx.kv.get_json(FINGERPRINTS, dict[str, str])
+        before = None if req.fingerprint is None else _FINGERPRINTS.validate_json(req.fingerprint)
         polled = [repo for repo in ctx.config.repos if str(git_common_dir(repo)) not in watched]
         now = changes.fingerprints(polled)
         now.update({k: v for k, v in (before or {}).items() if k in watched})
-        if now != before:
-            ctx.kv.set_json(FINGERPRINTS, now)
         if before is not None:
             moved |= changes.moved(before, now)
         moved |= self._edited(ctx, edited_now, watcher.worktrees if watcher else set())
-        pending = set(ctx.kv.get_json(MOVED, list[str]) or [])
-        if moved - pending:
-            pending |= moved
-            ctx.kv.set_json(MOVED, sorted(pending))
-        # Pending until `collect` takes them: what's seen in the check core makes right after
-        # a refresh (whose answer it ignores) still asks for a refresh at the next one.
         return Changed(
-            bool(pending) or (before is not None and set(before) != set(now)),
-            "a repo moved or was edited",
+            fingerprint=_FINGERPRINTS.dump_json(now).decode(),
+            subjects=frozenset(moved),
+            everything=before is not None and set(before) != set(now),
+            reason="a repo moved or was edited",
         )
 
     def _edited(self, ctx: Context[GitConfig], edited: set[Path], watched: set[Path]) -> set[str]:
-        """The repos (common git directories) with a worktree whose uncommitted edits differ
-        from the last refresh's, asking `git status` of the worktrees the watcher saw edited,
-        and of those it doesn't watch once `status_seconds` have passed since the last look."""
+        """The repos (common git directories) with a worktree whose uncommitted edits moved
+        since the last look, asking `git status` of the worktrees the watcher saw edited, and
+        of those it doesn't watch once `status_seconds` have passed since the last look. Edits
+        that moved differ from the last look's and from what's stored: what's stored may be
+        older than the last look (after a collect that failed), and a worktree whose edits are
+        as stored needn't be read again."""
         seconds = ctx.config.status_seconds
         last = ctx.kv.get(LAST_STATUS)
         poll = bool(seconds) and (
@@ -232,7 +222,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                     status = client.worktree_status(path)
                 except CommandError:  # gone since; the next read finds out
                     continue
-                if status != (wt.modified, wt.untracked):
+                last = self._statuses.get(resolved)
+                self._statuses[resolved] = status
+                if status != (wt.modified, wt.untracked) and status != last:
                     found.add(str(git_common_dir(Path(repo.dir))))
         return found
 

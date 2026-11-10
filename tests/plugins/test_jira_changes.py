@@ -5,12 +5,14 @@ from datetime import timedelta
 import pytest
 from conftest import NOW
 
+from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import ChangedRequest, Context
+from move_forward.plugin import Context
 from move_forward.plugins.jira import client
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.registry import Enabled
 from move_forward.repositories import KvRepository
 
 
@@ -31,6 +33,7 @@ def test_the_plugin_says_changed_when_a_ticket_of_mine_was_updated_since_it_look
     monkeypatch.setenv("JIRA_API_TOKEN", "t")
     db = Database(":memory:")
     plugin = JiraPlugin()
+    checks = ChangeChecks()  # as the server keeps what the checks said
 
     def changed(seconds: int) -> bool:
         ctx = Context(
@@ -41,8 +44,9 @@ def test_the_plugin_says_changed_when_a_ticket_of_mine_was_updated_since_it_look
             now=NOW + timedelta(seconds=seconds),
             db=db,
             kv=KvRepository(db, "jira"),
+            name="jira",
         )
-        return plugin.changed(ChangedRequest(ctx, Graph([]))).changed
+        return checks.check(Enabled(plugin, ctx), Graph([])) is not None
 
     assert not changed(0) and asked == []  # the first look only notes the time
     assert changed(90)

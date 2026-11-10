@@ -23,9 +23,10 @@ from conftest import (
 from legacy import save_json_snapshot
 
 from move_forward import refresh
+from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
-from move_forward.graph import Graph, Ref
-from move_forward.plugin import ActionError, ChangedRequest, CollectAfterRequest
+from move_forward.graph import Ref
+from move_forward.plugin import ActionError, CollectAfterRequest
 from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack import actions, changes, client
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
@@ -366,15 +367,12 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
         stacks=stacks(StackBranch(name="me/a", parent="main"), dir=str(repo)),
     )
 
-    checked: list[Graph] = []  # as core keeps them, for the next check
+    checks = ChangeChecks()  # as the server keeps what the checks said, graphs and all
 
     def changed() -> bool:
         plugins = enabled(config, db, NOW)
         e = next(e for e in plugins if e.name == "git_stack")
-        graph = refresh.stored_graph(db, plugins)[0]
-        previous = checked[-1] if checked else None
-        checked.append(graph)
-        return GitStackPlugin().changed(ChangedRequest(e.ctx, graph, previous)).changed
+        return checks.check(e, refresh.stored_graph(db, plugins)[0]) is not None
 
     assert not changed()  # the first look notes where things stand
     assert not changed()

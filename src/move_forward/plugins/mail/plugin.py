@@ -38,9 +38,6 @@ from .panels import OPEN_PAGE, link, message_url, panels, threads
 from .repository import MIGRATIONS, MessageRepository
 from .setup import EXAMPLE, TABLES, questions
 
-STATUS = "status"
-"""The kv key of the mailbox's status at the last look, for `changed`."""
-
 
 def person_id(email: str) -> str:
     """The id of the `person` with address `email`: `mail/<address>`, the same whichever mail
@@ -139,13 +136,11 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         return MessageRepository(req.ctx.db).load()
 
     def changed(self, req: ChangedRequest[MailConfig]) -> Changed:
-        """Whether a mailbox's counts moved since the last look: mail came, went or was
-        read. One `STATUS` each, without opening the mailbox."""
+        """The mailboxes' counts, as the fingerprint core compares with the last: they move
+        when mail comes, goes or is read. One `STATUS` each, without opening the mailbox."""
         ctx = req.ctx
         now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
-        before = ctx.kv.get(STATUS)
-        ctx.kv.set(STATUS, now)
-        return Changed(before is not None and before != now, "the mailbox changed")
+        return Changed(fingerprint=now, reason="the mailbox changed")
 
     def identity(self, req: IdentityRequest[MailConfig, MailSnapshot]) -> Identity | None:
         return Identity(

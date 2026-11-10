@@ -26,6 +26,7 @@ from . import (
     tags,
 )
 from .act_now import Feedback
+from .change_checks import ChangeChecks, Taken
 from .config import Config
 from .db import CORE, Database
 from .graph import Graph, Ref
@@ -192,12 +193,15 @@ def _collect_all(
     db: Database,
     plugins: list[Enabled],
     now: datetime,
-    collect: Callable[[Enabled], BaseModel],
+    collect: Callable[[Enabled, Taken], BaseModel],
+    checks: ChangeChecks,
+    graph: Graph | None,
 ) -> None:
-    """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
-    plugin's `store`. Each plugin has `COLLECT_TIMEOUT_SECONDS`: one that takes longer is
-    recorded as failed, and the refresh goes on without it; one still running from an earlier
-    refresh is left out."""
+    """Collect each plugin's snapshot with `collect`, in parallel, given what moved since its
+    last collect (`ChangeChecks.take`, asking its check with `graph` first when there is one),
+    and keep it with the plugin's `store`, which settles what it was given. Each plugin has
+    `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh
+    goes on without it; one still running from an earlier refresh is left out."""
     started = time.monotonic()
     pool = ThreadPoolExecutor(max_workers=max(1, len(plugins)))
     running: list[tuple[Enabled, Future[None]]] = []
@@ -210,13 +214,19 @@ def _collect_all(
 
         def run(e: Enabled = e) -> None:
             try:
-                collect_into(
-                    db,
-                    e.name,
-                    now,
-                    lambda: collect(e),
-                    lambda snapshot: store_snapshot(e, snapshot),
-                )
+                taken: Taken | None = None
+
+                def collector() -> BaseModel:  # taking within, so its failure is the plugin's
+                    nonlocal taken
+                    taken = checks.take(e, graph)
+                    return collect(e, taken)
+
+                def store(snapshot: BaseModel) -> None:
+                    store_snapshot(e, snapshot)
+                    assert taken is not None  # the collector took it
+                    checks.stored(e, taken)
+
+                collect_into(db, e.name, now, collector, store)
             finally:
                 with _collecting_lock:
                     _collecting.discard(e.name)
@@ -239,15 +249,6 @@ def _wants(e: Enabled, subscribed: set[str]) -> bool:
     )
 
 
-def refresh_seconds(e: Enabled) -> int | None:
-    """How often a plugin refreshes on its own: its section's `refresh_seconds`; None for one
-    that doesn't collect, or has no such setting."""
-    if not e.plugin.collects:
-        return None
-    seconds: object = getattr(e.ctx.config, "refresh_seconds", None)
-    return seconds if isinstance(seconds, int) else None
-
-
 def to_collect(
     plugins: list[Enabled], only: set[str] | None = None
 ) -> tuple[list[Enabled], list[Enabled]]:
@@ -260,9 +261,15 @@ def to_collect(
 
 
 def refresh(
-    config: Config, db: Database, now: datetime | None = None, only: set[str] | None = None
+    config: Config,
+    db: Database,
+    now: datetime | None = None,
+    only: set[str] | None = None,
+    checks: ChangeChecks | None = None,
 ) -> None:
-    """Refresh every plugin, or `only` those. Each plugin fails on its own. After collecting,
+    """Refresh every plugin, or `only` those. Each plugin fails on its own. Each collect is
+    given what moved since the plugin's last (`ChangeChecks.take`); with the server's
+    `checks`, a plugin with a change check is asked it as its collect starts. After collecting,
     the graph is built again, the plugins' events found against what held before, the daily
     prune runs if due, and `after_collect` runs for the plugins collected and those that
     collect nothing (they work from the others' data). When the dashboard is stopping, it
@@ -275,16 +282,23 @@ def refresh(
     before = before_refresh(db, plugins)
     first, after = to_collect(plugins, only)
     collected = {e.name for e in first + after}
+    asking = checks is not None
+    checks = checks or ChangeChecks()
 
-    _collect_all(db, first, now, lambda e: e.plugin.collect(CollectRequest(e.ctx)))
+    def collect_first(e: Enabled, taken: Taken) -> BaseModel:
+        return e.plugin.collect(CollectRequest(e.ctx, taken.full, taken.subjects))
+
+    _collect_all(db, first, now, collect_first, checks, before.graph if asking else None)
     graph, snapshots = stored_graph(db, plugins)
     if after and not shell.stopping():
-        _collect_all(
-            db,
-            after,
-            now,
-            lambda e: e.plugin.collect_after(CollectAfterRequest(e.ctx, graph)),
-        )
+        given = graph
+
+        def collect_after(e: Enabled, taken: Taken) -> BaseModel:
+            return e.plugin.collect_after(
+                CollectAfterRequest(e.ctx, given, taken.full, taken.subjects)
+            )
+
+        _collect_all(db, after, now, collect_after, checks, given if asking else None)
         graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
     _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)

@@ -17,12 +17,13 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from pydantic import Field, TypeAdapter, ValidationError
 
 from . import act_now, auth, render, settings, shell, tag_view
+from .change_checks import ChangeChecks
 from .config import Config
 from .db import Database
 from .graph import Graph, Ref
 from .notifications import NotificationRepository
 from .panels import Layout
-from .plugin import KEPT, MAX_SUBJECTS, ActionError, ChangedRequest, Response
+from .plugin import KEPT, MAX_SUBJECTS, ActionError, Response
 from .refresh import (
     PageFailed,
     build_dashboard,
@@ -30,7 +31,6 @@ from .refresh import (
     perform_action,
     plugin_page,
     refresh,
-    refresh_seconds,
     refresh_subjects,
     stored_graph,
     to_collect,
@@ -150,9 +150,8 @@ class App:
         `_pending_lock`."""
         self._last_checked: dict[str, float] = {}
         """`time.monotonic()` when each plugin was last asked whether it `changed`."""
-        self._checked_graphs: dict[str, Graph] = {}
-        """The graph each plugin's last change check that didn't fail was given: the next
-        one's `previous_graph`."""
+        self.checks = ChangeChecks()
+        """What moved in each plugin's tool, as its change checks said."""
 
     @property
     def token(self) -> str:
@@ -171,7 +170,7 @@ class App:
     def intervals(self) -> dict[str, int]:
         """How often each plugin that refreshes on its own does: its `refresh_seconds`."""
         plugins = enabled(self.config, self.db, datetime.now(UTC))
-        return {e.name: s for e in plugins if (s := refresh_seconds(e)) is not None}
+        return {e.name: s for e in plugins if (s := e.refresh_seconds) is not None}
 
     def due(self, now: float | None = None) -> set[str]:
         """The plugins whose `refresh_seconds` have passed since they last refreshed."""
@@ -194,7 +193,7 @@ class App:
             started = time.monotonic()
             for name in self.intervals() if only is None else only:
                 self.last_refreshed[name] = started
-            refresh(self.config, self.db, None, only)
+            refresh(self.config, self.db, None, only, self.checks)
             self._after_refresh(self.refreshing)
         finally:
             self.refreshing = frozenset()
@@ -202,41 +201,33 @@ class App:
         return True
 
     def _after_refresh(self, names: frozenset[str]) -> None:
-        """Ask the plugins just refreshed whether they `changed`, ignoring the answer, so what
-        the refresh did itself isn't taken for a change; and ask the plugins that watch them
+        """Start the wait for the next change check over for the plugins just refreshed (each
+        was asked as its collect started), and ask the plugins that watch them
         (`Plugin.watches`) at once, refreshing those that did."""
         now = time.monotonic()
+        for name in names:
+            self._last_checked[name] = now
         plugins = enabled(self.config, self.db, datetime.now(UTC))
-        refreshed = [
-            e
-            for e in plugins
-            if e.name in names and (e.plugin.change_check_seconds or e.plugin.watches)
-        ]
         watchers = [
             e for e in plugins if e.name not in names and names.intersection(e.plugin.watches)
         ]
-        if not refreshed and not watchers:
+        if not watchers:
             return
         graph, _ = stored_graph(self.db, plugins)
-        for e in refreshed:
-            self._last_checked[e.name] = now
-            self._changed(e, graph)
         changed = {e.name: why for e in watchers if (why := self._changed(e, graph)) is not None}
         if changed:
             log.info("changed with %s: %s; refreshing", ", ".join(sorted(names)), _said(changed))
             self.request_refresh(set(changed))
 
     def _changed(self, e: Enabled, graph: Graph) -> str | None:
-        """Why `e.plugin.changed` says its tool has something new ("" when it doesn't say);
-        None when it hasn't, or the check fails (raises, or answers with something that isn't
-        a `Changed`): logged at debug and tried again next time, against the same previous
-        graph, so one plugin's check can't stop the others' and what it missed isn't lost."""
-        try:  # reading the answer too, so a malformed one counts as a failed check
-            previous = self._checked_graphs.get(e.name)
-            answer = e.plugin.changed(ChangedRequest(e.ctx, graph, previous))
-            why = answer.reason if answer.changed else None
-            self._checked_graphs[e.name] = graph
-            return why
+        """Why the plugin's change check says something new moved in its tool ("" when it
+        doesn't say), kept by `checks`; None when nothing did, or the check fails (raises, or
+        answers with something that isn't a `Changed`): logged at debug and tried again next
+        time, against the same as this one, so one plugin's check can't stop the others' and
+        what it missed isn't lost."""
+        try:
+            answer = self.checks.check(e, graph)
+            return None if answer is None else answer.reason
         except Exception:
             log.debug("%s: change check failed", e.name, exc_info=True)
             return None

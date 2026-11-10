@@ -16,6 +16,7 @@ import pytest
 from conftest import ME, NOW, pr, snapshot
 
 from move_forward import auth, registry, server, settings
+from move_forward.change_checks import ChangeChecks
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
@@ -689,6 +690,26 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
     assert app.due() == {"github"}
 
 
+def test_a_refresh_is_given_the_servers_change_checks(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    given: list[ChangeChecks | None] = []
+
+    def recording(
+        config: Config,
+        db: Database,
+        now: datetime | None = None,
+        only: set[str] | None = None,
+        checks: ChangeChecks | None = None,
+    ) -> None:
+        given.append(checks)
+
+    monkeypatch.setattr(server, "refresh", recording)
+    app.refresh_now({"github"})
+    # Its collects are asked what moved as they start, and kept with what its checks said.
+    assert len(given) == 1 and given[0] is app.checks
+
+
 def test_a_page_load_asks_for_no_refresh(app: server.App, monkeypatch: pytest.MonkeyPatch) -> None:
     clock = [1000.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
@@ -710,7 +731,7 @@ class _GitHubWithChecks(GitHubPlugin):
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
-        return answer if isinstance(answer, Changed) else Changed(answer)
+        return answer if isinstance(answer, Changed) else Changed(everything=answer)
 
 
 def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
@@ -724,8 +745,9 @@ def test_a_plugin_that_changed_is_refreshed_without_waiting_for_its_interval(
     assert app.check_for_changes(1060.0) == set()  # the check failed; tried again later
     assert app.check_for_changes(1120.0) == {"github"}
     assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
-    # A refresh asks once more, to forget what it changed itself, and starts the wait over.
-    monkeypatch.setattr(_GitHubWithChecks, "answers", [True, True])
+    # A refresh starts the wait over, and asks nothing itself: its collect is asked as it
+    # starts (see `refresh`), and what moves after that counts at the next check.
+    monkeypatch.setattr(_GitHubWithChecks, "answers", [True])
     monkeypatch.setattr(server.time, "monotonic", lambda: 2000.0)
     app.refresh_now({"github"})
     assert _GitHubWithChecks.answers == [True]
@@ -739,7 +761,9 @@ def test_why_a_plugin_changed_is_logged(
     swap = {"github": _GitHubWithChecks()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     monkeypatch.setattr(
-        _GitHubWithChecks, "answers", [Changed(True, "2 PRs notified"), Changed(False, "x")]
+        _GitHubWithChecks,
+        "answers",
+        [Changed(everything=True, reason="2 PRs notified"), Changed(reason="x")],
     )
     with caplog.at_level(logging.INFO):
         assert app.check_for_changes(1000.0) == {"github"}
@@ -758,7 +782,7 @@ class _GitHubComparingGraphs(GitHubPlugin):
         self.given.append((req.previous_graph, req.graph))
         if self.failing.pop(0):
             raise RuntimeError("offline")
-        return Changed(False)
+        return Changed()
 
 
 def test_a_change_check_is_given_the_graph_of_the_last_that_didnt_fail(
@@ -780,7 +804,7 @@ class _SlackChanging(SlackPlugin):
     change_check_seconds: ClassVar[int | None] = 60
 
     def changed(self, req: ChangedRequest[SlackConfig]) -> Changed:
-        return Changed(True, "a message")
+        return Changed(everything=True, reason="a message")
 
 
 class _GitHubAnsweringBadly(GitHubPlugin):
@@ -812,11 +836,11 @@ def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     app.config = app.config.with_section("git", GitConfig(repos=[]))
     migrate(app.config, app.db)
-    monkeypatch.setattr(_GitHubWatchingGit, "answers", [True, False, False])
+    monkeypatch.setattr(_GitHubWatchingGit, "answers", [True, False])
     app.refresh_now({"git"})
     assert app._pending == {"github"}  # pyright: ignore[reportPrivateUsage]
     app._pending = set()  # pyright: ignore[reportPrivateUsage]
-    app.refresh_now({"github"})  # its own refresh: asked only to forget what it did
+    app.refresh_now({"github"})  # its own refresh: not asked here (its collect is)
     app.refresh_now({"git"})  # nothing of github's moved
     assert app._pending == set() and _GitHubWatchingGit.answers == []  # pyright: ignore[reportPrivateUsage]
     assert app.check_for_changes() == set()  # no change_check_seconds: never polled
