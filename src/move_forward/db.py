@@ -359,8 +359,10 @@ def _private(path: Path) -> None:
     its -wal and -shm files the database's permissions; on Windows they'd take their folder's,
     so `Database` makes them first (see `_side_files`). Another connection closing can delete
     a side file between its making and its access list's (the last one out of a WAL database
-    removes them): then it's made again. One deleted after it was made private is caught once
-    the connection holds them open (see `Database`)."""
+    removes them): then it's made again. One deleted after it was made private, and made again
+    by SQLite with its folder's access, is made private once the connection holds them open
+    (see `Database`); a handle another user opened in between keeps its access, which matters
+    only where `db_path`'s folder lets other users in."""
     for attempt in range(3):
         os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o600))
         try:
@@ -410,7 +412,8 @@ class Database:
         if self._path and sys.platform == "win32":
             # Held open by this connection now, so no other's closing can delete them: one
             # deleted while the other was being made, which SQLite made again with its
-            # folder's access, is made private here.
+            # folder's access, is made private from here on (a handle opened before keeps
+            # its access, as an access list only checks new ones).
             for side in _side_files(self._path):
                 if side.exists():
                     make_private(side)
