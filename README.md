@@ -229,20 +229,20 @@ said, and a priority I set on the item replaces it.
 An item's tags come from its tool (a PR's or a ticket's labels: each plugin's page says
 which), from a `#tag` in its title or description (a PR's, a todo's; not in code or an HTML
 comment), and from me: its Tag field, on any item about something (a mail, a ticket, a branch),
-or `mfd tag`. Each is a `#tag` badge, filters the page (below), and has an
-Untag button, which takes it off whatever put it there. One I put on goes for good; one from its
-tool or text stays off until the plugin the item is from next refreshes, which puts it back if
-the tool or the text still has it (notes never refreshes: there it stays off until I Tag it
-again). A tag I put on stays on finished work (a merged PR, a done ticket); what I put on or
-took off is forgotten once the item is gone (a deleted entry, a ticked-off todo, a mail once
-read).
+or `mfd tag`. Each is a `#tag` badge, filters the page (below), and has an Untag button, which
+takes it off whatever put it there. One I put on goes for good; one from its tool or text stays
+off until the plugin the item is from next refreshes, which puts it back if the tool or the
+text still has it (notes never refreshes: there it stays off until I Tag it again). A tag I put
+on stays on finished work (a merged PR, a done ticket); what I put on or took off is forgotten
+once the item is gone (a deleted entry, a ticked-off todo, a mail once read).
 
 A tag's words are separated by `-` or `_`, and it needs a letter (`#7` is a PR's number). Text
 that names a tag, in a title or a description, however its words are spaced, hyphenated or cased
 ("Garbage day moved" names `#garbage-day`), points at it; a one-word tag shorter than three
 letters, or a tag only labels give (often a common word, like `bug`), is named only with its
 `#`. Tags relate items without making them one piece of work: icing one, or setting its
-priority, doesn't touch the others. Core publishes each as a `tag` entity (see [entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
+priority, doesn't touch the others. Core publishes each as a `tag` entity (see
+[entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
 shows.
 
 The page can show only what carries some tags (the tag view). The drop-down above Act now lists
@@ -408,7 +408,8 @@ entry on ice comes off it once its work is over the same way (a stack stays
 until it's reopened), what the notes remembered (`mfd notes remember`) as happening that long ago is forgotten,
 pings that old leave the database, and so do Act now's
 snoozes once over, and its other snoozes and pins that old. A priority set on work that's since
-finished is cleared, and so is a tag I put on, or took off, a work entry, todo or mail thread that's gone. A plugin's problem it
+finished is cleared, and so is a tag I put on, or took off, a work entry, todo or mail thread
+that's gone. A plugin's problem it
 hasn't reported for that long is forgotten (the plugin was taken out of the config, or no
 longer checks for it). Reviewer email and Slack id
 lookups that found none that long ago are forgotten, to be tried again. PR and ticket dates come from `gh pr view` and
@@ -420,7 +421,8 @@ Jira; without Jira, ticket keys aren't known as such, so they hold no entry.
 tables (kept when a refresh fails, with the error shown alongside), the
 notes in the notes plugin's tables, the page's dragged order (core's `layout`), what you
 snoozed or pinned in Act now (core's `act_now_feedback`), the priorities, tags (those you put
-on, and those you took off until their plugin refreshes) and contact types you set, the sign-in sessions, the notifications waiting to be told, what
+on, and those you took off until their plugin refreshes) and contact types you set, the
+sign-in sessions, the notifications waiting to be told, what
 the panels last showed that notifies when new and the problems the plugins report (core's too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
 plugin's (from `mfd import`, or looked up from commits), and the messages
 mail reads in its own. It's the

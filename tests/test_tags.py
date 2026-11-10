@@ -1,6 +1,6 @@
 """`#tags`: what carries one is related to it, and what names it points at it."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -246,13 +246,14 @@ def test_tags_on_gone_entities_are_forgotten_and_finished_work_keeps_them() -> N
     gone_entry = Ref(kind="notes.entry", id="Chores")  # deleted: a new "Chores" starts clean
     merged = Ref(kind="pull_request", id=pr(2).url)
     repo = TagRepository(db)
+    untagged = Ref(kind="notes.entry", id="Errand #errand")  # gone, with only a tag taken off
     for ref in (gone_entry, merged):
         repo.add(ref, "chores", NOW)
-    repo.take_off(gone_entry, "errand", "notes", NOW)
+    repo.take_off(untagged, "errand", "notes", NOW)
     plugins = enabled(config, db, NOW)
     graph, _ = refresh.stored_graph(db, plugins)
     notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
-    assert "tags: took my tags off 1 entity(ies) that are gone" in notices
+    assert "tags: forgot what I tagged or untagged on 2 gone entity(ies)" in notices
     assert repo.all() == {merged: ["chores"]}
     assert repo.taken_off() == {}
 
@@ -411,7 +412,9 @@ def test_a_label_taken_off_stays_off_until_its_plugin_refreshes() -> None:
     config, db = stored(github=labelled)
     fields = {"kind": "pull_request", "id": pr(1).url, "tag": "bug"}
     assert all("#bug" in badges for badges in _shown(config, db, pr(1).url))
-    assert refresh.run_action(config, db, "act_now/untag", fields) == "#bug taken off"
+    assert refresh.run_action(config, db, "act_now/untag", fields) == (
+        "#bug taken off; it comes back with the next refresh if GitHub still has it"
+    )
     assert refresh.run_action(config, db, "act_now/untag", fields) == "#bug wasn't on it"
     shown = _shown(config, db, pr(1).url)
     assert shown and all("#bug" not in badges for badges in shown)
@@ -423,12 +426,24 @@ def test_a_label_taken_off_stays_off_until_its_plugin_refreshes() -> None:
     assert all("#bug" in badges for badges in _shown(config, db, pr(1).url))
 
 
+def test_a_refresh_puts_back_only_its_own_plugins_tags() -> None:
+    config, db = stored(github=snapshot(mine=[pr(1, labels=["bug"])]))
+    repo = TagRepository(db)
+    entry = Ref(kind="notes.entry", id="Chores #errand")
+    repo.take_off(Ref(kind="pull_request", id=pr(1).url), "bug", "github", NOW)
+    repo.take_off(entry, "errand", "notes", NOW)  # notes never refreshes: it stays off
+    [github] = [e for e in enabled(config, db, NOW) if e.name == "github"]
+    collect = refresh._collect_all  # pyright: ignore[reportPrivateUsage]
+    collect(db, [github], NOW + timedelta(minutes=1), lambda e: snapshot())
+    assert repo.taken_off() == {entry: {"errand"}}
+
+
 def test_taking_off_a_tag_mine_and_in_its_text_takes_off_both() -> None:
     config, db = stored(github=snapshot(mine=[pr(1, title="Fix #chores")]))
     fields = {"kind": "pull_request", "id": pr(1).url}
     refresh.run_action(config, db, "act_now/tag", {**fields, "input": "chores"})
     assert refresh.run_action(config, db, "act_now/untag", {**fields, "tag": "chores"}) == (
-        "#chores taken off"
+        "#chores taken off; it comes back with the next refresh if its text still has it"
     )
     assert TagRepository(db).all() == {}
     shown = _shown(config, db, pr(1).url)
@@ -446,6 +461,6 @@ def test_the_tag_command_takes_off_a_tag_from_text(
     assert cli.main(["-c", str(config), "tag", "Chores #errand", "errand", "--remove"]) == 0
     entry = Ref(kind="notes.entry", id="Chores #errand")
     assert TagRepository(Database(db_path)).taken_off() == {entry: {"errand"}}
-    out = capsys.readouterr().out
-    assert "#errand taken off Chores #errand" in out
-    assert "Chores #errand had no #errand" in out
+    out = capsys.readouterr().out.splitlines()
+    # Notes never refreshes, so it doesn't come back.
+    assert out[-2:] == ["#errand taken off Chores #errand", "Chores #errand had no #errand"]

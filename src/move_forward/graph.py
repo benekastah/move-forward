@@ -57,9 +57,9 @@ class Entity(Model):
     """Tags its tool puts on it, e.g. a ticket's or PR's labels, as written there ("Garbage
     Day"): core counts them as `#tags` (see `tags`), whatever its kind's `tags_from_text`, but
     names one only labels give only by its `#`; one I take off comes back at the plugin's next
-    refresh, if the tool still has it. Put only labels no outsider can set (people with a say in the tool, or the tool
-    itself), even on a kind whose text anyone can write; the plugin decides whether the tool's
-    own (Gmail's `\\Inbox`) are tags too."""
+    refresh, if the tool still has it. Put only labels no outsider can set (people with a say in
+    the tool, or the tool itself), even on a kind whose text anyone can write; the plugin decides
+    whether the tool's own (Gmail's `\\Inbox`) are tags too."""
     family: str | None = None
     """The family of kinds it's in (a pull request, a ticket), set by core; None for a kind
     that's a plugin's own."""
@@ -375,6 +375,14 @@ def _as[V: BaseModel](entity: Entity, model: type[V]) -> V:
         "lifecycle": entity.lifecycle,
     }
     return model.model_validate({**entity.attrs, **fields})
+
+
+def publisher(graph: Graph, ref: Ref) -> str | None:
+    """The plugin that published `ref`'s entity: a family's by whoever published that id, a
+    plugin's own kind by that plugin. None when the graph doesn't have it, or core made it (a
+    `tag`)."""
+    entity = graph.get(ref.kind, ref.id)
+    return entity.kind.split(".", 1)[0] if entity is not None and entity.kind else None
 
 
 def attrs(model: BaseModel) -> dict[str, JsonValue]:

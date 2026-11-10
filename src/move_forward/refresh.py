@@ -28,7 +28,7 @@ from . import (
 from .act_now import Feedback
 from .config import Config
 from .db import CORE, Database
-from .graph import Graph, Ref
+from .graph import Graph, Ref, publisher
 from .kinds import FAMILIES
 from .notifications import Event, NotificationRepository
 from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
@@ -197,9 +197,9 @@ def _collect_all(
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, and keep it with the
     plugin's `store`, letting the tags I took off what it publishes come back
-    (`TagRepository.put_back`): it has found them again, or not. Each plugin has `COLLECT_TIMEOUT_SECONDS`: one that takes longer is
-    recorded as failed, and the refresh goes on without it; one still running from an earlier
-    refresh is left out."""
+    (`TagRepository.put_back`): it has found them again, or not. Each plugin has
+    `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh goes
+    on without it; one still running from an earlier refresh is left out."""
     started = time.monotonic()
     pool = ThreadPoolExecutor(max_workers=max(1, len(plugins)))
     running: list[tuple[Enabled, Future[None]]] = []
@@ -314,13 +314,12 @@ def _identify_kept(db: Database, graph: Graph) -> None:
 
 
 def publishers(graph: Graph, refs: list[Ref]) -> dict[str, list[Ref]]:
-    """`refs` by the plugin that published each: a family's by whoever published that id, a
-    plugin's own kind by that plugin. Refs the graph doesn't have are left out."""
+    """`refs` by the plugin that published each (see `move_forward.graph.publisher`). Refs the
+    graph doesn't have are left out."""
     found: dict[str, list[Ref]] = {}
     for ref in dict.fromkeys(refs):
-        entity = graph.get(ref.kind, ref.id)
-        if entity is not None and entity.kind:
-            found.setdefault(entity.kind.split(".", 1)[0], []).append(ref)
+        if (name := publisher(graph, ref)) is not None:
+            found.setdefault(name, []).append(ref)
     return found
 
 
@@ -404,7 +403,7 @@ def _prune_plugins(
 ) -> list[str]:
     """Every plugin's daily prune, and core's (Act now's feedback that's over or older than
     `days`, problems no plugin has reported for `days`, finished work's priorities, gone
-    entities' tags), each failing on its own; what they did, by plugin."""
+    entities' tags and untags), each failing on its own; what they did, by plugin."""
     notices: list[str] = []
     if dropped := FeedbackRepository(db).prune(now, now - timedelta(days=days)):
         notices.append(f"act_now: forgot {dropped} snooze(s) or pin(s)")
@@ -417,7 +416,7 @@ def _prune_plugins(
         log.exception("act_now: forgetting finished work's priorities failed")
     try:
         if cleared := tags.forget_gone(TagRepository(db), graph):
-            notices.append(f"tags: took my tags off {cleared} entity(ies) that are gone")
+            notices.append(f"tags: forgot what I tagged or untagged on {cleared} gone entity(ies)")
     except Exception:
         log.exception("tags: forgetting gone entities' tags failed")
     for e in plugins:
@@ -687,9 +686,17 @@ def _tag(config: Config, db: Database, action: str, fields: dict[str, str]) -> A
     repo = TagRepository(db)
     if action == "tag":
         return ActionResult(f"tagged #{tag}" if repo.add(ref, tag, now) else f"already #{tag}")
-    graph, _ = stored_graph(db, enabled(config, db, now))
+    plugins = enabled(config, db, now)
+    graph, _ = stored_graph(db, plugins)  # what the entity's plugin gives it (see `take_off`)
     taken = tags.take_off(repo, graph, ref, tag, now)
-    return ActionResult(f"#{tag} taken off" if taken else f"#{tag} wasn't on it")
+    if not taken.on:
+        return ActionResult(f"#{tag} wasn't on it")
+    return ActionResult(f"#{tag} taken off{taken.back(refreshing(plugins))}")
+
+
+def refreshing(plugins: list[Enabled]) -> dict[str, str]:
+    """The titles of the plugins that refresh (collect), by name."""
+    return {e.name: e.plugin.title for e in plugins if e.plugin.collects}
 
 
 def _members(fields: dict[str, str]) -> list[tuple[str, str, str, str]]:

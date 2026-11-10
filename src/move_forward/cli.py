@@ -37,6 +37,7 @@ from .refresh import (
     build_dashboard,
     refresh,
     refresh_subjects,
+    refreshing,
     snooze_item,
     snoozed,
     stored_graph,
@@ -414,7 +415,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{label(ref.kind)} {ref.id}: {PRIORITIES[int(args.level)].lower()}")
         return 0
     if args.command == "tag":
-        graph, _ = stored_graph(db, enabled(config, db, datetime.now(UTC)))
+        plugins = enabled(config, db, datetime.now(UTC))
+        graph, _ = stored_graph(db, plugins)
         try:
             ref = priority.resolve(graph, args.entity, args.kind)
             tag = tags.tag_key(args.tag)
@@ -423,8 +425,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         repo = TagRepository(db)
         if args.remove:
-            removed = tags.take_off(repo, graph, ref, tag, datetime.now(UTC))
-            print(f"#{tag} taken off {ref.id}" if removed else f"{ref.id} had no #{tag}")
+            taken = tags.take_off(repo, graph, ref, tag, datetime.now(UTC))
+            back = taken.back(refreshing(plugins))
+            print(f"#{tag} taken off {ref.id}{back}" if taken.on else f"{ref.id} had no #{tag}")
         else:
             added = repo.add(ref, tag, datetime.now(UTC))
             print(f"{ref.id}: #{tag}" if added else f"{ref.id} has #{tag} already")

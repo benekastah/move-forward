@@ -12,12 +12,13 @@ import re
 import unicodedata
 from collections.abc import Iterable, Mapping
 from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
 from datetime import datetime
 from itertools import pairwise
 
 from . import act_now
 from .domain import KindModel
-from .graph import Entity, Graph, KindSpec, Ref
+from .graph import Entity, Graph, KindSpec, Ref, publisher
 from .kinds import TAG
 from .page import Action, Item, ItemAdditions
 from .repositories import TagRepository
@@ -174,13 +175,6 @@ def _labels(entity: Entity) -> list[str]:
     return [h for h in map(handle, entity.tags) if any(c.isalpha() for c in h)]
 
 
-def carried(entity: Entity, spec: KindSpec | None) -> list[str]:
-    """The tags `entity` has from its tool and its text, by handle, in order, once each: a `#tag`
-    in its title or mentions, out of their code (where its kind's `tags_from_text`), and its
-    tool's (`Entity.tags`: labels). Each refresh of its plugin finds them again."""
-    return list(dict.fromkeys([*_written(entity, spec), *_labels(entity)]))
-
-
 def tagged(
     entities: list[Entity],
     specs: Mapping[str, KindSpec],
@@ -189,8 +183,10 @@ def tagged(
 ) -> list[Entity]:
     """The entities, each pointing too at the tags its text names (but one it carries), then a
     `tag` per tag on any of them, pointing at what carries it: open while one of those is. An
-    entity carries the tags it has from its tool and text (`carried`) but those `removed` from
-    it, and those `added` to it by hand. A tag only labels give is named only with its `#`."""
+    entity carries the tags it has from its text (a `#tag` in its title or mentions, out of their
+    code, where its kind's `tags_from_text`) and its tool (`Entity.tags`: labels), each refresh
+    of its plugin finding them again, but those `removed` from it; and those `added` to it by
+    hand. A tag only labels give is named only with its `#`."""
     carrying: dict[str, list[Entity]] = {}
     chosen: set[str] = set()
     """The tags someone wrote or put on by hand, not only a tool's labels."""
@@ -233,17 +229,45 @@ def tagged(
     ]
 
 
-def take_off(repo: TagRepository, graph: Graph, ref: Ref, tag: str, now: datetime) -> bool:
+@dataclass(frozen=True)
+class TakenOff:
+    """What Untag did: whether the tag was on the entity, and, when its tool or its text gives
+    it the tag, the plugin whose next refresh puts it back if they still do."""
+
+    on: bool
+    plugin: str | None = None
+    from_tool: bool = False
+    from_text: bool = False
+
+    def back(self, refreshing: Mapping[str, str]) -> str:
+        """When the tag comes back, to follow "#tag taken off", given the titles of the plugins
+        that refresh, by name. Empty for one gone for good: mine, or one from a plugin that never
+        refreshes (notes), which stays off until I tag it again."""
+        title = refreshing.get(self.plugin) if self.plugin else None
+        if title is None:
+            return ""
+        who = [*([title] if self.from_tool else []), *(["its text"] if self.from_text else [])]
+        return f"; it comes back with the next refresh if {' or '.join(who)} still has it"
+
+
+def take_off(repo: TagRepository, graph: Graph, ref: Ref, tag: str, now: datetime) -> TakenOff:
     """Untag: take `tag` off the entity, whatever put it there. Mine is gone for good; one its
     tool or text gives it stays off until the plugin that published it next refreshes, which
-    puts it back if the tool or the text still has it. Whether it was on the entity."""
+    puts it back if the tool or the text still has it. `graph` is the stored one: only the
+    entity as its plugin publishes it says whether its tool or text gives it the tag, and, for a
+    family's entity, which plugin that is."""
     mine = repo.remove(ref, tag)
     entity = graph.get(ref.kind, ref.id)
-    if entity is None or tag not in carried(entity, graph.spec(ref.kind)):
-        return mine
+    name = publisher(graph, ref)
+    if entity is None or name is None:
+        return TakenOff(mine)
+    from_text = tag in _written(entity, graph.spec(ref.kind))
+    from_tool = tag in _labels(entity)
+    if not (from_text or from_tool):
+        return TakenOff(mine)
     on = (found := graph.get(TAG, tag)) is not None and ref in found.refs
-    repo.take_off(ref, tag, (entity.kind or ref.kind).split(".", 1)[0], now)
-    return mine or on
+    repo.take_off(ref, tag, name, now)
+    return TakenOff(mine or on, name, from_tool, from_text)
 
 
 def forget_gone(repo: TagRepository, graph: Graph) -> int:
