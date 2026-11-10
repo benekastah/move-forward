@@ -72,12 +72,8 @@ NOTIFICATIONS_SEEN = "notifications_last_modified"
 """The kv key of the notifications' last `Last-Modified`, for `changed`."""
 NOTIFICATIONS_WAIT = "notifications_poll_after"
 """The kv key of when GitHub lets `changed` poll the notifications again."""
-CHANGED = "prs_changed"
-"""The kv key of the PRs (`owner/name#number`) `changed` saw change, for `collect`; with
-`EVERYTHING` among them when it saw a change it can't pin on a PR."""
 EVERYTHING = "*"
-LAST_FULL = "last_full_collect"
-"""The kv key of when every search last ran."""
+"""Among the PRs `_notified` found, for a notification it can't pin on a PR."""
 NOTIFICATIONS_FAILED = "notifications"
 """The problem (`Context.problem`) of why the notifications can't be polled."""
 EMAIL_LOOKUPS_FAILED = "email_lookups"
@@ -148,16 +144,17 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return {"merge": {"method": "squash"}}
 
     def collect(self, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
-        """Every search; or, after `changed` saw only some PRs change, just those PRs, placed
-        in the stored lists as the searches would find them. Every search runs when a full
-        collect is due (`refresh_seconds` since the last), so frequent changes can't put it
-        off, when a change wasn't about a PR (a CI run), when more PRs changed than a search
-        page holds (a request for them all would time out), and when fetching them fails."""
+        """Every search; or, after `changed` saw only some PRs (`owner/name#number`) change,
+        just those PRs (`req.subjects`), placed in the stored lists as the searches would find
+        them. Every search runs when core asks for a full collect (`refresh_seconds` since the
+        last, so frequent changes can't put it off, or a change that wasn't about a PR), when
+        more PRs changed than a search page holds (a request for them all would time out), and
+        when fetching them fails."""
         ctx = req.ctx
         config = ctx.config
-        changed = self._take_changed(ctx)
-        everything = EVERYTHING in changed or len(changed) > client.PAGE_SIZE
-        previous = None if everything or self._full_due(ctx) else self.load(LoadRequest(ctx))
+        changed = req.subjects
+        everything = req.full or len(changed) > client.PAGE_SIZE
+        previous = None if everything else self.load(LoadRequest(ctx))
         if previous is not None and changed:
             ids = [_pr_id(pr) for pr in sorted(changed)]
             try:
@@ -190,7 +187,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                         ),
                     }
                 )
-        ctx.kv.set(LAST_FULL, ctx.now.isoformat())
         return client.collect(
             config.host,
             config.org,
@@ -204,27 +200,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             ),
         )
 
-    def _full_due(self, ctx: Context[GitHubConfig]) -> bool:
-        last = ctx.kv.get(LAST_FULL)
-        return (
-            last is None
-            or (ctx.now - datetime.fromisoformat(last)).total_seconds()
-            >= ctx.config.refresh_seconds
-        )
-
-    def _take_changed(self, ctx: Context[GitHubConfig]) -> set[str]:
-        changed = set(ctx.kv.get_json(CHANGED, list[str]) or [])
-        ctx.kv.delete(CHANGED)
-        return changed
-
-    def _note_changed(self, ctx: Context[GitHubConfig], prs: set[str]) -> set[str]:
-        """Add `prs` to those pending for `collect`; all that are pending."""
-        pending = set(ctx.kv.get_json(CHANGED, list[str]) or [])
-        if prs - pending:
-            pending |= prs
-            ctx.kv.set_json(CHANGED, sorted(pending))
-        return pending
-
     def store(self, req: StoreRequest[GitHubConfig, GitHubSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
         PrRepository(ctx.db).replace(snapshot)
@@ -232,8 +207,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
         refresh of git, which it watches), or I have a notification about something my
-        searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed is
-        kept for `collect`, to fetch just those, and asks for a refresh until it has."""
+        searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed are
+        the answer's subjects, which core keeps for `collect`, to fetch just those; a
+        notification about something else asks for every search."""
         ctx, graph, previous = req.ctx, req.graph, req.previous_graph
         notified = self._notified(ctx)
         # Against the graph at the last check that didn't raise: core keeps it for us.
@@ -242,13 +218,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             if previous is not None
             else set[str]()
         )
-        changed = moved | notified
-        # Pending until `collect` fetches them: what's seen in the check core makes right
-        # after a refresh (whose answer it ignores) still asks for a refresh at the next one.
-        pending = self._note_changed(ctx, changed)
-        if EVERYTHING in pending:
-            return Changed(True, "every search")
-        return Changed(bool(pending), f"{len(pending)} PR(s) to fetch")
+        prs = frozenset((moved | notified) - {EVERYTHING})
+        if EVERYTHING in notified:
+            return Changed(True, "every search", subjects=prs)
+        return Changed(reason=f"{len(prs)} PR(s) changed", subjects=prs)
 
     def _tips(self, graph: Graph) -> dict[str, str]:
         return pushes.tips(graph, f"{self.name}.{PR}")
