@@ -21,7 +21,6 @@ from ..db import Database, Migration, Params
 from ..domain import KindModel, Model
 from ..graph import Entity, Graph, KindSpec, Ref, attrs
 from ..lookups import BY_HAND, IMPORTED, LOOKED_UP, LookupCache
-from ..markdown import cell, tables
 from ..notifications import Event
 from ..page import (
     Action,
@@ -52,7 +51,6 @@ from ..plugin import (
     ContextRequest,
     Form,
     HandleRequest,
-    ImportRequest,
     InputRequest,
     ItemAdditionsFor,
     ItemRequest,
@@ -100,7 +98,6 @@ __all__ = [
     "Graph",
     "HandleRequest",
     "Identity",
-    "ImportRequest",
     "InitSetup",
     "InputRequest",
     "Item",
@@ -138,7 +135,6 @@ __all__ = [
     "anchor",
     "attrs",
     "branch_prefix",
-    "cell",
     "channel",
     "checkout",
     "choices",
@@ -148,7 +144,6 @@ __all__ = [
     "https_url",
     "path",
     "quiet",
-    "tables",
     "url",
     "word",
 ]

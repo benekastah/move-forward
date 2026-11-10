@@ -5,12 +5,11 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import Reviewer, pr, snapshot, stored
+from conftest import NOW, Reviewer, pr, snapshot, stored
 
 from move_forward import cli, refresh
 from move_forward.db import Database
 from move_forward.plugin import ActionError
-from move_forward.plugins.slack.models import Contact
 from move_forward.plugins.slack.repository import SlackRepository
 
 
@@ -28,7 +27,7 @@ def test_the_page_lists_requested_reviewers_and_where_their_pings_go() -> None:
     assert "action='/actions/slack/set_contact?back=/slack/contacts'" in page
 
 
-def test_setting_by_hand_checks_the_ids_and_wins_over_imports() -> None:
+def test_setting_by_hand_checks_the_ids_and_wins_over_a_lookup() -> None:
     config, db = stored(slack=True)
     notice = refresh.run_action(
         config, db, "slack/set_contact", {"login": "bob", "slack_id": " U222222 "}
@@ -37,7 +36,7 @@ def test_setting_by_hand_checks_the_ids_and_wins_over_imports() -> None:
     with pytest.raises(ActionError, match="isn't a Slack member id"):
         refresh.run_action(config, db, "slack/set_contact", {"login": "bob", "slack_id": "x"})
     slack = SlackRepository(db)
-    slack.replace_imported([Contact(login="bob", slack_id="U999999")], [], [])
+    slack.save_looked_up("bob", "U999999", NOW)
     assert slack.contacts()["bob"].slack_id == "U222222"
     assert slack.sources()["user:bob"] == "dashboard"
 

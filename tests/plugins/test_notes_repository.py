@@ -9,12 +9,8 @@ from move_forward import localtime
 from move_forward.db import Database
 from move_forward.plugins.notes.models import (
     Condition,
-    Entry,
-    Ice,
     IcedItem,
     Link,
-    Section,
-    Todo,
 )
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
@@ -89,40 +85,6 @@ def test_icing_and_thawing(notes: NotesRepository) -> None:
     assert notes.ices() == [] and notes.is_empty()
 
 
-def test_replace_all_keeps_everything_an_import_read(notes: NotesRepository) -> None:
-    notes.add_entry("old", DAY)
-    entry = Entry(
-        id=0,
-        title="APP-1 Fix it",
-        status="in review",
-        where="engineering https://github.com/acme/widgets/pull/1",
-        blocked_on="reviews",
-        updated_on=DAY,
-        todos=[
-            Todo(id=0, text="reply", size="quick", links=[PR]),
-            Todo(id=0, text="x", done_on=DAY),
-        ],
-        conditions=[Condition(pr=PR.ref, text="after PR 2")],
-        lines=["- Odd: kept as is"],
-        links=[PR],
-    )
-    ice = Ice(
-        id=0,
-        title="me/b",
-        iced_on=DAY,
-        items=[IcedItem(kind="git.branch", ref_id="/w\tme/b", name="me/b", repo_dir="/w")],
-    )
-    sections = [Section(heading=None, body="Intro."), Section(heading="Reviews", body="- x")]
-    notes.replace_all([entry], [ice], sections)
-    [read] = notes.entries()
-    assert read.model_copy(update={"id": 0, "todos": []}) == entry.model_copy(update={"todos": []})
-    assert [(t.text, t.size, t.done_on, t.links) for t in read.todos] == [
-        ("reply", "quick", None, [PR]),
-        ("x", None, DAY, []),
-    ]
-    assert [i.title for i in notes.ices()] == ["me/b"] and notes.sections() == sections
-
-
 def test_branches_iced_before_names_were_kept_get_theirs_from_their_ids() -> None:
     db = Database(":memory:")
     db.migrate("notes", MIGRATIONS[:2])
@@ -164,23 +126,6 @@ def test_kinds_kept_before_they_were_named_for_their_plugins_are_renamed() -> No
     kinds = [item.kind for ice in notes.ices() for item in ice.items]
     assert kinds == ["git.branch", "pull_request", "notes.entry"]
     assert [r["kind"] for r in db.query("SELECT kind FROM notes_ice_covers")] == ["pull_request"]
-
-
-def test_an_import_replaces_stacks_on_ice_but_not_what_was_iced_on_its_own(
-    notes: NotesRepository,
-) -> None:
-    stack = [IcedItem(kind="git.branch", ref_id="/w\tme/a", name="me/a", repo_dir="/w")]
-    ticket = [IcedItem(kind="ticket", ref_id="APP-1", name="APP-1 Fix")]
-    notes.add_ice("me/a", DAY, None, stack)
-    notes.add_ice("APP-1 Fix", DAY, None, ticket)
-    imported = Ice(
-        id=0,
-        title="me/b",
-        iced_on=DAY,
-        items=[stack[0].model_copy(update={"ref_id": "/w\tme/b", "name": "me/b"})],
-    )
-    notes.replace_all([], [imported], [])
-    assert [i.title for i in notes.ices()] == ["APP-1 Fix", "me/b"]
 
 
 def test_check_ins_written_as_declines_are_remembered_by_their_keys() -> None:
@@ -342,3 +287,11 @@ def test_rekeying_moves_links_todos_links_and_whats_on_ice_once_each() -> None:
         ("b", [URL]),  # "a" held only what "b" holds: it goes, not left empty
         ("c", []),
     ]
+
+
+def test_the_work_notes_other_sections_are_dropped() -> None:
+    db = Database(":memory:")
+    db.migrate("notes", MIGRATIONS[:11])
+    db.execute("INSERT INTO notes_sections VALUES (0, NULL, 'Intro.')")
+    db.migrate("notes", MIGRATIONS)
+    assert not db.query("SELECT name FROM sqlite_master WHERE name = 'notes_sections'")

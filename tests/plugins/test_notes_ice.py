@@ -1,8 +1,6 @@
 """notes' ice as other plugins see it: an `iced` entity per act of icing, hiding what it
 covers, including what notes finds for it in the graph."""
 
-from pathlib import Path
-
 import pytest
 from conftest import NOW, dashboard, entry, issue, panel, pr, snapshot, stored, titles, todo
 
@@ -13,7 +11,6 @@ from move_forward.graph import Entity, Graph, Ref
 from move_forward.plugin import ActionError, Context, Request
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes import plugin as notes_plugin
-from move_forward.plugins.notes.cli import export_notes
 from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.covers import covers
 from move_forward.plugins.notes.models import Ice, IcedItem
@@ -21,7 +18,6 @@ from move_forward.plugins.notes.panels import Builder, entities
 from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 from move_forward.refresh import build_dashboard
-from move_forward.registry import enabled
 from move_forward.repositories import KvRepository
 
 WIDGETS = "/src/widgets"
@@ -233,15 +229,6 @@ def test_put_on_ice_is_offered_on_my_open_prs_tickets_and_entries() -> None:
     assert ice_fields("github.conflicts") == [{"kind": "pull_request", "id": mine.url}]
     assert ice_fields("notes.todos") == [{"kind": "notes.entry", "id": "APP-1 Fix"}]
     assert ice_fields("github.reviews_for_me") == []  # not mine
-
-
-def test_export_writes_only_stacks_to_on_ice_md(tmp_path: Path) -> None:
-    config, db = _work()
-    _ice_item(config, db, "ticket", "APP-1")
-    notes = next(e for e in enabled(config, db, NOW) if e.name == "notes")
-    notice = export_notes(notes.ctx, tmp_path, force=False)
-    assert "1 other thing(s) on ice stay in the database only" in notice
-    assert "APP-1" not in (tmp_path / "on-ice.md").read_text()
 
 
 def test_notes_reads_its_tables_once_per_page_for_its_buttons(

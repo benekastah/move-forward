@@ -1,5 +1,4 @@
-"""`mfd notes`: read and change the notes, and export them as the skill's markdown (which
-`mfd import` reads, through `import_notes`).
+"""`mfd notes`: read and change the notes.
 
 Every command works without the server, straight on the database, and prints `--json` for
 scripts (the move-forward skill calls them). Changes go through the same functions as the
@@ -23,65 +22,11 @@ from ...api import (
     InputRequest,
 )
 from ...api.kinds import TICKET
-from . import actions, markdown, panels
+from . import actions, panels
 from .config import NotesConfig
 from .models import Condition, Entry, Ice, Size, Todo
 from .repository import NotesRepository
-
-ASKED_ICE = "asked:ice"
-"""The key `mfd notes remember` keeps when the skill last asked about what's on ice under:
-`on-ice.md`'s `Last asked`, which the import reads and the export writes."""
-
-
-def import_notes(ctx: Context[NotesConfig], notes_dir: Path, replace: bool) -> list[str]:
-    """Read `work-notes.md` and `on-ice.md` from `notes_dir` into the tables, for `mfd
-    import`; nothing when it has neither. Skips them all, saying so, when notes are already
-    there, unless `replace`."""
-
-    def read(name: str) -> str:
-        path = notes_dir / name
-        return path.read_text(encoding="utf-8-sig", errors="replace") if path.exists() else ""
-
-    names = (markdown.WORK_NOTES_FILE, markdown.ON_ICE_FILE)
-    if not any((notes_dir / name).exists() for name in names):
-        return []
-    repo = NotesRepository(ctx.db)
-    work_notes = read(markdown.WORK_NOTES_FILE)
-    entries, sections = markdown.read_work_notes(work_notes)
-    ices, last_asked = markdown.read_on_ice(read(markdown.ON_ICE_FILE), ctx.today)
-    if (entries or ices or sections) and not repo.is_empty() and not replace:
-        # Anything read replaces all that's there: even a preamble alone would empty them.
-        # Not an error: re-running `mfd import` for another plugin's file is routine.
-        return ["already has notes; skipped, pass --replace to overwrite them"]
-    if entries or ices or sections:
-        repo.replace_all(entries, ices, sections)
-    if last_asked:
-        repo.remember(ASKED_ICE, last_asked)
-    todos = sum(len(e.todos) for e in entries)
-    return [f"imported {len(entries)} entries, {todos} todos and {len(ices)} stacks on ice"]
-
-
-def export_notes(ctx: Context[NotesConfig], notes_dir: Path, force: bool) -> str:
-    """Write `work-notes.md` and `on-ice.md` into `notes_dir`, in the skill's format."""
-    repo = NotesRepository(ctx.db)
-    targets = [notes_dir / markdown.WORK_NOTES_FILE, notes_dir / markdown.ON_ICE_FILE]
-    existing = [str(p) for p in targets if p.exists()]
-    if existing and not force:
-        raise ValueError(f"{', '.join(existing)} exists; pass --force to overwrite")
-    notes_dir.mkdir(parents=True, exist_ok=True)
-    entries = repo.entries()
-    targets[0].write_text(markdown.write_work_notes(entries, repo.sections()), encoding="utf-8")
-    ices = repo.ices()
-    stacks = [i for i in ices if all(item.kind == markdown.BRANCH for item in i.items)]
-    targets[1].write_text(markdown.write_on_ice(stacks, repo.recall(ASKED_ICE)), encoding="utf-8")
-    left_out = len(ices) - len(stacks)
-    return f"wrote {len(entries)} entries and {len(stacks)} stacks on ice to {notes_dir}" + (
-        f"; on-ice.md holds only stacks, so {left_out} other thing(s) on ice stay in the"
-        " database only"
-        if left_out
-        else ""
-    )
-
+from .text import PR_URL_RE, links_in, sized
 
 Command = Callable[[InputRequest[NotesConfig]], "Result"]
 
@@ -223,11 +168,11 @@ def cmd_todo_add(req: InputRequest[NotesConfig]) -> Result:
     ctx, graph, args = req.ctx, req.graph, req.args
     notes = NotesRepository(ctx.db)
     entry = find_entry(notes.entries(), args.entry, graph)
-    text, written = markdown.sized(args.text.strip())  # as the notes write a size
+    text, written = sized(args.text.strip())  # as the notes write a size
     text = text.strip()
     if not text:
         raise ValueError("the todo is empty")
-    links = [*markdown.links_in(text), *(actions.link_for(graph, v) for v in args.link)]
+    links = [*links_in(text), *(actions.link_for(graph, v) for v in args.link)]
     size: Size | None = args.size or written
     todo_id = notes.add_todo(entry.id, text, size, list(dict.fromkeys(links)))
     notes.touch(entry.id, ctx.today)
@@ -257,7 +202,7 @@ def cmd_condition(req: InputRequest[NotesConfig]) -> Result:
     entry = find_entry(notes.entries(), args.entry, graph)
     text = args.text.strip()
     pr = args.pr.strip() if args.pr else None
-    if pr is not None and not markdown.PR_URL_RE.fullmatch(pr):
+    if pr is not None and not PR_URL_RE.fullmatch(pr):
         raise ValueError(f"{pr!r} isn't a pull request's URL")
     if args.condition_command == "add":
         if pr is None:
@@ -311,11 +256,6 @@ def cmd_thaw(req: InputRequest[NotesConfig]) -> Result:
     )
 
 
-def cmd_export(req: InputRequest[NotesConfig]) -> Result:
-    ctx, args = req.ctx, req.args
-    return Result(export_notes(ctx, Path(args.dir).expanduser(), args.force))
-
-
 def _commands() -> dict[str, Command]:
     return {
         "list": cmd_list,
@@ -331,7 +271,6 @@ def _commands() -> dict[str, Command]:
         "recall": cmd_recall,
         "ice": cmd_ice,
         "thaw": cmd_thaw,
-        "export": cmd_export,
     }
 
 
@@ -406,9 +345,6 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     )
     ice.add_argument("--note")
     add("thaw", "take what's on ice off it").add_argument("ice", type=int)
-    export_parser = add("export", "write work-notes.md and on-ice.md into a directory")
-    export_parser.add_argument("dir", type=Path)
-    export_parser.add_argument("--force", action="store_true", help="overwrite existing files")
     handlers = _commands()
 
     def run(req: InputRequest[NotesConfig]) -> int:

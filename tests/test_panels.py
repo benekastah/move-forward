@@ -700,7 +700,7 @@ def test_a_lone_todo_joined_to_another_item_is_listed_with_its_own_buttons() -> 
 
 def test_empty_notes_say_how_to_fill_them() -> None:
     empty = dashboard().panel("notes.todos")
-    assert "mfd import <dir>" in empty.description
+    assert "mfd notes add-entry" in empty.description
     some = dashboard(work_items=[entry("APP-1", [todo("x")])]).panel("notes.todos")
     assert "mfd import" not in some.description
 

@@ -273,8 +273,8 @@ The rules:
   `prune` clears what's finished.
 - **A cache of lookups** (a login's email, found once and kept) is a kept table of a key, a
   value, a `source` and a `looked_up_at`, which `api.LookupCache(db, table, key, value)`
-  reads and writes: a value set by hand (`BY_HAND`) wins over an import's (`IMPORTED`),
-  which wins over a lookup's (`LOOKED_UP`), and `forget_misses_before(cutoff)`, from
+  reads and writes: a value set by hand (`BY_HAND`) wins over a lookup's (`LOOKED_UP`),
+  as does one the old `mfd import` read (`IMPORTED`), and `forget_misses_before(cutoff)`, from
   `prune`, lets lookups that found nothing be tried again. Its docstring has the table.
 - **Order-independent.** A plugin can be enabled before or after any other, so its
   migrations touch only its own tables.
@@ -513,11 +513,6 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   dashboard's token, as every request does.
 - **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
   a handler `(req: InputRequest) -> int` that gets the parsed `req.args`.
-- **Importing.** `import_dir(req)` reads what the plugin recognises in `req.dir` for `mfd
-  import <dir>` into its tables, and returns what it read, one line each (none when it
-  recognises nothing there). What it won't overwrite without `req.replace` (`--replace`) it
-  skips with a line saying so, as `mfd import` is run again routinely; it raises `ValueError`
-  (or lets an `OSError` through) only for what fails, which makes the command fail.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the
 plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their

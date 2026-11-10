@@ -6,13 +6,13 @@ from collections.abc import Callable, Collection
 from datetime import date, datetime
 
 from ...api import Database, Migration, Ref, localtime
-from .markdown import BRANCH, attach_conditions
-from .models import Condition, Entry, Ice, IcedItem, Link, Section, Size, Todo
+from .models import Condition, Entry, Ice, IcedItem, Link, Size, Todo
+from .text import attach_conditions
 
 
 def _attach_old_conditions(conn: sqlite3.Connection) -> None:
     """Give each condition kept before conditions named their PR its PR, by
-    `markdown.attach_conditions`: the PR its text names, else each of its entry's PRs; one
+    `text.attach_conditions`: the PR its text names, else each of its entry's PRs; one
     with neither becomes a line of its entry."""
     old = conn.execute(
         "SELECT entry_id, text FROM notes_conditions WHERE pr IS NULL ORDER BY entry_id, position"
@@ -269,6 +269,8 @@ MIGRATIONS = [
     UPDATE notes_entries SET checked_on = NULL, asked_done_on = NULL;
     """,
     ),
+    # The work notes' other sections, which only `mfd notes export` wrote back out.
+    Migration("0012_drop_sections", "DROP TABLE notes_sections;"),
 ]
 """The notes plugin's migrations. Every table but the derived `notes_ice_covers` is kept:
 only the notes know what's in them."""
@@ -281,10 +283,6 @@ def _insert_condition(conn: sqlite3.Connection, entry_id: int, condition: Condit
         " ?, ?)",
         (entry_id, entry_id, condition.text, condition.pr),
     )
-
-
-def _iso(value: date | None) -> str | None:
-    return value.isoformat() if value else None
 
 
 def _date(value: str | None) -> date | None:
@@ -376,16 +374,9 @@ class NotesRepository:
             found[row["ice_id"]].append(Ref(kind=row["kind"], id=row["ref_id"]))
         return dict(found)
 
-    def sections(self) -> list[Section]:
-        return [
-            Section(heading=row["heading"], body=row["body"])
-            for row in self._db.query("SELECT * FROM notes_sections ORDER BY position")
-        ]
-
     def is_empty(self) -> bool:
         return not self._db.query(
-            "SELECT 1 FROM notes_entries UNION ALL SELECT 1 FROM notes_ice"
-            " UNION ALL SELECT 1 FROM notes_sections LIMIT 1"
+            "SELECT 1 FROM notes_entries UNION ALL SELECT 1 FROM notes_ice LIMIT 1"
         )
 
     # Writing
@@ -615,89 +606,3 @@ class NotesRepository:
     def delete_ice(self, ice_id: int) -> None:
         """Thaw: forget the act of icing and what it covered."""
         self._db.execute("DELETE FROM notes_ice WHERE id = ?", (ice_id,))
-
-    def replace_all(
-        self,
-        entries: list[Entry],
-        ices: list[Ice],
-        sections: list[Section],
-    ) -> None:
-        """Replace everything with what an import read, in one transaction, but the PRs,
-        tickets and entries on ice: `on-ice.md` holds only stacks, so an import can't have
-        read them. The given ids are ignored; rows get new ones."""
-        with self._db.transaction() as conn:
-            for table in ("notes_entries", "notes_sections"):
-                conn.execute(f"DELETE FROM {table}")
-            conn.execute(
-                "DELETE FROM notes_ice WHERE NOT EXISTS"
-                " (SELECT 1 FROM notes_iced WHERE ice_id = notes_ice.id AND kind != ?)",
-                (BRANCH,),
-            )
-            for entry in entries:
-                cursor = conn.execute(
-                    "INSERT INTO notes_entries (title, status, location, blocked_on, updated_on)"
-                    " VALUES (?, ?, ?, ?, ?)",
-                    (
-                        entry.title,
-                        entry.status,
-                        entry.where,
-                        entry.blocked_on,
-                        _iso(entry.updated_on),
-                    ),
-                )
-                entry_id = cursor.lastrowid
-                conn.executemany(
-                    "INSERT OR IGNORE INTO notes_links VALUES (?, ?, ?)",
-                    [(entry_id, link.kind, link.ref) for link in entry.links],
-                )
-                conn.executemany(
-                    "INSERT INTO notes_entry_lines VALUES (?, ?, ?)",
-                    [(entry_id, i, line) for i, line in enumerate(entry.lines)],
-                )
-                conn.executemany(
-                    "INSERT INTO notes_conditions (entry_id, position, text, pr) VALUES (?, ?, ?, ?)",
-                    [(entry_id, i, c.text, c.pr) for i, c in enumerate(entry.conditions)],
-                )
-                for position, todo in enumerate(entry.todos):
-                    cursor = conn.execute(
-                        "INSERT INTO notes_todos (entry_id, position, text, size, done_on)"
-                        " VALUES (?, ?, ?, ?, ?)",
-                        (
-                            entry_id,
-                            position,
-                            todo.text,
-                            todo.size,
-                            todo.done_on.isoformat() if todo.done_on else None,
-                        ),
-                    )
-                    conn.executemany(
-                        "INSERT OR IGNORE INTO notes_todo_links VALUES (?, ?, ?)",
-                        [(cursor.lastrowid, link.kind, link.ref) for link in todo.links],
-                    )
-            for ice in ices:
-                cursor = conn.execute(
-                    "INSERT INTO notes_ice (title, iced_on, note) VALUES (?, ?, ?)",
-                    (ice.title, ice.iced_on.isoformat(), ice.note),
-                )
-                # A branch in two stacks stays with the first: something is on ice once.
-                conn.executemany(
-                    "INSERT OR IGNORE INTO notes_iced"
-                    " (ice_id, position, kind, ref_id, sha, name, repo_dir)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    [
-                        (
-                            cursor.lastrowid,
-                            i,
-                            item.kind,
-                            item.ref_id,
-                            item.sha,
-                            item.name,
-                            item.repo_dir,
-                        )
-                        for i, item in enumerate(ice.items)
-                    ],
-                )
-            conn.executemany(
-                "INSERT INTO notes_sections VALUES (?, ?, ?)",
-                [(i, s.heading, s.body) for i, s in enumerate(sections)],
-            )

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from ...api import BY_HAND, IMPORTED, Database, LookupCache, Migration
+from ...api import BY_HAND, Database, LookupCache, Migration
 from .models import Contact, Ping, TeamChannel
 
 MIGRATIONS = [
@@ -88,10 +88,10 @@ MIGRATIONS = [
 
 class SlackRepository:
     """People's and teams' Slack destinations, and the pings sent. A person's Slack id and a
-    ping say where they came from (`source`): an import (`IMPORTED`, which the next import
-    replaces), the dashboard (`BY_HAND`: set by hand, or a ping marked as sent; an import
-    leaves it) or, for a Slack id, a lookup through Slack's API by email (`LOOKED_UP`);
-    people's Slack ids are an `api.LookupCache`. A team's channel is always set by hand."""
+    ping say where they came from (`source`): the dashboard (`BY_HAND`: set by hand, or a ping
+    marked as sent), a lookup through Slack's API by email (`LOOKED_UP`, a Slack id's), or
+    `mfd import`, which this version no longer has (`IMPORTED`); people's Slack ids are an
+    `api.LookupCache`. A team's channel is always set by hand."""
 
     def __init__(self, db: Database):
         self._db = db
@@ -128,11 +128,11 @@ class SlackRepository:
         return self._contacts.forget_misses_before(cutoff)
 
     def set_contact(self, login: str, slack_id: str | None) -> None:
-        """Set a person's Slack id by hand; it wins over imports from now on."""
+        """Set a person's Slack id by hand; it wins over a lookup from now on."""
         self._contacts.set_by_hand(login, slack_id)
 
     def unset_contact(self, login: str) -> bool:
-        """Forget a person's Slack id; False if there was none. An import can bring it back."""
+        """Forget a person's Slack id; False if there was none. A lookup can bring it back."""
         return self._contacts.forget(login)
 
     def set_team_channel(self, team: str, name: str | None, channel_id: str | None) -> None:
@@ -142,7 +142,7 @@ class SlackRepository:
         )
 
     def unset_team_channel(self, team: str) -> bool:
-        """Forget a team's channel; False if there was none. An import can set it again."""
+        """Forget a team's channel; False if there was none."""
         with self._db.transaction() as conn:
             return (
                 conn.execute("DELETE FROM slack_team_channels WHERE team = ?", (team,)).rowcount > 0
@@ -181,33 +181,3 @@ class SlackRepository:
             return conn.execute(
                 "DELETE FROM slack_pings WHERE sent_at < ?", (cutoff.isoformat(),)
             ).rowcount
-
-    def replace_imported(
-        self, contacts: list[Contact], teams: list[TeamChannel], pings: list[Ping]
-    ) -> list[str]:
-        """Replace the Slack ids and pings an earlier import read with these; what the
-        dashboard wrote stays, and wins where both name the same person. People without a
-        Slack id are left out, so they can still be looked up. Sets the teams' channels as if
-        by hand, but for teams that have one already; returns the teams it set."""
-        with self._db.transaction() as conn:
-            self._contacts.replace_imported(
-                {c.login: c.slack_id for c in contacts if c.slack_id}, conn
-            )
-            conn.execute("DELETE FROM slack_pings WHERE source = ?", (IMPORTED,))
-            set_teams = [
-                t.slug
-                for t in teams
-                if conn.execute(
-                    "INSERT OR IGNORE INTO slack_team_channels VALUES (?, ?, ?)",
-                    (t.slug, t.channel_name, t.channel_id),
-                ).rowcount
-            ]
-            conn.executemany(
-                "INSERT INTO slack_pings (pr_url, target, kind, message, sent_at, source)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                [
-                    (p.pr_url, p.target, p.kind, p.message, p.sent_at.isoformat(), IMPORTED)
-                    for p in pings
-                ],
-            )
-        return set_teams

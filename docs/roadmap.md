@@ -18,7 +18,6 @@ its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened 
 review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
 - **Hooks removed:**
-  - `import_dir`, with `mfd import`, and `mfd notes export`;
   - `refresh_subjects`: ↻ calls `collect` with its subjects;
   - `collect_after`: `collect` gets the graph, and a plugin says by a class variable that
     it collects after the others;
@@ -325,13 +324,8 @@ set of tables, pages and actions, and settles what two of them both see the way 
   (`condition add --pr`), and check-ins, offers, declines and once-a-day questions are
   remembered by key (`mfd notes remember` and `recall`, keyed as
   [plugins/notes.md](plugins/notes.md) says); the skill still keeps them its old way until
-  it's changed to use them. Its `reviewer-map.md` is read only through `mfd import`, so it
-  should set Slack ids with `mfd slack contact set` rather
-  than editing the map.
-- **An export that keeps everything.** `mfd notes export` loses the links made with Link (an
-  entry's to a PR or ticket its text doesn't name, a todo's) and the order of an entry's lines,
-  as the skill's markdown has no place for them: to keep them, the format needs a line for
-  links and the notes a position for each line.
+  it's changed to use them. Its `reviewer-map.md` is read by nothing now, so it should set
+  Slack ids with `mfd slack contact set` rather than editing the map.
 - **Keep the skill and the dashboard in step.** The CLI's JSON output is the contract the
   skill is written against: change it deliberately, with the skill. The skill's own rule
   against cleaning while something's on ice no longer matches the dashboard, which cleans

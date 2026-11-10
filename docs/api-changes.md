@@ -82,14 +82,13 @@ for themselves (a token, a request, an example config) is core's.
   changes, so a plugin can report it on every refresh rather than remembering what it warned
   of. One the plugin hasn't reported for `prune_days` is forgotten in the daily clean-up.
 
-- **Importing**: `import_dir(req: ImportRequest)` reads what the plugin recognises in
-  `req.dir` for `mfd import <dir>` and says what, one line each; `req.replace` is
-  `--replace`; what it won't overwrite without it, it skips with a line saying so, as
-  `mfd import` is run again routinely. Raising `ValueError` or `OSError` fails the command,
-  without stopping the other plugins.
+- **No importing**: `mfd import` is gone, and with it `import_dir`, `ImportRequest`, the
+  markdown helpers `api.cell` and `api.tables`, and `LookupCache.replace_imported`. A plugin
+  that read a file someone keeps by hand gives a command or a page to set the same instead.
 - **Lookup caches**: `LookupCache` (with the sources `BY_HAND`, `IMPORTED` and `LOOKED_UP`)
-  keeps a plugin's cache of looked-up values in its own table: by hand wins over an import,
-  which wins over a lookup, and lookups that found nothing are tried again after a cutoff.
+  keeps a plugin's cache of looked-up values in its own table: by hand wins over a lookup,
+  as does what an earlier version's `mfd import` read (`IMPORTED`), and lookups that found
+  nothing are tried again after a cutoff.
 - **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
   return the snapshot, and core calls each once per refresh.
 - **Collecting after the graph** is implementing `collect_after`: `collects_after_graph` is a

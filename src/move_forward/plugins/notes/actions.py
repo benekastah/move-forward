@@ -23,9 +23,9 @@ from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .config import NotesConfig
 from .covers import covers
-from .markdown import REVIEWS_SECTION, links_in, sized
 from .models import Entry, IcedItem, Link, Size, Todo
 from .repository import NotesRepository
+from .text import links_in, sized
 
 ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
 BRANCH = "git.branch"
@@ -293,15 +293,12 @@ def todo_add(req: InputRequest[NotesConfig]) -> str:
 
 
 def entry_title(text: str) -> str:
-    """`text` as a new entry's title, refused where the skill's markdown (`mfd notes export`)
-    would read it back as something else: a line break (any `splitlines` takes) splits its
-    heading, and a title of a section of its own is that section."""
+    """`text` as a new entry's title, refused when it's empty or more than one line (any
+    break `splitlines` takes)."""
     if not text.strip():
         raise ActionError("an entry's title is empty")
     if len(text.splitlines()) > 1:
         raise ActionError("an entry's title is one line")
-    if text.casefold() == REVIEWS_SECTION.casefold():
-        raise ActionError(f"{text!r} is a section of the work notes, not an entry")
     return text
 
 

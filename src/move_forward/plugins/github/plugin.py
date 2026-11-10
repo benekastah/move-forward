@@ -17,7 +17,6 @@ from ...api import (
     Event,
     Graph,
     Identity,
-    ImportRequest,
     InitSetup,
     Item,
     KindSpec,
@@ -41,7 +40,7 @@ from .config import GitHubConfig
 from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
 from .panels import PR, REQUEST_REVIEWER_TASK, REVIEW_TASK, Builder
-from .people import REVIEWER_MAP_FILE, PeopleRepository, read_reviewer_map
+from .people import PeopleRepository
 from .prs import (
     changes_requested,
     last_review_activity,
@@ -498,15 +497,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 )
             )
         return found
-
-    def import_dir(self, req: ImportRequest[GitHubConfig]) -> list[str]:
-        """Reviewers' emails from `reviewer-map.md`, replacing what an earlier import read."""
-        path = req.dir / REVIEWER_MAP_FILE
-        if not path.exists():
-            return []
-        emails = read_reviewer_map(path.read_text(encoding="utf-8-sig", errors="replace"))
-        PeopleRepository(req.ctx.db).replace_imported(emails)
-        return [f"imported {len(emails)} reviewers' emails"]
 
     def prune(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[str]:
         """Forget email lookups that found none `prune_days` ago, to try them again."""

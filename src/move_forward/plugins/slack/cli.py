@@ -1,46 +1,14 @@
-"""`mfd slack`: see and set where review pings go; and what `mfd import` reads for slack,
-the reviewer map and logged nudges from the skill's markdown."""
+"""`mfd slack`: see and set where review pings go."""
 
 import argparse
 import json
 import re
 import sys
-from pathlib import Path
 
 from ...api import ActionError, CliHandler, Context, InputRequest, SourceError, http
-from . import client, contacts, discovery, markdown
+from . import client, contacts, discovery
 from .config import SlackConfig
 from .repository import SlackRepository
-
-
-def import_markdown(ctx: Context[SlackConfig], notes_dir: Path) -> list[str]:
-    """Read Slack ids from `reviewer-map.md`, and logged nudges from `work-notes.md`,
-    replacing what an earlier import read; and set its teams' channels as if by hand, where
-    none is set, naming the teams whose channel set already differs from the map's. Nothing
-    when it has neither file. Can be run again any time."""
-    names = (markdown.REVIEWER_MAP_FILE, markdown.WORK_NOTES_FILE)
-    if not any((notes_dir / name).exists() for name in names):
-        return []
-
-    def read(name: str) -> str:
-        path = notes_dir / name
-        return path.read_text(encoding="utf-8-sig", errors="replace") if path.exists() else ""
-
-    people, teams = markdown.read_reviewer_map(read(markdown.REVIEWER_MAP_FILE))
-    pings = markdown.read_nudges(read(markdown.WORK_NOTES_FILE))
-    slack = SlackRepository(ctx.db)
-    set_teams = slack.replace_imported(people, teams, pings)
-    kept = slack.team_channels()
-    # Only a kept channel unlike the map's is worth a word: one equal to it changed nothing.
-    differ = sorted(t.slug for t in teams if kept.get(t.slug) != t)
-    said = ([f"set {len(set_teams)} teams' channels, as by hand"] if set_teams else []) + (
-        [f"left {', '.join(differ)}, whose channel set already differs from the map's"]
-        if differ
-        else []
-    )
-    return [f"imported {len(people)} people and {len(pings)} logged nudges"] + (
-        ["; ".join(said)] if said else []
-    )
 
 
 def list_destinations(

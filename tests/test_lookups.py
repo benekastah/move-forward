@@ -1,12 +1,11 @@
-"""`api.LookupCache`: a plugin's kept cache of looked-up values, which an import or a hand can
-also set."""
+"""`api.LookupCache`: a plugin's kept cache of looked-up values, which a hand can also set."""
 
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from move_forward.db import Database, Migration
-from move_forward.lookups import BY_HAND, IMPORTED, LOOKED_UP, LookupCache
+from move_forward.lookups import BY_HAND, LOOKED_UP, LookupCache
 
 NOW = datetime(2026, 11, 9, 12, tzinfo=UTC)
 TABLE = Migration(
@@ -28,20 +27,16 @@ def _cache() -> LookupCache:
     return LookupCache(db, "demo_ids", "login", "user_id")
 
 
-def test_by_hand_wins_over_an_import_which_wins_over_a_lookup() -> None:
+def test_by_hand_wins_over_a_lookup_which_never_overwrites() -> None:
     ids = _cache()
     ids.save_looked_up("alice", "L1", NOW)
     ids.save_looked_up("bob", "L2", NOW)
     ids.set_by_hand("bob", "H2")
-    ids.replace_imported({"alice": "I1", "bob": "I2", "carol": "I3"})
-    ids.save_looked_up("carol", "L3", NOW)  # a lookup never overwrites
-    assert ids.values() == {"alice": "I1", "bob": "H2", "carol": "I3"}
-    assert ids.sources() == {"alice": IMPORTED, "bob": BY_HAND, "carol": IMPORTED}
-    # The next import replaces what the last one read, and leaves the rest.
-    ids.replace_imported({"dan": "I4"})
-    assert ids.values() == {"bob": "H2", "dan": "I4"}
+    ids.save_looked_up("alice", "L3", NOW)
+    assert ids.values() == {"alice": "L1", "bob": "H2"}
+    assert ids.sources() == {"alice": LOOKED_UP, "bob": BY_HAND}
     assert ids.forget("bob") and not ids.forget("bob")
-    assert ids.values() == {"dan": "I4"}
+    assert ids.values() == {"alice": "L1"}
 
 
 def test_lookups_that_found_nothing_are_forgotten_after_the_cutoff() -> None:
@@ -54,16 +49,6 @@ def test_lookups_that_found_nothing_are_forgotten_after_the_cutoff() -> None:
     assert ids.forget_misses_before(NOW - timedelta(days=90)) == 1
     assert ids.values() == {"alice": "L1", "carol": None, "dan": None}
     assert ids.sources()["carol"] == LOOKED_UP
-
-
-def test_an_import_joins_the_callers_transaction() -> None:
-    db = Database(":memory:")
-    db.migrate("demo", [TABLE])
-    ids = LookupCache(db, "demo_ids", "login", "user_id")
-    with pytest.raises(RuntimeError), db.transaction() as conn:
-        ids.replace_imported({"alice": "I1"}, conn)
-        raise RuntimeError("the caller's next write fails")
-    assert ids.values() == {}
 
 
 def test_names_are_refused_unless_they_are_plain_identifiers() -> None:

@@ -32,10 +32,9 @@ def test_a_todo_starts_from_nothing_as_an_entry_of_its_own() -> None:
         (" ", "empty"),
         ("two\nlines", "one line"),
         ("two\u2028lines", "one line"),  # any break splitlines takes
-        ("Reviews requested of me", "a section"),
     ],
 )
-def test_a_todo_the_notes_would_read_back_otherwise_is_refused(text: str, why: str) -> None:
+def test_a_todo_that_isnt_one_line_of_text_is_refused(text: str, why: str) -> None:
     config, db = stored()
     with pytest.raises(ActionError, match=why):
         refresh.run_action(config, db, NEW, {"input": text})

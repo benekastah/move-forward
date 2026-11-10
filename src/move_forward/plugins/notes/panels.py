@@ -10,8 +10,8 @@ from ...api import Action, Badge, Band, Entity, Graph, Item, Link, Model, Panel,
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
-from .markdown import PR_URL_RE
 from .models import Condition, Entry, Ice, Todo
+from .text import PR_URL_RE
 
 NOT_BLOCKED_RE = re.compile(
     r"\s*(?:(?:nothing|none|not blocked|no blockers?)(?:\s+(?:yet|now|for now|so far|currently"

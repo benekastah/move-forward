@@ -100,7 +100,9 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
 
 def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
     ctx = _context()
-    PeopleRepository(ctx.db).replace_imported({"alice": "a@x", ME: "me@x"})
+    people = PeopleRepository(ctx.db)
+    people.save_looked_up("alice", "a@x", NOW)
+    people.save_looked_up(ME, "me@x", NOW)
     people = {
         e.ref.id: e.attrs
         for e in GitHubPlugin().entities(Request(ctx, Graph(), snapshot()))

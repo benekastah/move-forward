@@ -128,7 +128,6 @@ before the command's name.
 | `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one off it, whatever put it there; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
 | `mfd snoozes` | Print the Act now items snoozed now, as the page has them (the snooze's time isn't up and the item hasn't changed since), including items on ice, which the page hides, as JSON (kind, id, task, until, fingerprint; `until` is null for a snooze until it changes), for the skill. |
-| `mfd import <dir> [--replace]` | Read the move-forward skill's markdown notes (`work-notes.md`, `on-ice.md`, `reviewer-map.md`) from `<dir>`: each enabled plugin imports what it knows of them, saying what, prefixed with its name. Notes already holding notes skip them, saying so, unless `--replace`, which overwrites the notes. One failing (a file it can't read) doesn't stop the others; the command fails then, and when nothing in `<dir>` is imported. See each plugin's page for what it reads. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 | `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) or password (mail) without showing it (`<plugin>.<account>` for one of a plugin's accounts, when it reads several), and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under its `keychain_service` (the plugin's, or the account's), with `email` as the account; the config is refused when two tokens are kept under the same one, whatever its case. |
 | `mfd token rotate` | Make a new dashboard token (the one in `token` next to the database) and end every session; a running server picks it up by itself, and scripts need the new one. |
@@ -424,9 +423,9 @@ snoozed or pinned in Act now (core's `act_now_feedback`), the priorities, tags (
 on, and those you took off until their plugin refreshes) and contact types you set, the
 sign-in sessions, the notifications waiting to be told, what
 the panels last showed that notifies when new and the problems the plugins report (core's too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
-plugin's (from `mfd import`, or looked up from commits), and the messages
+plugin's (looked up from commits), and the messages
 mail reads in its own. It's the
-source of truth for the notes; `mfd notes export` writes them out as markdown.
+source of truth for the notes.
 The server's token sits next to it, in `token`. The
 database, its backups and the token are readable by you alone (on Windows, by their access lists).
 

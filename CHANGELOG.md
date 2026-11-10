@@ -5,6 +5,19 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### No more `mfd import` or `mfd notes export`
+
+`mfd import <dir>` and `mfd notes export <dir>` are gone, with the reading and writing of the
+skill's markdown notes (`work-notes.md`, `on-ice.md`, `reviewer-map.md`). The database is where
+the notes live: change them with `mfd notes` (`add-entry`, `todo add`, `condition add`, `ice`,
+`remember`) and read them with `mfd notes list --json`, `show` and `ices`. Set people's Slack
+ids and teams' channels with `mfd slack contact set` and `mfd slack team set`, which win over
+what an earlier import read; reviewers' emails are looked up from their commits. A script that
+ran `mfd import` after editing the markdown makes those calls instead. The notes' other
+sections of `work-notes.md` (text that wasn't an entry), kept only to export them, are dropped.
+An entry may now be titled "Reviews requested of me", which only the markdown read as a
+section.
+
 ### Any tag can be taken off
 
 Every tag on an item looks alike, and has its Untag button: a tool's label and a `#tag` in the

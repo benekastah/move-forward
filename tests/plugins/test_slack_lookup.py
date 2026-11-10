@@ -13,7 +13,6 @@ from move_forward import https, keychain, render
 from move_forward.https import RequestError
 from move_forward.plugin import Request
 from move_forward.plugins.slack import client, contacts
-from move_forward.plugins.slack.models import Contact
 from move_forward.plugins.slack.repository import SlackRepository
 from move_forward.refresh import build_dashboard, stored_graph
 from move_forward.registry import enabled
@@ -56,14 +55,9 @@ def test_requested_reviewers_are_looked_up_once_each(monkeypatch: pytest.MonkeyP
     }
     assert repo.sources()["user:alice"] == "lookup"
     assert contacts.look_up_requested(slack.ctx, graph) == [] and len(asked) == 2
-    # An import replaces a lookup; setting by hand beats both.
-    repo.replace_imported([Contact(login="alice", slack_id="U999999")], [], [])
-    assert repo.contacts()["alice"].slack_id == "U999999"
-    # Someone the import names without a Slack id is still looked up, and a lookup stays.
-    repo.replace_imported([Contact(login="bob"), Contact(login="erin")], [], [])
-    assert "erin" not in repo.contacts() and repo.sources()["user:bob"] == "lookup"
+    # Setting by hand beats a lookup, which never overwrites it.
     repo.set_contact("alice", "U000000")
-    repo.replace_imported([Contact(login="alice", slack_id="U999999")], [], [])
+    repo.save_looked_up("alice", "U999999", NOW)
     assert repo.contacts()["alice"].slack_id == "U000000"
 
 
