@@ -7,7 +7,7 @@ from typing import ClassVar
 
 import pytest
 from conftest import ME, NOW, dashboard, issue, local_snapshot, pr, snapshot, stored
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 
 from move_forward import cli, localtime, refresh, registry, render
 from move_forward.act_now import ActNowConfig
@@ -41,6 +41,8 @@ from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.plugins.mail.config import MailConfig
+from move_forward.plugins.mail.plugin import MailPlugin
 from move_forward.refresh import build_dashboard
 from move_forward.repositories import KvRepository
 
@@ -230,6 +232,67 @@ def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPa
     graph.handle("ticket", "https://j/browse/APP-9")
     graph.fetch("ticket", ["https://j/browse/APP-9"])
     assert _Asked.asked == [("url_for", "ticket"), ("handle_for", "ticket"), ("fetch", "ticket")]
+
+
+_family_asked: list[tuple[str, str]] = []
+"""Which of `_GitHubPeople` and `_MailPeople` core asked, by hook, in order."""
+
+
+def _person(id: str, **attrs: JsonValue) -> Entity:
+    return Entity(ref=Ref(kind="person", id=id), title=id, lifecycle="open", attrs=attrs)
+
+
+class _GitHubPeople(GitHubPlugin):
+    """GitHub, knowing no person's handle and fetching alice."""
+
+    def handle_for(self, req: HandleRequest[GitHubConfig]) -> str | None:
+        _family_asked.append((self.name, "handle_for"))
+        return None
+
+    def fetch(self, req: FetchRequest[GitHubConfig]) -> list[Entity]:
+        _family_asked.append((self.name, "fetch"))
+        return [_person("github.com/alice", handle="alice", me=False)]
+
+
+class _MailPeople(MailPlugin):
+    """Mail, knowing every person's handle and fetching bob."""
+
+    def handle_for(self, req: HandleRequest[MailConfig]) -> str | None:
+        _family_asked.append((self.name, "handle_for"))
+        return "bob@x.org"
+
+    def fetch(self, req: FetchRequest[MailConfig]) -> list[Entity]:
+        _family_asked.append((self.name, "fetch"))
+        return [_person("mail/bob@x.org", handle="bob@x.org", email="bob@x.org")]
+
+
+def test_each_publisher_of_a_family_is_asked_in_plugin_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    swap = {"github": _GitHubPeople(), "mail": _MailPeople()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    config = Config.model_validate(
+        {
+            "email": "me@x",
+            "github": {"org": "o"},
+            "mail": {"host": "imap.x.org", "username": "me@x"},
+        }
+    )
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    _family_asked.clear()
+    assert graph.handle("person", "mail/bob@x.org") == "bob@x.org"  # github had no answer
+    assert list(graph.fetch("person", ["github.com/alice", "mail/bob@x.org"])) == [
+        "github.com/alice",
+        "mail/bob@x.org",
+    ]
+    assert _family_asked == [
+        ("github", "handle_for"),
+        ("mail", "handle_for"),
+        ("github", "fetch"),
+        ("mail", "fetch"),
+    ]
 
 
 def test_url_for_is_by_default_the_id_where_the_familys_ids_are_urls() -> None:

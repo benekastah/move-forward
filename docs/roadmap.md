@@ -14,15 +14,31 @@ small shared entity graph.
 ## First: finish simplifying
 
 The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but for the last of
-its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api), in one PR, as each changes
-the hooks a plugin implements:
+its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api), B7, in one PR: fewer
+request types, and fewer hooks to learn.
 
-- **B2:** call `url_for`, `handle_for` and `fetch` only on the plugin whose `kinds` include
-  the kind, and default `url_for` to the id for families whose ids are URLs.
-- **B3:** one item-actions hook (`prepare_item_actions`, renamed) instead of it and
-  `item_actions`.
-- **B7:** merge the hooks' request types into about four shapes (context; context and graph;
-  context, kind and id; context and snapshot).
+- **Five request types**, each hook taking one:
+  - `ContextRequest` (ctx): `load`, `linking_patterns`;
+  - `Request` (ctx, graph, snapshot, and `panels` where it has them): `store`, `entities`,
+    `identity`, `panels`, `act_now`, `relate`, `after_collect`, `prune`, item actions and
+    `events`;
+  - `RefreshRequest` (ctx, graph, `full`, `subjects`): `collect` and `changed`;
+  - `RefRequest` (ctx, kind, ids): `url_for`, `handle_for` and `fetch`;
+  - `InputRequest` (ctx, graph, and one of a page's query and path, a form's fields,
+    surface and back, or the command line's args): pages, buttons and `mfd <plugin>`.
+- **`previous`:** `changed` and `events` get the earlier request of their type, with its own
+  `previous` dropped; `checked_at` is its `ctx.now`, and `changed` also gets the
+  `fingerprint` it last answered. After a restart, core rebuilds it from what it stored,
+  with an empty graph.
+- **The due horizon** moves into the context.
+- **Hooks removed:**
+  - `import_dir`, with `mfd import`, and `mfd notes export`;
+  - `refresh_subjects`: ↻ calls `collect` with its subjects;
+  - `collect_after`: `collect` gets the graph, and a plugin says by a class variable that
+    it collects after the others;
+  - `kept_item`: core keeps the focused item in memory across a button, so a todo just
+    ticked shows as it is now, its box ticked, with its buttons but those that can't act
+    from the remembered copy.
 
 ## Next, in this order
 

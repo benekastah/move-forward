@@ -73,8 +73,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   asked after every refresh with the plugin's snapshot and the graph before and after it, for
   what changed; and an item's `notify`, which core raises when the item is newly in its
   plugin's panels. Rare work (the daily
-  prune) can ask the owning plugin for entities its snapshot no longer holds
-  with `graph.fetch`. Buttons, badges, details and links on other plugins' items
+  prune) can ask the plugins that publish a kind for entities their snapshots no longer
+  hold with `graph.fetch`. Buttons, badges, details and links on other plugins' items
   come from `item_actions`, called once per page (where a plugin reads its tables for them),
   which returns the function core calls per item with whose item it is and where it's
   shown. Core adds its own to items: the importance choices on

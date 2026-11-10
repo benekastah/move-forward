@@ -335,9 +335,10 @@ class Graph:
         return self._url_for(kind, id)
 
     def fetch(self, kind: str, ids: list[str]) -> dict[str, Entity]:
-        """Entities of `kind` by id, fetched now from the plugin that owns the kind, whether or
-        not the graph has them: e.g. PRs merged months ago, for the daily prune. Slow (it calls
-        the tool), so only for work that runs rarely; ids the plugin can't find are left out."""
+        """Entities of `kind` by id, fetched now from every plugin that publishes the kind (a
+        family may have several), whether or not the graph has them: e.g. PRs merged months ago,
+        for the daily prune. Slow (it calls the tools), so only for work that runs rarely; ids no
+        plugin can find are left out."""
         if not ids:
             return {}
         return {e.ref.id: e for e in self._fetch(kind, ids) if e.ref.kind == kind}

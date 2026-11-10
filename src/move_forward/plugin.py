@@ -233,7 +233,8 @@ ItemAdditionsFor = Callable[[ItemRequest], ItemAdditions]
 """What `Plugin.item_actions` returns: what the plugin adds to each item of one page."""
 
 
-def _adds_nothing(req: ItemRequest) -> ItemAdditions:
+def adds_nothing(req: ItemRequest) -> ItemAdditions:
+    """What `Plugin.item_actions` returns by default: nothing added to any item."""
     return ItemAdditions()
 
 
@@ -649,7 +650,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     def fetch(self, req: FetchRequest[C]) -> list[Entity]:
         """Entities of one of its `kinds`, by id, fetched from its tool now, even ones its
         snapshot doesn't hold; `Graph.fetch` asks. Core asks only about the plugin's own kinds
-        (a family's of each plugin that publishes it), so `req.kind` is one of them."""
+        (about a family, each plugin that publishes it), so `req.kind` is one of them."""
         return []
 
     def url_for(self, req: UrlRequest[C]) -> str | None:
@@ -690,7 +691,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         returns once per item, saying whose item it is and where it's shown (`ItemRequest`):
         what needs the plugin's tables or a pass over the graph is done here, once, not per
         item. Adds nothing by default."""
-        return _adds_nothing
+        return adds_nothing
 
     def kept_item(self, req: KeptItemRequest[C]) -> tuple[str, Item] | None:
         """An item one of this plugin's actions asked to keep on the focus page after changing

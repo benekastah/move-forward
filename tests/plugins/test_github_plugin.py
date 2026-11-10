@@ -163,7 +163,6 @@ def test_prs_are_fetched_with_when_they_closed(monkeypatch: pytest.MonkeyPatch) 
         ("https://pr/1", "merged", "2026-06-01T00:00:00+00:00"),
         ("https://pr/2", "open", None),
     ]
-    assert GitHubPlugin().fetch(FetchRequest(_context(), "ticket", ["APP-1"])) == []
 
 
 def test_the_snapshot_moves_from_json_and_round_trips() -> None:

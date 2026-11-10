@@ -157,7 +157,6 @@ def test_tickets_are_fetched_open_or_resolved_and_their_projects_remembered(
     ]
     assert [e.lifecycle for e in fetched] == ["done", "open", "done"]
     assert IssueRepository(db).projects() == ["APP", "OPS"]
-    assert JiraPlugin().fetch(FetchRequest(ctx, "pr", ["x"])) == []
     assert JiraPlugin().fetch(FetchRequest(ctx, "ticket", elsewhere)) == []  # without asking Jira
 
 

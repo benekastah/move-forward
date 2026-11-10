@@ -54,6 +54,7 @@ from .plugin import (
     StoreRequest,
     Subjects,
     SubjectsRequest,
+    adds_nothing,
     collect_into,
 )
 from .prune import prune_if_due
@@ -532,17 +533,14 @@ def build_dashboard(
         for source, row in SnapshotRepository(db).of([e.name for e in plugins]).items()
     }
 
-    def nothing(req: ItemRequest) -> ItemAdditions:
-        return ItemAdditions()
-
     prepared = [
         (
             e,
             call(
                 e.name,
-                "item_actions",
+                "item_actions (once a page)",
                 lambda e=e: e.plugin.item_actions(ItemActionsRequest(e.ctx, graph)),
-                nothing,
+                adds_nothing,
             ),
         )
         for e in plugins
@@ -555,7 +553,9 @@ def build_dashboard(
         found = _merged(contacts.additions(item), tagging.additions(item))
         for e, add in prepared:
             req = ItemRequest(item, owner, surface)
-            added = call(e.name, "item_actions", lambda add=add, req=req: add(req), found)
+            added = call(
+                e.name, "item_actions (per item)", lambda add=add, req=req: add(req), found
+            )
             if added is not found:
                 found = _merged(found, added)
         return found
