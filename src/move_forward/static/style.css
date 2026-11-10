@@ -74,6 +74,9 @@ footer { color: var(--muted); font-size: 12px; flex-wrap: wrap; justify-content:
 footer .error { color: var(--warn); }
 footer form { margin: 0 0 0 auto; }
 footer button { font-size: 12px; }
+/* A plugin whose group the tag view leaves off: its summary's refresh status and button. */
+footer .left-off { display: inline-flex; align-items: baseline; gap: 6px; }
+footer .left-off form { margin: 0; }
 
 details[data-drag] > summary[draggable="true"] { cursor: grab; }
 
@@ -198,6 +201,13 @@ main.single { max-width: 720px; margin: 0 auto; padding-top: 16px; }
 .badge.warn { background: var(--warn-bg); color: var(--warn); }
 .badge.good { background: var(--good-bg); color: var(--good); }
 .badge.label { background: var(--label-bg); color: var(--label); }
+/* A tag's badge links to the page filtered by it (the tag view). */
+a.badge.tag { text-decoration: none; }
+a.badge.tag:hover { text-decoration: underline; }
+.tag-view { padding: 8px 16px 0; }
+.tag-view form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; }
+.tag-view .badge.selected { background: var(--accent); color: var(--accent-text); font-size: 12px; }
+.tag-view .clear { font-size: 12px; color: var(--muted); }
 .details { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
 .details li { overflow-wrap: anywhere; }
 .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 12px; }

@@ -242,15 +242,12 @@ class Tags:
                 self._carried.setdefault(ref, []).append(tag.ref.id)
         self._known = sorted(t.ref.id for t in graph.of_kind(TAG))
 
-    def additions(self, item: Item) -> ItemAdditions:
-        """A `#tag` badge per tag on what `item` is mainly about, those I added first, then those
-        in its text, then its tool's labels, coloured apart as only the tool takes them off; a
-        Tag field to add one, and an Untag button per tag I added. Nothing for an item about
-        nothing, or about what hides things (ice)."""
+    def _shown(self, item: Item) -> tuple[list[str], list[str], list[str]] | None:
+        """The tags on what `item` is mainly about: those I added, those in its text, and its
+        tool's labels; None for an item about nothing, or about what hides things (ice)."""
         if not item.subjects or self._graph.hides(item.subjects[0].kind):
-            return ItemAdditions()
+            return None
         subject = item.subjects[0]
-        fields = {"kind": subject.kind, "id": subject.id}
         carried = self._carried.get(subject, [])
         mine = [tag for tag in self._added.get(subject, []) if tag in carried]
         entity = self._graph.get(subject.kind, subject.id)
@@ -263,6 +260,25 @@ class Tags:
         # In its text, a tag stays when its label goes: it's written, whatever the tool says.
         written = [tag for tag in carried if tag not in mine and tag in in_text]
         labels = [tag for tag in carried if tag not in mine and tag not in in_text]
+        return mine, written, labels
+
+    def of(self, item: Item) -> list[str]:
+        """The tags whose badges `item` shows (`additions`), in their order: what the tag view
+        keeps it by."""
+        shown = self._shown(item)
+        return [*shown[0], *shown[1], *shown[2]] if shown else []
+
+    def additions(self, item: Item) -> ItemAdditions:
+        """A `#tag` badge per tag on what `item` is mainly about, those I added first, then those
+        in its text, then its tool's labels, coloured apart as only the tool takes them off; a
+        Tag field to add one, and an Untag button per tag I added. Nothing for an item about
+        nothing, or about what hides things (ice)."""
+        shown = self._shown(item)
+        if shown is None:
+            return ItemAdditions()
+        mine, written, labels = shown
+        subject = item.subjects[0]
+        fields = {"kind": subject.kind, "id": subject.id}
         return ItemAdditions(
             badges=[
                 *(f"#{tag}" for tag in [*mine, *written]),

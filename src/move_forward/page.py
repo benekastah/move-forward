@@ -195,6 +195,9 @@ class Item(Model):
     """Set by core, in a panel: I snoozed the item (`act_now.set_aside`), and it hasn't changed
     since nor has the snooze ended. Act now leaves it out; its panel shows it dimmed and last,
     with Unsnooze, and doesn't count it."""
+    tags: list[str] = Field(default_factory=list[str])
+    """Set by core: the tags whose `#tag` badges the item shows, by handle, which the tag view
+    (`?tag=`) keeps it by."""
     done: bool = False
     """Its work is done but it's kept a while to undo (a todo ticked off today): it's shown
     dimmed and last, isn't counted, isn't in Act now, and focus mode doesn't step through it.

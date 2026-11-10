@@ -78,7 +78,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   about a person (`people.py`) their contact type, and Set type for a
   person with an address; and on every item about an
   entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag I put on it
-  (`tags.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,
+  (`tags.py`), which it keeps in `Item.tags` and the page filters by (`tag_view.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,
   who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
   default, the items of its panels marked `act_now`.
 - Every request needs the dashboard's token, a plugin's pages (served at

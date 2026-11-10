@@ -2,12 +2,13 @@
 
 import hashlib
 import json
+from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
 from datetime import datetime
 from html import escape
-from urllib.parse import urlencode
 
-from . import localtime
+from . import localtime, tag_view
 from .act_now import OPENED_FIELD
 from .page import Action, Badge, Group, Item, Link, Panel, SourceStatus, age
 from .panels import ACT_NOW, Dashboard
@@ -21,7 +22,9 @@ OPEN_SECTIONS_SCRIPT = (
     # browser last saw, from localStorage, and keeps it current on each toggle. Only
     # sections it has a state for are touched, so a new panel keeps its default. Browsers
     # fire toggle at load for sections that start open, and for the ones restored here;
-    # saving then just writes the same state again. Without localStorage (a private window,
+    # saving then just writes the same state again. Saving replaces the state with the page's,
+    # dropping sections gone for good, but while the tag view leaves some off the page
+    # (`data-filtered` on `main`), it keeps theirs too. Without localStorage (a private window,
     # say) the sections stay as rendered. Runs again on `mfd:replaced`, when RELOAD_SCRIPT
     # swaps in a new page: it binds only the new elements, so nothing piles up.
     "const initOpenSections = () => {"
@@ -30,8 +33,9 @@ OPEN_SECTIONS_SCRIPT = (
     "  try { return JSON.parse(localStorage.getItem('mfd.open') || '{}'); } catch { return {}; } };"
     " const saved = read();"
     " for (const s of sections) if (s.dataset.key in saved) s.open = saved[s.dataset.key];"
-    " const save = () => { try { localStorage.setItem('mfd.open',"
-    "  JSON.stringify(Object.fromEntries(sections.map((s) => [s.dataset.key, s.open])))); }"
+    " const kept = () => (document.querySelector('main[data-filtered]') ? read() : {});"
+    " const save = () => { try { localStorage.setItem('mfd.open', JSON.stringify({ ...kept(),"
+    "  ...Object.fromEntries(sections.map((s) => [s.dataset.key, s.open])) })); }"
     "  catch {} };"
     " for (const s of sections) s.addEventListener('toggle', save);"
     "};"
@@ -42,7 +46,9 @@ OPEN_SECTIONS_SCRIPT = (
 LAYOUT_SCRIPT = (
     # Dragging a group's or a panel's summary moves it among its siblings (a panel stays in
     # its group, and Act now, which has no data-drag, stays first), then posts the page's
-    # whole order to /layout. Without the script the page keeps its order. Like
+    # whole order to /layout. Without the script the page keeps its order. While the tag view
+    # leaves groups or panels off the page, none has data-drag, as their order can't be
+    # saved whole. Like
     # OPEN_SECTIONS_SCRIPT, it binds the new elements again on `mfd:replaced`.
     "const initLayout = () => {"
     " let dragged = null;"
@@ -157,7 +163,8 @@ OPENED_SCRIPT = (
     # An Act now item is also marked opened (`act_now/opened`), dimmed in its place until it
     # changes. An item's ↻ button fetches its subjects again at once. One delegated listener
     # on the document, so it needs no rebinding when RELOAD_SCRIPT swaps the body in; a
-    # failed request only means the page shows the change at its next reload.
+    # failed request only means the page shows the change at its next reload. A link in an
+    # item's badges (a `#tag`'s, filtering the page) opens nothing.
     "(() => {"
     " const KEY = 'mfd-opened', KEEP = 30 * 60 * 1000;"
     " const kept = () => { try { return JSON.parse(sessionStorage.getItem(KEY) || '[]'); }"
@@ -172,7 +179,7 @@ OPENED_SCRIPT = (
     "  const again = e.target.closest && e.target.closest('button.refetch');"
     "  if (again) { refetch(subjectsOf(again)); return; }"
     "  const link = e.target.closest && e.target.closest('li.item a[href]');"
-    "  if (!link || link.closest('form')) return;"
+    "  if (!link || link.closest('form, .badges')) return;"
     "  const item = link.closest('li.item'), now = Date.now();"
     "  const remembered = kept().filter((s) => now - s.at < KEEP);"
     "  for (const s of subjectsOf(item)) remembered.push({ kind: s.kind, id: s.id, at: now });"
@@ -265,6 +272,29 @@ LOGO = "<a href='/' class='logo'><img src='/logo.svg' alt=''> Move forward</a>"
 """The header's home link: the arrow (the favicon without its circle) and the name."""
 
 
+def _logo(tags: Sequence[str]) -> str:
+    """`LOGO`, keeping the tags the page is filtered by."""
+    return LOGO.replace("href='/'", f"href='{_e(tag_view.url('/', tags))}'")
+
+
+@dataclass(frozen=True)
+class _Where:
+    """The page items are shown on, and the tags it's filtered by (see `tag_view`): where
+    their tag badges link to, adding theirs, and what their buttons come back to."""
+
+    path: str = "/"
+    params: tuple[tuple[str, str], ...] = ()
+    tags: tuple[str, ...] = ()
+
+    def url(self, tags: Sequence[str]) -> str:
+        """This page filtered by `tags`."""
+        return tag_view.url(self.path, tags, dict(self.params))
+
+
+_UNFILTERED = _Where()
+"""The dashboard, not filtered by any tag."""
+
+
 def _e(text: object) -> str:
     return escape(str(text), quote=True)
 
@@ -332,12 +362,31 @@ def linkable(url: str | None) -> bool:
     return url is not None and (url.startswith(("https://", "http://")) or local_path(url))
 
 
-def _badge(badge: str | Badge) -> str:
-    """A badge, coloured by its tone."""
-    if isinstance(badge, str):
-        return f"<span class='badge'>{_shown(badge)}</span>"
-    tone = "" if badge.tone == "plain" else f" {badge.tone}"
-    return f"<span class='badge{tone}'>{_shown(badge.text)}</span>"
+def _badge(badge: str | Badge, href: str | None = None) -> str:
+    """A badge, coloured by its tone; a link to `href`, when given (a `#tag`'s, filtering the
+    page by it)."""
+    text, tone = (badge, "") if isinstance(badge, str) else (badge.text, badge.tone)
+    tone = "" if tone in ("", "plain") else f" {tone}"
+    if href is None:
+        return f"<span class='badge{tone}'>{_shown(text)}</span>"
+    return (
+        f"<a class='badge tag{tone}' href='{_e(href)}'"
+        f" title='Show only what carries {_e(text)}'>{_shown(text)}</a>"
+    )
+
+
+def _badges(item: Item, where: _Where | None) -> str:
+    """An item's badges; on the dashboard or focus mode (`where`), each of its tags'
+    (`Item.tags`) links to the page filtered by it too."""
+
+    def href(badge: str | Badge) -> str | None:
+        text = badge if isinstance(badge, str) else badge.text
+        tag = text.removeprefix("#")
+        if where is None or not text.startswith("#") or tag not in item.tags:
+            return None
+        return where.url(tag_view.adding(where.tags, tag))
+
+    return "".join(_badge(b, href(b)) for b in item.badges)
 
 
 def _link_action(action: Action) -> str:
@@ -376,10 +425,16 @@ def _choices(action: Action) -> str:
     return f"<select name='choice' aria-label='{_e(action.label)}'>{options}</select>"
 
 
-def _action(action: Action, back: str = "", at: str = "", pos: int | None = None) -> str:
-    """A button's form. `back` is where the action redirects afterwards; default the page.
-    `at` is the key of the panel it's in, and `pos` its item's place there: the redirect
-    returns to that place (see `Spot`), not the top of the page."""
+def _action(
+    action: Action,
+    back: str = "",
+    at: str = "",
+    pos: int | None = None,
+    tags: Sequence[str] = (),
+) -> str:
+    """A button's form. `back` is where the action redirects afterwards; default the
+    dashboard, filtered by `tags`. `at` is the key of the panel it's in, and `pos` its item's
+    place there: the redirect returns to that place (see `Spot`), not the top of the page."""
     fields = "".join(
         f"<input type='hidden' name='{_e(name)}' value='{_e(value)}'>"
         for name, value in action.fields.items()
@@ -388,7 +443,7 @@ def _action(action: Action, back: str = "", at: str = "", pos: int | None = None
     params = {k: v for k, v in (("back", back), ("at", at)) if v}
     if at and pos is not None:
         params["pos"] = str(pos)
-    query = "?" + urlencode(params) if params else ""
+    query = tag_view.url("", () if back else tags, params)
     if action.checkbox:
         control = (
             f"<label class='check{' suggested' if action.suggested else ''}'>"
@@ -424,6 +479,18 @@ def buttons(actions: list[Action], back: str = "", at: str = "", pos: int | None
     """Buttons for `actions` (those that post, not links), each asking first if it has a
     `confirm`, for plugins' pages as for the dashboard. `back` is where each redirects
     afterwards; default the page they're on."""
+    return _buttons(actions, back, at, pos)
+
+
+def _buttons(
+    actions: list[Action],
+    back: str = "",
+    at: str = "",
+    pos: int | None = None,
+    tags: Sequence[str] = (),
+) -> str:
+    """`buttons`, coming back to the dashboard filtered by `tags` (see `tag_view`) unless
+    `back` says where."""
     # A plugin may add an action after core's own groups. Keep the first position of
     # each named group and collect its later actions there as well.
     sequence: list[str | Action] = []
@@ -441,9 +508,9 @@ def buttons(actions: list[Action], back: str = "", at: str = "", pos: int | None
     forms = ""
     for choice in sequence:
         if isinstance(choice, Action):
-            forms += _action(choice, back, at, pos)
+            forms += _action(choice, back, at, pos, tags)
         else:
-            rendered = "".join(_action(action, back, at, pos) for action in groups[choice])
+            rendered = "".join(_action(action, back, at, pos, tags) for action in groups[choice])
             forms += (
                 f"<div class='button-group' role='group' aria-label='{_e(choice)}'>{rendered}</div>"
             )
@@ -482,7 +549,10 @@ def _item(
     pos: int | None = None,
     children: str = "",
     child_count: int = 0,
+    where: _Where | None = None,
 ) -> str:
+    """An item's HTML. On the dashboard or focus mode (`where`), its tags' badges link to the
+    page filtered by them, and its buttons keep the page's filter."""
     title = (
         f"<a href='{_e(item.url)}' target='_blank' rel='noopener'>{_shown(item.title)}</a>"
         if linkable(item.url)
@@ -509,7 +579,7 @@ def _item(
     if item.subtitle:
         parts.append(f"<div class='item-subtitle'>{_shown(item.subtitle)}</div>")
     if item.badges:
-        parts.append("<div class='badges'>" + "".join(_badge(b) for b in item.badges) + "</div>")
+        parts.append(f"<div class='badges'>{_badges(item, where)}</div>")
     # One part is drawn only when it's marked listed: an entry with one todo shows it as
     # itself, but one joined to another item in Act now is listed there.
     show_parts = len(item.parts) > 1 or (item.parts_listed and bool(item.parts))
@@ -522,13 +592,16 @@ def _item(
     if show_parts:
         parts.append(
             "<ul class='item-parts'>"
-            + "".join(_item(_without_shared(part, item), back, at, pos) for part in item.parts)
+            + "".join(
+                _item(_without_shared(part, item), back, at, pos, where=where)
+                for part in item.parts
+            )
             + "</ul>"
         )
     if item.links:
         links = "".join(_link(link) for link in item.links)
         parts.append(f"<div class='links'>{links}</div>")
-    parts.append(buttons(item.actions, back, at, pos))
+    parts.append(_buttons(item.actions, back, at, pos, where.tags if where else ()))
     if children:
         key = f"children:{item.anchor}"
         parts.append(
@@ -588,7 +661,7 @@ def _live(panel: Panel) -> int:
     return sum(not item.set_aside and not item.done for item in panel.items)
 
 
-def _panel(panel: Panel, spot: Spot | None = None) -> str:
+def _panel(panel: Panel, spot: Spot | None = None, where: _Where = _UNFILTERED) -> str:
     open_attr = _open(bool(panel.items))
     indexed = list(enumerate(panel.items))
     children = _nesting(panel.items)
@@ -600,7 +673,12 @@ def _panel(panel: Panel, spot: Spot | None = None) -> str:
             f"<li id='{SPOT_ID}' aria-hidden='true'></li>" if spot == (panel.key, index) else ""
         )
         return marker + _item(
-            item, at=panel.key, pos=index, children=nested, child_count=len(descendants)
+            item,
+            at=panel.key,
+            pos=index,
+            children=nested,
+            child_count=len(descendants),
+            where=where,
         )
 
     items = "".join(cell(index, item) for index, item in children.get(None, []))  # roots
@@ -609,10 +687,11 @@ def _panel(panel: Panel, spot: Spot | None = None) -> str:
     return (
         f"<details class='panel{'' if panel.items else ' empty'}' id='{_e(panel.key)}'"
         f" data-key='{_e(panel.key)}'"
-        f" data-drag{open_attr}>"
+        f"{'' if where.tags else ' data-drag'}{open_attr}>"
         f"<summary><h2>{_e(panel.title)}</h2><span class='count'>{_live(panel)}</span>"
         f"<span class='description'>{_e(panel.description)}</span></summary>"
-        f"{buttons(panel.actions, at=panel.key)}<ul class='items'>{items}</ul></details>"
+        f"{_buttons(panel.actions, at=panel.key, tags=where.tags)}"
+        f"<ul class='items'>{items}</ul></details>"
     )
 
 
@@ -624,9 +703,16 @@ def _when(now: datetime, then: datetime) -> str:
     return f"{local:%b} {local.day} {local:%H:%M}"
 
 
-def _refreshed(name: str, status: SourceStatus, now: datetime, refreshing: AbstractSet[str]) -> str:
+def _refreshed(
+    name: str,
+    status: SourceStatus,
+    now: datetime,
+    refreshing: AbstractSet[str],
+    tags: Sequence[str] = (),
+) -> str:
     """When a plugin last refreshed (or that it's refreshing, or why its last refresh
-    failed), and a button to refresh it now, for its group's summary."""
+    failed), and a button to refresh it now, for its group's summary, back to the page
+    filtered by `tags`."""
     if name in refreshing:
         text, cls, title = "refreshing…", "refreshed", ""
     elif status.error:
@@ -636,7 +722,7 @@ def _refreshed(name: str, status: SourceStatus, now: datetime, refreshing: Abstr
         cls, title = "refreshed", f"{age(now, status.fetched_at)} ago" if status.fetched_at else ""
     return (
         f"<span class='{cls}' title='{_e(title)}'>{_e(text)}</span>"
-        "<form method='post' action='/refresh' class='refresh'>"
+        f"<form method='post' action='{_e(tag_view.url('/refresh', tags))}' class='refresh'>"
         f"<input type='hidden' name='plugin' value='{_e(name)}'>"
         f"<button type='submit' class='small secondary' title='Refresh {_e(name)} now'"
         f"{' disabled' if refreshing else ''}>Refresh</button></form>"
@@ -662,7 +748,11 @@ def _status_of(key: str, sources: dict[str, SourceStatus]) -> SourceStatus | Non
 
 
 def _group(
-    group: Group, dashboard: Dashboard, refreshing: AbstractSet[str], spot: Spot | None = None
+    group: Group,
+    dashboard: Dashboard,
+    refreshing: AbstractSet[str],
+    where: _Where,
+    spot: Spot | None = None,
 ) -> str:
     """A group section; panel keys the dashboard left out (e.g. Stacks without git stack) are
     skipped. A plugin's group says when the plugin last refreshed, and refreshes it on a click,
@@ -670,7 +760,11 @@ def _group(
     panels = [p for key in group.panel_keys if (p := dashboard.find_panel(key))]
     count = sum(_live(panel) for panel in panels)
     status = _status_of(group.key, dashboard.sources)
-    refreshed = _refreshed(group.key, status, dashboard.generated_at, refreshing) if status else ""
+    refreshed = (
+        _refreshed(group.key, status, dashboard.generated_at, refreshing, where.tags)
+        if status
+        else ""
+    )
     problems = dashboard.plugin_problems.get(group.key, [])
     counted = said = ""
     if problems:
@@ -685,22 +779,85 @@ def _group(
         )
     return (
         f"<details class='group' data-key='{_e(group.key)}'"
-        + (" data-drag" if group.key != ACT_NOW else "")
+        + (" data-drag" if group.key != ACT_NOW and not where.tags else "")
         + f"{_open(group.open)}>"
         f"<summary><h2>{_e(group.title)}</h2><span class='count'>{count}</span>{counted}"
         f"{refreshed}</summary>{said}"
         "<div class='panels'>"
-        + "".join(_panel(panel, spot) for panel in panels)
+        + "".join(_panel(panel, spot, where) for panel in panels)
         + "</div></details>"
     )
 
 
-def _sources(dashboard: Dashboard) -> str:
+def _tag_bar(options: list[tuple[str, int]], where: _Where) -> str:
+    """The tag view's controls (see `tag_view`): a drop-down adding a tag the page's items carry
+    (with how many do), each selected tag with a link clearing it, and one clearing them all.
+    A GET form and links, so it works without scripts; with them, the drop-down sends itself."""
+    if not options and not where.tags:
+        return ""
+    kept = [*where.params, *((tag_view.PARAM, tag) for tag in where.tags)]
+    hidden = "".join(
+        f"<input type='hidden' name='{_e(name)}' value='{_e(value)}'>" for name, value in kept
+    )
+    choices = "".join(
+        f"<option value='{_e(tag)}'>#{_e(tag)} ({count})</option>"
+        for tag, count in options
+        if tag not in where.tags
+    )
+    select = (
+        f"<select name='{tag_view.PARAM}' aria-label='Show only what carries a tag'"
+        " onchange='this.form.submit()'><option value=''>Filter by tag…</option>"
+        f"{choices}</select>"
+        "<noscript><button type='submit' class='small secondary'>Add</button></noscript>"
+        if choices
+        else ""
+    )
+    selected = "".join(
+        f"<a class='badge tag selected' href='{_e(where.url(tag_view.without(where.tags, tag)))}'"
+        f" title='Clear #{_e(tag)}' aria-label='Clear #{_e(tag)}'>#{_e(tag)} ×</a>"
+        for tag in where.tags
+    )
+    clear = f"<a class='clear' href='{_e(where.url(()))}'>Clear all</a>" if where.tags else ""
+    return (
+        f"<nav class='tag-view'><form method='get' action='{_e(where.path)}'>"
+        f"{hidden}{select}{selected}{clear}</form></nav>"
+    )
+
+
+def _nothing_carries(where: _Where) -> str:
+    """What the page says when nothing on it carries a tag it's filtered by."""
+    named = " or ".join(f"#{_e(tag)}" for tag in where.tags)
+    return (
+        "<article class='panel padded'><h2>Nothing here</h2>"
+        f"<p>Nothing carries {named}. <a href='{_e(where.url(()))}'>Clear the filter</a>.</p>"
+        "</article>"
+    )
+
+
+def _sources(
+    dashboard: Dashboard, shown: Dashboard, refreshing: AbstractSet[str], tags: Sequence[str]
+) -> str:
     """The footer: how fresh the data of plugins without a group of their own is, and the
     problems they report (the others' summaries say both), who I am, and the installed plugins
-    left out."""
+    left out. A plugin whose group the tag view leaves off (`shown`, filtered by `tags`) has its
+    summary's refresh status, Refresh button and problems here instead."""
     grouped = {group.key for group in dashboard.groups}
+    visible = {group.key for group in shown.groups}
     spans: list[str] = []
+    for group in dashboard.groups:
+        status = _status_of(group.key, dashboard.sources)
+        problems = dashboard.plugin_problems.get(group.key, [])
+        if group.key in visible or (status is None and not problems):
+            continue
+        refreshed = (
+            ""
+            if status is None
+            else _refreshed(group.key, status, dashboard.generated_at, refreshing, tags)
+        )
+        said = "".join(f" <span class='error'>{_e(problem)}</span>" for problem in problems)
+        spans.append(
+            f"<span class='left-off'><strong>{_e(group.title)}:</strong>{refreshed}{said}</span>"
+        )
     for name, status in dashboard.sources.items():
         if name in grouped or _plugin_of(name) in grouped:
             continue
@@ -714,7 +871,7 @@ def _sources(dashboard: Dashboard) -> str:
                 f" {age(dashboard.generated_at, status.fetched_at)} ago</span>"
             )
     for name, problems in dashboard.plugin_problems.items():
-        if name not in grouped:
+        if name not in grouped:  # a group's, shown or left off, are said with it
             spans += [
                 f"<span class='error'><strong>{_e(name)}:</strong> {_e(problem)}</span>"
                 for problem in problems
@@ -731,12 +888,16 @@ def dashboard_page(
     refreshing: AbstractSet[str],
     notice: str = "",
     spot: Spot | None = None,
+    tags: Sequence[str] = (),
 ) -> str:
     """The page. `spot` is where an action was just pressed (see `Spot`).
 
     `refreshing` are the plugins a refresh running now collects. `notice` is the outcome of
-    an action just run, shown in the header.
+    an action just run, shown in the header. `tags` are those the page is filtered by (see
+    `tag_view`): `dashboard` is built with them selected (`panels.build`'s `selected`).
     """
+    where = _Where(tags=tuple(tags))
+    shown = tag_view.filtered(dashboard, tags)
     status = (
         "refreshing…" if refreshing else f"built {localtime.local(dashboard.generated_at):%H:%M}"
     )
@@ -744,57 +905,75 @@ def dashboard_page(
     notice_html = f"<span class='notice'>{_e(notice)}</span>" if notice else ""
     return (
         _head("Move forward", reload_seconds, refresh_icon=bool(refreshing))
-        + f"<header><h1>{LOGO}</h1><div class='header-right'>"
+        + f"<header><h1>{_logo(tags)}</h1><div class='header-right'>"
         f"{notice_html}<span{' data-refreshing' if refreshing else ''}>{_e(status)}</span>"
-        "<a class='button' href='/focus'>Focus</a>"
+        f"<a class='button' href='{_e(tag_view.url('/focus', tags))}'>Focus</a>"
         "<a class='button secondary' href='/settings'>Settings</a>"
-        "<form method='post' action='/refresh'><button type='submit'"
+        f"<form method='post' action='{_e(tag_view.url('/refresh', tags))}'><button type='submit'"
         f"{' disabled' if refreshing else ''}>Refresh</button></form></div></header>"
-        + "<main>"
-        + "".join(_group(group, dashboard, refreshing, spot) for group in dashboard.groups)
+        + _tag_bar(tag_view.options(dashboard), where)
+        + f"<main{' data-filtered' if tags else ''}>"
+        + (
+            "".join(_group(group, shown, refreshing, where, spot) for group in shown.groups)
+            or (_nothing_carries(where) if tags else "")
+        )
         + "</main>"
-        f"<footer>{_sources(dashboard)}<form method='post' action='/layout/reset'>"
+        f"<footer>{_sources(dashboard, shown, refreshing, tags)}"
+        f"<form method='post' action='{_e(tag_view.url('/layout/reset', tags))}'>"
         "<button type='submit' class='secondary'>Reset layout</button></form></footer>"
         "</body></html>"
     )
 
 
-def focus_url(category: str, index: int) -> str:
-    return "/focus?" + urlencode({"cat": category, "i": index})
+def focus_url(category: str, index: int, tags: Sequence[str] = ()) -> str:
+    """Focus mode's page of a category's item at `index`, filtered by `tags`."""
+    return tag_view.url("/focus", tags, {"cat": category, "i": str(index)})
 
 
-def _focus_category(dashboard: Dashboard, key: str, title: str, cls: str) -> str:
+def _focus_category(
+    dashboard: Dashboard, key: str, title: str, cls: str, tags: Sequence[str]
+) -> str:
     """A row of focus mode's first page: the category's title, linked when it has items,
     and how many."""
     count = len(dashboard.focus_items(key) or [])
     if not count:
         return f"<li class='{cls} empty'><span>{_e(title)}</span><span class='count'>0</span></li>"
     return (
-        f"<li class='{cls}'><a href='{_e(focus_url(key, 0))}'>{_e(title)}</a>"
+        f"<li class='{cls}'><a href='{_e(focus_url(key, 0, tags))}'>{_e(title)}</a>"
         f"<span class='count'>{count}</span></li>"
     )
 
 
-def focus_categories_page(dashboard: Dashboard) -> str:
+def focus_categories_page(dashboard: Dashboard, tags: Sequence[str] = ()) -> str:
     """Focus mode's first page: Act now and its panels, then each group's title with its
-    panels, each to walk with a count."""
+    panels, each to walk with a count; with `tags`, only what carries one (see `tag_view`
+    and `dashboard_page`)."""
+    where = _Where("/focus", (), tuple(tags))
+    shown = tag_view.focused(dashboard, tags)
     rows: list[str] = []
-    for group in dashboard.groups:
+    for group in shown.groups:
         rows.append(
-            _focus_category(dashboard, group.key, group.title, "category")
+            _focus_category(shown, group.key, group.title, "category", tags)
             if group.key == ACT_NOW
             else f"<li class='category heading'><span>{_e(group.title)}</span></li>"
         )
         rows.extend(
-            _focus_category(dashboard, panel.key, panel.title, "category sub")
+            _focus_category(shown, panel.key, panel.title, "category sub", tags)
             for key in group.panel_keys
-            if (panel := dashboard.find_panel(key))
+            if (panel := shown.find_panel(key))
         )
-    return (
-        _head("Focus", None) + f"<header><h1>{LOGO} / focus</h1></header>"
-        "<main class='single'><article class='panel padded'><h2>What to focus on?</h2>"
+    body = (
+        "<article class='panel padded'><h2>What to focus on?</h2>"
         "<p>One item at a time, in the skill's order of priority.</p>"
-        f"<ul class='categories'>{''.join(rows)}</ul></article></main></body></html>"
+        f"<ul class='categories'>{''.join(rows)}</ul></article>"
+        if rows or not tags
+        else _nothing_carries(where)
+    )
+    return (
+        _head("Focus", None)
+        + f"<header><h1>{_logo(tags)} / focus</h1></header>"
+        + _tag_bar(tag_view.options(dashboard), where)
+        + f"<main class='single'>{body}</main></body></html>"
     )
 
 
@@ -804,35 +983,43 @@ def focus_page(
     index: int,
     notice: str = "",
     done: tuple[str, Item] | None = None,
+    tags: Sequence[str] = (),
 ) -> str | None:
     """One item of a focus category with previous and next links; None for an unknown category.
 
     An index past the end (the list shrank since the link was made) shows the last item.
     `notice` is the outcome of an action just run from this page. `done` is an item an action
     just changed, e.g. a todo ticked off, with its panel's key: it's shown in place of the
-    item at `index` (which is now the one after it), so the change can be undone.
+    item at `index` (which is now the one after it), so the change can be undone. With `tags`,
+    it steps through only what carries one (see `tag_view` and `dashboard_page`).
     """
-    title = dashboard.focus_title(category)
-    items = dashboard.focus_items(category)
+    where = _Where("/focus", (("cat", category),), tuple(tags))
+    shown = tag_view.focused(dashboard, tags)
+    title = shown.focus_title(category)
+    items = shown.focus_items(category)
     if title is None or items is None:
         return None
     head = _head(f"Focus: {title}", None)
     notice_html = f"<span class='notice'>{_e(notice)}</span>" if notice else ""
     header = (
-        f"<header><h1>{LOGO} / <a href='/focus'>focus</a>"
-        f" / {_e(title)}</h1>{notice_html}</header><main class='single'>"
+        f"<header><h1>{_logo(tags)} / <a href='{_e(tag_view.url('/focus', tags))}'>focus</a>"
+        f" / {_e(title)}</h1>{notice_html}</header>"
+        + _tag_bar(tag_view.options(dashboard), where)
+        + "<main class='single'>"
     )
     if not items and done is None:
-        return (
-            head + header + "<article class='panel padded'><h2>Nothing here</h2>"
-            "<p>This category is empty. <a href='/focus'>Pick another</a>.</p>"
-            "</article></main></body></html>"
+        empty = (
+            _nothing_carries(where)
+            if tags
+            else "<article class='panel padded'><h2>Nothing here</h2>"
+            "<p>This category is empty. <a href='/focus'>Pick another</a>.</p></article>"
         )
+        return head + header + empty + "</main></body></html>"
     index = max(0, min(index, len(items) - (0 if done else 1)))
-    here = focus_url(category, index)
+    here = focus_url(category, index, tags)
     if done is not None:
         done_panel, item = done
-        panel = dashboard.find_panel(done_panel)
+        panel = shown.find_panel(done_panel)
         panel_title, description = (panel.title, panel.description) if panel else ("Done", "")
         position = f"done · {len(items) - index} to go"
         next_index = index
@@ -842,12 +1029,14 @@ def focus_page(
         position = f"{index + 1} of {len(items)}"
         next_index = index + 1
     prev_link = (
-        f"<a class='button secondary prev' href='{_e(focus_url(category, index - 1))}'>← Prev</a>"
+        f"<a class='button secondary prev' href='{_e(focus_url(category, index - 1, tags))}'>"
+        "← Prev</a>"
         if index > 0
         else "<span class='button secondary disabled prev'>← Prev</span>"
     )
     next_link = (
-        f"<a class='button secondary next' href='{_e(focus_url(category, next_index))}'>Next →</a>"
+        f"<a class='button secondary next' href='{_e(focus_url(category, next_index, tags))}'>"
+        "Next →</a>"
         if next_index < len(items)
         else "<span class='button secondary disabled next'>Next →</span>"
     )
@@ -857,6 +1046,6 @@ def focus_page(
         "</nav><article class='panel focus'>"
         f"<div class='focus-panel'><h2>{_e(panel_title)}</h2>"
         f"<span class='description'>{_e(description)}</span></div>"
-        f"<ul class='items'>{_item(item, here)}</ul></article>"
+        f"<ul class='items'>{_item(item, here, where=where)}</ul></article>"
         f"</main><script>{FOCUS_KEYS_SCRIPT}</script></body></html>"
     )

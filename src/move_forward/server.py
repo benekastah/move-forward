@@ -6,7 +6,7 @@ import re
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 from pydantic import Field, TypeAdapter, ValidationError
 
-from . import act_now, auth, render, settings, shell
+from . import act_now, auth, render, settings, shell, tag_view
 from .config import Config
 from .db import Database
 from .graph import Graph, Ref
@@ -330,11 +330,12 @@ class App:
                 subjects, self._subjects = self._subjects, []
             only = None if pending is None else pending | self.due()
 
-    def dashboard_page(self, notice: str = "", spot: render.Spot | None = None) -> str:
-        """The page from stored data."""
-        return render.dashboard_page(
-            build_dashboard(self.config, self.db), self.refreshing, notice, spot
-        )
+    def dashboard_page(
+        self, notice: str = "", spot: render.Spot | None = None, tags: Sequence[str] = ()
+    ) -> str:
+        """The page from stored data, filtered by `tags` (see `tag_view`)."""
+        built = build_dashboard(self.config, self.db, selected=tags)
+        return render.dashboard_page(built, self.refreshing, notice, spot, tags)
 
     def run_action(
         self, name: str, fields: dict[str, str], back: str | None = None
@@ -379,17 +380,19 @@ class App:
         index: int,
         notice: str = "",
         kept: str = "",
+        tags: Sequence[str] = (),
     ) -> str | None:
-        """The category list without a category, else that category's item at `index`.
+        """The category list without a category, else that category's item at `index`; with
+        `tags`, of only what carries one of them (see `tag_view`).
 
         `kept` names an item an action asked to keep on the page, e.g. a todo just ticked off,
         so it can be undone; see `Plugin.kept_item`.
         """
-        dashboard = build_dashboard(self.config, self.db, surface="focus")
+        built = build_dashboard(self.config, self.db, surface="focus", selected=tags)
         if not category:
-            return render.focus_categories_page(dashboard)
+            return render.focus_categories_page(built, tags)
         done_item = kept_item(self.config, self.db, kept) if kept else None
-        return render.focus_page(dashboard, category, index, notice, done_item)
+        return render.focus_page(built, category, index, notice, done_item, tags)
 
 
 def _said(changed: dict[str, str]) -> str:
@@ -405,8 +408,8 @@ PAGE_FAILED = "<p>This page failed; the log says why.</p>"
 
 def _back_to_page(query: str, extra: dict[str, str] | None = None) -> str:
     """Where a POST redirects: the request's `back` path (a focus page) if it's local, else the
-    dashboard, at the panel the request's `at` names. The `extra` parameters ride along
-    either way."""
+    dashboard, at the panel the request's `at` names, filtered by the request's tags (see
+    `tag_view`; a `back` path has its own). The `extra` parameters ride along either way."""
     params: dict[str, str] = dict(extra or {})
     query_params = parse_qs(query, keep_blank_values=True)
     back = query_params.get("back", [""])[0]
@@ -421,7 +424,7 @@ def _back_to_page(query: str, extra: dict[str, str] | None = None) -> str:
         return (
             back + ("&" if "?" in back else "?") + urlencode(params) if params else back
         ) + anchor
-    return ("/?" + urlencode(params) if params else "/") + anchor
+    return tag_view.url("/", tag_view.selected(query_params), params) + anchor
 
 
 AT_RE = re.compile(r"[\w.-]+")
@@ -627,7 +630,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             elif url.path == "/":
                 query = parse_qs(url.query)
                 notice = self._take_notice()
-                self._html(HTTPStatus.OK, app.dashboard_page(notice, _spot(query)))
+                tags = tag_view.selected(query)
+                self._html(HTTPStatus.OK, app.dashboard_page(notice, _spot(query), tags))
             elif url.path == settings.PATH and app.config_path is not None:
                 self._html(HTTPStatus.OK, settings.page(app.config, self._take_notice()))
             elif url.path == "/focus":
@@ -635,7 +639,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 category = params.get("cat", [""])[0]
                 notice = self._take_notice()
                 kept = params.get(KEPT, [""])[0]
-                page = app.focus_page(category, _int(params, "i"), notice, kept)
+                tags = tag_view.selected(params)
+                page = app.focus_page(category, _int(params, "i"), notice, kept, tags)
                 if page is None:
                     self._html(HTTPStatus.NOT_FOUND, "<p>No such focus category.</p>")
                 else:

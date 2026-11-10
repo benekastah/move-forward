@@ -205,6 +205,15 @@ def no_contact_importance(ref: Ref) -> int:
     return 0
 
 
+Shows = Callable[[Item], bool]
+"""Whether Act now may show an item with this one among its members (the tag view's filter)."""
+
+
+def shows_all(item: Item) -> bool:
+    """Every item may be shown (no filter)."""
+    return True
+
+
 def _with_contact_importance(
     nomination: Nomination, contact_importance: ContactImportance
 ) -> Nomination:
@@ -412,13 +421,16 @@ def panels(
     units: Units = no_units,
     priority_of: PriorityOf = no_priority,
     contact_importance: ContactImportance = no_contact_importance,
+    shows: Shows = shows_all,
 ) -> list[Panel]:
     """Act now's panels: nominations not snoozed (those I opened dimmed, in
     their place), pinned ones first and
     then the best (by score, then the order they came in), one
     per subject (the others mentioned on it), at most `per_plugin` from one plugin, `size`
     in all, each with buttons to snooze, pin or prioritize it; who it's about can raise
-    the item's importance, and a priority I set replaces it. They're split into a panel per
+    the item's importance, and a priority I set replaces it. Only an item one of whose
+    members `shows` says may be shown takes a place, its members all kept, so it's the same
+    item, and its buttons act on the same, whatever filters it. They're split into a panel per
     plugin (keyed and, by `titles`, titled after it), so they flow across the page; the
     panels come in their best items' order, and each item is badged with its place overall.
     With nothing to act on, one empty panel says so."""
@@ -471,6 +483,8 @@ def panels(
         nomination = group.nomination
         if place == size:
             break
+        if not any(shows(n.item) for n in [nomination, *group.also, *group.then]):
+            continue
         if per.get(nomination.plugin, 0) == per_plugin:
             continue
         per[nomination.plugin] = per.get(nomination.plugin, 0) + 1

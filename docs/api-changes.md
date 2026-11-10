@@ -117,6 +117,8 @@ for themselves (a token, a request, an example config) is core's.
   any int: `Band.CI + 5` is refused. Pick the band that says what the panel is; a plugin's
   panels in one band go in the order `panels` lists them, and groups whose most urgent
   panels share a band go by plugin name.
+- **An item's tags**: core sets `Item.tags`, the tags whose `#tag` badges the item shows, which
+  the page's tag view (`?tag=`) keeps it by; a plugin's are ignored.
 - **One events hook**: `graph_events` and `GraphEventsRequest` are gone, and `events` takes
   both inputs. `EventsRequest` has the plugin's snapshot `before` the refresh and `after` it,
   and the graph before it (`previous_graph`, where `graph` was) and now (`graph`). It's asked

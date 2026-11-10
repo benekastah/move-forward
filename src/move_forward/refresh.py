@@ -5,7 +5,7 @@ import json
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
@@ -485,11 +485,15 @@ def snoozed(config: Config, db: Database, now: datetime) -> dict[act_now.Feedbac
 
 
 def build_dashboard(
-    config: Config, db: Database, now: datetime | None = None, surface: Surface = "dashboard"
+    config: Config,
+    db: Database,
+    now: datetime | None = None,
+    surface: Surface = "dashboard",
+    selected: Sequence[str] = (),
 ) -> panels.Dashboard:
     """The dashboard from whatever is stored; cheap, no network. `surface` is where the
     plugins' panels are shown (the dashboard or focus mode), for what other plugins add to
-    their items."""
+    their items, and `selected` the tags the tag view selects (see `panels.build`)."""
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
@@ -562,6 +566,8 @@ def build_dashboard(
         _known_action(plugins),
         graph.hides,
         contacts.importance,
+        tagging.of,
+        selected,
     )
     return built.model_copy(
         update={
