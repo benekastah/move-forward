@@ -186,17 +186,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
                     # Its sender wrote the subject: a ticket I iced that it names mustn't hide
                     # their mail from me.
                     mentions_hide=False,
-                    # The labels I or my filters put on it are its tags, whoever sent it;
-                    # Gmail's own (`\Inbox`, `\Starred`) are on most mail and say nothing
-                    # of what it's about.
-                    tags=list(
-                        dict.fromkeys(
-                            label
-                            for m in thread.messages
-                            for label in m.labels
-                            if not label.startswith("\\")
-                        )
-                    ),
+                    # Its labels are its tags, whoever sent it: mine, and Gmail's own (#inbox).
+                    tags=list(dict.fromkeys(label for m in thread.messages for label in m.labels)),
                     attrs=attrs(
                         ThreadAttrs(
                             subject=latest.subject,

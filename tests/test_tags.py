@@ -325,7 +325,7 @@ def test_a_tools_labels_are_tags_whatever_its_kind_says_of_its_text() -> None:
     }
     assert found["garbage-day"].refs == [mail.ref]  # a label, not the sender's #sale
     assert "sale" not in found and "7" not in found
-    assert found["2"].refs == [Ref(kind=TAG, id="garbage-day")]  # named as any tag is
+    assert found["2"].refs == []  # a tag only labels give is named only with its #
 
 
 @pytest.mark.parametrize(
@@ -342,6 +342,25 @@ def test_labels_are_handled_as_tags_are(label: str, handle: str | None) -> None:
     entity = Entity(ref=Ref(kind="x.a", id="1"), title="t", tags=[label])
     found = [e.ref.id for e in tags.tagged([entity], {}) if e.ref.kind == TAG]
     assert found == ([handle] if handle else [])
+
+
+def test_a_labels_tag_written_by_someone_is_named_by_its_words() -> None:
+    labelled = Entity(ref=Ref(kind="x.a", id="1"), title="t", tags=["Garbage Day"])
+    found = _tagged(labelled, _entity("2", "#garbage-day prep"), _entity("3", "garbage day moved"))
+    assert found["3"].refs == [Ref(kind=TAG, id="garbage-day")]
+
+
+def test_a_labels_tag_i_put_on_by_hand_is_named_by_its_words() -> None:
+    labelled = Entity(ref=Ref(kind="x.a", id="1"), title="t", tags=["Garbage Day"])
+    found = {
+        e.ref.id: e
+        for e in tags.tagged(
+            [labelled, _entity("h", "tagged"), _entity("3", "garbage day moved")],
+            {},
+            {Ref(kind="x.a", id="h"): ["garbage-day"]},
+        )
+    }
+    assert found["3"].refs == [Ref(kind=TAG, id="garbage-day")]
 
 
 def test_a_plugin_names_a_tag_as_core_does() -> None:

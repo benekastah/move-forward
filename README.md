@@ -229,7 +229,7 @@ said, and a priority I set on the item replaces it.
 An item's tags come from its tool (a PR's or a ticket's labels: each plugin's page says
 which), from a `#tag` in its title or description (a PR's, a todo's; not in code or an HTML
 comment), and from me: its Tag field, on any item about something (a mail, a ticket, a branch),
-or `mfd tag`. All tags are alike: each is a `#tag` badge, filters the page (below), and has an
+or `mfd tag`. Each is a `#tag` badge, filters the page (below), and has an
 Untag button, which takes it off whatever put it there. One I put on goes for good; one from its
 tool or text stays off until the plugin the item is from next refreshes, which puts it back if
 the tool or the text still has it (notes never refreshes: there it stays off until I Tag it
@@ -240,9 +240,9 @@ read).
 A tag's words are separated by `-` or `_`, and it needs a letter (`#7` is a PR's number). Text
 that names a tag, in a title or a description, however its words are spaced, hyphenated or cased
 ("Garbage day moved" names `#garbage-day`), points at it; a one-word tag shorter than three
-letters is named only with its `#`. Tags relate items without making them one piece of work:
-icing one, or setting its priority, doesn't touch the others. Core publishes each as a `tag` entity
-(see [entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
+letters, or a tag only labels give (often a common word, like `bug`), is named only with its
+`#`. Tags relate items without making them one piece of work: icing one, or setting its
+priority, doesn't touch the others. Core publishes each as a `tag` entity (see [entities.md](docs/entities.md)); a plugin reads which tags are on, or named by, what it
 shows.
 
 The page can show only what carries some tags (the tag view). The drop-down above Act now lists

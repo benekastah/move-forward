@@ -55,9 +55,9 @@ class Entity(Model):
     attrs: dict[str, JsonValue] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     """Tags its tool puts on it, e.g. a ticket's or PR's labels, as written there ("Garbage
-    Day"): core counts them as `#tags` like any other (see `tags`), whatever its kind's
-    `tags_from_text`; one I take off comes back at the plugin's next refresh, if the tool still
-    has it. Put only labels no outsider can set (people with a say in the tool, or the tool
+    Day"): core counts them as `#tags` (see `tags`), whatever its kind's `tags_from_text`, but
+    names one only labels give only by its `#`; one I take off comes back at the plugin's next
+    refresh, if the tool still has it. Put only labels no outsider can set (people with a say in the tool, or the tool
     itself), even on a kind whose text anyone can write; the plugin decides whether the tool's
     own (Gmail's `\\Inbox`) are tags too."""
     family: str | None = None
@@ -93,8 +93,8 @@ class KindSpec:
     """Whether `mfd priority <id>`, given no kind, looks among its entities by id."""
     tags_from_text: bool = True
     """Whether a `#tag` in its entities' text, their title or `mentions` (a PR's body, out of its
-    code), puts the tag on them (see `tags`), as a tag like any other. False where anyone can write it, as mail's
-    senders write its subjects: their text still names tags."""
+    code), puts the tag on them (see `tags`). False where anyone can write it, as mail's senders
+    write its subjects: their text still names tags."""
 
 
 def _no_url(kind: str, id: str) -> str | None:

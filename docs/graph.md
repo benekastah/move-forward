@@ -178,7 +178,7 @@ hand, but one I took off, pointing at what carries it, while each entity whose t
 name a tag points at it. It isn't linking, so it relates nothing through it: `related(ref, "tag")` gives the tags
 on or named by `ref`, and by the tickets or entries it belongs to (one hop through a linking
 entity, as for any kind), and a tag's `refs` what carries it. A one-word tag shorter than
-three letters is named only with its `#`.
+three letters, or one only labels give, is named only with its `#`.
 
 `related(ref, kind)` finds entities of `kind` one hop from `ref`, in either direction, or
 linked with it by a linking entity that's one hop from both:

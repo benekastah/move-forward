@@ -719,7 +719,7 @@ def test_a_threads_labels_are_its_tags_and_kept_between_refreshes() -> None:
         message(1, labels=["Garbage"], sender="x@spam.com", verified=False),
     )
     [thread] = [e for e in harness.entities() if e.ref.kind == THREAD]
-    assert thread.tags == ["Garbage", "Bills"]  # whoever sent the mail; not Gmail's own
+    assert thread.tags == ["Garbage", "Bills", "\\Inbox"]  # whoever sent the mail
     kept = MessageRepository(harness.db).load().messages
     assert [m.labels for m in kept] == [["Garbage", "Bills", "\\Inbox"], ["Garbage"]]
     assert MessageRepository(harness.db).latest("root@acme.com") == kept[0]
@@ -1035,6 +1035,37 @@ def test_mail_naming_a_tag_on_open_work_is_about_it_but_a_senders_own_tag_isnt()
     assert about("m1@acme.com") == []
 
 
+@pytest.mark.parametrize(("body", "about"), [("", []), ("Needs #help-wanted", ["#help-wanted"])])
+def test_mail_names_a_label_by_its_words_only_where_someone_wrote_it(
+    body: str, about: list[str]
+) -> None:
+    harness = mailbox(message(1, subject="Help wanted at the school fair", sender="pta@school.org"))
+    harness.with_entities(  # a label is often common words: "help wanted" alone names nothing
+        [
+            Entity(
+                ref=Ref(kind="pull_request", id="https://github.com/o/r/pull/1"),
+                title="Fix the build",
+                mentions=[body],
+                tags=["help wanted"],
+                attrs={
+                    "handle": "#1",
+                    "repo": "o/r",
+                    "head": "fix",
+                    "draft": False,
+                    "mine": False,
+                    "changes_requested": False,
+                    "created_at": NOW.isoformat(),
+                    "merged_at": None,
+                },
+            )
+        ]
+    )
+    assert harness.graph().get("pull_request", "https://github.com/o/r/pull/1") is not None
+    [item] = _items(harness)
+    assert [d for d in item.details if d.startswith("about")] == [f"about {t}" for t in about]
+    assert item.signals is not None and item.signals.importance == len(about)
+
+
 def test_mail_i_tag_is_about_the_tag_while_something_else_open_has_it() -> None:
     harness = mailbox(message(1, subject="Garbage day moved", sender="city@town.example"))
     thread = Ref(kind=THREAD, id="root@acme.com")
@@ -1344,7 +1375,7 @@ def test_gmails_own_labels_make_a_thread_about_nothing() -> None:
         [Entity(ref=Ref(kind="notes.todo", id="8"), title="clear the #inbox, #starred too")]
     )
     items = _items(harness)
-    assert len(items) == 2  # each is in Gmail's \\Inbox, as the other is, and the todo says #inbox
+    assert len(items) == 2  # each has #inbox, as does the other and the todo
     assert not any(d.startswith("about") for item in items for d in item.details)
     assert all(item.signals is not None and item.signals.importance == 0 for item in items)
 

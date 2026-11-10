@@ -7,17 +7,14 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ### Any tag can be taken off
 
-Every tag on an item is alike, and has its Untag button: a tool's label and a `#tag` in the
+Every tag on an item looks alike, and has its Untag button: a tool's label and a `#tag` in the
 item's text as well as one I put on. `POST /actions/act_now/untag` and `mfd tag <entity> <tag>
 --remove` take off any tag, not only mine. One I put on goes for good; one from a tool or text
 stays off until the plugin that publishes the item next refreshes, which puts it back if the
 tool or the text still has it. A script reading items' buttons in `mfd dump` sees an Untag per
 tag; `mfd tag --remove` says "had no #tag" (no longer "of mine") when the tag wasn't on it.
-A tool's label is named by its words in text, as other tags are, rather than only with its `#`.
 Its badge is a plain string, `"#bug"`, like every tag's, no longer `{"text": "#bug", "tone":
 "label"}`: a script reading badges reads a tag's as a string.
-Mail's threads no longer carry Gmail's own labels as tags (`#inbox`, `#starred`, `#important`),
-only those I or my filters put on them: a link to `/?tag=inbox` shows what I tagged so.
 
 ### Discover missing teams' Slack destinations
 

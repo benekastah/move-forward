@@ -1,12 +1,12 @@
 """`#tags`: put on an entity by its tool (`Entity.tags`: a PR's or a ticket's labels), by a
 `#tag` in its title or `mentions` (out of code), or by hand (`TagRepository`, and the Tag field
-core adds to items: `Tags`), they relate everything carrying them. All tags are alike, and any
+core adds to items: `Tags`), they relate everything carrying them. All tags look alike, and any
 can be taken off: one I put on for good, one from its tool or text until its plugin next
 refreshes (`take_off`). Core publishes a `tag` entity for each (`kinds.TAG`), pointing at what
 carries it, and points at it every entity whose text (title or `mentions`) names it, as
 "Garbage day" names `#garbage-day`. A tag's words are separated by `-` or `_`, and text names it
-however it spaces, hyphenates or cases them. Tags aren't units of work: ice, priorities and Act
-now's joins don't pass through them."""
+however it spaces, hyphenates or cases them; one only labels give, only by its `#`. Tags aren't
+units of work: ice, priorities and Act now's joins don't pass through them."""
 
 import re
 import unicodedata
@@ -162,14 +162,23 @@ def _by_words(handles: Iterable[str]) -> ByWords:
     return {word: sorted(tags, key=lambda kt: -len(kt[0])) for word, tags in found.items()}
 
 
+def _written(entity: Entity, spec: KindSpec | None) -> list[str]:
+    """The `#tags` in `entity`'s title or mentions, out of their code, where its kind's
+    `tags_from_text`."""
+    texts = [entity.title, *entity.mentions] if spec is None or spec.tags_from_text else []
+    return [t for text in texts for t in tags(prose(text))]
+
+
+def _labels(entity: Entity) -> list[str]:
+    """The tags `entity`'s tool gives it (`Entity.tags`: labels), by handle."""
+    return [h for h in map(handle, entity.tags) if any(c.isalpha() for c in h)]
+
+
 def carried(entity: Entity, spec: KindSpec | None) -> list[str]:
     """The tags `entity` has from its tool and its text, by handle, in order, once each: a `#tag`
     in its title or mentions, out of their code (where its kind's `tags_from_text`), and its
     tool's (`Entity.tags`: labels). Each refresh of its plugin finds them again."""
-    texts = [entity.title, *entity.mentions] if spec is None or spec.tags_from_text else []
-    found = [t for text in texts for t in tags(prose(text))]
-    found += [h for h in map(handle, entity.tags) if any(c.isalpha() for c in h)]
-    return list(dict.fromkeys(found))
+    return list(dict.fromkeys([*_written(entity, spec), *_labels(entity)]))
 
 
 def tagged(
@@ -181,16 +190,23 @@ def tagged(
     """The entities, each pointing too at the tags its text names (but one it carries), then a
     `tag` per tag on any of them, pointing at what carries it: open while one of those is. An
     entity carries the tags it has from its tool and text (`carried`) but those `removed` from
-    it, and those `added` to it by hand."""
+    it, and those `added` to it by hand. A tag only labels give is named only with its `#`."""
     carrying: dict[str, list[Entity]] = {}
+    chosen: set[str] = set()
+    """The tags someone wrote or put on by hand, not only a tool's labels."""
     for entity in entities:
+        spec = specs.get(entity.ref.kind)
         gone = (removed or {}).get(entity.ref, set[str]())
-        found = [t for t in carried(entity, specs.get(entity.ref.kind)) if t not in gone]
-        for tag in dict.fromkeys([*found, *(added or {}).get(entity.ref, [])]):
+        written = [t for t in _written(entity, spec) if t not in gone]
+        labels = [t for t in _labels(entity) if t not in gone]
+        mine = (added or {}).get(entity.ref, [])
+        chosen.update(written, mine)
+        for tag in dict.fromkeys([*written, *labels, *mine]):
             carrying.setdefault(tag, []).append(entity)
     if not carrying:
         return entities
-    by_words = _by_words(carrying)
+    # A label is often a common word ("bug"): one only a tool gave is named by its `#` alone.
+    by_words = _by_words(chosen)
     carriers = {tag: {c.ref for c in found} for tag, found in carrying.items()}
     result: list[Entity] = []
     for entity in entities:
