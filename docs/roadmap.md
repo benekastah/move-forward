@@ -18,7 +18,6 @@ its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened 
 review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
 - **Hooks merged:**
-  - `identity` goes: core reads who I am from the `person` a plugin publishes marked as me;
   - `act_now` goes, if items can say they're candidates (with their `signals`) in place of
     the four plugins' overrides;
   - `store` and `load` become one repository the plugin gives, if that spares a plugin
@@ -173,8 +172,7 @@ Confluence, Notion, Figma). In order:
    organisation) that people point at, whose type or importance counts for its people's items,
    once a plugin publishes one: contact types' `@domain` labels are the closest today.
 4. **Who someone is, across tools.** A person with several identifiers (addresses, each
-   tool's handle), not one email; `me` on core's `Person`, not just github's; how far an
-   identity can be trusted, since an address in a header proves nothing (mail publishes a
+   tool's handle), not one email; how far an identity can be trusted, since an address in a header proves nothing (mail publishes a
    sender only when the receiving server verified them; a family-level `verified` would let
    any plugin say so, and core join and trust only that: a person's contact type spreads to
    everyone with their email, and github's reviewer emails come from commits, which anyone

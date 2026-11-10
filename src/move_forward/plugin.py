@@ -25,7 +25,7 @@ from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
 from .kinds import FAMILIES, Family, is_url
 from .notifications import Event
-from .page import Identity, Item, ItemAdditions, Panel, Surface
+from .page import Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, ProblemRepository, SnapshotRepository
 
 log = logging.getLogger(__name__)
@@ -150,7 +150,7 @@ class Previous[S: BaseModel]:
 @dataclass(frozen=True)
 class Request[C: BaseModel, S: BaseModel]:
     """A hook working from what's stored: `store`, `entities`, `relate`, `panels`,
-    `act_now`, `identity`, `item_actions`, `after_collect`, `prune` and `events`."""
+    `act_now`, `item_actions`, `after_collect`, `prune` and `events`."""
 
     ctx: Context[C]
     graph: Graph
@@ -526,11 +526,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         keys jira has seen; None where no id can be found in text, as by default. Read from
         its tables, so cheap: core asks every time it builds the graph."""
         return {kind: None for kind, spec in self.kinds.items() if spec.linking}
-
-    def identity(self, req: Request[C, S]) -> Identity | None:
-        """Who I am in the plugin's tool (a login), for the page's footer, which lists each
-        plugin's; None when it doesn't say."""
-        return None
 
     def entities(self, req: Request[C, S]) -> list[Entity]:
         """What the plugin publishes to the graph, from its snapshot and tables."""

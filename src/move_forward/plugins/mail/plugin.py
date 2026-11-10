@@ -9,7 +9,6 @@ from ...api import (
     Context,
     ContextRequest,
     Entity,
-    Identity,
     InitSection,
     InitSetup,
     InputRequest,
@@ -132,14 +131,21 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
         return Changed(fingerprint=now, reason="the mailbox changed")
 
-    def identity(self, req: Request[MailConfig, MailSnapshot]) -> Identity | None:
-        return Identity(
-            tool=self.title, login=", ".join(m.username for m in req.ctx.config.mailboxes())
-        )
-
     def entities(self, req: Request[MailConfig, MailSnapshot]) -> list[Entity]:
         found: list[Entity] = []
         people: dict[str, Entity] = {}
+        for mailbox in req.ctx.config.mailboxes():  # me, as each mailbox signs in
+            me = mailbox.username.strip()
+            address = me.lower() if "@" in me else None
+            if me and "/" not in me:
+                people.setdefault(
+                    address or me,
+                    Entity(
+                        ref=Ref(kind=PERSON, id=person_id(address or me)),
+                        title=me,
+                        attrs=attrs(MailPerson(handle=me, email=address, me=True)),
+                    ),
+                )
         for thread in threads(req.snapshot):
             latest = thread.latest
             email = latest.sender_email

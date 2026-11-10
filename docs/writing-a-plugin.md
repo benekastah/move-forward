@@ -18,7 +18,7 @@ hook's signature:
 | Request | Fields | Hooks |
 | --- | --- | --- |
 | `ContextRequest` | `ctx` | `load`, `linking_patterns` |
-| `Request` | `ctx`, `graph`, `snapshot`, and `previous` or `panels` where a hook has them | `store`, `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`, `events` |
+| `Request` | `ctx`, `graph`, `snapshot`, and `previous` or `panels` where a hook has them | `store`, `entities`, `relate`, `panels`, `act_now`, `item_actions`, `after_collect`, `prune`, `events` |
 | `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `changed` |
 | `RefRequest` | `ctx`, `kind`, `ids` | `address`, `fetch` |
 | `InputRequest` | `ctx`, `graph`, and one of `page` (a `Page`: `query`, `path`), `form` (a `Form`: `fields`, `surface`, `back`) or `args` | pages, buttons (`actions`), `mfd <plugin>` (`cli`) |
@@ -230,8 +230,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
 - `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
   for every page, with the database held so no refresh stores between its queries (so it
   mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
-- `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
-  the page's footer, which lists each plugin's.
+- Who I am in the tool is a `person` it publishes with `me=True`: the page's footer lists
+  each plugin's, by handle.
 - A plugin that needs other plugins' entities to know what to fetch sets `collects_after =
   True` (see git_stack): its `collect` runs once the others have stored their snapshots, with
   the graph they make (`req.graph`; every collect has the graph, built from what's stored). It's refreshed on its own schedule, not with the

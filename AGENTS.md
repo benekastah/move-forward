@@ -52,7 +52,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 - Every plugin hook that runs with the plugin's context takes one request object, of five
   kinds, so a hook can gain an input without breaking its overrides: `ContextRequest(ctx)`
   (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
-  `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`,
+  `relate`, `panels`, `act_now`, `item_actions`, `after_collect`, `prune`,
   `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `changed`);
   `RefRequest(ctx, kind, ids)` (`address`, `fetch`); and `InputRequest(ctx, graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
   and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,

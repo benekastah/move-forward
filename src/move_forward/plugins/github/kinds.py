@@ -14,5 +14,3 @@ class GitHubPullRequest(PullRequest):
 
 class GitHubPerson(Person):
     """A `person`: me, or anyone github knows an email for; `handle` is their login."""
-
-    me: bool

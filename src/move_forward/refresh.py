@@ -29,10 +29,11 @@ from .act_now import Feedback
 from .change_checks import ChangeChecks, Taken
 from .config import Config
 from .db import CORE, Database
+from .domain import Model
 from .graph import Graph, Ref, publisher
-from .kinds import FAMILIES
+from .kinds import FAMILIES, PERSON
 from .notifications import Event, NotificationRepository
-from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
+from .page import Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
 from .plugin import (
     ActionError,
     ActionResult,
@@ -501,6 +502,13 @@ def _plugin_panels(
     return plugin_panels
 
 
+class _Person(Model):
+    """What the footer reads of a plugin's `person`s: who's me, by handle."""
+
+    handle: str
+    me: bool = False
+
+
 def snoozed(config: Config, db: Database, now: datetime) -> dict[act_now.FeedbackKey, Feedback]:
     """The snoozes in force, by their item's key, as the page sees them: those whose time
     isn't up and whose item hasn't changed since (`act_now.set_aside`). One whose item is in
@@ -531,16 +539,9 @@ def build_dashboard(
     graph, snapshots = stored_graph(db, plugins)
     plugin_panels = _plugin_panels(plugins, graph, snapshots)
     identities = [
-        found
+        Identity(tool=e.plugin.title, login=", ".join(me))
         for e in plugins
-        if (
-            found := call(
-                e.name,
-                "identity",
-                lambda e=e: e.plugin.identity(Request(e.ctx, graph, snapshots[e.name])),
-                None,
-            )
-        )
+        if (me := [p.handle for p in graph.view(f"{e.name}.{PERSON}", _Person) if p.me])
     ]
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)

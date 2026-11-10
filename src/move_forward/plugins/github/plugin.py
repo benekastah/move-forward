@@ -15,7 +15,6 @@ from ...api import (
     Entity,
     Event,
     Graph,
-    Identity,
     InitSection,
     InitSetup,
     Item,
@@ -275,13 +274,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         ctx = req.ctx
         return PrRepository(ctx.db).load()
 
-    def identity(self, req: Request[GitHubConfig, GitHubSnapshot]) -> Identity | None:
-        """My GitHub login, as the last refresh found it."""
-        snapshot = req.snapshot
-        return (
-            Identity(tool=self.title, login=snapshot.login) if snapshot and snapshot.login else None
-        )
-
     def _email_domains(self, ctx: Context[GitHubConfig]) -> list[str]:
         if ctx.config.email_domains:
             return ctx.config.email_domains
@@ -414,7 +406,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def entities(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Entity]:
         """A `pull_request` for every PR in the snapshot, and a `person` (`<host>/<login>`)
-        for me and for everyone whose email github knows."""
+        for me (`me`, by the login the last refresh found) and for everyone whose email github
+        knows."""
         ctx, snapshot = req.ctx, req.snapshot
         if snapshot is None:
             return []

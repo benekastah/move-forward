@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from conftest import ME, NOW, pr, snapshot, stored
+from conftest import ME, NOW, dashboard, pr, snapshot, stored
 from legacy import save_json_snapshot
 
 from move_forward import refresh
@@ -288,10 +288,8 @@ def test_a_pr_a_search_found_twice_is_kept_once_at_its_first_place() -> None:
 
 
 def test_github_says_who_i_am_by_my_login() -> None:
-    assert GitHubPlugin().identity(Request(_context(), Graph(), snapshot())) == Identity(
-        tool="GitHub", login=ME
-    )
-    assert GitHubPlugin().identity(Request(_context(), Graph(), None)) is None
+    assert dashboard(github=snapshot()).identities == [Identity(tool="GitHub", login=ME)]
+    assert dashboard(github=snapshot(login="")).identities == []
 
 
 def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
