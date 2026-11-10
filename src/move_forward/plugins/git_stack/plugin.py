@@ -11,7 +11,6 @@ from ...api import (
     ContextRequest,
     Entity,
     Event,
-    Item,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
@@ -26,7 +25,7 @@ from . import actions, changes, client, events
 from .config import GitStackConfig
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
-from .panels import CLEAN, STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
+from .panels import STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
 from .repository import MIGRATIONS, StackRepository
 
 
@@ -82,30 +81,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     def panels(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Panel]:
         snapshot, graph = req.snapshot, req.graph
         return [Builder(snapshot, graph).stacks()]
-
-    def act_now(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Item]:
-        """Merged branches, quick to clean up, as git nominates the merged branches it can
-        delete; the rest of Stacks is news rather than something to do. One per repo: its
-        Clean cleans them all, so more would only take Act now's places with the same button."""
-        # Not one on ice: core would leave it out, and with it the repo's only Clean.
-        merged = [
-            item
-            for panel in req.panels
-            for item in panel.items
-            if item.signals and not any(req.graph.hidden(ref) for ref in item.subjects)
-        ]
-        by_repo: dict[str, list[Item]] = {}
-        for item in merged:
-            repo = next((a.fields["repo"] for a in item.actions if a.name == CLEAN), "")
-            by_repo.setdefault(repo, []).append(item)
-        return [
-            items[0].model_copy(
-                update={"details": [*items[0].details, f"and {len(items) - 1} more merged here"]}
-            )
-            if len(items) > 1
-            else items[0]
-            for items in by_repo.values()
-        ]
 
     def events(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Event]:
         before, after = req.previous.snapshot, req.snapshot

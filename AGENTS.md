@@ -52,7 +52,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 - Every plugin hook that runs with the plugin's context takes one request object, of five
   kinds, so a hook can gain an input without breaking its overrides: `ContextRequest(ctx)`
   (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
-  `relate`, `panels`, `act_now`, `item_actions`, `after_collect`, `prune`,
+  `relate`, `panels`, `item_actions`, `after_collect`, `prune`,
   `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `changed`);
   `RefRequest(ctx, kind, ids)` (`address`, `fetch`); and `InputRequest(ctx, graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
   and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
@@ -88,9 +88,10 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   about a person (`people.py`) their contact type, and Set type for a
   person with an address; and on every item about an
   entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag
-  (`tags.py`), which it keeps in `Item.tags` and the page filters by (`tag_view.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,
-  who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
-  default, the items of its panels marked `act_now`.
+  (`tags.py`), which it keeps in `Item.tags` and the page filters by (`tag_view.py`). A plugin's panels' items are core's Act now's candidates, each with `Signals` (effort, what it
+  closes, who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by): those of
+  its panels marked `act_now`, but deferred ones, unless an item says otherwise
+  (`Item.act_now`).
 - Every request needs the dashboard's token, a plugin's pages (served at
   `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
   static files.

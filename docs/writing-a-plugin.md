@@ -18,7 +18,7 @@ hook's signature:
 | Request | Fields | Hooks |
 | --- | --- | --- |
 | `ContextRequest` | `ctx` | `load`, `linking_patterns` |
-| `Request` | `ctx`, `graph`, `snapshot`, and `previous` or `panels` where a hook has them | `store`, `entities`, `relate`, `panels`, `act_now`, `item_actions`, `after_collect`, `prune`, `events` |
+| `Request` | `ctx`, `graph`, `snapshot`, and `previous` for `events` | `store`, `entities`, `relate`, `panels`, `item_actions`, `after_collect`, `prune`, `events` |
 | `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `changed` |
 | `RefRequest` | `ctx`, `kind`, `ids` | `address`, `fetch` |
 | `InputRequest` | `ctx`, `graph`, and one of `page` (a `Page`: `query`, `path`), `form` (a `Form`: `fields`, `surface`, `back`) or `args` | pages, buttons (`actions`), `mfd <plugin>` (`cli`) |
@@ -424,7 +424,7 @@ def panels(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Panel]:
 - A badge is a string, or `Badge(text, tone="warn")` for one that needs attention (`good`
   for one going well). A link to what's over sets `done`, and is struck through. An item
   that's not for now (a draft) is `deferred`: it sorts last, and Act now leaves it out
-  unless the plugin's `act_now` nominates it.
+  unless it says it's a candidate (`act_now=True`, below).
 - An item or part whose work is done but kept a while to undo (a todo ticked off today) is
   `done`: it's dimmed and last, isn't counted, isn't in Act now, and focus mode skips it; nor
   does it count towards what brings back a snoozed item. Mark an item whose parts are all done
@@ -450,14 +450,15 @@ Panel(..., act_now=True, signals=Signals(verb="Triage", task="triage", effort="m
 ```
 
 An item can carry its own `signals` (`effort`, `closes`, `waiting` and `waiting_since`,
-`importance` from 0 to 2, `due`, `blocked`, `verb`), and a plugin can override
-`act_now(req)` (`req.panels` are its own) to nominate precisely, from those panels: the tag
-view offers the tags the panels carry, so a candidate about something in none of them would
-lose its tags from the choices once a tag is selected. Map your tool's own idea of
+`importance` from 0 to 2, `due`, `blocked`, `verb`), and say itself whether it's a
+candidate, whatever its panel: `Item(act_now=True)` nominates it (a ticket due soon in a
+panel that isn't for now, the feedback on a draft, deferred as it is), and
+`Item(act_now=False)` keeps it out. A candidate with no signals, its own or its panel's,
+isn't one. Map your tool's own idea of
 importance (a priority, an escalation) onto `importance`, in the plugin. An item whose main
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
-A plugin that nominates by due date passes `ctx.due_horizon` to `due_pressure`, so it agrees
+A panel that nominates by due date passes `ctx.due_horizon` to `due_pressure`, so it agrees
 with `[act_now] due_warning_days`.
 Set `Item.fingerprint` to what would make a snoozed item worth another look.
 An item with a `task` also has Snooze in its own panel; what's snoozed

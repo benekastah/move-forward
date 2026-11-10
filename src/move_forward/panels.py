@@ -48,7 +48,19 @@ class PluginPanels:
     title: str
     panels: list[Panel]
     nominations: list[Item] = field(default_factory=list[Item])
-    """Its candidates for Act now (see `Plugin.act_now`)."""
+    """Its candidates for Act now (see `candidates`)."""
+
+
+def candidates(panels: list[Panel]) -> list[Item]:
+    """The items of `panels` that are candidates for Act now (`Item.act_now`), each with its
+    panel's signals unless it has its own; one with neither isn't one."""
+    return [
+        item if item.signals else item.model_copy(update={"signals": panel.signals})
+        for panel in panels
+        for item in panel.items
+        if (item.signals or panel.signals)
+        and (item.act_now if item.act_now is not None else panel.act_now and not item.deferred)
+    ]
 
 
 def panel_key(plugin: str, key: str) -> str:

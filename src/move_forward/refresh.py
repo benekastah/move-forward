@@ -492,13 +492,9 @@ def _plugin_panels(
         if own is None:
             plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, [_failed(e)], []))
             continue
-        nominated = call(
-            e.name,
-            "act_now",
-            lambda e=e, s=snapshot, own=own: e.plugin.act_now(Request(e.ctx, graph, s, panels=own)),
-            [],
+        plugin_panels.append(
+            panels.PluginPanels(e.name, e.plugin.title, own, panels.candidates(own))
         )
-        plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
     return plugin_panels
 
 

@@ -61,7 +61,7 @@ class Context[C: BaseModel]:
     """The plugin's name, as `Plugin.name`."""
     due_horizon: timedelta = DUE_HORIZON
     """How far ahead a due date starts to count, as `[act_now] due_warning_days` says; a plugin
-    nominating by its due dates passes it to `due_pressure`."""
+    making items candidates for Act now by their due dates passes it to `due_pressure`."""
     tokens: Mapping[str, TokenSettings] | None = None
     """Where each of the plugin's tokens is, as `Plugin.tokens` says, for `token`; None for
     its default: the section's own, when it says where a token is."""
@@ -150,7 +150,7 @@ class Previous[S: BaseModel]:
 @dataclass(frozen=True)
 class Request[C: BaseModel, S: BaseModel]:
     """A hook working from what's stored: `store`, `entities`, `relate`, `panels`,
-    `act_now`, `item_actions`, `after_collect`, `prune` and `events`."""
+    `item_actions`, `after_collect`, `prune` and `events`."""
 
     ctx: Context[C]
     graph: Graph
@@ -161,8 +161,6 @@ class Request[C: BaseModel, S: BaseModel]:
     just fetched; for `events`, the snapshot now."""
     previous: Previous[S] = field(default_factory=Previous[S])
     """For `events` only: the plugin's snapshot and the graph before this refresh."""
-    panels: list[Panel] = field(default_factory=list[Panel])
-    """For `act_now` only: the plugin's own panels, as `panels` built them."""
 
 
 @dataclass(frozen=True)
@@ -553,21 +551,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def panels(self, req: Request[C, S]) -> list[Panel]:
         return []
-
-    def act_now(self, req: Request[C, S]) -> list[Item]:
-        """The plugin's candidates for core's Act now, each with `signals`, from its
-        `panels`. By default the items of the panels marked `act_now` that aren't `deferred`,
-        each taking its panel's signals if it has none of its own; a plugin that knows
-        better nominates precisely (a deferred item too). Each candidate is about something in
-        one of its panels: the tag view offers the tags its panels carry, so a candidate about
-        anything else would have its tags missing from the choices once one is selected."""
-        return [
-            item if item.signals else item.model_copy(update={"signals": panel.signals})
-            for panel in req.panels
-            if panel.act_now
-            for item in panel.items
-            if not item.deferred
-        ]
 
     def item_actions(self, req: Request[C, S]) -> ItemAdditionsFor:
         """What the plugin adds to other plugins' items on one page: buttons (e.g. "add todo"

@@ -14,6 +14,13 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **An item says it's an Act now candidate**: the `act_now(req)` hook (and `Request.panels`)
+  is gone. A panel's items are candidates as before (its `act_now`, but deferred ones), and an
+  item says otherwise with `Item.act_now`: True for a candidate wherever it is and deferred or
+  not, False for none. A candidate needs signals, its own or its panel's. A plugin that
+  nominated precisely sets the flag where it builds the items (jira's due-soon tickets, from
+  `ctx.due_horizon`; git_stack's one Clean per repo; notes' close-outs; github's drafts'
+  feedback).
 - **Who I am is a `person`**: `identity(req)` and `api.Identity` are gone. The page's footer
   names, for each plugin, the `person`s it publishes with `me` True, by handle; `me` is on
   core's `Person` family now (it was github's), False by default. A plugin that gave an
@@ -23,8 +30,8 @@ for themselves (a token, a request, an example config) is core's.
   each of `req.ids` it knows as an `Address(url, handle)`, by id. By default it gives the id as
   the URL where its family's ids are URLs, as `url_for` did.
 - **Five request types**: a hook's request is one of `ContextRequest(ctx)` (`load`,
-  `linking_patterns`), `Request(ctx, graph, snapshot, previous, panels)` (`store`,
-  `entities`, `relate`, `panels`, `act_now`, `item_actions`, `after_collect`,
+  `linking_patterns`), `Request(ctx, graph, snapshot, previous)` (`store`,
+  `entities`, `relate`, `panels`, `item_actions`, `after_collect`,
   `prune`, `events`), `RefreshRequest(ctx, graph, full, subjects, previous)` (`collect`,
   `changed`), `RefRequest(ctx, kind, ids)` (`address`, `fetch`) and `InputRequest(ctx,
   graph, page, form, args)` (pages, buttons and `mfd <plugin>`), in place of a type per hook

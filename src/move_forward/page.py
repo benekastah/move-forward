@@ -172,13 +172,18 @@ class Item(Model):
     """Higher sorts first within its panel; Act now orders by score, not by it."""
     deferred: bool = False
     """Not for now, e.g. a draft PR: it sorts after everything else in its panel, whatever
-    its rank, and Act now leaves it out unless its plugin nominates it in `act_now`."""
+    its rank, and Act now leaves it out unless it says it's a candidate (`act_now`)."""
     actions: list[Action] = Field(default_factory=list)
     subjects: list[Ref] = Field(default_factory=list)
     """The entities the item is about, the main one first, e.g. a PR and its branch; other
     plugins add their buttons by them."""
     signals: Signals | None = None
-    """What Act now ranks it by, should its plugin nominate it; None takes its panel's."""
+    """What Act now ranks it by, should it be a candidate; None takes its panel's."""
+    act_now: bool | None = None
+    """Whether it's a candidate for core's Act now: None, as its panel says (`Panel.act_now`),
+    unless it's `deferred`; True, wherever it is and deferred or not (a ticket due soon in a
+    panel that isn't for now, the feedback on a draft); False, never. A candidate needs
+    signals, its own or its panel's, with a `task`."""
     notify: Notify | None = Field(default=None, exclude=True)
     """The notification to raise when the item first shows in its panel, e.g. a branch
     joining Cleanup: core compares each refresh's panels with the last's. None for none."""
@@ -241,8 +246,8 @@ class Panel(Model):
     sort_by_importance: bool = False
     """Sort items by their assigned or signaled importance before their `rank`."""
     act_now: bool = False
-    """Its items are candidates for core's Act now (see `Plugin.act_now`): work that's often
-    the next thing to do."""
+    """Its items are candidates for core's Act now, but those that say otherwise
+    (`Item.act_now`) and those `deferred`: work that's often the next thing to do."""
     signals: Signals | None = None
     """The signals of its items that carry none, for Act now: e.g. "Review", in minutes."""
 

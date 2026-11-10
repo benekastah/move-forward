@@ -300,11 +300,15 @@ def end_of(day: date) -> datetime:
     return localtime.at(day + timedelta(days=1), time())
 
 
-def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Panel:
+def what_next(
+    config: JiraConfig, snapshot: JiraSnapshot, now: datetime, horizon: timedelta
+) -> Panel:
     """My open tickets in the order to take them, each with signals for Act now: an incident
     is important, critical once escalated, and an escalated bug important (one step more
     at the top priority); a due date
-    counts, and a ticket with open blockers, or in the blocked status, is blocked."""
+    counts, and a ticket with open blockers, or in the blocked status, is blocked. Those that
+    matter now are candidates for Act now: important ones, those due within `horizon`, and
+    blocked ones, which Act now ranks down until they've sat untouched for a while."""
     items: list[Item] = []
     for issue in snapshot.issues:
         kind = issue.type.lower()
@@ -344,6 +348,8 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
         rank += min(999, (now - issue.created).days)
         badges: list[str | Badge] = [Badge(text=why, tone="warn") if blocked else why]
         badges += [f"due {issue.due:%b} {issue.due.day}"] if issue.due else []
+        due = end_of(issue.due) if issue.due else None
+        due_soon = due is not None and due_pressure(due, now, horizon) > 0
         items.append(
             Item(
                 title=f"{issue.key} {issue.summary}",
@@ -363,10 +369,11 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                     verb=verb,
                     task=task,
                     importance=importance,
-                    due=end_of(issue.due) if issue.due else None,
+                    due=due,
                     blocked=blocked,
                     touched=issue.updated,
                 ),
+                act_now=bool(importance or due_soon or blocked) or None,
             )
         )
     return Panel(
@@ -515,24 +522,5 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         return [
             transitions(ctx.config, snapshot, graph),
             rollouts(ctx.config, snapshot, graph),
-            what_next(ctx.config, snapshot, ctx.now),
+            what_next(ctx.config, snapshot, ctx.now, ctx.due_horizon),
         ]
-
-    def act_now(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Item]:
-        """Its transitions, and the tickets in What next that matter now: important ones
-        (incidents, escalated bugs), those due within `ctx.due_horizon`, and blocked ones, which
-        Act now ranks down until they've sat untouched for a while."""
-        ctx, panels = req.ctx, req.panels
-        nominated = super().act_now(req)
-        for panel in panels:
-            if panel.key != "jira_next":
-                continue
-            for item in panel.items:
-                signals = item.signals or Signals()
-                due_soon = (
-                    signals.due is not None
-                    and due_pressure(signals.due, ctx.now, ctx.due_horizon) > 0
-                )
-                if signals.importance or due_soon or signals.blocked:
-                    nominated.append(item)
-        return nominated

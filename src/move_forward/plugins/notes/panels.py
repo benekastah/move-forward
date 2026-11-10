@@ -472,7 +472,7 @@ class Builder:
                         *([add_todo_action(entry.title)] if not lone or lone.done else []),
                     ],
                     subjects=[Ref(kind=ENTRY, id=entry.title)],
-                    # Only a close-out has signals: what notes nominates for Act now.
+                    # Only a close-out has signals, and is a candidate for Act now.
                     signals=Signals(
                         task="close_out",
                         verb=ordered[0].text
@@ -487,6 +487,7 @@ class Builder:
                     )
                     if close_out
                     else None,
+                    act_now=close_out or None,
                     parts=parts,
                     done=not open_todos,
                 )

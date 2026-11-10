@@ -15,7 +15,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
-from move_forward.page import Action, Identity, Item, ItemAdditions
+from move_forward.page import Action, Identity, ItemAdditions, Panel
 from move_forward.plugin import (
     Address,
     CliHandler,
@@ -72,14 +72,14 @@ def hooked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "PLUGINS", plugins)
 
 
-def test_act_now_tells_a_plugin_the_due_horizon(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_plugins_context_has_the_due_horizon(monkeypatch: pytest.MonkeyPatch) -> None:
     told: list[timedelta] = []
 
-    def act_now(self: GitHubPlugin, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Item]:
+    def panels(self: GitHubPlugin, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Panel]:
         told.append(req.ctx.due_horizon)
         return []
 
-    monkeypatch.setattr(GitHubPlugin, "act_now", act_now)
+    monkeypatch.setattr(GitHubPlugin, "panels", panels)
     config, db = stored(github=snapshot())
     ranking = ActNowConfig(due_warning_days=14)
     build_dashboard(config.model_copy(update={"act_now": ranking}), db, NOW)
