@@ -77,5 +77,5 @@ def test_problems_no_plugin_has_reported_for_prune_days_are_forgotten(
     plugins = enabled(config, db, NOW)
     graph, _ = refresh.stored_graph(db, plugins)
     notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
-    assert "problems: forgot 2 no plugin reports any more" in notices
+    assert "problems: forgot 2 not reported for 30 days" in notices
     assert ProblemRepository(db).of(["github", "jira"]) == {"github": ["still wrong"]}

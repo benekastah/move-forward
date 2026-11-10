@@ -409,7 +409,7 @@ def _prune_plugins(
     if dropped := FeedbackRepository(db).prune(now, now - timedelta(days=days)):
         notices.append(f"act_now: forgot {dropped} snooze(s) or pin(s)")
     if dropped := ProblemRepository(db).prune(now - timedelta(days=days)):
-        notices.append(f"problems: forgot {dropped} no plugin reports any more")
+        notices.append(f"problems: forgot {dropped} not reported for {days} days")
     try:  # it asks plugins for what they no longer hold, which can fail (a token gone bad)
         if cleared := priority.forget_finished(PriorityRepository(db), graph):
             notices.append(f"act_now: cleared {cleared} priority(ies) of finished work")

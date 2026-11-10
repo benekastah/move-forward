@@ -14,9 +14,9 @@ git's `github_hosts` too, so git knows the server's remotes.
 It also refreshes soon after I get a notification about something in the org (anyone's,
 with `search_scope = "everywhere"`): a review requested, a review, a comment, CI. It polls my
 notifications as often as GitHub allows (every 60 seconds, usually), and GitHub answers "not
-modified" cheaply when there's nothing new. Reading them takes a classic token with the
-`notifications` scope: with a fine-grained one, which GitHub doesn't let read them, that's
-logged once a run, and only the background refresh and pushes below refresh it. A poll that
+modified" cheaply when there's nothing new. Reading them takes `gh auth login`'s token, or a
+classic one with the `notifications` or `repo` scope: with a fine-grained or GitHub App token,
+which GitHub doesn't let read them, that's logged once a run, and only the background refresh and pushes below refresh it. A poll that
 fails otherwise (`gh` hanging, GitHub down) is a problem on GitHub's group until one works. And it refreshes within seconds of a commit or push on the local branch of one of my
 open PRs: GitHub notifies nobody of their own pushes, so github watches git, and after each
 refresh of git it compares where `git.branch` entities for those PRs' heads stand (their

@@ -20,7 +20,8 @@ a fine-grained one."""
 
 class Refused(CommandError):
     """GitHub won't let the token read the notifications, and won't while it's the token: a
-    fine-grained one can't (only a classic token with the `notifications` scope can)."""
+    fine-grained or GitHub App token can't (`gh auth login`'s, or a classic one with the
+    `notifications` or `repo` scope, can)."""
 
 
 class _Owner(BaseModel):

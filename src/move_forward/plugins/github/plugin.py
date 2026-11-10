@@ -267,7 +267,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             # for as long as that's the token. The branch moves found with it still count.
             ctx.problem(NOTIFICATIONS_FAILED, None)
             if not self._refusal_logged:
-                ctx.log.warning("can't read GitHub notifications (it takes a classic token): %s", e)
+                ctx.log.warning(
+                    "can't read GitHub notifications (a fine-grained token can't): %s", e
+                )
                 self._refusal_logged = True
             retry = ctx.now + timedelta(seconds=notifications.DEFAULT_POLL_SECONDS)
             ctx.kv.set(NOTIFICATIONS_WAIT, retry.isoformat())
