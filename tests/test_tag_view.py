@@ -119,7 +119,7 @@ def test_a_plugin_whose_group_is_left_off_keeps_its_status_in_the_footer() -> No
     assert "boom" not in unfiltered and "no notifications" not in unfiltered  # its group says
     footer = render.dashboard_page(board("chores"), set(), tags=["chores"]).split("<footer>")[1]
     assert "<strong>GitHub:</strong>" in footer and "boom" in footer
-    assert "<strong>github:</strong> no notifications" in footer
+    assert "no notifications" in footer and "<strong>github:</strong>" not in footer  # once
     assert "<form method='post' action='/refresh?tag=chores' class='refresh'>" in footer
     assert "<input type='hidden' name='plugin' value='github'>" in footer
 

@@ -846,11 +846,17 @@ def _sources(
     spans: list[str] = []
     for group in dashboard.groups:
         status = _status_of(group.key, dashboard.sources)
-        if group.key in visible or status is None:
+        problems = dashboard.plugin_problems.get(group.key, [])
+        if group.key in visible or (status is None and not problems):
             continue
-        refreshed = _refreshed(group.key, status, dashboard.generated_at, refreshing, tags)
+        refreshed = (
+            ""
+            if status is None
+            else _refreshed(group.key, status, dashboard.generated_at, refreshing, tags)
+        )
+        said = "".join(f" <span class='error'>{_e(problem)}</span>" for problem in problems)
         spans.append(
-            f"<span class='left-off'><strong>{_e(group.title)}:</strong>{refreshed}</span>"
+            f"<span class='left-off'><strong>{_e(group.title)}:</strong>{refreshed}{said}</span>"
         )
     for name, status in dashboard.sources.items():
         if name in grouped or _plugin_of(name) in grouped:
@@ -865,7 +871,7 @@ def _sources(
                 f" {age(dashboard.generated_at, status.fetched_at)} ago</span>"
             )
     for name, problems in dashboard.plugin_problems.items():
-        if name not in visible:
+        if name not in grouped:  # a group's, shown or left off, are said with it
             spans += [
                 f"<span class='error'><strong>{_e(name)}:</strong> {_e(problem)}</span>"
                 for problem in problems

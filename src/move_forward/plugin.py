@@ -625,7 +625,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """The plugin's candidates for core's Act now, each with `signals`, from its
         `panels`. By default the items of the panels marked `act_now` that aren't `deferred`,
         each taking its panel's signals if it has none of its own; a plugin that knows
-        better nominates precisely (a deferred item too)."""
+        better nominates precisely (a deferred item too). Each candidate is about something in
+        one of its panels: the tag view offers the tags its panels carry, so a candidate about
+        anything else would have its tags missing from the choices once one is selected."""
         return [
             item if item.signals else item.model_copy(update={"signals": panel.signals})
             for panel in req.panels

@@ -403,7 +403,9 @@ Panel(..., act_now=True, signals=Signals(verb="Triage", task="triage", effort="m
 
 An item can carry its own `signals` (`effort`, `closes`, `waiting` and `waiting_since`,
 `importance` from 0 to 2, `due`, `blocked`, `verb`), and a plugin can override
-`act_now(req)` (`req.panels` are its own) to nominate precisely. Map your tool's own idea of
+`act_now(req)` (`req.panels` are its own) to nominate precisely, from those panels: the tag
+view offers the tags the panels carry, so a candidate about something in none of them would
+lose its tags from the choices once a tag is selected. Map your tool's own idea of
 importance (a priority, an escalation) onto `importance`, in the plugin. An item whose main
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
