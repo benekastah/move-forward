@@ -29,9 +29,10 @@ class SlackConfig(TokenFields):
     finding requested reviewers' Slack ids by their email; no token, no lookups.
     `SLACK_API_TOKEN` unless set."""
     keychain_service: str = ""
-    """The service that token is stored under in the system's secret store (the macOS
-    keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't set;
-    its account is the top-level `email`. `move-forward-slack` unless set."""
+    """The service that token is stored under, by `mfd token set slack`, in the system's
+    secret store (the macOS keychain, Windows' Credential Manager, the desktop keyring), when
+    `token_env` isn't set; its account is the top-level `email`. `move-forward-slack` unless
+    set."""
     workspace_url: str = ""
     """Base URL for Slack links, e.g. https://example.slack.com. Empty means no links."""
     ping_first: str = DEFAULT_PING_FIRST

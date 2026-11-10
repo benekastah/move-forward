@@ -112,10 +112,11 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         return questions(ask, setup)
 
     def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
-        """`auth_servers` where the host's are known (Gmail's), so uncommenting it changes
-        nothing; another server's are for me to look up, so no value is suggested."""
-        known = KNOWN_AUTH_SERVERS.get(str(section.get("host", "")).lower())
-        return {"auth_servers": known} if known else {}
+        """`auth_servers` as the host's known ones (Gmail's), or `[]` for another server,
+        which reads the same as unset there: uncommenting it changes nothing, and its comment
+        says what to put in."""
+        host = str(section.get("host", "")).lower()
+        return {"auth_servers": KNOWN_AUTH_SERVERS.get(host, [])}
 
     def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
         """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""

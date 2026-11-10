@@ -29,11 +29,13 @@ from .config import Config
 from .keychain import TokenFields
 from .plugin import Plugin
 
-COMMENT_COLUMN = 40
-"""Where a commented-out key's comment starts, when the key leaves room."""
 LINE_WIDTH = 100
-"""The widest line `mfd init` writes: a comment that won't fit beside its key goes above it,
-wrapped to this. A key whose value is wider still is written whole."""
+"""The widest line `mfd init` writes: a key's comment, above it, is wrapped to this. A key
+whose value is wider still is written whole."""
+_CODE_SPAN = re.compile(r"`[^`]*`")
+_NO_BREAK = "\0"
+"""What stands for a space inside a code span while wrapping: not whitespace to `textwrap`,
+and in no docstring."""
 _SENTENCE = re.compile(r"(.*?(?<![eE]\.g)(?<![iI]\.e)(?<!\betc)[.?!][)\]\"'`]*)(?=\s|$)")
 """A docstring's first sentence: up to a `.`, `?` or `!` (and a closing bracket or quote)
 before a space, but not the `.` of `e.g.`, `i.e.` or `etc.`."""
@@ -56,23 +58,27 @@ def summary(description: str | None) -> str:
     return text
 
 
-def _commented(line: str, description: str | None) -> str:
-    """`line` with its docstring's `summary` as its comment, if it has one: beside it, or
-    above it, wrapped, when it won't fit in `LINE_WIDTH` there."""
-    if not (comment := summary(description)):
-        return f"{line}\n"
-    beside = f"{line.ljust(COMMENT_COLUMN - 2)}  # {comment}"
-    if len(beside) <= LINE_WIDTH:
-        return f"{beside}\n"
-    above = textwrap.wrap(
-        comment,
+def _comment(text: str) -> str:
+    """`text` as comment lines, wrapped to `LINE_WIDTH`, but never inside a `code span`
+    (see `_NO_BREAK`)."""
+    kept = _CODE_SPAN.sub(lambda span: span[0].replace(" ", _NO_BREAK), text)
+    lines = textwrap.wrap(
+        kept,
         LINE_WIDTH,
         initial_indent="# ",
         subsequent_indent="# ",
         break_long_words=False,
         break_on_hyphens=False,
     )
-    return "".join(f"{text}\n" for text in above) + f"{line}\n"
+    return "".join(f"{line.replace(_NO_BREAK, ' ')}\n" for line in lines)
+
+
+def _commented(line: str, description: str | None) -> str:
+    """`line` with its docstring's `summary` above it as its comment, after a blank line so
+    each key with one reads as an entry of its own; `line` alone if it has none."""
+    if not (comment := summary(description)):
+        return f"{line}\n"
+    return f"\n{_comment(comment)}{line}\n"
 
 
 def _toml_ready(value: object) -> object:
@@ -129,8 +135,8 @@ def commented_defaults(
 def plugin_defaults(plugin: Plugin[Any, Any], values: Mapping[str, object]) -> str:
     """What `mfd init` writes, commented out, under the plugin's section of these `values`:
     its optional keys but those in `values`, as `init_shown` shows them, then its
-    `init_tables`, less the keys those write, and none when `values` has one of those tables
-    (uncommented, it would be written twice)."""
+    `init_tables` after a blank line, less the keys those write, and none when `values` has
+    one of those tables (uncommented, it would be written twice)."""
     tables = {
         key
         for key in plugin.config_model.model_fields
@@ -138,7 +144,9 @@ def plugin_defaults(plugin: Plugin[Any, Any], values: Mapping[str, object]) -> s
     }
     shown = plugin.init_shown(values)
     keys = commented_defaults(plugin.config_model, {*values, *tables}, shown)
-    return keys + ("" if tables & values.keys() else plugin.init_tables)
+    if not plugin.init_tables or tables & values.keys():
+        return keys
+    return f"{keys}\n{plugin.init_tables}"
 
 
 def _core_table_names() -> list[str]:
@@ -156,7 +164,7 @@ def _core_table_names() -> list[str]:
 def core_defaults(skip: Collection[str]) -> str:
     """Core's optional top-level keys but `skip` (those written already), commented out."""
     hidden = {*skip, *_core_table_names(), *HAND_WRITTEN, "sections"}
-    return "# Optional settings, with their defaults. Uncomment to change.\n" + (
+    return "\n# Optional settings, with their defaults. Uncomment to change.\n" + (
         commented_defaults(Config, hidden)
     )
 
@@ -167,7 +175,8 @@ def core_tables() -> str:
     for key in _core_table_names():
         field = Config.model_fields[key]
         model = cast(type[BaseModel], field.annotation)
-        text += "\n" + _commented(f"# [{key}]", field.description) + commented_defaults(model)
+        comment = _comment(summary(field.description))
+        text += f"\n{comment}# [{key}]\n{commented_defaults(model)}"
     return text
 
 
@@ -232,11 +241,17 @@ def _table(name: str, values: dict[str, object], optional: str = "") -> str:
 
 
 OPTIONAL_NOTIFICATION_SETTINGS = """\
-# [notifications]                       # browser notifications; none until you subscribe
-# kinds of event to be told of, e.g. "dashboard.source_failing"; the settings page lists them
+# Browser notifications; none until you subscribe.
+# [notifications]
+
+# Kinds of event to be told of, e.g. "dashboard.source_failing"; the settings page lists them.
 # subscribe = []
-# failing_minutes = 15                  # how long a plugin fails before `source_failing` says so
-# keep_hours = 24                       # events older than this are dropped untold
+
+# How long a plugin fails before `source_failing` says so, in minutes.
+# failing_minutes = 15
+
+# Events older than this, in hours, are dropped untold.
+# keep_hours = 24
 """
 
 
@@ -256,7 +271,7 @@ def render_config(
             values = sections[plugin.name]
             text += _table(plugin.name, values, plugin_defaults(plugin, values))
         else:
-            text += f"\n# [{plugin.name}]                      # uncomment to turn it on\n"
+            text += f"\n# Uncomment to turn {plugin.title} on.\n# [{plugin.name}]\n"
             example = tomllib.loads(_uncommented(plugin.init_example))
             text += plugin.init_example + plugin_defaults(plugin, example)
     text += core_tables() + "\n"

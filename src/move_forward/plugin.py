@@ -678,7 +678,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
         `init_example`'s for a section left out): where an example says more than the
         default (github's `merge`), or the default is None, which TOML can't write (such a key
         not here isn't written). Uncommenting one should be right for that section: mail
-        shows `auth_servers` only for a Gmail host, whose value it knows."""
+        shows `auth_servers` as the host's known ones, or `[]`, which is what unset means for
+        another host."""
         return {}
 
     def prune(self, req: PruneRequest[C]) -> list[str]:

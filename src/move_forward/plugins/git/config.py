@@ -16,11 +16,11 @@ class GitConfig(Strict):
     """`[git]`: the repos I work in on this machine."""
 
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
-    """How often the dashboard reads every repo anyway, a backstop: changes are seen as they
-    happen (see `watch`)."""
+    """How often the dashboard reads every repo anyway, a backstop, as it watches them for
+    changes."""
     status_seconds: int = Field(default=DEFAULT_STATUS_SECONDS, ge=0)
-    """For a worktree that can't be watched (see `watch`), how often its `git status` is
-    checked for uncommitted edits, refreshing its repo when they changed; 0 leaves them to
+    """For a worktree it can't watch for changes, how often its `git status` is checked for
+    uncommitted edits, refreshing its repo when they changed; 0 leaves them to
     `refresh_seconds`."""
 
     repos: list[Path]

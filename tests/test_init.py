@@ -385,8 +385,8 @@ def _tables(field: FieldInfo) -> bool:
 LEFT_OUT = init.render_config(init.EXAMPLE_ANSWERS, {})
 """What `mfd init` writes when asked for no plugin: every offered plugin's section commented
 out."""
-_COMMENTED_KEY = re.compile(r"^# ([a-z_]+) = (.*?)(?:  # (.*))?$")
-"""A commented-out key as `mfd init` writes it: its name, value and comment."""
+_COMMENTED_KEY = re.compile(r"^# ([a-z_]+) = (.*)$")
+"""A commented-out key as `mfd init` writes it: its name and value."""
 
 
 @pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
@@ -492,28 +492,25 @@ def test_every_commented_key_has_its_docstrings_first_sentence() -> None:
             if field is None or key[1] in examples.get(table, {}):
                 continue  # an example table's key (`[github.teams]`'s), or the init_example's
             assert field.description, f"{table}.{key[1]} has no docstring"
-            expected = init.summary(field.description)
-            comment = key[3] if key[3] is not None else _comment_above(lines, n, expected)
-            assert comment == expected, f"{table}.{key[1]}"
+            comment, start = _comment_above(lines, n)
+            assert comment == init.summary(field.description), f"{table}.{key[1]}"
+            assert lines[start - 1] == "", f"{table}.{key[1]} runs on from the line before"
             checked.append(f"{table}.{key[1]}")
     names = {name.removeprefix(".") for name in checked}
-    assert {"prune_days", "act_now.size", "github.history_days", "mail.port"} <= names
-    assert {"db_path", "git.status_seconds", "act_now.weights"} <= names  # comments above
+    assert {"prune_days", "db_path", "act_now.size", "act_now.weights", "mail.port"} <= names
 
 
-def _comment_above(lines: list[str], n: int, expected: str) -> str:
-    """The comment written above line `n`, a key: the `# ` lines before it, back to the first
-    that makes it `expected` (else to a line that isn't prose). None of them reads as a key or
-    a table, uncommented, so uncommenting the file can't take one for one."""
-    above: list[str] = []
-    for line in reversed(lines[:n]):
-        if not line.startswith("# ") or _COMMENTED_KEY.match(line) or line.startswith("# ["):
+def _comment_above(lines: list[str], n: int) -> tuple[str, int]:
+    """The comment written above line `n`, a key: the `# ` lines before it, back to one that
+    isn't prose, joined; and the line it starts on. None of them reads as a key or a table,
+    uncommented, so uncommenting the file can't take one for one."""
+    start = n
+    while start > 0 and (line := lines[start - 1]).startswith("# "):
+        if _COMMENTED_KEY.match(line) or line.startswith("# ["):
             break
         assert not re.match(r"# (\[|[A-Za-z0-9_\"'-]+ *=)", line), line
-        above.insert(0, line[2:])
-        if " ".join(above) == expected:
-            break
-    return " ".join(above)
+        start -= 1
+    return " ".join(line[2:] for line in lines[start:n]), start
 
 
 class _Color(Enum):
@@ -556,15 +553,53 @@ WRITTEN = {
 
 @pytest.mark.parametrize("name", list(WRITTEN))
 def test_no_line_mfd_init_writes_is_wider_than_its_width(name: str) -> None:
-    """A comment that won't fit beside its key goes above it. A line wider still is a key
-    whose value alone makes it so (act_now's `weights`): written whole, with nothing beside
-    it, as a value can't be cut."""
+    """A comment is wrapped to it. A line wider still is a key whose value alone makes it so
+    (act_now's `weights`): written whole, as a value can't be cut."""
     for line in WRITTEN[name].splitlines():
         if len(line) <= init.LINE_WIDTH:
             continue
         key = _COMMENTED_KEY.match(line)
-        assert key is not None and key[3] is None, line
+        assert key is not None, line
         assert tomledit.value(tomllib.loads(f"v = {key[2]}")["v"]) == key[2], line
+
+
+@pytest.mark.parametrize("name", list(WRITTEN))
+def test_every_comment_is_above_its_key_or_table(name: str) -> None:
+    """No key or table, commented out or not, has a comment beside it: one form throughout."""
+    for line in WRITTEN[name].splitlines():
+        if re.match(r"^(# )?\[", line):
+            assert line.endswith("]"), line
+        elif key := re.match(r"^(?:# )?[a-z_-]+ = (.*)$", line):
+            assert tomledit.value(tomllib.loads(f"v = {key[1]}")["v"]) == key[1], line
+
+
+class _Spanned(BaseModel):
+    key: int = 0
+    """A comment whose code span would straddle the wrap, as it starts near its end: word word
+    then `a code span with spaces` ends."""
+
+
+@pytest.mark.parametrize("name", list(WRITTEN))
+def test_wrapping_never_splits_a_code_span(name: str) -> None:
+    """jira's `blocked_by_links` example, `["depends on"]`, stays on one line, as does every
+    code span in a comment."""
+    comments = [line for line in WRITTEN[name].splitlines() if line.startswith("# ")]
+    comments += init.commented_defaults(_Spanned).splitlines()
+    assert [line for line in comments if line.count("`") % 2] == []
+
+
+def test_a_whole_float_is_written_as_an_int() -> None:
+    """JSON mode gives act_now's weights as floats; a whole one reads better as 3 than 3.0."""
+    assert "\n# weights = { closes = 3, minutes = 2, hour = 1," in LEFT_OUT
+
+
+class _Holes(BaseModel):
+    maybe: list[int | None] = Field(default_factory=lambda: [1, None, 2])
+
+
+def test_none_is_left_out_of_a_list() -> None:
+    """TOML has no None, so a list's are dropped rather than written as an invalid `null`."""
+    assert tomllib.loads(_uncomment(init.commented_defaults(_Holes))) == {"maybe": [1, 2]}
 
 
 def test_a_tokens_place_shows_the_sections_own_default() -> None:
@@ -591,9 +626,9 @@ def test_answered_keys_are_not_commented_defaults_too() -> None:
     tomllib.loads(_uncomment(text))  # no table twice
 
 
-def test_mails_auth_servers_are_shown_only_where_known() -> None:
-    """For Gmail, the servers unset stands for; for another host, none to uncomment, as the
-    wrong ones would verify no sender."""
+def test_mails_auth_servers_are_shown_as_unset_reads_them() -> None:
+    """For Gmail, the servers unset stands for; for another host, none, which unset means
+    there too, so whoever must set it still sees the key and its comment."""
 
     def mail(host: str) -> str:
         values: dict[str, object] = {"host": host, "username": "me@x.y"}
@@ -601,7 +636,7 @@ def test_mails_auth_servers_are_shown_only_where_known() -> None:
         return "\n".join(_section_lines(text, "mail") or [])
 
     assert '\n# auth_servers = ["mx.google.com"]\n' in mail("imap.gmail.com")
-    assert "\n# auth_servers =" not in mail("imap.work.example")
+    assert "\n# auth_servers = []\n" in mail("imap.work.example")
 
 
 @pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
@@ -638,7 +673,8 @@ def test_every_key_of_core_is_in_the_example() -> None:
             continue
         model = field.annotation
         if isinstance(model, type) and issubclass(model, BaseModel):
-            section = re.search(rf"^# \[{name}\][^\n]*\n((?:#[^\n]*\n)*)", example, re.MULTILINE)
+            pattern = rf"^# \[{name}\]\n((?:(?!# \[)#[^\n]*\n|\n)*)"
+            section = re.search(pattern, example, re.MULTILINE)
             shown = section[1] if section else ""
             missing += [f"{name}.{key}" for key in model.model_fields if not has(key, shown)]
         elif not has(name, top):

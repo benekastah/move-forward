@@ -3,7 +3,8 @@
 from ...api import Asker, InitSetup, channel, url
 
 TABLES = """\
-# [slack.teams]                         # where review pings to a team go, by its name in `teams`
+# Where review pings to a team go, by its name in `teams`.
+# [slack.teams]
 # my-team = "#team-my-team"
 """
 EXAMPLE = '# workspace_url = "https://example.slack.com"\n'

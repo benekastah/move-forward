@@ -9,7 +9,8 @@ from .config import DEFAULT_HOST
 
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 TABLES = """\
-# [github.teams]                         # a team's slug, where it isn't the team's name
+# A team's slug, by its name in `teams`, where it isn't the team's name.
+# [github.teams]
 # web = "web-reviewers"
 """
 EXAMPLE = '# org = "example-org"\n'

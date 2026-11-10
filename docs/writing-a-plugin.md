@@ -109,7 +109,8 @@ class LinearConfig(TokenFields):
   `init_tables`, commented tables of example entries (`[github.teams]`), and from
   `init_shown(section)`, given the section's values, an example value for a key whose default
   is None or says less than an example, where uncommenting it is right for that section
-  (mail's `auth_servers`, for a Gmail host only). A plugin still setting `init_template`
+  (mail's `auth_servers`: Gmail's servers for a Gmail host, `[]` for another, the same as
+  unset there). Each comment goes above what it's about. A plugin still setting `init_template`
   is refused, naming these.
   `mfd init --example` writes each plugin's section as `mfd init` does when it isn't
   chosen, or, with `init_example_on` (a tool most use: github, git), on, with

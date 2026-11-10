@@ -156,10 +156,10 @@ class MailConfig(TokenFields, MailboxKeys):
     """The environment variable holding `[mail]`'s own password; an account has its own, and
     with accounts `[mail]` can't set this or `keychain_service`. `MAIL_PASSWORD` unless set."""
     keychain_service: str = ""
-    """The service `[mail]`'s own password is stored under in the system's secret store (the
-    macOS keychain, Windows' Credential Manager, the desktop keyring), when `token_env` isn't
-    set; its account is the top-level `email`. An account has its own. `move-forward-mail`
-    unless set."""
+    """The service `[mail]`'s own password is stored under, by `mfd token set mail`, in the
+    system's secret store (the macOS keychain, Windows' Credential Manager, the desktop
+    keyring), when `token_env` isn't set; its account is the top-level `email`. An account has
+    its own. `move-forward-mail` unless set."""
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=60)
     """How often the dashboard reads the mailboxes in the background; it also looks every couple
     of minutes for a change, and reads them at once if there is one."""

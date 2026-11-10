@@ -127,8 +127,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   its model can't say: a required key with an example value in its `init_example`, a table of
   example entries (`[github.teams]`, `[mail.<name>]`) in its `init_tables`, and from its
   `init_shown(section)` an example value for a key whose default says less (or is None),
-  where it's right for that section. Lines are kept within 100 columns: a comment that won't
-  fit beside its key goes above it.
+  where it's right for that section. A key's comment goes above it, after a blank line, wrapped
+  to 100 columns (never inside a code span); write `init_tables`' comments the same way.
   Core's `[notifications]` is still written by hand, in `init.py`. Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
   `MOVED_SETTINGS` in `config.py`), and a removed plugin's section says it's gone
