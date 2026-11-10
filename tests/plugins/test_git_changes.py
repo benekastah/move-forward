@@ -1,7 +1,6 @@
 """git telling that a repository moved, from its ref files' times, or that its uncommitted
 edits changed, from `git status`."""
 
-import json
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
@@ -10,10 +9,10 @@ from typing import Any
 import pytest
 from conftest import NOW
 
+from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.plugin import (
-    ChangedRequest,
     CollectRequest,
     Context,
     EntitiesRequest,
@@ -23,10 +22,32 @@ from move_forward.plugin import (
 from move_forward.plugins.git import changes, client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalRepo
-from move_forward.plugins.git.plugin import LAST_FULL, MOVED, GitPlugin
+from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
-from move_forward.repositories import KvRepository, ProblemRepository
+from move_forward.registry import Enabled
+from move_forward.repositories import ChangeRepository, KvRepository, ProblemRepository
 from move_forward.shell import CommandError, git, git_common_dir
+
+
+class _Server:
+    """What the server does with the plugin's change checks: asks them, keeping what they said
+    (`ChangeChecks`), and refreshes the plugin with what moved."""
+
+    def __init__(self, plugin: GitPlugin) -> None:
+        self.plugin = plugin
+        self.checks = ChangeChecks()
+
+    def changed(self, ctx: Context[GitConfig]) -> bool:
+        """Whether a check now would have the server refresh the plugin."""
+        return self.checks.check(Enabled(self.plugin, ctx), Graph([])) is not None
+
+    def refresh(self, ctx: Context[GitConfig]) -> None:
+        """Collect what moved, or everything, and store it, as a refresh does."""
+        e = Enabled(self.plugin, ctx)
+        taken = self.checks.take(e, Graph([]))
+        found = self.plugin.collect(CollectRequest(ctx, taken.full, taken.subjects))
+        self.plugin.store(StoreRequest(ctx, found))
+        self.checks.stored(e, taken)
 
 
 def _repo(path: Path) -> Path:
@@ -74,7 +95,9 @@ def test_a_worktree_is_watched_through_its_main_repository(tmp_path: Path) -> No
     assert changes.fingerprint([repo, tmp_path / "wt"]) == changes.fingerprint([repo])
 
 
-def test_the_plugin_says_changed_after_a_move_until_a_refresh_reads_it(tmp_path: Path) -> None:
+def test_the_plugin_says_changed_after_a_move_and_keeps_it_until_a_refresh_reads_it(
+    tmp_path: Path,
+) -> None:
     repo = _repo(tmp_path / "r")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
@@ -87,15 +110,16 @@ def test_the_plugin_says_changed_after_a_move_until_a_refresh_reads_it(tmp_path:
         db=db,
         kv=KvRepository(db, "git"),
     )
-    plugin = GitPlugin(watching=False)
-    assert not plugin.changed(ChangedRequest(ctx, Graph([])))  # nothing to compare against yet
+    server = _Server(GitPlugin(watching=False))
+    assert not server.changed(ctx)  # nothing to compare against yet
     git(repo, "commit", "-q", "--allow-empty", "-m", "second")
-    assert plugin.changed(ChangedRequest(ctx, Graph([])))
-    # Still, until a refresh reads it: core ignores the check right after a refresh, and a
-    # move seen there mustn't wait for the next one.
-    assert plugin.changed(ChangedRequest(ctx, Graph([])))
-    plugin.store(StoreRequest(ctx, plugin.collect(CollectRequest(ctx))))
-    assert not plugin.changed(ChangedRequest(ctx, Graph([])))
+    assert server.changed(ctx)
+    # Kept until a refresh reads it, but asking for one only once: nothing new moved since.
+    assert not server.changed(ctx)
+    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
+    server.refresh(ctx)
+    assert not server.changed(ctx)
+    assert ChangeRepository(db).get("git").subjects == set()
 
 
 def test_after_a_change_only_the_repos_that_moved_are_read_again(
@@ -104,7 +128,7 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     a, b = _repo(tmp_path / "a"), _repo(tmp_path / "b")
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
-    plugin = GitPlugin(watching=False)
+    server = _Server(GitPlugin(watching=False))
 
     def ctx(minutes: int) -> Context[GitConfig]:
         return Context(
@@ -127,20 +151,20 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     monkeypatch.setattr(client, "collect_repo", counting)
 
     def refresh(minutes: int) -> None:
-        plugin.store(StoreRequest(ctx(minutes), plugin.collect(CollectRequest(ctx(minutes)))))
+        server.refresh(ctx(minutes))
 
-    assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # the first look
+    assert not server.changed(ctx(0))  # the first look
     refresh(0)
     assert sorted(read) == ["a", "b"]
     git(b, "commit", "-q", "--allow-empty", "-m", "second")
-    assert plugin.changed(ChangedRequest(ctx(1), Graph([])))
+    assert server.changed(ctx(1))
     read.clear()
     refresh(1)
     assert read == ["b"]  # a is kept as stored
-    stored = plugin.load(LoadRequest(ctx(1)))
+    stored = server.plugin.load(LoadRequest(ctx(1)))
     assert stored is not None and [r.dir for r in stored.repos] == [str(a), str(b)]
     git(a, "commit", "-q", "--allow-empty", "-m", "second")
-    assert plugin.changed(ChangedRequest(ctx(11), Graph([])))
+    assert server.changed(ctx(11))
     read.clear()
     refresh(11)  # ten minutes since every repo was read: all of them, whatever moved
     assert sorted(read) == ["a", "b"]
@@ -151,6 +175,7 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
     plugin = GitPlugin(watching=False)
+    server = _Server(plugin)
 
     def ctx(seconds: int, status_seconds: int = 30) -> Context[GitConfig]:
         return Context(
@@ -164,16 +189,14 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
         )
 
     plugin.store(StoreRequest(ctx(0), plugin.collect(CollectRequest(ctx(0)))))
-    assert not plugin.changed(ChangedRequest(ctx(0), Graph([])))  # as stored
+    assert not server.changed(ctx(0))  # as stored
     (repo / "new.txt").write_text("x\n")
-    assert not plugin.changed(ChangedRequest(ctx(10), Graph([])))  # status_seconds not up yet
-    assert not plugin.changed(ChangedRequest(ctx(40, status_seconds=0), Graph([])))  # off
-    assert plugin.changed(ChangedRequest(ctx(40), Graph([])))
-    assert KvRepository(db, "git").get(MOVED) == json.dumps([str(git_common_dir(repo))])
-    plugin.store(
-        StoreRequest(ctx(40), plugin.collect(CollectRequest(ctx(40))))
-    )  # reads it, untracked file and all
-    assert not plugin.changed(ChangedRequest(ctx(80), Graph([])))
+    assert not server.changed(ctx(10))  # status_seconds not up yet
+    assert not server.changed(ctx(40, status_seconds=0))  # off
+    assert server.changed(ctx(40))
+    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
+    server.refresh(ctx(40))  # reads it, untracked file and all
+    assert not server.changed(ctx(80))
 
 
 def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
@@ -191,19 +214,20 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
         db=db,
         kv=KvRepository(db, "git"),
     )
-    plugin = GitPlugin(watching=False)
-    assert not plugin.changed(ChangedRequest(ctx, Graph([])))
+    server = _Server(GitPlugin(watching=False))
+    assert not server.changed(ctx)
     git(repo, "commit", "-q", "--allow-empty", "-m", "second")
-    assert plugin.changed(ChangedRequest(ctx, Graph([])))
+    assert server.changed(ctx)
 
     def failing(*args: Any, **kwargs: Any) -> LocalRepo:
         raise CommandError("git: index.lock exists")
 
     monkeypatch.setattr(client, "collect_repo", failing)
     with pytest.raises(CommandError):
-        plugin.collect(CollectRequest(ctx))
-    assert ctx.kv.get(LAST_FULL) is None  # the next collect reads every repo
-    assert not plugin.changed(ChangedRequest(ctx, Graph([])))  # no refresh every check
+        server.refresh(ctx)
+    assert ChangeRepository(db).get("git").full_at is None  # the next collect reads every repo
+    assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}  # kept
+    assert not server.changed(ctx)  # no refresh every check
 
 
 @pytest.mark.parametrize("second", ["Acme/widgets", "acme/WIDGETS"])
