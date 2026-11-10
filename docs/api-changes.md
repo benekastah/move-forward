@@ -14,6 +14,12 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **One item-actions hook**: `prepare_item_actions` is gone, and `item_actions(req)` has its
+  shape: called once per page with `ItemActionsRequest(ctx, graph)`, it returns the function
+  (`ItemAdditionsFor`) core calls for each item with an `ItemRequest(item, owner, surface)`.
+  A plugin that implemented the per-item `item_actions` wraps its body in a function it
+  returns; one that implemented `prepare_item_actions` renames it, and its function takes an
+  `ItemRequest`.
 - **Asked only about its own kinds**: core calls `url_for`, `handle_for` and `fetch` only on
   the plugins whose `kinds` include `req.kind` (each publisher of a family's), so a plugin
   drops its `if req.kind != ...` check. `url_for` gives the id by default where its family's

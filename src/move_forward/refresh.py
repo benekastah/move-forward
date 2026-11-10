@@ -10,7 +10,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
@@ -45,10 +45,10 @@ from .plugin import (
     EventsRequest,
     IdentityRequest,
     ItemActionsRequest,
+    ItemRequest,
     KeptItemRequest,
     PageRequest,
     PanelsRequest,
-    PrepareItemActionsRequest,
     PruneRequest,
     Response,
     StoreRequest,
@@ -532,7 +532,7 @@ def build_dashboard(
         for source, row in SnapshotRepository(db).of([e.name for e in plugins]).items()
     }
 
-    def nothing(req: ItemActionsRequest[Any]) -> ItemAdditions:
+    def nothing(req: ItemRequest) -> ItemAdditions:
         return ItemAdditions()
 
     prepared = [
@@ -540,8 +540,8 @@ def build_dashboard(
             e,
             call(
                 e.name,
-                "prepare_item_actions",
-                lambda e=e: e.plugin.prepare_item_actions(PrepareItemActionsRequest(e.ctx, graph)),
+                "item_actions",
+                lambda e=e: e.plugin.item_actions(ItemActionsRequest(e.ctx, graph)),
                 nothing,
             ),
         )
@@ -554,7 +554,7 @@ def build_dashboard(
     def item_actions(item: Item, owner: str, surface: Surface) -> ItemAdditions:
         found = _merged(contacts.additions(item), tagging.additions(item))
         for e, add in prepared:
-            req = ItemActionsRequest(e.ctx, item, graph, owner, surface)
+            req = ItemRequest(item, owner, surface)
             added = call(e.name, "item_actions", lambda add=add, req=req: add(req), found)
             if added is not found:
                 found = _merged(found, added)

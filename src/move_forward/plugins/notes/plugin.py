@@ -4,7 +4,6 @@
 """
 
 import argparse
-from collections.abc import Callable
 from datetime import timedelta
 from typing import ClassVar
 
@@ -24,13 +23,14 @@ from ...api import (
     Item,
     ItemActionsRequest,
     ItemAdditions,
+    ItemAdditionsFor,
+    ItemRequest,
     KeptItemRequest,
     KindSpec,
     Migration,
     Panel,
     PanelsRequest,
     Plugin,
-    PrepareItemActionsRequest,
     PruneRequest,
 )
 from ...api.kinds import FAMILIES
@@ -97,14 +97,12 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         panels = req.panels
         return [i for p in panels if p.key == TODOS for i in p.items if i.signals]
 
-    def prepare_item_actions(
-        self, req: PrepareItemActionsRequest[NotesConfig]
-    ) -> Callable[[ItemActionsRequest[NotesConfig]], ItemAdditions]:
+    def item_actions(self, req: ItemActionsRequest[NotesConfig]) -> ItemAdditionsFor:
         """Put on ice and Add todo on other plugins' items, from the notes read once for the
         page."""
         builder = _builder(req.ctx, req.graph)
 
-        def additions(each: ItemActionsRequest[NotesConfig]) -> ItemAdditions:
+        def additions(each: ItemRequest) -> ItemAdditions:
             found = (
                 builder.put_on_ice(
                     each.item, group="Act now" if each.surface == "act_now" else "Disposition"

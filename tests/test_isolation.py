@@ -54,7 +54,7 @@ def test_failing_panels_show_as_one_failed_panel(monkeypatch: pytest.MonkeyPatch
 
 def test_failing_item_actions_and_load_are_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
     config, db = stored(github=snapshot(mine=[pr(1)]))
-    monkeypatch.setattr(NotesPlugin, "prepare_item_actions", _boom)
+    monkeypatch.setattr(NotesPlugin, "item_actions", _boom)
     monkeypatch.setattr(GitPlugin, "load", _boom)
     dashboard = refresh.build_dashboard(config, db, NOW)
     assert dashboard.panels

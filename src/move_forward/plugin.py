@@ -215,17 +215,26 @@ class ActNowRequest[C: BaseModel, S: BaseModel]:
 @dataclass(frozen=True)
 class ItemActionsRequest[C: BaseModel]:
     ctx: Context[C]
-    item: Item
     graph: Graph
-    owner: str
-    """The plugin whose item it is."""
-    surface: Surface
 
 
 @dataclass(frozen=True)
-class PrepareItemActionsRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
+class ItemRequest:
+    """An item the function `item_actions` returned is asked about."""
+
+    item: Item
+    owner: str
+    """The plugin whose item it is."""
+    surface: Surface
+    """Where it's shown: the dashboard, focus mode or Act now."""
+
+
+ItemAdditionsFor = Callable[[ItemRequest], ItemAdditions]
+"""What `Plugin.item_actions` returns: what the plugin adds to each item of one page."""
+
+
+def _adds_nothing(req: ItemRequest) -> ItemAdditions:
+    return ItemAdditions()
 
 
 @dataclass(frozen=True)
@@ -675,18 +684,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
             if not item.deferred
         ]
 
-    def item_actions(self, req: ItemActionsRequest[C]) -> ItemAdditions:
-        """What the plugin adds to another plugin's item: buttons (e.g. "add todo" on a PR),
-        badges, details and links."""
-        return ItemAdditions()
-
-    def prepare_item_actions(
-        self, req: PrepareItemActionsRequest[C]
-    ) -> Callable[[ItemActionsRequest[C]], ItemAdditions]:
-        """`item_actions` for every item of one page: a plugin whose additions need its
-        tables or a pass over the graph does that here, once, and returns the per-item
-        function."""
-        return self.item_actions
+    def item_actions(self, req: ItemActionsRequest[C]) -> ItemAdditionsFor:
+        """What the plugin adds to other plugins' items on one page: buttons (e.g. "add todo"
+        on a PR), badges, details and links. Core calls it once per page and the function it
+        returns once per item, saying whose item it is and where it's shown (`ItemRequest`):
+        what needs the plugin's tables or a pass over the graph is done here, once, not per
+        item. Adds nothing by default."""
+        return _adds_nothing
 
     def kept_item(self, req: KeptItemRequest[C]) -> tuple[str, Item] | None:
         """An item one of this plugin's actions asked to keep on the focus page after changing

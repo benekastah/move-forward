@@ -464,11 +464,12 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   `req.field(name)`, which says "missing field" when the form lacks it. Raise
   `ActionError` with a message the page can show; anything else a handler raises is shown
   as "<plugin>/<name> failed" and logged.
-- **Adding to other plugins' items.** `item_actions(req)` returns `ItemAdditions`
-  (buttons, badges, details, links) for `req.item`, by its subjects; `req.owner` is the
-  plugin whose item it is and `req.surface` where it's shown (`dashboard`, `focus`,
-  `act_now`). A plugin that reads its tables for them does so once per page in
-  `prepare_item_actions(req)`, returning the per-item function.
+- **Adding to other plugins' items.** `item_actions(req)` is called once per page, with
+  `req.graph`, and returns a function (`ItemAdditionsFor`) that core calls for each item
+  with an `ItemRequest`: it returns the `ItemAdditions` (buttons, badges, details, links)
+  for `each.item`, by its subjects; `each.owner` is the plugin whose item it is and
+  `each.surface` where it's shown (`dashboard`, `focus`, `act_now`). Read your tables, or
+  make a pass over the graph, in `item_actions` itself, once, not in the function.
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in
   `ActionResult(notice, touched=[ref])`, and that entity is fetched again (below).

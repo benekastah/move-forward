@@ -1,7 +1,6 @@
 """Core's hooks for plugins: buttons on other plugins' items, pages and commands."""
 
 import argparse
-from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import ClassVar
@@ -26,11 +25,12 @@ from move_forward.plugin import (
     FetchRequest,
     HandleRequest,
     ItemActionsRequest,
+    ItemAdditionsFor,
+    ItemRequest,
     LinkingRequest,
     PageHandler,
     PageRequest,
     Plugin,
-    PrepareItemActionsRequest,
     RelateRequest,
     UrlRequest,
 )
@@ -48,14 +48,16 @@ from move_forward.repositories import KvRepository
 class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /jira/hello."""
 
-    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
-        pr = req.item.subject("pull_request")
-        if pr is None:
-            return ItemAdditions()
-        return ItemAdditions(
-            actions=[Action(name="", label="Look", fields={}, href=f"/jira/hello?pr={pr.id}")],
-            badges=[f"seen by {self.name} on {req.surface}, {req.owner}'s"],
-        )
+    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditionsFor:
+        def additions(each: ItemRequest) -> ItemAdditions:
+            pr = each.item.subject("pull_request")
+            if pr is None:
+                return ItemAdditions()
+            look = Action(name="", label="Look", fields={}, href=f"/jira/hello?pr={pr.id}")
+            seen = f"seen by {self.name} on {each.surface}, {each.owner}'s"
+            return ItemAdditions(actions=[look], badges=[seen])
+
+        return additions
 
     def pages(self) -> dict[str, PageHandler]:
         def hello(req: PageRequest[JiraConfig]) -> str | None:
@@ -376,13 +378,11 @@ class _Prepared(JiraPlugin):
 
     prepared = 0
 
-    def prepare_item_actions(
-        self, req: PrepareItemActionsRequest[JiraConfig]
-    ) -> Callable[[ItemActionsRequest[JiraConfig]], ItemAdditions]:
+    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditionsFor:
         _Prepared.prepared += 1
         prs = {e.ref.id for e in req.graph.of_kind("pull_request")}
 
-        def actions(each: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
+        def actions(each: ItemRequest) -> ItemAdditions:
             pr = each.item.subject("pull_request")
             if pr is None or pr.id not in prs:
                 return ItemAdditions()
@@ -392,7 +392,7 @@ class _Prepared(JiraPlugin):
         return actions
 
 
-def test_a_plugin_prepares_its_item_actions_once_per_page(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_plugin_works_out_its_item_actions_once_per_page(monkeypatch: pytest.MonkeyPatch) -> None:
     plugins = [_Prepared() if p.name == "jira" else p for p in registry.PLUGINS]
     monkeypatch.setattr(registry, "PLUGINS", plugins)
     mine = [pr(1, merge_state="DIRTY"), pr(2, merge_state="DIRTY")]

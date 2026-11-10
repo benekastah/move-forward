@@ -5,7 +5,6 @@ reads the first two from the skill's `reviewer-map.md`.
 """
 
 import argparse
-from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import ClassVar, Literal
 from urllib.parse import quote, urlencode
@@ -27,13 +26,14 @@ from ...api import (
     InitSetup,
     ItemActionsRequest,
     ItemAdditions,
+    ItemAdditionsFor,
+    ItemRequest,
     Migration,
     PageHandler,
     PageRequest,
     Panel,
     PanelsRequest,
     Plugin,
-    PrepareItemActionsRequest,
     PruneRequest,
     age,
     html,
@@ -166,15 +166,13 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         slack = pinger(ctx, graph)
         return [slack.nudges(slack.pings())]
 
-    def prepare_item_actions(
-        self, req: PrepareItemActionsRequest[SlackConfig]
-    ) -> Callable[[ItemActionsRequest[SlackConfig]], ItemAdditions]:
+    def item_actions(self, req: ItemActionsRequest[SlackConfig]) -> ItemAdditionsFor:
         """A Ping link on any item about one of my open PRs with someone to chase: Bump once a
         target was pinged, muted while the PR isn't in order. The pings are worked out once for
         the page."""
         pings = pinger(req.ctx, req.graph).pings()
 
-        def ping_action(each: ItemActionsRequest[SlackConfig]) -> ItemAdditions:
+        def ping_action(each: ItemRequest) -> ItemAdditions:
             pr = each.item.subject(PR)
             ping = pings.get(pr.id) if pr else None
             if ping is None or not ping.has_someone_to_chase:
