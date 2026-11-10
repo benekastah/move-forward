@@ -134,7 +134,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         changed = req.subjects
         ids = [pr_id_of(config.host, url) for url in sorted(changed)]
         everything = req.full or len(changed) > client.PAGE_SIZE or None in ids
-        previous = None if everything else self.load(ContextRequest(ctx))
+        previous = None if everything else PrRepository(ctx.db).load()
         if previous is not None and changed:
             try:
                 fetched = client.fetch_prs(config.host, [i for i in ids if i is not None])
@@ -178,11 +178,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 == "individual"
             ),
         )
-
-    def store(self, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
-        ctx, snapshot = req.ctx, req.snapshot
-        assert snapshot is not None
-        PrRepository(ctx.db).replace(snapshot)
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
@@ -258,7 +253,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             elif n.kind not in notifications.UNRELATED:
                 prs.add(EVERYTHING)
         if ci_repos:
-            if (snapshot := self.load(ContextRequest(ctx))) is None:
+            if (snapshot := PrRepository(ctx.db).load()) is None:
                 return prs | {EVERYTHING}
             prs |= {pr.url for pr in snapshot.mine if pr.repo.lower() in ci_repos}
         return prs
@@ -268,9 +263,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         assert before is not None and after is not None
         return changes.changes(before, after, ctx.config.ignored_reviewers)
 
-    def load(self, req: ContextRequest[GitHubConfig]) -> GitHubSnapshot | None:
-        ctx = req.ctx
-        return PrRepository(ctx.db).load()
+    def snapshots(self, req: ContextRequest[GitHubConfig]) -> PrRepository:
+        return PrRepository(req.ctx.db)
 
     def _email_domains(self, ctx: Context[GitHubConfig]) -> list[str]:
         if ctx.config.email_domains:
@@ -312,7 +306,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the
         local checkouts the graph's `git.repo` entities describe."""
         ctx, graph = req.ctx, req.graph
-        gh = self.load(ContextRequest(ctx))
+        gh = PrRepository(ctx.db).load()
         if gh is None:
             return
         self._lookup_emails(ctx, gh)

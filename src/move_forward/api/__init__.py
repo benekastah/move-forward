@@ -60,6 +60,7 @@ from ..plugin import (
     RefreshRequest,
     Request,
     Response,
+    Snapshots,
     SourceError,
     collect_into,
 )
@@ -116,6 +117,7 @@ __all__ = [
     "Request",
     "Response",
     "Signals",
+    "Snapshots",
     "SourceError",
     "Strict",
     "Surface",

@@ -34,7 +34,7 @@ class _GitHub(GitHubPlugin):
         ASKED.append((self.name, req.full, req.subjects))
         if self.slow:
             time.sleep(0.5)
-        kept = self.load(ContextRequest(req.ctx))
+        kept = self.snapshots(ContextRequest(req.ctx)).load()
         assert kept is not None
         return kept
 
@@ -44,7 +44,7 @@ class _Jira(JiraPlugin):
 
     def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
         ASKED.append((self.name, req.full, req.subjects))
-        kept = self.load(ContextRequest(req.ctx))
+        kept = self.snapshots(ContextRequest(req.ctx)).load()
         assert kept is not None
         return kept
 

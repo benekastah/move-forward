@@ -93,9 +93,9 @@ STORED = "stored:"
 its events have nothing to compare with."""
 
 
-def store_snapshot(e: Enabled, snapshot: BaseModel, graph: Graph) -> None:
-    """Keep a plugin's new snapshot, collected from `graph`, and remember that it has one."""
-    e.plugin.store(Request(e.ctx, graph, snapshot))
+def store_snapshot(e: Enabled, snapshot: BaseModel) -> None:
+    """Keep a plugin's new snapshot, and remember that it has one."""
+    e.kept().save(snapshot)
     KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", "1")
 
 
@@ -201,7 +201,7 @@ def _collect_all(
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, from `graph`, given what
     moved since its last collect (`ChangeChecks.take`, asking its check first when `asking`),
-    and keep it with the plugin's `store`, which settles what it was given and lets the tags I
+    and keep it where the plugin keeps it (`Plugin.snapshots`), which settles what it was given and lets the tags I
     took off what it publishes come back (`TagRepository.put_back`): it has found them again,
     or not. Each plugin has
     `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh
@@ -226,7 +226,7 @@ def _collect_all(
                     return collect(e, taken)
 
                 def store(snapshot: BaseModel) -> None:
-                    store_snapshot(e, snapshot, graph)
+                    store_snapshot(e, snapshot)
                     assert taken is not None  # the collector took it
                     checks.stored(e, taken)
                     TagRepository(db).put_back(e.name, now)
@@ -363,7 +363,7 @@ def refresh_subjects(
         try:
             if snapshot is None:
                 raise RuntimeError("no snapshot")
-            store_snapshot(e, snapshot, before.graph)
+            store_snapshot(e, snapshot)
             stored = True
         except Exception:
             log.debug("%s: fetching %s again failed", name, mine, exc_info=True)

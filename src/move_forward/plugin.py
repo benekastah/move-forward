@@ -13,7 +13,7 @@ import traceback
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Protocol
 
 from pydantic import BaseModel
 
@@ -123,7 +123,7 @@ def _section_token(config: BaseModel) -> dict[str, TokenSettings]:
 
 @dataclass(frozen=True)
 class ContextRequest[C: BaseModel]:
-    """A hook given only the plugin's context: `load` and `linking_patterns`."""
+    """A hook given only the plugin's context: `snapshots` and `linking_patterns`."""
 
     ctx: Context[C]
 
@@ -149,16 +149,16 @@ class Previous[S: BaseModel]:
 
 @dataclass(frozen=True)
 class Request[C: BaseModel, S: BaseModel]:
-    """A hook working from what's stored: `store`, `entities`, `relate`, `panels`,
-    `item_actions`, `after_collect`, `prune` and `events`."""
+    """A hook working from what's stored: `entities`, `relate`, `panels`, `item_actions`,
+    `after_collect`, `prune` and `events`."""
 
     ctx: Context[C]
     graph: Graph
     """Every plugin's entities. Empty for `entities`, which the graph is built from, and
     before any relations for `relate`."""
     snapshot: S | None
-    """What the plugin last stored; None before its first refresh. For `store`, what `collect`
-    just fetched; for `events`, the snapshot now."""
+    """What the plugin last stored; None before its first refresh. For `events`, the snapshot
+    now."""
     previous: Previous[S] = field(default_factory=Previous[S])
     """For `events` only: the plugin's snapshot and the graph before this refresh."""
 
@@ -344,6 +344,35 @@ ActionHandler = Callable[[InputRequest[Any]], str | ActionResult]
 parameters too) and raises `ActionError` with the reason when it can't."""
 
 
+class Snapshots[S: BaseModel](Protocol):
+    """Where a plugin keeps its snapshot (`Plugin.snapshots`): usually its repository over the
+    tables its migrations made. Nothing is kept as JSON."""
+
+    def save(self, snapshot: S) -> None:
+        """Keep what `collect` fetched, replacing what the last good collect kept, in one
+        transaction."""
+        ...
+
+    def load(self) -> S | None:
+        """What the last good collect kept, for `entities` and `panels`; None when there's
+        nothing. Core holds the database while it runs (`Database.reading`), so a refresh can't
+        store between its queries: it mustn't wait on another thread using `ctx.db`."""
+        ...
+
+
+class _NoSnapshots[S: BaseModel]:
+    """What a plugin without a snapshot model keeps: nothing."""
+
+    def __init__(self, plugin: str):
+        self._plugin = plugin
+
+    def save(self, snapshot: S) -> None:
+        raise NotImplementedError(f"{self._plugin} has a snapshot model but no snapshots")
+
+    def load(self) -> S | None:
+        return None
+
+
 class Plugin[C: BaseModel, S: BaseModel]:
     """Base of every plugin. Subclasses set the class attributes and override what they use.
 
@@ -463,17 +492,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
         can't be stopped)."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
-    def store(self, req: Request[C, S]) -> None:
-        """Keep what `collect` fetched (`req.snapshot`, never None here) in the plugin's
-        tables, replacing what the last good collect kept, in one transaction."""
-        raise NotImplementedError(f"{self.name} has a snapshot model but no store")
-
-    def load(self, req: ContextRequest[C]) -> S | None:
-        """What the last good collect kept, for `entities` and `panels`; None when there's
-        nothing (no snapshot model, say). Core holds the database while it runs
-        (`Database.reading`), so a refresh can't store between its queries: it mustn't wait on
-        another thread using `ctx.db`."""
-        return None
+    def snapshots(self, req: ContextRequest[C]) -> "Snapshots[S]":
+        """Where the plugin keeps what `collect` fetched, in its own tables: usually its
+        repository over them (see `Snapshots`). By default nothing is kept, for a plugin with
+        no snapshot model."""
+        return _NoSnapshots[S](self.name)
 
     def events(self, req: Request[C, S]) -> list[Event]:
         """What happened since the last refresh, as events of its `notification_kinds`:

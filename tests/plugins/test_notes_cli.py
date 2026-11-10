@@ -156,7 +156,7 @@ def test_ice_a_branch_and_thaw_it(run: Run, config: Path) -> None:
         worktrees=[],
         branches=[Branch(name="feature", committed_at=datetime.now(UTC))],
     )
-    LocalRepository(_db(config)).replace(LocalSnapshot(repos=[repo]))
+    LocalRepository(_db(config)).save(LocalSnapshot(repos=[repo]))
     assert run("ice", "--branch", "/src/app", "nope")[0] == 1
     assert run("ice", "--branch", "/elsewhere", "feature")[0] == 1
     assert run("ice", "--branch", "/src/app", "feature", "--note", "waiting on infra")[0] == 0

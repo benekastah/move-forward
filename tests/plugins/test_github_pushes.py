@@ -33,7 +33,7 @@ def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
 
     def changed_after(*branches: object) -> bool:
         if branches:
-            LocalRepository(db).replace(local_snapshot(branches=list(branches)))
+            LocalRepository(db).save(local_snapshot(branches=list(branches)))
         graph = stored_graph(db, enabled(config, db, NOW))[0]
         return checks.check(github(), graph) is not None
 
@@ -85,6 +85,6 @@ def test_a_push_counts_when_the_notifications_cant_be_read(
         return checks.check(github(), stored_graph(db, enabled(config, db, NOW))[0]) is not None
 
     assert not changed()  # the first look notes where things stand
-    LocalRepository(db).replace(local_snapshot(branches=[local_branch(mine.head, ahead=0)]))
+    LocalRepository(db).save(local_snapshot(branches=[local_branch(mine.head, ahead=0)]))
     assert changed()
     assert checks.take(github(), None).subjects == {"https://github.com/acme/widgets/pull/1"}

@@ -239,7 +239,7 @@ def test_git_keeps_its_snapshot_in_its_tables() -> None:
     repo = LocalRepository(db)
     assert repo.load() == first
     second = local_snapshot(dir="/src/other", github_repo=None)
-    repo.replace(second)
+    repo.save(second)
     assert repo.load() == second
     assert db.query("SELECT * FROM git_branches") == []  # gone with their repo
 

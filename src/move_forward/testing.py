@@ -151,7 +151,7 @@ class Harness:
                 self.db, registry.enabled(self.config, self.db, self.now)
             )
             me = self._enabled()
-            refresh.store_snapshot(me, snapshot, before.graph)
+            refresh.store_snapshot(me, snapshot)
             SnapshotRepository(self.db).save_fetched(self.plugin.name, self.now)
             self._events = refresh.events_of(
                 me, before.previous(self.name), me.snapshot(), self.graph()

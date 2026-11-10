@@ -33,7 +33,7 @@ from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.jira.repository import IssueRepository
-from move_forward.repositories import FeedbackRepository, SnapshotRepository
+from move_forward.repositories import FeedbackRepository, KvRepository, SnapshotRepository
 
 
 class _Git(GitPlugin):
@@ -91,13 +91,21 @@ class _GitInKv(GitPlugin):
             raise RuntimeError("git is gone")
         return local_snapshot()
 
-    def store(self, req: Request[GitConfig, LocalSnapshot]) -> None:
-        assert req.snapshot is not None
-        req.ctx.kv.set("snapshot", req.snapshot.model_dump_json())
+    def snapshots(self, req: ContextRequest[GitConfig]) -> "_InKv":
+        return _InKv(req.ctx.kv)
 
-    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
-        ctx = req.ctx
-        stored = ctx.kv.get("snapshot")
+
+class _InKv:
+    """git's snapshot, kept in its kv as JSON."""
+
+    def __init__(self, kv: KvRepository):
+        self.kv = kv
+
+    def save(self, snapshot: LocalSnapshot) -> None:
+        self.kv.set("snapshot", snapshot.model_dump_json())
+
+    def load(self) -> LocalSnapshot | None:
+        stored = self.kv.get("snapshot")
         return LocalSnapshot.model_validate_json(stored) if stored else None
 
 
@@ -122,9 +130,14 @@ def test_a_plugin_can_keep_its_snapshot_itself(
     assert graph.get("git.repo", "acme/widgets") is not None
 
 
-class _GitThatCantStore(_GitInKv):
-    def store(self, req: Request[GitConfig, LocalSnapshot]) -> None:
+class _CantSave(_InKv):
+    def save(self, snapshot: LocalSnapshot) -> None:
         raise RuntimeError("disk full")
+
+
+class _GitThatCantStore(_GitInKv):
+    def snapshots(self, req: ContextRequest[GitConfig]) -> _InKv:
+        return _CantSave(req.ctx.kv)
 
 
 def test_a_failing_store_is_recorded_like_a_failing_collect(
@@ -311,7 +324,7 @@ def test_an_item_opened_elsewhere_is_dimmed_in_its_place_until_it_changes() -> N
     assert any(isinstance(b, Badge) and b.text.startswith("opened") for b in dimmed.badges)
 
     moved = pr(1, author="alice", head_oid="b" * 40)  # pushed to since
-    PrRepository(db).replace(snapshot(direct_requests=[moved]))
+    PrRepository(db).save(snapshot(direct_requests=[moved]))
     (changed,) = refresh.build_dashboard(config, db, NOW).act_now()
     assert changed.opened_at is None  # its fingerprint moved: worth another look
 
@@ -346,7 +359,7 @@ def test_opening_elsewhere_replaces_a_snooze_only_once_it_has_lapsed() -> None:
     assert said.action == "snooze"  # still in force: kept
 
     moved = pr(1, author="alice", head_oid="b" * 40)  # pushed to since: the snooze is over
-    PrRepository(db).replace(snapshot(direct_requests=[moved]))
+    PrRepository(db).save(snapshot(direct_requests=[moved]))
     (back,) = refresh.build_dashboard(config, db, NOW).act_now()
     refresh.run_action(config, db, "act_now/opened", json.loads(back.act_now_fields or "{}"))
     (dimmed,) = refresh.build_dashboard(config, db, NOW).act_now()

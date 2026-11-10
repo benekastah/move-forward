@@ -16,6 +16,7 @@ from move_forward.graph import Graph, Ref
 from move_forward.page import Identity
 from move_forward.plugin import (
     Context,
+    ContextRequest,
     RefRequest,
     RefreshRequest,
     Request,
@@ -209,10 +210,10 @@ def test_the_snapshot_moves_from_json_and_round_trips() -> None:
     db.migrate("github", MIGRATIONS)
     store = PrRepository(db)
     assert store.load() is None  # the rebuild requests a full collect
-    store.replace(gh)
+    store.save(gh)
     assert store.load() == gh
     smaller = snapshot(mine=[pr(4)], team_members=["x"])
-    store.replace(smaller)
+    store.save(smaller)
     assert store.load() == smaller
     assert db.query("SELECT * FROM github_pr_files") == []  # gone with their PRs
 
@@ -222,7 +223,7 @@ def test_a_threads_comment_count_is_kept() -> None:
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)
     store = PrRepository(db)
-    store.replace(snapshot(mine=[pr(1, threads=[thread])]))
+    store.save(snapshot(mine=[pr(1, threads=[thread])]))
     assert store.load() == snapshot(mine=[pr(1, threads=[thread])])
 
 
@@ -237,7 +238,7 @@ def test_one_person_can_belong_to_multiple_stored_github_teams() -> None:
             "acme/empty": [],
         }
     )
-    store.replace(found)
+    store.save(found)
     assert store.load() == found
     assert [
         tuple(row)
@@ -279,7 +280,7 @@ def test_a_pr_a_search_found_twice_is_kept_once_at_its_first_place() -> None:
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)
     repo = PrRepository(db)
-    repo.replace(snapshot(mine=[pr(1), pr(2), pr(1, title="again")]))
+    repo.save(snapshot(mine=[pr(1), pr(2), pr(1, title="again")]))
     loaded = repo.load()
     assert loaded is not None and [(p.number, p.title) for p in loaded.mine] == [
         (1, "PR 1"),
@@ -333,7 +334,7 @@ def test_collect_fetches_only_the_prs_that_changed_until_a_full_collect_is_due(
         e = Enabled(plugin, at)
         taken = checks.take(e, None)
         gh = plugin.collect(RefreshRequest(at, Graph(), taken.full, taken.subjects))
-        plugin.store(Request(at, Graph(), gh))
+        plugin.snapshots(ContextRequest(at)).save(gh)
         checks.stored(e, taken)
         assert changes.get("github").subjects == set()
         return gh
@@ -366,7 +367,7 @@ def test_partial_collect_fetches_membership_for_a_new_individual_policy_team(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ctx = _context(team_reviewer_assignment={"bacon": "individual"})
-    PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
+    PrRepository(ctx.db).save(snapshot(mine=[pr(1)]))
 
     def fetch_prs(host: str, ids: list[client.PrId]) -> list[PullRequest]:
         return [pr(2, requested_teams=["bacon"], requested_users=["shared"])]
@@ -387,7 +388,7 @@ def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ctx = _context(teams={"core": "core-squad"})  # a team whose slug isn't its name
-    PrRepository(ctx.db).replace(
+    PrRepository(ctx.db).save(
         snapshot(mine=[pr(1)], team_memberships={"acme/core-squad": ["ann"], "acme/x": ["zed"]})
     )
 
@@ -454,7 +455,7 @@ def test_after_collect_suggests_reviewers_only_where_one_may_be_picked(
 
     monkeypatch.setattr(derive, "collect", collect)
     ctx = _context()
-    PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
+    PrRepository(ctx.db).save(snapshot(mine=[pr(1)]))
     GitHubPlugin().after_collect(Request(ctx, Graph(), None))
     assert picked == [1]
 
@@ -476,7 +477,7 @@ def test_reviewers_whose_email_lookup_fails_are_one_problem_until_none_does(
 
     monkeypatch.setattr(derive, "collect", derived)
     ctx = _context()
-    PrRepository(ctx.db).replace(
+    PrRepository(ctx.db).save(
         snapshot(mine=[pr(1, requested_users=["alice", "bob"]), pr(2, requested_users=["carol"])])
     )
     for _ in range(2):  # tried again each refresh, but said once
@@ -501,7 +502,7 @@ def test_a_collect_of_some_prs_fetches_those_into_their_lists(
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     ctx = _context()
-    PrRepository(ctx.db).replace(snapshot(mine=[pr(1), pr(2)]))
+    PrRepository(ctx.db).save(snapshot(mine=[pr(1), pr(2)]))
     urls = frozenset(pr(n).url for n in (1, 3, 4))  # 4: gone
     found = GitHubPlugin().collect(RefreshRequest(ctx, Graph(), False, urls))
     assert asked == [[client.PrId(repo="acme/widgets", number=n) for n in (1, 3, 4)]]
@@ -534,7 +535,7 @@ def test_a_collect_of_what_it_cant_fetch_alone_searches_everything(
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     ctx = _context()
     if stored:
-        PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
+        PrRepository(ctx.db).save(snapshot(mine=[pr(1)]))
     GitHubPlugin().collect(RefreshRequest(ctx, Graph(), False, frozenset({url})))
     assert searched == [True]
 
@@ -557,7 +558,7 @@ def test_a_reviews_state_and_whether_it_has_text_are_kept() -> None:
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)
     store = PrRepository(db)
-    store.replace(snapshot(mine=[pr(1, events=[review])]))
+    store.save(snapshot(mine=[pr(1, events=[review])]))
     assert store.load() == snapshot(mine=[pr(1, events=[review])])
 
 
@@ -566,7 +567,7 @@ def test_each_files_changed_lines_are_kept() -> None:
     db.migrate("github", MIGRATIONS)
     store = PrRepository(db)
     changed = pr(1, files=["a.py", "b.py"], file_lines=[3, 40])
-    store.replace(snapshot(mine=[changed]))
+    store.save(snapshot(mine=[changed]))
     assert store.load() == snapshot(mine=[changed])
 
 
@@ -577,7 +578,7 @@ def test_the_mentioned_list_round_trips_and_the_rebuild_asks_for_a_fresh_collect
     store = PrRepository(db)
     db.migrate("github", MIGRATIONS)
     assert store.load() is None  # no account: the next refresh collects everything
-    store.replace(snapshot(mentioned=[pr(2, author="alice")]))
+    store.save(snapshot(mentioned=[pr(2, author="alice")]))
     loaded = store.load()
     assert loaded is not None and [p.number for p in loaded.mentioned] == [2]
 
@@ -608,6 +609,6 @@ def test_merge_settings_are_kept_between_refreshes() -> None:
     )
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)
-    PrRepository(db).replace(snapshot(mine=[settings]))
+    PrRepository(db).save(snapshot(mine=[settings]))
     kept = PrRepository(db).load()
     assert kept is not None and kept.mine == [settings]

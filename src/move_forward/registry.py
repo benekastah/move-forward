@@ -30,6 +30,7 @@ from .plugin import (
     Plugin,
     RefRequest,
     Request,
+    Snapshots,
     SourceError,
 )
 from .repositories import KvRepository
@@ -258,7 +259,11 @@ class Enabled:
     def snapshot(self) -> BaseModel | None:
         """What the plugin last stored; None when it has nothing, or its `load` fails."""
         with self.ctx.db.reading():  # all of one refresh's, never half of the next's
-            return call(self.name, "load", lambda: self.plugin.load(ContextRequest(self.ctx)), None)
+            return call(self.name, "load", lambda: self.kept().load(), None)
+
+    def kept(self) -> "Snapshots[Any]":
+        """Where the plugin keeps its snapshot (`Plugin.snapshots`)."""
+        return self.plugin.snapshots(ContextRequest(self.ctx))
 
 
 def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:

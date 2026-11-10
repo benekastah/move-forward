@@ -13,6 +13,7 @@ from move_forward.api import (
     Item,
     KindModel,
     KindSpec,
+    KvRepository,
     Model,
     Notify,
     PageHandler,
@@ -52,6 +53,20 @@ class _PrView(Model):
     handle: str
 
 
+class _Issues:
+    """Linear's issues, kept in its kv as JSON."""
+
+    def __init__(self, kv: KvRepository):
+        self.kv = kv
+
+    def save(self, snapshot: LinearSnapshot) -> None:
+        self.kv.set("snapshot", snapshot.model_dump_json())
+
+    def load(self) -> LinearSnapshot | None:
+        kept = self.kv.get("snapshot")
+        return LinearSnapshot.model_validate_json(kept) if kept else None
+
+
 class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     """A plugin of its own: its issues, by key, kept in kv."""
 
@@ -63,13 +78,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     kinds: ClassVar[dict[str, KindSpec]] = {ISSUE: KindSpec(IssueAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = {"to_triage": "an issue is to triage"}
 
-    def store(self, req: Request[LinearConfig, LinearSnapshot]) -> None:
-        assert req.snapshot is not None
-        req.ctx.kv.set("snapshot", req.snapshot.model_dump_json())
-
-    def load(self, req: ContextRequest[LinearConfig]) -> LinearSnapshot | None:
-        kept = req.ctx.kv.get("snapshot")
-        return LinearSnapshot.model_validate_json(kept) if kept else None
+    def snapshots(self, req: ContextRequest[LinearConfig]) -> "_Issues":
+        return _Issues(req.ctx.kv)
 
     def entities(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Entity]:
         issues = req.snapshot.issues if req.snapshot else []

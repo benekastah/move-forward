@@ -43,15 +43,15 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   it's no unit of work. A kind whose entities hide what they point at (ice) is
   declared `hides`, and core leaves items about hidden things off the page;
   plugins don't filter them out themselves.
-- A plugin keeps what `collect` fetched in its own tables, with `store`, and
-  reads it back with `load`; nothing is kept as JSON. Core keeps only when each
+- A plugin keeps what `collect` fetched in its own tables, through what its `snapshots`
+  gives (its repository, which `save`s and `load`s it); nothing is kept as JSON. Core keeps only when each
   plugin last fetched, and why it failed; what its change checks last saw and said moved,
   until a collect started after stores (`change_checks.py`); and what else a plugin reports wrong with
   `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its state on
   the page and logged when it changes, rather than each plugin warning in its own way.
 - Every plugin hook that runs with the plugin's context takes one request object, of five
   kinds, so a hook can gain an input without breaking its overrides: `ContextRequest(ctx)`
-  (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
+  (`snapshots`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`entities`,
   `relate`, `panels`, `item_actions`, `after_collect`, `prune`,
   `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `changed`);
   `RefRequest(ctx, kind, ids)` (`address`, `fetch`); and `InputRequest(ctx, graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
@@ -159,7 +159,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   on: it runs the migration as soon as the file is saved, and once it has, renaming it makes
   the server refuse to start.
 - **A plugin table is fetched or kept**, and its comment says which.
-  Fetched tables hold what `collect` brings back; `store` replaces them
+  Fetched tables hold what `collect` brings back; `save` replaces them
   wholesale, so they're never pruned. A table computed from the graph in
   `after_collect` (github's reviewer suggestions, notes' ice covers) is
   replaced the same way, and counts as fetched (or says "derived"). Kept tables hold what only the dashboard

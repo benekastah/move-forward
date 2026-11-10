@@ -70,7 +70,7 @@ flowchart TB
     index --> built(["Graph"])
 ```
 
-1. Each enabled plugin's `load` reads what its last refresh kept, and its `entities` turns
+1. Each enabled plugin's `snapshots` loads what its last refresh kept, and its `entities` turns
    that (and its other tables) into entities.
 2. A plugin declares the kinds it publishes in `kinds`, each with a model of its
    attributes, and builds its entities' attributes from those models (with `attrs` from

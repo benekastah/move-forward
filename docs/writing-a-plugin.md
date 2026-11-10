@@ -17,15 +17,15 @@ hook's signature:
 
 | Request | Fields | Hooks |
 | --- | --- | --- |
-| `ContextRequest` | `ctx` | `load`, `linking_patterns` |
-| `Request` | `ctx`, `graph`, `snapshot`, and `previous` for `events` | `store`, `entities`, `relate`, `panels`, `item_actions`, `after_collect`, `prune`, `events` |
+| `ContextRequest` | `ctx` | `snapshots`, `linking_patterns` |
+| `Request` | `ctx`, `graph`, `snapshot`, and `previous` for `events` | `entities`, `relate`, `panels`, `item_actions`, `after_collect`, `prune`, `events` |
 | `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `changed` |
 | `RefRequest` | `ctx`, `kind`, `ids` | `address`, `fetch` |
 | `InputRequest` | `ctx`, `graph`, and one of `page` (a `Page`: `query`, `path`), `form` (a `Form`: `fields`, `surface`, `back`) or `args` | pages, buttons (`actions`), `mfd <plugin>` (`cli`) |
 
 `ctx` is the plugin's context (below), `graph` every plugin's entities (empty for `entities`,
 which the graph is built from), and `snapshot` what the plugin last stored (None before its
-first refresh; for `store`, what `collect` just fetched). A field a hook doesn't get is left at
+first refresh). A field a hook doesn't get is left at
 its default; each field's docstring names the hooks that get it.
 
 `previous` is a `Previous`, what held before, for the two hooks that compare: `changed` and
@@ -42,7 +42,7 @@ src/move_forward/plugins/linear/
     models.py      # LinearSnapshot and its parts: what collect brings back
     client.py      # talking to Linear (the standard library or a CLI; no new dependencies)
     setup.py       # mfd init's questions for [linear], and its example values
-    repository.py  # the plugin's tables: MIGRATIONS, and store/load queries
+    repository.py  # the plugin's tables: MIGRATIONS, and its Snapshots (save, load)
     kinds.py       # IssueAttrs: the attributes of the entities it publishes
     panels.py      # pure functions from the snapshot and the graph to panels
     plugin.py      # LinearPlugin, the Plugin subclass tying them together
@@ -170,12 +170,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     def collect(self, req: RefreshRequest[LinearConfig]) -> LinearSnapshot:
         return client.collect(req.ctx.config, req.ctx.email)
 
-    def store(self, req: Request[LinearConfig, LinearSnapshot]) -> None:
-        assert req.snapshot is not None  # what collect just fetched
-        IssueRepository(req.ctx.db).replace(req.snapshot)
-
-    def load(self, req: ContextRequest[LinearConfig]) -> LinearSnapshot | None:
-        return IssueRepository(req.ctx.db).load()
+    def snapshots(self, req: ContextRequest[LinearConfig]) -> IssueRepository:
+        return IssueRepository(req.ctx.db)
 ```
 
 - `name` is the config section, the kv namespace and migrations' owner, the tables'
@@ -227,9 +223,11 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   what it stored last. It has five minutes to finish: past that, the
   refresh records it as timed out and goes on, and leaves it out of later refreshes until
   its collect returns (a thread can't be stopped). Set a timeout on whatever it calls, too.
-- `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
-  for every page, with the database held so no refresh stores between its queries (so it
-  mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
+- `snapshots(req)` gives where the plugin keeps what `collect` returned, in its own
+  tables: a `Snapshots`, usually its repository over them, whose `save(snapshot)` replaces
+  what the last good collect kept and whose `load()` reads it back for every page, with the
+  database held so no refresh stores between its queries (so it mustn't wait on another
+  thread using `ctx.db`). Nothing is kept as JSON.
 - Who I am in the tool is a `person` it publishes with `me=True`: the page's footer lists
   each plugin's, by handle.
 - A plugin that needs other plugins' entities to know what to fetch sets `collects_after =
@@ -267,7 +265,7 @@ The rules:
   another plugin whose name starts with yours (`git_stack_` for `git`); and refuses a plugin
   named for a prefix of core's own (`team`, of `team_channels`).
 - **Fetched or kept**, and the table's comment says which. A fetched table holds what
-  `collect` brought back and is replaced wholesale by `store`. A kept table holds what
+  `collect` brought back and is replaced wholesale by its `Snapshots.save`. A kept table holds what
   only the dashboard knows (notes, pings sent, projects seen); it survives refreshes, and
   `prune` clears what's finished.
 - **A cache of lookups** (a login's email, found once and kept) is a kept table of a key, a

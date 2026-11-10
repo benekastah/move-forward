@@ -82,7 +82,7 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
     monkeypatch.setattr(notifications, "run", run)
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)
-    PrRepository(db).replace(snapshot(mine=[pr(1)], direct_requests=[pr(2, author="alice")]))
+    PrRepository(db).save(snapshot(mine=[pr(1)], direct_requests=[pr(2, author="alice")]))
     plugin = GitHubPlugin()
     checks = ChangeChecks()  # as the server keeps what the checks said
 

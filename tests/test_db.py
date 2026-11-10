@@ -4,6 +4,7 @@ from pathlib import Path
 
 import conftest
 import pytest
+from pydantic import BaseModel
 
 from move_forward import auth, registry
 from move_forward import db as db_module
@@ -575,14 +576,21 @@ def test_a_plugins_load_sees_no_write_between_its_reads(monkeypatch: pytest.Monk
 
     writer = threading.Thread(target=write)
 
-    def load(self: NotesPlugin, req: ContextRequest[NotesConfig]) -> None:
-        seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
-        writer.start()
-        started.wait()
-        writer.join(0.2)
-        seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
+    class Probe:
+        def save(self, snapshot: BaseModel) -> None:
+            raise AssertionError("not stored")
 
-    monkeypatch.setattr(NotesPlugin, "load", load)
+        def load(self) -> None:
+            seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
+            writer.start()
+            started.wait()
+            writer.join(0.2)
+            seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
+
+    def snapshots(self: NotesPlugin, req: ContextRequest[NotesConfig]) -> Probe:
+        return Probe()
+
+    monkeypatch.setattr(NotesPlugin, "snapshots", snapshots)
     [notes] = [e for e in registry.enabled(config, db, conftest.NOW) if e.name == "notes"]
     notes.snapshot()
     writer.join()

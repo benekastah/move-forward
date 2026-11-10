@@ -26,6 +26,7 @@ from ...api import (
     Ref,
     RefreshRequest,
     Request,
+    Snapshots,
     attrs,
 )
 from ...api.ids import branch_parts
@@ -112,9 +113,9 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         before stands in for a repo git can't read now. Repos that are each a clone of one
         GitHub repo are a problem (`CLONES`) until only one is left."""
         ctx = req.ctx
-        previous = self.load(ContextRequest(ctx))
+        previous = LocalRepository(ctx.db).load()
         only = _repos_of(ctx.config.repos, req.subjects)
-        partial = not req.full and previous is not None and only is not None
+        partial = not req.full and only is not None
         found = client.collect(
             ctx.config.repos,
             ctx.now,
@@ -139,13 +140,13 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         ctx.problem(CLONES, "; ".join(clones) or None)
         return found
 
-    def store(self, req: Request[GitConfig, LocalSnapshot]) -> None:
-        """Keep the snapshot, and watch the worktrees it found (once `changed` has started
-        watching: only the server asks it). The last looks at uncommitted edits are forgotten:
+    def snapshots(self, req: ContextRequest[GitConfig]) -> Snapshots[LocalSnapshot]:
+        return _Kept(self, LocalRepository(req.ctx.db))
+
+    def _stored(self, snapshot: LocalSnapshot) -> None:
+        """A new snapshot was kept: watch the worktrees it found (once `changed` has started
+        watching: only the server asks it), and forget the last looks at uncommitted edits, as
         what's stored is now newer, and edits back as a look saw them may differ from it."""
-        ctx, snapshot = req.ctx, req.snapshot
-        assert snapshot is not None
-        LocalRepository(ctx.db).replace(snapshot)
         self._statuses.clear()
         if self._watcher is not None:
             self._watch(snapshot)
@@ -160,7 +161,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 ctx.log.warning("can't watch the repos, so polling them: %s", e)
                 self._watching = False
                 return None
-            if snapshot := self.load(ContextRequest(ctx)):
+            if snapshot := LocalRepository(ctx.db).load():
                 self._watch(snapshot)
         return self._watcher
 
@@ -229,7 +230,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         if not poll and not edited:
             return set()
         found: set[str] = set()
-        for repo in snapshot.repos if (snapshot := self.load(ContextRequest(ctx))) else []:
+        for repo in snapshot.repos if (snapshot := LocalRepository(ctx.db).load()) else []:
             for wt in repo.worktrees:
                 path = Path(wt.path)
                 resolved = path.resolve()
@@ -244,10 +245,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 if status != (wt.modified, wt.untracked) and status != last:
                     found.add(str(git_common_dir(Path(repo.dir))))
         return found
-
-    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
-        ctx = req.ctx
-        return LocalRepository(ctx.db).load()
 
     def entities(self, req: Request[GitConfig, LocalSnapshot]) -> list[Entity]:
         """A `repo` per GitHub repo checked out (the first checkout of it, when two clones are,
@@ -323,3 +320,19 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
             "pull_branch": actions.pull_branch,
             "wip_commit": actions.wip_commit,
         }
+
+
+class _Kept:
+    """git's snapshot, kept in its tables (`LocalRepository`): keeping a new one tells the
+    plugin, which watches the worktrees it found."""
+
+    def __init__(self, plugin: GitPlugin, repository: LocalRepository):
+        self._plugin = plugin
+        self._repository = repository
+
+    def save(self, snapshot: LocalSnapshot) -> None:
+        self._repository.save(snapshot)
+        self._plugin._stored(snapshot)  # pyright: ignore[reportPrivateUsage]
+
+    def load(self) -> LocalSnapshot:
+        return self._repository.load()

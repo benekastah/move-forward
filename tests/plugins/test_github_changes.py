@@ -206,10 +206,10 @@ def test_new_commits_and_the_authors_comments_on_a_reviewed_pr_are_said() -> Non
 class _Scripted(GitHubPlugin):
     """GitHub that fetches the next of `snapshots` instead of asking GitHub."""
 
-    snapshots: ClassVar[list[GitHubSnapshot]] = []
+    fetched: ClassVar[list[GitHubSnapshot]] = []
 
     def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
-        return self.snapshots.pop(0)
+        return self.fetched.pop(0)
 
     def after_collect(self, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
         pass
@@ -219,7 +219,7 @@ def test_a_refresh_stores_the_events_of_subscribed_kinds(monkeypatch: pytest.Mon
     monkeypatch.setattr(
         registry, "PLUGINS", [_Scripted() if p.name == "github" else p for p in registry.PLUGINS]
     )
-    monkeypatch.setattr(_Scripted, "snapshots", [_mine(**WAITING), _mine(**READY)])
+    monkeypatch.setattr(_Scripted, "fetched", [_mine(**WAITING), _mine(**READY)])
     config = Config.model_validate(
         {
             "email": "me@x",

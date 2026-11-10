@@ -431,11 +431,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         ctx = req.ctx
         return client.collect(ctx.config, ctx.email, ctx.token())
 
-    def store(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
-        ctx, snapshot = req.ctx, req.snapshot
-        assert snapshot is not None
-        IssueRepository(ctx.db).replace(snapshot)
-
     def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
         """Whether a ticket of mine was updated since the last look core took
         (`req.previous.at`, and a minute before it, as Jira counts in whole minutes): a
@@ -448,9 +443,8 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             found = client.updated_within(ctx.config, ctx.email, ctx.token(), minutes)
         return Changed(everything=found, reason="a ticket of mine was updated")
 
-    def load(self, req: ContextRequest[JiraConfig]) -> JiraSnapshot | None:
-        ctx = req.ctx
-        return IssueRepository(ctx.db).load()
+    def snapshots(self, req: ContextRequest[JiraConfig]) -> IssueRepository:
+        return IssueRepository(req.ctx.db)
 
     def linking_patterns(self, req: ContextRequest[JiraConfig]) -> dict[str, str | None]:
         """Keys of the projects my tickets have been in, so `UTF-8` or `SHA-256` in a PR

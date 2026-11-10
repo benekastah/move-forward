@@ -18,8 +18,6 @@ its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened 
 review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
 - **Hooks merged:**
-  - `store` and `load` become one repository the plugin gives, if that spares a plugin
-    keeping state between the two calls; otherwise they stay.
 
 Then a further look at what's left: the hooks, and the class variables (about 21).
 

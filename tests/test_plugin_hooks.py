@@ -119,7 +119,7 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
     )
     db = Database(":memory:")
     registry.migrate(config, db)
-    PrRepository(db).replace(snapshot(mine=[pr(1, title="Fix <it>")]))
+    PrRepository(db).save(snapshot(mine=[pr(1, title="Fix <it>")]))
     page = refresh.plugin_page(config, db, "/jira/hello", {"pr": [pr(1).url]})
     assert isinstance(page, str) and "Fix &lt;it&gt;" in page and "/ hello</h1>" in page
     assert refresh.plugin_page(config, db, "/jira/hello", {"pr": ["nope"]}) is None

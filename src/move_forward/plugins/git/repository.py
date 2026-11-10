@@ -95,7 +95,7 @@ class LocalRepository:
     def __init__(self, db: Database):
         self._db = db
 
-    def replace(self, snapshot: LocalSnapshot) -> None:
+    def save(self, snapshot: LocalSnapshot) -> None:
         """Keep what a refresh found, in place of the last refresh's."""
         repos = snapshot.repos
         with self._db.transaction() as conn:

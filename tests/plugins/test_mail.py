@@ -678,7 +678,7 @@ def test_a_failed_store_leaves_what_was_kept() -> None:
     harness = mailbox(message(1))
     clash = [message(2), message(2, subject="same uid")]  # the second can't go in
     with pytest.raises(sqlite3.IntegrityError):
-        MessageRepository(harness.db).replace(MailSnapshot(messages=clash))
+        MessageRepository(harness.db).save(MailSnapshot(messages=clash))
     assert [m.uid for m in MessageRepository(harness.db).load().messages] == [1]
 
 

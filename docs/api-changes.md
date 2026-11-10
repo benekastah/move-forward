@@ -14,6 +14,11 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **One `snapshots` hook for keeping the snapshot**: `store(req)` and `load(req)` are gone.
+  `snapshots(req: ContextRequest)` gives a `Snapshots` (`save(snapshot)`, `load()`), most often
+  the plugin's repository over its tables, which already had both; the built-ins' repositories'
+  `replace` is `save`. A plugin that did more as it stored (git watching the worktrees it found)
+  gives an object of its own whose `save` does that too.
 - **An item says it's an Act now candidate**: the `act_now(req)` hook (and `Request.panels`)
   is gone. A panel's items are candidates as before (its `act_now`, but deferred ones), and an
   item says otherwise with `Item.act_now`: True for a candidate wherever it is and deferred or
@@ -29,17 +34,15 @@ for themselves (a token, a request, an example config) is core's.
   `HandleRequest`) are one hook, `address(req: RefRequest)`, answering a URL and a handle for
   each of `req.ids` it knows as an `Address(url, handle)`, by id. By default it gives the id as
   the URL where its family's ids are URLs, as `url_for` did.
-- **Five request types**: a hook's request is one of `ContextRequest(ctx)` (`load`,
-  `linking_patterns`), `Request(ctx, graph, snapshot, previous)` (`store`,
-  `entities`, `relate`, `panels`, `item_actions`, `after_collect`,
-  `prune`, `events`), `RefreshRequest(ctx, graph, full, subjects, previous)` (`collect`,
+- **Five request types**: a hook's request is one of `ContextRequest(ctx)` (`snapshots`,
+  `linking_patterns`), `Request(ctx, graph, snapshot, previous)` (`entities`, `relate`,
+  `panels`, `item_actions`, `after_collect`, `prune`, `events`), `RefreshRequest(ctx, graph, full, subjects, previous)` (`collect`,
   `changed`), `RefRequest(ctx, kind, ids)` (`address`, `fetch`) and `InputRequest(ctx,
   graph, page, form, args)` (pages, buttons and `mfd <plugin>`), in place of a type per hook
   (`EntitiesRequest`, `PanelsRequest`, `CollectRequest`, `ChangedRequest`, `ActionRequest`,
   `PageRequest`, `CliRequest` and the rest, named in the entries below, are gone). A field a
   hook doesn't get keeps its default. Every hook with a snapshot now has the graph and the
-  snapshot both: `entities` gets an empty graph, as the graph is built from it, and `store`
-  gets what `collect` fetched as `req.snapshot` (never None there). A page's query and path
+  snapshot both: `entities` gets an empty graph, as the graph is built from it. A page's query and path
   are `req.page.query` and `req.page.path` (`Page`), a button's fields, surface and back
   `req.form.fields`, `req.form.surface` and `req.form.back` (`Form`); `req.field(name)` still
   reads a required field.

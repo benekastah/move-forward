@@ -50,11 +50,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
 
-    def store(self, req: Request[GitStackConfig, GitStackSnapshot]) -> None:
-        ctx, snapshot = req.ctx, req.snapshot
-        assert snapshot is not None
-        StackRepository(ctx.db).replace(snapshot)
-
     def changed(self, req: RefreshRequest[GitStackConfig]) -> Changed:
         """Whether a stack may have moved since the last look (see `changes`): asked right
         after each refresh of git, rather than collecting with every one. Its branches are
@@ -69,10 +64,9 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
             fingerprint=changes.configs(dirs), everything=moved, reason="a stack may have moved"
         )
 
-    def load(self, req: ContextRequest[GitStackConfig]) -> GitStackSnapshot | None:
+    def snapshots(self, req: ContextRequest[GitStackConfig]) -> StackRepository:
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""
-        ctx = req.ctx
-        return StackRepository(ctx.db).load()
+        return StackRepository(req.ctx.db)
 
     def entities(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Entity]:
         snapshot = req.snapshot

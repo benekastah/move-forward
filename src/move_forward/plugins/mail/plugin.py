@@ -117,12 +117,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
             messages = merged(messages, found.messages)
         return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
-    def store(self, req: Request[MailConfig, MailSnapshot]) -> None:
-        assert req.snapshot is not None
-        MessageRepository(req.ctx.db).replace(req.snapshot)
-
-    def load(self, req: ContextRequest[MailConfig]) -> MailSnapshot | None:
-        return MessageRepository(req.ctx.db).load()
+    def snapshots(self, req: ContextRequest[MailConfig]) -> MessageRepository:
+        return MessageRepository(req.ctx.db)
 
     def changed(self, req: RefreshRequest[MailConfig]) -> Changed:
         """The mailboxes' counts, as the fingerprint core compares with the last: they move
