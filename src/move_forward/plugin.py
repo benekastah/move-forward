@@ -24,7 +24,7 @@ from .asking import Asker, InitSetup
 from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
-from .kinds import Family
+from .kinds import FAMILIES, Family, is_url
 from .notifications import Event
 from .page import Identity, Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, ProblemRepository, SnapshotRepository
@@ -215,17 +215,27 @@ class ActNowRequest[C: BaseModel, S: BaseModel]:
 @dataclass(frozen=True)
 class ItemActionsRequest[C: BaseModel]:
     ctx: Context[C]
-    item: Item
     graph: Graph
-    owner: str
-    """The plugin whose item it is."""
-    surface: Surface
 
 
 @dataclass(frozen=True)
-class PrepareItemActionsRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
+class ItemRequest:
+    """An item the function `item_actions` returned is asked about."""
+
+    item: Item
+    owner: str
+    """The plugin whose item it is."""
+    surface: Surface
+    """Where it's shown: the dashboard, focus mode or Act now."""
+
+
+ItemAdditionsFor = Callable[[ItemRequest], ItemAdditions]
+"""What `Plugin.item_actions` returns: what the plugin adds to each item of one page."""
+
+
+def adds_nothing(req: ItemRequest) -> ItemAdditions:
+    """What `Plugin.item_actions` returns by default: nothing added to any item."""
+    return ItemAdditions()
 
 
 @dataclass(frozen=True)
@@ -638,18 +648,21 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return []
 
     def fetch(self, req: FetchRequest[C]) -> list[Entity]:
-        """Entities of a kind the plugin publishes, by id, fetched from its tool now, even ones
-        its snapshot doesn't hold; `Graph.fetch` asks. [] for a kind it doesn't know."""
+        """Entities of one of its `kinds`, by id, fetched from its tool now, even ones its
+        snapshot doesn't hold; `Graph.fetch` asks. Core asks only about the plugin's own kinds
+        (about a family, each plugin that publishes it), so `req.kind` is one of them."""
         return []
 
     def url_for(self, req: UrlRequest[C]) -> str | None:
-        """A URL for an entity of a kind the plugin knows, even one not in the graph, e.g. a
-        ticket's from its key."""
-        return None
+        """A URL for an entity of one of its `kinds`, even one not in the graph, e.g. a
+        ticket's from its key. Core asks only about the plugin's own kinds. By default, the id
+        itself where it's a URL of a family whose ids are URLs (a pull request's), else None."""
+        family = FAMILIES.get(req.kind)
+        return req.id if family and family.id_rule(req.id) and is_url(req.id) else None
 
     def handle_for(self, req: HandleRequest[C]) -> str | None:
-        """The `handle` of an entity of a kind the plugin knows, by id, even one not in the
-        graph, e.g. a ticket's key from its URL."""
+        """The `handle` of an entity of one of its `kinds`, by id, even one not in the graph,
+        e.g. a ticket's key from its URL. Core asks only about the plugin's own kinds."""
         return None
 
     # Page
@@ -672,18 +685,13 @@ class Plugin[C: BaseModel, S: BaseModel]:
             if not item.deferred
         ]
 
-    def item_actions(self, req: ItemActionsRequest[C]) -> ItemAdditions:
-        """What the plugin adds to another plugin's item: buttons (e.g. "add todo" on a PR),
-        badges, details and links."""
-        return ItemAdditions()
-
-    def prepare_item_actions(
-        self, req: PrepareItemActionsRequest[C]
-    ) -> Callable[[ItemActionsRequest[C]], ItemAdditions]:
-        """`item_actions` for every item of one page: a plugin whose additions need its
-        tables or a pass over the graph does that here, once, and returns the per-item
-        function."""
-        return self.item_actions
+    def item_actions(self, req: ItemActionsRequest[C]) -> ItemAdditionsFor:
+        """What the plugin adds to other plugins' items on one page: buttons (e.g. "add todo"
+        on a PR), badges, details and links. Core calls it once per page and the function it
+        returns once per item, saying whose item it is and where it's shown (`ItemRequest`):
+        what needs the plugin's tables or a pass over the graph is done here, once, not per
+        item. Adds nothing by default."""
+        return adds_nothing
 
     def kept_item(self, req: KeptItemRequest[C]) -> tuple[str, Item] | None:
         """An item one of this plugin's actions asked to keep on the focus page after changing

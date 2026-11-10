@@ -350,9 +350,13 @@ class LinearPlugin(...):
   `KindSpec(..., tags_from_text=False)`. Read the tags on or named by an entity with
   `graph.related(ref, TAG)` (`api.kinds.TAG`).
 - `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
-  graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)` (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
+  graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)`
+  (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
   daily prune; what a fetched entity must carry is in
-  [entities.md](entities.md#fetched-on-demand).
+  [entities.md](entities.md#fetched-on-demand). Core asks each only about the plugin's own
+  `kinds`, so they needn't check `req.kind` is theirs; `url_for` gives the id by default
+  where its family's ids are URLs (a pull request's), so a plugin overrides it only to make
+  a URL of something else (a ticket's key).
 - A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
 - **Relations.** What only your plugin knows links one of its entities to another's (a PR
   to its local branch) goes in `relate(req)`, as `(mine, theirs)` pairs; see
@@ -460,11 +464,12 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   `req.field(name)`, which says "missing field" when the form lacks it. Raise
   `ActionError` with a message the page can show; anything else a handler raises is shown
   as "<plugin>/<name> failed" and logged.
-- **Adding to other plugins' items.** `item_actions(req)` returns `ItemAdditions`
-  (buttons, badges, details, links) for `req.item`, by its subjects; `req.owner` is the
-  plugin whose item it is and `req.surface` where it's shown (`dashboard`, `focus`,
-  `act_now`). A plugin that reads its tables for them does so once per page in
-  `prepare_item_actions(req)`, returning the per-item function.
+- **Adding to other plugins' items.** `item_actions(req)` is called once per page, with
+  `req.graph`, and returns a function (`ItemAdditionsFor`) that core calls for each item
+  with an `ItemRequest`: it returns the `ItemAdditions` (buttons, badges, details, links)
+  for `each.item`, by its subjects; `each.owner` is the plugin whose item it is and
+  `each.surface` where it's shown (`dashboard`, `focus`, `act_now`). Read your tables, or
+  make a pass over the graph, in `item_actions` itself, once, not in the function.
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in
   `ActionResult(notice, touched=[ref])`, and that entity is fetched again (below).

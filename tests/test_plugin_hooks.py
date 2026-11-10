@@ -1,14 +1,13 @@
 """Core's hooks for plugins: buttons on other plugins' items, pages and commands."""
 
 import argparse
-from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import ClassVar
 
 import pytest
 from conftest import ME, NOW, dashboard, issue, local_snapshot, pr, snapshot, stored
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 
 from move_forward import cli, localtime, refresh, registry, render
 from move_forward.act_now import ActNowConfig
@@ -24,13 +23,16 @@ from move_forward.plugin import (
     Context,
     EntitiesRequest,
     FetchRequest,
+    HandleRequest,
     ItemActionsRequest,
+    ItemAdditionsFor,
+    ItemRequest,
     LinkingRequest,
     PageHandler,
     PageRequest,
     Plugin,
-    PrepareItemActionsRequest,
     RelateRequest,
+    UrlRequest,
 )
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
@@ -39,6 +41,8 @@ from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.plugins.mail.config import MailConfig
+from move_forward.plugins.mail.plugin import MailPlugin
 from move_forward.refresh import build_dashboard
 from move_forward.repositories import KvRepository
 
@@ -46,14 +50,16 @@ from move_forward.repositories import KvRepository
 class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /jira/hello."""
 
-    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
-        pr = req.item.subject("pull_request")
-        if pr is None:
-            return ItemAdditions()
-        return ItemAdditions(
-            actions=[Action(name="", label="Look", fields={}, href=f"/jira/hello?pr={pr.id}")],
-            badges=[f"seen by {self.name} on {req.surface}, {req.owner}'s"],
-        )
+    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditionsFor:
+        def additions(each: ItemRequest) -> ItemAdditions:
+            pr = each.item.subject("pull_request")
+            if pr is None:
+                return ItemAdditions()
+            look = Action(name="", label="Look", fields={}, href=f"/jira/hello?pr={pr.id}")
+            seen = f"seen by {self.name} on {each.surface}, {each.owner}'s"
+            return ItemAdditions(actions=[look], badges=[seen])
+
+        return additions
 
     def pages(self) -> dict[str, PageHandler]:
         def hello(req: PageRequest[JiraConfig]) -> str | None:
@@ -190,7 +196,118 @@ def test_the_graph_fetches_through_the_plugin_that_owns_the_kind(
     assert list(graph.fetch("ticket", ["APP-1", "APP-2", "APP-3"])) == ["APP-1", "APP-2"]
     assert graph.fetch("ticket", []) == {}
     assert graph.fetch("pull_request", ["https://pr/1"]) == {}
-    assert _Fetching.asked == [["APP-1", "APP-2", "APP-3"], ["https://pr/1"]]
+    assert _Fetching.asked == [["APP-1", "APP-2", "APP-3"]]  # not about PRs: not its kind
+
+
+class _Asked(JiraPlugin):
+    """Jira, noting each kind core asks it about, by hook."""
+
+    asked: ClassVar[list[tuple[str, str]]] = []
+
+    def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
+        self.asked.append(("fetch", req.kind))
+        return []
+
+    def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
+        self.asked.append(("url_for", req.kind))
+        return super().url_for(req)
+
+    def handle_for(self, req: HandleRequest[JiraConfig]) -> str | None:
+        self.asked.append(("handle_for", req.kind))
+        return super().handle_for(req)
+
+
+def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
+    plugins = [_Asked() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config, db = stored(github=snapshot(), jira_site="https://j")
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    _Asked.asked.clear()
+    for kind, id in [("pull_request", "https://github.com/o/r/pull/9"), ("git.branch", "b")]:
+        graph.url_for(kind, id)
+        graph.handle(kind, id)
+        graph.fetch(kind, [id])
+    assert _Asked.asked == []
+    graph.url_for("ticket", "APP-9")
+    graph.handle("ticket", "https://j/browse/APP-9")
+    graph.fetch("ticket", ["https://j/browse/APP-9"])
+    assert _Asked.asked == [("url_for", "ticket"), ("handle_for", "ticket"), ("fetch", "ticket")]
+
+
+_family_asked: list[tuple[str, str]] = []
+"""Which of `_GitHubPeople` and `_MailPeople` core asked, by hook, in order."""
+
+
+def _person(id: str, **attrs: JsonValue) -> Entity:
+    return Entity(ref=Ref(kind="person", id=id), title=id, lifecycle="open", attrs=attrs)
+
+
+class _GitHubPeople(GitHubPlugin):
+    """GitHub, knowing no person's handle and fetching alice."""
+
+    def handle_for(self, req: HandleRequest[GitHubConfig]) -> str | None:
+        _family_asked.append((self.name, "handle_for"))
+        return None
+
+    def fetch(self, req: FetchRequest[GitHubConfig]) -> list[Entity]:
+        _family_asked.append((self.name, "fetch"))
+        return [_person("github.com/alice", handle="alice", me=False)]
+
+
+class _MailPeople(MailPlugin):
+    """Mail, knowing every person's handle and fetching bob."""
+
+    def handle_for(self, req: HandleRequest[MailConfig]) -> str | None:
+        _family_asked.append((self.name, "handle_for"))
+        return "bob@x.org"
+
+    def fetch(self, req: FetchRequest[MailConfig]) -> list[Entity]:
+        _family_asked.append((self.name, "fetch"))
+        return [_person("mail/bob@x.org", handle="bob@x.org", email="bob@x.org")]
+
+
+def test_each_publisher_of_a_family_is_asked_in_plugin_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    swap = {"github": _GitHubPeople(), "mail": _MailPeople()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    config = Config.model_validate(
+        {
+            "email": "me@x",
+            "github": {"org": "o"},
+            "mail": {"host": "imap.x.org", "username": "me@x"},
+        }
+    )
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    _family_asked.clear()
+    assert graph.handle("person", "mail/bob@x.org") == "bob@x.org"  # github had no answer
+    assert list(graph.fetch("person", ["github.com/alice", "mail/bob@x.org"])) == [
+        "github.com/alice",
+        "mail/bob@x.org",
+    ]
+    assert _family_asked == [
+        ("github", "handle_for"),
+        ("mail", "handle_for"),
+        ("github", "fetch"),
+        ("mail", "fetch"),
+    ]
+
+
+def test_url_for_is_by_default_the_id_where_the_familys_ids_are_urls() -> None:
+    config, db = stored(github=snapshot())
+    [github] = [e for e in registry.enabled(config, db, NOW) if e.name == "github"]
+    default = Plugin[GitHubConfig, GitHubSnapshot]()
+    url = "https://github.com/o/r/pull/9"
+
+    def url_for(kind: str, id: str) -> str | None:
+        return default.url_for(UrlRequest(github.ctx, kind, id))
+
+    assert url_for("pull_request", url) == url
+    assert url_for("pull_request", "#9") is None  # not a URL
+    assert url_for("person", "github.com/alice") is None  # a family whose ids aren't URLs
+    assert url_for("git.branch", "https://x/y") is None  # not a family's
 
 
 class _Failing(JiraPlugin):
@@ -324,13 +441,11 @@ class _Prepared(JiraPlugin):
 
     prepared = 0
 
-    def prepare_item_actions(
-        self, req: PrepareItemActionsRequest[JiraConfig]
-    ) -> Callable[[ItemActionsRequest[JiraConfig]], ItemAdditions]:
+    def item_actions(self, req: ItemActionsRequest[JiraConfig]) -> ItemAdditionsFor:
         _Prepared.prepared += 1
         prs = {e.ref.id for e in req.graph.of_kind("pull_request")}
 
-        def actions(each: ItemActionsRequest[JiraConfig]) -> ItemAdditions:
+        def actions(each: ItemRequest) -> ItemAdditions:
             pr = each.item.subject("pull_request")
             if pr is None or pr.id not in prs:
                 return ItemAdditions()
@@ -340,7 +455,7 @@ class _Prepared(JiraPlugin):
         return actions
 
 
-def test_a_plugin_prepares_its_item_actions_once_per_page(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_plugin_works_out_its_item_actions_once_per_page(monkeypatch: pytest.MonkeyPatch) -> None:
     plugins = [_Prepared() if p.name == "jira" else p for p in registry.PLUGINS]
     monkeypatch.setattr(registry, "PLUGINS", plugins)
     mine = [pr(1, merge_state="DIRTY"), pr(2, merge_state="DIRTY")]

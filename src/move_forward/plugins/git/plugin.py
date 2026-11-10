@@ -19,6 +19,8 @@ from ...api import (
     InitSetup,
     ItemActionsRequest,
     ItemAdditions,
+    ItemAdditionsFor,
+    ItemRequest,
     KindSpec,
     LoadRequest,
     Migration,
@@ -286,10 +288,15 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
 
-    def item_actions(self, req: ItemActionsRequest[GitConfig]) -> ItemAdditions:
-        item, graph = req.item, req.graph
-        found = (delete_iced_action(item, graph), restore_iced_action(item, graph))
-        return ItemAdditions(actions=[action for action in found if action])
+    def item_actions(self, req: ItemActionsRequest[GitConfig]) -> ItemAdditionsFor:
+        """Delete or restore the branches an On ice item put on ice."""
+        graph = req.graph
+
+        def additions(each: ItemRequest) -> ItemAdditions:
+            found = (delete_iced_action(each.item, graph), restore_iced_action(each.item, graph))
+            return ItemAdditions(actions=[action for action in found if action])
+
+        return additions
 
     def actions(self) -> dict[str, ActionHandler]:
         return {

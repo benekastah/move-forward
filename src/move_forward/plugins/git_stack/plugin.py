@@ -18,6 +18,8 @@ from ...api import (
     Item,
     ItemActionsRequest,
     ItemAdditions,
+    ItemAdditionsFor,
+    ItemRequest,
     KindSpec,
     LoadRequest,
     Migration,
@@ -115,9 +117,15 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         before, after = req.before, req.after
         return events.changes(before, after)
 
-    def item_actions(self, req: ItemActionsRequest[GitStackConfig]) -> ItemAdditions:
-        action = untrack_iced_action(req.item, req.graph)
-        return ItemAdditions(actions=[action] if action else [])
+    def item_actions(self, req: ItemActionsRequest[GitStackConfig]) -> ItemAdditionsFor:
+        """Untrack the branches an On ice item put on ice."""
+        graph = req.graph
+
+        def additions(each: ItemRequest) -> ItemAdditions:
+            action = untrack_iced_action(each.item, graph)
+            return ItemAdditions(actions=[action] if action else [])
+
+        return additions
 
     def actions(self) -> dict[str, ActionHandler]:
         return {

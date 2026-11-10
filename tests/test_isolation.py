@@ -27,6 +27,11 @@ def _boom(*_: object, **__: object) -> Any:
     raise RuntimeError("boom")
 
 
+def _boom_per_item(*_: object) -> Any:
+    """An `item_actions` that answers once a page, then fails on each item."""
+    return _boom
+
+
 def test_failing_entities_leave_that_plugin_out_of_the_graph_logged_once(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -52,12 +57,19 @@ def test_failing_panels_show_as_one_failed_panel(monkeypatch: pytest.MonkeyPatch
     assert any(p.key.startswith("git.") for p in dashboard.panels)  # the others are there
 
 
-def test_failing_item_actions_and_load_are_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_failing_item_actions_and_load_are_left_out_saying_which_call_failed(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     config, db = stored(github=snapshot(mine=[pr(1)]))
-    monkeypatch.setattr(NotesPlugin, "prepare_item_actions", _boom)
+    monkeypatch.setattr(NotesPlugin, "item_actions", _boom)
+    monkeypatch.setattr(GitPlugin, "item_actions", _boom_per_item)
     monkeypatch.setattr(GitPlugin, "load", _boom)
-    dashboard = refresh.build_dashboard(config, db, NOW)
+    with caplog.at_level(logging.ERROR):
+        dashboard = refresh.build_dashboard(config, db, NOW)
     assert dashboard.panels
+    failed = {r.message for r in caplog.records}
+    assert "notes: item_actions (once a page) failed" in failed
+    assert "git: item_actions (per item) failed" in failed
 
 
 def test_an_action_that_raises_says_it_failed_not_that_a_field_is_missing(

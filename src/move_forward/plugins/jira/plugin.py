@@ -483,9 +483,9 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     def fetch(self, req: FetchRequest[JiraConfig]) -> list[Entity]:
         """Tickets by URL, open or resolved, with `resolved_at` (null while open). Their
         projects are remembered, so their keys link from then on (see `linking_patterns`)."""
-        ctx, kind, ids = req.ctx, req.kind, req.ids
+        ctx, ids = req.ctx, req.ids
         keys = [k for id in ids if (k := client.key_of(ctx.config.site, id))]
-        if kind != TICKET or not keys:
+        if not keys:
             return []
         found = client.tickets(ctx.config, ctx.email, keys, ctx.token())
         IssueRepository(ctx.db).remember_projects([i.key for i in found])
@@ -503,17 +503,14 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
 
     def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
         """A ticket's URL, from its URL or its key alone."""
-        ctx, kind, id = req.ctx, req.kind, req.id
-        if kind != TICKET:
-            return None
+        ctx, id = req.ctx, req.id
         if client.key_of(ctx.config.site, id):
             return id
         return client.ticket_url(ctx.config.site, id) if client.is_key(id) else None
 
     def handle_for(self, req: HandleRequest[JiraConfig]) -> str | None:
         """A ticket's key, from its URL."""
-        ctx, kind, id = req.ctx, req.kind, req.id
-        return client.key_of(ctx.config.site, id) if kind == TICKET else None
+        return client.key_of(req.ctx.config.site, req.id)
 
     def panels(self, req: PanelsRequest[JiraConfig, JiraSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph

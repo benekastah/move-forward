@@ -77,14 +77,15 @@ gone.
 | `tag` | core, for each `#tag` on an entity | the tag's handle (`garbage-day` for `#garbage-day` or `#Garbage_Day`) | | what carries it; an entity whose title or mentions name it ("Garbage day", however spaced, hyphenated or cased) points at it |
 | `notes.iced` (hiding) | notes | the act of icing's id | | what it puts on ice (a stack's `git.branch`es, or a `pull_request`, `ticket` or `notes.entry`), and what else that covers: the branches' `pull_request`s and `git_stack.stack_branch`es, an entry's refs |
 
-`url_for(kind, id)` gives a URL for an entity that isn't in the graph: github
-answers for `pull_request` (the id is the URL), jira for `ticket` (its id, or from its key
-and `site`). `handle(kind, id)` gives its handle: jira's makes a ticket's key from its
+`url_for(kind, id)` gives a URL for an entity that isn't in the graph, asking only the
+plugins that publish `kind`: for `pull_request` the id is the URL (every plugin's default for
+a family whose ids are URLs), and jira gives a `ticket`'s (its id, or from its key and
+`site`). `handle(kind, id)` gives its handle: jira's makes a ticket's key from its
 URL.
 
 ## Fetched on demand
 
-`Graph.fetch(kind, ids)` asks the plugin that owns a kind for entities by id, now, even ones
+`Graph.fetch(kind, ids)` asks the plugins that publish a kind (and only those) for entities by id, now, even ones
 long gone from its snapshot; it's slow, so it's for rare work like the daily prune. A
 fetched entity must say its `lifecycle`, and its attributes fit its family's fetched model
 (`api.kinds.PullRequestFetched`, `TicketFetched`), whoever publishes it, or else its kind's

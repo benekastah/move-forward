@@ -14,15 +14,43 @@ small shared entity graph.
 ## First: finish simplifying
 
 The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but for the last of
-its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api), in one PR, as each changes
-the hooks a plugin implements:
+its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened from the
+review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
-- **B2:** call `url_for`, `handle_for` and `fetch` only on the plugin whose `kinds` include
-  the kind, and default `url_for` to the id for families whose ids are URLs.
-- **B3:** one item-actions hook (`prepare_item_actions`, renamed) instead of it and
-  `item_actions`.
-- **B7:** merge the hooks' request types into about four shapes (context; context and graph;
-  context, kind and id; context and snapshot).
+- **Five request types**, each hook taking one, with `Previous` a type of its own beside them
+  and `ItemRequest` (one item, given to what `item_actions` returns) kept as it is:
+  - `ContextRequest` (ctx): `load`, `linking_patterns`;
+  - `Request` (ctx, graph, snapshot): `store`, `entities`, `panels`, `relate`,
+    `after_collect`, `prune`, item actions and `events`, and `identity` and `act_now` (with
+    `panels`) unless they go, below;
+  - `RefreshRequest` (ctx, graph, `full`, `subjects`): `collect` and `changed`;
+  - `RefRequest` (ctx, kind, ids): `url_for`, `handle_for` and `fetch`;
+  - `InputRequest` (ctx, graph, and one of a page's query and path, a form's fields,
+    surface and back, or the command line's args): pages, buttons and `mfd <plugin>`.
+- **`Previous`:** `changed` and `events` get what was before as a `Previous`: when the last
+  check or refresh ran, the fingerprint the plugin last answered (`changed`), its snapshot
+  before (`events`) and the graph then. Only the graph can't be rebuilt after a restart, so
+  it's None there.
+- **The due horizon** moves into the context.
+- **Hooks removed:**
+  - `import_dir`, with `mfd import`, and `mfd notes export`;
+  - `refresh_subjects`: ↻ calls `collect` with its subjects;
+  - `collect_after`: `collect` gets the graph, and a plugin says by a class variable that
+    it collects after the others;
+  - `kept_item`: core keeps the focused item in memory across a button, so a todo just
+    ticked shows as it is now, its box ticked, with its buttons but those that can't act
+    from the remembered copy.
+- **Hooks merged:**
+  - `init_suggested` becomes a class variable;
+  - `url_for` and `handle_for` become one hook, answering both for an entity by id;
+  - `identity` goes: core reads who I am from the `person` a plugin publishes marked as me;
+  - `act_now` goes, if items can say they're candidates (with their `signals`) in place of
+    the four plugins' overrides;
+  - `init_shown` folds into what `init_questions` returns;
+  - `store` and `load` become one repository the plugin gives, if that spares a plugin
+    keeping state between the two calls; otherwise they stay.
+
+Then a further look at what's left: the hooks, and the class variables (about 21).
 
 ## Next, in this order
 
