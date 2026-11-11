@@ -134,7 +134,8 @@ class LinearConfig(TokenFields):
   section's `shown`, an example value for a key whose default is None or says less than an
   example, where uncommenting it is right for that section (mail's `auth_servers`: Gmail's
   servers for a Gmail host, `[]` for another, the same as unset there). Each comment goes
-  above what it's about. A plugin still setting `init_template` is refused, naming these.
+  above what it's about. A plugin still setting a removed name (`init_template`,
+  `init_questions`) is refused, naming what replaced it.
   `mfd init --example` writes each plugin's section as `mfd init` does when it isn't
   chosen, or, with `example_on=True` (a tool most use: github, git), on, with its `example`
   uncommented.
