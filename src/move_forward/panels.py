@@ -52,14 +52,13 @@ class PluginPanels:
 
 
 def candidates(panels: list[Panel]) -> list[Item]:
-    """The items of `panels` that are candidates for Act now (`Item.act_now`), each with its
-    panel's signals unless it has its own; one with neither isn't one."""
+    """The items of `panels` that are candidates for Act now (`Panel.candidate`), each with
+    its panel's signals unless it has its own."""
     return [
         item if item.signals else item.model_copy(update={"signals": panel.signals})
         for panel in panels
         for item in panel.items
-        if (item.signals or panel.signals)
-        and (item.act_now if item.act_now is not None else panel.act_now and not item.deferred)
+        if panel.candidate(item)
     ]
 
 

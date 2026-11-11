@@ -121,8 +121,11 @@ tag on the thread (`tags_from_text=False`): anyone can write one. A subject stil
 the graph whoever sent it; only what mail says it's about, and how it ranks, waits for a
 verified sender. That `person` is `mail/<address>`, with the address as its `handle` and
 `email`, so core joins them with the same person in other tools, a CRM say, and ranks and badges
-their mail by their contact type. Each mailbox's address is a `person` too, marked `me`, which
-the page's footer names. Only a sender the receiving server vouched for is published
+their mail by their contact type. Each mailbox's `username` is a `person` too, marked `me`,
+which the page's footer names: `mail/<address>` when it's an address, with that `email`; a bare
+login (`jdoe`, as some servers sign in) is `mail/jdoe`, with no `email`, so it joins no one in
+other tools. A `username` with a `/` in it can't be in a person's id, so it's no `person` and the
+footer leaves it out. Only a sender the receiving server vouched for is published
 that way: one whose `From` passed DMARC (its one `dmarc` result), by the server's own
 `Authentication-Results` (the topmost, stamped with a name in `auth_servers`; any below came
 with the message). Anyone can write any `From`, and a forged one mustn't borrow a customer's

@@ -120,7 +120,8 @@ class LinearConfig(TokenFields):
   `?` or `!` before a space, but not at `e.g.`, `i.e.` or `etc.`.
 - `mfd init` asks which plugins to set up (offering by default those that set
   `init_suggested = True`), then each chosen one's `init_questions(ask, setup)`, which
-  returns its section as an `InitSection`: its `values`, and what it `shown`s (below). `setup` has my email, where init runs and the teams found so far; a plugin that
+  returns its section as an `InitSection`: its `values`, and its `shown` (below). `setup`
+  has my email, where init runs and the teams found so far; a plugin that
   sets the teams (github does) says so with `init_finds_teams`, and otherwise core asks
   for them by name before any plugin's questions. Init refuses a plugin chosen without the
   plugins it `requires`. `ask(question, default, check, complete)` and `ask.list`
@@ -458,8 +459,8 @@ isn't one. Map your tool's own idea of
 importance (a priority, an escalation) onto `importance`, in the plugin. An item whose main
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
-A panel that nominates by due date passes `ctx.due_horizon` to `due_pressure`, so it agrees
-with `[act_now] due_warning_days`.
+A plugin whose items are candidates by due date passes `ctx.due_horizon` to `due_pressure`,
+so it agrees with `[act_now] due_warning_days`.
 Set `Item.fingerprint` to what would make a snoozed item worth another look.
 An item with a `task` also has Snooze in its own panel; what's snoozed
 waits there, last and dimmed, with Unsnooze, and Act now leaves it out. Give a task to any item it makes

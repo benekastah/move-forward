@@ -251,6 +251,15 @@ class Panel(Model):
     signals: Signals | None = None
     """The signals of its items that carry none, for Act now: e.g. "Review", in minutes."""
 
+    def candidate(self, item: Item) -> bool:
+        """Whether its `item` is a candidate for Act now: as the item says (`Item.act_now`),
+        else as the panel does (`act_now`), but not when it's `deferred`; and only with
+        signals, its own or the panel's. Core's Act now takes these, and a plugin reasoning
+        about what Act now will take asks the same."""
+        if item.signals is None and self.signals is None:
+            return False
+        return item.act_now if item.act_now is not None else self.act_now and not item.deferred
+
 
 Surface = Literal["dashboard", "focus", "act_now"]
 """Where an item is shown: the dashboard's panels, focus mode, or Act now."""

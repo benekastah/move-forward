@@ -931,7 +931,9 @@ def _for_act_now(panels: list[Panel]) -> list[Panel]:
     draft's item is deferred, but not a deferred review, as a draft isn't ready for one. And
     asking for a reviewer loses its effort while there's something else to do on the PR, which
     is worth doing before anyone looks at it, so it ranks below that and shows as "also" until
-    then."""
+    then. What Act now takes is what's on the panels (`Panel.candidate`), so that's where the
+    effort goes: such an item carries its signals itself, `effort` "unknown", and `mfd dump`
+    shows them so, as what Act now ranks it by."""
 
     def task(panel: Panel, item: Item) -> str | None:
         signals = item.signals or panel.signals
@@ -956,8 +958,7 @@ def _for_act_now(panels: list[Panel]) -> list[Panel]:
         item.url
         for panel in flagged
         for item in panel.items
-        if (item.act_now if item.act_now is not None else panel.act_now and not item.deferred)
-        and task(panel, item) not in (None, REQUEST_REVIEWER_TASK)
+        if panel.candidate(item) and task(panel, item) not in (None, REQUEST_REVIEWER_TASK)
     }
 
     def waiting(panel: Panel, item: Item) -> Item:

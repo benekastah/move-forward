@@ -132,6 +132,9 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         people: dict[str, Entity] = {}
         for mailbox in req.ctx.config.mailboxes():  # me, as each mailbox signs in
             me = mailbox.username.strip()
+            # An address is me by it, with that email; a bare login (`jdoe`) is me by the
+            # login, with no email to join me with elsewhere. A `/` can't go in a person's id
+            # (`mail/<id>`), so such a username is no one, and the footer leaves it out.
             address = me.lower() if "@" in me else None
             if me and "/" not in me:
                 people.setdefault(

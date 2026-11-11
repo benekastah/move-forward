@@ -1,5 +1,6 @@
 """The git plugin."""
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
@@ -141,7 +142,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         return found
 
     def snapshots(self, req: ContextRequest[GitConfig]) -> Snapshots[LocalSnapshot]:
-        return _Kept(self, LocalRepository(req.ctx.db))
+        return _Kept(LocalRepository(req.ctx.db), on_save=self._stored)
 
     def _stored(self, snapshot: LocalSnapshot) -> None:
         """A new snapshot was kept: watch the worktrees it found (once `changed` has started
@@ -323,16 +324,16 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
 
 
 class _Kept:
-    """git's snapshot, kept in its tables (`LocalRepository`): keeping a new one tells the
-    plugin, which watches the worktrees it found."""
+    """git's snapshot, kept in its tables (`LocalRepository`): keeping a new one calls
+    `on_save` with it (the plugin, which watches the worktrees it found)."""
 
-    def __init__(self, plugin: GitPlugin, repository: LocalRepository):
-        self._plugin = plugin
+    def __init__(self, repository: LocalRepository, on_save: Callable[[LocalSnapshot], None]):
         self._repository = repository
+        self._on_save = on_save
 
     def save(self, snapshot: LocalSnapshot) -> None:
         self._repository.save(snapshot)
-        self._plugin._stored(snapshot)  # pyright: ignore[reportPrivateUsage]
+        self._on_save(snapshot)
 
     def load(self) -> LocalSnapshot:
         return self._repository.load()

@@ -143,8 +143,8 @@ class Harness:
         return self
 
     def store(self, snapshot: BaseModel) -> None:
-        """Keep `snapshot` as a refresh would after collecting it: the plugin's `store`, and
-        when it was fetched. Its events are found then, as the refresh would (see
+        """Keep `snapshot` as a refresh would after collecting it: where the plugin keeps it
+        (`Plugin.snapshots`), and when it was fetched. Its events are found then, as the refresh would (see
         `events`)."""
         with self._installed():
             before = refresh.before_refresh(
@@ -196,7 +196,7 @@ class Harness:
         return self.plugin.name
 
     def snapshot(self) -> BaseModel | None:
-        """What the plugin last stored, through its `load`."""
+        """What the plugin last stored, through its `snapshots`."""
         with self._installed():
             return self._enabled().snapshot()
 

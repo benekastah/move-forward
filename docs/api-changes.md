@@ -22,7 +22,8 @@ for themselves (a token, a request, an example config) is core's.
 - **An item says it's an Act now candidate**: the `act_now(req)` hook (and `Request.panels`)
   is gone. A panel's items are candidates as before (its `act_now`, but deferred ones), and an
   item says otherwise with `Item.act_now`: True for a candidate wherever it is and deferred or
-  not, False for none. A candidate needs signals, its own or its panel's. A plugin that
+  not, False for none. A candidate needs signals, its own or its panel's; `panel.candidate(item)`
+  says whether an item is one, as Act now decides. A plugin that
   nominated precisely sets the flag where it builds the items (jira's due-soon tickets, from
   `ctx.due_horizon`; git_stack's one Clean per repo; notes' close-outs; github's drafts'
   feedback).

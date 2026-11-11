@@ -44,7 +44,7 @@ flowchart LR
     git_stack([git_stack]) -- "publishes, pointing at branch" --> stack_branch[git_stack.stack_branch]
     jira([jira]) -- "publishes, its labels as tags" --> ticket
     mail([mail]) -- "publishes, pointing at its sender, its Gmail labels as tags" --> thread
-    mail -- "publishes (senders, by email)" --> person
+    mail -- "publishes (me, senders, by email)" --> person
     notes([notes]) -- publishes --> entry
     notes -- "publishes, pointing at what it hides" --> ice
     ice -. "hides what it covers" .-> core([core])

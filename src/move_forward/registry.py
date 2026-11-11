@@ -257,9 +257,10 @@ class Enabled:
         return seconds if isinstance(seconds, int) else None
 
     def snapshot(self) -> BaseModel | None:
-        """What the plugin last stored; None when it has nothing, or its `load` fails."""
+        """What the plugin last stored; None when it has nothing, or loading it through its
+        `snapshots` fails (logged as `snapshots.load`)."""
         with self.ctx.db.reading():  # all of one refresh's, never half of the next's
-            return call(self.name, "load", lambda: self.kept().load(), None)
+            return call(self.name, "snapshots.load", lambda: self.kept().load(), None)
 
     def kept(self) -> "Snapshots[Any]":
         """Where the plugin keeps its snapshot (`Plugin.snapshots`)."""

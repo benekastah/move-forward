@@ -60,7 +60,7 @@ points at them by their contact type, or by the importance a tool states for the
 
 ```mermaid
 flowchart TB
-    tables[("each plugin's tables")] -->|"Plugin.load"| snapshot["snapshot<br/>(the plugin's model)"]
+    tables[("each plugin's tables")] -->|"Plugin.snapshots"| snapshot["snapshot<br/>(the plugin's model)"]
     snapshot -->|"Plugin.entities"| published["entities, per plugin"]
     published --> check{"a kind the plugin owns, a ref not<br/>seen yet, fitting the kind's model?"}
     check -->|no| dropped["left out, logged:<br/>a plugin bug"]
