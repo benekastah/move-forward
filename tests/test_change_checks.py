@@ -19,7 +19,7 @@ from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.registry import Enabled
-from move_forward.repositories import SnapshotRepository
+from move_forward.repositories import ChangeRepository, SnapshotRepository
 
 
 class _Git(GitPlugin):
@@ -222,3 +222,20 @@ def test_a_failure_to_take_what_moved_is_the_plugins_not_the_whole_refreshs(
     refresh.refresh(config, db, NOW, {"git"}, ChangeChecks())
     [row] = SnapshotRepository(db).of(["git"]).values()
     assert row.error == "OperationalError: database is locked" and git.given == []
+
+
+def test_a_plugin_that_only_watches_another_is_asked_as_its_collect_starts(
+    git: _Git, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no poll of its own (git_stack's way), it's asked as its collect starts as any
+    plugin with a check is: a collect that didn't ask would leave the fingerprint from before
+    the move, and the check after what it watches refreshes would report the move again."""
+    monkeypatch.setattr(_Git, "change_check_seconds", None)
+    monkeypatch.setattr(_Git, "watches", ["github"])
+    config, db, checks = _config(tmp_path / "x.db"), Database(":memory:"), ChangeChecks()
+    registry.migrate(config, db)
+    refresh.refresh(config, db, _minutes(0), {"git"}, checks)  # the first: a full collect
+    git.answers[:] = [Changed(fingerprint="b", subjects=frozenset({"a"}))]
+    refresh.refresh(config, db, _minutes(1), {"git"}, checks)
+    assert len(git.asked) == 2 and git.given[1:] == [(False, {"a"})]
+    assert ChangeRepository(db).get("git").fingerprint == "b"

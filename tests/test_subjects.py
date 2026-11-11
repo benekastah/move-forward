@@ -173,8 +173,8 @@ def test_a_plugins_first_collect_since_the_start_is_narrowed_only_if_asked_for_a
 def test_the_loop_narrows_a_plugin_asked_for_entities_unless_its_refresh_was_pressed_too(
     named: set[str] | None, full: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """One round of the server's loop, with a ↻ on github's PR pending, and its Refresh
-    pressed or not: github is collected once."""
+    """One round of the server's loop, with a ↻ on github's PR pending, and its Refresh, the
+    header's, or neither pressed: github is collected once."""
     config, db = stored(github=snapshot(mine=[pr(1)]))
     app = server.App(config, db, "token")
     rounds = [0]

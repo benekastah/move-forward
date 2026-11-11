@@ -919,12 +919,22 @@ def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
     assert app.check_for_changes() == set()  # no change_check_seconds: never polled
 
 
-def test_a_watcher_refreshed_this_round_isnt_asked_after_a_plugin_refreshed_alone_before_it(
-    app: server.App, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("then", "expected"),
+    [
+        # github next: its collect asks its check as it starts, so asking it after git's
+        # would only have it fetched again in the next round.
+        ("github", ["git", "github"]),
+        # slack next, which doesn't watch git: github is asked after git's, and collected in
+        # the next round.
+        ("slack", ["git", "slack", "github"]),
+    ],
+)
+def test_a_watcher_is_asked_after_a_plugin_refreshed_alone_unless_its_refreshed_next(
+    then: str, expected: list[str], app: server.App, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A ↻ on a git branch while github is due: git first, narrowed to the branch, then github,
-    once. Its collect asks its check as it starts, so asking it after git's would only have it
-    fetched again in the next round."""
+    """A ↻ on a git branch while another plugin's Refresh is pending: git first, narrowed to
+    the branch, then that plugin; github, which watches git, is collected once."""
     swap = {"github": _GitHubWatchingGit()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     app.config = app.config.with_section("git", GitConfig(repos=[]))
@@ -953,7 +963,7 @@ def test_a_watcher_refreshed_this_round_isnt_asked_after_a_plugin_refreshed_alon
         rounds[0] += 1
         if rounds[0] == 1:  # after the first refresh, of everything
             collected.clear()
-            app.request_refresh({"github"})
+            app.request_refresh({then})
             app.request_refresh_subjects([branch])
         elif rounds[0] > 2:  # one round more, for what the first asked for
             raise KeyboardInterrupt
@@ -968,7 +978,7 @@ def test_a_watcher_refreshed_this_round_isnt_asked_after_a_plugin_refreshed_alon
     monkeypatch.setattr(app._wake, "wait", wait)  # pyright: ignore[reportPrivateUsage]
     with pytest.raises(KeyboardInterrupt):
         app.run_refresh_loop()
-    assert collected == ["git", "github"]
+    assert collected == expected
 
 
 def test_secrets_in_query_parameters_are_left_out_of_the_log() -> None:

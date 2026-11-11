@@ -221,9 +221,9 @@ class App:
 
     def _after_refresh(self, names: frozenset[str], then: frozenset[str] = frozenset()) -> None:
         """Start the wait for the next change check over for the plugins just refreshed (each
-        was asked as its collect started), and ask the plugins that watch them
-        (`Plugin.watches`), but those refreshed next (`then`), at once, refreshing those that
-        did."""
+        was asked as its collect started), and at once ask the plugins that watch them
+        (`Plugin.watches`), except those refreshed next (`then`), whether they changed,
+        refreshing those that did."""
         now = time.monotonic()
         for name in names:
             self._last_checked[name] = now

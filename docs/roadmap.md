@@ -119,11 +119,11 @@ that needs a core one says so, and lands on top of it.
 10. **Account on the settings page.** A Sign out everywhere button (`mfd logout`), and where
     each plugin's token is found (`mfd token check`). Setting or rotating a token stays in
     the terminal.
-11. **Snooze a PR wherever it's nominated.** slack's Nudge reviewers (task `ping`) has Snooze,
-    but github's items for my PRs waiting on review have no task, so they have neither Snooze
-    nor Unsnooze. A snooze is kept by subject, kind and task, so snoozing the nudge sets aside
-    only the nudge: give github's items a task, and say whether snoozing one PR's item sets
-    aside the other.
+11. **Snooze a PR waiting on review.** slack's Nudge reviewers nominates a PR of mine (task
+    `ping`), with Snooze, but the PR's item in github's Ready for review has no task, so it
+    has neither Snooze nor Unsnooze. A snooze is kept by its subject's kind and id and its
+    task, so snoozing the nudge sets aside only the nudge: give github's item a task, and
+    decide whether snoozing it sets aside the nudge too.
 
 ### github
 
