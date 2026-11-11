@@ -27,5 +27,6 @@ class ThreadAttrs(KindModel):
 
 
 class MailPerson(Person):
-    """A `person`: someone whose mail is in the mailbox, by `mail/<address>`; `handle` and
-    `email` are their address."""
+    """A `person`: someone whose mail is in the mailbox, by `mail/<address>`, `handle` and
+    `email` being their address; or me, signing in to a mailbox with a bare login, by
+    `mail/<login>`, `handle` being the login and `email` None."""

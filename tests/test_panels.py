@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import pytest
 from conftest import (
@@ -1059,25 +1060,36 @@ def test_focus_mode_keeps_an_item_that_left_its_category_as_it_is_now() -> None:
 @pytest.mark.parametrize(
     ("panel_act_now", "item_act_now", "deferred", "signals", "candidate"),
     [
-        (True, None, False, True, True),
-        (True, None, True, True, False),  # deferred: not for now
-        (False, None, False, True, False),
-        (False, True, True, True, True),  # the item says so, deferred or not
-        (True, False, False, True, False),
-        (True, None, False, False, False),  # no signals to rank it by
+        (True, None, False, "panel", True),
+        (True, None, False, "item", True),  # its own signals are enough
+        (True, None, True, "panel", False),  # deferred: not for now
+        (False, None, False, "panel", False),
+        (False, True, True, "panel", True),  # the item says so, deferred or not
+        (True, False, False, "panel", False),
+        (True, None, False, None, False),  # no signals to rank it by
     ],
 )
 def test_a_panel_says_which_of_its_items_are_candidates_for_act_now(
-    panel_act_now: bool, item_act_now: bool | None, deferred: bool, signals: bool, candidate: bool
+    panel_act_now: bool,
+    item_act_now: bool | None,
+    deferred: bool,
+    signals: Literal["panel", "item"] | None,
+    candidate: bool,
 ) -> None:
-    item = Item(title="x", act_now=item_act_now, deferred=deferred)
+    go = Signals(verb="Go", task="go")
+    item = Item(
+        title="x",
+        act_now=item_act_now,
+        deferred=deferred,
+        signals=go if signals == "item" else None,
+    )
     shown = Panel(
         key="p",
         title="P",
         description="",
         items=[item],
         act_now=panel_act_now,
-        signals=Signals(verb="Go", task="go") if signals else None,
+        signals=go if signals == "panel" else None,
     )
     assert shown.candidate(item) is candidate
     assert (panels.candidates([shown]) != []) is candidate

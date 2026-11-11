@@ -631,9 +631,9 @@ class Database:
 
     @contextmanager
     def reading(self) -> Generator[None]:
-        """Several reads, with no write of another thread between them: a plugin's `load`
-        reads its tables in several queries, and mustn't get half of one refresh's and half of
-        the next's."""
+        """Several reads, with no write of another thread between them: a plugin's
+        `Snapshots.load` reads its tables in several queries, and mustn't get half of one
+        refresh's and half of the next's."""
         with self._lock:
             yield
 

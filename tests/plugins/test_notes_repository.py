@@ -243,14 +243,14 @@ def test_conditions_kept_before_they_named_their_pr_are_given_one_once() -> None
 
 
 def test_rekeying_asks_for_new_ids_outside_its_transaction() -> None:
-    """What gives the new ids asks plugins (their `url_for`), which may use the database."""
+    """What gives the new ids asks plugins (their `address`), which may use the database."""
     db = Database(":memory:")
     db.migrate("notes", MIGRATIONS)
     notes = NotesRepository(db)
     notes.add_entry("e", DAY, links=[Link(kind="jira.issue", ref="APP-1")])
 
     def identify(kind: str, ref: str) -> str:
-        # A plugin's url_for waiting on another thread that reads the database, say.
+        # A plugin's address waiting on another thread that reads the database, say.
         reader = threading.Thread(target=db.query, args=("SELECT 1",))
         reader.start()
         reader.join(timeout=2)

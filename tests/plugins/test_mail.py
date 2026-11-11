@@ -18,6 +18,7 @@ from move_forward.kinds import PERSON, Person
 from move_forward.page import Identity
 from move_forward.plugin import (
     RefreshRequest,
+    Request,
     Response,
     SourceError,
 )
@@ -1438,3 +1439,23 @@ def test_i_am_a_person_by_each_mailboxs_address_once_whoever_writes() -> None:
     harness = mailbox(message(1, sender=ME))  # mail I sent myself
     me = [e for e in harness.entities() if e.ref.kind == PERSON]
     assert [(e.ref.id, e.attrs["me"], e.attrs["email"]) for e in me] == [(f"mail/{ME}", True, ME)]
+
+
+def test_signing_in_with_a_bare_login_i_am_a_person_by_it_without_an_email() -> None:
+    harness = mailbox(username="jdoe")
+    [me] = [e for e in harness.entities() if e.ref.kind == PERSON]
+    assert (me.ref.id, me.attrs["me"], me.attrs["handle"], me.attrs["email"]) == (
+        "mail/jdoe",
+        True,
+        "jdoe",
+        None,
+    )
+    assert harness.dashboard().identities == [Identity(tool="Mail", login="jdoe")]
+
+
+def test_a_username_with_a_slash_is_no_one_and_left_out_of_the_footer() -> None:
+    harness = mailbox(username="a/b")
+    # What mail publishes, before the graph drops an id its family doesn't take.
+    published = harness.plugin.entities(Request(harness.ctx, Graph(), harness.snapshot()))
+    assert [e for e in published if e.ref.kind == PERSON] == []
+    assert harness.dashboard().identities == []

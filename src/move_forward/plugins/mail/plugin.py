@@ -34,10 +34,11 @@ from .repository import MIGRATIONS, MessageRepository
 from .setup import EXAMPLE, TABLES, questions
 
 
-def person_id(email: str) -> str:
-    """The id of the `person` with address `email`: `mail/<address>`, the same whichever mail
-    plugin publishes them, and apart from any code host's `<host>/<login>`."""
-    return f"mail/{email}"
+def person_id(key: str) -> str:
+    """The id of the `person` `key` names: `mail/<address>` for an address, the same whichever
+    mail plugin publishes them, and apart from any code host's `<host>/<login>`; `mail/<login>`
+    for me signing in to a mailbox with a bare login. `key` has no `/`."""
+    return f"mail/{key}"
 
 
 def password(ctx: Context[MailConfig], mailbox: Mailbox) -> str:

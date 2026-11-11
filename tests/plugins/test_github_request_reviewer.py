@@ -3,10 +3,14 @@
 import pytest
 from conftest import ME, REPO, dashboard, panel, pr, snapshot, stored
 
-from move_forward.page import Action, Item
+from move_forward.page import Action, Item, Panel, Signals
 from move_forward.plugin import ActionError
 from move_forward.plugins.github import client
-from move_forward.plugins.github.panels import REQUEST_REVIEWER
+from move_forward.plugins.github.panels import (
+    REQUEST_REVIEWER,
+    REQUEST_REVIEWER_TASK,
+    _for_act_now,  # pyright: ignore[reportPrivateUsage]
+)
 from move_forward.refresh import perform_action
 
 URL = f"https://github.com/{REPO}/pull/1"
@@ -32,6 +36,27 @@ def test_a_reviewer_request_ranks_below_anything_else_to_do_on_the_pr() -> None:
     assert item.title == "Resolve conflicts: PR 1"
     assert "also: Request a reviewer" in item.details
     assert _field(item) is not None
+
+
+def test_a_reviewer_request_keeps_its_effort_beside_work_act_now_doesnt_take() -> None:
+    ask = Signals(verb="Request a reviewer", task=REQUEST_REVIEWER_TASK, effort="minutes")
+    fix = Signals(verb="Fix CI", task="fix_ci", effort="hour")
+    request = Item(title="PR 1", url=URL, signals=ask)
+    not_taken = Item(title="PR 1", url=URL, act_now=False)  # tasked, by its panel
+    [needs, _] = _for_act_now(
+        [
+            Panel(key="needs_reviewer", title="", description="", act_now=True, items=[request]),
+            Panel(
+                key="ci_failures",
+                title="",
+                description="",
+                act_now=True,
+                signals=fix,
+                items=[not_taken],
+            ),
+        ]
+    )
+    assert needs.items[0].signals == ask  # nothing Act now shows to do first
 
 
 def test_a_pr_with_a_reviewer_has_no_field() -> None:
