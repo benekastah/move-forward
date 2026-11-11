@@ -1,19 +1,24 @@
 """Fetching some entities again: a refresh of just the plugins that publish them, each
-narrowed to them."""
+narrowed to them, unless its refresh was asked for by name too."""
 
 import time
 from datetime import timedelta
+from pathlib import Path
 from typing import ClassVar
 
 import pytest
 from conftest import NOW, issue, pr, snapshot, stored
 
-from move_forward import refresh, registry
+from move_forward import cli, refresh, registry, server
+from move_forward.change_checks import ChangeChecks
+from move_forward.config import load
+from move_forward.db import Database
 from move_forward.graph import Ref
-from move_forward.plugin import ContextRequest, RefreshRequest
+from move_forward.plugin import Changed, ContextRequest, RefreshRequest
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
+from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
@@ -40,6 +45,9 @@ class _GitHub(GitHubPlugin):
         kept = self.snapshots(ContextRequest(req.ctx)).load()
         assert kept is not None
         return kept
+
+    def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
+        return Changed()  # nothing moved, and nothing asked of GitHub
 
 
 class _Jira(JiraPlugin):
@@ -117,3 +125,69 @@ def test_a_plugin_whose_full_refresh_is_due_refreshes_in_full() -> None:
     config, db = _refreshed()
     refresh.refresh_subjects(config, db, [PR_1], NOW + timedelta(days=1))
     assert list(ASKED) == [("github", True, frozenset({PR_1.id}))]
+
+
+def test_a_plugin_also_asked_for_by_name_is_refreshed_as_it_would_have_been() -> None:
+    """Its Refresh button, its own action or its schedule: in full, given what was asked too,
+    while one refreshed for what was asked alone is narrowed to it."""
+    config, db = stored(github=snapshot(mine=[pr(1)]), jira=JiraSnapshot(issues=[issue("APP-1")]))
+    checks = ChangeChecks()
+    refresh.refresh(config, db, NOW, None, checks)
+    ASKED.clear()
+    asked = {"github": frozenset({PR_1.id}), "jira": frozenset({APP_1.id})}
+    refresh.refresh(config, db, LATER, {"github"}, checks, asked)
+    assert sorted(ASKED) == [
+        ("github", True, frozenset({PR_1.id})),
+        ("jira", False, frozenset({APP_1.id})),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("named", "full"),
+    [
+        (set[str](), False),  # ↻ alone: narrowed to the PR
+        ({"github"}, True),  # its Refresh button too: in full, as the button would have it
+    ],
+)
+def test_the_loop_narrows_a_plugin_asked_for_entities_unless_its_refresh_was_pressed_too(
+    named: set[str], full: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One round of the server's loop, with a ↻ on github's PR pending, and its Refresh
+    pressed or not: github is collected once."""
+    config, db = stored(github=snapshot(mine=[pr(1)]))
+    app = server.App(config, db, "token")
+    rounds = [0]
+
+    def wait(timeout: float | None = None) -> bool:
+        rounds[0] += 1
+        if rounds[0] > 1:
+            raise KeyboardInterrupt  # one round after the first refresh is enough
+        ASKED.clear()
+        app.request_refresh(named)
+        app.request_refresh_subjects([PR_1])
+        return True
+
+    monkeypatch.setattr(app._wake, "wait", wait)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(KeyboardInterrupt):
+        app.run_refresh_loop()
+    assert list(ASKED) == [("github", full, frozenset({PR_1.id}))]
+
+
+def test_mfd_refresh_subject_fetches_just_that(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "config.toml"
+    db_path = tmp_path / "dashboard.db"
+    path.write_text(
+        f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n[github]\norg = "acme"\n',
+        encoding="utf-8",
+    )
+    db = Database(db_path)
+    registry.migrate(load(path), db)
+    PrRepository(db).save(snapshot(mine=[pr(1)]))
+    assert cli.main(["-c", str(path), "refresh"]) == 0  # in full: the first
+    ASKED.clear()
+    capsys.readouterr()
+    assert cli.main(["-c", str(path), "refresh", "--subject", PR_1.kind, PR_1.id]) == 0
+    assert list(ASKED) == [("github", False, frozenset({PR_1.id}))]  # once, and narrowed
+    assert "github: ok" in capsys.readouterr().out

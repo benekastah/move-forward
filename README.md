@@ -347,7 +347,7 @@ Pages (GET, HTML):
 | `/` | The dashboard. `?tag=<tag>`, repeated for several, shows only what carries one of them (see [Tags](#tags)). |
 | `/settings` | The config's settings as a form (see [Settings](#settings)). |
 | `/focus` | Focus mode's category list. |
-| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `act` (Act now) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<token>` (set by the redirect of a button pressed on a focus page) names the item it was on, which the server remembers, to show in place of item `n` once it's left the category. |
+| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `act` (Act now) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<item>` (in a focus page's own address, and so in its buttons' redirects) names the item the page shows (its anchor, or `title:` and its title), found again wherever it is, and remembered to show in place of item `n` once it's left the category; follow a redirect rather than build it. |
 
 Both focus pages take `tag` as `/` does.
 
@@ -356,7 +356,9 @@ Plugins add pages and buttons of their own, listed on their pages (see
 
 `POST /refresh/subjects` (JSON, `[{"kind": ..., "id": ...}]`, at most 50) asks for those
 entities to be fetched again, ahead of any refresh that's due: a refresh of the plugins that
-publish them, each narrowed to them where it can be, recorded as any refresh. It answers `204 No Content`, or `400` for a body that isn't one.
+publish them, each narrowed to them where it can be, recorded as any refresh. A plugin whose
+refresh is asked for by name or falls due in the same round is refreshed as it would have been,
+given them too. It answers `204 No Content`, or `400` for a body that isn't one.
 
 `POST /layout` (JSON, sent by the page's drag script) stores the page's order:
 `{"groups": [group keys], "panels": {group key: [panel keys]}}`. It answers

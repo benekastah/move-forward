@@ -117,7 +117,8 @@ class Before:
     snapshots: dict[str, BaseModel | None]
     """Each plugin's snapshot; None for one that had never stored one."""
     stored_at: dict[str, datetime]
-    """When each plugin last stored its snapshot, by a refresh or a refresh of subjects; one
+    """When the refresh that last stored each plugin's snapshot began (a refresh or a refresh of
+    subjects); one
     that never did (or did only before the time was kept) isn't here. A refresh that failed
     stored nothing, so it doesn't count."""
 
@@ -211,13 +212,15 @@ def _collect_all(
     graph: Graph,
     asking: bool,
     asked: Mapping[str, frozenset[str]] | None = None,
+    named: set[str] | None = None,
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, from `graph`, given what
     moved since its last collect and the ids of its entities `asked` for (`ChangeChecks.take`,
-    asking its check first when `asking`), and keep it where the plugin keeps it
-    (`Plugin.snapshots`), which settles what it was given and lets the tags I
-    took off what it publishes come back (`TagRepository.put_back`): it has found them again,
-    or not. Each plugin has
+    asking its check first when `asking`; a plugin not `named`, None meaning all, was asked
+    for them alone, so they narrow its collect), and keep it where the plugin keeps it
+    (`Plugin.snapshots`), which settles what it was given and lets the tags I took off what it
+    publishes come back (`TagRepository.put_back`): it has found them again, or not. Each
+    plugin has
     `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh
     goes on without it; one still running from an earlier refresh is left out."""
     started = time.monotonic()
@@ -236,7 +239,12 @@ def _collect_all(
 
                 def collector() -> BaseModel:  # taking within, so its failure is the plugin's
                     nonlocal taken
-                    taken = checks.take(e, graph if asking else None, (asked or {}).get(e.name))
+                    taken = checks.take(
+                        e,
+                        graph if asking else None,
+                        (asked or {}).get(e.name),
+                        named is None or e.name in named,
+                    )
                     return collect(e, taken)
 
                 def store(snapshot: BaseModel) -> None:
@@ -290,17 +298,19 @@ def refresh(
     """Refresh every plugin, or `only` those and the plugins `asked` names. Each plugin fails
     on its own, its outcome recorded as its status. Each collect is given what moved since the
     plugin's last (`ChangeChecks.take`) and the ids of its entities `asked` for (see
-    `asked_of`); with the server's `checks`, a plugin with a change check is asked it as its
-    collect starts. After collecting,
-    the graph is built again, the plugins' events found against what held before, the daily
-    prune runs if due, and `after_collect` runs for the plugins collected and those that
-    collect nothing (they work from the others' data). When the dashboard is stopping, it
-    collects no more, but still finds the events of what it stored, and ends there, as long as
-    it gets that far: the server runs it in a daemon thread, which its own shutdown may freeze
-    first, and then that refresh's events are lost (the next start compares with what it
-    stored). Run outside that thread (`mfd refresh`, a test), it always gets that far."""
+    `asked_of`): a plugin that isn't one of `only` is refreshed for them alone, its collect
+    narrowed to them; one that is (or every plugin, with no `only`) is collected as it would
+    have been, given them too. With the server's `checks`, a plugin with a change check is
+    asked it as its collect starts. After collecting, the graph is built again, the plugins'
+    events found against what held before, the daily prune runs if due, and `after_collect`
+    runs for the plugins collected and those that collect nothing (they work from the others'
+    data). When the dashboard is stopping, it collects no more, but still finds the events of
+    what it stored, and ends there, as long as it gets that far: the server runs it in a daemon
+    thread, which its own shutdown may freeze first, and then that refresh's events are lost
+    (the next start compares with what it stored). Run outside that thread (`mfd refresh`, a test), it always gets that far."""
     now = now or datetime.now(UTC)
     asked = asked or {}
+    named = only
     only = None if only is None else only | set(asked)
     plugins = enabled(config, db, now)
     before = before_refresh(db, plugins)
@@ -312,7 +322,7 @@ def refresh(
     def collect_first(e: Enabled, taken: Taken) -> BaseModel:
         return e.plugin.collect(RefreshRequest(e.ctx, before.graph, taken.full, taken.subjects))
 
-    _collect_all(db, first, now, collect_first, checks, before.graph, asking, asked)
+    _collect_all(db, first, now, collect_first, checks, before.graph, asking, asked, named)
     graph, snapshots = stored_graph(db, plugins)
     if after and not shell.stopping():
         given = graph
@@ -320,7 +330,7 @@ def refresh(
         def collect_after(e: Enabled, taken: Taken) -> BaseModel:
             return e.plugin.collect(RefreshRequest(e.ctx, given, taken.full, taken.subjects))
 
-        _collect_all(db, after, now, collect_after, checks, given, asking, asked)
+        _collect_all(db, after, now, collect_after, checks, given, asking, asked, named)
         graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
     _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)

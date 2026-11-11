@@ -23,6 +23,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.notifications import Event, NotificationRepository
+from move_forward.page import Item
 from move_forward.panels import Layout
 from move_forward.plugin import (
     ActionError,
@@ -40,6 +41,7 @@ from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.plugin import SlackPlugin
 from move_forward.plugins.slack.repository import SlackRepository
+from move_forward.refresh import build_dashboard
 from move_forward.registry import migrate
 from move_forward.repositories import LayoutRepository, SessionRepository, TagRepository
 
@@ -467,6 +469,35 @@ def test_an_item_gone_from_the_page_is_shown_as_it_was_without_its_buttons(
     body, _ = _focused(client, _pressed(client, back, "todo_delete", {"todo": str(dishes)}))
     assert "dishes" in body and "gone · 1 to go" in body
     assert "/actions/notes/" not in body.split("focus-panel", 1)[1].split("laundry")[0]
+
+
+def test_an_item_snoozed_in_act_nows_focus_mode_stays_there_set_aside(
+    app: server.App, client: HTTPConnection
+) -> None:
+    """Snoozed, the todo leaves Act now but stays in its own panel: found there, with
+    Unsnooze."""
+    notes = NotesRepository(app.db)
+    notes.add_todo(notes.add_entry("Chores", NOW.date()), "dishes", size="quick")
+    body, back = _focused(client, "/focus?cat=act&i=0")
+    step = build_dashboard(app.config, app.db, surface="focus").focus_step("act", 0)
+    assert step is not None and "1 of 2" in body and "dishes" in body
+    snooze = next(a for a in step[1].actions if a.label == "Snooze")
+    response = post(client, f"/actions/act_now/snooze?back={back}", snooze.fields)
+    response.read()
+    body, _ = _focused(client, response.getheader("Location") or "")
+    shown = body.split("focus-panel", 1)[1]
+    assert "set aside · 1 to go" in body and "dishes" in shown
+    assert "/actions/act_now/unsnooze?" in body
+
+
+def test_the_server_remembers_only_the_last_items_focus_pages_showed(app: server.App) -> None:
+    """So a server left running doesn't grow as focus pages are browsed."""
+    for n in range(server.MAX_SHOWN + 1):
+        app._remember(f"item-{n}", ("notes.todos", Item(title=str(n))))  # pyright: ignore[reportPrivateUsage]
+    assert app._remembered("item-0") is None  # pyright: ignore[reportPrivateUsage]
+    assert app._remembered("item-1") == ("notes.todos", Item(title="1"))  # pyright: ignore[reportPrivateUsage]
+    last = f"item-{server.MAX_SHOWN}"
+    assert app._remembered(last) == ("notes.todos", Item(title=str(server.MAX_SHOWN)))  # pyright: ignore[reportPrivateUsage]
 
 
 def test_being_stopped_shuts_down_quietly(
@@ -1094,11 +1125,20 @@ def test_entities_are_asked_to_be_fetched_again_through_the_endpoint(
         assert response.status in (400, 401, 403)
 
 
+@pytest.mark.parametrize(
+    ("named", "expected"),
+    [
+        # github is refreshed for the PR alone: first, narrowed to it, then the rest.
+        ({"jira"}, ["refresh [] asked ['github']", "refresh ['jira']"]),
+        # github is asked for by name too: refreshed as it would have been, given the PR.
+        ({"github", "jira"}, ["refresh ['github', 'jira'] asked ['github']"]),
+    ],
+)
 def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
-    app: server.App, monkeypatch: pytest.MonkeyPatch
+    app: server.App, monkeypatch: pytest.MonkeyPatch, named: set[str], expected: list[str]
 ) -> None:
-    """The plugins publishing them first, narrowed to them; then the rest asked for, but not
-    those again."""
+    """The plugins refreshed for them alone first, narrowed to them; then the rest asked for,
+    none twice."""
     done: list[str] = []
     waits = [0]
 
@@ -1113,7 +1153,7 @@ def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
         waits[0] += 1
         if waits[0] > 1:
             raise KeyboardInterrupt  # one round is enough
-        app.request_refresh({"github", "jira"})
+        app.request_refresh(named)
         app.request_refresh_subjects([Ref(kind="pull_request", id=pr(1).url)])
         return True
 
@@ -1126,7 +1166,7 @@ def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
     monkeypatch.setattr(app._wake, "wait", wait)  # pyright: ignore[reportPrivateUsage]
     with pytest.raises(KeyboardInterrupt):
         app.run_refresh_loop()
-    assert done == ["refresh all", "refresh [] asked ['github']", "refresh ['jira']"]
+    assert done == ["refresh all", *expected]
 
 
 def test_a_page_answering_a_bad_response_fails_rather_than_sending_it(

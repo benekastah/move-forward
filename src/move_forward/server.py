@@ -194,17 +194,18 @@ class App:
         self, only: set[str] | None = None, asked: dict[str, frozenset[str]] | None = None
     ) -> bool:
         """Refresh every plugin, or `only` those and the plugins `asked` names, each collect
-        given the ids of its entities asked for (see `refresh.refresh`), unless a refresh is
-        already running; returns whether this call did it. Each plugin refreshed waits its
-        `refresh_seconds` again before it's due."""
+        given the ids of its entities asked for, and narrowed to them when it's not one of
+        `only` (see `refresh.refresh`), unless a refresh is already running; returns whether
+        this call did it. Each plugin refreshed waits its `refresh_seconds` again before it's
+        due."""
         if not self._refresh_lock.acquire(blocking=False):
             return False
         try:
-            only = None if only is None else only | set(asked or {})
-            first, after = to_collect(enabled(self.config, self.db, datetime.now(UTC)), only)
+            every = None if only is None else only | set(asked or {})
+            first, after = to_collect(enabled(self.config, self.db, datetime.now(UTC)), every)
             self.refreshing = frozenset(e.name for e in first + after)
             started = time.monotonic()
-            for name in self.intervals() if only is None else only:
+            for name in self.intervals() if every is None else every:
                 self.last_refreshed[name] = started
             refresh(self.config, self.db, None, only, self.checks, asked)
             self._after_refresh(self.refreshing)
@@ -308,20 +309,21 @@ class App:
 
     def run_refresh_loop(self) -> None:
         """Refresh everything at start, then each plugin as it falls due, and what's asked
-        for (`request_refresh`) at once; the plugins publishing entities asked for
-        (`request_refresh_subjects`) first, narrowed to them, so a tab coming back to focus
-        doesn't wait on the other plugins, nor is any plugin refreshed twice in a round."""
+        for (`request_refresh`) at once. A plugin publishing entities asked for
+        (`request_refresh_subjects`) and refreshed for them alone is refreshed first, narrowed
+        to them, so a tab coming back to focus doesn't wait on the other plugins; one also
+        refreshed by name or schedule this round is refreshed as it would have been, given
+        them too. No plugin is refreshed twice in a round."""
         only: set[str] | None = None
         subjects: list[Ref] = []
         while True:
             try:
                 asked = asked_of(self.config, self.db, subjects) if subjects else {}
-                if asked and only is not None:
-                    self.refresh_now(set(), asked)
-                    only -= set(asked)
-                    asked = {}
-                if only is None or only or asked:
-                    self.refresh_now(only, asked)
+                alone = {n: ids for n, ids in asked.items() if only is not None and n not in only}
+                if alone:
+                    self.refresh_now(set(), alone)
+                if only is None or only:
+                    self.refresh_now(only, {n: ids for n, ids in asked.items() if n not in alone})
             except Exception:
                 log.exception("refresh failed")
             self._wake.wait(self._seconds_to_next())
