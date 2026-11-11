@@ -339,7 +339,10 @@ def test_focus_page_actions_come_back_to_it() -> None:
     )
     html = render.focus_page(dashboard, "cleanup", 0, notice="done")
     assert html is not None
-    assert "action='/actions/delete_branch?back=%2Ffocus%3Fcat%3Dcleanup%26i%3D0'" in html
+    assert (
+        "action='/actions/delete_branch?back=%2Ffocus%3Fcat%3Dcleanup%26i%3D0%26kept%3Dtitle%253Ax'"
+        in html
+    )
     assert "<span class='notice'>done</span>" in html
     assert "/actions/delete_branch?at=cleanup&pos=0' class='action'" in render.dashboard_page(
         dashboard, refreshing=frozenset()
@@ -354,7 +357,10 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
         "<label class='check'><input type='checkbox' onchange='this.form.requestSubmit()'> Done"
         in html
     )
-    assert "action='/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0'" in html
+    assert (
+        "action='/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0%26kept%3Ditem-notes-todo-"
+        in html
+    )
     assert "<input type='hidden' name='todo' value='" in html
     assert "1 of 2" in html
 
@@ -365,9 +371,10 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
     assert steps is not None
     on, step_a = steps[0]
     NotesRepository(db).set_done(todo_a, NOW.date())
-    done = build_dashboard(config, db, NOW, surface="focus").kept("notes.todos", (on.key, step_a))
-    assert done is not None
-    html = render.focus_page(built, "notes.todos", 0, done=done)
+    after = build_dashboard(config, db, NOW, surface="focus")
+    done = after.kept("notes.todos", panels.focus_key(step_a), (on.key, step_a))
+    assert isinstance(done, panels.Kept)
+    html = render.focus_page(built, "notes.todos", 0, kept=done)
     assert html is not None
     assert (
         "<input type='checkbox' checked onchange" in html and "/actions/notes/todo_undone?" in html
@@ -379,7 +386,7 @@ def test_checkbox_actions_and_the_done_todo_view() -> None:
 
     # Ticking the last item off leaves nothing else, but still shows the done one.
     empty = dashboard()
-    html = render.focus_page(empty, "notes.todos", 0, done=done)
+    html = render.focus_page(empty, "notes.todos", 0, kept=done)
     assert html is not None and "Nothing here" not in html and "done · 0 to go" in html
     assert "disabled next" in html
 

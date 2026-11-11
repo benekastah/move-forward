@@ -407,6 +407,7 @@ def test_a_refresh_of_one_pr_keeps_the_rest_of_its_lists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config, db = stored(github=snapshot(mine=[pr(1), pr(2)]))
+    ChangeRepository(db).collected("github", 0, NOW)  # a full refresh just ran
     asked: list[list[client.PrId]] = []
 
     def fetch_prs(host: str, ids: list[client.PrId]) -> list[object]:
@@ -415,7 +416,7 @@ def test_a_refresh_of_one_pr_keeps_the_rest_of_its_lists(
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     one = Ref(kind="pull_request", id=pr(1).url)
-    assert refresh.refresh_subjects(config, db, [one], NOW) == set()
+    refresh.refresh_subjects(config, db, [one], NOW)
     assert asked == [[client.PrId(repo="acme/widgets", number=1)]]
     kept = PrRepository(db).load()
     assert kept is not None

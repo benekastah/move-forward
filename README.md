@@ -121,7 +121,7 @@ before the command's name.
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
 | `mfd restart` | Ask a running `mfd serve` supervisor to check the code and config, then replace its server process. This works on macOS, Linux and Windows; on macOS and Linux, `SIGUSR1` to the supervisor process does the same. An already running supervisor must be started once with this version to accept restart requests. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
-| `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that fail to. |
+| `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), refresh just the plugins that publish those entities, each fetching only them where it can. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <entity> [7d\|12h\|changed] [--kind K] [--task T]` | Snooze the items about an entity (named as for `mfd priority`; all its tasks, or `--task`'s), as their Snooze button does: each until it changes or the time is up (default: `[act_now]` `snooze_days` for its kind); with `changed`, only until it changes. It snoozes what has a Snooze button, in Act now or a panel, and says so when nothing does. `mfd unsnooze <entity> [--kind K] [--task T]` brings back anything snoozed (named as for `mfd priority`; all its tasks, or `--task`'s). |
 | `mfd priority <entity> <1\|2\|clear> [--kind K]` | Set how much an entity matters: 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
@@ -162,8 +162,8 @@ until unpinned), which act on all it shows: what else is due on its subject and 
 to it. A snoozed item comes back once it changes (its title, badges or details). Opening an
 item's link, or pressing a plugin's button on it, marks it opened: it's dimmed in its place,
 with when you opened it, until it changes (or for a day at most). Coming back to the tab
-fetches again just what you opened in the last half hour, not its plugins whole; an item's
-↻ button does the same for it at once.
+refreshes the plugins of what you opened in the last half hour, each fetching just that where
+it can (github a PR, git a branch's repo); an item's ↻ button does the same for it at once.
 
 Items with something to do have the same Snooze in their own panels. An item snoozed, in Act
 now or its panel, leaves Act now and waits in its panel, last and dimmed, with Unsnooze, until
@@ -308,10 +308,12 @@ Prev and Next (or the left and right arrow keys). Act now goes through its items
 order overall; a panel, in its own. Work entries are split into their todos
 ([notes](docs/plugins/notes.md#panels) says how). With tags selected (see [Tags](#tags)), it goes
 through only what carries one.
-Buttons on a focused item come back to the same item afterwards: one that takes it out of
-the category (a todo ticked off, an item snoozed) leaves it shown as the page has it now (the
-todo ticked, the item with Unsnooze), so what it did can be undone, or, when the page no longer
-shows it at all, as it was, without its buttons.
+Buttons on a focused item come back to the same item afterwards, wherever they moved it (a
+todo made quick comes first). One that takes it out of the category (a todo ticked off, an
+item snoozed) leaves it shown as the page has it now (the todo ticked, "done"; the item with
+Unsnooze, "set aside"), so what it did can be undone, or, when the page no longer shows it at
+all, as it was, without its buttons, "gone". A focus page's address names its item as
+`kept`: its anchor (`item-…`), or `title:` and its title for an item about nothing.
 
 ## API
 
@@ -353,8 +355,8 @@ Plugins add pages and buttons of their own, listed on their pages (see
 [Plugins](#plugins)).
 
 `POST /refresh/subjects` (JSON, `[{"kind": ..., "id": ...}]`, at most 50) asks for those
-entities to be fetched again, ahead of any refresh that's due; a plugin that fails to fetch
-them is refreshed whole. It answers `204 No Content`, or `400` for a body that isn't one.
+entities to be fetched again, ahead of any refresh that's due: a refresh of the plugins that
+publish them, each narrowed to them where it can be, recorded as any refresh. It answers `204 No Content`, or `400` for a body that isn't one.
 
 `POST /layout` (JSON, sent by the page's drag script) stores the page's order:
 `{"groups": [group keys], "panels": {group key: [panel keys]}}`. It answers

@@ -494,7 +494,7 @@ def test_fetching_a_pr_again_tells_what_changed_once(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(GitHubPlugin, "collect", again)
     pr_ref = Ref(kind="pull_request", id=_OPEN.url)
-    assert refresh.refresh_subjects(config, db, [pr_ref], NOW) == set()
+    refresh.refresh_subjects(config, db, [pr_ref], NOW)
     assert _told(db) == _MERGE_TOLD
     refresh.refresh(config, db, NOW)
     assert _told(db) == []

@@ -11,7 +11,7 @@ from html import escape
 from . import localtime, tag_view
 from .act_now import OPENED_FIELD
 from .page import Action, Badge, Group, Item, Link, Panel, SourceStatus, age
-from .panels import ACT_NOW, Dashboard
+from .panels import ACT_NOW, Dashboard, Kept, focus_key
 from .text import shown
 
 PAGE_RELOAD_SECONDS = 60
@@ -925,10 +925,15 @@ def dashboard_page(
     )
 
 
+KEPT = "kept"
+"""A focus page's parameter naming the item it shows (its `focus_key`), for its buttons to come
+back to: the page finds it again wherever they put it (see `Dashboard.kept`)."""
+
+
 def focus_url(category: str, index: int, tags: Sequence[str] = (), kept: str = "") -> str:
-    """Focus mode's page of a category's item at `index`, filtered by `tags`, showing the item
-    `kept` names in its place (see `server.App.focus_page`)."""
-    params = {"cat": category, "i": str(index)} | ({"kept": kept} if kept else {})
+    """Focus mode's page of a category's item at `index`, filtered by `tags`; with `kept`, of
+    the item it names, found again wherever it is now (see `server.App.focus_page`)."""
+    params = {"cat": category, "i": str(index)} | ({KEPT: kept} if kept else {})
     return tag_view.url("/focus", tags, params)
 
 
@@ -984,19 +989,17 @@ def focus_page(
     category: str,
     index: int,
     notice: str = "",
-    done: tuple[str, Item] | None = None,
+    kept: Kept | None = None,
     tags: Sequence[str] = (),
-    kept: str = "",
 ) -> str | None:
     """One item of a focus category with previous and next links; None for an unknown category.
 
     An index past the end (the list shrank since the link was made) shows the last item.
-    `notice` is the outcome of an action just run from this page. `done` is an item an action
-    just took out of the category, e.g. a todo ticked off, with its panel's key: it's shown in
-    place of the item at `index` (which is now the one after it), so the change can be undone,
-    and its buttons come back to this page as `kept` names it (see `server.App.run_action`).
-    With `tags`,
-    it steps through only what carries one (see `tag_view` and `dashboard_page`).
+    `notice` is the outcome of an action just run from this page. `kept` is an item an action
+    just took out of the category, e.g. a todo ticked off: it's shown in place of the item at
+    `index` (which is now the one after it), so the change can be undone. The page's own link,
+    which its buttons come back to, names the item it shows (`KEPT`), to find it again. With
+    `tags`, it steps through only what carries one (see `tag_view` and `dashboard_page`).
     """
     where = _Where("/focus", (("cat", category),), tuple(tags))
     shown = tag_view.focused(dashboard, tags)
@@ -1012,7 +1015,7 @@ def focus_page(
         + _tag_bar(tag_view.options(dashboard), where)
         + "<main class='single'>"
     )
-    if not items and done is None:
+    if not items and kept is None:
         empty = (
             _nothing_carries(where)
             if tags
@@ -1020,19 +1023,21 @@ def focus_page(
             "<p>This category is empty. <a href='/focus'>Pick another</a>.</p></article>"
         )
         return head + header + empty + "</main></body></html>"
-    index = max(0, min(index, len(items) - (0 if done else 1)))
-    here = focus_url(category, index, tags, kept)
-    if done is not None:
-        done_panel, item = done
-        panel = shown.find_panel(done_panel)
+    if kept is not None:
+        index = max(0, min(index, len(items)))
+        item = kept.item
+        panel = shown.find_panel(kept.panel)
         panel_title, description = (panel.title, panel.description) if panel else ("Done", "")
-        position = f"done · {len(items) - index} to go"
+        state = "gone" if kept.gone else "done" if item.done else "set aside"
+        position = f"{state} · {len(items) - index} to go"
         next_index = index
     else:
+        index = max(0, min(index, len(items) - 1))
         panel, item = items[index]
         panel_title, description = panel.title, panel.description
         position = f"{index + 1} of {len(items)}"
         next_index = index + 1
+    here = focus_url(category, index, tags, focus_key(item))
     prev_link = (
         f"<a class='button secondary prev' href='{_e(focus_url(category, index - 1, tags))}'>"
         "← Prev</a>"

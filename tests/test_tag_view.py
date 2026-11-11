@@ -221,7 +221,7 @@ def test_what_comes_back_to_the_page_keeps_the_selection() -> None:
     assert "href='/focus?cat=act&amp;i=0&amp;tag=urgent'" in focus
     step = render.focus_page(board, ACT_NOW, 0, tags=["urgent"]) or ""
     # A focus page's buttons come back to it, whose address has the selection.
-    assert "back=%2Ffocus%3Fcat%3Dact%26i%3D0%26tag%3Durgent" in step
+    assert re.search(r"back=%2Ffocus%3Fcat%3Dact%26i%3D0%26kept%3D[\w-]+%26tag%3Durgent'", step)
     assert not re.search(r"action='/actions/[^']*[?&]tag=", step)  # nor the selection twice
 
 

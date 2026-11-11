@@ -184,10 +184,10 @@ class RefreshRequest[C: BaseModel]:
     """For `collect`: what moved, in the plugin's own terms. What its change checks said
     (`Changed.subjects`) since a collect last stored: core keeps each until a collect that
     started after it was said stores, so a collect that fails loses none of it, and what moves
-    again while one runs stays for the next. Or, with `full` False and nothing pending, the ids
-    of its entities to fetch again now: those an action touched (`ActionResult.touched`), or
-    that I opened or asked for again (↻, `mfd refresh --subject`). A collect that can't fetch
-    just those fetches everything. Empty for `changed`, which says what moved rather than
+    again while one runs stays for the next. With them, the ids of its entities asked to be
+    fetched again now: those an action touched (`ActionResult.touched`), or that I opened or
+    asked for again (↻, `mfd refresh --subject`). A collect that can't fetch just those
+    fetches everything. Empty for `changed`, which says what moved rather than
     being told."""
     previous: Previous[BaseModel] = field(default_factory=Previous[BaseModel])
     """For `changed` only: when core took the plugin's last answer, its fingerprint, and the

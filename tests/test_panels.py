@@ -1039,16 +1039,18 @@ def test_focus_mode_keeps_an_item_that_left_its_category_as_it_is_now() -> None:
     config, db = stored(work_items=[entry("Chores", [todo("dishes"), todo("laundry")])])
     before = build_dashboard(config, db, NOW, surface="focus")
     [(on, dishes), _] = before.focus_items("notes.todos") or []
-    remembered = (on.key, dishes)
-    assert before.kept("notes.todos", remembered) is None  # still a step
+    key, remembered = panels.focus_key(dishes), (on.key, dishes)
+    assert before.kept("notes.todos", key, remembered) == 0  # still a step, the first
     [todo_id] = [t.id for e in NotesRepository(db).entries() for t in e.todos if t.text == "dishes"]
     NotesRepository(db).set_done(todo_id, NOW.date())
     after = build_dashboard(config, db, NOW, surface="focus")
-    kept = after.kept("notes.todos", remembered)
-    assert kept is not None and kept[0] == "notes.todos"
-    assert (kept[1].title, kept[1].done) == ("dishes", True)
-    assert [(a.name, a.checked) for a in kept[1].actions] == [("notes/todo_undone", True)]
+    kept = after.kept("notes.todos", key, remembered)
+    assert isinstance(kept, panels.Kept) and (kept.panel, kept.gone) == ("notes.todos", False)
+    assert (kept.item.title, kept.item.done) == ("dishes", True)
+    assert [(a.name, a.checked) for a in kept.item.actions] == [("notes/todo_undone", True)]
     NotesRepository(db).delete_todo(todo_id)
-    gone = build_dashboard(config, db, NOW, surface="focus").kept("notes.todos", remembered)
-    assert gone is not None and gone[1].title == "dishes"
-    assert [a for a in gone[1].actions if a.href is None] == []  # nothing left to act on
+    after = build_dashboard(config, db, NOW, surface="focus")
+    gone = after.kept("notes.todos", key, remembered)
+    assert isinstance(gone, panels.Kept) and (gone.item.title, gone.gone) == ("dishes", True)
+    assert [a for a in gone.item.actions if a.href is None] == []  # nothing left to act on
+    assert after.kept("notes.todos", key) is None  # without the copy, nothing to show

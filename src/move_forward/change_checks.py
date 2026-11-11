@@ -38,7 +38,8 @@ class Taken:
     full: bool
     """Whether to fetch everything (`RefreshRequest.full`)."""
     subjects: frozenset[str]
-    """What moved since a collect last stored (`RefreshRequest.subjects`)."""
+    """What moved since a collect last stored, and the ids of entities asked for
+    (`RefreshRequest.subjects`)."""
     at: datetime
     """When the collect started: the last full collect's time, once a full one stores."""
     seen: int
@@ -92,25 +93,30 @@ class ChangeChecks:
         )
         return answer if moved else None
 
-    def take(self, e: Enabled, graph: Graph | None) -> Taken:
-        """What a collect of the plugin starting now is given. With `graph` (what the collect
-        works from), a plugin with a check is asked first, so what moved up to now is in it,
-        and the next check compares with now; a check that fails is logged, and the collect
-        goes on with what's pending."""
+    def take(self, e: Enabled, graph: Graph | None, asked: frozenset[str] | None = None) -> Taken:
+        """What a collect of the plugin starting now is given: what's pending, and the ids of
+        its entities `asked` for (`refresh.asked_of`). With `graph` (what the collect works
+        from), a plugin with a check is asked first, so what moved up to now is in it, and the
+        next check compares with now; a check that fails is logged, and the collect goes on
+        with what's pending. A collect of entities asked for is narrowed to them even when it's
+        the plugin's first since this started, as long as a full one has stored before and its
+        `refresh_seconds` haven't passed since: they were asked for, not the rest."""
         if graph is not None and checks(e):
             try:
                 self.check(e, graph)
             except Exception:
                 log.debug("%s: change check before collecting failed", e.name, exc_info=True)
         held = ChangeRepository(e.ctx.db).get(e.name)
+        asked = asked or frozenset()
         seconds = e.refresh_seconds
         due = (
-            e.name not in self._full
+            (e.name not in self._full and not asked)
             or held.full_at is None
             or (seconds is not None and (e.ctx.now - held.full_at).total_seconds() >= seconds)
         )
-        full = due or held.everything or not held.subjects
-        return Taken(full, held.subjects, e.ctx.now, held.checks)
+        subjects = held.subjects | asked
+        full = due or held.everything or not subjects
+        return Taken(full, subjects, e.ctx.now, held.checks)
 
     def stored(self, e: Enabled, taken: Taken) -> None:
         """The collect given `taken` stored: what moved before it started is no longer

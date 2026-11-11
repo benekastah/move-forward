@@ -45,7 +45,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   plugins don't filter them out themselves.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
-  plugin last fetched, and why it failed, and when it last stored; what its change checks last saw and said moved,
+  plugin last fetched, and why it failed, and when it last stored; what its change checks
+  last saw and said moved,
   until a collect started after stores (`change_checks.py`); and what else a plugin reports wrong with
   `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its state on
   the page and logged when it changes, rather than each plugin warning in its own way.
@@ -53,11 +54,11 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   can gain an input without breaking its overrides. Most take one of five kinds:
   `ContextRequest(ctx)` (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)`
   (`store`, `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`,
-  `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `changed`);
-  `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx, graph)` with a `Page`, a
-  `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). Two keep a request of
-  their own: `url_for` (`UrlRequest`) and `handle_for` (`HandleRequest`). `changed`
-  and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
+  `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
+  (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx,
+  graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd
+  <plugin>`). Two keep a request of their own: `url_for` (`UrlRequest`) and `handle_for`
+  (`HandleRequest`). `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
   the snapshot and the graph then). Those called before there's a context take what they need:
   `init_suggested()`, `init_questions(ask, setup)` and `init_shown(section)` (`mfd init`),
   `tokens(config)` (`mfd token`, and loading the config), `cli(parser)`, `pages()` and
@@ -84,7 +85,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   hold with `graph.fetch`. Buttons, badges, details and links on other plugins' items
   come from `item_actions`, called once per page (where a plugin reads its tables for them),
   which returns the function core calls per item with whose item it is and where it's
-  shown. Core adds its own to items: the importance choices on
+  shown. Core adds its own to items, and plugins theirs, but not to a part that's `done` (a
+  todo ticked off, kept to untick, finished within its item: only its own buttons act on it):
+  the importance choices on
   every item about an entity (but what `hides`), with Clear priority once one's set; Snooze
   (for a while, or until it changes) on every item with a task, wherever it's shown, and Pin in Act now; on an item
   about a person (`people.py`) their contact type, and Set type for a
