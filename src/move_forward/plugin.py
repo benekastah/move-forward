@@ -133,9 +133,9 @@ class Previous[S: BaseModel]:
     """What held before, for `changed` and `events` to compare with now."""
 
     at: datetime | None = None
-    """For `changed`, when the plugin's last change check ran; for `events`, when the plugin
-    last stored a snapshot (a refresh, or a refresh of subjects), the one `snapshot` holds: a
-    refresh that failed stored nothing, so it doesn't count. None before the first."""
+    """For `changed`, when the plugin's last change check ran; for `events`, when the refresh
+    that last stored a snapshot began (a refresh, or a refresh of subjects), the one `snapshot`
+    holds: a refresh that failed stored nothing, so it doesn't count. None before the first."""
     fingerprint: str | None = None
     """What the plugin's last change check answered (`Changed.fingerprint`), for `changed`;
     None before the first."""
@@ -161,7 +161,8 @@ class Request[C: BaseModel, S: BaseModel]:
     """What the plugin last stored; None before its first refresh. For `store`, what `collect`
     just fetched; for `events`, the snapshot now."""
     previous: Previous[S] = field(default_factory=Previous[S])
-    """For `events` only: the plugin's snapshot and the graph before this refresh."""
+    """For `events` only: the plugin's snapshot before this refresh, when the refresh that
+    stored it began (`at`), and the graph then."""
     panels: list[Panel] = field(default_factory=list[Panel])
     """For `act_now` only: the plugin's own panels, as `panels` built them."""
 
