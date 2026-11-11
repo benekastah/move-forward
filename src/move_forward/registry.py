@@ -181,6 +181,8 @@ REMOVED_ATTRIBUTES: dict[str, str] = {
     " snapshot's model is its type parameter `S`",
     "cli_help": "a plugin has a command when it overrides `cli`, whose docstring's first line"
     " is the command's help",
+    "locked_settings": "mark each such field `LOCKED` in its type, e.g."
+    " `site: Annotated[str, LOCKED]`",
 }
 """`Plugin` attributes and hooks that are gone, each with what replaced it. A plugin still
 setting one is refused, naming its replacement, rather than core silently ignoring it (its
