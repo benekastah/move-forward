@@ -62,21 +62,19 @@ class ChangeChecks:
         self._full: set[str] = set()
         """The plugins whose full collect stored since this started."""
 
-    def check(self, e: Enabled, graph: Graph) -> Changed | None:
+    def check(self, e: Enabled, graph: Graph, since: Graph | None = None) -> Changed | None:
         """Ask the plugin what moved, and keep the answer; the answer when it says something
         moved (a fingerprint other than the last, any subject, or `Changed.everything`), for a
-        refresh, else None. Raises when the check does, or answers with something that isn't a
-        `Changed`: then nothing is kept, and the next check compares with the same as this one
-        did."""
+        refresh, else None. Its previous graph is the one its last check was given, or `since`
+        when none has been since this started. Raises when the check does, or answers with
+        something that isn't a `Changed`: then nothing is kept, and the next check compares
+        with the same as this one did."""
         repo = ChangeRepository(e.ctx.db)
         held = repo.get(e.name)
+        previous = self._graphs.get(e.name, since)
         answer = e.plugin.changed(
             RefreshRequest(
-                e.ctx,
-                graph,
-                previous=Previous(
-                    held.checked_at, held.fingerprint, graph=self._graphs.get(e.name)
-                ),
+                e.ctx, graph, previous=Previous(held.checked_at, held.fingerprint, graph=previous)
             )
         )
         if not isinstance(cast(object, answer), Changed):  # a plugin needn't be type-checked
@@ -93,6 +91,19 @@ class ChangeChecks:
             )
         )
         return answer if moved else None
+
+    def moved(self, e: Enabled, graph: Graph, since: Graph | None = None) -> str | None:
+        """Why the plugin's change check says something new moved in its tool ("" when it
+        doesn't say), kept as `check` keeps it; None when nothing did, or the check fails
+        (raises, or answers with something that isn't a `Changed`): logged at debug and tried
+        again next time, against the same as this one, so one plugin's check can't stop the
+        others' and what it missed isn't lost."""
+        try:
+            answer = self.check(e, graph, since)
+            return None if answer is None else answer.reason
+        except Exception:
+            log.debug("%s: change check failed", e.name, exc_info=True)
+            return None
 
     def take(
         self,

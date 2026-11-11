@@ -38,7 +38,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     init = Init(suggested=shutil.which("git-stack") is not None, example_on=True)
     """Suggested only when git stack is installed, i.e. `git stack` would run."""
     requires: ClassVar[list[str]] = ["git"]
-    collects_after = True
     watches: ClassVar[list[str]] = ["git"]
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}

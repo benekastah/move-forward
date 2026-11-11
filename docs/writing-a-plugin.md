@@ -237,10 +237,12 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   thread using `ctx.db`). Nothing is kept as JSON.
 - Who I am in the tool is a `person` it publishes with `me=True`: the page's footer lists
   each plugin's, by handle.
-- A plugin that needs other plugins' entities to know what to fetch sets `collects_after =
-  True` (see git_stack): its `collect` runs once the others have stored their snapshots, with
-  the graph they make (`req.graph`; every collect has the graph, built from what's stored). It's refreshed on its own schedule, not with the
-  plugins it reads; to refresh soon after they change, it `watches` them.
+- Every collect has the graph (`req.graph`), as stored before the refresh: every plugin due
+  collects at once. A plugin that needs other plugins' entities to know what to fetch (see
+  git_stack) `watches` them, and its `changed` compares their entities in `req.graph` with
+  `req.previous.graph`: in each refresh that collects one of them, once they've stored, it's
+  asked, and collected again from the new graph if it says something moved, so what they just
+  found reaches it in the same refresh.
 - `notification_kinds` and `events(req)` make browser notifications: when the user has
   subscribed to one of the kinds (`<plugin>.<kind>`), `events` is asked after every refresh,
   of anything, with the plugin's snapshot before it and now (`req.previous.snapshot`,

@@ -172,8 +172,9 @@ class RefreshRequest[C: BaseModel]:
 
     ctx: Context[C]
     graph: Graph
-    """Every plugin's entities, built from what's stored now: for a plugin that
-    `collects_after` the others, with what they just stored."""
+    """Every plugin's entities, built from what's stored now: for `collect`, as stored before
+    the refresh began, or, collected again for a plugin it `watches`, as that one just stored
+    it (see `watches`)."""
     full: bool = True
     """For `collect`: whether to fetch everything: at the plugin's first collect since the
     dashboard started, unless it collects only entities asked for (see `subjects`) and a full
@@ -422,16 +423,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
     change_check_seconds: ClassVar[int | None] = None
     """How often `mfd serve` asks `changed`; None for a plugin without such a check. It's
     asked as each collect starts too, whether it's set or the plugin `watches` another."""
-    collects_after: ClassVar[bool] = False
-    """Its `collect` needs other plugins' entities to know what to fetch, e.g. the repos git
-    found (git_stack's): a refresh collects it once the others due have stored their
-    snapshots, with the graph they make, in parallel with the other plugins that collect after.
-    It's refreshed on its own schedule, not with the plugins it reads: to refresh soon after
-    they change, it `watches` them."""
     watches: ClassVar[list[str]] = []
-    """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
-    each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
-    rather than waiting for `change_check_seconds`."""
+    """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]` for
+    git_stack, whose `collect` needs the repos git found: in each refresh that collects one of
+    them, once they've stored, `changed` is asked with the new graph, and the plugin collected
+    (again, if it was collected in that refresh, from the graph as it was before) when it says
+    something moved, rather than waiting for `change_check_seconds` (see `refresh._settle`)."""
     always_on: ClassVar[bool] = False
     """On without a section (notes), so `mfd init` doesn't offer it."""
     init: ClassVar[Init] = Init()
@@ -462,8 +459,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def collect(self, req: RefreshRequest[C]) -> S:
         """Fetch the plugin's snapshot: everything, or with `req.full` False just what its
-        change checks said moved (`req.subjects`), from the graph (`req.graph`; see
-        `collects_after`). Runs in parallel with other plugins' and
+        change checks said moved (`req.subjects`), from the graph (`req.graph`: as stored
+        before the refresh, or after for a plugin collected again as it `watches` one that
+        refreshed). Runs in parallel with other plugins' and
         may raise; the error is shown and the last good snapshot kept. It has five minutes
         (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
         failed and goes on, and leaves it out of refreshes until its collect returns (a thread

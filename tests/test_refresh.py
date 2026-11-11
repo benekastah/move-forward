@@ -12,11 +12,12 @@ from move_forward import refresh, registry
 from move_forward.act_now import OPENED_FOR, ActNowConfig, Feedback
 from move_forward.config import Config
 from move_forward.db import Database
-from move_forward.graph import Ref
+from move_forward.graph import Graph, Ref
 from move_forward.notifications import NotificationRepository
 from move_forward.page import Badge, Item
 from move_forward.plugin import (
     ActionError,
+    Changed,
     ContextRequest,
     RefreshRequest,
     Request,
@@ -24,7 +25,6 @@ from move_forward.plugin import (
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
-from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -41,17 +41,25 @@ class _Git(GitPlugin):
         return local_snapshot()
 
 
-class _JiraAfterGit(JiraPlugin):
-    """Fetches an issue per repo git found, and remembers what after_collect saw."""
+class _JiraWatchingGit(JiraPlugin):
+    """Fetches an issue per repo git found, as git_stack reads git's, so it watches git; and
+    remembers what it collected from and what after_collect saw."""
 
-    collects_after = True
+    change_check_seconds: ClassVar[int | None] = None
+    watches: ClassVar[list[str]] = ["git"]
+    collected_from: ClassVar[list[list[str]]] = []
     seen_by_after_collect: ClassVar[list[str]] = []
 
+    def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
+        def repos(graph: Graph | None) -> list[str]:
+            return sorted(r.ref.id for r in graph.of_kind("git.repo")) if graph else []
+
+        return Changed(everything=repos(req.graph) != repos(req.previous.graph))
+
     def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
-        graph = req.graph
-        return JiraSnapshot(
-            issues=[issue(summary=f"about {r.ref.id}") for r in graph.of_kind("git.repo")]
-        )
+        repos = [r.ref.id for r in req.graph.of_kind("git.repo")]
+        self.collected_from.append(repos)
+        return JiraSnapshot(issues=[issue(summary=f"about {r}") for r in repos])
 
     def after_collect(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
         graph = req.graph
@@ -60,11 +68,17 @@ class _JiraAfterGit(JiraPlugin):
 
 @pytest.fixture(autouse=True)
 def plugins(monkeypatch: pytest.MonkeyPatch) -> None:
-    swap = {"git": _Git(), "jira": _JiraAfterGit()}
+    swap = {"git": _Git(), "jira": _JiraWatchingGit()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
 
 
-def test_a_plugin_collects_from_the_graph_of_the_others(tmp_path: Path) -> None:
+def test_a_watcher_collects_again_from_what_the_plugin_it_watches_just_stored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every plugin collects from the graph as stored before the refresh; jira, watching git,
+    is asked once git has stored, and collected again from git's repos, in the same refresh.
+    In a refresh where its check says nothing moved, it's collected once."""
+    monkeypatch.setattr(_JiraWatchingGit, "collected_from", [])
     config = Config.model_validate(
         {
             "email": "me@x",
@@ -77,7 +91,10 @@ def test_a_plugin_collects_from_the_graph_of_the_others(tmp_path: Path) -> None:
     refresh.refresh(config, db, NOW)
     stored = IssueRepository(db).load()
     assert [i.summary for i in stored.issues] == ["about acme/widgets"]
-    assert _JiraAfterGit.seen_by_after_collect == ["https://jira/browse/APP-1"]
+    assert _JiraWatchingGit.collected_from == [[], ["acme/widgets"]]
+    assert _JiraWatchingGit.seen_by_after_collect == ["https://jira/browse/APP-1"]
+    refresh.refresh(config, db, NOW)
+    assert _JiraWatchingGit.collected_from == [[], ["acme/widgets"], ["acme/widgets"]]
 
 
 class _GitInKv(GitPlugin):
@@ -246,11 +263,6 @@ def test_feedback_that_is_over_or_old_is_pruned() -> None:
     assert sorted(feedback.all()) == [("pull_request", "3", ""), ("pull_request", "4", "")]
 
 
-def test_git_stack_collects_after_the_others_and_git_doesnt() -> None:
-    assert GitStackPlugin().collects_after
-    assert not GitPlugin().collects_after
-
-
 def test_refreshing_some_plugins_refreshes_only_those(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -263,7 +275,6 @@ def test_refreshing_some_plugins_refreshes_only_those(
 
     class JiraOnGit(JiraPlugin):
         requires: ClassVar[list[str]] = ["git"]
-        collects_after = True
 
         def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
             calls.append("jira")

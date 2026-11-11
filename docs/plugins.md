@@ -75,25 +75,26 @@ flowchart LR
 
 ## Refresh, requirements and item actions
 
-Plugins collect in two phases: first those that don't need the others' entities, in
-parallel, then those that set `collects_after` (they need the others' entities to know what to
-fetch), with the graph the first made. A plugin's `requires` must
-be enabled too. Each plugin refreshes on its own schedule; one that `watches` another is
-asked whether it `changed` right after that one refreshes. Plugins add buttons to each other's items by the items' `subjects`.
+Every plugin due collects at once, in parallel, from the graph as stored before the refresh.
+Then each plugin that `watches` one just collected is asked whether it `changed`, with the graph
+they stored, and collected again from it if it did: git_stack, which reads git's repos, gets a
+repo git just found in the same refresh. A plugin's `requires` must be enabled too. Each
+plugin refreshes on its own schedule, and with the plugins it watches. Plugins add buttons to each other's items by the items' `subjects`.
 
 ```mermaid
 flowchart TB
-    subgraph Phase1["Refresh, phase 1: collect (in parallel)"]
+    subgraph Collect["Refresh: collect (in parallel, from the graph before)"]
         github([github])
         git([git])
         jira([jira])
         mail([mail])
-    end
-    subgraph Phase2["Phase 2: collects_after (sees the new graph)"]
         git_stack([git_stack])
     end
-    Phase1 --> Phase2
-    Phase2 --> after["after_collect and prune, on the rebuilt graph"]
+    subgraph Settle["Then: watchers whose check says git moved, from the new graph"]
+        git_stack2([git_stack])
+    end
+    Collect --> Settle
+    Settle --> after["after_collect and prune, on the rebuilt graph"]
 
     git_stack == "requires" ==> git
 
