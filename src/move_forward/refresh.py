@@ -124,7 +124,8 @@ class Before:
     snapshots: dict[str, BaseModel | None]
     """Each plugin's snapshot; None for one that had never stored one."""
     stored_at: dict[str, datetime]
-    """When each plugin last stored its snapshot, by a refresh or a refresh of subjects; one
+    """When the refresh that last stored each plugin's snapshot began (a refresh or a refresh of
+    subjects); one
     that never did (or did only before the time was kept) isn't here. A refresh that failed
     stored nothing, so it doesn't count."""
 

@@ -44,11 +44,12 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   declared `hides`, and core leaves items about hidden things off the page;
   plugins don't filter them out themselves.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
-  reads it back with `load`; nothing is kept as JSON. Core keeps only when each
-  plugin last fetched, and why it failed, and when it last stored; what its change checks last saw and said moved,
-  until a collect started after stores (`change_checks.py`); and what else a plugin reports wrong with
-  `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its state on
-  the page and logged when it changes, rather than each plugin warning in its own way.
+  reads it back with `load`; nothing is kept as JSON. Core keeps only when each plugin
+  last fetched and last stored, and why it failed; what its change checks last saw and said
+  moved, until a collect started after stores (`change_checks.py`); and what else a plugin
+  reports wrong with `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown
+  with its state on the page and logged when it changes, rather than each plugin warning in its
+  own way.
 - Every plugin hook that runs with the plugin's context takes one request object, so a hook
   can gain an input without breaking its overrides. Most take one of five kinds:
   `ContextRequest(ctx)` (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
