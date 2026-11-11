@@ -204,8 +204,8 @@ class Config(Strict):
                 continue
             if unknown := sorted(plugin.teams(section) - set(self.teams)):
                 raise ValueError(
-                    f"[{plugin.name}] names the teams {', '.join(unknown)}, which the top-level"
-                    " teams don't have"
+                    f"[{plugin.name}] names teams the top-level teams don't have:"
+                    f" {', '.join(unknown)}"
                 )
         return self
 
