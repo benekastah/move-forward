@@ -66,13 +66,14 @@ from ..plugin import (
     collect_into,
 )
 from ..repositories import KvRepository
-from ..strict import Strict
+from ..strict import TABLES, Strict, locked
 
 __all__ = [
     "API_VERSION",
     "BY_HAND",
     "IMPORTED",
     "LOOKED_UP",
+    "TABLES",
     "Action",
     "ActionError",
     "ActionHandler",
@@ -134,6 +135,7 @@ __all__ = [
     "directories",
     "due_pressure",
     "https_url",
+    "locked",
     "path",
     "quiet",
     "url",

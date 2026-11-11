@@ -108,7 +108,7 @@ class LinearConfig(TokenFields):
 - Config models subclass `Strict` (or `TokenFields`, which is one), which rejects unknown
   keys: a typo is an error. A field
   whose entries are tables of their own, by name (mail's `[mail.<name>]` accounts), says so
-  with `json_schema_extra={"tables": True}`, and its example is one such table.
+  with `json_schema_extra={api.TABLES: True}`, and its example is one such table.
 - Every field has a docstring.
 - A built-in's every key appears in two places: the model and the plugin's page in
   `docs/plugins/`. A plugin from another package can't add to those pages: its model and its
@@ -138,10 +138,11 @@ class LinearConfig(TokenFields):
   `mfd init --example` writes each plugin's section as `mfd init` does when it isn't
   chosen, or, with `example_on=True` (a tool most use: github, git), on, with its `example`
   uncommented.
-- Settings that say where a credential goes (a site, a host) are named in `locked_settings`,
-  so the settings page, reached with the dashboard's cookie, shows them without changing them;
-  `token_env` and `keychain_service` are locked already; a section keeping its token's place
-  under other names, or building it from other settings, names those too.
+- Settings that say where a credential goes (a site, a host) are marked `locked()` on the
+  model (`site: Annotated[str, api.locked()]`), so the settings page, reached with the
+  dashboard's cookie, shows them without changing them; `token_env` and `keychain_service`
+  are locked already; a section keeping its token's place under other names, or building it
+  from other settings, marks those too.
 - Secrets never go in the config. Build the section on `api.keychain.TokenFields`, as jira,
   slack and mail do: it gives it `token_env` and `keychain_service`, defaulting to the
   `default_token_env` and `default_keychain_service` it sets. Read the token with

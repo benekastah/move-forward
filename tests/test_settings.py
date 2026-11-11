@@ -3,7 +3,7 @@
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any, ClassVar, cast
+from typing import Annotated, Any, cast
 
 import pytest
 from pydantic import BaseModel
@@ -12,7 +12,7 @@ from move_forward import config as config_module
 from move_forward import registry, settings
 from move_forward.keychain import TokenSettings
 from move_forward.plugin import API_VERSION, Plugin
-from move_forward.strict import Strict
+from move_forward.strict import Strict, locked
 
 TEXT = """\
 # my config
@@ -247,7 +247,7 @@ def test_no_setting_the_page_changes_moves_a_plugins_token(plugin: Plugin[Any, A
 
 
 class _SiteConfig(Strict):
-    site: str = "https://x"
+    site: Annotated[str, locked()] = "https://x"
     token_env: str = "SITE_TOKEN"
     keychain_service: str = "move-forward-site"
     page_size: int = 50
@@ -259,7 +259,6 @@ class _SitePlugin(Plugin[_SiteConfig, BaseModel]):
     name = "site"
     config_model = _SiteConfig
     api_version = API_VERSION
-    locked_settings: ClassVar[frozenset[str]] = frozenset({"site"})
 
 
 def test_a_plugin_of_its_own_says_which_settings_stay_in_the_file(
@@ -272,8 +271,9 @@ def test_a_plugin_of_its_own_says_which_settings_stay_in_the_file(
 
 
 class _ElsewhereConfig(Strict):
-    secret_env: str = "ELSEWHERE_TOKEN"
-    secret_service: str = "move-forward-elsewhere"
+    secret_env: Annotated[str, locked()] = "ELSEWHERE_TOKEN"
+    secret_service: Annotated[str, locked()] = "move-forward-elsewhere"
+    page_size: int = 50
 
 
 class _ElsewhereSettings:
@@ -283,18 +283,17 @@ class _ElsewhereSettings:
 
 
 class _ElsewherePlugin(Plugin[_ElsewhereConfig, BaseModel]):
-    """A plugin keeping its token's settings under names of its own, which it names."""
+    """A plugin keeping its token's settings under names of its own, which it marks."""
 
     name = "elsewhere"
     config_model = _ElsewhereConfig
     api_version = API_VERSION
-    locked_settings: ClassVar[frozenset[str]] = frozenset({"secret_env", "secret_service"})
 
     def tokens(self, config: _ElsewhereConfig) -> dict[str, TokenSettings]:
         return {"": _ElsewhereSettings(config)}
 
 
-def test_settings_a_plugin_names_stay_in_the_file_and_save_leaves_them(
+def test_settings_a_plugin_marks_locked_stay_in_the_file_and_save_leaves_them(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _ElsewherePlugin()])
@@ -303,5 +302,28 @@ def test_settings_a_plugin_names_stay_in_the_file_and_save_leaves_them(
     config = config_module.load(path)
     locked = {s.key for s in settings.settings(config) if s.section == "elsewhere" and s.locked}
     assert locked == {"secret_env", "secret_service"}
-    settings.save(path, config, {"elsewhere:secret_env": "OTHER_TOKEN"})
-    assert "OTHER_TOKEN" not in path.read_text(encoding="utf-8")
+    form = {"elsewhere:secret_env": "OTHER_TOKEN", "elsewhere:page_size": "7"}
+    settings.save(path, config, form)
+    saved = path.read_text(encoding="utf-8")
+    assert "OTHER_TOKEN" not in saved and "page_size = 7" in saved  # the form was read
+
+
+LOCKED_BY_PLUGIN: dict[str, set[str]] = {
+    "git": {"repos", "github_hosts"},
+    "git_stack": set(),
+    "github": {"host"},
+    "jira": {"site", "token_env", "keychain_service"},
+    "mail": {"host", "port", "message_url", "auth_servers", "token_env", "keychain_service"},
+    "notes": set(),
+    "slack": {"workspace_url", "token_env", "keychain_service"},
+}
+"""Every setting each built-in keeps out of the settings page's reach, each for a reason (see
+`strict.locked`): a key leaving this list lets the page point a credential elsewhere."""
+
+
+def test_each_built_in_locks_exactly_its_settings() -> None:
+    builtins = {plugin.name: plugin for plugin in registry.BUILTINS}
+    assert builtins.keys() == LOCKED_BY_PLUGIN.keys()
+    for name, plugin in builtins.items():
+        section = plugin.config_model.model_validate(plugin.init.example.values)
+        assert settings.locked_keys(plugin, section) == LOCKED_BY_PLUGIN[name], name

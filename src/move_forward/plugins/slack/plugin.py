@@ -145,8 +145,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     config_model = SlackConfig
     api_version = API_VERSION
     teams_field = "teams"
-    locked_settings: ClassVar[frozenset[str]] = frozenset({"workspace_url"})
-    """The workspace its links go to."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
 
     def panels(self, req: Request[SlackConfig, BaseModel]) -> list[Panel]:

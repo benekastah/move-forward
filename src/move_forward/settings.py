@@ -11,8 +11,8 @@ kinds a form can hold (numbers, true or false, text, lists); tables such as
 `[github.teams]` stay for editing by hand. `db_path` and `port` are shown but not changed
 here: changing them moves the server. Nor are the settings that choose where a
 credential is sent or which one is read, where items link, whom mail trusts, or what runs
-where (see `SECRET_LOCKED`, a plugin's `locked_settings`, and its token's `token_env` and
-`keychain_service`): the page is reached with the dashboard's cookie, and a page that
+where (see `SECRET_LOCKED`, a plugin's fields marked `locked()`, and its token's `token_env`
+and `keychain_service`): the page is reached with the dashboard's cookie, and a page that
 could point the Jira site, say, at another server could send it the API token.
 """
 
@@ -27,7 +27,7 @@ from typing import Any, Literal, cast, get_args, get_origin
 from pydantic import BaseModel, ValidationError
 from pydantic_core import PydanticUndefined
 
-from . import registry, render, tomledit
+from . import registry, render, strict, tomledit
 from .config import Config
 from .plugin import Plugin
 
@@ -37,11 +37,11 @@ LOCKED = {"db_path", "port"}
 """Top-level settings shown but not changed here: changing them moves the server."""
 SECRET_LOCKED = {"email"}
 """Top-level settings only the file changes: the account every token is keyed by. A plugin
-names its own in `Plugin.locked_settings`: where a credential goes (a host, a site, a client
+marks its own `locked()` on its config model: where a credential goes (a host, a site, a client
 id), where items link with my login in the link (mail's `message_url`), whose word decides a
 sender is who they claim (mail's `auth_servers`, though a form can't hold it yet), and which
 checkouts `git` runs commands in; where its token comes from is locked whatever it names
-(see `_locked_by`)."""
+(see `locked_keys`)."""
 TOKEN_KEYS = frozenset({"token_env", "keychain_service"})
 """A plugin section's keys saying where its token is read from: locked whatever it says."""
 NOTIFICATIONS = "notifications"
@@ -130,11 +130,13 @@ def _fields(
     return found
 
 
-def _locked_by(plugin: Plugin[Any, Any], section: BaseModel) -> frozenset[str]:
-    """A plugin section's keys only the file changes: those it names in `locked_settings`, and
+def locked_keys(plugin: Plugin[Any, Any], section: BaseModel) -> frozenset[str]:
+    """A plugin section's keys only the file changes: those its model marks `locked()`, and
     `token_env` and `keychain_service` when it keeps a token. A plugin keeping its token's
-    settings under other names, or building them from other keys, names those."""
-    return plugin.locked_settings | (TOKEN_KEYS if plugin.tokens(section) else frozenset[str]())
+    settings under other names, or building them from other keys, marks those."""
+    fields = type(section).model_fields.items()
+    marked = frozenset(key for key, field in fields if strict.marked(field, strict.LOCKED))
+    return marked | (TOKEN_KEYS if plugin.tokens(section) else frozenset[str]())
 
 
 def settings(config: Config) -> list[Setting]:
@@ -151,7 +153,7 @@ def settings(config: Config) -> list[Setting]:
     for plugin in registry.PLUGINS:
         section = config.section(plugin.name)
         if section is not None:
-            found += _fields(section, plugin.name, set(), _locked_by(plugin, section))
+            found += _fields(section, plugin.name, set(), locked_keys(plugin, section))
     return found
 
 

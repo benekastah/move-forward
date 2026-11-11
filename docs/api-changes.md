@@ -14,6 +14,12 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **Locked settings are marked on their fields**: `Plugin.locked_settings` is gone. A config
+  model marks each setting the settings page shows but won't change with `api.locked()`, e.g.
+  `site: Annotated[str, locked()]`; a section's `token_env` and `keychain_service` are locked
+  without marking, as before. A field whose entries are tables by name is marked
+  `json_schema_extra={api.TABLES: True}`, and core reads each marker whatever else the
+  field's `json_schema_extra` holds, so one field can carry both.
 - **No `cli_help`**: a plugin has a command when it overrides `cli`, and the first line of
   that override's docstring is its help; the registry refuses an override without one. Move
   the help text into the docstring.
@@ -183,7 +189,7 @@ for themselves (a token, a request, an example config) is core's.
   entries (`[github.teams]`), whose keys aren't written again (nor the tables, when the
   section's answers have one), and a section's `shown` (see "An `InitSection`" above), an example value
   for a key whose default is None or says less. A field marked
-  `json_schema_extra={"tables": True}` is left to those `tables`.
+  `json_schema_extra={"tables": True}` (`api.TABLES`) is left to those `tables`.
 - **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
   its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;
   with neither, it raises `SourceError` with core's message ("no token: run `mfd token set

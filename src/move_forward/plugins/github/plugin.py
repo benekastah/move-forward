@@ -94,8 +94,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     config_model = GitHubConfig
     api_version = API_VERSION
     teams_field = "teams"
-    locked_settings: ClassVar[frozenset[str]] = frozenset({"host"})
-    """Its token, `gh`'s, goes to `host`."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),

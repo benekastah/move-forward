@@ -28,6 +28,7 @@ from .asking import Asker, Complete, InitSection, InitSetup, Prompt, choices, qu
 from .config import Config
 from .keychain import TokenFields
 from .plugin import Plugin
+from .strict import TABLES, marked
 
 LINE_WIDTH = 100
 """The widest line `mfd init` writes: a key's comment, above it, is wrapped to this. A key
@@ -120,11 +121,11 @@ def commented_defaults(
 ) -> str:
     """`model`'s optional keys but `skip`, commented out, each with its default (or its value in
     `shown`) and its docstring's `summary`. A table of tables by name (a field marked
-    `tables`, mail's accounts) and a key whose default is None, not in `shown`, are left out."""
+    `TABLES`, mail's accounts) and a key whose default is None, not in `shown`, are left out."""
     shown = shown or {}
     text = ""
     for key, field in model.model_fields.items():
-        if key in skip or field.is_required() or field.json_schema_extra == {"tables": True}:
+        if key in skip or field.is_required() or marked(field, TABLES):
             continue
         value = shown[key] if key in shown else _default(model, key, field)
         if value is not None:
