@@ -785,8 +785,8 @@ def _check_uncommented(plugin: Plugin[Any, Any], section: list[str]) -> None:
 def test_a_plugins_token_help_is_its_next_step(
     tmp_path: Path, no_machine_guesses: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    help = "make one at https://id.example/tokens"
-    monkeypatch.setattr(JiraPlugin, "init", replace(JiraPlugin.init, token_help=help))
+    token_help = "make one at https://id.example/tokens"
+    monkeypatch.setattr(JiraPlugin, "init", replace(JiraPlugin.init, token_help=token_help))
     message = init.init(
         tmp_path / "config.toml",
         scripted({"Plugins": "jira", "Jira site": "https://o.atlassian.net"}),

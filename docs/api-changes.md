@@ -20,12 +20,17 @@ for themselves (a token, a request, an example config) is core's.
   without marking, as before. A field whose entries are tables by name is marked
   `json_schema_extra={api.TABLES: True}`, and core reads each marker whatever else the
   field's `json_schema_extra` holds, so one field can carry both.
+- **Removed names are refused**: a plugin still setting a `Plugin` attribute or hook that
+  version 2 removed (`store`, `load`, `url_for`, `init_questions` and the rest, listed in
+  `registry.REMOVED_ATTRIBUTES`) is left out, and `mfd check` names what replaced it, rather
+  than the dashboard ignoring it without a word. Rename or drop it as the message says.
 - **No `cli_help`**: a plugin has a command when it overrides `cli`, and the first line of
-  that override's docstring is its help; the registry refuses an override without one. Move
-  the help text into the docstring.
+  that override's docstring is its help; the registry refuses an override without one, and a
+  plugin still setting `cli_help`. Move the help text into the docstring.
 - **No `snapshot_model`**: a plugin collects when it overrides `collect`, and the registry
   refuses one that overrides `collect` without `snapshots`, or `snapshots` without `collect`.
-  Drop the class variable; the snapshot's model is the plugin's second type parameter, `S`.
+  Drop the class variable (a plugin still setting it is refused); the snapshot's model is the
+  plugin's second type parameter, `S`.
 - **One `Init`**: what only `mfd init` reads is one class variable, `init`, an `api.Init`
   (built in the plugin's `setup.py`), in place of the class variables `init_suggested`,
   `init_example`, `init_example_on`, `init_tables`, `init_finds_teams` and `token_help`, and
@@ -33,7 +38,8 @@ for themselves (a token, a request, an example config) is core's.
   called, `(ask, setup) -> InitSection`; by default nothing is asked), `example`, `tables`,
   `suggested`, `example_on`, `finds_teams` and `token_help`, each as the one it replaces.
   `suggested` is False by default: `mfd init` suggests a plugin only when its `Init` says so
-  (git_stack's says whether git stack is installed).
+  (git_stack's says whether git stack is installed). A plugin still setting one of the old
+  names is refused (see "Removed names are refused").
 - **One `snapshots` hook for keeping the snapshot**: `store(req)` and `load(req)` are gone.
   `snapshots(req: ContextRequest)` gives a `Snapshots` (`save(snapshot)`, `load()`), most often
   the plugin's repository over its tables, which already had both; the built-ins' repositories'

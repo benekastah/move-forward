@@ -379,12 +379,27 @@ def test_a_plugins_command_without_a_docstring_is_refused() -> None:
         registry.check_plugins([_Undocumented()])
 
 
-def test_a_plugin_setting_the_removed_init_template_is_told_what_replaced_it() -> None:
-    class Old(Plugin[Strict, KindModel]):
-        name = "old"
-        config_model = Strict
-        api_version = API_VERSION
-        init_template = "# [old.teams]\n# web = 'web'\n"
+@pytest.mark.parametrize(
+    ("removed", "replacement"),
+    [
+        ("init_template", "`Init`'s `tables`"),
+        ("init_questions", "`Init`, as its `questions`"),
+        ("token_help", "`Init`, as its `token_help`"),
+        ("url_for", "address(req)"),
+        ("refresh_subjects", "req.subjects"),
+        ("snapshot_model", "overrides `collect`"),
+        ("cli_help", "docstring's first line"),
+    ],
+)
+def test_a_plugin_setting_a_removed_attribute_is_told_what_replaced_it(
+    removed: str, replacement: str
+) -> None:
+    old = type("Old", (_Plain,), {"name": "old", removed: "anything"})()
+    with pytest.raises(RuntimeError, match=f"old sets {removed},") as refused:
+        registry.check_plugins([old])
+    assert replacement in str(refused.value)
 
-    with pytest.raises(RuntimeError, match="old sets init_template.*Init's tables.*shown"):
-        registry.check_plugins([Old()])
+
+def test_every_removed_attribute_is_gone_from_plugin() -> None:
+    """Else every plugin would have it, and be refused."""
+    assert [name for name in registry.REMOVED_ATTRIBUTES if hasattr(Plugin, name)] == []
