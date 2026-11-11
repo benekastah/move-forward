@@ -14,25 +14,19 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
-- **Settings are marked in their types**: `Plugin.locked_settings` is gone, and a plugin still
-  setting it is refused. A config model marks each setting the settings page shows but won't
-  change with `api.LOCKED` in its type, e.g. `site: Annotated[str, LOCKED]`; a section's
-  `token_env` and `keychain_service` are locked without marking, as before. A field whose
-  entries are tables by name is marked `api.TABLES` the same way, in place of
-  `json_schema_extra={"tables": True}`, which core no longer reads. A field can carry both,
-  alongside a `Field(...)` default. `Strict` refuses a marker given as a default (`host: str =
-  LOCKED`), which would mark nothing.
-- **Removed names are refused**: a plugin still setting a `Plugin` attribute or hook that
-  version 2 removed (`store`, `load`, `url_for`, `init_questions` and the rest, listed in
-  `registry.REMOVED_ATTRIBUTES`) is left out, and `mfd check` names what replaced it, rather
-  than the dashboard ignoring it without a word. Rename or drop it as the message says.
+- **Settings are marked in their types**: `Plugin.locked_settings` is gone. A config model
+  marks each setting the settings page shows but won't change with `api.LOCKED` in its type,
+  e.g. `site: Annotated[str, LOCKED]`; a section's `token_env` and `keychain_service` are
+  locked without marking, as before. A field whose entries are tables by name is marked
+  `api.TABLES` the same way, in place of `json_schema_extra={"tables": True}`, which core no
+  longer reads. A field can carry both, alongside a `Field(...)` default. `Strict` refuses a
+  marker given as a default (`host: str = LOCKED`), which would mark nothing.
 - **No `cli_help`**: a plugin has a command when it overrides `cli`, and the first line of
-  that override's docstring is its help; the registry refuses an override without one, and a
-  plugin still setting `cli_help`. Move the help text into the docstring.
+  that override's docstring is its help; the registry refuses an override without one. Move
+  the help text into the docstring.
 - **No `snapshot_model`**: a plugin collects when it overrides `collect`, and the registry
   refuses one that overrides `collect` without `snapshots`, or `snapshots` without `collect`.
-  Drop the class variable (a plugin still setting it is refused); the snapshot's model is the
-  plugin's second type parameter, `S`.
+  Drop the class variable; the snapshot's model is the plugin's second type parameter, `S`.
 - **One `Init`**: what only `mfd init` reads is one class variable, `init`, an `api.Init`
   (built in the plugin's `setup.py`), in place of the class variables `init_suggested`,
   `init_example`, `init_example_on`, `init_tables`, `init_finds_teams` and `token_help`, and
@@ -40,8 +34,7 @@ for themselves (a token, a request, an example config) is core's.
   called, `(ask, setup) -> InitSection`; by default nothing is asked), `example`, `tables`,
   `suggested`, `example_on`, `finds_teams` and `token_help`, each as the one it replaces.
   `suggested` is False by default: `mfd init` suggests a plugin only when its `Init` says so
-  (git_stack's says whether git stack is installed). A plugin still setting one of the old
-  names is refused (see "Removed names are refused").
+  (git_stack's says whether git stack is installed).
 - **One `snapshots` hook for keeping the snapshot**: `store(req)` and `load(req)` are gone.
   `snapshots(req: ContextRequest)` gives a `Snapshots` (`save(snapshot)`, `load()`), most often
   the plugin's repository over its tables, which already had both; the built-ins' repositories'
@@ -188,8 +181,7 @@ for themselves (a token, a request, an example config) is core's.
   plugin's section as `mfd init` writes it, installed plugins' too. A plugin whose `Init`
   says `example_on` has its section on there, with its `example` uncommented; any other's
   is commented out.
-- **Commented defaults come from the model**: `init_template` is gone, and a plugin still
-  setting it is refused (`mfd check` says why). `mfd init` writes
+- **Commented defaults come from the model**: `init_template` is gone. `mfd init` writes
   each optional key of `config_model` itself, commented out, with its default (a
   `TokenFields` section's `default_token_env` and `default_keychain_service` for an empty
   `token_env` and `keychain_service`) and its docstring's first sentence as its comment. A
