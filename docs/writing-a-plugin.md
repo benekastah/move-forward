@@ -33,9 +33,9 @@ Five hooks keep a request of their own: `url_for` (`UrlRequest`), `handle_for`
 `import_dir` (`ImportRequest`).
 
 `previous` is a `Previous`, what held before, for the two hooks that compare: `changed` and
-`events`. Its `at` is when the plugin's last change check ran (`changed`), or when it last
-stored a snapshot, the one `events` compares with (`events`; a refresh that failed stored
-nothing); `fingerprint` what its last check answered (`changed`), `snapshot` its snapshot
+`events`. Its `at` is when the plugin's last change check ran (`changed`), or when the refresh
+that last stored a snapshot began, the one `events` compares with (`events`; a refresh that
+failed stored nothing); `fingerprint` what its last check answered (`changed`), `snapshot` its snapshot
 before this refresh (`events`), and `graph` the graph then: None at the first change check
 since the dashboard started, as it's the one thing a restart can't rebuild.
 
