@@ -32,6 +32,7 @@ from .plugin import (
     Request,
     Snapshots,
     SourceError,
+    command_help,
     overrides,
 )
 from .repositories import KvRepository
@@ -153,7 +154,8 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`).
     A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
     declares (`Plugin.families`), whose model they must extend. A plugin overriding `collect`
-    overrides `snapshots` too, and the reverse. A plugin setting the removed `init_template` is
+    overrides `snapshots` too, and the reverse; one overriding `cli` gives it a docstring, its
+    command's help. A plugin setting the removed `init_template` is
     refused, naming what replaced it."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
@@ -178,6 +180,11 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(
                 f"{plugin.name} overrides {has} but not {lacks}: a plugin that collects keeps"
                 " what it fetched with snapshots, and only one that collects keeps a snapshot"
+            )
+        if overrides(plugin, "cli") and command_help(plugin) is None:
+            raise RuntimeError(
+                f"{plugin.name}'s cli has no docstring: its first line is the help of"
+                f" `mfd {plugin.name}`"
             )
         if hasattr(plugin, "init_template"):
             # No longer read: said, rather than its tables going missing from `mfd init`.

@@ -1,6 +1,7 @@
 """Finding the plugins: the built-ins, and other packages' by entry point; and the names no
 plugin may take."""
 
+import argparse
 import sys
 from collections.abc import Iterator
 from importlib.metadata import EntryPoint
@@ -14,7 +15,14 @@ from move_forward import cli, config, kinds, registry, render, server
 from move_forward.domain import KindModel
 from move_forward.graph import KindSpec
 from move_forward.kinds import FAMILIES, Family, Person, declaring, is_url
-from move_forward.plugin import API_VERSION, ContextRequest, Plugin, RefreshRequest, Snapshots
+from move_forward.plugin import (
+    API_VERSION,
+    CliHandler,
+    ContextRequest,
+    Plugin,
+    RefreshRequest,
+    Snapshots,
+)
 from move_forward.strict import Strict
 
 
@@ -356,6 +364,19 @@ def test_a_plugin_overriding_collect_without_snapshots_is_refused() -> None:
 def test_a_plugin_overriding_snapshots_without_collect_is_refused() -> None:
     with pytest.raises(RuntimeError, match="keeps overrides snapshots but not collect"):
         registry.check_plugins([_Keeps()])
+
+
+class _Undocumented(_Plain):
+    name = "undocumented"
+
+    def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        return lambda req: 0
+
+
+def test_a_plugins_command_without_a_docstring_is_refused() -> None:
+    """Its help would be `Plugin.cli`'s docstring, inherited, or nothing."""
+    with pytest.raises(RuntimeError, match="undocumented's cli has no docstring"):
+        registry.check_plugins([_Undocumented()])
 
 
 def test_a_plugin_setting_the_removed_init_template_is_told_what_replaced_it() -> None:

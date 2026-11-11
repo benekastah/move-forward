@@ -516,8 +516,9 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   `api.html.page` and `api.html.e` to escape everything), or a `Response`, e.g.
   `Response.redirect(url)`. Every page needs the
   dashboard's token, as every request does.
-- **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
-  a handler `(req: InputRequest) -> int` that gets the parsed `req.args`.
+- **Commands.** Implement `cli(parser)` for `mfd linear ...`, returning a handler `(req:
+  InputRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
+  the command's help in `mfd --help`; core refuses a `cli` without one.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the
 plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their

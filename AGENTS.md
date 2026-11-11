@@ -55,7 +55,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 - A plugin says what it is in class variables, each documented on `Plugin`: its `name`,
   `title`, `config_model`, `kinds` and `families`, `requires`, `migrations`,
   how it refreshes (`collects_after`, `watches`, `change_check_seconds`), its
-  `notification_kinds`, its command (`cli_help`), and how `mfd init` and the settings page
+  `notification_kinds`, and how `mfd init` and the settings page
   show it (`always_on`, `init`, `teams_field`, `locked_settings`), and `api_version`. `init`
   is an `Init`, built in the plugin's `setup.py`: its questions, its example section and
   tables, whether `mfd init` suggests it, and its token's next step.
@@ -68,7 +68,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   buttons, `mfd <plugin>`). `changed` and `events` get what held before as a `Previous`
   (`req.previous`: when, the fingerprint, the snapshot and the graph then). Those called
   before there's a context take what they need: `tokens(config)` (`mfd token`, and loading
-  the config), `cli(parser)`, `pages()` and `actions()`. Who I am in a tool is a `person` it
+  the config), `cli(parser)` (a plugin has a command when it overrides it, and its
+  docstring's first line is the command's help), `pages()` and `actions()`. Who I am in a tool is a `person` it
   publishes with `me`; what focus mode keeps on the page after a button is core's.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,

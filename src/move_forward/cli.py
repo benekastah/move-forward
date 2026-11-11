@@ -32,7 +32,7 @@ from .act_now import PRIORITIES, UNTIL_CHANGED
 from .db import Database
 from .graph import Ref
 from .kinds import label
-from .plugin import CliHandler, InputRequest
+from .plugin import CliHandler, InputRequest, command_help
 from .refresh import (
     build_dashboard,
     refresh,
@@ -170,9 +170,9 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
         "rotate", help="make a new dashboard token and sign every browser out"
     )
     plugin_commands = {
-        plugin.name: plugin.cli(commands.add_parser(plugin.name, help=plugin.cli_help))
+        plugin.name: plugin.cli(commands.add_parser(plugin.name, help=about))
         for plugin in registry.PLUGINS
-        if plugin.cli_help
+        if (about := command_help(plugin)) is not None
     }
     return parser, plugin_commands
 

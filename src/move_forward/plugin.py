@@ -8,6 +8,7 @@ what it uses.
 """
 
 import argparse
+import inspect
 import logging
 import traceback
 from collections.abc import Callable, Mapping
@@ -435,8 +436,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
     rather than waiting for `change_check_seconds`."""
-    cli_help: ClassVar[str | None] = None
-    """The help line of `mfd <name>`; None means the plugin has no command."""
     always_on: ClassVar[bool] = False
     """On without a section (notes), so `mfd init` doesn't offer it."""
     locked_settings: ClassVar[frozenset[str]] = frozenset()
@@ -580,8 +579,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         """Add the arguments of `mfd <name>` to `parser` and return what runs it, given an
-        `InputRequest` with the parsed `args`. Only called when `cli_help` is set."""
-        raise NotImplementedError(f"{self.name} has cli_help but no cli")
+        `InputRequest` with the parsed `args`. A plugin has a command when it overrides this,
+        with a docstring whose first line is the command's help (`command_help`)."""
+        raise NotImplementedError(f"{self.name} has no command")
 
     # Upkeep
 
@@ -593,8 +593,19 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
 def overrides(plugin: Plugin[Any, Any], hook: str) -> bool:
     """Whether `plugin`'s class overrides `Plugin`'s method `hook`: what some hooks' being
-    there says (`collects`)."""
+    there says (`collects`, `command_help`)."""
     return getattr(type(plugin), hook) is not getattr(Plugin, hook)
+
+
+def command_help(plugin: Plugin[Any, Any]) -> str | None:
+    """The help line of `mfd <name>`: the first line of the docstring of the plugin's `cli`;
+    None for a plugin without a command (not overriding `cli`), or whose `cli` has no
+    docstring (which the registry refuses). Its own docstring, not one inherited from
+    `Plugin.cli`."""
+    if not overrides(plugin, "cli"):
+        return None
+    doc = type(plugin).cli.__doc__
+    return inspect.cleandoc(doc).splitlines()[0] if doc and doc.strip() else None
 
 
 def collect_into[T: BaseModel](
