@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Annotated, Any, cast
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from move_forward import config as config_module
-from move_forward import registry, settings
+from move_forward import registry, settings, strict
 from move_forward.keychain import TokenSettings
 from move_forward.plugin import API_VERSION, Plugin
 from move_forward.strict import LOCKED, Strict
@@ -335,3 +335,31 @@ def test_a_marker_given_as_a_default_is_refused() -> None:
 
         class _Misplaced(Strict):  # pyright: ignore[reportUnusedClass]
             host: str = LOCKED  # pyright: ignore[reportAssignmentType]
+
+
+type _Host = Annotated[str, LOCKED]
+
+
+def test_a_marker_inside_a_fields_type_is_refused() -> None:
+    """Pydantic keeps it in the type, not the field's metadata, so it would lock nothing."""
+    with pytest.raises(TypeError, match="host has a marker inside its type"):
+
+        class _InUnion(Strict):  # pyright: ignore[reportUnusedClass]
+            host: Annotated[str, LOCKED] | None = None
+
+    with pytest.raises(TypeError, match="hosts has a marker inside its type"):
+
+        class _InList(Strict):  # pyright: ignore[reportUnusedClass]
+            hosts: list[Annotated[str, LOCKED]] = Field(default_factory=list[str])
+
+    with pytest.raises(TypeError, match="host has a marker inside its type"):
+
+        class _InAlias(Strict):  # pyright: ignore[reportUnusedClass]
+            host: _Host = "h"
+
+
+def test_a_marker_on_an_optional_type_marks_the_field() -> None:
+    class _Optional(Strict):
+        host: Annotated[str | None, LOCKED] = None
+
+    assert strict.marked(_Optional.model_fields["host"], LOCKED)
