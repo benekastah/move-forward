@@ -14,10 +14,6 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
-- **Removed names are refused**: a plugin still setting a `Plugin` attribute or hook that
-  version 2 removed (`store`, `load`, `url_for`, `init_questions` and the rest, listed in
-  `registry.REMOVED_ATTRIBUTES`) is left out, and `mfd check` names what replaced it, rather
-  than the dashboard ignoring it without a word. Rename or drop it as the message says.
 - **One `Init`**: what only `mfd init` reads is one class variable, `init`, an `api.Init`
   (built in the plugin's `setup.py`), in place of the class variables `init_suggested`,
   `init_example`, `init_example_on`, `init_tables`, `init_finds_teams` and `token_help`, and
@@ -25,8 +21,7 @@ for themselves (a token, a request, an example config) is core's.
   called, `(ask, setup) -> InitSection`; by default nothing is asked), `example`, `tables`,
   `suggested`, `example_on`, `finds_teams` and `token_help`, each as the one it replaces.
   `suggested` is False by default: `mfd init` suggests a plugin only when its `Init` says so
-  (git_stack's says whether git stack is installed). A plugin still setting one of the old
-  names is refused (see "Removed names are refused").
+  (git_stack's says whether git stack is installed).
 - **One `snapshots` hook for keeping the snapshot**: `store(req)` and `load(req)` are gone.
   `snapshots(req: ContextRequest)` gives a `Snapshots` (`save(snapshot)`, `load()`), most often
   the plugin's repository over its tables, which already had both; the built-ins' repositories'
@@ -173,8 +168,7 @@ for themselves (a token, a request, an example config) is core's.
   plugin's section as `mfd init` writes it, installed plugins' too. A plugin whose `Init`
   says `example_on` has its section on there, with its `example` uncommented; any other's
   is commented out.
-- **Commented defaults come from the model**: `init_template` is gone, and a plugin still
-  setting it is refused (`mfd check` says why). `mfd init` writes
+- **Commented defaults come from the model**: `init_template` is gone. `mfd init` writes
   each optional key of `config_model` itself, commented out, with its default (a
   `TokenFields` section's `default_token_env` and `default_keychain_service` for an empty
   `token_env` and `keychain_service`) and its docstring's first sentence as its comment. A
