@@ -14,17 +14,38 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
-- **Five request types**: most hooks' request is one of `ContextRequest(ctx)` (`load`,
-  `linking_patterns`), `Request(ctx, graph, snapshot, previous, panels)` (`store`,
-  `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`,
-  `prune`, `events`), `RefreshRequest(ctx, graph, full, subjects, previous)` (`collect`,
-  `changed`), `RefRequest(ctx, kind, ids)` (`fetch`) and `InputRequest(ctx, graph, page,
-  form, args)` (pages, buttons and `mfd <plugin>`), in place of a type per hook
+- **One `snapshots` hook for keeping the snapshot**: `store(req)` and `load(req)` are gone.
+  `snapshots(req: ContextRequest)` gives a `Snapshots` (`save(snapshot)`, `load()`), most often
+  the plugin's repository over its tables, which already had both; the built-ins' repositories'
+  `replace` is `save`. A plugin that did more as it stored (git watching the worktrees it found)
+  gives an object of its own whose `save` does that too.
+- **An item says it's an Act now candidate**: the `act_now(req)` hook (and `Request.panels`)
+  is gone. A panel's items are candidates as before (its `act_now`, but deferred ones), and an
+  item says otherwise with `Item.act_now`: True for a candidate wherever it is and deferred or
+  not, False for none. A candidate needs signals, its own or its panel's; `panel.candidate(item)`
+  says whether an item is one, as Act now decides. A plugin that
+  nominated precisely sets the flag where it builds the items (jira's due-soon tickets, from
+  `ctx.due_horizon`; git_stack's one Clean per repo; notes' close-outs; github's drafts'
+  feedback).
+- **Who I am is a `person`**: `identity(req)` and `api.Identity` are gone. The page's footer
+  names, for each plugin, the `person`s it publishes with `me` True, by handle; `me` is on
+  core's `Person` family now (it was github's), False by default. A plugin that gave an
+  `Identity` publishes me as a person instead.
+- **One `address` hook**: `url_for(req)` and `handle_for(req)` (and `UrlRequest` and
+  `HandleRequest`) are one hook, `address(req: RefRequest)`, answering a URL and a handle for
+  each of `req.ids` it knows as an `Address(url, handle)`, by id. By default it gives the id as
+  the URL where its family's ids are URLs, as `url_for` did.
+- **Five request types**: a hook's request is one of `ContextRequest(ctx)` (`snapshots`,
+  `linking_patterns`), `Request(ctx, graph, snapshot, previous)` (`entities`, `relate`,
+  `panels`, `item_actions`, `after_collect`, `prune`, `events`), `RefreshRequest(ctx, graph,
+  full, subjects, previous)` (`collect`, `changed`), `RefRequest(ctx, kind, ids)` (`address`,
+  `fetch`) and `InputRequest(ctx, graph, page, form, args)` (pages, buttons and `mfd
+  <plugin>`), in place of a type per hook
   (`EntitiesRequest`, `PanelsRequest`, `CollectRequest`, `ChangedRequest`, `ActionRequest`,
-  `PageRequest`, `CliRequest` and the rest, named in the entries below, are gone). `url_for`
-  and `handle_for` keep their own (`UrlRequest`, `HandleRequest`). A field a hook doesn't get
-  keeps its default. Every hook with a snapshot now has the graph and the snapshot both: `entities` gets an empty graph, as the graph is built from it, and `store`
-  gets what `collect` fetched as `req.snapshot` (never None there). A page's query and path
+  `PageRequest`, `CliRequest` and the rest, named in the entries below, are gone). A field a
+  hook doesn't get keeps its default. Every hook with a snapshot now has the graph and the
+  snapshot both: `entities` gets an empty graph, as the graph is built from it. A page's
+  query and path
   are `req.page.query` and `req.page.path` (`Page`), a button's fields, surface and back
   `req.form.fields`, `req.form.surface` and `req.form.back` (`Form`); `req.field(name)` still
   reads a required field.
@@ -128,8 +149,13 @@ for themselves (a token, a request, an example config) is core's.
   its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
   place under other names overrides `tokens(config)`, returning `{"": settings}`).
 - **`changed` returns a `Changed`**, never a bare bool (see "Core keeps what moved" above).
-- **`init_suggested()` is False by default**: `mfd init` suggests a plugin only when it
-  overrides it to say True.
+- **`init_suggested` is a class variable**, False by default: `mfd init` suggests a plugin
+  only when it sets `init_suggested = True` (git_stack's says whether git stack is
+  installed).
+- **An `InitSection`**: `init_questions` returns `InitSection(values, shown)`, and
+  `init_example` is one too (no longer commented TOML text). `init_shown(section)` is gone: what
+  it gave is the section's `shown`, the example values of optional keys, written commented
+  out.
 - **`api.http` is `request` and `RequestError`**: `api.http.opener` and
   `api.http.require_https` have left `api`. Send a request with `api.http.request`, which
   checks for HTTPS and refuses redirects itself.
@@ -144,8 +170,8 @@ for themselves (a token, a request, an example config) is core's.
   `token_env` and `keychain_service`) and its docstring's first sentence as its comment. A
   plugin keeps what the model can't say: `init_tables`, commented tables of example entries
   (`[github.teams]`), whose keys aren't written again (nor the tables, when the section's
-  answers have one), and `init_shown(section)`, the method giving an example value, for that
-  section's values, for a key whose default is None or says less. A field marked
+  answers have one), and a section's `shown` (see "An `InitSection`" above), an example value
+  for a key whose default is None or says less. A field marked
   `json_schema_extra={"tables": True}` is left to `init_tables`.
 - **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
   its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;

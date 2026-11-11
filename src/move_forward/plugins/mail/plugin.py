@@ -1,6 +1,5 @@
 """The mail plugin: unread and flagged mail, so the people who matter get answered first."""
 
-from collections.abc import Mapping
 from typing import ClassVar
 
 from ...api import (
@@ -10,7 +9,7 @@ from ...api import (
     Context,
     ContextRequest,
     Entity,
-    Identity,
+    InitSection,
     InitSetup,
     InputRequest,
     KindSpec,
@@ -27,7 +26,7 @@ from ...api import (
 from ...api.keychain import TokenSettings
 from ...api.kinds import PERSON
 from . import client
-from .config import KNOWN_AUTH_SERVERS, Mailbox, MailConfig
+from .config import Mailbox, MailConfig
 from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
@@ -35,10 +34,11 @@ from .repository import MIGRATIONS, MessageRepository
 from .setup import EXAMPLE, TABLES, questions
 
 
-def person_id(email: str) -> str:
-    """The id of the `person` with address `email`: `mail/<address>`, the same whichever mail
-    plugin publishes them, and apart from any code host's `<host>/<login>`."""
-    return f"mail/{email}"
+def person_id(key: str) -> str:
+    """The id of the `person` `key` names: `mail/<address>` for an address, the same whichever
+    mail plugin publishes them, and apart from any code host's `<host>/<login>`; `mail/<login>`
+    for me signing in to a mailbox with a bare login. `key` has no `/`."""
+    return f"mail/{key}"
 
 
 def password(ctx: Context[MailConfig], mailbox: Mailbox) -> str:
@@ -101,15 +101,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     """Threads are published while they have unread or flagged mail: one that's gone is done."""
     change_check_seconds: ClassVar[int | None] = 120
 
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
         return questions(ask, setup)
-
-    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
-        """`auth_servers` as the host's known ones (Gmail's), or `[]` for another server,
-        which reads the same as unset there: uncommenting it changes nothing, and its comment
-        says what to put in."""
-        host = str(section.get("host", "")).lower()
-        return {"auth_servers": KNOWN_AUTH_SERVERS.get(host, [])}
 
     def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
         """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""
@@ -125,12 +118,8 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
             messages = merged(messages, found.messages)
         return MailSnapshot(messages=sorted(messages, key=lambda m: (m.date, m.uid), reverse=True))
 
-    def store(self, req: Request[MailConfig, MailSnapshot]) -> None:
-        assert req.snapshot is not None
-        MessageRepository(req.ctx.db).replace(req.snapshot)
-
-    def load(self, req: ContextRequest[MailConfig]) -> MailSnapshot | None:
-        return MessageRepository(req.ctx.db).load()
+    def snapshots(self, req: ContextRequest[MailConfig]) -> MessageRepository:
+        return MessageRepository(req.ctx.db)
 
     def changed(self, req: RefreshRequest[MailConfig]) -> Changed:
         """The mailboxes' counts, as the fingerprint core compares with the last: they move
@@ -139,14 +128,24 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
         now = "\n".join(client.status(m, password(ctx, m)) for m in ctx.config.mailboxes())
         return Changed(fingerprint=now, reason="the mailbox changed")
 
-    def identity(self, req: Request[MailConfig, MailSnapshot]) -> Identity | None:
-        return Identity(
-            tool=self.title, login=", ".join(m.username for m in req.ctx.config.mailboxes())
-        )
-
     def entities(self, req: Request[MailConfig, MailSnapshot]) -> list[Entity]:
         found: list[Entity] = []
         people: dict[str, Entity] = {}
+        for mailbox in req.ctx.config.mailboxes():  # me, as each mailbox signs in
+            me = mailbox.username.strip()
+            # An address is me by it, with that email; a bare login (`jdoe`) is me by the
+            # login, with no email to join me with elsewhere. A `/` can't go in a person's id
+            # (`mail/<id>`), so such a username is no one, and the footer leaves it out.
+            address = me.lower() if "@" in me else None
+            if me and "/" not in me:
+                people.setdefault(
+                    address or me,
+                    Entity(
+                        ref=Ref(kind=PERSON, id=person_id(address or me)),
+                        title=me,
+                        attrs=attrs(MailPerson(handle=me, email=address, me=True)),
+                    ),
+                )
         for thread in threads(req.snapshot):
             latest = thread.latest
             email = latest.sender_email

@@ -191,7 +191,7 @@ def test_remotes_are_read_whatever_they_are_called(tmp_path: Path) -> None:
     assert branches["synced"].ahead_of_default == 0 and branches["synced"].my_commits == 0
     db = Database(":memory:")
     db.migrate("git", MIGRATIONS)
-    LocalRepository(db).replace(LocalSnapshot(repos=[collected]))
+    LocalRepository(db).save(LocalSnapshot(repos=[collected]))
     assert LocalRepository(db).load().repos[0].default_refs == collected.default_refs
 
 

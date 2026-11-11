@@ -46,7 +46,7 @@ class _Server:
         e = Enabled(self.plugin, ctx)
         taken = self.checks.take(e, Graph([]))
         found = self.plugin.collect(RefreshRequest(ctx, Graph(), taken.full, taken.subjects))
-        self.plugin.store(Request(ctx, Graph(), found))
+        self.plugin.snapshots(ContextRequest(ctx)).save(found)
         self.checks.stored(e, taken)
 
 
@@ -161,7 +161,7 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     read.clear()
     refresh(1)
     assert read == ["b"]  # a is kept as stored
-    stored = server.plugin.load(ContextRequest(ctx(1)))
+    stored = server.plugin.snapshots(ContextRequest(ctx(1))).load()
     assert stored is not None and [r.dir for r in stored.repos] == [str(a), str(b)]
     git(a, "commit", "-q", "--allow-empty", "-m", "second")
     assert server.changed(ctx(11))
@@ -188,7 +188,7 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
             kv=KvRepository(db, "git"),
         )
 
-    plugin.store(Request(ctx(0), Graph(), plugin.collect(RefreshRequest(ctx(0), Graph()))))
+    plugin.snapshots(ContextRequest(ctx(0))).save(plugin.collect(RefreshRequest(ctx(0), Graph())))
     assert not server.changed(ctx(0))  # as stored
     (repo / "new.txt").write_text("x\n")
     assert not server.changed(ctx(10))  # status_seconds not up yet
@@ -219,7 +219,7 @@ def test_edits_after_a_collect_that_failed_ask_again_only_when_they_move_again(
             kv=KvRepository(db, "git"),
         )
 
-    plugin.store(Request(ctx(0), Graph(), plugin.collect(RefreshRequest(ctx(0), Graph()))))
+    plugin.snapshots(ContextRequest(ctx(0))).save(plugin.collect(RefreshRequest(ctx(0), Graph())))
     assert not server.changed(ctx(0))
     (repo / "new.txt").write_text("x\n", encoding="utf-8")
     assert server.changed(ctx(40))
@@ -357,7 +357,7 @@ def test_a_collect_of_a_branch_reads_its_repo_alone_and_of_anything_else_every_r
         kv=KvRepository(db, "git"),
     )
     plugin = GitPlugin(watching=False)
-    plugin.store(Request(ctx, Graph(), plugin.collect(RefreshRequest(ctx, Graph()))))
+    plugin.snapshots(ContextRequest(ctx)).save(plugin.collect(RefreshRequest(ctx, Graph())))
     read: list[str] = []
     real = client.collect_repo
 

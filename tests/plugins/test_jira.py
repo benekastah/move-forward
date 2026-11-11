@@ -170,7 +170,7 @@ def test_tickets_move_from_the_json_snapshot_and_round_trip() -> None:
     repo = IssueRepository(db)
     assert repo.load() == JiraSnapshot(issues=[labelled, bare])
     due = bare.model_copy(update={"due": date(2026, 11, 5)})
-    repo.replace(JiraSnapshot(issues=[due]))
+    repo.save(JiraSnapshot(issues=[due]))
     assert repo.load() == JiraSnapshot(issues=[due])
     assert db.query("SELECT * FROM jira_issue_labels") == []  # gone with their tickets
 
@@ -179,7 +179,7 @@ def test_the_comments_table_kept_before_is_dropped() -> None:
     db = Database(":memory:")
     db.migrate("jira", MIGRATIONS[:4])
     issue = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
-    IssueRepository(db).replace(JiraSnapshot(issues=[issue]))
+    IssueRepository(db).save(JiraSnapshot(issues=[issue]))
     db.execute(  # a comment, as the table held them
         "INSERT INTO jira_issue_comments VALUES (?, 0, '1', 'Alice', '2026-11-01T00:00:00+00:00',"
         " 0, 1)",
@@ -197,7 +197,7 @@ def test_a_ticket_a_search_found_twice_is_kept_once() -> None:
     first = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
     other = first.model_copy(update={"key": "APP-3"})
     repo = IssueRepository(db)
-    repo.replace(JiraSnapshot(issues=[first, other, first.model_copy(update={"summary": "x"})]))
+    repo.save(JiraSnapshot(issues=[first, other, first.model_copy(update={"summary": "x"})]))
     assert [(i.key, i.summary) for i in repo.load().issues] == [
         (first.key, first.summary),
         ("APP-3", first.summary),
@@ -224,8 +224,8 @@ def test_ticket_keys_are_only_those_of_projects_my_tickets_have_been_in() -> Non
     assert plugin.linking_patterns(ContextRequest(_ctx(db))) == {"ticket": None}  # nothing seen yet
     first = jira.to_issue(jira.RawIssue.model_validate(RAW), "https://j")
     repo = IssueRepository(db)
-    repo.replace(JiraSnapshot(issues=[first.model_copy(update={"key": "OPS_2-7"})]))
-    repo.replace(JiraSnapshot(issues=[first]))  # OPS_2's last ticket is gone: still known
+    repo.save(JiraSnapshot(issues=[first.model_copy(update={"key": "OPS_2-7"})]))
+    repo.save(JiraSnapshot(issues=[first]))  # OPS_2's last ticket is gone: still known
     assert repo.projects() == ["APP", "OPS_2"]
     graph = Graph(linking=plugin.linking_patterns(ContextRequest(_ctx(db))))
     found = graph.named("APP-1, OPS_2-9, UTF-8, SHA-256, XAPP-3")

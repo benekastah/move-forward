@@ -921,4 +921,53 @@ class Builder:
             self.team_prs(),
             self.metadata(),
         ]
-        return [self._auto_merging(self._with_primary_reviewers(panel)) for panel in panels]
+        return _for_act_now(
+            [self._auto_merging(self._with_primary_reviewers(panel)) for panel in panels]
+        )
+
+
+def _for_act_now(panels: list[Panel]) -> list[Panel]:
+    """`panels` with what Act now should take of them: the feedback on my drafts too, though a
+    draft's item is deferred, but not a deferred review, as a draft isn't ready for one. And
+    asking for a reviewer loses its effort while there's something else to do on the PR, which
+    is worth doing before anyone looks at it, so it ranks below that and shows as "also" until
+    then. What Act now takes is what's on the panels (`Panel.candidate`), so that's where the
+    effort goes: such an item carries its signals itself, `effort` "unknown", and `mfd dump`
+    shows them so, as what Act now ranks it by."""
+
+    def task(panel: Panel, item: Item) -> str | None:
+        signals = item.signals or panel.signals
+        return signals.task if signals else None
+
+    flagged = [
+        panel.model_copy(
+            update={
+                "items": [
+                    item.model_copy(update={"act_now": True})
+                    if panel.act_now
+                    and item.deferred
+                    and task(panel, item) not in (None, REVIEW_TASK)
+                    else item
+                    for item in panel.items
+                ]
+            }
+        )
+        for panel in panels
+    ]
+    busy = {
+        item.url
+        for panel in flagged
+        for item in panel.items
+        if panel.candidate(item) and task(panel, item) not in (None, REQUEST_REVIEWER_TASK)
+    }
+
+    def waiting(panel: Panel, item: Item) -> Item:
+        signals = item.signals or panel.signals
+        if signals is None or signals.task != REQUEST_REVIEWER_TASK or item.url not in busy:
+            return item
+        return item.model_copy(update={"signals": signals.model_copy(update={"effort": "unknown"})})
+
+    return [
+        panel.model_copy(update={"items": [waiting(panel, item) for item in panel.items]})
+        for panel in flagged
+    ]

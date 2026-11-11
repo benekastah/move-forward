@@ -11,7 +11,6 @@ from ...api import (
     ContextRequest,
     Entity,
     Event,
-    Item,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
@@ -26,7 +25,7 @@ from . import actions, changes, client, events
 from .config import GitStackConfig
 from .kinds import StackBranchAttrs
 from .models import GitStackSnapshot
-from .panels import CLEAN, STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
+from .panels import STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
 from .repository import MIGRATIONS, StackRepository
 
 
@@ -36,6 +35,8 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     config_model = GitStackConfig
     api_version = API_VERSION
     init_example_on = True
+    init_suggested = shutil.which("git-stack") is not None
+    """Only when git stack is installed, i.e. `git stack` would run."""
     requires: ClassVar[list[str]] = ["git"]
     collects_after = True
     watches: ClassVar[list[str]] = ["git"]
@@ -44,19 +45,10 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
 
-    def init_suggested(self) -> bool:
-        """Only when git stack is installed, i.e. `git stack` would run."""
-        return shutil.which("git-stack") is not None
-
     def collect(self, req: RefreshRequest[GitStackConfig]) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
-
-    def store(self, req: Request[GitStackConfig, GitStackSnapshot]) -> None:
-        ctx, snapshot = req.ctx, req.snapshot
-        assert snapshot is not None
-        StackRepository(ctx.db).replace(snapshot)
 
     def changed(self, req: RefreshRequest[GitStackConfig]) -> Changed:
         """Whether a stack may have moved since the last look (see `changes`): asked right
@@ -72,10 +64,9 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
             fingerprint=changes.configs(dirs), everything=moved, reason="a stack may have moved"
         )
 
-    def load(self, req: ContextRequest[GitStackConfig]) -> GitStackSnapshot | None:
+    def snapshots(self, req: ContextRequest[GitStackConfig]) -> StackRepository:
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""
-        ctx = req.ctx
-        return StackRepository(ctx.db).load()
+        return StackRepository(req.ctx.db)
 
     def entities(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Entity]:
         snapshot = req.snapshot
@@ -84,30 +75,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     def panels(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Panel]:
         snapshot, graph = req.snapshot, req.graph
         return [Builder(snapshot, graph).stacks()]
-
-    def act_now(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Item]:
-        """Merged branches, quick to clean up, as git nominates the merged branches it can
-        delete; the rest of Stacks is news rather than something to do. One per repo: its
-        Clean cleans them all, so more would only take Act now's places with the same button."""
-        # Not one on ice: core would leave it out, and with it the repo's only Clean.
-        merged = [
-            item
-            for panel in req.panels
-            for item in panel.items
-            if item.signals and not any(req.graph.hidden(ref) for ref in item.subjects)
-        ]
-        by_repo: dict[str, list[Item]] = {}
-        for item in merged:
-            repo = next((a.fields["repo"] for a in item.actions if a.name == CLEAN), "")
-            by_repo.setdefault(repo, []).append(item)
-        return [
-            items[0].model_copy(
-                update={"details": [*items[0].details, f"and {len(items) - 1} more merged here"]}
-            )
-            if len(items) > 1
-            else items[0]
-            for items in by_repo.values()
-        ]
 
     def events(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Event]:
         before, after = req.previous.snapshot, req.snapshot

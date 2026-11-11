@@ -57,7 +57,7 @@ def test_a_branch_whose_pr_merges_is_deletable_once_and_not_the_first_time() -> 
     refreshes = _Refreshes(pair)
     assert refreshes.deletable() == []  # first: nothing to compare with
     merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
-    PrRepository(pair[1]).replace(snapshot(merged_recent=[merged]))
+    PrRepository(pair[1]).save(snapshot(merged_recent=[merged]))
     assert refreshes.deletable() == ["me/done: PR merged 1d ago"]
     assert refreshes.deletable() == []  # said once
 

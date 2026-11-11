@@ -15,12 +15,12 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
-from move_forward.page import Action, Identity, Item, ItemAdditions
+from move_forward.page import Action, Identity, ItemAdditions, Panel
 from move_forward.plugin import (
+    Address,
     CliHandler,
     Context,
     ContextRequest,
-    HandleRequest,
     InputRequest,
     ItemAdditionsFor,
     ItemRequest,
@@ -29,7 +29,6 @@ from move_forward.plugin import (
     RefRequest,
     RefreshRequest,
     Request,
-    UrlRequest,
 )
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
@@ -74,14 +73,14 @@ def hooked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "PLUGINS", plugins)
 
 
-def test_act_now_tells_a_plugin_the_due_horizon(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_plugins_context_has_the_due_horizon(monkeypatch: pytest.MonkeyPatch) -> None:
     told: list[timedelta] = []
 
-    def act_now(self: GitHubPlugin, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Item]:
+    def panels(self: GitHubPlugin, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Panel]:
         told.append(req.ctx.due_horizon)
         return []
 
-    monkeypatch.setattr(GitHubPlugin, "act_now", act_now)
+    monkeypatch.setattr(GitHubPlugin, "panels", panels)
     config, db = stored(github=snapshot())
     ranking = ActNowConfig(due_warning_days=14)
     build_dashboard(config.model_copy(update={"act_now": ranking}), db, NOW)
@@ -121,7 +120,7 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
     )
     db = Database(":memory:")
     registry.migrate(config, db)
-    PrRepository(db).replace(snapshot(mine=[pr(1, title="Fix <it>")]))
+    PrRepository(db).save(snapshot(mine=[pr(1, title="Fix <it>")]))
     page = refresh.plugin_page(config, db, "/jira/hello", {"pr": [pr(1).url]})
     assert isinstance(page, str) and "Fix &lt;it&gt;" in page and "/ hello</h1>" in page
     assert refresh.plugin_page(config, db, "/jira/hello", {"pr": ["nope"]}) is None
@@ -205,13 +204,9 @@ class _Asked(JiraPlugin):
         self.asked.append(("fetch", req.kind))
         return []
 
-    def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
-        self.asked.append(("url_for", req.kind))
-        return super().url_for(req)
-
-    def handle_for(self, req: HandleRequest[JiraConfig]) -> str | None:
-        self.asked.append(("handle_for", req.kind))
-        return super().handle_for(req)
+    def address(self, req: RefRequest[JiraConfig]) -> dict[str, Address]:
+        self.asked.append(("address", req.kind))
+        return super().address(req)
 
 
 def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -228,7 +223,7 @@ def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPa
     graph.url_for("ticket", "APP-9")
     graph.handle("ticket", "https://j/browse/APP-9")
     graph.fetch("ticket", ["https://j/browse/APP-9"])
-    assert _Asked.asked == [("url_for", "ticket"), ("handle_for", "ticket"), ("fetch", "ticket")]
+    assert _Asked.asked == [("address", "ticket"), ("address", "ticket"), ("fetch", "ticket")]
 
 
 _family_asked: list[tuple[str, str]] = []
@@ -242,9 +237,9 @@ def _person(id: str, **attrs: JsonValue) -> Entity:
 class _GitHubPeople(GitHubPlugin):
     """GitHub, knowing no person's handle and fetching alice."""
 
-    def handle_for(self, req: HandleRequest[GitHubConfig]) -> str | None:
-        _family_asked.append((self.name, "handle_for"))
-        return None
+    def address(self, req: RefRequest[GitHubConfig]) -> dict[str, Address]:
+        _family_asked.append((self.name, "address"))
+        return {}
 
     def fetch(self, req: RefRequest[GitHubConfig]) -> list[Entity]:
         _family_asked.append((self.name, "fetch"))
@@ -254,9 +249,9 @@ class _GitHubPeople(GitHubPlugin):
 class _MailPeople(MailPlugin):
     """Mail, knowing every person's handle and fetching bob."""
 
-    def handle_for(self, req: HandleRequest[MailConfig]) -> str | None:
-        _family_asked.append((self.name, "handle_for"))
-        return "bob@x.org"
+    def address(self, req: RefRequest[MailConfig]) -> dict[str, Address]:
+        _family_asked.append((self.name, "address"))
+        return {id: Address(handle="bob@x.org") for id in req.ids}
 
     def fetch(self, req: RefRequest[MailConfig]) -> list[Entity]:
         _family_asked.append((self.name, "fetch"))
@@ -285,21 +280,22 @@ def test_each_publisher_of_a_family_is_asked_in_plugin_order(
         "mail/bob@x.org",
     ]
     assert _family_asked == [
-        ("github", "handle_for"),
-        ("mail", "handle_for"),
+        ("github", "address"),
+        ("mail", "address"),
         ("github", "fetch"),
         ("mail", "fetch"),
     ]
 
 
-def test_url_for_is_by_default_the_id_where_the_familys_ids_are_urls() -> None:
+def test_an_address_is_by_default_the_id_where_the_familys_ids_are_urls() -> None:
     config, db = stored(github=snapshot())
     [github] = [e for e in registry.enabled(config, db, NOW) if e.name == "github"]
     default = Plugin[GitHubConfig, GitHubSnapshot]()
     url = "https://github.com/o/r/pull/9"
 
     def url_for(kind: str, id: str) -> str | None:
-        return default.url_for(UrlRequest(github.ctx, kind, id))
+        found = default.address(RefRequest(github.ctx, kind, [id]))
+        return found[id].url if id in found else None
 
     assert url_for("pull_request", url) == url
     assert url_for("pull_request", "#9") is None  # not a URL
@@ -523,30 +519,38 @@ def test_a_plugin_relates_only_its_own_entities(
     assert f"jira related pull_request {pr(1).url}, which it doesn't publish" in caplog.text
 
 
+def test_jira_knows_a_tickets_url_from_its_key_and_its_key_from_its_url() -> None:
+    config, db = stored(jira_site="https://j")
+    [jira] = [e for e in registry.enabled(config, db, NOW) if e.name == "jira"]
+    url = "https://j/browse/APP-9"
+    found = JiraPlugin().address(RefRequest(jira.ctx, "ticket", ["APP-9", url, "nope"]))
+    assert found == {"APP-9": Address(url=url), url: Address(url=url, handle="APP-9")}
+
+
 class _Given(JiraPlugin):
     """Jira, collecting one ticket, and noting what each hook it overrides was given."""
 
     def __init__(self) -> None:
         self.graphs: dict[str, Graph] = {}
-        self.snapshots: dict[str, BaseModel | None] = {}
+        self.stored: dict[str, BaseModel | None] = {}
 
     def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
         self.graphs["collect"] = req.graph
         return JiraSnapshot(issues=[issue("APP-1")])
 
     def after_collect(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
-        self.snapshots["after_collect"] = req.snapshot
+        self.stored["after_collect"] = req.snapshot
 
     def prune(self, req: Request[JiraConfig, JiraSnapshot]) -> list[str]:
-        self.snapshots["prune"] = req.snapshot
+        self.stored["prune"] = req.snapshot
         return []
 
     def relate(self, req: Request[JiraConfig, BaseModel]) -> list[tuple[Ref, Ref]]:
-        self.snapshots["relate"] = req.snapshot
+        self.stored["relate"] = req.snapshot
         return []
 
     def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
-        self.snapshots["item_actions"] = req.snapshot
+        self.stored["item_actions"] = req.snapshot
         return super().item_actions(req)
 
 
@@ -561,7 +565,7 @@ def test_hooks_are_given_the_graph_and_the_plugins_snapshot(
     build_dashboard(config, db, NOW)
     assert given.graphs["collect"].get("pull_request", pr(1).url) is not None
     now = JiraSnapshot(issues=[issue("APP-1")])
-    assert given.snapshots == {
+    assert given.stored == {
         "after_collect": now,
         "prune": now,
         "relate": now,

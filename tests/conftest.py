@@ -12,7 +12,6 @@ from move_forward import auth, localtime
 from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
-from move_forward.graph import Graph
 from move_forward.notifications import Event
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
@@ -265,7 +264,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
         know_jira_projects(db, "APP")
     for e in enabled(config, db, NOW):  # kept as a refresh keeps them
         if e.name in snapshots:
-            store_snapshot(e, snapshots[e.name], Graph())
+            store_snapshot(e, snapshots[e.name])
             SnapshotRepository(db).save_fetched(e.name, NOW)
     plugins = enabled(config, db, NOW)
     notes = next(e for e in plugins if e.name == "notes")

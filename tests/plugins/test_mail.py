@@ -15,6 +15,7 @@ from move_forward.asking import Asker, InitSetup
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref, attrs
 from move_forward.kinds import PERSON, Person
+from move_forward.page import Identity
 from move_forward.plugin import (
     RefreshRequest,
     Request,
@@ -216,7 +217,7 @@ def test_an_address_that_cant_be_shown_as_one_isnt_kept(sender: str) -> None:
 
 def test_an_address_with_a_slash_is_shown_but_is_no_one() -> None:
     harness = mailbox(message(1, sender='"a/b"@evil.com'))
-    [thread] = harness.entities()
+    [thread] = [e for e in harness.entities() if e.ref.kind == THREAD]
     assert thread.attrs["sender_email"] == '"a/b"@evil.com' and thread.refs == []
 
 
@@ -542,7 +543,7 @@ def test_it_publishes_a_thread_per_conversation_pointing_at_whoever_wrote_last()
 def test_a_sender_the_server_didnt_vouch_for_is_no_one() -> None:
     harness = mailbox(message(1, sender="ceo@acme.com", verified=False))
     ContactRepository(harness.db).set("@acme.com", "customer", NOW)
-    [thread] = harness.entities()
+    [thread] = [e for e in harness.entities() if e.ref.kind == THREAD]
     assert thread.refs == []
     [item] = _items(harness)
     assert "customer" not in item.badges
@@ -611,7 +612,7 @@ def test_an_app_link_goes_through_the_open_page_which_sends_the_browser_on() -> 
     harness = mailbox(message(1), message_url="message:%3C{message_id}%3E")
     [item] = _items(harness)
     assert item.url == "/mail/open?thread=root%40acme.com"
-    [thread, _] = harness.entities()
+    [thread] = [e for e in harness.entities() if e.ref.kind == THREAD]
     assert thread.url == item.url
     found = harness.page("open", {"thread": ["root@acme.com"]})
     assert isinstance(found, Response)
@@ -666,14 +667,19 @@ def test_init_guesses_gmail_from_my_email() -> None:
         return check(default) if check else default
 
     found = questions(cast(Asker, ask), InitSetup(email=ME, cwd=Path()))
-    assert found == {"host": "imap.gmail.com", "username": ME, "message_url": GMAIL_MESSAGE_URL}
+    assert found.values == {
+        "host": "imap.gmail.com",
+        "username": ME,
+        "message_url": GMAIL_MESSAGE_URL,
+    }
+    assert found.shown == {"auth_servers": ["mx.google.com"]}
 
 
 def test_a_failed_store_leaves_what_was_kept() -> None:
     harness = mailbox(message(1))
     clash = [message(2), message(2, subject="same uid")]  # the second can't go in
     with pytest.raises(sqlite3.IntegrityError):
-        MessageRepository(harness.db).replace(MailSnapshot(messages=clash))
+        MessageRepository(harness.db).save(MailSnapshot(messages=clash))
     assert [m.uid for m in MessageRepository(harness.db).load().messages] == [1]
 
 
@@ -1260,8 +1266,9 @@ def test_two_mailboxes_keep_their_messages_apart_and_say_whose_they_are() -> Non
     plugin = MailPlugin()
     config = cast(MailConfig, harness.ctx.config)
     assert sorted(plugin.tokens(config)) == ["home", "work"]
-    identity = plugin.identity(Request(harness.ctx, Graph(), snapshot))
-    assert identity is not None and identity.login == "me@gmail.com, me@work.example"
+    assert harness.dashboard().identities == [
+        Identity(tool="Mail", login="me@gmail.com, me@work.example")
+    ]
 
 
 def test_an_unverified_message_in_two_mailboxes_is_one_conversation_counted_once() -> None:
@@ -1426,3 +1433,29 @@ def test_no_password_is_called_a_password(monkeypatch: pytest.MonkeyPatch) -> No
     harness = Harness(MailPlugin(), SECTION, now=NOW)
     with pytest.raises(SourceError, match=r"^no password: run `mfd token set mail`"):
         MailPlugin().collect(RefreshRequest(harness.ctx, Graph()))
+
+
+def test_i_am_a_person_by_each_mailboxs_address_once_whoever_writes() -> None:
+    harness = mailbox(message(1, sender=ME))  # mail I sent myself
+    me = [e for e in harness.entities() if e.ref.kind == PERSON]
+    assert [(e.ref.id, e.attrs["me"], e.attrs["email"]) for e in me] == [(f"mail/{ME}", True, ME)]
+
+
+def test_signing_in_with_a_bare_login_i_am_a_person_by_it_without_an_email() -> None:
+    harness = mailbox(username="jdoe")
+    [me] = [e for e in harness.entities() if e.ref.kind == PERSON]
+    assert (me.ref.id, me.attrs["me"], me.attrs["handle"], me.attrs["email"]) == (
+        "mail/jdoe",
+        True,
+        "jdoe",
+        None,
+    )
+    assert harness.dashboard().identities == [Identity(tool="Mail", login="jdoe")]
+
+
+def test_a_username_with_a_slash_is_no_one_and_left_out_of_the_footer() -> None:
+    harness = mailbox(username="a/b")
+    # What mail publishes, before the graph drops an id its family doesn't take.
+    published = harness.plugin.entities(Request(harness.ctx, Graph(), harness.snapshot()))
+    assert [e for e in published if e.ref.kind == PERSON] == []
+    assert harness.dashboard().identities == []

@@ -86,6 +86,9 @@ class Person(KindModel):
 
     handle: str
     """Their name in the tool, e.g. a login."""
+    me: bool = False
+    """It's me, as the tool knows me (the account it's signed in as): the page's footer lists
+    each plugin's me by its `handle`."""
     email: str | None = None
     """What joins them to the same person in other tools (`Graph.same_person`)."""
     contact_type: str | None = None

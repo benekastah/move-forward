@@ -119,6 +119,20 @@ def test_a_plugin_failing_long_enough_is_said_once_until_it_works_again() -> Non
     assert notifications.dashboard_events(db, config, later + timedelta(minutes=30), ["github"])
 
 
+class _Kept:
+    """What `_Git` keeps: that it stored, and which repos then."""
+
+    def __init__(self, kv: KvRepository, repos: list[str]):
+        self.kv = kv
+        self.repos = repos
+
+    def save(self, snapshot: LocalSnapshot) -> None:
+        self.kv.set("snapshot", json.dumps(self.repos))
+
+    def load(self) -> LocalSnapshot | None:
+        return local_snapshot() if self.kv.get("snapshot") else None
+
+
 class _Git(GitPlugin):
     """git that says "changed" whenever its snapshot differs, and keeps it in kv."""
 
@@ -129,12 +143,8 @@ class _Git(GitPlugin):
     def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         return local_snapshot()
 
-    def store(self, req: Request[GitConfig, LocalSnapshot]) -> None:
-        req.ctx.kv.set("snapshot", json.dumps(self.repos))
-
-    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
-        ctx = req.ctx
-        return local_snapshot() if ctx.kv.get("snapshot") else None
+    def snapshots(self, req: ContextRequest[GitConfig]) -> "_Kept":
+        return _Kept(req.ctx.kv, self.repos)
 
     def events(self, req: Request[GitConfig, LocalSnapshot]) -> list[Event]:
         if self.broken:

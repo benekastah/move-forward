@@ -536,7 +536,7 @@ class NotesRepository:
         have now (`Graph.identify`: a ticket kept by its key gets its URL); where the new
         id is there already, the old row goes, and an act of icing it leaves with nothing.
         How many ids changed. `identify` runs before
-        the transaction, not in it: it asks plugins (`url_for`), which may use the database."""
+        the transaction, not in it: it asks plugins (`address`), which may use the database."""
         marks = ", ".join("?" * len(kinds))
         tables = [
             ("notes_links", "ref"),

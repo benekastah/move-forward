@@ -74,7 +74,7 @@ class PrRepository:
     def __init__(self, db: Database):
         self._db = db
 
-    def replace(self, snapshot: GitHubSnapshot) -> None:
+    def save(self, snapshot: GitHubSnapshot) -> None:
         """Keep what the searches found, in place of what the last refresh's found."""
         rows: dict[str, list[Params]] = defaultdict(list)
         for name in LISTS:

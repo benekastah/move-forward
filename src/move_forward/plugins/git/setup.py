@@ -1,11 +1,11 @@
 """`mfd init`'s questions for `[git]`."""
 
-from ...api import Asker, InitSetup, branch_prefix, checkout, directories, path
+from ...api import Asker, InitSection, InitSetup, branch_prefix, checkout, directories, path
 
-EXAMPLE = '# repos = ["~/src/app", "~/src/infra"]\n'
+EXAMPLE = InitSection({"repos": ["~/src/app", "~/src/infra"]})
 
 
-def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
+def questions(ask: Asker, setup: InitSetup) -> InitSection:
     """The repos, guessing the checkout init runs in, and my branch prefixes."""
     here = checkout(setup.cwd)
     repos = ask.list(
@@ -21,4 +21,4 @@ def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
         [],
         branch_prefix,
     )
-    return {"repos": repos, **({"my_branch_prefixes": prefixes} if prefixes else {})}
+    return InitSection({"repos": repos, **({"my_branch_prefixes": prefixes} if prefixes else {})})

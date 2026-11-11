@@ -13,7 +13,6 @@ from ...api import (
     Context,
     Entity,
     Graph,
-    Item,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
@@ -28,7 +27,7 @@ from . import actions, cli, prune
 from .config import NotesConfig
 from .covers import covers
 from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
-from .panels import ENTRY, ICED, TODO, TODOS, Builder, entities
+from .panels import ENTRY, ICED, TODO, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 EMPTY_NOTES = (
@@ -80,11 +79,6 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         if NotesRepository(ctx.db).is_empty():
             todos = todos.model_copy(update={"description": EMPTY_NOTES})
         return [todos, builder.iced()]
-
-    def act_now(self, req: Request[NotesConfig, BaseModel]) -> list[Item]:
-        """Close-outs: entries whose open todos are all quick, finishing the entry."""
-        panels = req.panels
-        return [i for p in panels if p.key == TODOS for i in p.items if i.signals]
 
     def item_actions(self, req: Request[NotesConfig, BaseModel]) -> ItemAdditionsFor:
         """Put on ice and Add todo on other plugins' items, from the notes read once for the

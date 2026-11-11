@@ -9,6 +9,7 @@ from ...api import (
     API_VERSION,
     Action,
     ActionHandler,
+    Address,
     Asker,
     Badge,
     Band,
@@ -17,7 +18,7 @@ from ...api import (
     Entity,
     Event,
     Graph,
-    HandleRequest,
+    InitSection,
     InitSetup,
     Item,
     KindSpec,
@@ -32,7 +33,6 @@ from ...api import (
     RefreshRequest,
     Request,
     Signals,
-    UrlRequest,
     age,
     attrs,
     due_pressure,
@@ -300,11 +300,15 @@ def end_of(day: date) -> datetime:
     return localtime.at(day + timedelta(days=1), time())
 
 
-def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Panel:
+def what_next(
+    config: JiraConfig, snapshot: JiraSnapshot, now: datetime, horizon: timedelta
+) -> Panel:
     """My open tickets in the order to take them, each with signals for Act now: an incident
     is important, critical once escalated, and an escalated bug important (one step more
     at the top priority); a due date
-    counts, and a ticket with open blockers, or in the blocked status, is blocked."""
+    counts, and a ticket with open blockers, or in the blocked status, is blocked. Those that
+    matter now are candidates for Act now: important ones, those due within `horizon`, and
+    blocked ones, which Act now ranks down until they've sat untouched for a while."""
     items: list[Item] = []
     for issue in snapshot.issues:
         kind = issue.type.lower()
@@ -344,6 +348,8 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
         rank += min(999, (now - issue.created).days)
         badges: list[str | Badge] = [Badge(text=why, tone="warn") if blocked else why]
         badges += [f"due {issue.due:%b} {issue.due.day}"] if issue.due else []
+        due = end_of(issue.due) if issue.due else None
+        due_soon = due is not None and due_pressure(due, now, horizon) > 0
         items.append(
             Item(
                 title=f"{issue.key} {issue.summary}",
@@ -363,10 +369,11 @@ def what_next(config: JiraConfig, snapshot: JiraSnapshot, now: datetime) -> Pane
                     verb=verb,
                     task=task,
                     importance=importance,
-                    due=end_of(issue.due) if issue.due else None,
+                    due=due,
                     blocked=blocked,
                     touched=issue.updated,
                 ),
+                act_now=bool(importance or due_soon or blocked) or None,
             )
         )
     return Panel(
@@ -407,7 +414,7 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
     change_check_seconds: ClassVar[int | None] = 60
 
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
         return questions(ask, setup)
 
     def events(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Event]:
@@ -424,11 +431,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         ctx = req.ctx
         return client.collect(ctx.config, ctx.email, ctx.token())
 
-    def store(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
-        ctx, snapshot = req.ctx, req.snapshot
-        assert snapshot is not None
-        IssueRepository(ctx.db).replace(snapshot)
-
     def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
         """Whether a ticket of mine was updated since the last look core took
         (`req.previous.at`, and a minute before it, as Jira counts in whole minutes): a
@@ -441,9 +443,8 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             found = client.updated_within(ctx.config, ctx.email, ctx.token(), minutes)
         return Changed(everything=found, reason="a ticket of mine was updated")
 
-    def load(self, req: ContextRequest[JiraConfig]) -> JiraSnapshot | None:
-        ctx = req.ctx
-        return IssueRepository(ctx.db).load()
+    def snapshots(self, req: ContextRequest[JiraConfig]) -> IssueRepository:
+        return IssueRepository(req.ctx.db)
 
     def linking_patterns(self, req: ContextRequest[JiraConfig]) -> dict[str, str | None]:
         """Keys of the projects my tickets have been in, so `UTF-8` or `SHA-256` in a PR
@@ -497,16 +498,16 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
             for i in found
         ]
 
-    def url_for(self, req: UrlRequest[JiraConfig]) -> str | None:
-        """A ticket's URL, from its URL or its key alone."""
-        ctx, id = req.ctx, req.id
-        if client.key_of(ctx.config.site, id):
-            return id
-        return client.ticket_url(ctx.config.site, id) if client.is_key(id) else None
-
-    def handle_for(self, req: HandleRequest[JiraConfig]) -> str | None:
-        """A ticket's key, from its URL."""
-        return client.key_of(req.ctx.config.site, req.id)
+    def address(self, req: RefRequest[JiraConfig]) -> dict[str, Address]:
+        """A ticket's URL, from its URL or its key alone, and its key, from its URL."""
+        site = req.ctx.config.site
+        found: dict[str, Address] = {}
+        for id in req.ids:
+            if key := client.key_of(site, id):
+                found[id] = Address(url=id, handle=key)
+            elif client.is_key(id):
+                found[id] = Address(url=client.ticket_url(site, id))
+        return found
 
     def panels(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
@@ -515,24 +516,5 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
         return [
             transitions(ctx.config, snapshot, graph),
             rollouts(ctx.config, snapshot, graph),
-            what_next(ctx.config, snapshot, ctx.now),
+            what_next(ctx.config, snapshot, ctx.now, ctx.due_horizon),
         ]
-
-    def act_now(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Item]:
-        """Its transitions, and the tickets in What next that matter now: important ones
-        (incidents, escalated bugs), those due within `ctx.due_horizon`, and blocked ones, which
-        Act now ranks down until they've sat untouched for a while."""
-        ctx, panels = req.ctx, req.panels
-        nominated = super().act_now(req)
-        for panel in panels:
-            if panel.key != "jira_next":
-                continue
-            for item in panel.items:
-                signals = item.signals or Signals()
-                due_soon = (
-                    signals.due is not None
-                    and due_pressure(signals.due, ctx.now, ctx.due_horizon) > 0
-                )
-                if signals.importance or due_soon or signals.blocked:
-                    nominated.append(item)
-        return nominated

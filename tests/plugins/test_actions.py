@@ -116,7 +116,7 @@ def _stored(config: Config) -> Database:
             )
             for repo in section(config, "git", GitConfig).repos
         ]
-        LocalRepository(db).replace(LocalSnapshot(repos=repos))
+        LocalRepository(db).save(LocalSnapshot(repos=repos))
     return db
 
 
@@ -392,7 +392,7 @@ def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -
         StackBranch(name="beside", parent="done"),
     ]
     snapshot = GitStackSnapshot(repos=[StackRepo(dir=str(repo), branches=tracked)])
-    StackRepository(db).replace(snapshot)
+    StackRepository(db).save(snapshot)
     assert refresh.run_action(config, db, "notes/ice", {"repo": str(repo), "branch": "top"}) == (
         "put done on ice (4 branches)"
     )
@@ -417,7 +417,7 @@ def test_ice_takes_the_other_stacks_in_the_group_as_git_stack_would(
         StackBranch(name="apart", parent="main"),  # a stack of its own
     ]
     snapshot = GitStackSnapshot(repos=[StackRepo(dir=str(repo), branches=tracked)])
-    StackRepository(db).replace(snapshot)
+    StackRepository(db).save(snapshot)
     assert refresh.run_action(config, db, "notes/ice", {"repo": str(repo), "branch": "wip"}) == (
         "put done on ice (4 branches)"
     )

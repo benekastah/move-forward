@@ -42,7 +42,7 @@ class _GitHub(GitHubPlugin):
         ASKED.append((self.name, req.full, req.subjects))
         if self.slow:
             time.sleep(0.5)
-        kept = self.load(ContextRequest(req.ctx))
+        kept = self.snapshots(ContextRequest(req.ctx)).load()
         assert kept is not None
         return kept
 
@@ -59,7 +59,7 @@ class _Jira(JiraPlugin):
         ASKED.append((self.name, req.full, req.subjects))
         if self.failing:
             raise RuntimeError("Jira is down")
-        kept = self.load(ContextRequest(req.ctx))
+        kept = self.snapshots(ContextRequest(req.ctx)).load()
         assert kept is not None
         return kept
 
@@ -205,7 +205,7 @@ def test_mfd_refresh_subject_fetches_just_that(
     )
     db = Database(db_path)
     registry.migrate(load(path), db)
-    PrRepository(db).replace(snapshot(mine=[pr(1)]))
+    PrRepository(db).save(snapshot(mine=[pr(1)]))
     assert cli.main(["-c", str(path), "refresh"]) == 0  # in full: the first
     ASKED.clear()
     capsys.readouterr()

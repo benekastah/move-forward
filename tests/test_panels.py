@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import pytest
 from conftest import (
@@ -1054,3 +1055,41 @@ def test_focus_mode_keeps_an_item_that_left_its_category_as_it_is_now() -> None:
     assert isinstance(gone, panels.Kept) and (gone.item.title, gone.gone) == ("dishes", True)
     assert [a for a in gone.item.actions if a.href is None] == []  # nothing left to act on
     assert after.kept("notes.todos", key) is None  # without the copy, nothing to show
+
+
+@pytest.mark.parametrize(
+    ("panel_act_now", "item_act_now", "deferred", "signals", "candidate"),
+    [
+        (True, None, False, "panel", True),
+        (True, None, False, "item", True),  # its own signals are enough
+        (True, None, True, "panel", False),  # deferred: not for now
+        (False, None, False, "panel", False),
+        (False, True, True, "panel", True),  # the item says so, deferred or not
+        (True, False, False, "panel", False),
+        (True, None, False, None, False),  # no signals to rank it by
+    ],
+)
+def test_a_panel_says_which_of_its_items_are_candidates_for_act_now(
+    panel_act_now: bool,
+    item_act_now: bool | None,
+    deferred: bool,
+    signals: Literal["panel", "item"] | None,
+    candidate: bool,
+) -> None:
+    go = Signals(verb="Go", task="go")
+    item = Item(
+        title="x",
+        act_now=item_act_now,
+        deferred=deferred,
+        signals=go if signals == "item" else None,
+    )
+    shown = Panel(
+        key="p",
+        title="P",
+        description="",
+        items=[item],
+        act_now=panel_act_now,
+        signals=go if signals == "panel" else None,
+    )
+    assert shown.candidate(item) is candidate
+    assert (panels.candidates([shown]) != []) is candidate

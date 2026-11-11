@@ -29,10 +29,11 @@ from .act_now import Feedback
 from .change_checks import ChangeChecks, Taken
 from .config import Config
 from .db import CORE, Database
+from .domain import Model
 from .graph import Graph, Ref, publisher
-from .kinds import FAMILIES
+from .kinds import FAMILIES, PERSON
 from .notifications import Event, NotificationRepository
-from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
+from .page import Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
 from .plugin import (
     ActionError,
     ActionResult,
@@ -93,10 +94,9 @@ its events have nothing to compare with), and when it last did, in ISO 8601 (`1`
 the time was kept, says only that it has)."""
 
 
-def store_snapshot(e: Enabled, snapshot: BaseModel, graph: Graph) -> None:
-    """Keep a plugin's new snapshot, collected from `graph`, and remember that it has one, and
-    when."""
-    e.plugin.store(Request(e.ctx, graph, snapshot))
+def store_snapshot(e: Enabled, snapshot: BaseModel) -> None:
+    """Keep a plugin's new snapshot, and remember that it has one, and when."""
+    e.kept().save(snapshot)
     KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", e.ctx.now.isoformat())
 
 
@@ -217,9 +217,10 @@ def _collect_all(
     """Collect each plugin's snapshot with `collect`, in parallel, from `graph`, given what
     moved since its last collect and the ids of its entities `asked` for (`ChangeChecks.take`,
     asking its check first when `asking`; a plugin not `named`, None meaning all, was asked
-    for them alone, so they narrow its collect), and keep it with the plugin's `store`, which
-    settles what it was given and lets the tags I took off what it publishes come back
-    (`TagRepository.put_back`): it has found them again, or not. Each plugin has
+    for them alone, so they narrow its collect), and keep it where the plugin keeps it
+    (`Plugin.snapshots`), which settles what it was given and lets the tags I took off what it
+    publishes come back (`TagRepository.put_back`): it has found them again, or not. Each
+    plugin has
     `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh
     goes on without it; one still running from an earlier refresh is left out."""
     started = time.monotonic()
@@ -247,7 +248,7 @@ def _collect_all(
                     return collect(e, taken)
 
                 def store(snapshot: BaseModel) -> None:
-                    store_snapshot(e, snapshot, graph)
+                    store_snapshot(e, snapshot)
                     assert taken is not None  # the collector took it
                     checks.stored(e, taken)
                     TagRepository(db).put_back(e.name, now)
@@ -484,14 +485,17 @@ def _plugin_panels(
         if own is None:
             plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, [_failed(e)], []))
             continue
-        nominated = call(
-            e.name,
-            "act_now",
-            lambda e=e, s=snapshot, own=own: e.plugin.act_now(Request(e.ctx, graph, s, panels=own)),
-            [],
+        plugin_panels.append(
+            panels.PluginPanels(e.name, e.plugin.title, own, panels.candidates(own))
         )
-        plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
     return plugin_panels
+
+
+class _Person(Model):
+    """What the footer reads of a plugin's `person`s: who's me, by handle."""
+
+    handle: str
+    me: bool = False
 
 
 def snoozed(config: Config, db: Database, now: datetime) -> dict[act_now.FeedbackKey, Feedback]:
@@ -524,16 +528,9 @@ def build_dashboard(
     graph, snapshots = stored_graph(db, plugins)
     plugin_panels = _plugin_panels(plugins, graph, snapshots)
     identities = [
-        found
+        Identity(tool=e.plugin.title, login=", ".join(me))
         for e in plugins
-        if (
-            found := call(
-                e.name,
-                "identity",
-                lambda e=e: e.plugin.identity(Request(e.ctx, graph, snapshots[e.name])),
-                None,
-            )
-        )
+        if (me := [p.handle for p in graph.view(f"{e.name}.{PERSON}", _Person) if p.me])
     ]
     sources = {
         source: SourceStatus(fetched_at=row.fetched_at, error=row.error)

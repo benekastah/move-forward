@@ -116,7 +116,7 @@ class IssueRepository:
     def __init__(self, db: Database):
         self._db = db
 
-    def replace(self, snapshot: JiraSnapshot) -> None:
+    def save(self, snapshot: JiraSnapshot) -> None:
         """Keep the tickets a refresh found, in place of the last refresh's, and remember
         their projects."""
         # A search's pages can overlap: the same ticket twice is kept once, at its first place.

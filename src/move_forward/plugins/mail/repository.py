@@ -99,7 +99,7 @@ class MessageRepository:
     def __init__(self, db: Database):
         self._db = db
 
-    def replace(self, snapshot: MailSnapshot) -> None:
+    def save(self, snapshot: MailSnapshot) -> None:
         """Keep `snapshot` in place of what was there, all at once: no one reads half of it, and
         a failure leaves the old one."""
         rows = [

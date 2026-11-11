@@ -50,7 +50,7 @@ breaks its family's rule:
 | --- | --- | --- |
 | `pull_request` | its URL | `#7`, `!12` |
 | `ticket` | its URL | its key, `APP-12` |
-| `person` | `<host>/<login>`, e.g. `github.com/alice`; mail's are `mail/<address>` | the login, or the address |
+| `person` | `<host>/<login>`, e.g. `github.com/alice`; mail's are `mail/<address>` (`mail/<login>` for a mailbox signing in with a bare login) | the login, or the address |
 
 What the dashboard kept by a handle before (a priority on `APP-12`, a todo linked to it)
 gets the entity's id at each refresh, once the graph can say it (`Graph.identify`); until
@@ -66,7 +66,7 @@ gone.
 | Kind | Published by | id | state | refs |
 | --- | --- | --- | --- | --- |
 | `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket`s its branch, title and body mention by key |
-| `person` | github: me, and everyone it knows an email for; mail: whoever wrote a thread's latest message, when the server verified them (DMARC) | `<host>/<login>`; mail's `mail/<address>` | | |
+| `person` | github: me, and everyone it knows an email for; mail: me, by each mailbox's `username` (an address, or a bare login without `email`; none with a `/`), and whoever wrote a thread's latest message, when the server verified them (DMARC) | `<host>/<login>`; mail's `mail/<address>`, or `mail/<login>` | | |
 | `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with; for a message with none, `uid:<uid>` (`uid:<account>:<uid>` in one of several mailboxes) | `unread` or `flagged` | the `person` who wrote its latest message, if verified; it mentions its subject, then too |
 | `git.repo` | git | GitHub `owner/name` | | |
 | `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |
@@ -133,14 +133,14 @@ On my open PRs only:
 
 ### `person`
 
-The person family, modeled in core (`api.kinds.Person`); github adds `me`. People with the same
+The person family, modeled in core (`api.kinds.Person`). People with the same
 `email` are one person, whichever tools publish them (`Graph.same_person`). An entity that
 points at a person is about them, so core ranks and badges its items by their contact type.
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
 | `handle` | string | their name in the tool, a login; mail's is their address |
-| `me` | bool | (github's) the person using the dashboard |
+| `me` | bool | the person using the dashboard, as the tool knows them (github's login, each mailbox's address): the page's footer names each plugin's by handle |
 | `email` | string or null | their address; github's is their commit email, imported or looked up from commits |
 | `contact_type` | string or null | what they are to me, when the tool knows, e.g. `customer`; one I set beats it |
 

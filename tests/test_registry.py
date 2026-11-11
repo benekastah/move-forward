@@ -310,5 +310,5 @@ def test_a_plugin_setting_the_removed_init_template_is_told_what_replaced_it() -
         api_version = API_VERSION
         init_template = "# [old.teams]\n# web = 'web'\n"
 
-    with pytest.raises(RuntimeError, match="old sets init_template.*init_tables.*init_shown"):
+    with pytest.raises(RuntimeError, match="old sets init_template.*init_tables.*shown"):
         registry.check_plugins([Old()])

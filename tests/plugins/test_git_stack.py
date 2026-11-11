@@ -196,7 +196,7 @@ def test_the_migration_keeps_the_last_snapshot_and_store_replaces_it() -> None:
     repo = StackRepository(db)
     assert repo.load() == first
     second = stacks(StackBranch(name="main"), dir="/src/other")
-    repo.replace(second)
+    repo.save(second)
     assert repo.load() == second
 
 
@@ -376,7 +376,7 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
 
     assert not changed()  # the first look notes where things stand
     assert not changed()
-    LocalRepository(db).replace(
+    LocalRepository(db).save(
         local_snapshot(dir=str(repo), branches=[local_branch("me/a", sha="b" * 40)])
     )
     assert changed()  # a commit on a tracked branch

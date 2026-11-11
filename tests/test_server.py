@@ -59,7 +59,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
     )
     db = Database(":memory:")
     migrate(config, db)
-    PrRepository(db).replace(
+    PrRepository(db).save(
         snapshot(mine=[pr(1, requested_users=["alice"], requested_teams=["web"])])
     )
     refreshed: list[bool] = []

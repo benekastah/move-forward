@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from pydantic.fields import FieldInfo
 
 from move_forward import asking, cli, config, init, keychain, registry, tomledit
+from move_forward.asking import InitSection
 from move_forward.plugin import Plugin
 from move_forward.plugins.git import setup as git_setup
 from move_forward.plugins.git.config import GitConfig
@@ -19,6 +20,7 @@ from move_forward.plugins.github import setup as github_setup
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.plugin import JiraPlugin
+from move_forward.plugins.mail import setup as mail_setup
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.shell import git
 
@@ -55,15 +57,12 @@ def no_machine_guesses(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def org_team_examples(org: str, host: str = "github.com") -> list[str]:
         return ["platform", "web"] if org == "acme" else []
 
-    def installed(_self: GitStackPlugin) -> bool:
-        return False
-
     monkeypatch.setattr(git_setup, "checkout", checkout)
     monkeypatch.setattr(github_setup, "guess_org", guess_org)
     monkeypatch.setattr(github_setup, "guess_teams", guess_teams)
     monkeypatch.setattr(github_setup, "org_team_examples", org_team_examples)
     monkeypatch.setattr(init, "guess_email", lambda: "jane@acme.com")
-    monkeypatch.setattr(GitStackPlugin, "init_suggested", installed)
+    monkeypatch.setattr(GitStackPlugin, "init_suggested", False)
 
 
 def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: None) -> None:
@@ -89,10 +88,7 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
 def test_init_turns_on_git_stack_when_it_is_installed(
     tmp_path: Path, no_machine_guesses: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def installed(_self: GitStackPlugin) -> bool:
-        return True
-
-    monkeypatch.setattr(GitStackPlugin, "init_suggested", installed)
+    monkeypatch.setattr(GitStackPlugin, "init_suggested", True)
     path = tmp_path / "config.toml"
     init.init(path, scripted({}), cwd=tmp_path)
     assert config.load(path).section("git_stack") is not None
@@ -203,7 +199,11 @@ def test_repo_paths_must_exist(tmp_path: Path, no_machine_guesses: None) -> None
 def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> None:
     text = init.render_config(
         {"email": "e@x.y", "teams": ["t", "u"]},
-        {"github": {"org": "a"}, "git": {"repos": []}, "slack": {"teams": {"t": "#t"}}},
+        {
+            "github": InitSection({"org": "a"}),
+            "git": InitSection({"repos": []}),
+            "slack": InitSection({"teams": {"t": "#t"}}),
+        },
     )
     assert tomllib.loads(text) == {
         "email": "e@x.y",
@@ -411,8 +411,7 @@ def test_what_mfd_init_writes_for_a_plugin_loads_uncommented(plugin: Plugin[Any,
     left_out = _section_lines(LEFT_OUT, plugin.name)
     assert left_out is not None
     _check_uncommented(plugin, left_out)
-    values = tomllib.loads(_uncomment(plugin.init_example))
-    text = init.render_config(init.EXAMPLE_ANSWERS, {plugin.name: values})
+    text = init.render_config(init.EXAMPLE_ANSWERS, {plugin.name: plugin.init_example})
     chosen = _section_lines(text, plugin.name)
     assert chosen is not None and not chosen[0].startswith("#")
     _check_uncommented(plugin, chosen)
@@ -421,14 +420,14 @@ def test_what_mfd_init_writes_for_a_plugin_loads_uncommented(plugin: Plugin[Any,
 @pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
 def test_a_plugins_commented_defaults_are_its_defaults(plugin: Plugin[Any, Any]) -> None:
     """Uncommenting a left-out section's optional keys changes nothing, but for the keys it
-    shows an example of instead (`init_shown`) and its example tables (`init_tables`)."""
+    shows an example of instead (its example's `shown`) and its example tables (`init_tables`)."""
     lines = _section_lines(LEFT_OUT, plugin.name) or []
     uncommented = _uncomment("\n".join(line for line in lines if not line.startswith("##")))
     loaded = plugin.config_model.model_validate(tomllib.loads(uncommented)[plugin.name])
-    bare = plugin.config_model.model_validate(tomllib.loads(_uncomment(plugin.init_example)))
+    bare = plugin.config_model.model_validate(plugin.init_example.values)
     fields = plugin.config_model.model_fields
     examples = {
-        *plugin.init_shown(tomllib.loads(_uncomment(plugin.init_example))),
+        *plugin.init_example.shown,
         *(k for k in fields if f"[{plugin.name}.{k}]" in plugin.init_tables),
     }
     assert loaded.model_dump(exclude=examples) == bare.model_dump(exclude=examples)
@@ -480,7 +479,7 @@ def test_every_commented_key_has_its_docstrings_first_sentence() -> None:
         and key not in init.HAND_WRITTEN
     }
     models |= {plugin.name: plugin.config_model for plugin in init.offered()}
-    examples = {p.name: tomllib.loads(_uncomment(p.init_example)) for p in init.offered()}
+    examples = {p.name: p.init_example.values for p in init.offered()}
     table = ""
     checked: list[str] = []
     lines = LEFT_OUT.splitlines()
@@ -543,7 +542,7 @@ WRITTEN = {
     "example": init.example(),
     "chosen": init.render_config(
         init.EXAMPLE_ANSWERS,
-        {p.name: tomllib.loads(_uncomment(p.init_example)) for p in init.offered()},
+        {p.name: p.init_example for p in init.offered()},
         ["github.pr_mergeable"],
     ),
 }
@@ -626,8 +625,8 @@ def test_answered_keys_are_not_commented_defaults_too() -> None:
     text = init.render_config(
         {"email": "e@x.y", "teams": ["web"], "port": 9000},
         {
-            "github": {"org": "a", "host": "h", "teams": {"web": "web-reviewers"}},
-            "slack": {"teams": {"web": "#web"}},
+            "github": InitSection({"org": "a", "host": "h", "teams": {"web": "web-reviewers"}}),
+            "slack": InitSection({"teams": {"web": "#web"}}),
         },
     )
     top = text.split("\n# [", 1)[0]
@@ -646,7 +645,8 @@ def test_mails_auth_servers_are_shown_as_unset_reads_them() -> None:
 
     def mail(host: str) -> str:
         values: dict[str, object] = {"host": host, "username": "me@x.y"}
-        text = init.render_config(init.EXAMPLE_ANSWERS, {"mail": values})
+        section = InitSection(values, mail_setup.shown(host))
+        text = init.render_config(init.EXAMPLE_ANSWERS, {"mail": section})
         return "\n".join(_section_lines(text, "mail") or [])
 
     assert '\n# auth_servers = ["mx.google.com"]\n' in mail("imap.gmail.com")

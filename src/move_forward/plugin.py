@@ -13,19 +13,19 @@ import traceback
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Protocol
 
 from pydantic import BaseModel
 
 from . import keychain, localtime, shell
 from .act_now import DUE_HORIZON
-from .asking import Asker, InitSetup
+from .asking import Asker, InitSection, InitSetup
 from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
 from .kinds import FAMILIES, Family, is_url
 from .notifications import Event
-from .page import Identity, Item, ItemAdditions, Panel, Surface
+from .page import Item, ItemAdditions, Panel, Surface
 from .repositories import KvRepository, ProblemRepository, SnapshotRepository
 
 log = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ class Context[C: BaseModel]:
     """The plugin's name, as `Plugin.name`."""
     due_horizon: timedelta = DUE_HORIZON
     """How far ahead a due date starts to count, as `[act_now] due_warning_days` says; a plugin
-    nominating by its due dates passes it to `due_pressure`."""
+    making items candidates for Act now by their due dates passes it to `due_pressure`."""
     tokens: Mapping[str, TokenSettings] | None = None
     """Where each of the plugin's tokens is, as `Plugin.tokens` says, for `token`; None for
     its default: the section's own, when it says where a token is."""
@@ -123,7 +123,7 @@ def _section_token(config: BaseModel) -> dict[str, TokenSettings]:
 
 @dataclass(frozen=True)
 class ContextRequest[C: BaseModel]:
-    """A hook given only the plugin's context: `load` and `linking_patterns`."""
+    """A hook given only the plugin's context: `snapshots` and `linking_patterns`."""
 
     ctx: Context[C]
 
@@ -150,21 +150,19 @@ class Previous[S: BaseModel]:
 
 @dataclass(frozen=True)
 class Request[C: BaseModel, S: BaseModel]:
-    """A hook working from what's stored: `store`, `entities`, `relate`, `panels`,
-    `act_now`, `identity`, `item_actions`, `after_collect`, `prune` and `events`."""
+    """A hook working from what's stored: `entities`, `relate`, `panels`, `item_actions`,
+    `after_collect`, `prune` and `events`."""
 
     ctx: Context[C]
     graph: Graph
     """Every plugin's entities. Empty for `entities`, which the graph is built from, and
     before any relations for `relate`."""
     snapshot: S | None
-    """What the plugin last stored; None before its first refresh. For `store`, what `collect`
-    just fetched; for `events`, the snapshot now."""
+    """What the plugin last stored; None before its first refresh. For `events`, the snapshot
+    now."""
     previous: Previous[S] = field(default_factory=Previous[S])
     """For `events` only: the plugin's snapshot before this refresh, when the refresh that
     stored it began (`at`), and the graph then."""
-    panels: list[Panel] = field(default_factory=list[Panel])
-    """For `act_now` only: the plugin's own panels, as `panels` built them."""
 
 
 @dataclass(frozen=True)
@@ -200,12 +198,23 @@ class RefreshRequest[C: BaseModel]:
 
 @dataclass(frozen=True)
 class RefRequest[C: BaseModel]:
-    """A hook asked about some of the plugin's entities by id: `fetch`."""
+    """A hook asked about some of the plugin's entities by id: `address` and `fetch`."""
 
     ctx: Context[C]
     kind: str
     """One of the plugin's `kinds` (of a family, each publisher's)."""
     ids: list[str]
+
+
+@dataclass(frozen=True)
+class Address:
+    """Where an entity is and what it's called, as `Plugin.address` knows them."""
+
+    url: str | None = None
+    """A link to it, e.g. a ticket's from its key; None when the plugin can't say."""
+    handle: str | None = None
+    """What text names it by (its family's `handle`), e.g. a ticket's key from its URL; None
+    when the plugin can't say."""
 
 
 @dataclass(frozen=True)
@@ -250,20 +259,6 @@ class InputRequest[C: BaseModel]:
             return self.form.fields[name]
         except KeyError:
             raise ActionError(f"missing field {name!r}") from None
-
-
-@dataclass(frozen=True)
-class UrlRequest[C: BaseModel]:
-    ctx: Context[C]
-    kind: str
-    id: str
-
-
-@dataclass(frozen=True)
-class HandleRequest[C: BaseModel]:
-    ctx: Context[C]
-    kind: str
-    id: str
 
 
 @dataclass(frozen=True)
@@ -355,6 +350,35 @@ ActionHandler = Callable[[InputRequest[Any]], str | ActionResult]
 parameters too) and raises `ActionError` with the reason when it can't."""
 
 
+class Snapshots[S: BaseModel](Protocol):
+    """Where a plugin keeps its snapshot (`Plugin.snapshots`): usually its repository over the
+    tables its migrations made. Nothing is kept as JSON."""
+
+    def save(self, snapshot: S) -> None:
+        """Keep what `collect` fetched, replacing what the last good collect kept, in one
+        transaction."""
+        ...
+
+    def load(self) -> S | None:
+        """What the last good collect kept, for `entities` and `panels`; None when there's
+        nothing. Core holds the database while it runs (`Database.reading`), so a refresh can't
+        store between its queries: it mustn't wait on another thread using `ctx.db`."""
+        ...
+
+
+class _NoSnapshots[S: BaseModel]:
+    """What a plugin without a snapshot model keeps: nothing."""
+
+    def __init__(self, plugin: str):
+        self._plugin = plugin
+
+    def save(self, snapshot: S) -> None:
+        raise NotImplementedError(f"{self._plugin} has a snapshot model but no snapshots")
+
+    def load(self) -> S | None:
+        return None
+
+
 class Plugin[C: BaseModel, S: BaseModel]:
     """Base of every plugin. Subclasses set the class attributes and override what they use.
 
@@ -423,11 +447,15 @@ class Plugin[C: BaseModel, S: BaseModel]:
     them after its optional keys: a table keyed by name, with example entries (`[github.teams]`,
     `[mail.<name>]`). A key written here as `[<section>.<key>]` isn't written as a key too.
     `mfd init` writes each other optional key itself, from `config_model`: its default, and its
-    docstring's first sentence as its comment (`init_shown` for one it shows otherwise)."""
-    init_example: ClassVar[str] = ""
-    """The section's required settings with example values, commented out, for a section `mfd
-    init` writes commented out because the plugin wasn't chosen. `mfd init --example` writes
+    docstring's first sentence as its comment (a section's `shown` for one it shows
+    otherwise)."""
+    init_example: ClassVar[InitSection] = InitSection()
+    """The section with example values for its required settings (and its `shown`), which `mfd
+    init` writes commented out for a plugin that wasn't chosen. `mfd init --example` writes
     them uncommented for a plugin `init_example_on`."""
+    init_suggested: ClassVar[bool] = False
+    """Whether `mfd init` offers to set the plugin up by default: not unless the plugin says
+    so, as most need something of mine (a site, a mailbox) to be of use."""
     init_example_on: ClassVar[bool] = False
     """`mfd init --example` writes the section on, with `init_example`'s values, rather than
     commented out like a plugin `mfd init` wasn't asked for: for a tool most use. Off by
@@ -470,17 +498,11 @@ class Plugin[C: BaseModel, S: BaseModel]:
         can't be stopped)."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
-    def store(self, req: Request[C, S]) -> None:
-        """Keep what `collect` fetched (`req.snapshot`, never None here) in the plugin's
-        tables, replacing what the last good collect kept, in one transaction."""
-        raise NotImplementedError(f"{self.name} has a snapshot model but no store")
-
-    def load(self, req: ContextRequest[C]) -> S | None:
-        """What the last good collect kept, for `entities` and `panels`; None when there's
-        nothing (no snapshot model, say). Core holds the database while it runs
-        (`Database.reading`), so a refresh can't store between its queries: it mustn't wait on
-        another thread using `ctx.db`."""
-        return None
+    def snapshots(self, req: ContextRequest[C]) -> "Snapshots[S]":
+        """Where the plugin keeps what `collect` fetched, in its own tables: usually its
+        repository over them (see `Snapshots`). By default nothing is kept, for a plugin with
+        no snapshot model."""
+        return _NoSnapshots[S](self.name)
 
     def events(self, req: Request[C, S]) -> list[Event]:
         """What happened since the last refresh, as events of its `notification_kinds`:
@@ -532,11 +554,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         its tables, so cheap: core asks every time it builds the graph."""
         return {kind: None for kind, spec in self.kinds.items() if spec.linking}
 
-    def identity(self, req: Request[C, S]) -> Identity | None:
-        """Who I am in the plugin's tool (a login), for the page's footer, which lists each
-        plugin's; None when it doesn't say."""
-        return None
-
     def entities(self, req: Request[C, S]) -> list[Entity]:
         """What the plugin publishes to the graph, from its snapshot and tables."""
         return []
@@ -547,37 +564,22 @@ class Plugin[C: BaseModel, S: BaseModel]:
         (about a family, each plugin that publishes it), so `req.kind` is one of them."""
         return []
 
-    def url_for(self, req: UrlRequest[C]) -> str | None:
-        """A URL for an entity of one of its `kinds`, even one not in the graph, e.g. a
-        ticket's from its key. Core asks only about the plugin's own kinds. By default, the id
-        itself where it's a URL of a family whose ids are URLs (a pull request's), else None."""
+    def address(self, req: RefRequest[C]) -> dict[str, Address]:
+        """Where each of these entities of one of its `kinds` is, and what it's called, by id,
+        even one not in the graph: a ticket's URL from its key, its key from its URL. Core asks
+        only about the plugin's own kinds. By default, its URL is its id where that's a URL of a
+        family whose ids are URLs (a pull request's), and nothing else is known."""
         family = FAMILIES.get(req.kind)
-        return req.id if family and family.id_rule(req.id) and is_url(req.id) else None
-
-    def handle_for(self, req: HandleRequest[C]) -> str | None:
-        """The `handle` of an entity of one of its `kinds`, by id, even one not in the graph,
-        e.g. a ticket's key from its URL. Core asks only about the plugin's own kinds."""
-        return None
+        return {
+            id: Address(url=id)
+            for id in req.ids
+            if family is not None and family.id_rule(id) and is_url(id)
+        }
 
     # Page
 
     def panels(self, req: Request[C, S]) -> list[Panel]:
         return []
-
-    def act_now(self, req: Request[C, S]) -> list[Item]:
-        """The plugin's candidates for core's Act now, each with `signals`, from its
-        `panels`. By default the items of the panels marked `act_now` that aren't `deferred`,
-        each taking its panel's signals if it has none of its own; a plugin that knows
-        better nominates precisely (a deferred item too). Each candidate is about something in
-        one of its panels: the tag view offers the tags its panels carry, so a candidate about
-        anything else would have its tags missing from the choices once one is selected."""
-        return [
-            item if item.signals else item.model_copy(update={"signals": panel.signals})
-            for panel in req.panels
-            if panel.act_now
-            for item in panel.items
-            if not item.deferred
-        ]
 
     def item_actions(self, req: Request[C, S]) -> ItemAdditionsFor:
         """What the plugin adds to other plugins' items on one page: buttons (e.g. "add todo"
@@ -607,26 +609,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Set-up and upkeep
 
-    def init_suggested(self) -> bool:
-        """Whether `mfd init` offers to set the plugin up by default: not unless the plugin
-        says so, as most need something of mine (a site, a mailbox) to be of use."""
-        return False
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
-        """Ask for the `[name]` section's settings in `mfd init`; returns its values (a
-        table's as a dict, e.g. `{"teams": {...}}` for `[name.teams]`). `setup` has what
-        init knows so far; a plugin can add to its `teams`."""
-        return {}
-
-    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
-        """Optional keys `mfd init` writes, commented out, with these values in place of their
-        defaults, under a section of these `section` values (`init_questions`' answers, or
-        `init_example`'s for a section left out): where an example says more than the
-        default (github's `merge`), or the default is None, which TOML can't write (such a key
-        not here isn't written). Uncommenting one should be right for that section: mail
-        shows `auth_servers` as the host's known ones, or `[]`, which is what unset means for
-        another host."""
-        return {}
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
+        """Ask for the `[name]` section's settings in `mfd init`; returns the section to write.
+        `setup` has what init knows so far; a plugin can add to its `teams`."""
+        return InitSection()
 
     def prune(self, req: Request[C, S]) -> list[str]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns

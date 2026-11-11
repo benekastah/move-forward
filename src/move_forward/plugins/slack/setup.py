@@ -1,16 +1,16 @@
 """`mfd init`'s questions for `[slack]`."""
 
-from ...api import Asker, InitSetup, channel, url
+from ...api import Asker, InitSection, InitSetup, channel, url
 
 TABLES = """\
 # Where review pings to a team go, by its name in `teams`.
 # [slack.teams]
 # my-team = "#team-my-team"
 """
-EXAMPLE = '# workspace_url = "https://example.slack.com"\n'
+EXAMPLE = InitSection({"workspace_url": "https://example.slack.com"})
 
 
-def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
+def questions(ask: Asker, setup: InitSetup) -> InitSection:
     """The workspace, for ping links, and a channel for each of my teams' review pings."""
     workspace = ask(
         "Slack workspace URL, for ping links; it's under the workspace name in Slack's menu"
@@ -27,7 +27,9 @@ def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
         )
         if answer:
             channels[team] = answer
-    return {
-        **({"workspace_url": workspace} if workspace else {}),
-        **({"teams": channels} if channels else {}),
-    }
+    return InitSection(
+        {
+            **({"workspace_url": workspace} if workspace else {}),
+            **({"teams": channels} if channels else {}),
+        }
+    )

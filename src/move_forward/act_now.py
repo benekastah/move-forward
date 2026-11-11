@@ -1,7 +1,8 @@
 """Act now: core's short, ranked list of the best next actions, whatever the tools.
 
-Each plugin nominates items through its `act_now` hook, each with `Signals` saying how long
-it takes, what it finishes and who's waiting. Core scores them (a blocked one lower, unless it has sat untouched for a while),
+Each plugin's panels offer its candidates (`panels.candidates`): the items of a panel marked
+`act_now`, but deferred ones, and those an item's own `Item.act_now` says, each with `Signals`
+saying how long it takes, what it finishes and who's waiting. Core scores them (a blocked one lower, unless it has sat untouched for a while),
 keeps one item per subject, joins an item about a unit of work (a ticket, a work entry) to
 the best item about something in it (its PR), keeps a few per plugin, and says on each
 item why it's there.

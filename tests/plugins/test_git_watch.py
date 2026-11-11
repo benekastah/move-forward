@@ -13,7 +13,7 @@ from conftest import NOW
 from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Context, RefreshRequest, Request
+from move_forward.plugin import Context, ContextRequest, RefreshRequest
 from move_forward.plugins.git import watch
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.plugin import GitPlugin
@@ -197,12 +197,35 @@ def test_the_plugin_refreshes_the_repo_an_edit_changed(tmp_path: Path) -> None:
     db.migrate("git", MIGRATIONS)
     plugin, checks = GitPlugin(), ChangeChecks()
     ctx = _plugin_context(repo, db)
-    plugin.store(Request(ctx(0), Graph(), plugin.collect(RefreshRequest(ctx(0), Graph()))))
+    plugin.snapshots(ContextRequest(ctx(0))).save(plugin.collect(RefreshRequest(ctx(0), Graph())))
     try:
         assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None  # starts watching
         (repo / "src" / "deep" / "a.py").write_text("changed\n")
         assert _until(lambda: checks.check(Enabled(plugin, ctx(1)), Graph([])) is not None)
         assert ChangeRepository(db).get("git").subjects == {str(git_common_dir(repo))}
+    finally:
+        plugin.stop_watching()
+
+
+def test_a_worktree_a_new_snapshot_found_is_watched_once_watching_has_started(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path / "r")
+    db = Database(":memory:")
+    db.migrate("git", MIGRATIONS)
+    plugin, checks = GitPlugin(), ChangeChecks()
+    ctx = _plugin_context(repo, db)
+    kept = plugin.snapshots(ContextRequest(ctx(0)))
+    kept.save(plugin.collect(RefreshRequest(ctx(0), Graph())))
+    try:
+        assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None  # starts watching
+        worktree = tmp_path / "wt"
+        git(repo, "worktree", "add", "-q", "--detach", str(worktree))
+        kept.save(plugin.collect(RefreshRequest(ctx(1), Graph())))  # as a refresh stores it
+        time.sleep(QUIET_SECONDS)
+        checks.check(Enabled(plugin, ctx(2)), Graph([]))  # what adding it moved, taken
+        (worktree / "src" / "deep" / "a.py").write_text("changed\n")
+        assert _until(lambda: checks.check(Enabled(plugin, ctx(3)), Graph([])) is not None)
     finally:
         plugin.stop_watching()
 
@@ -213,7 +236,7 @@ def test_ignored_files_dont_refresh_the_repo(tmp_path: Path) -> None:
     db.migrate("git", MIGRATIONS)
     plugin, checks = GitPlugin(), ChangeChecks()
     ctx = _plugin_context(repo, db)
-    plugin.store(Request(ctx(0), Graph(), plugin.collect(RefreshRequest(ctx(0), Graph()))))
+    plugin.snapshots(ContextRequest(ctx(0))).save(plugin.collect(RefreshRequest(ctx(0), Graph())))
     try:
         assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None  # starts watching
         (repo / "src" / "node_modules" / "dep" / "index.js").write_text("x\n")

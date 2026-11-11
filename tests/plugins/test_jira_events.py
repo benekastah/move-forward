@@ -88,7 +88,7 @@ def test_a_ticket_whose_prs_merge_is_closeable_once_and_not_the_first_time() -> 
     refreshes = _Refreshes((config, db))
     assert refreshes.closeable() == []  # first: nothing to compare with
     assert refreshes.closeable() == []
-    PrRepository(db).replace(snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)]))
+    PrRepository(db).save(snapshot(merged_recent=[pr(1, state="MERGED", merged_at=NOW)]))
     assert refreshes.closeable() == ["APP-1"]
     assert refreshes.closeable() == []  # said once
 

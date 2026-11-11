@@ -58,7 +58,7 @@ class StackRepository:
     def __init__(self, db: Database):
         self._db = db
 
-    def replace(self, snapshot: GitStackSnapshot) -> None:
+    def save(self, snapshot: GitStackSnapshot) -> None:
         """Keep what `git stack info` said, in place of what it said last time."""
         with self._db.transaction() as conn:
             conn.execute("DELETE FROM git_stack_branches")

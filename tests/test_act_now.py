@@ -7,14 +7,10 @@ from datetime import datetime, timedelta
 from conftest import NOW
 
 from move_forward import act_now
+from move_forward import panels as panels_module
 from move_forward.act_now import Feedback, FeedbackKey, Nomination
-from move_forward.db import Database
-from move_forward.graph import Graph, Ref
+from move_forward.graph import Ref
 from move_forward.page import Action, Item, Panel, Signals
-from move_forward.plugin import Context, Request
-from move_forward.plugins.jira.config import JiraConfig
-from move_forward.plugins.jira.plugin import JiraPlugin
-from move_forward.repositories import KvRepository
 
 
 def _item(title: str, subject: str | None = None, **signals: object) -> Item:
@@ -160,34 +156,39 @@ def test_no_plugin_fills_more_than_its_share_and_the_list_is_short() -> None:
     assert _titles(ranked) == ["g0", "g1", "g2", "j"]
 
 
-def test_by_default_a_plugin_nominates_its_act_now_panels_items_with_their_signals() -> None:
-    own = Item(title="own", signals=Signals(verb="Merge", task="merge"))
-    plain = Item(title="plain")
+def test_an_act_now_panels_items_are_candidates_with_their_signals_but_as_they_say() -> None:
+    review = Signals(verb="Review", task="review", effort="minutes")
     panels = [
         Panel(
             key="a",
             title="A",
             description="",
-            items=[own, plain],
+            items=[
+                Item(title="own", signals=Signals(verb="Merge", task="merge")),
+                Item(title="plain"),
+                Item(title="draft", deferred=True),
+                Item(title="draft, but", deferred=True, act_now=True),
+                Item(title="not this one", act_now=False),
+            ],
             act_now=True,
-            signals=Signals(verb="Review", task="review", effort="minutes"),
+            signals=review,
         ),
-        Panel(key="b", title="B", description="", items=[Item(title="not nominated")]),
+        Panel(
+            key="b",
+            title="B",
+            description="",
+            items=[
+                Item(title="not nominated", signals=review),
+                Item(title="due soon", signals=review, act_now=True),
+                Item(title="no signals", act_now=True),
+            ],
+        ),
     ]
-    db = Database(":memory:")
-    ctx = Context(
-        config=JiraConfig(site="https://j"),
-        email="me@x",
-        teams=[],
-        prune_days=90,
-        now=NOW,
-        db=db,
-        kv=KvRepository(db, "jira"),
-    )
-    nominated = JiraPlugin().act_now(Request(ctx, Graph(), None, panels=panels))
-    assert [(i.title, i.signals) for i in nominated] == [
+    assert [(i.title, i.signals) for i in panels_module.candidates(panels)] == [
         ("own", Signals(verb="Merge", task="merge")),
-        ("plain", Signals(verb="Review", task="review", effort="minutes")),
+        ("plain", review),
+        ("draft, but", review),
+        ("due soon", review),
     ]
 
 

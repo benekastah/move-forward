@@ -12,24 +12,21 @@ this page explains them as they apply to a plugin.
 ## Requests
 
 Every hook takes one argument, a request object, whose fields are the hook's inputs, so core
-can give one a new field without changing any hook's signature. Most hooks take one of five
-kinds, all in `move_forward.api`:
+can give one a new field without changing any hook's signature. There are five kinds, all in
+`move_forward.api`:
 
 | Request | Fields | Hooks |
 | --- | --- | --- |
-| `ContextRequest` | `ctx` | `load`, `linking_patterns` |
-| `Request` | `ctx`, `graph`, `snapshot`, and `previous` or `panels` where a hook has them | `store`, `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`, `events` |
+| `ContextRequest` | `ctx` | `snapshots`, `linking_patterns` |
+| `Request` | `ctx`, `graph`, `snapshot`, and `previous` for `events` | `entities`, `relate`, `panels`, `item_actions`, `after_collect`, `prune`, `events` |
 | `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `changed` |
-| `RefRequest` | `ctx`, `kind`, `ids` | `fetch` |
+| `RefRequest` | `ctx`, `kind`, `ids` | `address`, `fetch` |
 | `InputRequest` | `ctx`, `graph`, and one of `page` (a `Page`: `query`, `path`), `form` (a `Form`: `fields`, `surface`, `back`) or `args` | pages, buttons (`actions`), `mfd <plugin>` (`cli`) |
 
 `ctx` is the plugin's context (below), `graph` every plugin's entities (empty for `entities`,
 which the graph is built from), and `snapshot` what the plugin last stored (None before its
-first refresh; for `store`, what `collect` just fetched). A field a hook doesn't get is left at
-its default; each field's docstring names the hooks that get it.
-
-Two hooks keep a request of their own: `url_for` (`UrlRequest`) and `handle_for`
-(`HandleRequest`).
+first refresh). A field a hook doesn't get is left at its default; each field's docstring
+names the hooks that get it.
 
 `previous` is a `Previous`, what held before, for the two hooks that compare: `changed` and
 `events`. Its `at` is when the plugin's last change check ran (`changed`), or when the refresh
@@ -46,7 +43,7 @@ src/move_forward/plugins/linear/
     models.py      # LinearSnapshot and its parts: what collect brings back
     client.py      # talking to Linear (the standard library or a CLI; no new dependencies)
     setup.py       # mfd init's questions for [linear], and its example values
-    repository.py  # the plugin's tables: MIGRATIONS, and store/load queries
+    repository.py  # the plugin's tables: MIGRATIONS, and its Snapshots (save, load)
     kinds.py       # IssueAttrs: the attributes of the entities it publishes
     panels.py      # pure functions from the snapshot and the graph to panels
     plugin.py      # LinearPlugin, the Plugin subclass tying them together
@@ -121,21 +118,21 @@ class LinearConfig(TokenFields):
   for, its unit, the value that turns it off ("0: never", "empty: no such convention"), and
   what an empty or unset value stands for where that isn't obvious. It ends at the first `.`,
   `?` or `!` before a space, but not at `e.g.`, `i.e.` or `etc.`.
-- `mfd init` asks which plugins to set up (offering by default those whose
-  `init_suggested()` is true; it's false unless a plugin overrides it), then each chosen one's `init_questions(ask, setup)`, which returns its section's
-  values. `setup` has my email, where init runs and the teams found so far; a plugin that
+- `mfd init` asks which plugins to set up (offering by default those that set
+  `init_suggested = True`), then each chosen one's `init_questions(ask, setup)`, which
+  returns its section as an `InitSection`: its `values`, and its `shown` (below). `setup`
+  has my email, where init runs and the teams found so far; a plugin that
   sets the teams (github does) says so with `init_finds_teams`, and otherwise core asks
   for them by name before any plugin's questions. Init refuses a plugin chosen without the
   plugins it `requires`. `ask(question, default, check, complete)` and `ask.list`
   tab-complete with `complete`: `asking.choices(...)` (a list, or a function fetching it
   on the first tab) or `asking.directories`. Keep the questions and guesses in a
-  `setup.py` (see github's), with `init_example` (the required keys with example values,
-  commented, written when the plugin isn't chosen) and what the model can't say: in
-  `init_tables`, commented tables of example entries (`[github.teams]`), and from
-  `init_shown(section)`, given the section's values, an example value for a key whose default
-  is None or says less than an example, where uncommenting it is right for that section
-  (mail's `auth_servers`: Gmail's servers for a Gmail host, `[]` for another, the same as
-  unset there). Each comment goes above what it's about. A plugin still setting `init_template`
+  `setup.py` (see github's), with `init_example` (an `InitSection` of the required keys
+  with example values, written commented out when the plugin isn't chosen) and what the
+  model can't say: in `init_tables`, commented tables of example entries (`[github.teams]`),
+  and in a section's `shown`, an example value for a key whose default is None or says less
+  than an example, where uncommenting it is right for that section (mail's `auth_servers`:
+  Gmail's servers for a Gmail host, `[]` for another, the same as unset there). Each comment goes above what it's about. A plugin still setting `init_template`
   is refused, naming these.
   `mfd init --example` writes each plugin's section as `mfd init` does when it isn't
   chosen, or, with `init_example_on` (a tool most use: github, git), on, with
@@ -175,12 +172,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     def collect(self, req: RefreshRequest[LinearConfig]) -> LinearSnapshot:
         return client.collect(req.ctx.config, req.ctx.email)
 
-    def store(self, req: Request[LinearConfig, LinearSnapshot]) -> None:
-        assert req.snapshot is not None  # what collect just fetched
-        IssueRepository(req.ctx.db).replace(req.snapshot)
-
-    def load(self, req: ContextRequest[LinearConfig]) -> LinearSnapshot | None:
-        return IssueRepository(req.ctx.db).load()
+    def snapshots(self, req: ContextRequest[LinearConfig]) -> IssueRepository:
+        return IssueRepository(req.ctx.db)
 ```
 
 - `name` is the config section, the kv namespace and migrations' owner, the tables'
@@ -233,11 +226,13 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   what it stored last. It has five minutes to finish: past that, the
   refresh records it as timed out and goes on, and leaves it out of later refreshes until
   its collect returns (a thread can't be stopped). Set a timeout on whatever it calls, too.
-- `store` keeps what `collect` returned in the plugin's own tables; `load` reads it back
-  for every page, with the database held so no refresh stores between its queries (so it
-  mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
-- `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
-  the page's footer, which lists each plugin's.
+- `snapshots(req)` gives where the plugin keeps what `collect` returned, in its own
+  tables: a `Snapshots`, usually its repository over them, whose `save(snapshot)` replaces
+  what the last good collect kept and whose `load()` reads it back for every page, with the
+  database held so no refresh stores between its queries (so it mustn't wait on another
+  thread using `ctx.db`). Nothing is kept as JSON.
+- Who I am in the tool is a `person` it publishes with `me=True`: the page's footer lists
+  each plugin's, by handle.
 - A plugin that needs other plugins' entities to know what to fetch sets `collects_after =
   True` (see git_stack): its `collect` runs once the others have stored their snapshots, with
   the graph they make (`req.graph`; every collect has the graph, built from what's stored). It's refreshed on its own schedule, not with the
@@ -273,7 +268,7 @@ The rules:
   another plugin whose name starts with yours (`git_stack_` for `git`); and refuses a plugin
   named for a prefix of core's own (`team`, of `team_channels`).
 - **Fetched or kept**, and the table's comment says which. A fetched table holds what
-  `collect` brought back and is replaced wholesale by `store`. A kept table holds what
+  `collect` brought back and is replaced wholesale by its `Snapshots.save`. A kept table holds what
   only the dashboard knows (notes, pings sent, projects seen); it survives refreshes, and
   `prune` clears what's finished.
 - **A cache of lookups** (a login's email, found once and kept) is a kept table of a key, a
@@ -377,14 +372,14 @@ class LinearPlugin(...):
   refreshes. A kind whose text anyone can write (mail's subjects) is
   `KindSpec(..., tags_from_text=False)`. Read the tags on or named by an entity with
   `graph.related(ref, TAG)` (`api.kinds.TAG`).
-- `url_for(req)` (`req.kind`, `req.id`) makes a link for an entity that isn't in the
-  graph, `handle_for(req)` what to call it (a ticket's key from its URL), and `fetch(req)`
-  (`req.kind`, `req.ids`) fetches entities by id from the tool now, for rare work like the
-  daily prune; what a fetched entity must carry is in
-  [entities.md](entities.md#fetched-on-demand). Core asks each only about the plugin's own
-  `kinds`, so they needn't check `req.kind` is theirs; `url_for` gives the id by default
-  where its family's ids are URLs (a pull request's), so a plugin overrides it only to make
-  a URL of something else (a ticket's key).
+- `address(req)` (`req.kind`, `req.ids`) says where entities that may not be in the graph
+  are and what they're called, by id: an `Address(url, handle)` (a ticket's URL from its key,
+  its key from its URL), leaving out what it can't say. `fetch(req)` fetches entities by id
+  from the tool now, for rare work like the daily prune; what a fetched entity must carry is
+  in [entities.md](entities.md#fetched-on-demand). Core asks each only about the plugin's own
+  `kinds`, so they needn't check `req.kind` is theirs; `address` gives the id as the URL by
+  default where its family's ids are URLs (a pull request's), so a plugin overrides it only
+  to make a URL of something else (a ticket's key), or to give a handle.
 - A branch's id is `api.ids.branch_id(repo_dir, name)`, read with `branch_parts(id)`.
 - **Relations.** What only your plugin knows links one of its entities to another's (a PR
   to its local branch) goes in `relate(req)`, as `(mine, theirs)` pairs; see
@@ -430,7 +425,7 @@ def panels(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Panel]:
 - A badge is a string, or `Badge(text, tone="warn")` for one that needs attention (`good`
   for one going well). A link to what's over sets `done`, and is struck through. An item
   that's not for now (a draft) is `deferred`: it sorts last, and Act now leaves it out
-  unless the plugin's `act_now` nominates it.
+  unless it says it's a candidate (`act_now=True`, below).
 - An item or part whose work is done but kept a while to undo (a todo ticked off today) is
   `done`: it's dimmed and last, isn't counted, isn't in Act now, and focus mode skips it; nor
   does it count towards what brings back a snoozed item. Mark an item whose parts are all done
@@ -457,15 +452,16 @@ Panel(..., act_now=True, signals=Signals(verb="Triage", task="triage", effort="m
 ```
 
 An item can carry its own `signals` (`effort`, `closes`, `waiting` and `waiting_since`,
-`importance` from 0 to 2, `due`, `blocked`, `verb`), and a plugin can override
-`act_now(req)` (`req.panels` are its own) to nominate precisely, from those panels: the tag
-view offers the tags the panels carry, so a candidate about something in none of them would
-lose its tags from the choices once a tag is selected. Map your tool's own idea of
+`importance` from 0 to 2, `due`, `blocked`, `verb`), and say itself whether it's a
+candidate, whatever its panel: `Item(act_now=True)` nominates it (a ticket due soon in a
+panel that isn't for now, the feedback on a draft, deferred as it is), and
+`Item(act_now=False)` keeps it out. A candidate with no signals, its own or its panel's,
+isn't one. Map your tool's own idea of
 importance (a priority, an escalation) onto `importance`, in the plugin. An item whose main
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
-A plugin that nominates by due date passes `ctx.due_horizon` to `due_pressure`, so it agrees
-with `[act_now] due_warning_days`.
+A plugin whose items are candidates by due date passes `ctx.due_horizon` to `due_pressure`,
+so it agrees with `[act_now] due_warning_days`.
 Set `Item.fingerprint` to what would make a snoozed item worth another look.
 An item with a `task` also has Snooze in its own panel; what's snoozed
 waits there, last and dimmed, with Unsnooze, and Act now leaves it out. Give a task to any item it makes
@@ -567,7 +563,7 @@ built-ins working together use `conftest.dashboard(...)` and `conftest.stored(..
 ## Docs to update in the same commit
 
 For a built-in, in this repository; a plugin from another package keeps the same in its own
-docs, and its `init_example`, `init_tables` and `init_shown(section)`.
+docs, and its `init_example`, `init_tables` and its sections' `shown`.
 
 - The plugin's page, `docs/plugins/<name>.md` (copy one of the others): its config and
   setup, what it publishes, its panels, what it nominates for Act now, its buttons, pages
@@ -575,4 +571,4 @@ docs, and its `init_example`, `init_tables` and `init_shown(section)`.
 - [entities.md](entities.md) for its kinds, [plugins.md](plugins.md) for what it publishes
   and reads.
 - Its config keys' docstrings, which `mfd init` writes from, and what its model can't say:
-  its `init_example`, `init_tables` and `init_shown(section)`.
+  its `init_example`, `init_tables` and its sections' `shown`.

@@ -43,26 +43,31 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   it's no unit of work. A kind whose entities hide what they point at (ice) is
   declared `hides`, and core leaves items about hidden things off the page;
   plugins don't filter them out themselves.
-- A plugin keeps what `collect` fetched in its own tables, with `store`, and
-  reads it back with `load`; nothing is kept as JSON. Core keeps only when each plugin
-  last fetched and last stored, and why it failed; what its change checks last saw and said
-  moved, until a collect started after stores (`change_checks.py`); and what else a plugin
-  reports wrong with `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown
-  with its state on the page and logged when it changes, rather than each plugin warning in its
-  own way.
-- Every plugin hook that runs with the plugin's context takes one request object, so a hook
-  can gain an input without breaking its overrides. Most take one of five kinds:
-  `ContextRequest(ctx)` (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)`
-  (`store`, `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`,
-  `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
-  (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx,
-  graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd
-  <plugin>`). Two keep a request of their own: `url_for` (`UrlRequest`) and `handle_for`
-  (`HandleRequest`). `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
-  the snapshot and the graph then). Those called before there's a context take what they need:
-  `init_suggested()`, `init_questions(ask, setup)` and `init_shown(section)` (`mfd init`),
-  `tokens(config)` (`mfd token`, and loading the config), `cli(parser)`, `pages()` and
-  `actions()`.
+- A plugin keeps what `collect` fetched in its own tables, through what its `snapshots`
+  gives (its repository, which `save`s and `load`s it); nothing is kept as JSON. Core keeps
+  only when each plugin last fetched and last stored, and why it failed; what its change
+  checks last saw and said moved, until a collect started after stores (`change_checks.py`);
+  and what else a plugin reports wrong with `ctx.problem(key, text | None)` (a lookup its
+  token isn't allowed), shown with its state on the page and logged when it changes, rather
+  than each plugin warning in its own way.
+- A plugin says what it is in class variables, each documented on `Plugin`: its `name`,
+  `title`, `config_model`, `snapshot_model`, `kinds` and `families`, `requires`, `migrations`,
+  how it refreshes (`collects_after`, `watches`, `change_check_seconds`), its
+  `notification_kinds`, its command (`cli_help`), and how `mfd init` and the settings page
+  show it (`always_on`, `init_suggested`, `init_example`, `init_example_on`, `init_tables`,
+  `init_finds_teams`, `teams_field`, `locked_settings`, `token_help`), and `api_version`.
+- Every plugin hook that runs with the plugin's context takes one request object, of five
+  kinds, so a hook can gain an input without breaking its overrides: `ContextRequest(ctx)`
+  (`snapshots`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`entities`, `relate`,
+  `panels`, `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph,
+  full, subjects)` (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`address`, `fetch`);
+  and `InputRequest(ctx, graph)` with a `Page`, a `Form` or the command line's `args` (pages,
+  buttons, `mfd <plugin>`). `changed` and `events` get what held before as a `Previous`
+  (`req.previous`: when, the fingerprint, the snapshot and the graph then). Those called
+  before there's a context take what they need: `init_questions(ask, setup)` (`mfd init`,
+  returning an `InitSection`), `tokens(config)` (`mfd token`, and loading the config),
+  `cli(parser)`, `pages()` and `actions()`. Who I am in a tool is a `person` it publishes
+  with `me`; what focus mode keeps on the page after a button is core's.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.
@@ -93,10 +98,10 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   badges, a Tag field and an Untag per tag (`tags.py`), which it keeps in `Item.tags` and the
   page filters by (`tag_view.py`). Nothing is added to a part that's `done` (a todo ticked
   off, kept to untick, finished within its item), by core or by any plugin's `item_actions`:
-  only the part's own buttons act on it. A plugin nominates items for core's Act now with
-  `act_now`, each with `Signals` (effort, what it closes, who's waiting, and a `task`: the
-  stable id Act now keeps a snooze or pin by); by default, the items of its panels marked
-  `act_now`.
+  only the part's own buttons act on it. A plugin's panels' items are core's Act now's
+  candidates, each with `Signals` (effort, what it closes, who's waiting, and a `task`: the
+  stable id Act now keeps a snooze or pin by): those of its panels marked `act_now`, but
+  deferred ones, unless an item says otherwise (`Item.act_now`).
 - Every request needs the dashboard's token, a plugin's pages (served at
   `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
   static files.
@@ -145,9 +150,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   built the same way) writes each optional key from its model, commented out with its default
   and its docstring's first sentence. A plugin writes by hand, in its `setup.py`, only what
   its model can't say: a required key with an example value in its `init_example`, a table of
-  example entries (`[github.teams]`, `[mail.<name>]`) in its `init_tables`, and from its
-  `init_shown(section)` an example value for a key whose default says less (or is None),
-  where it's right for that section. A key's comment goes above it, after a blank line, wrapped
+  example entries (`[github.teams]`, `[mail.<name>]`) in its `init_tables`, and in a
+  section's `shown` (its `init_example`'s, and what its `init_questions` returns) an example
+  value for a key whose default says less (or is None), where it's right for that section. A key's comment goes above it, after a blank line, wrapped
   to 100 columns (never inside a code span); write `init_tables`' comments the same way.
   Core's `[notifications]` is still written by hand, in `init.py`. Config models reject unknown
   keys; keep it that way. A key that moves says where it went (see
@@ -164,7 +169,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   on: it runs the migration as soon as the file is saved, and once it has, renaming it makes
   the server refuse to start.
 - **A plugin table is fetched or kept**, and its comment says which.
-  Fetched tables hold what `collect` brings back; `store` replaces them
+  Fetched tables hold what `collect` brings back; `save` replaces them
   wholesale, so they're never pruned. A table computed from the graph in
   `after_collect` (github's reviewer suggestions, notes' ice covers) is
   replaced the same way, and counts as fetched (or says "derived"). Kept tables hold what only the dashboard

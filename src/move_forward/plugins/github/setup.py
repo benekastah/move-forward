@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from ...api import Asker, InitSetup, checkout, choices, quiet, word
+from ...api import Asker, InitSection, InitSetup, checkout, choices, quiet, word
 from .client import api
 from .config import DEFAULT_HOST
 
@@ -13,7 +13,9 @@ TABLES = """\
 # [github.teams]
 # my-team = "my-team-reviewers"
 """
-EXAMPLE = '# org = "example-org"\n'
+SHOWN: dict[str, object] = {"merge": {"method": "squash"}}
+"""`[github.merge]`'s method, whose default (GitHub's pick) TOML can't write."""
+EXAMPLE = InitSection({"org": "example-org"}, SHOWN)
 
 
 def guess_org(cwd: Path) -> str:
@@ -71,7 +73,7 @@ def org_teams(org: str, host: str = DEFAULT_HOST) -> list[str]:
     return quiet(api(host, "--paginate", f"orgs/{org}/teams", "--jq", ".[].slug")).split()
 
 
-def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
+def questions(ask: Asker, setup: InitSetup) -> InitSection:
     """The org (and, from an Enterprise org's URL, the host), and the teams I review for
     (which become the config's top-level teams)."""
     host, name = host_and_org(
@@ -90,4 +92,4 @@ def questions(ask: Asker, setup: InitSetup) -> dict[str, object]:
         word("team slug"),
         choices(lambda: org_teams(name, host)),
     )
-    return {"org": name, **({"host": host} if host != DEFAULT_HOST else {})}
+    return InitSection({"org": name, **({"host": host} if host != DEFAULT_HOST else {})}, SHOWN)

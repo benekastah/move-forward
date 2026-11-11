@@ -1,7 +1,6 @@
 """The GitHub plugin."""
 
 import subprocess
-from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import ClassVar
 from urllib.parse import urlsplit
@@ -16,9 +15,8 @@ from ...api import (
     Entity,
     Event,
     Graph,
-    Identity,
+    InitSection,
     InitSetup,
-    Item,
     KindSpec,
     Migration,
     Panel,
@@ -27,7 +25,6 @@ from ...api import (
     RefRequest,
     RefreshRequest,
     Request,
-    Signals,
     attrs,
     collect_into,
 )
@@ -37,7 +34,7 @@ from . import actions, changes, client, derive, notifications, placing, pushes, 
 from .config import GitHubConfig
 from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
-from .panels import PR, REQUEST_REVIEWER_TASK, REVIEW_TASK, Builder
+from .panels import PR, Builder
 from .people import PeopleRepository
 from .prs import (
     changes_requested,
@@ -99,6 +96,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     init_tables = TABLES
     init_example = EXAMPLE
     init_example_on = True
+    init_suggested = True
+    """Always: init guesses its org from the checkout it runs in."""
     init_finds_teams = True
     config_model = GitHubConfig
     api_version = API_VERSION
@@ -119,16 +118,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         self._refusal_logged = False
         """Whether the token's refusal to read the notifications was logged this run."""
 
-    def init_suggested(self) -> bool:
-        """Always: init guesses its org from the checkout it runs in."""
-        return True
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
+    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
         return questions(ask, setup)
-
-    def init_shown(self, section: Mapping[str, object]) -> dict[str, object]:
-        """`[github.merge]`'s method, whose default (GitHub's pick) TOML can't write."""
-        return {"merge": {"method": "squash"}}
 
     def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, when only some PRs changed (`req.subjects`, by URL: those
@@ -143,7 +134,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         changed = req.subjects
         ids = [pr_id_of(config.host, url) for url in sorted(changed)]
         everything = req.full or len(changed) > client.PAGE_SIZE or None in ids
-        previous = None if everything else self.load(ContextRequest(ctx))
+        previous = None if everything else PrRepository(ctx.db).load()
         if previous is not None and changed:
             try:
                 fetched = client.fetch_prs(config.host, [i for i in ids if i is not None])
@@ -187,11 +178,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 == "individual"
             ),
         )
-
-    def store(self, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
-        ctx, snapshot = req.ctx, req.snapshot
-        assert snapshot is not None
-        PrRepository(ctx.db).replace(snapshot)
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each
@@ -267,7 +253,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
             elif n.kind not in notifications.UNRELATED:
                 prs.add(EVERYTHING)
         if ci_repos:
-            if (snapshot := self.load(ContextRequest(ctx))) is None:
+            if (snapshot := PrRepository(ctx.db).load()) is None:
                 return prs | {EVERYTHING}
             prs |= {pr.url for pr in snapshot.mine if pr.repo.lower() in ci_repos}
         return prs
@@ -277,16 +263,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         assert before is not None and after is not None
         return changes.changes(before, after, ctx.config.ignored_reviewers)
 
-    def load(self, req: ContextRequest[GitHubConfig]) -> GitHubSnapshot | None:
-        ctx = req.ctx
-        return PrRepository(ctx.db).load()
-
-    def identity(self, req: Request[GitHubConfig, GitHubSnapshot]) -> Identity | None:
-        """My GitHub login, as the last refresh found it."""
-        snapshot = req.snapshot
-        return (
-            Identity(tool=self.title, login=snapshot.login) if snapshot and snapshot.login else None
-        )
+    def snapshots(self, req: ContextRequest[GitHubConfig]) -> PrRepository:
+        return PrRepository(req.ctx.db)
 
     def _email_domains(self, ctx: Context[GitHubConfig]) -> list[str]:
         if ctx.config.email_domains:
@@ -419,7 +397,8 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
 
     def entities(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Entity]:
         """A `pull_request` for every PR in the snapshot, and a `person` (`<host>/<login>`)
-        for me and for everyone whose email github knows."""
+        for me (`me`, by the login the last refresh found) and for everyone whose email github
+        knows."""
         ctx, snapshot = req.ctx, req.snapshot
         if snapshot is None:
             return []
@@ -485,32 +464,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         retried = PeopleRepository(ctx.db).forget_misses_before(cutoff)
         return [f"will look up {retried} reviewer email(s) again"] if retried else []
-
-    def act_now(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Item]:
-        """The panels' items with signals, their own or their panel's (one with neither is
-        listed only), the feedback on my drafts too, though a draft's item is
-        deferred; but not a deferred review: a draft isn't ready for one. Asking for a reviewer
-        loses its effort while there's something else to do on the PR, which is worth doing
-        before anyone looks at it, so it ranks below that and shows as "also" until then."""
-        nominated = [
-            item if item.signals else item.model_copy(update={"signals": panel.signals})
-            for panel in req.panels
-            if panel.act_now
-            for item in panel.items
-            if (item.signals or panel.signals)
-            and not (
-                item.deferred and (item.signals or panel.signals or Signals()).task == REVIEW_TASK
-            )
-        ]
-        busy = {
-            i.url for i in nominated if not (i.signals and i.signals.task == REQUEST_REVIEWER_TASK)
-        }
-        return [
-            i.model_copy(update={"signals": i.signals.model_copy(update={"effort": "unknown"})})
-            if i.signals and i.signals.task == REQUEST_REVIEWER_TASK and i.url in busy
-            else i
-            for i in nominated
-        ]
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS
