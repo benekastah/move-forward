@@ -54,10 +54,10 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 - A plugin says what it is in class variables, each documented on `Plugin`: its `name`, `title`,
   `config_model`, `kinds` and `families`, `requires`, `migrations`, how it refreshes
   (`collects_after`, `watches`, `change_check_seconds`), its `notification_kinds`, and how `mfd
-  init` and the settings page show it (`always_on`, `init`, `teams_field`), and `api_version`.
-  `init` is an `Init`, built in the plugin's `setup.py`: its questions, its example section and
-  tables, whether `mfd init` suggests it, and its token's next step. A setting the settings page
-  mustn't change (where a credential goes) is marked on its config model's field, with `LOCKED`.
+  init` and the settings page show it (`always_on`, `init`), and `api_version`. `init` is an `Init`,
+  built in the plugin's `setup.py`: its questions, its example section and tables, whether `mfd
+  init` suggests it, and its token's next step. A setting the settings page mustn't change (where a
+  credential goes) is marked on its config model's field, with `LOCKED`.
 - Every plugin hook that runs with the plugin's context takes one request object, of five kinds, so
   a hook can gain an input without breaking its overrides: `ContextRequest(ctx)` (`snapshots`,
   `linking_patterns`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
@@ -66,8 +66,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`).
   `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the
   fingerprint, the snapshot and the graph then). Those called before there's a context take what
-  they need: `tokens(config)` (`mfd token`, and loading the config), `cli(parser)` (a plugin has a
-  command when it overrides it, and its docstring's first line is the command's help), `pages()` and
+  they need: `tokens(config)` (`mfd token`, and loading the config), `teams(config)` (the top-level
+  teams a section names, which loading the config checks), `cli(parser)` (a plugin has a command
+  when it overrides it, and its docstring's first line is the command's help), `pages()` and
   `actions()`. Who I am in a tool is a `person` it publishes with `me`; what focus mode keeps on the
   page after a button is core's.
 - Times are kept in UTC and shown in local time, through `localtime`; a day

@@ -4,10 +4,11 @@ from typing import ClassVar
 
 import pytest
 from conftest import NOW, section
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from move_forward import config, registry
 from move_forward.db import Database, Migration
+from move_forward.plugin import API_VERSION, Plugin
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS, GitHubConfig
 from move_forward.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV, JiraConfig
@@ -18,6 +19,7 @@ from move_forward.plugins.slack.config import (
     SlackConfig,
 )
 from move_forward.registry import enabled
+from move_forward.strict import Strict
 
 MINIMAL = 'email = "me@acme.com"\n'
 
@@ -152,8 +154,37 @@ def test_a_snooze_days_key_with_a_kinds_old_name_says_its_new_one(tmp_path: Path
 
 
 def test_a_plugin_team_must_be_a_top_level_team(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match=r"\[slack.teams\] has wbe"):
+    with pytest.raises(
+        ValidationError, match=r"\[slack\] names the teams wbe, which the top-level"
+    ):
         _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[slack.teams]\nwbe = "#web"\n')
+    with pytest.raises(ValidationError, match=r"\[github\] names the teams ops, which"):
+        _load(
+            tmp_path,
+            MINIMAL + 'teams = ["web"]\n\n[github]\norg = "a"\n[github.teams]\nops = "o"\n',
+        )
+
+
+class _RotaConfig(Strict):
+    teams: dict[str, str] = Field(default_factory=dict[str, str])
+    """Who's on call, by rota: not the top-level teams."""
+
+
+class _RotaPlugin(Plugin[_RotaConfig, BaseModel]):
+    """A plugin whose `teams` table isn't about the top-level teams, and so doesn't override
+    `teams`."""
+
+    name = "rota"
+    config_model = _RotaConfig
+    api_version = API_VERSION
+
+
+def test_a_plugin_not_naming_teams_is_not_checked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _RotaPlugin()])
+    loaded = _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[rota.teams]\nnights = "ann"\n')
+    assert loaded.section("rota") == _RotaConfig(teams={"nights": "ann"})
 
 
 def test_naming_settings_have_defaults_and_load(tmp_path: Path) -> None:

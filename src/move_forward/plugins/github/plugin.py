@@ -93,7 +93,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     init = INIT
     config_model = GitHubConfig
     api_version = API_VERSION
-    teams_field = "teams"
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),
@@ -106,6 +105,10 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def __init__(self) -> None:
         self._refusal_logged = False
         """Whether the token's refusal to read the notifications was logged this run."""
+
+    def teams(self, config: GitHubConfig) -> set[str]:
+        """Those `[github.teams]` gives its slug for."""
+        return set(config.teams)
 
     def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, when only some PRs changed (`req.subjects`, by URL: those

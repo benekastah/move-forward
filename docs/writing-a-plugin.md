@@ -158,9 +158,9 @@ class LinearConfig(TokenFields):
   with `ctx.token(account)`, and `mfd token set <plugin>.<account>` stores one. Anything sent with a
   token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
   the body, never the URL (its errors name the URL, without its query).
-- A section mapping the top-level teams to the tool's names for them (github's
-  `[github.teams]`) names that field in `teams_field`, so the config refuses a team it
-  doesn't have.
+- A section naming top-level teams (github's `[github.teams]`, mapping each to the tool's name
+  for it) says which in `teams(config)`, returning their names, so the config refuses a team the
+  top level doesn't have. Core reads nothing else about how a section keeps them.
 
 ## Collecting and storing
 

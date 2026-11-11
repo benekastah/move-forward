@@ -14,6 +14,10 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **A `teams` hook**: `Plugin.teams_field` is gone (a plugin still setting it is refused).
+  `teams(config)` returns the top-level teams a plugin's section names, which the config checks
+  the top level has; empty by default. A plugin that set `teams_field = "teams"` returns
+  `set(config.teams)`.
 - **Settings are marked in their types**: `Plugin.locked_settings` is gone, and a plugin still
   setting it is refused. A config model marks each setting the settings page shows but won't
   change with `api.LOCKED` in its type, e.g. `site: Annotated[str, LOCKED]`; a section's

@@ -183,6 +183,7 @@ REMOVED_ATTRIBUTES: dict[str, str] = {
     " is the command's help",
     "locked_settings": "mark each such field `LOCKED` in its type, e.g."
     " `site: Annotated[str, LOCKED]`",
+    "teams_field": "override `teams(config)`, returning the top-level teams the section names",
 }
 """`Plugin` attributes and hooks that are gone, each with what replaced it. A plugin still
 setting one is refused, naming its replacement, rather than core silently ignoring it (its

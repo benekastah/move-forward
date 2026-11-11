@@ -197,20 +197,15 @@ class Config(Strict):
 
     @model_validator(mode="after")
     def _known_teams(self) -> "Config":
-        """Every plugin section's teams table (`Plugin.teams_field`) names only top-level
-        teams."""
+        """Every plugin section names only top-level teams (`Plugin.teams`)."""
         for plugin in registry.PLUGINS:
-            if plugin.teams_field is None:
+            section = self.section(plugin.name)
+            if section is None:
                 continue
-            teams: object = getattr(self.section(plugin.name), plugin.teams_field, None)
-            if not isinstance(teams, dict):
-                continue
-            name = plugin.name
-            unknown = sorted(set(cast(dict[str, object], teams)) - set(self.teams))
-            if unknown:
+            if unknown := sorted(plugin.teams(section) - set(self.teams)):
                 raise ValueError(
-                    f"[{name}.{plugin.teams_field}] has {', '.join(unknown)}, which the"
-                    " top-level teams don't"
+                    f"[{plugin.name}] names the teams {', '.join(unknown)}, which the top-level"
+                    " teams don't have"
                 )
         return self
 
