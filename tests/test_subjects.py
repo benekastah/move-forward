@@ -22,7 +22,7 @@ from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
-from move_forward.repositories import SnapshotRepository
+from move_forward.repositories import ChangeRepository, SnapshotRepository
 
 PR_1 = Ref(kind="pull_request", id=pr(1).url)
 APP_1 = Ref(kind="ticket", id="https://jira/browse/APP-1")
@@ -145,15 +145,36 @@ def test_a_plugin_also_asked_for_by_name_is_refreshed_as_it_would_have_been() ->
 @pytest.mark.parametrize(
     ("named", "full"),
     [
+        (set[str](), False),  # ↻ alone: narrowed to the PR, a full collect being recent
+        ({"github"}, True),  # its Refresh button too: in full, its first since the start
+    ],
+)
+def test_a_plugins_first_collect_since_the_start_is_narrowed_only_if_asked_for_alone(
+    named: set[str], full: bool
+) -> None:
+    """A fresh start (new `ChangeChecks`), with a full collect stored before it, within
+    github's `refresh_seconds`, and a change still pending."""
+    config, db = _refreshed()
+    held = pr(2).url
+    ChangeRepository(db).checked("github", None, NOW, {held}, everything=False)
+    asked = {"github": frozenset({PR_1.id})}
+    refresh.refresh(config, db, LATER, named, ChangeChecks(), asked)
+    assert list(ASKED) == [("github", full, frozenset({held, PR_1.id}))]
+
+
+@pytest.mark.parametrize(
+    ("named", "full"),
+    [
         (set[str](), False),  # ↻ alone: narrowed to the PR
         ({"github"}, True),  # its Refresh button too: in full, as the button would have it
+        (None, True),  # the header's Refresh: every plugin by name, so in full
     ],
 )
 def test_the_loop_narrows_a_plugin_asked_for_entities_unless_its_refresh_was_pressed_too(
-    named: set[str], full: bool, monkeypatch: pytest.MonkeyPatch
+    named: set[str] | None, full: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """One round of the server's loop, with a ↻ on github's PR pending, and its Refresh
-    pressed or not: github is collected once."""
+    """One round of the server's loop, with a ↻ on github's PR pending, and its Refresh, the
+    header's, or neither pressed: github is collected once."""
     config, db = stored(github=snapshot(mine=[pr(1)]))
     app = server.App(config, db, "token")
     rounds = [0]
