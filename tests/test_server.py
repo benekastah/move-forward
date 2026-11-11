@@ -28,8 +28,8 @@ from move_forward.plugin import (
     ActionError,
     ActionResult,
     Changed,
-    ChangedRequest,
-    PageRequest,
+    InputRequest,
+    RefreshRequest,
     Response,
 )
 from move_forward.plugins.git.config import GitConfig
@@ -727,7 +727,7 @@ class _GitHubWithChecks(GitHubPlugin):
     answers: ClassVar[list[bool | Changed | Exception]] = []
     """Each a `Changed`, or a bare bool for one without a reason."""
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         answer = self.answers.pop(0)
         if isinstance(answer, Exception):
             raise answer
@@ -778,8 +778,8 @@ class _GitHubComparingGraphs(GitHubPlugin):
     given: ClassVar[list[tuple[Graph | None, Graph]]] = []
     failing: ClassVar[list[bool]] = []
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
-        self.given.append((req.previous_graph, req.graph))
+    def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
+        self.given.append((req.previous.graph, req.graph))
         if self.failing.pop(0):
             raise RuntimeError("offline")
         return Changed()
@@ -803,14 +803,14 @@ def test_a_change_check_is_given_the_graph_of_the_last_that_didnt_fail(
 class _SlackChanging(SlackPlugin):
     change_check_seconds: ClassVar[int | None] = 60
 
-    def changed(self, req: ChangedRequest[SlackConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[SlackConfig]) -> Changed:
         return Changed(everything=True, reason="a message")
 
 
 class _GitHubAnsweringBadly(GitHubPlugin):
     change_check_seconds: ClassVar[int | None] = 60
 
-    def changed(self, req: ChangedRequest[GitHubConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         return True  # pyright: ignore[reportReturnType]  # not a Changed
 
 
@@ -975,8 +975,8 @@ def test_an_action_refreshes_its_plugin_and_fetches_what_it_touched_again(
 def test_a_plugin_page_knows_its_path(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def where(req: PageRequest[Any]) -> str:
-        return f"<p>at {req.path}</p>"
+    def where(req: InputRequest[Any]) -> str:
+        return f"<p>at {req.page.path}</p>"
 
     def pages(self: SlackPlugin) -> dict[str, object]:
         return {"where": where}
@@ -989,7 +989,7 @@ def test_two_plugins_pages_of_one_name_are_each_their_own(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def pages_of(name: str) -> Callable[[object], dict[str, object]]:
-        def ping(req: PageRequest[Any]) -> str:
+        def ping(req: InputRequest[Any]) -> str:
             return f"<p>{name}'s ping</p>"
 
         return lambda self: {"ping": ping}
@@ -1003,7 +1003,7 @@ def test_two_plugins_pages_of_one_name_are_each_their_own(
 
 def test_a_page_can_redirect(client: HTTPConnection, monkeypatch: pytest.MonkeyPatch) -> None:
     def pages(self: SlackPlugin) -> dict[str, object]:
-        def away(req: PageRequest[Any]) -> Response:
+        def away(req: InputRequest[Any]) -> Response:
             return Response.redirect("https://slack.com/x")
 
         return {"away": away}
@@ -1090,11 +1090,11 @@ def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
 def test_a_page_answering_a_bad_response_fails_rather_than_sending_it(
     client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def injected(req: PageRequest[Any]) -> Response:
-        where = req.query.get("to", [""])[0]
+    def injected(req: InputRequest[Any]) -> Response:
+        where = req.page.query.get("to", [""])[0]
         return Response.redirect(where)
 
-    def odd(req: PageRequest[Any]) -> Response:
+    def odd(req: InputRequest[Any]) -> Response:
         return Response(status=999)
 
     def pages(self: SlackPlugin) -> dict[str, object]:

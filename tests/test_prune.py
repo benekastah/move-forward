@@ -5,11 +5,12 @@ from typing import Any
 
 import pytest
 from conftest import entry, pr, snapshot, stored
+from pydantic import BaseModel
 
 from move_forward import prune, refresh
 from move_forward.db import Database
 from move_forward.graph import Ref
-from move_forward.plugin import Context, PruneRequest, SourceError
+from move_forward.plugin import Context, Request, SourceError
 from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.registry import enabled
@@ -44,15 +45,15 @@ def test_a_failing_fetch_in_cores_clean_up_leaves_the_rest_of_it_and_the_plugins
     def failing(repo: object, graph: object) -> int:
         raise SourceError("the token can't fetch")
 
-    def notes_prune(self: NotesPlugin, req: PruneRequest[NotesConfig]) -> list[str]:
+    def notes_prune(self: NotesPlugin, req: Request[NotesConfig, BaseModel]) -> list[str]:
         ran.append("notes")
         return []
 
     monkeypatch.setattr(refresh.priority, "forget_finished", failing)
     monkeypatch.setattr(NotesPlugin, "prune", notes_prune)
     plugins = enabled(config, db, NOW)
-    graph, _ = refresh.stored_graph(db, plugins)
-    notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
+    graph, snapshots = refresh.stored_graph(db, plugins)
+    notices = refresh._prune_plugins(plugins, graph, snapshots, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
     assert "tags: forgot what I tagged or untagged on 1 gone entity(ies)" in notices
     assert ran == ["notes"]
 
@@ -75,7 +76,7 @@ def test_problems_no_plugin_has_reported_for_prune_days_are_forgotten(
     ]  # seen again isn't logged again
     ProblemRepository(db).set("jira", "team", "no team", NOW - timedelta(days=40))  # removed
     plugins = enabled(config, db, NOW)
-    graph, _ = refresh.stored_graph(db, plugins)
-    notices = refresh._prune_plugins(plugins, graph, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
+    graph, snapshots = refresh.stored_graph(db, plugins)
+    notices = refresh._prune_plugins(plugins, graph, snapshots, db, NOW, 30)  # pyright: ignore[reportPrivateUsage]
     assert "problems: forgot 2 not reported for 30 days" in notices
     assert ProblemRepository(db).of(["github", "jira"]) == {"github": ["still wrong"]}

@@ -60,6 +60,9 @@ class Context[C: BaseModel]:
     """Key/value state in the plugin's namespace."""
     name: str = ""
     """The plugin's name, as `Plugin.name`."""
+    due_horizon: timedelta = DUE_HORIZON
+    """How far ahead a due date starts to count, as `[act_now] due_warning_days` says; a plugin
+    nominating by its due dates passes it to `due_pressure`."""
     tokens: Mapping[str, TokenSettings] | None = None
     """Where each of the plugin's tokens is, as `Plugin.tokens` says, for `token`; None for
     its default: the section's own, when it says where a token is."""
@@ -125,42 +128,129 @@ def _section_token(config: BaseModel) -> dict[str, TokenSettings]:
 
 
 @dataclass(frozen=True)
-class EntitiesRequest[C: BaseModel, S: BaseModel]:
+class ContextRequest[C: BaseModel]:
+    """A hook given only the plugin's context: `load` and `linking_patterns`."""
+
     ctx: Context[C]
-    snapshot: S | None
-    """What the plugin last stored; None before its first refresh."""
 
 
 @dataclass(frozen=True)
-class IdentityRequest[C: BaseModel, S: BaseModel]:
-    ctx: Context[C]
-    snapshot: S | None
+class Previous[S: BaseModel]:
+    """What held before, for `changed` and `events` to compare with now."""
+
+    at: datetime | None = None
+    """For `changed`, when the plugin's last change check ran; for `events`, when the refresh
+    that last stored a snapshot began (a refresh, or a refresh of subjects), the one `snapshot`
+    holds: a refresh that failed stored nothing, so it doesn't count. None before the first."""
+    fingerprint: str | None = None
+    """What the plugin's last change check answered (`Changed.fingerprint`), for `changed`;
+    None before the first."""
+    snapshot: S | None = None
+    """The plugin's snapshot before this refresh, for `events`: after a start, what was stored
+    when the dashboard stopped."""
+    graph: Graph | None = None
+    """The graph then: at the plugin's last change check that didn't raise (`changed`), or
+    before this refresh (`events`). None at the first check since the dashboard started: it's
+    the one thing a restart can't rebuild."""
 
 
 @dataclass(frozen=True)
-class FetchRequest[C: BaseModel]:
+class Request[C: BaseModel, S: BaseModel]:
+    """A hook working from what's stored: `store`, `entities`, `relate`, `panels`,
+    `act_now`, `identity`, `item_actions`, `after_collect`, `prune` and `events`."""
+
+    ctx: Context[C]
+    graph: Graph
+    """Every plugin's entities. Empty for `entities`, which the graph is built from, and
+    before any relations for `relate`."""
+    snapshot: S | None
+    """What the plugin last stored; None before its first refresh. For `store`, what `collect`
+    just fetched; for `events`, the snapshot now."""
+    previous: Previous[S] = field(default_factory=Previous[S])
+    """For `events` only: the plugin's snapshot before this refresh, when the refresh that
+    stored it began (`at`), and the graph then."""
+    panels: list[Panel] = field(default_factory=list[Panel])
+    """For `act_now` only: the plugin's own panels, as `panels` built them."""
+
+
+@dataclass(frozen=True)
+class RefreshRequest[C: BaseModel]:
+    """A hook reading the plugin's tool: `collect`, `collect_after` and `changed`."""
+
+    ctx: Context[C]
+    graph: Graph
+    """Every plugin's entities, built from what's stored now: for `collect_after`, with what
+    the plugins collecting first just stored."""
+    full: bool = True
+    """For `collect` and `collect_after`: whether to fetch everything: at the plugin's first
+    collect since the dashboard started, when its `refresh_seconds` have passed since the last
+    full collect that stored, when its change checks saw something move that no subject
+    names, and when they named nothing. Otherwise fetching `subjects` is enough, keeping the
+    rest as stored. `changed` isn't told; it gets the default, which means nothing to it."""
+    subjects: frozenset[str] = frozenset()
+    """For `collect` and `collect_after`: what the plugin's change checks said moved
+    (`Changed.subjects`) since a collect last stored. Core keeps each until a collect that
+    started after it was said stores, so a collect that fails loses none of it, and what moves
+    again while one runs stays for the next. Empty for `changed`, which says what moved rather
+    than being told."""
+    previous: Previous[BaseModel] = field(default_factory=Previous[BaseModel])
+    """For `changed` only: when core took the plugin's last answer, its fingerprint, and the
+    graph it was given, to compare with `graph` for what other plugins' refreshes moved since
+    (a plugin that `watches` them)."""
+
+
+@dataclass(frozen=True)
+class RefRequest[C: BaseModel]:
+    """A hook asked about some of the plugin's entities by id: `fetch`."""
+
     ctx: Context[C]
     kind: str
+    """One of the plugin's `kinds` (of a family, each publisher's)."""
     ids: list[str]
 
 
 @dataclass(frozen=True)
-class UrlRequest[C: BaseModel]:
-    ctx: Context[C]
-    kind: str
-    id: str
+class Page:
+    """A page asked for (`Plugin.pages`)."""
+
+    query: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
+    path: str = ""
+    """The page's path, e.g. `/slack/ping`."""
 
 
 @dataclass(frozen=True)
-class HandleRequest[C: BaseModel]:
-    ctx: Context[C]
-    kind: str
-    id: str
+class Form:
+    """A button's form posted (`Plugin.actions`)."""
+
+    fields: dict[str, str] = field(default_factory=dict[str, str])
+    """The form's fields: untrusted, as anything a form sends."""
+    surface: Surface = "dashboard"
+    """Where the button was: the dashboard or focus mode."""
+    back: str | None = None
+    """The page the button was on, when it wasn't the dashboard (a focus page)."""
 
 
 @dataclass(frozen=True)
-class LinkingRequest[C: BaseModel]:
+class InputRequest[C: BaseModel]:
+    """A hook answering what I asked for: a page (`pages`), a button (`actions`) or `mfd
+    <plugin>` (`cli`)."""
+
     ctx: Context[C]
+    graph: Graph
+    page: Page = field(default_factory=Page)
+    """For a page only."""
+    form: Form = field(default_factory=Form)
+    """For a button only."""
+    args: argparse.Namespace = field(default_factory=argparse.Namespace)
+    """For `mfd <plugin>` only: its parsed arguments."""
+
+    def field(self, name: str) -> str:
+        """A required field of the form; `ActionError` saying "missing field" when it lacks
+        it."""
+        try:
+            return self.form.fields[name]
+        except KeyError:
+            raise ActionError(f"missing field {name!r}") from None
 
 
 @dataclass(frozen=True)
@@ -187,35 +277,17 @@ MAX_SUBJECTS = 50
 
 
 @dataclass(frozen=True)
-class RelateRequest[C: BaseModel]:
+class UrlRequest[C: BaseModel]:
     ctx: Context[C]
-    graph: Graph
-    """Every plugin's entities, before any relations."""
+    kind: str
+    id: str
 
 
 @dataclass(frozen=True)
-class PanelsRequest[C: BaseModel, S: BaseModel]:
+class HandleRequest[C: BaseModel]:
     ctx: Context[C]
-    snapshot: S | None
-    graph: Graph
-
-
-@dataclass(frozen=True)
-class ActNowRequest[C: BaseModel, S: BaseModel]:
-    ctx: Context[C]
-    snapshot: S | None
-    graph: Graph
-    panels: list[Panel]
-    """The plugin's own panels, as `panels` built them."""
-    due_horizon: timedelta = DUE_HORIZON
-    """How far ahead a due date starts to count, as `[act_now] due_warning_days` says; a plugin
-    nominating by its due dates passes it to `due_pressure`."""
-
-
-@dataclass(frozen=True)
-class ItemActionsRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
+    kind: str
+    id: str
 
 
 @dataclass(frozen=True)
@@ -246,80 +318,6 @@ class KeptItemRequest[C: BaseModel]:
     """What the action put after `<plugin>:` in its `KEPT` parameter."""
 
 
-@dataclass(frozen=True)
-class CollectRequest[C: BaseModel]:
-    ctx: Context[C]
-    full: bool = True
-    """Whether to fetch everything: at the plugin's first collect since the dashboard started,
-    when its `refresh_seconds` have passed since the last full collect that stored, when its
-    change checks saw something move that no subject names, and when they named nothing.
-    Otherwise fetching `subjects` is enough, keeping the rest as stored."""
-    subjects: frozenset[str] = frozenset()
-    """What the plugin's change checks said moved (`Changed.subjects`) since a collect last
-    stored: core keeps each until a collect that started after it was said stores, so a
-    collect that fails loses none of it, and what moves again while one runs stays for the
-    next."""
-
-
-@dataclass(frozen=True)
-class CollectAfterRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-    """The graph with what the plugins collecting first just stored."""
-    full: bool = True
-    """As `CollectRequest.full`."""
-    subjects: frozenset[str] = frozenset()
-    """As `CollectRequest.subjects`."""
-
-
-@dataclass(frozen=True)
-class StoreRequest[C: BaseModel, S: BaseModel]:
-    ctx: Context[C]
-    snapshot: S
-
-
-@dataclass(frozen=True)
-class LoadRequest[C: BaseModel]:
-    ctx: Context[C]
-
-
-@dataclass(frozen=True)
-class EventsRequest[C: BaseModel, S: BaseModel]:
-    ctx: Context[C]
-    before: S
-    """The plugin's snapshot before this refresh: after a start, what was stored when the
-    dashboard stopped."""
-    after: S
-    """Its snapshot now: the same as `before` when this refresh didn't fetch it."""
-    previous_graph: Graph
-    """The graph as it was before this refresh."""
-    graph: Graph
-    """The graph now."""
-
-
-@dataclass(frozen=True)
-class AfterCollectRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-
-
-@dataclass(frozen=True)
-class ChangedRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-    """Every plugin's entities, built from what's stored now."""
-    previous_graph: Graph | None = None
-    """The graph as it was at the plugin's last change check that didn't raise, to compare
-    with `graph` for what other plugins' refreshes moved since (a plugin that `watches`
-    them); None at the first check since the dashboard started."""
-    fingerprint: str | None = None
-    """The fingerprint of the last answer core took (`Changed.fingerprint`), for a plugin
-    that tells what moved by comparing its parts; None before the first."""
-    checked_at: datetime | None = None
-    """When core took that answer, for a tool asked what moved since a time; None before the
-    first."""
-
-
 @dataclass(frozen=True, kw_only=True)
 class Changed:
     """`changed`'s answer: what moved in the plugin's tool, which core keeps (see
@@ -330,27 +328,12 @@ class Changed:
     counts); None for a plugin that has none. Core keeps it and compares the next with it."""
     subjects: frozenset[str] = frozenset()
     """What moved since the last check, in the plugin's own terms (repos, PRs), for
-    `collect` to fetch just those (`CollectRequest.subjects`). Each asks for a refresh, so
+    `collect` to fetch just those (`RefreshRequest.subjects`). Each asks for a refresh, so
     name a subject only when it moved again, not while it's still as the last check saw it."""
     everything: bool = False
     """Something moved that `subjects` doesn't name, so the next collect is a full one."""
     reason: str = ""
     """What changed, e.g. "notifications about 2 PRs"; it goes into the log line."""
-
-
-@dataclass(frozen=True)
-class PruneRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-
-
-@dataclass(frozen=True)
-class PageRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-    query: dict[str, list[str]]
-    path: str
-    """The page's path, e.g. `/slack/ping`."""
 
 
 @dataclass(frozen=True)
@@ -375,13 +358,6 @@ def page_path(plugin: str, key: str) -> str:
 
 
 @dataclass(frozen=True)
-class CliRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-    args: argparse.Namespace
-
-
-@dataclass(frozen=True)
 class ImportRequest[C: BaseModel]:
     """`mfd import <dir>`: what a plugin reads from `dir`, the move-forward skill's markdown
     notes (`work-notes.md`, `on-ice.md`, `reviewer-map.md`)."""
@@ -393,9 +369,9 @@ class ImportRequest[C: BaseModel]:
     the import."""
 
 
-PageHandler = Callable[[PageRequest[Any]], str | Response | None]
+PageHandler = Callable[[InputRequest[Any]], str | Response | None]
 """Renders a page, as HTML or a `Response`; None means not found."""
-CliHandler = Callable[[CliRequest[Any]], int]
+CliHandler = Callable[[InputRequest[Any]], int]
 """Runs `mfd <plugin> ...` with the parsed arguments; returns the exit status."""
 API_VERSION = 2
 """The version of `move_forward.api` this dashboard offers. A change that would break a
@@ -423,26 +399,7 @@ class ActionError(Exception):
     """Something the user needs to know; shown on the page, not a crash."""
 
 
-@dataclass(frozen=True)
-class ActionRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-    fields: dict[str, str]
-    """The button's form fields: untrusted, as anything a form sends."""
-    surface: Surface = "dashboard"
-    """Where the button was: the dashboard or focus mode."""
-    back: str | None = None
-    """The page the button was on, when it wasn't the dashboard (a focus page)."""
-
-    def field(self, name: str) -> str:
-        """A required field; `ActionError` saying "missing field" when the form lacks it."""
-        try:
-            return self.fields[name]
-        except KeyError:
-            raise ActionError(f"missing field {name!r}") from None
-
-
-ActionHandler = Callable[[ActionRequest[Any]], str | ActionResult]
+ActionHandler = Callable[[InputRequest[Any]], str | ActionResult]
 """Runs a button's action; returns the notice for the page (or a result with redirect
 parameters too) and raises `ActionError` with the reason when it can't."""
 
@@ -552,7 +509,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Refresh
 
-    def collect(self, req: CollectRequest[C]) -> S:
+    def collect(self, req: RefreshRequest[C]) -> S:
         """Fetch the plugin's snapshot: everything, or with `req.full` False just what its
         change checks said moved (`req.subjects`). Runs in parallel with other plugins' and
         may raise; the error is shown and the last good snapshot kept. It has five minutes
@@ -561,29 +518,30 @@ class Plugin[C: BaseModel, S: BaseModel]:
         can't be stopped)."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
-    def store(self, req: StoreRequest[C, S]) -> None:
-        """Keep what `collect` fetched in the plugin's tables, replacing what the last good
-        collect kept, in one transaction."""
+    def store(self, req: Request[C, S]) -> None:
+        """Keep what `collect` fetched (`req.snapshot`, never None here) in the plugin's
+        tables, replacing what the last good collect kept, in one transaction."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no store")
 
-    def load(self, req: LoadRequest[C]) -> S | None:
+    def load(self, req: ContextRequest[C]) -> S | None:
         """What the last good collect kept, for `entities` and `panels`; None when there's
         nothing (no snapshot model, say). Core holds the database while it runs
         (`Database.reading`), so a refresh can't store between its queries: it mustn't wait on
         another thread using `ctx.db`."""
         return None
 
-    def events(self, req: EventsRequest[C, S]) -> list[Event]:
+    def events(self, req: Request[C, S]) -> list[Event]:
         """What happened since the last refresh, as events of its `notification_kinds`:
-        compare its snapshot (`before`, `after`) and what other plugins' entities say
-        (`previous_graph`, `graph`) before and after it, and say what became true. Asked after
-        every refresh, of anything, when I've subscribed to one of its kinds, but never before
-        the plugin has stored a snapshot to compare with. Say it only when the state changed
-        (not mergeable to mergeable), and never about something new in `after` that `before`
-        hasn't any state for. A failure is logged and the refresh goes on."""
+        compare its snapshot (`req.previous.snapshot`, `req.snapshot`) and what other plugins'
+        entities say (`req.previous.graph`, `req.graph`) before and after it, and say what
+        became true. Asked after every refresh, of anything, when I've subscribed to one of its
+        kinds, but never before the plugin has stored a snapshot to compare with (so neither
+        snapshot is None). Say it only when the state changed (not mergeable to mergeable), and
+        never about something new now that the snapshot before hasn't any state for. A failure
+        is logged and the refresh goes on."""
         return []
 
-    def collect_after(self, req: CollectAfterRequest[C]) -> S:
+    def collect_after(self, req: RefreshRequest[C]) -> S:
         """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
         repos git found, in place of `collect`: a plugin that implements it collects after the
         graph. Runs once the other plugins due have stored their snapshots, in parallel with
@@ -591,18 +549,19 @@ class Plugin[C: BaseModel, S: BaseModel]:
         not with the plugins it reads: to refresh soon after they change, `watches` them."""
         raise NotImplementedError(f"{self.name} doesn't collect after the graph")
 
-    def after_collect(self, req: AfterCollectRequest[C]) -> None:
+    def after_collect(self, req: Request[C, S]) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.
         caching lookups in the plugin's tables."""
 
-    def changed(self, req: ChangedRequest[C]) -> Changed:
+    def changed(self, req: RefreshRequest[C]) -> Changed:
         """What moved in the plugin's tool, by a check far cheaper than `collect` (files'
         times, a request answered "not modified", other plugins' entities in `graph`, built
         from what's stored), so the plugin refreshes soon after a change rather than at its
         next `refresh_seconds`. Say it as a `fingerprint` of the tool's state, which core
-        compares with the last (`req.fingerprint`), the `subjects` that moved, or that
+        compares with the last (`req.previous.fingerprint`), the `subjects` that moved, or that
         something moved that no subject names (`everything`); or more than one of these.
-        Other plugins' entities are compared with `previous_graph`, which core keeps too. Say
+        Other plugins' entities are compared with `req.previous.graph`, which core keeps too,
+        and a tool asked what moved since a time is given `req.previous.at`. Say
         why in `reason`, for the log; `Changed()` says nothing moved.
 
         Core asks again as each collect of the plugin starts, so what moves while it runs is
@@ -624,7 +583,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         than a minute (`refresh.SUBJECTS_TIMEOUT_SECONDS`)."""
         return None
 
-    def relate(self, req: RelateRequest[C]) -> list[tuple[Ref, Ref]]:
+    def relate(self, req: Request[C, S]) -> list[tuple[Ref, Ref]]:
         """Relations the plugin knows between one of its entities and another plugin's,
         which neither's own data says: github relates each pull request to the local
         `git.branch` it comes from. Each `(mine, theirs)` becomes a ref from `mine` to
@@ -632,22 +591,22 @@ class Plugin[C: BaseModel, S: BaseModel]:
         builds the graph, so it must be cheap: no I/O."""
         return []
 
-    def linking_patterns(self, req: LinkingRequest[C]) -> dict[str, str | None]:
+    def linking_patterns(self, req: ContextRequest[C]) -> dict[str, str | None]:
         """Its `linking` kinds with the patterns of their ids as of now, e.g. only the project
         keys jira has seen; None where no id can be found in text, as by default. Read from
         its tables, so cheap: core asks every time it builds the graph."""
         return {kind: None for kind, spec in self.kinds.items() if spec.linking}
 
-    def identity(self, req: IdentityRequest[C, S]) -> Identity | None:
+    def identity(self, req: Request[C, S]) -> Identity | None:
         """Who I am in the plugin's tool (a login), for the page's footer, which lists each
         plugin's; None when it doesn't say."""
         return None
 
-    def entities(self, req: EntitiesRequest[C, S]) -> list[Entity]:
+    def entities(self, req: Request[C, S]) -> list[Entity]:
         """What the plugin publishes to the graph, from its snapshot and tables."""
         return []
 
-    def fetch(self, req: FetchRequest[C]) -> list[Entity]:
+    def fetch(self, req: RefRequest[C]) -> list[Entity]:
         """Entities of one of its `kinds`, by id, fetched from its tool now, even ones its
         snapshot doesn't hold; `Graph.fetch` asks. Core asks only about the plugin's own kinds
         (about a family, each plugin that publishes it), so `req.kind` is one of them."""
@@ -667,10 +626,10 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Page
 
-    def panels(self, req: PanelsRequest[C, S]) -> list[Panel]:
+    def panels(self, req: Request[C, S]) -> list[Panel]:
         return []
 
-    def act_now(self, req: ActNowRequest[C, S]) -> list[Item]:
+    def act_now(self, req: Request[C, S]) -> list[Item]:
         """The plugin's candidates for core's Act now, each with `signals`, from its
         `panels`. By default the items of the panels marked `act_now` that aren't `deferred`,
         each taking its panel's signals if it has none of its own; a plugin that knows
@@ -685,7 +644,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
             if not item.deferred
         ]
 
-    def item_actions(self, req: ItemActionsRequest[C]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[C, S]) -> ItemAdditionsFor:
         """What the plugin adds to other plugins' items on one page: buttons (e.g. "add todo"
         on a PR), badges, details and links. Core calls it once per page and the function it
         returns once per item, saying whose item it is and where it's shown (`ItemRequest`):
@@ -702,18 +661,20 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def pages(self) -> dict[str, PageHandler]:
         """Extra pages by key, served at `/<plugin>/<key>` (`page_path`): "ping" is
-        `/slack/ping`, and "" the plugin's own `/<plugin>`."""
+        `/slack/ping`, and "" the plugin's own `/<plugin>`. Each is given an `InputRequest`
+        with the `page` asked for."""
         return {}
 
     # Writing
 
     def actions(self) -> dict[str, ActionHandler]:
-        """Button handlers by name, posted to `/actions/<plugin>/<name>`."""
+        """Button handlers by name, posted to `/actions/<plugin>/<name>`. Each is given an
+        `InputRequest` with the `form` posted."""
         return {}
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
-        """Add the arguments of `mfd <name>` to `parser` and return what runs it. Only called
-        when `cli_help` is set."""
+        """Add the arguments of `mfd <name>` to `parser` and return what runs it, given an
+        `InputRequest` with the parsed `args`. Only called when `cli_help` is set."""
         raise NotImplementedError(f"{self.name} has cli_help but no cli")
 
     def import_dir(self, req: ImportRequest[C]) -> list[str]:
@@ -746,7 +707,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         another host."""
         return {}
 
-    def prune(self, req: PruneRequest[C]) -> list[str]:
+    def prune(self, req: Request[C, S]) -> list[str]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns
         what was done, one line each."""
         return []

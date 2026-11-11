@@ -16,8 +16,8 @@ from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref, attrs
 from move_forward.kinds import PERSON, Person
 from move_forward.plugin import (
-    CollectRequest,
-    IdentityRequest,
+    RefreshRequest,
+    Request,
     Response,
     SourceError,
 )
@@ -463,7 +463,7 @@ def test_no_password_says_how_to_set_that_mailboxs(monkeypatch: pytest.MonkeyPat
     with pytest.raises(
         SourceError, match=r"mfd token set mail\.work`, or set \$MAIL_PASSWORD_WORK"
     ):
-        harness.plugin.collect(CollectRequest(harness.ctx))
+        harness.plugin.collect(RefreshRequest(harness.ctx, Graph()))
 
 
 def _passwords(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1216,7 +1216,7 @@ def test_every_mailbox_is_read_and_a_message_in_two_is_one(
 
     monkeypatch.setattr(client, "collect", collect)
     harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
-    snapshot = cast(MailSnapshot, harness.plugin.collect(CollectRequest(harness.ctx)))
+    snapshot = cast(MailSnapshot, harness.plugin.collect(RefreshRequest(harness.ctx, Graph())))
     assert [(m.subject, m.account, m.flagged) for m in snapshot.messages] == [
         ("For home", "home", False),
         ("To both", "home", True),  # home's copy, flagged in work
@@ -1260,7 +1260,7 @@ def test_two_mailboxes_keep_their_messages_apart_and_say_whose_they_are() -> Non
     plugin = MailPlugin()
     config = cast(MailConfig, harness.ctx.config)
     assert sorted(plugin.tokens(config)) == ["home", "work"]
-    identity = plugin.identity(IdentityRequest(harness.ctx, snapshot))
+    identity = plugin.identity(Request(harness.ctx, Graph(), snapshot))
     assert identity is not None and identity.login == "me@gmail.com, me@work.example"
 
 
@@ -1315,7 +1315,7 @@ def test_a_message_claiming_anothers_message_id_takes_nothing_from_it(
 
     monkeypatch.setattr(client, "collect", collect)
     harness = Harness(MailPlugin(), SECTION, now=NOW)  # one mailbox: nothing is merged in it
-    snapshot = cast(MailSnapshot, harness.plugin.collect(CollectRequest(harness.ctx)))
+    snapshot = cast(MailSnapshot, harness.plugin.collect(RefreshRequest(harness.ctx, Graph())))
     assert [(m.sender_email, m.flagged) for m in snapshot.messages] == [
         ("evil@evil.com", False),
         ("alice@acme.com", True),
@@ -1337,7 +1337,7 @@ def test_a_copy_in_another_mailbox_adds_whats_about_me_there_once(
 
     monkeypatch.setattr(client, "collect", collect)
     harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
-    snapshot = cast(MailSnapshot, harness.plugin.collect(CollectRequest(harness.ctx)))
+    snapshot = cast(MailSnapshot, harness.plugin.collect(RefreshRequest(harness.ctx, Graph())))
     found = [(m.account, m.uid, m.to_me, m.replies_to_me, m.important) for m in snapshot.messages]
     assert sorted(found) == [
         ("home", 1, True, True, False),  # what work's copy says of me
@@ -1425,4 +1425,4 @@ def test_no_password_is_called_a_password(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(keychain, "read", read)
     harness = Harness(MailPlugin(), SECTION, now=NOW)
     with pytest.raises(SourceError, match=r"^no password: run `mfd token set mail`"):
-        MailPlugin().collect(CollectRequest(harness.ctx))
+        MailPlugin().collect(RefreshRequest(harness.ctx, Graph()))

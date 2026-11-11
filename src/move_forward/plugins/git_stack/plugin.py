@@ -7,26 +7,20 @@ from typing import ClassVar
 from ...api import (
     API_VERSION,
     ActionHandler,
-    ActNowRequest,
     Changed,
-    ChangedRequest,
-    CollectAfterRequest,
-    EntitiesRequest,
+    ContextRequest,
     Entity,
     Event,
-    EventsRequest,
     Item,
-    ItemActionsRequest,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
     KindSpec,
-    LoadRequest,
     Migration,
     Panel,
-    PanelsRequest,
     Plugin,
-    StoreRequest,
+    RefreshRequest,
+    Request,
 )
 from . import actions, changes, client, events
 from .config import GitStackConfig
@@ -53,21 +47,22 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         """Only when git stack is installed, i.e. `git stack` would run."""
         return shutil.which("git-stack") is not None
 
-    def collect_after(self, req: CollectAfterRequest[GitStackConfig]) -> GitStackSnapshot:
+    def collect_after(self, req: RefreshRequest[GitStackConfig]) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
 
-    def store(self, req: StoreRequest[GitStackConfig, GitStackSnapshot]) -> None:
+    def store(self, req: Request[GitStackConfig, GitStackSnapshot]) -> None:
         ctx, snapshot = req.ctx, req.snapshot
+        assert snapshot is not None
         StackRepository(ctx.db).replace(snapshot)
 
-    def changed(self, req: ChangedRequest[GitStackConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[GitStackConfig]) -> Changed:
         """Whether a stack may have moved since the last look (see `changes`): asked right
         after each refresh of git, rather than collecting with every one. Its branches are
         compared with the graph at the last look; the config files, where git stack records
         its stacks and no graph shows, are the fingerprint core compares with the last."""
-        graph, previous = req.graph, req.previous_graph
+        graph, previous = req.graph, req.previous.graph
         dirs = repo_dirs(graph)
         moved = previous is not None and (
             changes.branches(previous, dirs) != changes.branches(graph, dirs)
@@ -76,20 +71,20 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
             fingerprint=changes.configs(dirs), everything=moved, reason="a stack may have moved"
         )
 
-    def load(self, req: LoadRequest[GitStackConfig]) -> GitStackSnapshot | None:
+    def load(self, req: ContextRequest[GitStackConfig]) -> GitStackSnapshot | None:
         """What the last refresh found; with no rows yet, nothing tracked (or no refresh)."""
         ctx = req.ctx
         return StackRepository(ctx.db).load()
 
-    def entities(self, req: EntitiesRequest[GitStackConfig, GitStackSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Entity]:
         snapshot = req.snapshot
         return entities(snapshot)
 
-    def panels(self, req: PanelsRequest[GitStackConfig, GitStackSnapshot]) -> list[Panel]:
+    def panels(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Panel]:
         snapshot, graph = req.snapshot, req.graph
         return [Builder(snapshot, graph).stacks()]
 
-    def act_now(self, req: ActNowRequest[GitStackConfig, GitStackSnapshot]) -> list[Item]:
+    def act_now(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Item]:
         """Merged branches, quick to clean up, as git nominates the merged branches it can
         delete; the rest of Stacks is news rather than something to do. One per repo: its
         Clean cleans them all, so more would only take Act now's places with the same button."""
@@ -113,11 +108,12 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
             for items in by_repo.values()
         ]
 
-    def events(self, req: EventsRequest[GitStackConfig, GitStackSnapshot]) -> list[Event]:
-        before, after = req.before, req.after
+    def events(self, req: Request[GitStackConfig, GitStackSnapshot]) -> list[Event]:
+        before, after = req.previous.snapshot, req.snapshot
+        assert before is not None and after is not None
         return events.changes(before, after)
 
-    def item_actions(self, req: ItemActionsRequest[GitStackConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[GitStackConfig, GitStackSnapshot]) -> ItemAdditionsFor:
         """Untrack the branches an On ice item put on ice."""
         graph = req.graph
 

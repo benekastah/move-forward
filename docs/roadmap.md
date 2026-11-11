@@ -17,21 +17,6 @@ The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but f
 its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened from the
 review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
-- **Five request types**, each hook taking one, with `Previous` a type of its own beside them
-  and `ItemRequest` (one item, given to what `item_actions` returns) kept as it is:
-  - `ContextRequest` (ctx): `load`, `linking_patterns`;
-  - `Request` (ctx, graph, snapshot): `store`, `entities`, `panels`, `relate`,
-    `after_collect`, `prune`, item actions and `events`, and `identity` and `act_now` (with
-    `panels`) unless they go, below;
-  - `RefreshRequest` (ctx, graph, `full`, `subjects`): `collect` and `changed`;
-  - `RefRequest` (ctx, kind, ids): `url_for`, `handle_for` and `fetch`;
-  - `InputRequest` (ctx, graph, and one of a page's query and path, a form's fields,
-    surface and back, or the command line's args): pages, buttons and `mfd <plugin>`.
-- **`Previous`:** `changed` and `events` get what was before as a `Previous`: when the last
-  check or refresh ran, the fingerprint the plugin last answered (`changed`), its snapshot
-  before (`events`) and the graph then. Only the graph can't be rebuilt after a restart, so
-  it's None there.
-- **The due horizon** moves into the context.
 - **Hooks removed:**
   - `import_dir`, with `mfd import`, and `mfd notes export`;
   - `refresh_subjects`: ↻ calls `collect` with its subjects;

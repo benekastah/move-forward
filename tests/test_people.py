@@ -20,9 +20,8 @@ from move_forward.people import Contacts, PeopleConfig
 from move_forward.plugin import (
     API_VERSION,
     ActionError,
-    EntitiesRequest,
-    PanelsRequest,
     Plugin,
+    Request,
 )
 from move_forward.repositories import ContactRepository
 from move_forward.strict import Strict
@@ -306,10 +305,10 @@ class _InboxPlugin(Plugin[BaseModel, BaseModel]):
     always_on = True
     kinds: ClassVar[dict[str, KindSpec]] = {"inbox.thread": KindSpec(KindModel)}
 
-    def entities(self, req: EntitiesRequest[BaseModel, BaseModel]) -> list[Entity]:
+    def entities(self, req: Request[BaseModel, BaseModel]) -> list[Entity]:
         return [Entity(ref=INBOX_THREAD, title="Hello", refs=[SENDER.ref])]
 
-    def panels(self, req: PanelsRequest[BaseModel, BaseModel]) -> list[Panel]:
+    def panels(self, req: Request[BaseModel, BaseModel]) -> list[Panel]:
         item = Item(title="Hello", subjects=[INBOX_THREAD])
         return [
             Panel(

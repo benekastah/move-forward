@@ -7,7 +7,7 @@ again at once.
 
 import re
 
-from ...api import ActionError, ActionHandler, ActionRequest, ActionResult, Ref
+from ...api import ActionError, ActionHandler, ActionResult, InputRequest, Ref
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.shell import CommandError
 from . import client
@@ -22,7 +22,7 @@ LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?")
 from reading as an option of `gh`."""
 
 
-def _my_open_pr(req: ActionRequest[GitHubConfig]) -> PullRequest:
+def _my_open_pr(req: InputRequest[GitHubConfig]) -> PullRequest:
     """The PR the `pr` field names by URL, if it's one of my open ones."""
     url = req.field("pr")
     found = PrRepository(req.ctx.db).my_open_pr(url)
@@ -36,7 +36,7 @@ def _same(one: str, other: str | None) -> bool:
     return other is not None and one.casefold() == other.casefold()
 
 
-def _login(req: ActionRequest[GitHubConfig], pr: PullRequest) -> str:
+def _login(req: InputRequest[GitHubConfig], pr: PullRequest) -> str:
     """The `input` field, if it could be asked about the PR: a login, and not its author's."""
     login = req.field("input").strip()
     if not LOGIN_RE.fullmatch(login):
@@ -46,7 +46,7 @@ def _login(req: ActionRequest[GitHubConfig], pr: PullRequest) -> str:
     return login
 
 
-def request_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
+def request_reviewer(req: InputRequest[GitHubConfig]) -> ActionResult:
     """Ask `input`, a login, to review the PR, unless they've been asked already."""
     pr = _my_open_pr(req)
     login = _login(req, pr)
@@ -61,7 +61,7 @@ def request_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
-def mark_ready(req: ActionRequest[GitHubConfig]) -> ActionResult:
+def mark_ready(req: InputRequest[GitHubConfig]) -> ActionResult:
     """Take the draft PR out of draft."""
     pr = _my_open_pr(req)
     if not pr.is_draft:
@@ -75,7 +75,7 @@ def mark_ready(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
-def update_branch(req: ActionRequest[GitHubConfig]) -> ActionResult:
+def update_branch(req: InputRequest[GitHubConfig]) -> ActionResult:
     """Bring the PR's branch up to date with its base, on GitHub, if it's behind."""
     pr = _my_open_pr(req)
     if pr.merge_state != "BEHIND":
@@ -89,7 +89,7 @@ def update_branch(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
-def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
+def primary_reviewer(req: InputRequest[GitHubConfig]) -> ActionResult:
     """Make `input`, a login, the PR's primary reviewer, in place of any other. They're asked
     to review too, as they must approve, unless they've been asked or have approved it:
     asking again would ask for an approval already given. Any other last decision (changes
@@ -113,7 +113,7 @@ def primary_reviewer(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
-def rerun_failed(req: ActionRequest[GitHubConfig]) -> ActionResult:
+def rerun_failed(req: InputRequest[GitHubConfig]) -> ActionResult:
     """Run the failed jobs of the PR's failing Actions runs again (`gh run rerun --failed`)."""
     pr = _my_open_pr(req)
     config = req.ctx.config
@@ -136,7 +136,7 @@ def rerun_failed(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
-def merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
+def merge(req: InputRequest[GitHubConfig]) -> ActionResult:
     """Merge the PR, or add it to its merge queue, as Ready to merge offers: only while Ready to
     merge would list it (`panels.merge_holds`: GitHub's blockers and the work notes' merge
     conditions), and only at the `head` the button showed."""
@@ -161,7 +161,7 @@ def merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
     return ActionResult(f"{pr.repo}#{pr.number} {done}", touched=[Ref(kind=PR, id=pr.url)])
 
 
-def auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
+def auto_merge(req: InputRequest[GitHubConfig]) -> ActionResult:
     """Let the PR merge by itself once it has what its base requires (auto-merge), as Merge when
     ready offers: where its repo allows it and its base requires a review it hasn't had (else
     it wouldn't wait for one), at the `head` the button showed, and not while the work notes
@@ -190,7 +190,7 @@ def auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
     )
 
 
-def cancel_auto_merge(req: ActionRequest[GitHubConfig]) -> ActionResult:
+def cancel_auto_merge(req: InputRequest[GitHubConfig]) -> ActionResult:
     """Turn the PR's auto-merge off."""
     pr = _my_open_pr(req)
     try:

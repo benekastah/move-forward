@@ -11,7 +11,7 @@ from move_forward.act_now import Feedback
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref
 from move_forward.kinds import FAMILIES, PERSON, TICKET, fits
-from move_forward.plugin import AfterCollectRequest, EntitiesRequest
+from move_forward.plugin import Request
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
@@ -39,7 +39,7 @@ def test_ids_fit_their_familys_rule() -> None:
 class _ByKey(JiraPlugin):
     """Jira, publishing its tickets by key, as it did before tickets' ids were URLs."""
 
-    def entities(self, req: EntitiesRequest[JiraConfig, JiraSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Entity]:
         return [
             e.model_copy(update={"ref": Ref(kind=TICKET, id=str(e.attrs["handle"]))})
             for e in super().entities(req)
@@ -139,7 +139,7 @@ def test_notes_gives_its_links_and_ice_their_tickets_urls() -> None:
     plugins = registry.enabled(config, db, NOW)
     graph, _ = stored_graph(db, plugins)
     [ctx] = [e.ctx for e in plugins if e.name == "notes"]
-    NotesPlugin().after_collect(AfterCollectRequest(ctx, graph))
+    NotesPlugin().after_collect(Request(ctx, graph, None))
     [kept] = notes.entries()
     assert kept.links == [Link(kind=TICKET, ref=APP_1)]  # one row: the key's went
     assert kept.todos[0].links == [Link(kind=TICKET, ref="https://jira/browse/APP-7")]

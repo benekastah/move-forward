@@ -11,7 +11,7 @@ from conftest import NOW, Reviewer, pr, snapshot, stored
 
 from move_forward import https, keychain, render
 from move_forward.https import RequestError
-from move_forward.plugin import PruneRequest
+from move_forward.plugin import Request
 from move_forward.plugins.slack import client, contacts
 from move_forward.plugins.slack.models import Contact
 from move_forward.plugins.slack.repository import SlackRepository
@@ -172,8 +172,8 @@ def test_a_lookup_that_found_nobody_is_tried_again_after_prune_days(
     graph, _ = stored_graph(db, plugins)
     [slack] = [e for e in plugins if e.name == "slack"]
     contacts.look_up_requested(slack.ctx, graph)
-    assert slack.plugin.prune(PruneRequest(slack.ctx, graph)) == []  # bob was looked up just now
+    assert slack.plugin.prune(Request(slack.ctx, graph, None)) == []  # bob was looked up just now
     later = replace(slack.ctx, now=NOW + timedelta(days=config.prune_days + 1))
-    assert slack.plugin.prune(PruneRequest(later, graph)) == ["will look up 1 person(s) again"]
+    assert slack.plugin.prune(Request(later, graph, None)) == ["will look up 1 person(s) again"]
     _lookups(monkeypatch, {"b@x": "U222222"})
     assert contacts.look_up_requested(later, graph) == ["bob"] and asked == ["b@x"]

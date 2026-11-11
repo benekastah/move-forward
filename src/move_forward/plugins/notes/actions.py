@@ -11,9 +11,9 @@ from pathlib import Path
 from ...api import (
     ActionError,
     ActionHandler,
-    ActionRequest,
     ActionResult,
     Graph,
+    InputRequest,
     Model,
     Ref,
     SourceError,
@@ -82,10 +82,10 @@ def _stack_branches(graph: Graph, repo: Path, branch: str) -> list[str]:
     return [name for name in names if name in here]
 
 
-def ice(req: ActionRequest[NotesConfig]) -> str:
+def ice(req: InputRequest[NotesConfig]) -> str:
     """Put the branch's stack on ice, recording each branch's commit as git last saw it. An
     optional `note` says why."""
-    ctx, graph, fields = req.ctx, req.graph, req.fields
+    ctx, graph, fields = req.ctx, req.graph, req.form.fields
     repo = _repo(graph, req.field("repo"))
     branch = req.field("branch")
     branches = _branches(graph, repo)
@@ -107,11 +107,11 @@ def ice(req: ActionRequest[NotesConfig]) -> str:
     return f"put {names[0]} on ice ({len(names)} branches)"
 
 
-def ice_item(req: ActionRequest[NotesConfig]) -> str:
+def ice_item(req: InputRequest[NotesConfig]) -> str:
     """Put a PR, ticket or work entry on ice, by `kind` and `id`, with what it links: an
     entry its PRs and tickets, a ticket the PRs that mention it (whose publisher lets their
     text hide them: mine, not those I'm asked to review). An optional `note` says why."""
-    ctx, graph, fields = req.ctx, req.graph, req.fields
+    ctx, graph, fields = req.ctx, req.graph, req.form.fields
     kind, given = req.field("kind"), req.field("id")
     ref_id = graph.identify(kind, given)  # a ticket by its key, too
     if kind not in ICEABLE:
@@ -130,14 +130,14 @@ def ice_item(req: ActionRequest[NotesConfig]) -> str:
     return f"put {entity.title} on ice"
 
 
-def _ice_id(req: ActionRequest[NotesConfig]) -> int:
+def _ice_id(req: InputRequest[NotesConfig]) -> int:
     try:
         return int(req.field("ice"))
     except ValueError as e:
-        raise ActionError(f"nothing on ice has the id {req.fields['ice']!r}") from e
+        raise ActionError(f"nothing on ice has the id {req.form.fields['ice']!r}") from e
 
 
-def ice_note(req: ActionRequest[NotesConfig]) -> str:
+def ice_note(req: InputRequest[NotesConfig]) -> str:
     """Say why something is on ice: `input`, in place of what's said now."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -150,7 +150,7 @@ def ice_note(req: ActionRequest[NotesConfig]) -> str:
     return f"noted why {title} is on ice"
 
 
-def thaw(req: ActionRequest[NotesConfig]) -> str:
+def thaw(req: InputRequest[NotesConfig]) -> str:
     """Take what's on ice (`ice`, its id) off it: a stack, a PR, a ticket or a work entry."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -165,14 +165,12 @@ def thaw(req: ActionRequest[NotesConfig]) -> str:
 # Todos
 
 
-def _todo(
-    notes: NotesRepository, req: ActionRequest[NotesConfig], done: bool
-) -> tuple[Entry, Todo]:
+def _todo(notes: NotesRepository, req: InputRequest[NotesConfig], done: bool) -> tuple[Entry, Todo]:
     """The todo the `todo` field names by id, and its entry; it must be done or open as said."""
     try:
         todo_id = int(req.field("todo"))
     except ValueError as e:
-        raise ActionError(f"bad todo id {req.fields['todo']!r}") from e
+        raise ActionError(f"bad todo id {req.form.fields['todo']!r}") from e
     for entry in notes.entries():
         for todo in entry.todos:
             if todo.id == todo_id:
@@ -182,7 +180,7 @@ def _todo(
     raise ActionError(f"no todo {todo_id}")
 
 
-def todo_done(req: ActionRequest[NotesConfig]) -> ActionResult:
+def todo_done(req: InputRequest[NotesConfig]) -> ActionResult:
     """Record an open todo as done today, and keep it on the focus page to undo."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -192,7 +190,7 @@ def todo_done(req: ActionRequest[NotesConfig]) -> ActionResult:
     return ActionResult(f"done: {todo.text}", ctx.kept(str(todo.id)))
 
 
-def todo_undone(req: ActionRequest[NotesConfig]) -> str:
+def todo_undone(req: InputRequest[NotesConfig]) -> str:
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
     entry, todo = _todo(notes, req, done=True)
@@ -201,7 +199,7 @@ def todo_undone(req: ActionRequest[NotesConfig]) -> str:
     return f"reopened: {todo.text}"
 
 
-def todo_delete(req: ActionRequest[NotesConfig]) -> str:
+def todo_delete(req: InputRequest[NotesConfig]) -> str:
     """Drop an open todo without recording it as done."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -231,7 +229,7 @@ def link_for(graph: Graph, value: str) -> Link:
     raise ActionError(f"{value!r} is neither a PR URL nor a ticket key Jira knows")
 
 
-def todo_link(req: ActionRequest[NotesConfig]) -> str:
+def todo_link(req: InputRequest[NotesConfig]) -> str:
     """Link an open todo to a Jira ticket or a PR."""
     ctx, graph = req.ctx, req.graph
     notes = NotesRepository(ctx.db)
@@ -252,7 +250,7 @@ def _size(size: str) -> Size | None:
     return "quick" if size == "quick" else "big" if size == "big" else None
 
 
-def todo_size(req: ActionRequest[NotesConfig]) -> str:
+def todo_size(req: InputRequest[NotesConfig]) -> str:
     """Say how big an open todo is: `size`, quick or big."""
     ctx = req.ctx
     notes = NotesRepository(ctx.db)
@@ -267,14 +265,14 @@ def todo_size(req: ActionRequest[NotesConfig]) -> str:
     return f"{todo.text} is {size}"
 
 
-def todo_add(req: ActionRequest[NotesConfig]) -> str:
+def todo_add(req: InputRequest[NotesConfig]) -> str:
     """Add an open todo to an entry: `input` (or `text`) with an optional size, quick or big, as
     `size` (or `choice`, from its drop-down), or a leading `[quick]` or `[big]` in it, as the
     notes write a size, so it reads back the same.
 
     With `create`, a missing entry is created first (`where` names its PR or ticket).
     """
-    ctx, fields = req.ctx, req.fields
+    ctx, fields = req.ctx, req.form.fields
     text, written = sized((fields.get("input") or fields.get("text") or "").strip())
     text = text.strip()
     if not text:
@@ -307,13 +305,13 @@ def entry_title(text: str) -> str:
     return text
 
 
-def todo_new(req: ActionRequest[NotesConfig]) -> str:
+def todo_new(req: InputRequest[NotesConfig]) -> str:
     """Start a todo from nothing: `input` as a new entry's title and its one todo, sized by
     `choice` (from its drop-down), or by a leading `[quick]` or `[big]`, as the notes write a
     size, so it reads back the same; as notes alone is a todo list. An entry of that title gets
     the todo instead, but not one on ice, where it would be hidden, nor twice."""
     ctx, graph = req.ctx, req.graph
-    text, written = sized((req.fields.get("input") or "").strip())
+    text, written = sized((req.form.fields.get("input") or "").strip())
     if not text.strip():
         raise ActionError("the todo is empty")
     text = entry_title(text.strip())
@@ -325,7 +323,7 @@ def todo_new(req: ActionRequest[NotesConfig]) -> str:
         entry_id = notes.add_entry(text, ctx.today, INFERRED, None, links_in(text))
     elif any(t.text == text for e in notes.entries() if e.title == text for t in e.open_todos):
         return f"already a todo: {text}"
-    chosen = _size(req.fields.get("choice") or "") or written
+    chosen = _size(req.form.fields.get("choice") or "") or written
     notes.add_todo(entry_id, text, chosen, links_in(text))
     notes.touch(entry_id, ctx.today)
     return f"added: {text}"

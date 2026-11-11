@@ -36,22 +36,16 @@ from .page import Item, ItemAdditions, Panel, SourceStatus, Surface
 from .plugin import (
     MAX_SUBJECTS,
     ActionError,
-    ActionRequest,
     ActionResult,
-    ActNowRequest,
-    AfterCollectRequest,
-    CollectAfterRequest,
-    CollectRequest,
-    EventsRequest,
-    IdentityRequest,
-    ItemActionsRequest,
+    Form,
+    InputRequest,
     ItemRequest,
     KeptItemRequest,
-    PageRequest,
-    PanelsRequest,
-    PruneRequest,
+    Page,
+    Previous,
+    RefreshRequest,
+    Request,
     Response,
-    StoreRequest,
     Subjects,
     SubjectsRequest,
     adds_nothing,
@@ -101,14 +95,25 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
 
 
 STORED = "stored:"
-"""Core's kv key, `stored:<plugin>`, saying the plugin has stored a snapshot: until it has,
-its events have nothing to compare with."""
+"""Core's kv key, `stored:<plugin>`, saying the plugin has stored a snapshot (until it has,
+its events have nothing to compare with), and when it last did, in ISO 8601 (`1`, from before
+the time was kept, says only that it has)."""
 
 
-def store_snapshot(e: Enabled, snapshot: BaseModel) -> None:
-    """Keep a plugin's new snapshot, and remember that it has one."""
-    e.plugin.store(StoreRequest(e.ctx, snapshot))
-    KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", "1")
+def store_snapshot(e: Enabled, snapshot: BaseModel, graph: Graph) -> None:
+    """Keep a plugin's new snapshot, collected from `graph`, and remember that it has one, and
+    when."""
+    e.plugin.store(Request(e.ctx, graph, snapshot))
+    KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", e.ctx.now.isoformat())
+
+
+def _stored_at(value: str) -> datetime | None:
+    """When a `STORED` value says the plugin last stored; None for one from before the time was
+    kept."""
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -118,42 +123,56 @@ class Before:
     graph: Graph
     snapshots: dict[str, BaseModel | None]
     """Each plugin's snapshot; None for one that had never stored one."""
+    stored_at: dict[str, datetime]
+    """When the refresh that last stored each plugin's snapshot began (a refresh or a refresh of
+    subjects); one
+    that never did (or did only before the time was kept) isn't here. A refresh that failed
+    stored nothing, so it doesn't count."""
+
+    def previous(self, name: str) -> Previous[BaseModel]:
+        """What held before for the plugin `name`, as its `events` gets it."""
+        return Previous(
+            self.stored_at.get(name), snapshot=self.snapshots.get(name), graph=self.graph
+        )
 
 
 def before_refresh(db: Database, plugins: list[Enabled]) -> Before:
     """What's stored now, as a refresh about to start compares its events with."""
     graph, snapshots = stored_graph(db, plugins)
     kv = KvRepository(db, CORE)
+    stored = {name: value for name in snapshots if (value := kv.get(f"{STORED}{name}"))}
     return Before(
-        graph, {name: s if kv.get(f"{STORED}{name}") else None for name, s in snapshots.items()}
+        graph,
+        {name: s if name in stored else None for name, s in snapshots.items()},
+        {name: at for name, value in stored.items() if (at := _stored_at(value)) is not None},
     )
 
 
 def changes_of(
-    e: Enabled, before: BaseModel | None, after: BaseModel | None, previous: Graph, graph: Graph
+    e: Enabled, previous: Previous[BaseModel], after: BaseModel | None, graph: Graph
 ) -> list[Event]:
-    """The events a plugin's `events` makes of a refresh, subscribed to or not, from its
-    snapshot `before` and `after` and the graph `previous`ly and now; none while it has no
-    snapshot to compare with."""
-    if before is None or after is None:
+    """The events a plugin's `events` makes of a refresh, subscribed to or not, from what held
+    `previous`ly and its snapshot `after` and the graph now; none while it has no snapshot to
+    compare with."""
+    if previous.snapshot is None or after is None:
         return []
-    return e.plugin.events(EventsRequest(e.ctx, before, after, previous, graph))
+    return e.plugin.events(Request(e.ctx, graph, after, previous))
 
 
 def newly_shown_of(e: Enabled, after: BaseModel | None, graph: Graph) -> list[Event]:
     """The events of a plugin's items newly shown with a notification (`Item.notify`),
     subscribed to or not, by `notifications.newly_shown`, which keeps what its panels show now
     for the next refresh. Its panels are built whether or not it raises any kind this way."""
-    panels = e.plugin.panels(PanelsRequest(e.ctx, after, graph))
+    panels = e.plugin.panels(Request(e.ctx, graph, after))
     return notifications.newly_shown(e.ctx.db, e.name, panels)
 
 
 def events_of(
-    e: Enabled, before: BaseModel | None, after: BaseModel | None, previous: Graph, graph: Graph
+    e: Enabled, previous: Previous[BaseModel], after: BaseModel | None, graph: Graph
 ) -> list[Event]:
     """Every event a plugin makes of a refresh, subscribed to or not: `changes_of`, then
     `newly_shown_of`."""
-    return [*changes_of(e, before, after, previous, graph), *newly_shown_of(e, after, graph)]
+    return [*changes_of(e, previous, after, graph), *newly_shown_of(e, after, graph)]
 
 
 def _events(
@@ -175,7 +194,7 @@ def _events(
     for e in wanting:
         after = snapshots.get(e.name)
         try:
-            found = changes_of(e, before.snapshots.get(e.name), after, before.graph, graph)
+            found = changes_of(e, before.previous(e.name), after, graph)
             _keep(e, found, subscribed, now)
         except Exception:
             log.exception("%s: finding what changed failed", e.name)
@@ -197,10 +216,11 @@ def _collect_all(
     now: datetime,
     collect: Callable[[Enabled, Taken], BaseModel],
     checks: ChangeChecks,
-    graph: Graph | None,
+    graph: Graph,
+    asking: bool,
 ) -> None:
-    """Collect each plugin's snapshot with `collect`, in parallel, given what moved since its
-    last collect (`ChangeChecks.take`, asking its check with `graph` first when there is one),
+    """Collect each plugin's snapshot with `collect`, in parallel, from `graph`, given what
+    moved since its last collect (`ChangeChecks.take`, asking its check first when `asking`),
     and keep it with the plugin's `store`, which settles what it was given and lets the tags I
     took off what it publishes come back (`TagRepository.put_back`): it has found them again,
     or not. Each plugin has
@@ -222,11 +242,11 @@ def _collect_all(
 
                 def collector() -> BaseModel:  # taking within, so its failure is the plugin's
                     nonlocal taken
-                    taken = checks.take(e, graph)
+                    taken = checks.take(e, graph if asking else None)
                     return collect(e, taken)
 
                 def store(snapshot: BaseModel) -> None:
-                    store_snapshot(e, snapshot)
+                    store_snapshot(e, snapshot, graph)
                     assert taken is not None  # the collector took it
                     checks.stored(e, taken)
                     TagRepository(db).put_back(e.name, now)
@@ -291,31 +311,31 @@ def refresh(
     checks = checks or ChangeChecks()
 
     def collect_first(e: Enabled, taken: Taken) -> BaseModel:
-        return e.plugin.collect(CollectRequest(e.ctx, taken.full, taken.subjects))
+        return e.plugin.collect(RefreshRequest(e.ctx, before.graph, taken.full, taken.subjects))
 
-    _collect_all(db, first, now, collect_first, checks, before.graph if asking else None)
+    _collect_all(db, first, now, collect_first, checks, before.graph, asking)
     graph, snapshots = stored_graph(db, plugins)
     if after and not shell.stopping():
         given = graph
 
         def collect_after(e: Enabled, taken: Taken) -> BaseModel:
-            return e.plugin.collect_after(
-                CollectAfterRequest(e.ctx, given, taken.full, taken.subjects)
-            )
+            return e.plugin.collect_after(RefreshRequest(e.ctx, given, taken.full, taken.subjects))
 
-        _collect_all(db, after, now, collect_after, checks, given if asking else None)
+        _collect_all(db, after, now, collect_after, checks, given, asking)
         graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
     _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)
     if shell.stopping():  # what was stored is told above, if the thread got that far
         return
     _dashboard_events(config, db, plugins, set(config.notifications.subscribe), now)
-    prune_if_due(db, now, lambda: _prune_plugins(plugins, graph, db, now, config.prune_days))
+    prune_if_due(
+        db, now, lambda: _prune_plugins(plugins, graph, snapshots, db, now, config.prune_days)
+    )
     for e in plugins:
         if e.name not in collected and e.plugin.collects:
             continue
         try:
-            e.plugin.after_collect(AfterCollectRequest(e.ctx, graph))
+            e.plugin.after_collect(Request(e.ctx, graph, snapshots.get(e.name)))
         except Exception:
             log.exception("%s: after_collect failed", e.name)
 
@@ -363,7 +383,7 @@ def refresh_subjects(
                 fallback.add(name)
                 break
             try:
-                store_snapshot(e, result.snapshot)
+                store_snapshot(e, result.snapshot, before.graph)
                 stored = True
             except Exception:
                 log.exception("%s: storing its subjects failed", name)
@@ -418,7 +438,12 @@ def _dashboard_events(
 
 
 def _prune_plugins(
-    plugins: list[Enabled], graph: Graph, db: Database, now: datetime, days: int
+    plugins: list[Enabled],
+    graph: Graph,
+    snapshots: dict[str, BaseModel | None],
+    db: Database,
+    now: datetime,
+    days: int,
 ) -> list[str]:
     """Every plugin's daily prune, and core's (Act now's feedback that's over or older than
     `days`, problems no plugin has reported for `days`, finished work's priorities, gone
@@ -440,7 +465,10 @@ def _prune_plugins(
         log.exception("tags: forgetting gone entities' tags failed")
     for e in plugins:
         try:
-            notices += [f"{e.name}: {n}" for n in e.plugin.prune(PruneRequest(e.ctx, graph))]
+            notices += [
+                f"{e.name}: {n}"
+                for n in e.plugin.prune(Request(e.ctx, graph, snapshots.get(e.name)))
+            ]
         except Exception:
             log.exception("%s: prune failed", e.name)
     return notices
@@ -457,7 +485,6 @@ def _merged(first: ItemAdditions, then: ItemAdditions) -> ItemAdditions:
 
 
 def _plugin_panels(
-    config: Config,
     plugins: list[Enabled],
     graph: Graph,
     snapshots: dict[str, BaseModel | None],
@@ -469,7 +496,7 @@ def _plugin_panels(
         own = call(
             e.name,
             "panels",
-            lambda e=e, s=snapshot: e.plugin.panels(PanelsRequest(e.ctx, s, graph)),
+            lambda e=e, s=snapshot: e.plugin.panels(Request(e.ctx, graph, s)),
             None,
         )
         if own is None:
@@ -478,9 +505,7 @@ def _plugin_panels(
         nominated = call(
             e.name,
             "act_now",
-            lambda e=e, s=snapshot, own=own: e.plugin.act_now(
-                ActNowRequest(e.ctx, s, graph, own, timedelta(days=config.act_now.due_warning_days))
-            ),
+            lambda e=e, s=snapshot, own=own: e.plugin.act_now(Request(e.ctx, graph, s, panels=own)),
             [],
         )
         plugin_panels.append(panels.PluginPanels(e.name, e.plugin.title, own, nominated))
@@ -494,7 +519,7 @@ def snoozed(config: Config, db: Database, now: datetime) -> dict[act_now.Feedbac
     the item: the snooze holds once it's thawed. Cheap, as `build_dashboard`."""
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
-    current = panels.fingerprints(_plugin_panels(config, plugins, graph, snapshots))
+    current = panels.fingerprints(_plugin_panels(plugins, graph, snapshots))
     return {
         key: f
         for key, f in FeedbackRepository(db).all().items()
@@ -515,7 +540,7 @@ def build_dashboard(
     now = now or datetime.now(UTC)
     plugins = enabled(config, db, now)
     graph, snapshots = stored_graph(db, plugins)
-    plugin_panels = _plugin_panels(config, plugins, graph, snapshots)
+    plugin_panels = _plugin_panels(plugins, graph, snapshots)
     identities = [
         found
         for e in plugins
@@ -523,7 +548,7 @@ def build_dashboard(
             found := call(
                 e.name,
                 "identity",
-                lambda e=e: e.plugin.identity(IdentityRequest(e.ctx, snapshots[e.name])),
+                lambda e=e: e.plugin.identity(Request(e.ctx, graph, snapshots[e.name])),
                 None,
             )
         )
@@ -539,7 +564,7 @@ def build_dashboard(
             call(
                 e.name,
                 "item_actions (once a page)",
-                lambda e=e: e.plugin.item_actions(ItemActionsRequest(e.ctx, graph)),
+                lambda e=e: e.plugin.item_actions(Request(e.ctx, graph, snapshots[e.name])),
                 adds_nothing,
             ),
         )
@@ -625,7 +650,7 @@ def plugin_page(
         return None
     graph, _ = stored_graph(db, plugins)
     try:
-        return handler(PageRequest(e.ctx, graph, query, path))
+        return handler(InputRequest(e.ctx, graph, page=Page(query, path)))
     except Exception as err:
         log.exception("%s: page %s failed", e.name, path)
         raise PageFailed(path) from err
@@ -857,7 +882,7 @@ def perform_action(
         raise ActionError(f"unknown action {name}")
     graph, _ = stored_graph(db, plugins)
     try:
-        result = handler(ActionRequest(e.ctx, graph, fields, surface, back))
+        result = handler(InputRequest(e.ctx, graph, form=Form(fields, surface, back)))
     except ActionError:
         raise
     except CommandError as err:

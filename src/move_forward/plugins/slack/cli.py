@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from ...api import ActionError, CliHandler, CliRequest, Context, SourceError, http
+from ...api import ActionError, CliHandler, Context, InputRequest, SourceError, http
 from . import client, contacts, discovery, markdown
 from .config import SlackConfig
 from .repository import SlackRepository
@@ -160,7 +160,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     team_set.add_argument("--id", help="the channel's id, e.g. C0123456")
     team_commands.add_parser("unset").add_argument("team")
 
-    def run(req: CliRequest[SlackConfig]) -> int:
+    def run(req: InputRequest[SlackConfig]) -> int:
         ctx, args = req.ctx, req.args
         try:
             print(run_command(ctx, args))

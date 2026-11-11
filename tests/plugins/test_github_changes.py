@@ -11,7 +11,7 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.notifications import NotificationRepository
 from move_forward.page import anchor
-from move_forward.plugin import AfterCollectRequest, CollectRequest
+from move_forward.plugin import RefreshRequest, Request
 from move_forward.plugins.github.changes import KINDS, changes
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import Check, GitHubSnapshot, Review, Thread
@@ -208,10 +208,10 @@ class _Scripted(GitHubPlugin):
 
     snapshots: ClassVar[list[GitHubSnapshot]] = []
 
-    def collect(self, req: CollectRequest[GitHubConfig]) -> GitHubSnapshot:
+    def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
         return self.snapshots.pop(0)
 
-    def after_collect(self, req: AfterCollectRequest[GitHubConfig]) -> None:
+    def after_collect(self, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
         pass
 
 

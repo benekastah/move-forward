@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable, Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any, cast
 
@@ -25,13 +25,11 @@ from .kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named
 from .plugin import (
     API_VERSION,
     Context,
-    EntitiesRequest,
-    FetchRequest,
+    ContextRequest,
     HandleRequest,
-    LinkingRequest,
-    LoadRequest,
     Plugin,
-    RelateRequest,
+    RefRequest,
+    Request,
     SourceError,
     UrlRequest,
 )
@@ -262,7 +260,7 @@ class Enabled:
     def snapshot(self) -> BaseModel | None:
         """What the plugin last stored; None when it has nothing, or its `load` fails."""
         with self.ctx.db.reading():  # all of one refresh's, never half of the next's
-            return call(self.name, "load", lambda: self.plugin.load(LoadRequest(self.ctx)), None)
+            return call(self.name, "load", lambda: self.plugin.load(ContextRequest(self.ctx)), None)
 
 
 def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:
@@ -368,6 +366,7 @@ def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
             teams=list(config.teams),
             prune_days=config.prune_days,
             now=now,
+            due_horizon=timedelta(days=config.act_now.due_warning_days),
             db=db,
             kv=KvRepository(db, plugin.name),
             name=plugin.name,
@@ -420,7 +419,7 @@ def build_graph(
         published: list[Entity] = call(
             e.name,
             "entities",
-            lambda e=e: e.plugin.entities(EntitiesRequest(e.ctx, snapshots.get(e.name))),
+            lambda e=e: e.plugin.entities(Request(e.ctx, Graph(), snapshots.get(e.name))),
             [],
         )
         for entity in published:
@@ -479,7 +478,7 @@ def build_graph(
         found: list[Entity] = []
         for e in owners(kind):
             try:
-                answer = e.plugin.fetch(FetchRequest(e.ctx, kind, ids))
+                answer = e.plugin.fetch(RefRequest(e.ctx, kind, ids))
             except SourceError:
                 raise
             except Exception:
@@ -500,7 +499,7 @@ def build_graph(
         patterns: dict[str, str | None] = call(
             e.name,
             "linking_patterns",
-            lambda e=e: e.plugin.linking_patterns(LinkingRequest(e.ctx)),
+            lambda e=e: e.plugin.linking_patterns(ContextRequest(e.ctx)),
             {},
         )
         linking.update(patterns)
@@ -511,7 +510,7 @@ def build_graph(
     entities = tags.tagged(entities, specs, tagged, untagged)
     hiding = [kind for kind, spec in specs.items() if spec.hides]
     graph = Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
-    related = _relations(plugins, graph)
+    related = _relations(plugins, graph, snapshots)
     if not related:
         return graph
     entities = [
@@ -523,14 +522,19 @@ def build_graph(
     return Graph(entities, url_for, fetch, linking, hiding, specs, handle_for)
 
 
-def _relations(plugins: list[Enabled], graph: Graph) -> dict[Ref, list[Ref]]:
+def _relations(
+    plugins: list[Enabled], graph: Graph, snapshots: dict[str, BaseModel | None]
+) -> dict[Ref, list[Ref]]:
     """What each plugin relates (`Plugin.relate`), by the entity of its own each starts at.
     A relation from an entity that isn't the plugin's, or isn't in the graph, is a plugin
     bug: it's logged and left out."""
     found: dict[Ref, list[Ref]] = {}
     for e in plugins:
         pairs: list[tuple[Ref, Ref]] = call(
-            e.name, "relate", lambda e=e: e.plugin.relate(RelateRequest(e.ctx, graph)), []
+            e.name,
+            "relate",
+            lambda e=e: e.plugin.relate(Request(e.ctx, graph, snapshots.get(e.name))),
+            [],
         )
         for mine, theirs in pairs:
             if mine.kind not in e.plugin.kinds or graph.get(mine.kind, mine.id) is None:

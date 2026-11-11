@@ -9,7 +9,7 @@ from move_forward import auth, registry
 from move_forward import db as db_module
 from move_forward.config import DEFAULT_DB_PATH
 from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database, Migration
-from move_forward.plugin import LoadRequest
+from move_forward.plugin import ContextRequest
 from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.private import is_private
@@ -575,7 +575,7 @@ def test_a_plugins_load_sees_no_write_between_its_reads(monkeypatch: pytest.Monk
 
     writer = threading.Thread(target=write)
 
-    def load(self: NotesPlugin, req: LoadRequest[NotesConfig]) -> None:
+    def load(self: NotesPlugin, req: ContextRequest[NotesConfig]) -> None:
         seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
         writer.start()
         started.wait()

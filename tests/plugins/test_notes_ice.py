@@ -10,7 +10,7 @@ from move_forward import refresh
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref
-from move_forward.plugin import ActionError, AfterCollectRequest, Context
+from move_forward.plugin import ActionError, Context, Request
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.notes import plugin as notes_plugin
 from move_forward.plugins.notes.cli import export_notes
@@ -124,7 +124,7 @@ def test_after_a_refresh_notes_finds_its_covers_again() -> None:
     )
     ice_id = NotesRepository(db).add_ice("me/x", NOW.date(), None, _ice(0, BRANCH.id).items)
     pr = _pr(1, "acme/widgets", "me/x")
-    NotesPlugin().after_collect(AfterCollectRequest(ctx, Graph([pr])))
+    NotesPlugin().after_collect(Request(ctx, Graph([pr]), None))
     assert NotesRepository(db).covers() == {ice_id: [pr.ref]}
 
 

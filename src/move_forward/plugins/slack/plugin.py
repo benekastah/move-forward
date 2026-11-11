@@ -16,25 +16,21 @@ from ...api import (
     Action,
     ActionError,
     ActionHandler,
-    ActionRequest,
-    AfterCollectRequest,
     Asker,
     CliHandler,
     Context,
     Graph,
     ImportRequest,
     InitSetup,
-    ItemActionsRequest,
+    InputRequest,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
     Migration,
     PageHandler,
-    PageRequest,
     Panel,
-    PanelsRequest,
     Plugin,
-    PruneRequest,
+    Request,
     age,
     html,
 )
@@ -161,12 +157,12 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 
-    def panels(self, req: PanelsRequest[SlackConfig, BaseModel]) -> list[Panel]:
+    def panels(self, req: Request[SlackConfig, BaseModel]) -> list[Panel]:
         ctx, graph = req.ctx, req.graph
         slack = pinger(ctx, graph)
         return [slack.nudges(slack.pings())]
 
-    def item_actions(self, req: ItemActionsRequest[SlackConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[SlackConfig, BaseModel]) -> ItemAdditionsFor:
         """A Ping link on any item about one of my open PRs with someone to chase: Bump once a
         target was pinged, muted while the PR isn't in order. The pings are worked out once for
         the page."""
@@ -196,14 +192,14 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         return ping_action
 
     def pages(self) -> dict[str, PageHandler]:
-        def ping(req: PageRequest[SlackConfig]) -> str | None:
-            ctx, graph, query = req.ctx, req.graph, req.query
+        def ping(req: InputRequest[SlackConfig]) -> str | None:
+            ctx, graph, query = req.ctx, req.graph, req.page.query
             pr_url = query.get("pr", [""])[0]
             found = pinger(ctx, graph).pings().get(pr_url)
-            notice = req.query.get("notice", [""])[0]
+            notice = req.page.query.get("notice", [""])[0]
             return ping_page(found, ctx.now, notice) if found else None
 
-        def where_pings_go(req: PageRequest[SlackConfig]) -> str | None:
+        def where_pings_go(req: InputRequest[SlackConfig]) -> str | None:
             ctx, graph = req.ctx, req.graph
             return contacts.contacts_page(ctx, graph)
 
@@ -212,7 +208,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             contacts.CONTACTS: where_pings_go,
         }
 
-    def after_collect(self, req: AfterCollectRequest[SlackConfig]) -> None:
+    def after_collect(self, req: Request[SlackConfig, BaseModel]) -> None:
         """Look up the Slack ids of requested reviewers nothing names one for."""
         ctx, graph = req.ctx, req.graph
         found = contacts.look_up_requested(ctx, graph)
@@ -228,9 +224,9 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         return cli.import_markdown(req.ctx, req.dir)
 
     def actions(self) -> dict[str, ActionHandler]:
-        def mark_sent(req: ActionRequest[SlackConfig]) -> str:
+        def mark_sent(req: InputRequest[SlackConfig]) -> str:
             """Record a ping as sent, so the next one to that target is a follow-up."""
-            ctx, fields = req.ctx, req.fields
+            ctx, fields = req.ctx, req.form.fields
             try:
                 form = PingForm.model_validate(fields)
             except ValueError as e:
@@ -254,7 +250,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             "clear_contact": contacts.clear_contact_action,
         }
 
-    def prune(self, req: PruneRequest[SlackConfig]) -> list[str]:
+    def prune(self, req: Request[SlackConfig, BaseModel]) -> list[str]:
         ctx = req.ctx
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
         slack = SlackRepository(ctx.db)

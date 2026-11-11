@@ -10,6 +10,7 @@ from move_forward.db import Database
 from move_forward.graph import Graph
 from move_forward.notifications import Event
 from move_forward.page import anchor
+from move_forward.plugin import Previous
 from move_forward.plugins.github.snapshots import PrRepository
 from move_forward.plugins.jira.changes import KINDS
 from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
@@ -76,7 +77,7 @@ class _Refreshes:
         now = cast(JiraSnapshot | None, snapshots["jira"])
         before_graph, before = self.previous or (graph, None)
         self.previous = (graph, now)
-        events = refresh.events_of(jira, before, now, before_graph, graph)
+        events = refresh.events_of(jira, Previous(snapshot=before, graph=before_graph), now, graph)
         return [e.thing for e in events if e.kind == "closeable"]
 
 

@@ -14,7 +14,7 @@ from move_forward.change_checks import ChangeChecks, Taken
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Changed, ChangedRequest, CollectRequest
+from move_forward.plugin import Changed, RefreshRequest
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
@@ -29,15 +29,15 @@ class _Git(GitPlugin):
     def __init__(self) -> None:
         super().__init__(watching=False)
         self.answers: list[Changed] = []
-        self.asked: list[ChangedRequest[GitConfig]] = []
+        self.asked: list[RefreshRequest[GitConfig]] = []
         self.given: list[tuple[bool, frozenset[str]]] = []
         self.failing = False
 
-    def changed(self, req: ChangedRequest[GitConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[GitConfig]) -> Changed:
         self.asked.append(req)
         return self.answers.pop(0) if self.answers else Changed()
 
-    def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+    def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         self.given.append((req.full, req.subjects))
         if self.failing:
             raise RuntimeError("offline")
@@ -75,8 +75,8 @@ def test_a_fingerprint_counts_once_it_differs_from_the_last(git: _Git, tmp_path:
     assert checks.check(e, Graph()) is None
     assert checks.check(e, Graph()) == Changed(fingerprint="b")
     assert checks.check(e, Graph()) is None
-    assert [r.fingerprint for r in git.asked] == [None, "a", "a", "b"]
-    assert git.asked[1].checked_at == NOW
+    assert [r.previous.fingerprint for r in git.asked] == [None, "a", "a", "b"]
+    assert git.asked[1].previous.at == NOW
 
 
 def test_what_a_check_kept_survives_a_restart(git: _Git, tmp_path: Path) -> None:

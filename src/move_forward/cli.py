@@ -32,7 +32,7 @@ from .act_now import PRIORITIES, UNTIL_CHANGED
 from .db import Database
 from .graph import Ref
 from .kinds import label
-from .plugin import CliHandler, CliRequest, ImportRequest
+from .plugin import CliHandler, ImportRequest, InputRequest
 from .refresh import (
     build_dashboard,
     refresh,
@@ -487,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{args.command}] isn't in {config_path}", file=sys.stderr)
             return 1
         graph, _ = stored_graph(db, plugins)
-        return plugin_commands[args.command](CliRequest(e.ctx, graph, args))
+        return plugin_commands[args.command](InputRequest(e.ctx, graph, args=args))
     if args.command == "serve":
         supervisor.serve_supervised()
         port = args.port or config.port

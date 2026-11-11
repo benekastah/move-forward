@@ -9,9 +9,35 @@ This page walks through what a plugin is made of, using a made-up `linear` plugi
 from Linear) as the example. [AGENTS.md](../AGENTS.md) has the rules every change follows;
 this page explains them as they apply to a plugin.
 
-Every hook takes one argument, a request object (`PanelsRequest`, `EntitiesRequest`, …,
-all in `move_forward.api`), whose fields are the hook's inputs: `req.ctx`, `req.snapshot`,
-`req.graph` and so on. Core can give a hook a new input without changing its signature.
+## Requests
+
+Every hook takes one argument, a request object, whose fields are the hook's inputs, so core
+can give one a new field without changing any hook's signature. Most hooks take one of five
+kinds, all in `move_forward.api`:
+
+| Request | Fields | Hooks |
+| --- | --- | --- |
+| `ContextRequest` | `ctx` | `load`, `linking_patterns` |
+| `Request` | `ctx`, `graph`, `snapshot`, and `previous` or `panels` where a hook has them | `store`, `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`, `events` |
+| `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `collect_after`, `changed` |
+| `RefRequest` | `ctx`, `kind`, `ids` | `fetch` |
+| `InputRequest` | `ctx`, `graph`, and one of `page` (a `Page`: `query`, `path`), `form` (a `Form`: `fields`, `surface`, `back`) or `args` | pages, buttons (`actions`), `mfd <plugin>` (`cli`) |
+
+`ctx` is the plugin's context (below), `graph` every plugin's entities (empty for `entities`,
+which the graph is built from), and `snapshot` what the plugin last stored (None before its
+first refresh; for `store`, what `collect` just fetched). A field a hook doesn't get is left at
+its default; each field's docstring names the hooks that get it.
+
+Five hooks keep a request of their own: `url_for` (`UrlRequest`), `handle_for`
+(`HandleRequest`), `refresh_subjects` (`SubjectsRequest`), `kept_item` (`KeptItemRequest`) and
+`import_dir` (`ImportRequest`).
+
+`previous` is a `Previous`, what held before, for the two hooks that compare: `changed` and
+`events`. Its `at` is when the plugin's last change check ran (`changed`), or when the refresh
+that last stored a snapshot began, the one `events` compares with (`events`; a refresh that
+failed stored nothing); `fingerprint` what its last check answered (`changed`), `snapshot` its snapshot
+before this refresh (`events`), and `graph` the graph then: None at the first change check
+since the dashboard started, as it's the one thing a restart can't rebuild.
 
 ## The pieces
 
@@ -147,13 +173,14 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     snapshot_model = LinearSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
 
-    def collect(self, req: CollectRequest[LinearConfig]) -> LinearSnapshot:
+    def collect(self, req: RefreshRequest[LinearConfig]) -> LinearSnapshot:
         return client.collect(req.ctx.config, req.ctx.email)
 
-    def store(self, req: StoreRequest[LinearConfig, LinearSnapshot]) -> None:
+    def store(self, req: Request[LinearConfig, LinearSnapshot]) -> None:
+        assert req.snapshot is not None  # what collect just fetched
         IssueRepository(req.ctx.db).replace(req.snapshot)
 
-    def load(self, req: LoadRequest[LinearConfig]) -> LinearSnapshot | None:
+    def load(self, req: ContextRequest[LinearConfig]) -> LinearSnapshot | None:
         return IssueRepository(req.ctx.db).load()
 ```
 
@@ -163,7 +190,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   keys and paths, `core` and `act_now` among them) nor a prefix of one of core's tables or
   indexes (`team` of `team_channels`). The registry checks this when it's imported.
 - Every hook gets `ctx`, the plugin's context: its section (`ctx.config`), `ctx.name`,
-  `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, its database (`ctx.db`) and key/value
+  `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, `ctx.due_horizon` (how far ahead a due
+  date starts to count, as `[act_now] due_warning_days` says), its database (`ctx.db`) and key/value
   state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
   and a logger named for it (`ctx.log`).
 - Something wrong that isn't a failed refresh (a lookup the token isn't allowed, two
@@ -187,9 +215,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   moved since the last check (a different fingerprint, any subject, or `everything`), so name
   a subject only when it moved again. It asks again as each collect of the plugin starts,
   so what moves while it runs is compared with what it read. The last fingerprint and when
-  it was taken are `req.fingerprint` and `req.checked_at`, for a check that needs them
-  (which repos moved, what was updated since); other plugins' entities it compares with
-  `req.previous_graph`, the graph its last check was given (None at the first since the
+  it was taken are `req.previous.fingerprint` and `req.previous.at`, for a check that needs
+  them (which repos moved, what was updated since); other plugins' entities it compares with
+  `req.previous.graph`, the graph its last check was given (None at the first since the
   server started). The subjects stay pending until a collect that started after they moved
   stores, so one that fails loses none: `collect` gets them as `req.subjects`, with
   `req.full` saying whether to fetch everything anyway (its first collect since the server
@@ -216,9 +244,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   plugins it reads; to refresh soon after they change, it `watches` them.
 - `notification_kinds` and `events(req)` make browser notifications: when the user has
   subscribed to one of the kinds (`<plugin>.<kind>`), `events` is asked after every refresh,
-  of anything, with the plugin's snapshot before it and now (`req.before`, `req.after`, the
-  same when this refresh didn't fetch it) and the graph before it and now
-  (`req.previous_graph`, `req.graph`), and returns an `Event` for what became true: its
+  of anything, with the plugin's snapshot before it and now (`req.previous.snapshot`,
+  `req.snapshot`, the same when this refresh didn't fetch it, and neither None) and the graph
+  before it and now (`req.previous.graph`, `req.graph`), and returns an `Event` for what became true: its
   `thing` (the plugin's events with the same one are told together; core keeps it as
   `<plugin>:<thing>`, so another plugin's events about one URL stay apart), `title`, `text`,
   and `anchor` (an item's `page.anchor(kind, id)`, to open the dashboard at it). Say it on a
@@ -277,7 +305,7 @@ class LinearPlugin(...):
         ISSUE: KindSpec(IssueAttrs, linking=True, fetchable=True, resolvable=True)
     }
 
-    def entities(self, req: EntitiesRequest[LinearConfig, LinearSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Entity]:
         snapshot = req.snapshot
         return [
             Entity(
@@ -374,7 +402,7 @@ quietly showing less. [graph.md](graph.md#through-a-view) shows one, and
 ## Panels
 
 ```python
-def panels(self, req: PanelsRequest[LinearConfig, LinearSnapshot]) -> list[Panel]:
+def panels(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Panel]:
     snapshot, graph = req.snapshot, req.graph
     return [
         Panel(
@@ -435,7 +463,7 @@ lose its tags from the choices once a tag is selected. Map your tool's own idea 
 importance (a priority, an escalation) onto `importance`, in the plugin. An item whose main
 subject is a unit of work (a linking kind, like a ticket) joins the best item about
 something in that unit, so give such items a `verb` that reads well after another's.
-A plugin that nominates by due date passes `req.due_horizon` to `due_pressure`, so it agrees
+A plugin that nominates by due date passes `ctx.due_horizon` to `due_pressure`, so it agrees
 with `[act_now] due_warning_days`.
 Set `Item.fingerprint` to what would make a snoozed item worth another look.
 An item with a `task` also has Snooze in its own panel; what's snoozed
@@ -449,13 +477,13 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 
 ## Buttons, pages and commands
 
-- **Actions.** `actions()` maps names to handlers `(req: ActionRequest) -> str |
+- **Actions.** `actions()` maps names to handlers `(req: InputRequest) -> str |
   ActionResult`; a button posts to `/actions/<plugin>/<name>`, which is its `Action.name`.
   Core leaves out (and logs) a button whose name no enabled plugin's `actions()` has, so a
   typo can't post to a 404. An action that keeps its item on the focus page returns
   `ActionResult(notice, req.ctx.kept(key))`, and `kept_item` gets `key` back.
-  `req.fields` are its form
-  fields, `req.surface` where the button was (`dashboard` or `focus`). A button with an
+  `req.form` is the form posted: `req.form.fields` its
+  fields, `req.form.surface` where the button was (`dashboard` or `focus`). A button with an
   `input` has a text field, posted as `input`; `suggestions` lists what it offers to pick
   from, and `choices` adds a drop-down beside it (label to value), posted as `choice`. Check every field: they
   come from a form, so treat them as untrusted (a repo must be configured, a worktree must
@@ -482,14 +510,14 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   instead. github fetches the PRs in one request.
 - **Keeping an item on the focus page** after an action changes it: return
   `ActionResult(notice, req.ctx.kept(key))` and implement `kept_item`.
-- **Pages.** `pages()` maps keys to handlers `(req: PageRequest) -> str | Response | None`
-  (with `req.query` and `req.path`); core serves each at `/<plugin>/<key>`, and `""` at
+- **Pages.** `pages()` maps keys to handlers `(req: InputRequest) -> str | Response | None`
+  (with `req.page.query` and `req.page.path`); core serves each at `/<plugin>/<key>`, and `""` at
   `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML (use
   `api.html.page` and `api.html.e` to escape everything), or a `Response`, e.g.
   `Response.redirect(url)`. Every page needs the
   dashboard's token, as every request does.
 - **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
-  a handler `(req: CliRequest) -> int` that gets the parsed `req.args`.
+  a handler `(req: InputRequest) -> int` that gets the parsed `req.args`.
 - **Importing.** `import_dir(req)` reads what the plugin recognises in `req.dir` for `mfd
   import <dir>` into its tables, and returns what it read, one line each (none when it
   recognises nothing there). What it won't overwrite without `req.replace` (`--replace`) it

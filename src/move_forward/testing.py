@@ -33,13 +33,10 @@ from .panels import Dashboard
 from .plugin import (
     API_VERSION,
     Changed,
-    CollectAfterRequest,
-    CollectRequest,
     Context,
-    EntitiesRequest,
-    PanelsRequest,
     Plugin,
-    PruneRequest,
+    RefreshRequest,
+    Request,
     Response,
     page_path,
 )
@@ -72,7 +69,7 @@ class _Seed(Plugin[BaseModel, BaseModel]):
     def __init__(self, name: str, entities: Sequence[Entity]):
         self.seeded = list(entities)
 
-    def entities(self, req: EntitiesRequest[BaseModel, BaseModel]) -> list[Entity]:
+    def entities(self, req: Request[BaseModel, BaseModel]) -> list[Entity]:
         return list(self.seeded)
 
 
@@ -154,10 +151,10 @@ class Harness:
                 self.db, registry.enabled(self.config, self.db, self.now)
             )
             me = self._enabled()
-            refresh.store_snapshot(me, snapshot)
+            refresh.store_snapshot(me, snapshot, before.graph)
             SnapshotRepository(self.db).save_fetched(self.plugin.name, self.now)
             self._events = refresh.events_of(
-                me, before.snapshots[self.name], me.snapshot(), before.graph, self.graph()
+                me, before.previous(self.name), me.snapshot(), self.graph()
             )
 
     def collect(self) -> BaseModel:
@@ -168,12 +165,11 @@ class Harness:
             me = self._enabled()
             graph = self.graph()
             taken = self._checks.take(me, graph)
+            req = RefreshRequest(me.ctx, graph, taken.full, taken.subjects)
             if self.plugin.collects_after_graph:
-                snapshot = self.plugin.collect_after(
-                    CollectAfterRequest(me.ctx, graph, taken.full, taken.subjects)
-                )
+                snapshot = self.plugin.collect_after(req)
             else:
-                snapshot = self.plugin.collect(CollectRequest(me.ctx, taken.full, taken.subjects))
+                snapshot = self.plugin.collect(req)
         self.store(snapshot)
         with self._installed():
             self._checks.stored(self._enabled(), taken)
@@ -226,7 +222,7 @@ class Harness:
 
     def panels(self) -> list[Panel]:
         """The plugin's panels, as its `panels` makes them (before core adds buttons)."""
-        return self.plugin.panels(PanelsRequest(self.ctx, self.snapshot(), self.graph()))
+        return self.plugin.panels(Request(self.ctx, self.graph(), self.snapshot()))
 
     def dashboard(self, surface: Surface = "dashboard") -> Dashboard:
         """The page core builds: Act now, the panels with every plugin's buttons, hidden
@@ -265,7 +261,7 @@ class Harness:
 
     def prune(self) -> list[str]:
         """Run the plugin's daily prune now; what it says it did."""
-        return self.plugin.prune(PruneRequest(self.ctx, self.graph()))
+        return self.plugin.prune(Request(self.ctx, self.graph(), self.snapshot()))
 
     # Helpers
 

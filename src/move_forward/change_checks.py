@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import cast
 
 from .graph import Graph
-from .plugin import Changed, ChangedRequest
+from .plugin import Changed, Previous, RefreshRequest
 from .registry import Enabled
 from .repositories import ChangeRepository
 
@@ -36,9 +36,9 @@ class Taken:
     """What a collect is given, as it starts (`ChangeChecks.take`)."""
 
     full: bool
-    """Whether to fetch everything (`CollectRequest.full`)."""
+    """Whether to fetch everything (`RefreshRequest.full`)."""
     subjects: frozenset[str]
-    """What moved since a collect last stored (`CollectRequest.subjects`)."""
+    """What moved since a collect last stored (`RefreshRequest.subjects`)."""
     at: datetime
     """When the collect started: the last full collect's time, once a full one stores."""
     seen: int
@@ -48,7 +48,7 @@ class Taken:
 
 class ChangeChecks:
     """The plugins' change checks, kept in core's tables, the graph each check was given, kept
-    here for the next (`ChangedRequest.previous_graph`), and the plugins that had a full
+    here for the next (`Previous.graph`), and the plugins that had a full
     collect since this started: one per server, or per `mfd refresh`. A plugin may be checked
     while it collects (a collect past its timeout, or a check that started just before): what
     a check keeps then stays pending, as the collect settles only what was taken before it
@@ -69,8 +69,12 @@ class ChangeChecks:
         repo = ChangeRepository(e.ctx.db)
         held = repo.get(e.name)
         answer = e.plugin.changed(
-            ChangedRequest(
-                e.ctx, graph, self._graphs.get(e.name), held.fingerprint, held.checked_at
+            RefreshRequest(
+                e.ctx,
+                graph,
+                previous=Previous(
+                    held.checked_at, held.fingerprint, graph=self._graphs.get(e.name)
+                ),
             )
         )
         if not isinstance(cast(object, answer), Changed):  # a plugin needn't be type-checked

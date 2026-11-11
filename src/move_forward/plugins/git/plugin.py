@@ -11,24 +11,20 @@ from ...api import (
     ActionHandler,
     Asker,
     Changed,
-    ChangedRequest,
-    CollectRequest,
     Context,
-    EntitiesRequest,
+    ContextRequest,
     Entity,
     InitSetup,
-    ItemActionsRequest,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
     KindSpec,
-    LoadRequest,
     Migration,
     Panel,
-    PanelsRequest,
     Plugin,
     Ref,
-    StoreRequest,
+    RefreshRequest,
+    Request,
     attrs,
 )
 from ...api.shell import CommandError, git_common_dir
@@ -93,14 +89,14 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     def init_questions(self, ask: Asker, setup: InitSetup) -> dict[str, object]:
         return questions(ask, setup)
 
-    def collect(self, req: CollectRequest[GitConfig]) -> LocalSnapshot:
+    def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         """Every repo; or, after `changed` saw only some move (`req.subjects`, by common git
         directory), just those, keeping the rest as stored, unless core asks for a full
         collect (`refresh_seconds` since the last, so frequent changes can't put it off). What
         was read before stands in for a repo git can't read now. Repos that are each a clone of
         one GitHub repo are a problem (`CLONES`) until only one is left."""
         ctx = req.ctx
-        previous = self.load(LoadRequest(ctx))
+        previous = self.load(ContextRequest(ctx))
         partial = not req.full and previous is not None
         found = client.collect(
             ctx.config.repos,
@@ -126,11 +122,12 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         ctx.problem(CLONES, "; ".join(clones) or None)
         return found
 
-    def store(self, req: StoreRequest[GitConfig, LocalSnapshot]) -> None:
+    def store(self, req: Request[GitConfig, LocalSnapshot]) -> None:
         """Keep the snapshot, and watch the worktrees it found (once `changed` has started
         watching: only the server asks it). The last looks at uncommitted edits are forgotten:
         what's stored is now newer, and edits back as a look saw them may differ from it."""
         ctx, snapshot = req.ctx, req.snapshot
+        assert snapshot is not None
         LocalRepository(ctx.db).replace(snapshot)
         self._statuses.clear()
         if self._watcher is not None:
@@ -146,7 +143,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 ctx.log.warning("can't watch the repos, so polling them: %s", e)
                 self._watching = False
                 return None
-            if snapshot := self.load(LoadRequest(ctx)):
+            if snapshot := self.load(ContextRequest(ctx)):
                 self._watch(snapshot)
         return self._watcher
 
@@ -167,12 +164,12 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 worktrees[Path(wt.path).resolve()] = common.resolve()
         self._watcher.sync(worktrees)
 
-    def changed(self, req: ChangedRequest[GitConfig]) -> Changed:
+    def changed(self, req: RefreshRequest[GitConfig]) -> Changed:
         """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a
         worktree's uncommitted edits changed. Watched repos say so as it happens (see
         `watch`); the rest are polled, their refs by their files' times (see `changes`) and
         their edits every `status_seconds` by `git status`. The polled repos' refs are the
-        fingerprint, by repo, which core keeps and gives back (`req.fingerprint`) to tell which
+        fingerprint, by repo, which core keeps and gives back (`req.previous.fingerprint`) to tell which
         moved; the repos that moved are the answer's subjects, which core keeps for `collect`,
         to read just those, and a repo found or gone asks for every repo."""
         ctx = req.ctx
@@ -183,7 +180,8 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         )
         moved = {self._ids[c] for c in moved_now if c in self._ids}
 
-        before = None if req.fingerprint is None else _FINGERPRINTS.validate_json(req.fingerprint)
+        fingerprint = req.previous.fingerprint
+        before = None if fingerprint is None else _FINGERPRINTS.validate_json(fingerprint)
         polled = [repo for repo in ctx.config.repos if str(git_common_dir(repo)) not in watched]
         now = changes.fingerprints(polled)
         now.update({k: v for k, v in (before or {}).items() if k in watched})
@@ -214,7 +212,7 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         if not poll and not edited:
             return set()
         found: set[str] = set()
-        for repo in snapshot.repos if (snapshot := self.load(LoadRequest(ctx))) else []:
+        for repo in snapshot.repos if (snapshot := self.load(ContextRequest(ctx))) else []:
             for wt in repo.worktrees:
                 path = Path(wt.path)
                 resolved = path.resolve()
@@ -230,11 +228,11 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                     found.add(str(git_common_dir(Path(repo.dir))))
         return found
 
-    def load(self, req: LoadRequest[GitConfig]) -> LocalSnapshot | None:
+    def load(self, req: ContextRequest[GitConfig]) -> LocalSnapshot | None:
         ctx = req.ctx
         return LocalRepository(ctx.db).load()
 
-    def entities(self, req: EntitiesRequest[GitConfig, LocalSnapshot]) -> list[Entity]:
+    def entities(self, req: Request[GitConfig, LocalSnapshot]) -> list[Entity]:
         """A `repo` per GitHub repo checked out (the first checkout of it, when two clones are,
         which `collect` warns of), and a `branch` per local branch."""
         snapshot = req.snapshot
@@ -284,11 +282,11 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
                 )
         return entities
 
-    def panels(self, req: PanelsRequest[GitConfig, LocalSnapshot]) -> list[Panel]:
+    def panels(self, req: Request[GitConfig, LocalSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         return Builder(ctx.config, ctx.now, snapshot, graph).panels()
 
-    def item_actions(self, req: ItemActionsRequest[GitConfig]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[GitConfig, LocalSnapshot]) -> ItemAdditionsFor:
         """Delete or restore the branches an On ice item put on ice."""
         graph = req.graph
 
