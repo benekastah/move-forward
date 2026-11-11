@@ -198,7 +198,7 @@ class Dashboard(Model):
 
     def kept(
         self, category: str, key: str, remembered: tuple[str, Item] | None = None
-    ) -> "int | Kept | None":
+    ) -> int | Kept | None:
         """Where focus mode finds again the item a page of the category showed (`key`, its
         `focus_key`), once a button there was pressed: its index, while it's still a step there,
         wherever the button moved it. Once it has left the category (a todo ticked off, an item

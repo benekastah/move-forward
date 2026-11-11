@@ -122,7 +122,7 @@ class Harness:
 
     # Setting up
 
-    def with_entities(self, entities: Sequence[Entity]) -> "Harness":
+    def with_entities(self, entities: Sequence[Entity]) -> Harness:
         """Place other plugins' entities in the graph: a family's (a `pull_request`, a
         `ticket`) as some plugin would publish them, or another plugin's own kind
         (`git.branch`) as that plugin. Returns the harness, to chain."""

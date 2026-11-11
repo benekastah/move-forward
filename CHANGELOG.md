@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Python 3.14 is required
+
+move-forward now needs Python 3.14 or newer (and pydantic 2.14.3 or newer). Install Python
+3.14, then reinstall mfd with it: `python3.14 dev.py install` (on Windows, `py -3.14 dev.py
+install`), after removing `.venv` if it was made with an older Python.
+
 ### A focus page's `kept` names the item it shows
 
 A focus page's address carries `kept`, naming the item it shows: its anchor (`item-…`, as on

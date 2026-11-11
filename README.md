@@ -14,7 +14,7 @@ All state lives in one SQLite database.
 
 ## Setup
 
-Requires Python 3.12+, `gh` logged in, and git. `git stack` is optional (for
+Requires Python 3.14+, `gh` logged in, and git. `git stack` is optional (for
 the `git_stack` plugin).
 
 ```sh

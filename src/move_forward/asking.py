@@ -102,7 +102,7 @@ def quiet(args: list[str], cwd: Path | None = None) -> str:
     """A command's output, or "" when it fails or isn't installed: for guesses."""
     try:
         return run(args, cwd=cwd).strip()
-    except (CommandError, FileNotFoundError):
+    except CommandError, FileNotFoundError:
         return ""
 
 

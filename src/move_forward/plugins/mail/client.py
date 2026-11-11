@@ -204,7 +204,7 @@ def _recipients(headers: EmailMessage) -> set[str]:
     for name in ("To", "Cc"):
         try:
             raw = getaddresses([str(headers.get(name) or "")])
-        except (ValueError, IndexError, TypeError):
+        except ValueError, IndexError, TypeError:
             continue
         found.update(a for _, text in raw if (a := _address(text)))
     return found
@@ -271,7 +271,7 @@ def _referenced(raw: bytes) -> set[str]:
         if parent := _message_ids(str(headers.get("In-Reply-To") or "")):
             return set(parent)
         return set(_message_ids(str(headers.get("References") or ""))[-1:])
-    except (ValueError, IndexError, TypeError):  # a malformed header
+    except ValueError, IndexError, TypeError:  # a malformed header
         return set()
 
 
@@ -316,7 +316,7 @@ def _utf7(name: str) -> str:
         encoded = match[1].replace(",", "/")
         try:
             return base64.b64decode(encoded + "=" * (-len(encoded) % 4)).decode("utf-16-be")
-        except (ValueError, UnicodeDecodeError):
+        except ValueError, UnicodeDecodeError:
             return match[0]
 
     return re.sub(r"&([A-Za-z0-9+,]*)-", shifted, name)
@@ -344,7 +344,7 @@ def _received(meta: bytes) -> datetime | None:
             int(hour), int(minute), int(second), tzinfo=UTC,
         )  # fmt: skip
         return local - offset
-    except (ValueError, OverflowError):
+    except ValueError, OverflowError:
         return None
 
 
@@ -353,7 +353,7 @@ def _sent(date: str) -> datetime | None:
     try:
         sent = parsedate_to_datetime(date)
         return sent.astimezone(UTC) if sent.tzinfo else sent.replace(tzinfo=UTC)
-    except (TypeError, ValueError, OverflowError):
+    except TypeError, ValueError, OverflowError:
         return None
 
 
@@ -444,7 +444,7 @@ def message(
     def header(name: str) -> str:
         try:
             return str(headers.get(name) or "")
-        except (ValueError, IndexError, TypeError):  # a malformed header
+        except ValueError, IndexError, TypeError:  # a malformed header
             return ""
 
     [(name, address), *_] = getaddresses([header("From")]) or [("", "")]

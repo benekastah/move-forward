@@ -114,7 +114,7 @@ class Config(Strict):
             raise TypeError(f"[{name}] is a {type(found).__name__}, not a {model.__name__}")
         return found
 
-    def with_section(self, name: str, section: BaseModel) -> "Config":
+    def with_section(self, name: str, section: BaseModel) -> Config:
         """This config with the plugin's section set (or replaced)."""
         return self.model_copy(update={"sections": {**self.sections, name: section}})
 
@@ -196,7 +196,7 @@ class Config(Strict):
         return settings
 
     @model_validator(mode="after")
-    def _known_teams(self) -> "Config":
+    def _known_teams(self) -> Config:
         """Every plugin section's teams table (`Plugin.teams_field`) names only top-level
         teams."""
         for plugin in registry.PLUGINS:
@@ -215,7 +215,7 @@ class Config(Strict):
         return self
 
     @model_validator(mode="after")
-    def _known_notifications(self) -> "Config":
+    def _known_notifications(self) -> Config:
         """`[notifications] subscribe` names only kinds that exist; one in `GONE_NOTIFICATIONS`
         says it's gone, and why, not that it's misspelled."""
         known = registry.notification_kinds()
@@ -234,14 +234,14 @@ class Config(Strict):
         return self
 
     @model_validator(mode="after")
-    def _requirements(self) -> "Config":
+    def _requirements(self) -> Config:
         unmet = registry.unmet_requirements(self)
         if unmet:
             raise ValueError("; ".join(unmet))
         return self
 
     @model_validator(mode="after")
-    def _token_services(self) -> "Config":
+    def _token_services(self) -> Config:
         """No two tokens (two plugins', or two of one plugin's accounts) are kept in one place,
         where storing one (`mfd token set`, Slack's Connect) would replace the other's."""
         if shared := registry.shared_token_services(self):

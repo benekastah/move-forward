@@ -61,7 +61,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - run: python dev.py static
 
   # The tests, on every system, in parallel on each.
@@ -79,7 +79,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - run: python dev.py tests
 
   # The one check the ruleset on main requires, so changing the jobs doesn't change what's

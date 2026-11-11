@@ -78,7 +78,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     kinds: ClassVar[dict[str, KindSpec]] = {ISSUE: KindSpec(IssueAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = {"to_triage": "an issue is to triage"}
 
-    def snapshots(self, req: ContextRequest[LinearConfig]) -> "_Issues":
+    def snapshots(self, req: ContextRequest[LinearConfig]) -> _Issues:
         return _Issues(req.ctx.kv)
 
     def entities(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Entity]:

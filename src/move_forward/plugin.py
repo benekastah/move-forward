@@ -309,7 +309,7 @@ class Response:
     headers: dict[str, str] = field(default_factory=dict[str, str])
 
     @classmethod
-    def redirect(cls, url: str) -> "Response":
+    def redirect(cls, url: str) -> Response:
         """Send the browser to `url` (303 See Other)."""
         return cls(status=303, headers={"Location": url})
 
@@ -498,7 +498,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         can't be stopped)."""
         raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
 
-    def snapshots(self, req: ContextRequest[C]) -> "Snapshots[S]":
+    def snapshots(self, req: ContextRequest[C]) -> Snapshots[S]:
         """Where the plugin keeps what `collect` fetched, in its own tables: usually its
         repository over them (see `Snapshots`). By default nothing is kept, for a plugin with
         no snapshot model."""

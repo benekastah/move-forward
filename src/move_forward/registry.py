@@ -262,7 +262,7 @@ class Enabled:
         with self.ctx.db.reading():  # all of one refresh's, never half of the next's
             return call(self.name, "snapshots.load", lambda: self.kept().load(), None)
 
-    def kept(self) -> "Snapshots[Any]":
+    def kept(self) -> Snapshots[Any]:
         """Where the plugin keeps its snapshot (`Plugin.snapshots`)."""
         return self.plugin.snapshots(ContextRequest(self.ctx))
 
@@ -285,12 +285,12 @@ def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:
         return default
 
 
-def enabled_names(config: "Config") -> list[str]:
+def enabled_names(config: Config) -> list[str]:
     """The plugins the config enables, in page order, without touching the database."""
     return [p.name for p in PLUGINS if config.section(p.name) is not None]
 
 
-def unmet_requirements(config: "Config") -> list[str]:
+def unmet_requirements(config: Config) -> list[str]:
     """What the enabled plugins need that the config doesn't enable, e.g. "[git_stack] needs
     [git]"."""
     names = enabled_names(config)
@@ -303,7 +303,7 @@ def unmet_requirements(config: "Config") -> list[str]:
     ]
 
 
-def tokens(config: "Config") -> dict[str, TokenSettings]:
+def tokens(config: Config) -> dict[str, TokenSettings]:
     """Where each enabled plugin keeps each of its tokens (`Plugin.tokens`), by the name
     `mfd token set` takes: the plugin's, or `<plugin>.<account>` for one of several."""
     found: dict[str, TokenSettings] = {}
@@ -315,7 +315,7 @@ def tokens(config: "Config") -> dict[str, TokenSettings]:
     return found
 
 
-def shared_token_services(config: "Config") -> list[str]:
+def shared_token_services(config: Config) -> list[str]:
     """The keychain services more than one token is kept under (as `tokens` says), each with
     whose, e.g. "jira ('Shared') and slack ('shared') keep their tokens in one place": storing
     one token would replace the other's. Case doesn't count, on every system, as Windows'
@@ -332,7 +332,7 @@ def shared_token_services(config: "Config") -> list[str]:
     ]
 
 
-def notification_kinds(config: "Config | None" = None) -> dict[str, str]:
+def notification_kinds(config: Config | None = None) -> dict[str, str]:
     """Every kind of event I can subscribe to, with what it says: the dashboard's, and those
     of the plugins `config` enables (every plugin's without one)."""
     names = None if config is None else set(enabled_names(config))
@@ -348,7 +348,7 @@ def notification_kinds_of(plugin_names: list[str]) -> dict[str, str]:
     )
 
 
-def migrate(config: "Config", db: Database) -> None:
+def migrate(config: Config, db: Database) -> None:
     """Apply the enabled plugins' migrations. Once, when `mfd` opens the database."""
     owners = [p.name for p in PLUGINS]
     for plugin in PLUGINS:
@@ -356,7 +356,7 @@ def migrate(config: "Config", db: Database) -> None:
             db.migrate(plugin.name, plugin.migrations, owners)
 
 
-def enabled(config: "Config", db: Database, now: datetime) -> list[Enabled]:
+def enabled(config: Config, db: Database, now: datetime) -> list[Enabled]:
     """The plugins with a config section, with their contexts. Their tables are there once
     `migrate` has run."""
     result: list[Enabled] = []
