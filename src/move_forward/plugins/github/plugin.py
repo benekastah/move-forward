@@ -329,8 +329,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     def after_collect(self, req: Request[GitHubConfig, GitHubSnapshot]) -> None:
         """Look up reviewers' emails, then score team PRs and suggest reviewers from the
         local checkouts the graph's `git.repo` entities describe."""
-        ctx, graph = req.ctx, req.graph
-        gh = self.load(ContextRequest(ctx))
+        ctx, graph, gh = req.ctx, req.graph, req.snapshot
         if gh is None:
             return
         self._lookup_emails(ctx, gh)

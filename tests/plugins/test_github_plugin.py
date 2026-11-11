@@ -449,8 +449,7 @@ def test_after_collect_suggests_reviewers_only_where_one_may_be_picked(
 
     monkeypatch.setattr(derive, "collect", collect)
     ctx = _context()
-    PrRepository(ctx.db).replace(snapshot(mine=[pr(1)]))
-    GitHubPlugin().after_collect(Request(ctx, Graph(), None))
+    GitHubPlugin().after_collect(Request(ctx, Graph(), snapshot(mine=[pr(1)])))
     assert picked == [1]
 
 
@@ -471,17 +470,15 @@ def test_reviewers_whose_email_lookup_fails_are_one_problem_until_none_does(
 
     monkeypatch.setattr(derive, "collect", derived)
     ctx = _context()
-    PrRepository(ctx.db).replace(
-        snapshot(mine=[pr(1, requested_users=["alice", "bob"]), pr(2, requested_users=["carol"])])
-    )
+    gh = snapshot(mine=[pr(1, requested_users=["alice", "bob"]), pr(2, requested_users=["carol"])])
     for _ in range(2):  # tried again each refresh, but said once
-        GitHubPlugin().after_collect(Request(ctx, Graph(), None))
+        GitHubPlugin().after_collect(Request(ctx, Graph(), gh))
     said = "looking up the commit emails of bob, carol failed: no commits for bob"
     assert ProblemRepository(ctx.db).of([""]) == {"": [said]}
     assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
     assert PeopleRepository(ctx.db).emails() == {"alice": "alice@acme.com"}
     failing.clear()
-    GitHubPlugin().after_collect(Request(ctx, Graph(), None))
+    GitHubPlugin().after_collect(Request(ctx, Graph(), gh))
     assert ProblemRepository(ctx.db).of([""]) == {}
 
 

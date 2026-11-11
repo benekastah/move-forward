@@ -11,9 +11,9 @@ this page explains them as they apply to a plugin.
 
 ## Requests
 
-Every hook takes one argument, a request object, whose fields are the hook's inputs. There are
-five kinds, all in `move_forward.api`, and core can give one a new field without changing any
-hook's signature:
+Every hook takes one argument, a request object, whose fields are the hook's inputs, so core
+can give one a new field without changing any hook's signature. Most hooks take one of five
+kinds, all in `move_forward.api`:
 
 | Request | Fields | Hooks |
 | --- | --- | --- |
@@ -28,11 +28,16 @@ which the graph is built from), and `snapshot` what the plugin last stored (None
 first refresh; for `store`, what `collect` just fetched). A field a hook doesn't get is left at
 its default; each field's docstring names the hooks that get it.
 
+Five hooks keep a request of their own: `url_for` (`UrlRequest`), `handle_for`
+(`HandleRequest`), `refresh_subjects` (`SubjectsRequest`), `kept_item` (`KeptItemRequest`) and
+`import_dir` (`ImportRequest`).
+
 `previous` is a `Previous`, what held before, for the two hooks that compare: `changed` and
-`events`. Its `at` is when the plugin's last change check (`changed`) or refresh (`events`)
-ran, `fingerprint` what its last check answered (`changed`), `snapshot` its snapshot before
-this refresh (`events`), and `graph` the graph then: None at the first change check since the
-dashboard started, as it's the one thing a restart can't rebuild.
+`events`. Its `at` is when the plugin's last change check ran (`changed`), or when it last
+stored a snapshot, the one `events` compares with (`events`; a refresh that failed stored
+nothing); `fingerprint` what its last check answered (`changed`), `snapshot` its snapshot
+before this refresh (`events`), and `graph` the graph then: None at the first change check
+since the dashboard started, as it's the one thing a restart can't rebuild.
 
 ## The pieces
 

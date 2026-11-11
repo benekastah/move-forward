@@ -45,17 +45,20 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   plugins don't filter them out themselves.
 - A plugin keeps what `collect` fetched in its own tables, with `store`, and
   reads it back with `load`; nothing is kept as JSON. Core keeps only when each
-  plugin last fetched, and why it failed; what its change checks last saw and said moved,
+  plugin last fetched, and why it failed, and when it last stored; what its change checks last saw and said moved,
   until a collect started after stores (`change_checks.py`); and what else a plugin reports wrong with
   `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its state on
   the page and logged when it changes, rather than each plugin warning in its own way.
-- Every plugin hook that runs with the plugin's context takes one request object, of five
-  kinds, so a hook can gain an input without breaking its overrides: `ContextRequest(ctx)`
-  (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
+- Every plugin hook that runs with the plugin's context takes one request object, so a hook
+  can gain an input without breaking its overrides. Most take one of five kinds:
+  `ContextRequest(ctx)` (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
   `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`,
   `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `collect_after`,
   `changed`); `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx, graph)` with a
-  `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). `changed`
+  `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). Five keep a
+  request of their own: `url_for` (`UrlRequest`), `handle_for` (`HandleRequest`),
+  `refresh_subjects` (`SubjectsRequest`), `kept_item` (`KeptItemRequest`) and `import_dir`
+  (`ImportRequest`). `changed`
   and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
   the snapshot and the graph then). Those called before there's a context take what they need:
   `init_suggested()`, `init_questions(ask, setup)` and `init_shown(section)` (`mfd init`),
