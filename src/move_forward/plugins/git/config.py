@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import Field, field_validator
 
-from ...api import Strict, locked
+from ...api import LOCKED, Strict
 
 DEFAULT_REFRESH_SECONDS = 1800
 DEFAULT_STATUS_SECONDS = 30
@@ -25,11 +25,11 @@ class GitConfig(Strict):
     `refresh_seconds`."""
 
     # Locked: where it runs git.
-    repos: Annotated[list[Path], locked()]
+    repos: Annotated[list[Path], LOCKED]
     """Main checkouts of the repos I work in, one per repo. Their other worktrees are found
     from them with `git worktree list`, so those aren't listed."""
     # Locked: which remotes it takes for GitHub's, whose PRs it links.
-    github_hosts: Annotated[list[str], locked()] = Field(default_factory=lambda: ["github.com"])
+    github_hosts: Annotated[list[str], LOCKED] = Field(default_factory=lambda: ["github.com"])
     """Hosts whose remotes are GitHub repos, as remote URLs name them: github.com, a GitHub
     Enterprise Server's host, or an alias for either in ~/.ssh/config (`github-work` in
     `git@github-work:acme/widgets.git`)."""

@@ -6,7 +6,7 @@ from typing import Annotated, Any, ClassVar, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 
-from ...api import TABLES, Strict, locked
+from ...api import LOCKED, TABLES, Strict
 from ...api.keychain import TokenFields
 
 DEFAULT_REFRESH_SECONDS = 900
@@ -86,9 +86,9 @@ class MailboxKeys(Strict):
     """The keys that say one mailbox: `[mail]`'s own, or an account's, each complete."""
 
     # Locked, with `port`: where its passwords are sent.
-    host: Annotated[str, locked()] = ""
+    host: Annotated[str, LOCKED] = ""
     """The IMAP server, e.g. `imap.gmail.com`."""
-    port: Annotated[int, locked()] = Field(default=DEFAULT_PORT, ge=1, le=65535)
+    port: Annotated[int, LOCKED] = Field(default=DEFAULT_PORT, ge=1, le=65535)
     """Its port for IMAP over TLS (IMAPS)."""
     username: str = ""
     """Who to sign in as, usually my address; also my address for telling mail sent to me from
@@ -99,14 +99,14 @@ class MailboxKeys(Strict):
     """Where my sent mail is, to know which mail answers me; empty, the mailbox the server
     marks as sent (`[Gmail]/Sent Mail`, `Sent`). Only its Message-IDs and recipients are read."""
     # Locked: where its items link, with my username in the link.
-    message_url: Annotated[str, locked()] = ""
+    message_url: Annotated[str, LOCKED] = ""
     """A link to open a message, with `{message_id}` (its Message-ID, without `<>`) and
     `{username}` filled in: for Gmail,
     `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}`; for Apple
     Mail, `message:%3C{message_id}%3E`; for Thunderbird, `mid:{message_id}`; empty, mail
     isn't linked. An `https://` link, or one of those schemes."""
     # Locked: whose word decides a sender is who they claim.
-    auth_servers: Annotated[list[str] | None, locked()] = None
+    auth_servers: Annotated[list[str] | None, LOCKED] = None
     """The names my mail server stamps its `Authentication-Results` with: unset for Gmail
     (`mx.google.com`, known), else the name a received message's `Authentication-Results`
     header starts with (its authserv-id), e.g. `["mx.work.example"]`. A sender counts as who
@@ -182,8 +182,8 @@ class MailConfig(TokenFields, MailboxKeys):
     max_messages: int = Field(default=DEFAULT_MAX_MESSAGES, ge=1, le=2000)
     """The most unread messages read in each mailbox, newest first; flagged ones are read
     however many."""
-    accounts: dict[str, MailAccount] = Field(
-        default_factory=dict[str, MailAccount], json_schema_extra={TABLES: True}
+    accounts: Annotated[dict[str, MailAccount], TABLES] = Field(
+        default_factory=dict[str, MailAccount]
     )
     """The accounts, by name: each `[mail.<name>]` table. Not a key to write itself."""
 

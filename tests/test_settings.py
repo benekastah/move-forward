@@ -12,7 +12,7 @@ from move_forward import config as config_module
 from move_forward import registry, settings
 from move_forward.keychain import TokenSettings
 from move_forward.plugin import API_VERSION, Plugin
-from move_forward.strict import Strict, locked
+from move_forward.strict import LOCKED, Strict
 
 TEXT = """\
 # my config
@@ -247,7 +247,7 @@ def test_no_setting_the_page_changes_moves_a_plugins_token(plugin: Plugin[Any, A
 
 
 class _SiteConfig(Strict):
-    site: Annotated[str, locked()] = "https://x"
+    site: Annotated[str, LOCKED] = "https://x"
     token_env: str = "SITE_TOKEN"
     keychain_service: str = "move-forward-site"
     page_size: int = 50
@@ -271,8 +271,8 @@ def test_a_plugin_of_its_own_says_which_settings_stay_in_the_file(
 
 
 class _ElsewhereConfig(Strict):
-    secret_env: Annotated[str, locked()] = "ELSEWHERE_TOKEN"
-    secret_service: Annotated[str, locked()] = "move-forward-elsewhere"
+    secret_env: Annotated[str, LOCKED] = "ELSEWHERE_TOKEN"
+    secret_service: Annotated[str, LOCKED] = "move-forward-elsewhere"
     page_size: int = 50
 
 
@@ -327,3 +327,11 @@ def test_each_built_in_locks_exactly_its_settings() -> None:
     for name, plugin in builtins.items():
         section = plugin.config_model.model_validate(plugin.init.example.values)
         assert settings.locked_keys(plugin, section) == LOCKED_BY_PLUGIN[name], name
+
+
+def test_a_marker_given_as_a_default_is_refused() -> None:
+    """`host: str = LOCKED` would mark nothing, and leave the host editable."""
+    with pytest.raises(TypeError, match="host has a marker as its default"):
+
+        class _Misplaced(Strict):  # pyright: ignore[reportUnusedClass]
+            host: str = LOCKED  # pyright: ignore[reportAssignmentType]

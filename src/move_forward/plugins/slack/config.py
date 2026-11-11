@@ -5,7 +5,7 @@ from typing import Annotated, ClassVar, cast
 
 from pydantic import Field, field_validator, model_validator
 
-from ...api import locked
+from ...api import LOCKED
 from ...api.keychain import TokenFields
 
 DEFAULT_PING_FIRST = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
@@ -35,7 +35,7 @@ class SlackConfig(TokenFields):
     `token_env` isn't set; its account is the top-level `email`. `move-forward-slack` unless
     set."""
     # Locked: the workspace its links go to.
-    workspace_url: Annotated[str, locked()] = ""
+    workspace_url: Annotated[str, LOCKED] = ""
     """Base URL for Slack links, e.g. https://example.slack.com. Empty means no links."""
     ping_first: str = DEFAULT_PING_FIRST
     """The first review reminder; `{url}` is the PR, and a brace of its own is written `{{` or

@@ -11,7 +11,7 @@ kinds a form can hold (numbers, true or false, text, lists); tables such as
 `[github.teams]` stay for editing by hand. `db_path` and `port` are shown but not changed
 here: changing them moves the server. Nor are the settings that choose where a
 credential is sent or which one is read, where items link, whom mail trusts, or what runs
-where (see `SECRET_LOCKED`, a plugin's fields marked `locked()`, and its token's `token_env`
+where (see `SECRET_LOCKED`, a plugin's fields marked `LOCKED`, and its token's `token_env`
 and `keychain_service`): the page is reached with the dashboard's cookie, and a page that
 could point the Jira site, say, at another server could send it the API token.
 """
@@ -37,7 +37,7 @@ LOCKED = {"db_path", "port"}
 """Top-level settings shown but not changed here: changing them moves the server."""
 SECRET_LOCKED = {"email"}
 """Top-level settings only the file changes: the account every token is keyed by. A plugin
-marks its own `locked()` on its config model: where a credential goes (a host, a site, a client
+marks its own `LOCKED` on its config model: where a credential goes (a host, a site, a client
 id), where items link with my login in the link (mail's `message_url`), whose word decides a
 sender is who they claim (mail's `auth_servers`, though a form can't hold it yet), and which
 checkouts `git` runs commands in; where its token comes from is locked whatever it names
@@ -117,21 +117,24 @@ def _kind(annotation: object) -> Kind | None:
 
 
 def _fields(
-    model: BaseModel, section: str | None, skip: set[str], locked_keys: frozenset[str] = frozenset()
+    model: BaseModel,
+    section: str | None,
+    skip: set[str],
+    plugin_locked: frozenset[str] = frozenset(),
 ) -> list[Setting]:
     found: list[Setting] = []
     for key, field in type(model).model_fields.items():
         if key in skip or (kind := _kind(field.annotation)) is None:
             continue
         help = " ".join((field.description or "").split())
-        locked = (section is None and key in LOCKED | SECRET_LOCKED) or key in locked_keys
+        locked = (section is None and key in LOCKED | SECRET_LOCKED) or key in plugin_locked
         default = field.get_default(call_default_factory=True)
         found.append(Setting(section, key, kind, getattr(model, key), help, locked, default))
     return found
 
 
 def locked_keys(plugin: Plugin[Any, Any], section: BaseModel) -> frozenset[str]:
-    """A plugin section's keys only the file changes: those its model marks `locked()`, and
+    """A plugin section's keys only the file changes: those its model marks `LOCKED`, and
     `token_env` and `keychain_service` when it keeps a token. A plugin keeping its token's
     settings under other names, or building them from other keys, marks those."""
     fields = type(section).model_fields.items()

@@ -24,7 +24,7 @@ from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.mail import setup as mail_setup
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.shell import git
-from move_forward.strict import TABLES, Strict, locked, marked
+from move_forward.strict import LOCKED, TABLES, Strict, marked
 
 
 def scripted(answers: dict[str, str | list[str]]) -> asking.Prompt:
@@ -529,17 +529,20 @@ class _Odd(BaseModel):
 
 
 class _LockedTables(Strict):
-    """A table of tables by name that's locked too: both markers, in one `json_schema_extra`."""
+    """A table of tables by name that's locked too: both markers, with a `Field` as well."""
 
-    accounts: Annotated[dict[str, int], locked()] = Field(
-        default_factory=dict[str, int], json_schema_extra={TABLES: True}
+    accounts: Annotated[dict[str, int], LOCKED, TABLES] = Field(
+        default_factory=dict[str, int], max_length=9
     )
     """Accounts."""
-    port: Annotated[int, locked()] = 993
+    port: Annotated[int, LOCKED] = 993
     """A port."""
 
 
 def test_a_table_of_tables_is_left_out_whatever_else_marks_it() -> None:
+    accounts = _LockedTables.model_fields["accounts"]
+    assert marked(accounts, LOCKED) and marked(accounts, TABLES)  # both kept, with the Field's
+    assert not marked(_LockedTables.model_fields["port"], TABLES)
     assert init.commented_defaults(_LockedTables) == "\n# A port.\n# port = 993\n"
 
 

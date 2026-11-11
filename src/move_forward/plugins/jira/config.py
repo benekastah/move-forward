@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 
-from ...api import locked
+from ...api import LOCKED
 from ...api.keychain import TokenFields
 
 DEFAULT_REFRESH_SECONDS = 900
@@ -35,7 +35,7 @@ class JiraConfig(TokenFields):
     """How often the dashboard refreshes this plugin's data in the background (tickets change slowly)."""
 
     # Locked: its token is sent there.
-    site: Annotated[str, locked()]
+    site: Annotated[str, LOCKED]
     """e.g. https://example.atlassian.net. Must be `https://`: requests carry the API token."""
     status_in_progress: list[str] = Field(default_factory=lambda: [DEFAULT_STATUS_IN_PROGRESS])
     """Workflow status names for "in progress", e.g. `["In Progress", "Doing"]`, for the
