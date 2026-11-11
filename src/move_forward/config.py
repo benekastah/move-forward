@@ -165,8 +165,9 @@ class Config(Strict):
         moved = _moved_settings(settings)
         if "notes_dir" in settings:
             moved.append(
-                "`notes_dir` is gone; the notes live in the database now: import them once with"
-                " `mfd import <dir>`"
+                "`notes_dir` is gone; the notes live in the database, and this version reads no"
+                " markdown: delete the line (to bring markdown notes in, make them `mfd notes`"
+                " calls, or run `mfd import <dir>` with an earlier version first)"
             )
         if "https" in settings:
             moved.append(

@@ -105,9 +105,9 @@ def test_the_plugin_says_changed_for_a_new_notification_in_its_org(
     assert asked[-1][-2:] == ["-H", f"If-Modified-Since: {FIRST}"]
     assert not changed(2)  # new, but not in the org
     assert changed(3)  # new in the org, whatever the case of its name
-    assert taken() == (False, {"ACME/widgets#8"})
+    assert taken() == (False, {"https://github.com/ACME/widgets/pull/8"})
     assert changed(5)  # a CI run names its repo, not its PR: my open PRs there
-    assert taken() == (False, {"acme/widgets#1"})
+    assert taken() == (False, {"https://github.com/acme/widgets/pull/1"})
     assert not changed(6)  # an issue: no PR search shows it
     assert changed(7)  # something new to us: everything
     assert taken() == (True, set())
@@ -138,7 +138,7 @@ def test_a_pr_still_pending_after_a_collect_that_failed_asks_again_when_it_moves
     assert changed(2)
     checks.take(Enabled(plugin, _context(db, 2)), None)  # a collect that then fails
     assert changed(3)
-    assert ChangeRepository(db).get("github").subjects == {"acme/widgets#7"}
+    assert ChangeRepository(db).get("github").subjects == {"https://github.com/acme/widgets/pull/7"}
 
 
 def test_a_failure_other_than_not_modified_is_raised(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -219,7 +219,9 @@ def test_searching_everywhere_hears_of_every_owners_prs(monkeypatch: pytest.Monk
 
     assert not changed(0)
     assert changed(2)
-    assert ChangeRepository(db).get("github").subjects == {"someone-else/widgets#7"}
+    assert ChangeRepository(db).get("github").subjects == {
+        "https://github.com/someone-else/widgets/pull/7"
+    }
 
 
 def test_a_token_that_cant_read_notifications_is_logged_once_a_run_not_a_problem(

@@ -1,10 +1,11 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+
+from conftest import entry, keep_notes, todo
 
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref
-from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes import prune as notes_prune
-from move_forward.plugins.notes.models import IcedItem
+from move_forward.plugins.notes.models import IcedItem, Todo
 from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
@@ -12,47 +13,42 @@ OLD = NOW - timedelta(days=100)
 RECENT = NOW - timedelta(days=10)
 PR = "https://github.com/acme/widgets/pull/"
 
-WORK_NOTES = f"""\
-# Work notes
 
-## APP-1 long done
-- Where: {PR}1
-- Left to do:
-- Done 2026-06-01: shipped
-- Updated: 2026-06-01
+def _done(text: str, on: str) -> Todo:
+    return Todo(id=0, text=text, done_on=date.fromisoformat(on))
 
-## APP-2 done but still has a todo
-- Where: {PR}2
-- Left to do:
-  - [quick] write the wrap-up
-- Done 2026-06-01: shipped
-- Done 2026-10-28: tested
-- Updated: 2026-10-28
 
-## APP-3 PR merged long ago, ticket open
-- Where: {PR}3
-- Left to do:
-- Updated: 2026-06-01
-
-## No ticket, no PR, stale
-- Left to do:
-- Updated: 2026-05-01
-
-## {PR}4 PR without a ticket, merged recently
-- Left to do:
-- Updated: 2026-10-20
-"""
+ENTRIES = [
+    entry(
+        "APP-1 long done",
+        [_done("shipped", "2026-06-01")],
+        Where=[f"{PR}1"],
+        Updated=["2026-06-01"],
+    ),
+    entry(
+        "APP-2 done but still has a todo",
+        [
+            todo("write the wrap-up", "quick"),
+            _done("shipped", "2026-06-01"),
+            _done("tested", "2026-10-28"),
+        ],
+        Where=[f"{PR}2"],
+        Updated=["2026-10-28"],
+    ),
+    entry("APP-3 PR merged long ago, ticket open", [], Where=[f"{PR}3"], Updated=["2026-06-01"]),
+    entry("No ticket, no PR, stale", [], Updated=["2026-05-01"]),
+    entry(f"{PR}4 PR without a ticket, merged recently", [], Updated=["2026-10-20"]),
+]
 
 
 CUTOFF = NOW - timedelta(days=90)
 
 
 def _seeded() -> Database:
-    """A database holding `WORK_NOTES`, as `mfd import` leaves it."""
+    """A database holding `ENTRIES`."""
     db = Database(":memory:")
     db.migrate("notes", MIGRATIONS)
-    entries, sections = markdown.read_work_notes(WORK_NOTES)
-    NotesRepository(db).replace_all(entries, [], sections)
+    keep_notes(db, ENTRIES, [])
     return db
 
 

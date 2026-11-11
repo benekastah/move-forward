@@ -32,10 +32,9 @@ def test_a_todo_starts_from_nothing_as_an_entry_of_its_own() -> None:
         (" ", "empty"),
         ("two\nlines", "one line"),
         ("two\u2028lines", "one line"),  # any break splitlines takes
-        ("Reviews requested of me", "a section"),
     ],
 )
-def test_a_todo_the_notes_would_read_back_otherwise_is_refused(text: str, why: str) -> None:
+def test_a_todo_that_isnt_one_line_of_text_is_refused(text: str, why: str) -> None:
     config, db = stored()
     with pytest.raises(ActionError, match=why):
         refresh.run_action(config, db, NEW, {"input": text})
@@ -113,10 +112,23 @@ def test_a_todo_ticked_off_today_stays_listed_ticked_to_untick() -> None:
     assert "taxes" in shown and "notes/todo_undone" in shown
     assert "notes/todo_add" in [a.name for a in done_today.actions]  # a follow-up, all the same
     assert chores.details == [] and chores.parts[1].badges == ["done"]
-    assert chores.parts[1].subjects == []  # nothing to rank or tag on what's done
+    assert not [a for a in chores.parts[1].actions if a.group == "Importance"]  # nothing to rank
     stepped = [part.title for _, part in built.focus_items("notes.todos") or []]
     assert stepped == ["dishes"]  # what's ticked off isn't a step
     assert list(items) == ["Chores", "Done today"]  # all ticked off: last
+
+
+def test_an_entry_all_ticked_off_today_offers_what_any_entry_does() -> None:
+    """It's still on the page until tomorrow, to tag, untag, ice or rank: only its ticked
+    parts, finished within it, get nothing added."""
+    today = localtime.day(NOW)
+    built = dashboard(work_items=[_with_done(entry("Done today", []), ("taxes", today))])
+    [item] = panel(built, "notes.todos").items
+    assert item.done
+    labels = [a.label for a in item.actions]
+    assert labels == ["Done", "Add todo", "Tag", "Put on ice", "Important", "Critical"]
+    [part] = item.parts
+    assert [a.label for a in part.actions] == ["Done"]
 
 
 def test_a_blank_new_todo_is_an_empty_todo() -> None:

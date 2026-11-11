@@ -21,7 +21,6 @@ from ..db import Database, Migration, Params
 from ..domain import KindModel, Model
 from ..graph import Entity, Graph, KindSpec, Ref, attrs
 from ..lookups import BY_HAND, IMPORTED, LOOKED_UP, LookupCache
-from ..markdown import cell, tables
 from ..notifications import Event
 from ..page import (
     Action,
@@ -41,8 +40,6 @@ from ..page import (
 )
 from ..plugin import (
     API_VERSION,
-    KEPT,
-    MAX_SUBJECTS,
     ActionError,
     ActionHandler,
     ActionResult,
@@ -52,11 +49,9 @@ from ..plugin import (
     ContextRequest,
     Form,
     HandleRequest,
-    ImportRequest,
     InputRequest,
     ItemAdditionsFor,
     ItemRequest,
-    KeptItemRequest,
     Page,
     PageHandler,
     Plugin,
@@ -66,8 +61,6 @@ from ..plugin import (
     Request,
     Response,
     SourceError,
-    Subjects,
-    SubjectsRequest,
     UrlRequest,
     collect_into,
 )
@@ -78,9 +71,7 @@ __all__ = [
     "API_VERSION",
     "BY_HAND",
     "IMPORTED",
-    "KEPT",
     "LOOKED_UP",
-    "MAX_SUBJECTS",
     "Action",
     "ActionError",
     "ActionHandler",
@@ -100,14 +91,12 @@ __all__ = [
     "Graph",
     "HandleRequest",
     "Identity",
-    "ImportRequest",
     "InitSetup",
     "InputRequest",
     "Item",
     "ItemAdditions",
     "ItemAdditionsFor",
     "ItemRequest",
-    "KeptItemRequest",
     "KindModel",
     "KindSpec",
     "KvRepository",
@@ -130,15 +119,12 @@ __all__ = [
     "Signals",
     "SourceError",
     "Strict",
-    "Subjects",
-    "SubjectsRequest",
     "Surface",
     "UrlRequest",
     "age",
     "anchor",
     "attrs",
     "branch_prefix",
-    "cell",
     "channel",
     "checkout",
     "choices",
@@ -148,7 +134,6 @@ __all__ = [
     "https_url",
     "path",
     "quiet",
-    "tables",
     "url",
     "word",
 ]

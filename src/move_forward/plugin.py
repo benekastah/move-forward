@@ -13,7 +13,6 @@ import traceback
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
@@ -76,11 +75,6 @@ class Context[C: BaseModel]:
     def today(self) -> date:
         """Today where I am: the local date, for what's recorded as done or changed today."""
         return localtime.day(self.now)
-
-    def kept(self, key: str) -> dict[str, str]:
-        """An action result's parameters keeping the plugin's item `key` on the focus page
-        (`ActionResult.params`); `Plugin.kept_item` gets `key` back."""
-        return {KEPT: f"{self.name}:{key}"}
 
     def part(self, name: str) -> str:
         """The source a part of the plugin's refresh is recorded as, e.g. github's `derived`
@@ -175,24 +169,29 @@ class Request[C: BaseModel, S: BaseModel]:
 
 @dataclass(frozen=True)
 class RefreshRequest[C: BaseModel]:
-    """A hook reading the plugin's tool: `collect`, `collect_after` and `changed`."""
+    """A hook reading the plugin's tool: `collect` and `changed`."""
 
     ctx: Context[C]
     graph: Graph
-    """Every plugin's entities, built from what's stored now: for `collect_after`, with what
-    the plugins collecting first just stored."""
+    """Every plugin's entities, built from what's stored now: for a plugin that
+    `collects_after` the others, with what they just stored."""
     full: bool = True
-    """For `collect` and `collect_after`: whether to fetch everything: at the plugin's first
-    collect since the dashboard started, when its `refresh_seconds` have passed since the last
-    full collect that stored, when its change checks saw something move that no subject
-    names, and when they named nothing. Otherwise fetching `subjects` is enough, keeping the
-    rest as stored. `changed` isn't told; it gets the default, which means nothing to it."""
+    """For `collect`: whether to fetch everything: at the plugin's first collect since the
+    dashboard started, unless it collects only entities asked for (see `subjects`) and a full
+    collect stored within its `refresh_seconds`; when its `refresh_seconds` have passed since
+    the last full collect that stored; when its change checks saw something move that no
+    subject names; and when they named nothing. Otherwise fetching `subjects` is enough,
+    keeping the rest as stored. `changed` isn't told; it gets the default, which means nothing
+    to it."""
     subjects: frozenset[str] = frozenset()
-    """For `collect` and `collect_after`: what the plugin's change checks said moved
-    (`Changed.subjects`) since a collect last stored. Core keeps each until a collect that
+    """For `collect`: what moved, in the plugin's own terms. What its change checks said
+    (`Changed.subjects`) since a collect last stored: core keeps each until a collect that
     started after it was said stores, so a collect that fails loses none of it, and what moves
-    again while one runs stays for the next. Empty for `changed`, which says what moved rather
-    than being told."""
+    again while one runs stays for the next. With them, the ids of its entities asked to be
+    fetched again now: those an action touched (`ActionResult.touched`), or that I opened or
+    asked for again (↻, `mfd refresh --subject`). A collect that can't fetch just those
+    fetches everything. Empty for `changed`, which says what moved rather than
+    being told."""
     previous: Previous[BaseModel] = field(default_factory=Previous[BaseModel])
     """For `changed` only: when core took the plugin's last answer, its fingerprint, and the
     graph it was given, to compare with `graph` for what other plugins' refreshes moved since
@@ -254,29 +253,6 @@ class InputRequest[C: BaseModel]:
 
 
 @dataclass(frozen=True)
-class SubjectsRequest[C: BaseModel, S: BaseModel]:
-    ctx: Context[C]
-    refs: list[Ref]
-    """What to fetch again: entities the plugin publishes, at most `MAX_SUBJECTS`."""
-    snapshot: S | None
-    """What the plugin last stored, to fold them into; None before its first refresh."""
-
-
-@dataclass(frozen=True)
-class Subjects[S: BaseModel]:
-    """What `refresh_subjects` fetched: the plugin's snapshot with them folded in."""
-
-    snapshot: S
-    """Kept with `store`, as a refresh's would be."""
-    updated: list[Ref] = field(default_factory=list[Ref])
-    """The refs fetched; the rest the tool didn't know."""
-
-
-MAX_SUBJECTS = 50
-"""How many entities one refresh of subjects fetches at most."""
-
-
-@dataclass(frozen=True)
 class UrlRequest[C: BaseModel]:
     ctx: Context[C]
     kind: str
@@ -308,14 +284,6 @@ ItemAdditionsFor = Callable[[ItemRequest], ItemAdditions]
 def adds_nothing(req: ItemRequest) -> ItemAdditions:
     """What `Plugin.item_actions` returns by default: nothing added to any item."""
     return ItemAdditions()
-
-
-@dataclass(frozen=True)
-class KeptItemRequest[C: BaseModel]:
-    ctx: Context[C]
-    graph: Graph
-    key: str
-    """What the action put after `<plugin>:` in its `KEPT` parameter."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -357,18 +325,6 @@ def page_path(plugin: str, key: str) -> str:
     return f"/{plugin}/{key}" if key else f"/{plugin}"
 
 
-@dataclass(frozen=True)
-class ImportRequest[C: BaseModel]:
-    """`mfd import <dir>`: what a plugin reads from `dir`, the move-forward skill's markdown
-    notes (`work-notes.md`, `on-ice.md`, `reviewer-map.md`)."""
-
-    ctx: Context[C]
-    dir: Path
-    replace: bool
-    """`--replace`: overwrite what's there where the plugin would otherwise keep it and skip
-    the import."""
-
-
 PageHandler = Callable[[InputRequest[Any]], str | Response | None]
 """Renders a page, as HTML or a `Response`; None means not found."""
 CliHandler = Callable[[InputRequest[Any]], int]
@@ -377,22 +333,17 @@ API_VERSION = 2
 """The version of `move_forward.api` this dashboard offers. A change that would break a
 plugin built against it (a hook's request losing a field, a name leaving `api`) raises it;
 see `docs/api-changes.md`."""
-KEPT = "kept"
-"""The redirect parameter naming an item to keep on the focus page: `<plugin>:<key>`."""
 
 
 @dataclass(frozen=True)
 class ActionResult:
-    """What an action did: the notice for the page, and parameters for the page it redirects
-    back to."""
+    """What an action did: the notice for the page, and what else it changed."""
 
     notice: str
-    params: dict[str, str] = field(default_factory=dict[str, str])
-    """e.g. `{KEPT: "notes:12"}`, to keep a todo just ticked off on the focus page; see
-    `Plugin.kept_item`."""
     touched: list[Ref] = field(default_factory=list[Ref])
     """What the action changed outside its own plugin's tool, e.g. a PR it reacted to: the
-    server refreshes the plugin that publishes each, as well as the acting plugin."""
+    server refreshes the plugin that publishes each, its collect given their ids, as well as
+    the acting plugin, which is refreshed as it would have been even when it publishes them."""
 
 
 class ActionError(Exception):
@@ -453,6 +404,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
     change_check_seconds: ClassVar[int | None] = None
     """How often `mfd serve` asks `changed`; None for a plugin without such a check. It's
     asked as each collect starts too, whether it's set or the plugin `watches` another."""
+    collects_after: ClassVar[bool] = False
+    """Its `collect` needs other plugins' entities to know what to fetch, e.g. the repos git
+    found (git_stack's): a refresh collects it once the others due have stored their
+    snapshots, with the graph they make, in parallel with the other plugins that collect after.
+    It's refreshed on its own schedule, not with the plugins it reads: to refresh soon after
+    they change, it `watches` them."""
     watches: ClassVar[list[str]] = []
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
@@ -490,14 +447,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     @property
     def collects(self) -> bool:
         """Whether the plugin fetches anything: it has a `snapshot_model`, so a refresh
-        calls its `collect` (or `collect_after`) and it has a schedule."""
+        calls its `collect` and it has a schedule."""
         return self.snapshot_model is not None
-
-    @property
-    def collects_after_graph(self) -> bool:
-        """Whether the snapshot comes from `collect_after` instead of `collect`: the plugin
-        implements `collect_after`."""
-        return any("collect_after" in vars(c) for c in type(self).__mro__ if c is not Plugin)
 
     def tokens(self, config: C) -> dict[str, TokenSettings]:
         """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
@@ -511,7 +462,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def collect(self, req: RefreshRequest[C]) -> S:
         """Fetch the plugin's snapshot: everything, or with `req.full` False just what its
-        change checks said moved (`req.subjects`). Runs in parallel with other plugins' and
+        change checks said moved (`req.subjects`), from the graph (`req.graph`; see
+        `collects_after`). Runs in parallel with other plugins' and
         may raise; the error is shown and the last good snapshot kept. It has five minutes
         (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
         failed and goes on, and leaves it out of refreshes until its collect returns (a thread
@@ -541,14 +493,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         is logged and the refresh goes on."""
         return []
 
-    def collect_after(self, req: RefreshRequest[C]) -> S:
-        """Fetch the snapshot when what to fetch comes from other plugins' entities, e.g. the
-        repos git found, in place of `collect`: a plugin that implements it collects after the
-        graph. Runs once the other plugins due have stored their snapshots, in parallel with
-        other `collect_after`s, and fails like `collect`. It's refreshed on its own schedule,
-        not with the plugins it reads: to refresh soon after they change, `watches` them."""
-        raise NotImplementedError(f"{self.name} doesn't collect after the graph")
-
     def after_collect(self, req: Request[C, S]) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.
         caching lookups in the plugin's tables."""
@@ -573,15 +517,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return Changed()
 
     # Reading
-
-    def refresh_subjects(self, req: SubjectsRequest[C, S]) -> Subjects[S] | None:
-        """Fetch just these of its entities again, now (an item I opened, a PR an action
-        touched), and fold them into its snapshot, rather than fetching everything. Core
-        keeps the result as a refresh would, events and all, but it doesn't count as the
-        plugin's refresh (`fetched_at` stays). None, by default, when the plugin can't:
-        core refreshes the whole plugin instead, as it does when this fails or takes longer
-        than a minute (`refresh.SUBJECTS_TIMEOUT_SECONDS`)."""
-        return None
 
     def relate(self, req: Request[C, S]) -> list[tuple[Ref, Ref]]:
         """Relations the plugin knows between one of its entities and another plugin's,
@@ -652,13 +587,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         item. Adds nothing by default."""
         return adds_nothing
 
-    def kept_item(self, req: KeptItemRequest[C]) -> tuple[str, Item] | None:
-        """An item one of this plugin's actions asked to keep on the focus page after changing
-        it (its result's `KEPT` parameter, `<plugin>:<key>`), e.g. a todo just ticked off,
-        shown with its box ticked so the tick can be undone; with the key of the plugin's
-        panel it belongs to."""
-        return None
-
     def pages(self) -> dict[str, PageHandler]:
         """Extra pages by key, served at `/<plugin>/<key>` (`page_path`): "ping" is
         `/slack/ping`, and "" the plugin's own `/<plugin>`. Each is given an `InputRequest`
@@ -676,13 +604,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Add the arguments of `mfd <name>` to `parser` and return what runs it, given an
         `InputRequest` with the parsed `args`. Only called when `cli_help` is set."""
         raise NotImplementedError(f"{self.name} has cli_help but no cli")
-
-    def import_dir(self, req: ImportRequest[C]) -> list[str]:
-        """Read what the plugin recognises in `req.dir` (`mfd import`) into its tables, and
-        say what it read, one line each; nothing when it recognises nothing there. What it
-        won't overwrite without `req.replace` it skips, saying so in a line. Raises
-        `ValueError` or `OSError` when it fails, saying why."""
-        return []
 
     # Set-up and upkeep
 

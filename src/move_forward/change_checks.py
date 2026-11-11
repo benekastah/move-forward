@@ -8,9 +8,10 @@ compares with what the collect read, and what moves while it runs, even what the
 given, stays pending for the next. A check asks for a refresh whenever it says something moved,
 pending or not, as a subject moving again after a collect failed is news too. The
 full-collect timer is here as well: a collect is a full one when it's the plugin's first since
-the dashboard started (so a changed config is applied everywhere), when its `refresh_seconds`
-have passed since the last full collect that stored, when something moved that no subject
-names, and when nothing's pending to narrow it to."""
+the dashboard started (so a changed config is applied everywhere), unless it collects only
+entities asked for and a full one stored within its `refresh_seconds`; when its
+`refresh_seconds` have passed since the last full collect that stored; when something moved
+that no subject names; and when nothing's pending to narrow it to."""
 
 import logging
 from dataclasses import dataclass
@@ -38,7 +39,8 @@ class Taken:
     full: bool
     """Whether to fetch everything (`RefreshRequest.full`)."""
     subjects: frozenset[str]
-    """What moved since a collect last stored (`RefreshRequest.subjects`)."""
+    """What moved since a collect last stored, and the ids of entities asked for
+    (`RefreshRequest.subjects`)."""
     at: datetime
     """When the collect started: the last full collect's time, once a full one stores."""
     seen: int
@@ -92,25 +94,39 @@ class ChangeChecks:
         )
         return answer if moved else None
 
-    def take(self, e: Enabled, graph: Graph | None) -> Taken:
-        """What a collect of the plugin starting now is given. With `graph` (what the collect
-        works from), a plugin with a check is asked first, so what moved up to now is in it,
-        and the next check compares with now; a check that fails is logged, and the collect
-        goes on with what's pending."""
+    def take(
+        self,
+        e: Enabled,
+        graph: Graph | None,
+        asked: frozenset[str] | None = None,
+        named: bool = False,
+    ) -> Taken:
+        """What a collect of the plugin starting now is given: what's pending, and the ids of
+        its entities `asked` for (`refresh.asked_of`). With `graph` (what the collect works
+        from), a plugin with a check is asked first, so what moved up to now is in it, and the
+        next check compares with now; a check that fails is logged, and the collect goes on
+        with what's pending. A collect only of entities asked for is narrowed to them even when
+        it's the plugin's first since this started, as long as a full one has stored before
+        and its `refresh_seconds` haven't passed since: they were asked for, not the rest. A
+        plugin also refreshed by name or schedule (`named`: a Refresh button, its own action,
+        its `refresh_seconds`) is collected as it would have been, given the ids as well."""
         if graph is not None and checks(e):
             try:
                 self.check(e, graph)
             except Exception:
                 log.debug("%s: change check before collecting failed", e.name, exc_info=True)
         held = ChangeRepository(e.ctx.db).get(e.name)
+        asked = asked or frozenset()
+        narrowing = frozenset[str]() if named else asked
         seconds = e.refresh_seconds
         due = (
-            e.name not in self._full
+            (e.name not in self._full and not narrowing)
             or held.full_at is None
             or (seconds is not None and (e.ctx.now - held.full_at).total_seconds() >= seconds)
         )
-        full = due or held.everything or not held.subjects
-        return Taken(full, held.subjects, e.ctx.now, held.checks)
+        full = due or held.everything or not (held.subjects | narrowing)
+        subjects = held.subjects | asked
+        return Taken(full, subjects, e.ctx.now, held.checks)
 
     def stored(self, e: Enabled, taken: Taken) -> None:
         """The collect given `taken` stored: what moved before it started is no longer

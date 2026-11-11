@@ -2,13 +2,13 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from conftest import issue, know_jira_projects, section
+from conftest import entry, iced, issue, keep_notes, know_jira_projects, section, todo
 
 from move_forward import refresh
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
-from move_forward.plugin import KEPT, ActionError, SourceError
+from move_forward.plugin import ActionError, SourceError
 from move_forward.plugins.git import client
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
@@ -20,7 +20,6 @@ from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.jira import client as jira_client
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraIssue
-from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.actions import ICED_FROM_DASHBOARD_NOTE
 from move_forward.plugins.notes.models import Entry, Link
 from move_forward.plugins.notes.repository import NotesRepository
@@ -428,39 +427,36 @@ def test_ice_takes_the_other_stacks_in_the_group_as_git_stack_would(
 
 def test_a_branch_iced_in_another_repo_can_be_iced_here(config: Config, repo: Path) -> None:
     db = _stored(config)
-    other = markdown.read_on_ice(
-        "## wip (~/elsewhere)\n- Iced: 2026-10-01\n- Branches:\n  - wip 1234\n", date.today()
-    )[0]
-    NotesRepository(db).replace_all([], other, [])
+    other = iced("wip", str(Path("~/elsewhere").expanduser()))
+    other = other.model_copy(update={"items": [other.items[0].model_copy(update={"sha": "1234"})]})
+    keep_notes(db, [], [other])
     assert _ice(config, repo, "wip") == "put wip on ice (1 branches)"
     with pytest.raises(ActionError, match="already on ice"):
         _ice(config, repo, "wip")
 
 
-WORK_NOTES = """\
-# Work notes
-
-## APP-1 Fix the widget
-- Status: in review
-- Left to do:
-  - [quick] reply to the thread
-  - [big] get it merged
-  - no size here
-- Blocked on: reviews
-- Updated: 2026-10-29
-
-## APP-2 Other
-- Left to do:
-  - [quick] only one
-- Updated: 2026-10-20
-"""
 APP_1 = "APP-1 Fix the widget"
 
 
 @pytest.fixture
 def work_notes(config: Config) -> None:
-    entries, sections = markdown.read_work_notes(WORK_NOTES)
-    NotesRepository(_stored(config)).replace_all(entries, [], sections)
+    app_1 = [
+        todo("reply to the thread", "quick"),
+        todo("get it merged", "big"),
+        todo("no size here"),
+    ]
+    keep_notes(
+        _stored(config),
+        [
+            entry(
+                APP_1,
+                app_1,
+                **{"Status": ["in review"], "Blocked on": ["reviews"], "Updated": ["2026-10-29"]},
+            ),
+            entry("APP-2 Other", [todo("only one", "quick")], Updated=["2026-10-20"]),
+        ],
+        [],
+    )
 
 
 def _entry(config: Config, title: str = APP_1) -> Entry:
@@ -481,7 +477,6 @@ def test_todo_done_and_undone(config: Config, work_notes: None) -> None:
     fields = _todo(config, "reply to the thread")
     result = refresh.perform_action(config, _stored(config), "notes/todo_done", fields)
     assert result.notice == "done: reply to the thread"
-    assert result.params == {KEPT: f"notes:{fields['todo']}"}  # kept on the focus page
     entry = _entry(config)
     assert _open(config) == ["[big] get it merged", "[None] no size here"]
     assert [t.done_on for t in entry.todos if t.text == "reply to the thread"] == [

@@ -210,12 +210,6 @@ def test_a_key_is_stripped_and_otherwise_matched_exactly(run: Run) -> None:
     assert run("recall", "asked:Ice")[1] == "\n"
 
 
-def test_asked_ice_is_on_ice_mds_last_asked(run: Run, tmp_path: Path) -> None:
-    assert run("remember", "asked:ice", "--on", "2026-10-30")[0] == 0
-    assert run("export", str(tmp_path / "out"))[0] == 0
-    assert "Last asked: 2026-10-30" in (tmp_path / "out" / "on-ice.md").read_text("utf-8")
-
-
 def test_todo_add_takes_a_leading_size_unless_size_says(run: Run, config: Path) -> None:
     run("add-entry", "Chores")
     assert _json(run, "todo", "add", "Chores", "[big] clean the garage")["notice"] == (
@@ -229,21 +223,9 @@ def test_todo_add_takes_a_leading_size_unless_size_says(run: Run, config: Path) 
     ]
 
 
-def test_an_import_of_a_preamble_alone_doesnt_empty_the_notes_without_replace(
-    run: Run, config: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    run("add-entry", "APP-1 Fix it")
-    notes_dir = tmp_path / "notes"
-    notes_dir.mkdir()
-    (notes_dir / "work-notes.md").write_text("# Work notes\n\nSome words before any entry.\n")
-    assert cli.main(["-c", str(config), "import", str(notes_dir)]) == 0
-    assert "notes: already has notes; skipped" in capsys.readouterr().out
-    assert [e["title"] for e in _json(run, "list")] == ["APP-1 Fix it"]
-
-
 @pytest.mark.parametrize(
     ("title", "said"),
-    [("", "is empty"), ("Two\nlines", "one line"), ("Reviews requested of me", "section")],
+    [("", "is empty"), ("Two\nlines", "one line")],
 )
 def test_add_entry_takes_only_titles_the_notes_read_back(run: Run, title: str, said: str) -> None:
     code, _, err = run("add-entry", title)

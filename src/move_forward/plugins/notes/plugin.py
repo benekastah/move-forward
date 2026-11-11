@@ -1,7 +1,4 @@
-"""The notes plugin: work entries with their todos, and what's on ice, in its own tables.
-
-`mfd import` reads them once from the move-forward skill's markdown files.
-"""
+"""The notes plugin: work entries with their todos, and what's on ice, in its own tables."""
 
 import argparse
 from datetime import timedelta
@@ -16,12 +13,10 @@ from ...api import (
     Context,
     Entity,
     Graph,
-    ImportRequest,
     Item,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
-    KeptItemRequest,
     KindSpec,
     Migration,
     Panel,
@@ -37,8 +32,7 @@ from .panels import ENTRY, ICED, TODO, TODOS, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
 
 EMPTY_NOTES = (
-    "No notes yet: New todo starts one here, `mfd import <dir>` reads the skill's"
-    " work-notes.md and on-ice.md, and `mfd notes add-entry <title>` starts an entry."
+    "No notes yet: New todo starts one here, and `mfd notes add-entry <title>` starts an entry."
 )
 """What the Todos panel says while the notes are empty."""
 
@@ -61,7 +55,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         ICED: KindSpec(IcedAttrs, hides=True),
         TODO: KindSpec(TodoAttrs, gone_means_done=True),
     }
-    cli_help = "read and change the notes, or export them as the skill's markdown"
+    cli_help = "read and change the notes"
 
     def entities(self, req: Request[NotesConfig, BaseModel]) -> list[Entity]:
         ctx = req.ctx
@@ -83,7 +77,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         ctx, graph = req.ctx, req.graph
         builder = _builder(ctx, graph)
         todos = builder.todos()
-        if NotesRepository(ctx.db).is_empty():  # e.g. just upgraded, before an import
+        if NotesRepository(ctx.db).is_empty():
             todos = todos.model_copy(update={"description": EMPTY_NOTES})
         return [todos, builder.iced()]
 
@@ -108,12 +102,6 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
 
         return additions
 
-    def kept_item(self, req: KeptItemRequest[NotesConfig]) -> tuple[str, Item] | None:
-        """The todo `todo_done` just ticked off, by id, with its box ticked."""
-        ctx, graph, key = req.ctx, req.graph, req.key
-        todo = _builder(ctx, graph).kept_todo(int(key)) if key.isdigit() else None
-        return (TODOS, todo) if todo else None
-
     def prune(self, req: Request[NotesConfig, BaseModel]) -> list[str]:
         ctx, graph = req.ctx, req.graph
         cutoff = ctx.now - timedelta(days=ctx.prune_days)
@@ -121,10 +109,6 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
-
-    def import_dir(self, req: ImportRequest[NotesConfig]) -> list[str]:
-        """`work-notes.md` and `on-ice.md`."""
-        return cli.import_notes(req.ctx, req.dir, req.replace)
 
     def actions(self) -> dict[str, ActionHandler]:
         return actions.ACTIONS

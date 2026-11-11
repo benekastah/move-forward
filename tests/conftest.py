@@ -1,7 +1,7 @@
 """Shared factories: small, fully populated domain objects that tests tweak."""
 
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -32,11 +32,10 @@ from move_forward.plugins.github.models import (
 from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.github.snapshots import DerivedRepository
 from move_forward.plugins.jira.models import JiraIssue
-from move_forward.plugins.notes import markdown
 from move_forward.plugins.notes.models import Entry, Ice, IcedItem, Size, Todo
 from move_forward.plugins.notes.repository import MIGRATIONS as NOTES_MIGRATIONS
-from move_forward.plugins.notes.repository import NotesRepository
-from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
+from move_forward.plugins.notes.text import attach_conditions, links_in
+from move_forward.plugins.slack.models import Ping, TeamChannel
 from move_forward.plugins.slack.pings import PrPing
 from move_forward.plugins.slack.plugin import pinger
 from move_forward.plugins.slack.repository import SlackRepository
@@ -201,8 +200,8 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             snapshots[source] = cast(BaseModel, value)
     derived = cast(DerivedSnapshot | None, o.pop("derived", None))
     db.migrate("notes", NOTES_MIGRATIONS)
-    NotesRepository(db).replace_all(
-        cast(list[Entry], o.pop("work_items", [])), cast(list[Ice], o.pop("iced_stacks", [])), []
+    keep_notes(
+        db, cast(list[Entry], o.pop("work_items", [])), cast(list[Ice], o.pop("iced_stacks", []))
     )
     reviewers = cast(dict[str, Reviewer], o.pop("users", {}))
     channels = cast(dict[str, TeamChannel], o.pop("teams", {}))
@@ -274,13 +273,19 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     if derived is not None:
         DerivedRepository(db).replace(derived)
         SnapshotRepository(db).save_fetched("github.derived", NOW)
-    PeopleRepository(db).replace_imported({u.login: u.email for u in reviewers.values() if u.email})
+    people = PeopleRepository(db)
+    for u in reviewers.values():
+        if u.email:
+            people.save_looked_up(u.login, u.email, NOW)
     if enable_slack:
-        SlackRepository(db).replace_imported(
-            [Contact(login=u.login, slack_id=u.slack_id) for u in reviewers.values() if u.slack_id],
-            list(channels.values()),
-            pings,
-        )
+        slack_repo = SlackRepository(db)
+        for u in reviewers.values():
+            if u.slack_id:
+                slack_repo.set_contact(u.login, u.slack_id)
+        for channel in channels.values():
+            slack_repo.set_team_channel(channel.slug, channel.channel_name, channel.channel_id)
+        for ping in pings:
+            slack_repo.add_ping(ping)
     return config, db
 
 
@@ -350,15 +355,85 @@ def todo(text: str, size: Size | None = None) -> Todo:
 
 
 def entry(title: str, todos: list[Todo], **fields: list[str]) -> Entry:
-    """An entry, read from the markdown the skill would write for it: `fields` are its
-    `- Key: value` lines, e.g. `**{"Blocked on": ["reviews"]}`."""
-    lines = [f"## {title}"]
-    lines += [f"- {key}: {value}" for key, values in fields.items() for value in values]
-    if todos:
-        lines.append("- Left to do:")
-        lines += [f"  - [{t.size}] {t.text}" if t.size else f"  - {t.text}" for t in todos]
-    [read], _ = markdown.read_work_notes("\n".join(lines))
-    return read
+    """An entry: `fields` are its `Status`, `Where`, `Blocked on`, `Updated` (a day, as
+    `YYYY-MM-DD`) and `Merge conditions`,
+    e.g. `**{"Blocked on": ["reviews"]}`. It's about the PRs its title, fields and todos
+    name, and each condition holds the PR it names, else each of those."""
+    known = {key: values[0] for key, values in fields.items() if values}
+    written = fields.get("Merge conditions", [])
+    named = [title, *(v for values in fields.values() for v in values), *(t.text for t in todos)]
+    links = links_in("\n".join(named))
+    conditions, lines = attach_conditions(written, [link.ref for link in links])
+    return Entry(
+        id=0,
+        title=title,
+        status=known.get("Status"),
+        where=known.get("Where"),
+        blocked_on=known.get("Blocked on"),
+        updated_on=date.fromisoformat(known["Updated"]) if "Updated" in known else None,
+        todos=[t.model_copy(update={"links": links_in(t.text)}) for t in todos],
+        conditions=conditions,
+        lines=lines,
+        links=links,
+    )
+
+
+def keep_notes(db: Database, entries: list[Entry], ices: list[Ice]) -> None:
+    """Put `entries` and `ices` in the notes' tables, with ids of their own."""
+    with db.transaction() as conn:
+        for e in entries:
+            entry_id = conn.execute(
+                "INSERT INTO notes_entries (title, status, location, blocked_on, updated_on)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (
+                    e.title,
+                    e.status,
+                    e.where,
+                    e.blocked_on,
+                    e.updated_on.isoformat() if e.updated_on else None,
+                ),
+            ).lastrowid
+            conn.executemany(
+                "INSERT OR IGNORE INTO notes_links VALUES (?, ?, ?)",
+                [(entry_id, link.kind, link.ref) for link in e.links],
+            )
+            conn.executemany(
+                "INSERT INTO notes_entry_lines VALUES (?, ?, ?)",
+                [(entry_id, i, line) for i, line in enumerate(e.lines)],
+            )
+            conn.executemany(
+                "INSERT INTO notes_conditions (entry_id, position, text, pr) VALUES (?, ?, ?, ?)",
+                [(entry_id, i, c.text, c.pr) for i, c in enumerate(e.conditions)],
+            )
+            for position, t in enumerate(e.todos):
+                todo_id = conn.execute(
+                    "INSERT INTO notes_todos (entry_id, position, text, size, done_on)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (
+                        entry_id,
+                        position,
+                        t.text,
+                        t.size,
+                        t.done_on.isoformat() if t.done_on else None,
+                    ),
+                ).lastrowid
+                conn.executemany(
+                    "INSERT OR IGNORE INTO notes_todo_links VALUES (?, ?, ?)",
+                    [(todo_id, link.kind, link.ref) for link in t.links],
+                )
+        for ice in ices:
+            ice_id = conn.execute(
+                "INSERT INTO notes_ice (title, iced_on, note) VALUES (?, ?, ?)",
+                (ice.title, ice.iced_on.isoformat(), ice.note),
+            ).lastrowid
+            conn.executemany(
+                "INSERT OR IGNORE INTO notes_iced (ice_id, position, kind, ref_id, sha, name,"
+                " repo_dir) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (ice_id, i, item.kind, item.ref_id, item.sha, item.name, item.repo_dir)
+                    for i, item in enumerate(ice.items)
+                ],
+            )
 
 
 def iced(branch: str, repo_dir: str = "/src/widgets") -> Ice:

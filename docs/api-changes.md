@@ -18,22 +18,20 @@ for themselves (a token, a request, an example config) is core's.
   `linking_patterns`), `Request(ctx, graph, snapshot, previous, panels)` (`store`,
   `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`,
   `prune`, `events`), `RefreshRequest(ctx, graph, full, subjects, previous)` (`collect`,
-  `collect_after`, `changed`), `RefRequest(ctx, kind, ids)` (`fetch`) and `InputRequest(ctx,
-  graph, page, form, args)` (pages, buttons and `mfd <plugin>`), in place of a type per hook
+  `changed`), `RefRequest(ctx, kind, ids)` (`fetch`) and `InputRequest(ctx, graph, page,
+  form, args)` (pages, buttons and `mfd <plugin>`), in place of a type per hook
   (`EntitiesRequest`, `PanelsRequest`, `CollectRequest`, `ChangedRequest`, `ActionRequest`,
-  `PageRequest`, `CliRequest` and the rest, named in the entries below, are gone). `url_for`,
-  `handle_for`, `refresh_subjects`, `kept_item` and `import_dir` keep their own (`UrlRequest`,
-  `HandleRequest`, `SubjectsRequest`, `KeptItemRequest`, `ImportRequest`). A field a
-  hook doesn't get keeps its default. Every hook with a snapshot now has the graph and the
-  snapshot both: `entities` gets an empty graph, as the graph is built from it, and `store`
+  `PageRequest`, `CliRequest` and the rest, named in the entries below, are gone). `url_for`
+  and `handle_for` keep their own (`UrlRequest`, `HandleRequest`). A field a hook doesn't get
+  keeps its default. Every hook with a snapshot now has the graph and the snapshot both: `entities` gets an empty graph, as the graph is built from it, and `store`
   gets what `collect` fetched as `req.snapshot` (never None there). A page's query and path
   are `req.page.query` and `req.page.path` (`Page`), a button's fields, surface and back
   `req.form.fields`, `req.form.surface` and `req.form.back` (`Form`); `req.field(name)` still
   reads a required field.
 - **`Previous`**: `changed` and `events` get what held before as `req.previous`: `at` (when
   the last check ran, or when the snapshot `events` compares with was stored), `fingerprint`
-  (the last check's answer), `snapshot` (the plugin's before this refresh) and `graph` (the graph then; None at the first check since
-  the dashboard started). It replaces `ChangedRequest`'s `previous_graph`, `fingerprint` and
+  (the last check's answer), `snapshot` (the plugin's before this refresh) and `graph` (the
+  graph then; None at the first check since the dashboard started). It replaces `ChangedRequest`'s `previous_graph`, `fingerprint` and
   `checked_at`, and `EventsRequest`'s `before` and `previous_graph` (`after` is
   `req.snapshot`).
 - **The due horizon is the context's**: `ctx.due_horizon`, as `[act_now] due_warning_days`
@@ -60,8 +58,10 @@ for themselves (a token, a request, an example config) is core's.
   `checked_at`, the last answer's fingerprint and when it was taken, and `CollectRequest`
   and `CollectAfterRequest` gain `subjects` (what moved since a collect last stored, which
   core keeps until a collect started after it stores) and `full` (whether to fetch
-  everything: the plugin's first collect since the dashboard started, `refresh_seconds`
-  since the last full collect that stored, something unnamed moved, or nothing's pending).
+  everything: the plugin's first collect since the dashboard started, unless it collects
+  only entities asked for (below) and a full collect stored within `refresh_seconds`;
+  `refresh_seconds` since the last full collect that stored; something unnamed moved; or
+  nothing's pending).
   Core asks `changed` as each collect starts, and no longer once more after a refresh,
   ignoring the answer; it asks for a refresh whenever a check says something moved since
   the last, so a check names a subject only when it moved again, and what's pending after a
@@ -84,27 +84,42 @@ for themselves (a token, a request, an example config) is core's.
   changes, so a plugin can report it on every refresh rather than remembering what it warned
   of. One the plugin hasn't reported for `prune_days` is forgotten in the daily clean-up.
 
-- **Importing**: `import_dir(req: ImportRequest)` reads what the plugin recognises in
-  `req.dir` for `mfd import <dir>` and says what, one line each; `req.replace` is
-  `--replace`; what it won't overwrite without it, it skips with a line saying so, as
-  `mfd import` is run again routinely. Raising `ValueError` or `OSError` fails the command,
-  without stopping the other plugins.
+- **No importing**: `mfd import` is gone, and with it `import_dir`, `ImportRequest`, the
+  markdown helpers `api.cell` and `api.tables`, and `LookupCache.replace_imported`. A plugin
+  that read a file someone keeps by hand gives a command or a page to set the same instead.
 - **Lookup caches**: `LookupCache` (with the sources `BY_HAND`, `IMPORTED` and `LOOKED_UP`)
-  keeps a plugin's cache of looked-up values in its own table: by hand wins over an import,
-  which wins over a lookup, and lookups that found nothing are tried again after a cutoff.
-- **No collecting in pieces**: `Collected` has left `api`. `collect` and `collect_after`
-  return the snapshot, and core calls each once per refresh.
-- **Collecting after the graph** is implementing `collect_after`: `collects_after_graph` is a
-  property saying whether the plugin does, no longer a class variable to set. Such a plugin
-  is refreshed on its own schedule, no longer with the plugins it `requires`; to refresh
-  soon after they change, it `watches` them.
+  keeps a plugin's cache of looked-up values in its own table: by hand wins over a lookup,
+  as does what an earlier version's `mfd import` read (`IMPORTED`), and lookups that found
+  nothing are tried again after a cutoff.
+- **No collecting in pieces**: `Collected` has left `api`. `collect` returns the snapshot,
+  and core calls it once per refresh.
+- **Focus mode keeps the item itself**: `kept_item`, `KeptItemRequest`, `ctx.kept(key)`,
+  `KEPT` and `ActionResult.params` are gone. A focus page names the item it shows in its
+  address, by its main subject (or, about nothing, its title), and its buttons come back to it:
+  core finds it again wherever they put it, and once one has taken it out of the category
+  shows it as the page has it now (or, gone from the page, as the page showed it, without its
+  buttons). A plugin whose action leaves its item on the page changed (a todo ticked off)
+  gives it the same main subject it had; core adds nothing to a part that's `done`.
+- **Fetching some entities again is a collect**: `refresh_subjects`, `SubjectsRequest`,
+  `Subjects` and `MAX_SUBJECTS` are gone. An action's `touched` refs, ↻ and `mfd refresh
+  --subject` refresh the publisher, its `collect` given their ids in `subjects` and `full`
+  False (unless a full collect is due), even at its first collect since the dashboard
+  started; a publisher refreshed this round by name or schedule too (its Refresh button, its
+  own action) is collected as it would have been, given the ids as well. One that can fetch
+  just those does (github, by PR URL; git, by a branch's id or a repo's common git
+  directory), and one that can't fetches everything, as `full` would. It's the plugin's
+  refresh, recorded as any other. github's change checks name PRs by URL now, as its
+  entities' ids.
+- **Collecting after the graph** is `collects_after = True`, and `collect` reads the graph
+  (`req.graph`, which every collect gets): `collect_after` and `collects_after_graph` are
+  gone. Such a plugin is refreshed on its own schedule, no longer with the plugins it
+  `requires`; to refresh soon after they change, it `watches` them.
 - **No `ctx.data_dir`**: `Context` loses `data_dir` and `data_root`. A plugin keeps what it
   needs in its tables or `ctx.kv`.
 - **No `KindSpec.fetched_attrs`**: a fetched entity's attributes fit its family's fetched
   model, or else its kind's own attributes.
 - **Timeouts are core's**: the class variables `collect_timeout_seconds` and
-  `subjects_timeout_seconds` are gone. `collect` (and `collect_after`) has five minutes, and
-  `refresh_subjects` a minute, for every plugin.
+  `subjects_timeout_seconds` are gone. `collect` has five minutes, for every plugin.
 - **`KindSpec.linking` is a `bool`**: `linking=True` where it was `linking=None`. A pattern
   for its ids comes only from `linking_patterns`, which by default gives none: a kind that
   gave `linking` a pattern string sets `linking=True` and returns the pattern from

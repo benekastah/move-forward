@@ -17,14 +17,6 @@ The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done but f
 its [plugin API trims](simplicity_review.md#b-trim-the-plugin-api): B7, widened from the
 review's request shapes to fewer request types and fewer hooks to learn, as a stack of PRs.
 
-- **Hooks removed:**
-  - `import_dir`, with `mfd import`, and `mfd notes export`;
-  - `refresh_subjects`: ↻ calls `collect` with its subjects;
-  - `collect_after`: `collect` gets the graph, and a plugin says by a class variable that
-    it collects after the others;
-  - `kept_item`: core keeps the focused item in memory across a button, so a todo just
-    ticked shows as it is now, its box ticked, with its buttons but those that can't act
-    from the remembered copy.
 - **Hooks merged:**
   - `init_suggested` becomes a class variable;
   - `url_for` and `handle_for` become one hook, answering both for an entity by id;
@@ -127,6 +119,11 @@ that needs a core one says so, and lands on top of it.
 10. **Account on the settings page.** A Sign out everywhere button (`mfd logout`), and where
     each plugin's token is found (`mfd token check`). Setting or rotating a token stays in
     the terminal.
+11. **Snooze a PR waiting on review.** slack's Nudge reviewers nominates a PR of mine (task
+    `ping`), with Snooze, but the PR's item in github's Ready for review has no task, so it
+    has neither Snooze nor Unsnooze. A snooze is kept by its subject's kind and id and its
+    task, so snoozing the nudge sets aside only the nudge: give github's item a task, and
+    decide whether snoozing it sets aside the nudge too.
 
 ### github
 
@@ -325,13 +322,8 @@ set of tables, pages and actions, and settles what two of them both see the way 
   (`condition add --pr`), and check-ins, offers, declines and once-a-day questions are
   remembered by key (`mfd notes remember` and `recall`, keyed as
   [plugins/notes.md](plugins/notes.md) says); the skill still keeps them its old way until
-  it's changed to use them. Its `reviewer-map.md` is read only through `mfd import`, so it
-  should set Slack ids with `mfd slack contact set` rather
-  than editing the map.
-- **An export that keeps everything.** `mfd notes export` loses the links made with Link (an
-  entry's to a PR or ticket its text doesn't name, a todo's) and the order of an entry's lines,
-  as the skill's markdown has no place for them: to keep them, the format needs a line for
-  links and the notes a position for each line.
+  it's changed to use them. Its `reviewer-map.md` is read by nothing now, so it should set
+  Slack ids with `mfd slack contact set` rather than editing the map.
 - **Keep the skill and the dashboard in step.** The CLI's JSON output is the contract the
   skill is written against: change it deliberately, with the skill. The skill's own rule
   against cleaning while something's on ice no longer matches the dashboard, which cleans

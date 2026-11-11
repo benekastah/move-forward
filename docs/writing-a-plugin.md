@@ -19,7 +19,7 @@ kinds, all in `move_forward.api`:
 | --- | --- | --- |
 | `ContextRequest` | `ctx` | `load`, `linking_patterns` |
 | `Request` | `ctx`, `graph`, `snapshot`, and `previous` or `panels` where a hook has them | `store`, `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`, `events` |
-| `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `collect_after`, `changed` |
+| `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `changed` |
 | `RefRequest` | `ctx`, `kind`, `ids` | `fetch` |
 | `InputRequest` | `ctx`, `graph`, and one of `page` (a `Page`: `query`, `path`), `form` (a `Form`: `fields`, `surface`, `back`) or `args` | pages, buttons (`actions`), `mfd <plugin>` (`cli`) |
 
@@ -28,9 +28,8 @@ which the graph is built from), and `snapshot` what the plugin last stored (None
 first refresh; for `store`, what `collect` just fetched). A field a hook doesn't get is left at
 its default; each field's docstring names the hooks that get it.
 
-Five hooks keep a request of their own: `url_for` (`UrlRequest`), `handle_for`
-(`HandleRequest`), `refresh_subjects` (`SubjectsRequest`), `kept_item` (`KeptItemRequest`) and
-`import_dir` (`ImportRequest`).
+Two hooks keep a request of their own: `url_for` (`UrlRequest`) and `handle_for`
+(`HandleRequest`).
 
 `previous` is a `Previous`, what held before, for the two hooks that compare: `changed` and
 `events`. Its `at` is when the plugin's last change check ran (`changed`), or when the refresh
@@ -221,14 +220,15 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   server started). The subjects stay pending until a collect that started after they moved
   stores, so one that fails loses none: `collect` gets them as `req.subjects`, with
   `req.full` saying whether to fetch everything anyway (its first collect since the server
-  started, `refresh_seconds` since the last full collect that stored, something unnamed
-  moved, or nothing's pending). With `changed`, `refresh_seconds` can be
+  started, unless it collects only entities asked for, below, and a full collect stored
+  within `refresh_seconds`; `refresh_seconds` since the last full collect that stored;
+  something unnamed moved; or nothing's pending). With `changed`, `refresh_seconds` can be
   long. A `changed` that
   reads another plugin's entities from the graph names that plugin in `watches`: the
   server asks it right after each refresh of that plugin (github watches git, to see my
   PRs' branches move), whether or not it also has `change_check_seconds`.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
-  the only place a plugin talks to its tool, along with `after_collect`, `collect_after`
+  the only place a plugin talks to its tool, along with `after_collect`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with
   what it stored last. It has five minutes to finish: past that, the
   refresh records it as timed out and goes on, and leaves it out of later refreshes until
@@ -238,9 +238,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   mustn't wait on another thread using `ctx.db`). Nothing is kept as JSON.
 - `identity(req)` says who I am in the tool, `Identity(tool=self.title, login=...)`, for
   the page's footer, which lists each plugin's.
-- A plugin that needs other plugins' entities to know what to fetch implements
-  `collect_after(req)` instead of `collect` (see git_stack): it runs once the others have
-  stored their snapshots, with the graph. It's refreshed on its own schedule, not with the
+- A plugin that needs other plugins' entities to know what to fetch sets `collects_after =
+  True` (see git_stack): its `collect` runs once the others have stored their snapshots, with
+  the graph they make (`req.graph`; every collect has the graph, built from what's stored). It's refreshed on its own schedule, not with the
   plugins it reads; to refresh soon after they change, it `watches` them.
 - `notification_kinds` and `events(req)` make browser notifications: when the user has
   subscribed to one of the kinds (`<plugin>.<kind>`), `events` is asked after every refresh,
@@ -278,8 +278,8 @@ The rules:
   `prune` clears what's finished.
 - **A cache of lookups** (a login's email, found once and kept) is a kept table of a key, a
   value, a `source` and a `looked_up_at`, which `api.LookupCache(db, table, key, value)`
-  reads and writes: a value set by hand (`BY_HAND`) wins over an import's (`IMPORTED`),
-  which wins over a lookup's (`LOOKED_UP`), and `forget_misses_before(cutoff)`, from
+  reads and writes: a value set by hand (`BY_HAND`) wins over a lookup's (`LOOKED_UP`),
+  as does one the old `mfd import` read (`IMPORTED`), and `forget_misses_before(cutoff)`, from
   `prune`, lets lookups that found nothing be tried again. Its docstring has the table.
 - **Order-independent.** A plugin can be enabled before or after any other, so its
   migrations touch only its own tables.
@@ -434,7 +434,8 @@ def panels(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Panel]:
 - An item or part whose work is done but kept a while to undo (a todo ticked off today) is
   `done`: it's dimmed and last, isn't counted, isn't in Act now, and focus mode skips it; nor
   does it count towards what brings back a snoozed item. Mark an item whose parts are all done
-  `done` too.
+  `done` too. A part that's `done` gets nothing from core or other plugins (no Tag, no
+  importance): only its own buttons act on it. An item that's `done` gets what any item does.
 - An item's `parts` (a work entry's todos) are listed beneath it when there are several, on the
   dashboard and in Act now, and shown one at a time in focus mode, each with its own buttons.
   A part listed beneath its item doesn't repeat a button the item has. Their titles count towards what brings back a snoozed item, so `details` needn't repeat them.
@@ -480,9 +481,7 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 - **Actions.** `actions()` maps names to handlers `(req: InputRequest) -> str |
   ActionResult`; a button posts to `/actions/<plugin>/<name>`, which is its `Action.name`.
   Core leaves out (and logs) a button whose name no enabled plugin's `actions()` has, so a
-  typo can't post to a 404. An action that keeps its item on the focus page returns
-  `ActionResult(notice, req.ctx.kept(key))`, and `kept_item` gets `key` back.
-  `req.form` is the form posted: `req.form.fields` its
+  typo can't post to a 404. `req.form` is the form posted: `req.form.fields` its
   fields, `req.form.surface` where the button was (`dashboard` or `focus`). A button with an
   `input` has a text field, posted as `input`; `suggestions` lists what it offers to pick
   from, and `choices` adds a drop-down beside it (label to value), posted as `choice`. Check every field: they
@@ -501,15 +500,19 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 - **After an action** the server refreshes the acting plugin. An action that changed
   something another plugin publishes (reacting to a PR, say) lists it in
   `ActionResult(notice, touched=[ref])`, and that entity is fetched again (below).
-- **Fetching a few entities again.** `refresh_subjects(req)` (`req.refs`, of kinds the
-  plugin publishes; `req.snapshot`, what it last stored) fetches just those entities now
-  and returns `Subjects(snapshot, updated)`, the snapshot with them folded in, which core
-  keeps as a refresh's would (events too). It's what an action's `touched` refs, a tab
-  coming back to focus and `mfd refresh --subject` use; returning None (the default), or
-  failing or taking longer than a minute, refreshes the plugin whole
-  instead. github fetches the PRs in one request.
-- **Keeping an item on the focus page** after an action changes it: return
-  `ActionResult(notice, req.ctx.kept(key))` and implement `kept_item`.
+- **Fetching a few entities again.** An action's `touched` refs, a tab coming back to
+  focus and `mfd refresh --subject` refresh the publisher, its `collect` given the entities'
+  ids in `req.subjects` (with what its change checks said moved) and `req.full` False, unless
+  a full collect is due, even at its first collect since the server started. When the
+  publisher is refreshed by name or schedule in the same round (its Refresh button, its own
+  action), it's collected as it would have been, given the ids too. It's the plugin's refresh
+  like any other: recorded, told, and its scheduled one waits its `refresh_seconds` again. A `collect` that can fetch just those does
+  (github fetches the PRs in one request); one that can't, or gets a subject it doesn't know,
+  fetches everything. One that fails is recorded as failed, as any refresh.
+- **Focus mode keeps the item** a button was pressed on, should the button take it out of
+  the category (a todo ticked off): core remembers it and shows it as the page now has it (the
+  todo ticked, to untick), found by its main subject, so give what an action leaves on the
+  page (a ticked todo) the same subject it had.
 - **Pages.** `pages()` maps keys to handlers `(req: InputRequest) -> str | Response | None`
   (with `req.page.query` and `req.page.path`); core serves each at `/<plugin>/<key>`, and `""` at
   `/<plugin>`, so two plugins' `ping` pages never clash. A handler returns HTML (use
@@ -518,11 +521,6 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   dashboard's token, as every request does.
 - **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
   a handler `(req: InputRequest) -> int` that gets the parsed `req.args`.
-- **Importing.** `import_dir(req)` reads what the plugin recognises in `req.dir` for `mfd
-  import <dir>` into its tables, and returns what it read, one line each (none when it
-  recognises nothing there). What it won't overwrite without `req.replace` (`--replace`) it
-  skips with a line saying so, as `mfd import` is run again routinely; it raises `ValueError`
-  (or lets an `OSError` through) only for what fails, which makes the command fail.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the
 plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their

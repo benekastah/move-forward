@@ -1,7 +1,8 @@
 """The Slack plugin: review pings, and where they go.
 
-People's Slack ids, teams' channels and the pings sent live in its own tables; `mfd import`
-reads the first two from the skill's `reviewer-map.md`.
+People's Slack ids, teams' channels and the pings sent live in its own tables. A Slack id is
+set by hand (`mfd slack contact set`) or looked up in Slack by the person's email; a team's
+channel is set by hand (`mfd slack team set`).
 """
 
 import argparse
@@ -20,7 +21,6 @@ from ...api import (
     CliHandler,
     Context,
     Graph,
-    ImportRequest,
     InitSetup,
     InputRequest,
     ItemAdditions,
@@ -217,11 +217,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         return cli.add_commands(parser)
-
-    def import_dir(self, req: ImportRequest[SlackConfig]) -> list[str]:
-        """Slack ids and team channels from `reviewer-map.md`, and nudges logged in
-        `work-notes.md`."""
-        return cli.import_markdown(req.ctx, req.dir)
 
     def actions(self) -> dict[str, ActionHandler]:
         def mark_sent(req: InputRequest[SlackConfig]) -> str:

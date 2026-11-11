@@ -3,23 +3,12 @@ commit authors to reviewers to suggest."""
 
 from datetime import datetime
 
-from ...api import Database, LookupCache, cell, tables
-
-REVIEWER_MAP_FILE = "reviewer-map.md"
-
-
-def read_reviewer_map(text: str) -> dict[str, str]:
-    """Emails by login, from the Users table of `reviewer-map.md` (login, email, Slack id)."""
-    return {
-        login: email
-        for row in tables(text).get("Users", [])
-        if (login := cell(row, 0)) and (email := cell(row, 1))
-    }
+from ...api import Database, LookupCache
 
 
 class PeopleRepository:
-    """Logins' commit emails: imported from the reviewer map (`mfd import`), or looked
-    up in the person's commits; an import wins over a lookup, which never overwrites."""
+    """Logins' commit emails, looked up in the person's commits; a lookup never overwrites
+    one known already."""
 
     def __init__(self, db: Database):
         self._people = LookupCache(db, "github_people", "login", "email")
@@ -37,7 +26,3 @@ class PeopleRepository:
         person may have committed with a work email since); how many. Emails found stay:
         people outlast the PRs they were found for, and suggestions need them."""
         return self._people.forget_misses_before(cutoff)
-
-    def replace_imported(self, emails: dict[str, str]) -> None:
-        """Replace what an earlier import read with these, over any lookup of the same login."""
-        self._people.replace_imported(emails)

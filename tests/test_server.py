@@ -1,6 +1,8 @@
 import errno
+import html
 import json
 import logging
+import re
 import socket
 import threading
 from collections.abc import Callable, Iterator
@@ -21,10 +23,9 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
 from move_forward.notifications import Event, NotificationRepository
-from move_forward.page import Action, Item
+from move_forward.page import Item
 from move_forward.panels import Layout
 from move_forward.plugin import (
-    KEPT,
     ActionError,
     ActionResult,
     Changed,
@@ -36,9 +37,11 @@ from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.github.snapshots import PrRepository
+from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.plugins.slack.plugin import SlackPlugin
 from move_forward.plugins.slack.repository import SlackRepository
+from move_forward.refresh import build_dashboard
 from move_forward.registry import migrate
 from move_forward.repositories import LayoutRepository, SessionRepository, TagRepository
 
@@ -331,8 +334,9 @@ def test_actions_from_a_focus_page_redirect_back_to_it(
         return "did it"
 
     monkeypatch.setattr(server, "perform_action", _results(fake_run))
-    response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dact%26i%3D0", {})
-    assert (response.getheader("Location"), notice_of(response)) == ("/focus?cat=act&i=0", "did it")
+    response = post(client, "/actions/x?back=%2Ffocus%3Fcat%3Dact%26i%3D0%26kept%3Dx", {})
+    assert notice_of(response) == "did it"
+    assert response.getheader("Location") == "/focus?cat=act&i=0&kept=x"
     # Only local paths; anything else goes to the dashboard.
     response = post(client, "/actions/x?back=//evil.example", {})
     assert (response.getheader("Location"), notice_of(response)) == ("/", "did it")
@@ -395,49 +399,105 @@ def test_a_buttons_redirect_keeps_the_tags_the_page_is_filtered_by(
     response.read()
 
 
-def test_ticking_a_todo_off_redirects_back_with_it(
-    client: HTTPConnection, monkeypatch: pytest.MonkeyPatch
+def _focused(client: HTTPConnection, page: str) -> tuple[str, str]:
+    """A focus page's body, and the `back` its buttons post with (quoted): its own address,
+    naming the item it shows; "" when it has no button."""
+    body = get(client, page).read().decode()
+    found = re.search(r"/actions/[\w/]+\?back=([^&'\"]+)", html.unescape(body))
+    return body, found[1] if found else ""
+
+
+def _pressed(client: HTTPConnection, back: str, action: str, fields: dict[str, str]) -> str:
+    """Press a focus page's button (it posts with `back`): where it redirects."""
+    response = post(client, f"/actions/notes/{action}?back={back}", fields)
+    response.read()
+    return response.getheader("Location") or ""
+
+
+def test_a_todo_ticked_off_in_focus_mode_stays_there_ticked_to_untick(
+    app: server.App, client: HTTPConnection
 ) -> None:
-    def fake_perform(
-        _config: object, _db: object, name: str, fields: dict[str, str], back: str | None = None
-    ) -> ActionResult:
-        params = {KEPT: "notes:7"} if name == "notes/todo_done" else {}
-        return ActionResult(f"{name} {fields['todo']}", params)
+    notes = NotesRepository(app.db)
+    entry = notes.add_entry("Chores", NOW.date())
+    dishes = notes.add_todo(entry, "dishes")
+    notes.add_todo(entry, "laundry")
+    _, back = _focused(client, "/focus?cat=notes.todos&i=0")
+    body, back = _focused(client, _pressed(client, back, "todo_done", {"todo": str(dishes)}))
+    # The todo it was on, as it is now: ticked, to untick; the next is laundry.
+    assert "dishes" in body and "<input type='checkbox' checked" in body
+    assert "/actions/notes/todo_undone?" in body and "done · 1 to go" in body
+    body, _ = _focused(client, _pressed(client, back, "todo_undone", {"todo": str(dishes)}))
+    assert "1 of 2" in body and "dishes" in body  # back as a step, as it was
 
-    monkeypatch.setattr(server, "perform_action", fake_perform)
-    kept = Item(
-        title="x y",
-        actions=[
-            Action(
-                name="notes/todo_undone",
-                label="Done",
-                fields={"todo": "7"},
-                checkbox=True,
-                checked=True,
-            )
-        ],
-    )
 
-    def fake_kept(*_: object) -> tuple[str, Item]:
-        return "notes.todos", kept
+def test_focus_mode_keeps_the_item_the_page_showed_though_the_order_changed(
+    app: server.App, client: HTTPConnection
+) -> None:
+    notes = NotesRepository(app.db)
+    entry = notes.add_entry("Chores", NOW.date())
+    dishes = notes.add_todo(entry, "dishes")
+    notes.add_todo(entry, "laundry")
+    body, back = _focused(client, "/focus?cat=notes.todos&i=0")
+    assert "1 of 2" in body and "dishes" in body
+    notes.add_todo(entry, "bins", size="quick")  # meanwhile, elsewhere: it sorts first
+    body, _ = _focused(client, _pressed(client, back, "todo_done", {"todo": str(dishes)}))
+    shown = body.split("focus-panel", 1)[1]
+    assert "done · 2 to go" in body and "dishes" in shown and "bins" not in shown
 
-    monkeypatch.setattr(server, "kept_item", fake_kept)
-    response = post(
-        client,
-        "/actions/notes/todo_done?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0",
-        {"todo": "7"},
-    )
-    assert response.getheader("Location") == "/focus?cat=notes.todos&i=0&kept=notes%3A7"
-    assert notice_of(response) == "notes/todo_done 7"
-    body = get(client, "/focus?cat=notes.todos&i=0&kept=notes%3A7").read().decode()
-    assert "<input type='checkbox' checked" in body and "x y" in body
-    response = post(
-        client,
-        "/actions/notes/todo_undone?back=%2Ffocus%3Fcat%3Dnotes.todos%26i%3D0",
-        {"todo": "7"},
-    )
-    assert response.getheader("Location") == "/focus?cat=notes.todos&i=0"
-    assert notice_of(response) == "notes/todo_undone 7"
+
+def test_focus_mode_follows_an_item_a_button_moved(app: server.App, client: HTTPConnection) -> None:
+    notes = NotesRepository(app.db)
+    entry = notes.add_entry("Chores", NOW.date())
+    notes.add_todo(entry, "dishes")
+    laundry = notes.add_todo(entry, "laundry")
+    body, back = _focused(client, "/focus?cat=notes.todos&i=1")
+    assert "2 of 2" in body and "laundry" in body
+    quick = {"todo": str(laundry), "size": "quick"}
+    body, _ = _focused(client, _pressed(client, back, "todo_size", quick))
+    shown = body.split("focus-panel", 1)[1]
+    assert "1 of 2" in body and "laundry" in shown and "dishes" not in shown
+
+
+def test_an_item_gone_from_the_page_is_shown_as_it_was_without_its_buttons(
+    app: server.App, client: HTTPConnection
+) -> None:
+    notes = NotesRepository(app.db)
+    entry = notes.add_entry("Chores", NOW.date())
+    dishes = notes.add_todo(entry, "dishes")
+    notes.add_todo(entry, "laundry")
+    _, back = _focused(client, "/focus?cat=notes.todos&i=0")
+    body, _ = _focused(client, _pressed(client, back, "todo_delete", {"todo": str(dishes)}))
+    assert "dishes" in body and "gone · 1 to go" in body
+    assert "/actions/notes/" not in body.split("focus-panel", 1)[1].split("laundry")[0]
+
+
+def test_an_item_snoozed_in_act_nows_focus_mode_stays_there_set_aside(
+    app: server.App, client: HTTPConnection
+) -> None:
+    """Snoozed, the todo leaves Act now but stays in its own panel: found there, with
+    Unsnooze."""
+    notes = NotesRepository(app.db)
+    notes.add_todo(notes.add_entry("Chores", NOW.date()), "dishes", size="quick")
+    body, back = _focused(client, "/focus?cat=act&i=0")
+    step = build_dashboard(app.config, app.db, surface="focus").focus_step("act", 0)
+    assert step is not None and "1 of 2" in body and "dishes" in body
+    snooze = next(a for a in step[1].actions if a.label == "Snooze")
+    response = post(client, f"/actions/act_now/snooze?back={back}", snooze.fields)
+    response.read()
+    body, _ = _focused(client, response.getheader("Location") or "")
+    shown = body.split("focus-panel", 1)[1]
+    assert "set aside · 1 to go" in body and "dishes" in shown
+    assert "/actions/act_now/unsnooze?" in body
+
+
+def test_the_server_remembers_only_the_last_items_focus_pages_showed(app: server.App) -> None:
+    """So a server left running doesn't grow as focus pages are browsed."""
+    for n in range(server.MAX_SHOWN + 1):
+        app._remember(f"item-{n}", ("notes.todos", Item(title=str(n))))  # pyright: ignore[reportPrivateUsage]
+    assert app._remembered("item-0") is None  # pyright: ignore[reportPrivateUsage]
+    assert app._remembered("item-1") == ("notes.todos", Item(title="1"))  # pyright: ignore[reportPrivateUsage]
+    last = f"item-{server.MAX_SHOWN}"
+    assert app._remembered(last) == ("notes.todos", Item(title=str(server.MAX_SHOWN)))  # pyright: ignore[reportPrivateUsage]
 
 
 def test_being_stopped_shuts_down_quietly(
@@ -701,6 +761,7 @@ def test_a_refresh_is_given_the_servers_change_checks(
         now: datetime | None = None,
         only: set[str] | None = None,
         checks: ChangeChecks | None = None,
+        asked: dict[str, frozenset[str]] | None = None,
     ) -> None:
         given.append(checks)
 
@@ -708,6 +769,18 @@ def test_a_refresh_is_given_the_servers_change_checks(
     app.refresh_now({"github"})
     # Its collects are asked what moved as they start, and kept with what its checks said.
     assert len(given) == 1 and given[0] is app.checks
+
+
+def test_fetching_entities_again_is_their_plugins_refresh_and_puts_off_the_next(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = [1000.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    app.refresh_now()
+    clock[0] += 300  # github's 300 s: due
+    assert "github" in app.due()
+    app.refresh_now(set(), {"github": frozenset({pr(1).url})})
+    assert "github" not in app.due()
 
 
 def test_a_page_load_asks_for_no_refresh(app: server.App, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -844,6 +917,68 @@ def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
     app.refresh_now({"git"})  # nothing of github's moved
     assert app._pending == set() and _GitHubWatchingGit.answers == []  # pyright: ignore[reportPrivateUsage]
     assert app.check_for_changes() == set()  # no change_check_seconds: never polled
+
+
+@pytest.mark.parametrize(
+    ("then", "expected"),
+    [
+        # github next: its collect asks its check as it starts, so asking it after git's
+        # would only have it fetched again in the next round.
+        ("github", ["git", "github"]),
+        # slack next, which doesn't watch git: github is asked after git's, and collected in
+        # the next round.
+        ("slack", ["git", "slack", "github"]),
+    ],
+)
+def test_a_watcher_is_asked_after_a_plugin_refreshed_alone_unless_its_refreshed_next(
+    then: str, expected: list[str], app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ↻ on a git branch while another plugin's Refresh is pending: git first, narrowed to
+    the branch, then that plugin; github, which watches git, is collected once."""
+    swap = {"github": _GitHubWatchingGit()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    app.config = app.config.with_section("git", GitConfig(repos=[]))
+    migrate(app.config, app.db)
+    monkeypatch.setattr(_GitHubWatchingGit, "answers", [True])  # the branch moved
+    branch = Ref(kind="git.branch", id="/repo/.git#topic")
+
+    def asked_of(config: Config, db: Database, refs: list[Ref]) -> dict[str, frozenset[str]]:
+        return {"git": frozenset(r.id for r in refs)}
+
+    collected: list[str] = []
+
+    def refresh(
+        config: Config,
+        db: Database,
+        now: datetime | None = None,
+        only: set[str] | None = None,
+        checks: ChangeChecks | None = None,
+        asked: dict[str, frozenset[str]] | None = None,
+    ) -> None:
+        collected.extend(sorted((only or set[str]()) | set(asked or {})))
+
+    rounds = [0]
+
+    def wait(timeout: float | None = None) -> bool:
+        rounds[0] += 1
+        if rounds[0] == 1:  # after the first refresh, of everything
+            collected.clear()
+            app.request_refresh({then})
+            app.request_refresh_subjects([branch])
+        elif rounds[0] > 2:  # one round more, for what the first asked for
+            raise KeyboardInterrupt
+        return True
+
+    def due(now: float | None = None) -> set[str]:
+        return set()
+
+    monkeypatch.setattr(server, "asked_of", asked_of)
+    monkeypatch.setattr(server, "refresh", refresh)
+    monkeypatch.setattr(app, "due", due)
+    monkeypatch.setattr(app._wake, "wait", wait)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(KeyboardInterrupt):
+        app.run_refresh_loop()
+    assert collected == expected
 
 
 def test_secrets_in_query_parameters_are_left_out_of_the_log() -> None:
@@ -1052,29 +1187,41 @@ def test_entities_are_asked_to_be_fetched_again_through_the_endpoint(
         assert response.status in (400, 401, 403)
 
 
+@pytest.mark.parametrize(
+    ("named", "expected"),
+    [
+        # github is refreshed for the PR alone: first, narrowed to it, then the rest.
+        ({"jira"}, ["refresh [] asked ['github'] then ['jira']", "refresh ['jira']"]),
+        # github is asked for by name too: refreshed as it would have been, given the PR.
+        ({"github", "jira"}, ["refresh ['github', 'jira'] asked ['github']"]),
+    ],
+)
 def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
-    app: server.App, monkeypatch: pytest.MonkeyPatch
+    app: server.App, monkeypatch: pytest.MonkeyPatch, named: set[str], expected: list[str]
 ) -> None:
+    """The plugins refreshed for them alone first, narrowed to them; then the rest asked for,
+    none twice."""
     done: list[str] = []
     waits = [0]
 
-    def subjects_now(refs: list[Ref]) -> set[str]:
-        done.append("subjects")
-        return {"jira"}  # couldn't: refreshed whole
-
-    def refresh_now(only: set[str] | None = None) -> bool:
-        done.append(f"refresh {sorted(only) if only is not None else 'all'}")
+    def refresh_now(
+        only: set[str] | None = None,
+        asked: dict[str, frozenset[str]] | None = None,
+        then: frozenset[str] = frozenset(),
+    ) -> bool:
+        named = f"refresh {sorted(only) if only is not None else 'all'}"
+        named += f" asked {sorted(asked)}" if asked else ""
+        done.append(named + (f" then {sorted(then)}" if then else ""))
         return True
 
     def wait(timeout: float | None = None) -> bool:
         waits[0] += 1
         if waits[0] > 1:
             raise KeyboardInterrupt  # one round is enough
-        app.request_refresh({"github"})
+        app.request_refresh(named)
         app.request_refresh_subjects([Ref(kind="pull_request", id=pr(1).url)])
         return True
 
-    monkeypatch.setattr(app, "refresh_subjects_now", subjects_now)
     monkeypatch.setattr(app, "refresh_now", refresh_now)
 
     def due(now: float | None = None) -> set[str]:
@@ -1084,7 +1231,7 @@ def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
     monkeypatch.setattr(app._wake, "wait", wait)  # pyright: ignore[reportPrivateUsage]
     with pytest.raises(KeyboardInterrupt):
         app.run_refresh_loop()
-    assert done == ["refresh all", "subjects", "refresh ['github', 'jira']"]
+    assert done == ["refresh all", *expected]
 
 
 def test_a_page_answering_a_bad_response_fails_rather_than_sending_it(

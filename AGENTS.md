@@ -52,15 +52,13 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   own way.
 - Every plugin hook that runs with the plugin's context takes one request object, so a hook
   can gain an input without breaking its overrides. Most take one of five kinds:
-  `ContextRequest(ctx)` (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)` (`store`, `entities`,
-  `relate`, `panels`, `act_now`, `identity`, `item_actions`, `after_collect`, `prune`,
-  `events`); `RefreshRequest(ctx, graph, full, subjects)` (`collect`, `collect_after`,
-  `changed`); `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx, graph)` with a
-  `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`). Five keep a
-  request of their own: `url_for` (`UrlRequest`), `handle_for` (`HandleRequest`),
-  `refresh_subjects` (`SubjectsRequest`), `kept_item` (`KeptItemRequest`) and `import_dir`
-  (`ImportRequest`). `changed`
-  and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
+  `ContextRequest(ctx)` (`load`, `linking_patterns`); `Request(ctx, graph, snapshot)`
+  (`store`, `entities`, `relate`, `panels`, `act_now`, `identity`, `item_actions`,
+  `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
+  (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`fetch`); and `InputRequest(ctx,
+  graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd
+  <plugin>`). Two keep a request of their own: `url_for` (`UrlRequest`) and `handle_for`
+  (`HandleRequest`). `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the fingerprint,
   the snapshot and the graph then). Those called before there's a context take what they need:
   `init_suggested()`, `init_questions(ask, setup)` and `init_shown(section)` (`mfd init`),
   `tokens(config)` (`mfd token`, and loading the config), `cli(parser)`, `pages()` and
@@ -70,8 +68,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   `ctx.today`.
 - Panel builders are pure: no I/O, no clock (use `ctx.now`), no database
   reads beyond what the plugin passes in. Everything slow happens in
-  `collect` or `after_collect`, or in `collect_after` for a plugin that
-  needs other plugins' entities to know what to fetch; `changed`, polled
+  `collect` or `after_collect` (a plugin whose `collect` needs other plugins' entities to
+  know what to fetch sets `collects_after`, and collects once they've stored); `changed`, polled
   every `change_check_seconds`, right after each refresh of a plugin it
   `watches` and as each of its own collects starts, is a cheap check of what moved in its
   tool, so the plugin refreshes sooner: a fingerprint, the subjects that moved, or both.
@@ -87,15 +85,18 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   hold with `graph.fetch`. Buttons, badges, details and links on other plugins' items
   come from `item_actions`, called once per page (where a plugin reads its tables for them),
   which returns the function core calls per item with whose item it is and where it's
-  shown. Core adds its own to items: the importance choices on
+  shown. Core adds its own to items, and plugins theirs: core's are the importance choices on
   every item about an entity (but what `hides`), with Clear priority once one's set; Snooze
-  (for a while, or until it changes) on every item with a task, wherever it's shown, and Pin in Act now; on an item
-  about a person (`people.py`) their contact type, and Set type for a
-  person with an address; and on every item about an
-  entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag
-  (`tags.py`), which it keeps in `Item.tags` and the page filters by (`tag_view.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,
-  who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
-  default, the items of its panels marked `act_now`.
+  (for a while, or until it changes) on every item with a task, wherever it's shown, and Pin
+  in Act now; on an item about a person (`people.py`) their contact type, and Set type for a
+  person with an address; and on every item about an entity (but what `hides`) its `#tag`
+  badges, a Tag field and an Untag per tag (`tags.py`), which it keeps in `Item.tags` and the
+  page filters by (`tag_view.py`). Nothing is added to a part that's `done` (a todo ticked
+  off, kept to untick, finished within its item), by core or by any plugin's `item_actions`:
+  only the part's own buttons act on it. A plugin nominates items for core's Act now with
+  `act_now`, each with `Signals` (effort, what it closes, who's waiting, and a `task`: the
+  stable id Act now keeps a snooze or pin by); by default, the items of its panels marked
+  `act_now`.
 - Every request needs the dashboard's token, a plugin's pages (served at
   `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
   static files.

@@ -10,8 +10,8 @@ from ...api import Action, Badge, Band, Entity, Graph, Item, Link, Model, Panel,
 from ...api.kinds import PULL_REQUEST as PR
 from ...api.kinds import TICKET
 from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
-from .markdown import PR_URL_RE
 from .models import Condition, Entry, Ice, Todo
+from .text import PR_URL_RE
 
 NOT_BLOCKED_RE = re.compile(
     r"\s*(?:(?:nothing|none|not blocked|no blockers?)(?:\s+(?:yet|now|for now|so far|currently"
@@ -380,18 +380,9 @@ class Builder:
         """Whether each PR the graph has is over (merged or closed), by URL."""
         return {pr.id: pr.lifecycle == "done" for pr in self.graph.view(PR, _PrView)}
 
-    def kept_todo(self, todo_id: int) -> Item | None:
-        """A todo just ticked off (or back on), for the focus page to keep showing with its box
-        as it is now, so the tick can be undone; None if it's gone."""
-        for entry in self.entries:
-            for todo in entry.todos:
-                if todo.id == todo_id:
-                    return self._kept(entry, todo, self._pr_done())
-        return None
-
-    def _kept(self, entry: Entry, todo: Todo, states: dict[str, bool]) -> Item:
-        """A todo kept to untick once ticked off (or to tick again), with its box as it is now:
-        about nothing, so nothing but its own buttons is offered on what's done."""
+    def _ticked(self, entry: Entry, todo: Todo, states: dict[str, bool]) -> Item:
+        """A todo ticked off today, kept to untick: `done`, so core offers nothing on it but
+        its own box."""
         links = _todo_links(todo, _entry_urls(entry), states, self.graph)
         mentioned = [link for link in links if link.strong]
         ticked = todo.done_on is not None
@@ -402,6 +393,7 @@ class Builder:
             badges=["done"] if ticked else [todo.size or "unsized"],
             links=links,
             actions=todo_actions(todo, entry.title),
+            subjects=[Ref(kind=TODO, id=str(todo.id))],
             done=ticked,
         )
 
@@ -443,7 +435,7 @@ class Builder:
                 for n, t in enumerate(ordered)
             ]
             # Those ticked off today stay, ticked, to untick, as focus mode keeps them.
-            done = [self._kept(entry, t, states) for t in ticked]
+            done = [self._ticked(entry, t, states) for t in ticked]
             # One todo isn't listed as a part, so the entry shows what its part would. Where it
             # stands in for the entry (focus mode), it's about the entry, so its importance and
             # Put on ice are the entry's, as on the page.

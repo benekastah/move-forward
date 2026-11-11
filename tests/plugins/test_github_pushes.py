@@ -43,7 +43,9 @@ def test_a_commit_or_push_on_my_prs_branch_says_github_changed(
     assert not changed_after()  # the first look notes where things stand
     assert not changed_after()
     assert changed_after(local_branch(mine.head, sha="a", ahead=0))  # pushed
-    assert checks.take(github(), None).subjects == {"acme/widgets#1"}  # for collect
+    assert checks.take(github(), None).subjects == {
+        "https://github.com/acme/widgets/pull/1"
+    }  # for collect
     # Pending until a collect fetches it, but asked for once: nothing new moved since.
     assert not changed_after()
     collected()
@@ -85,4 +87,4 @@ def test_a_push_counts_when_the_notifications_cant_be_read(
     assert not changed()  # the first look notes where things stand
     LocalRepository(db).replace(local_snapshot(branches=[local_branch(mine.head, ahead=0)]))
     assert changed()
-    assert checks.take(github(), None).subjects == {"acme/widgets#1"}
+    assert checks.take(github(), None).subjects == {"https://github.com/acme/widgets/pull/1"}

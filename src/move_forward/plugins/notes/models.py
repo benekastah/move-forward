@@ -84,12 +84,3 @@ class Ice(Model):
     note: str | None = None
     items: list[IcedItem]
     """In order: a stack's bottom branch first."""
-
-
-class Section(Model):
-    """A part of `work-notes.md` that isn't a piece of work, kept as written: the text
-    before the first entry, or a section like "Reviews requested of me"."""
-
-    heading: str | None
-    """None for the text before the first `##` heading."""
-    body: str

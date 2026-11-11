@@ -37,6 +37,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     api_version = API_VERSION
     init_example_on = True
     requires: ClassVar[list[str]] = ["git"]
+    collects_after = True
     watches: ClassVar[list[str]] = ["git"]
     snapshot_model = GitStackSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
@@ -47,7 +48,7 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
         """Only when git stack is installed, i.e. `git stack` would run."""
         return shutil.which("git-stack") is not None
 
-    def collect_after(self, req: RefreshRequest[GitStackConfig]) -> GitStackSnapshot:
+    def collect(self, req: RefreshRequest[GitStackConfig]) -> GitStackSnapshot:
         """`git stack info` in each repo git has branches in."""
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])

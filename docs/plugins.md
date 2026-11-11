@@ -14,7 +14,9 @@ git and git_stack both nominate merged branches for Act now, each those it can c
 the ones git stack tracks to git_stack's Clean.
 
 Core adds importance choices to entity items and their individual todo parts (but not to
-items about what hides things), and Snooze to every item with a task. Plugins can group their buttons with those of other plugins: notes' Put on ice joins git's
+items about what hides things, nor to a todo part ticked off), and Snooze to every item with a
+task. A todo part ticked off, kept to untick, gets nothing added, from core or any plugin: only
+its own box acts on it. An entry whose todos are all ticked off gets what any item does. Plugins can group their buttons with those of other plugins: notes' Put on ice joins git's
 Delete under Disposition, and joins core's Snooze and Pin on Act now items.
 Emoji buttons retain their text labels in titles and accessible names.
 
@@ -73,8 +75,9 @@ flowchart LR
 
 ## Refresh, requirements and item actions
 
-Plugins collect in two phases: `collect` first, in parallel, then `collect_after` for
-plugins that need the others' entities to know what to fetch. A plugin's `requires` must
+Plugins collect in two phases: first those that don't need the others' entities, in
+parallel, then those that set `collects_after` (they need the others' entities to know what to
+fetch), with the graph the first made. A plugin's `requires` must
 be enabled too. Each plugin refreshes on its own schedule; one that `watches` another is
 asked whether it `changed` right after that one refreshes. Plugins add buttons to each other's items by the items' `subjects`.
 
@@ -86,7 +89,7 @@ flowchart TB
         jira([jira])
         mail([mail])
     end
-    subgraph Phase2["Phase 2: collect_after (sees the graph)"]
+    subgraph Phase2["Phase 2: collects_after (sees the new graph)"]
         git_stack([git_stack])
     end
     Phase1 --> Phase2

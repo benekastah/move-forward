@@ -1,15 +1,9 @@
-"""The github plugin's people: logins and commit emails, copied from core, imported from the
-reviewer map, or looked up."""
+"""The github plugin's people: logins and commit emails, copied from core or looked up."""
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
-import pytest
-from skill_notes import REVIEWER_MAP
-
-from move_forward import cli
 from move_forward.db import Database
-from move_forward.plugins.github.people import PeopleRepository, read_reviewer_map
+from move_forward.plugins.github.people import PeopleRepository
 from move_forward.plugins.github.tables import MIGRATIONS
 
 NOW = datetime(2026, 10, 31, 12, tzinfo=UTC)
@@ -25,33 +19,13 @@ def test_the_migration_copies_emails_core_held() -> None:
     assert PeopleRepository(db).emails() == {"alice": "a@x", "bob": None}
 
 
-def test_an_import_wins_over_lookups_and_lookups_never_overwrite() -> None:
+def test_a_lookup_never_overwrites_what_is_known() -> None:
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)
     people = PeopleRepository(db)
-    people.save_looked_up("alice", "old@x", NOW)
-    people.save_looked_up("bob", "b@x", NOW)
-    people.replace_imported({"alice": "a@x"})
+    people.save_looked_up("alice", "a@x", NOW)
     people.save_looked_up("alice", "other@x", NOW)
-    assert people.emails() == {"alice": "a@x", "bob": "b@x"}
-    people.replace_imported({})
-    assert people.emails() == {"bob": "b@x"}
-
-
-def test_mfd_import_reads_reviewers_emails(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    (tmp_path / "reviewer-map.md").write_text(REVIEWER_MAP)
-    config = tmp_path / "config.toml"
-    config.write_text(
-        f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n\n[github]\norg = "acme"\n'
-    )
-    assert cli.main(["-c", str(config), "import", str(tmp_path)]) == 0
-    emails = read_reviewer_map(REVIEWER_MAP)
-    assert emails == {"alice": "alice@example.com"}  # bob has no email
-    assert "github: imported 1 reviewers' emails" in capsys.readouterr().out
-    assert PeopleRepository(Database(tmp_path / "d.db")).emails() == emails
-    assert cli.main(["-c", str(config), "import", str(tmp_path / "nope")]) == 1
+    assert people.emails() == {"alice": "a@x"}
 
 
 def test_lookups_that_found_no_email_are_tried_again_after_the_cutoff() -> None:
@@ -63,6 +37,6 @@ def test_lookups_that_found_no_email_are_tried_again_after_the_cutoff() -> None:
     people.save_looked_up("alice", "a@x", old)  # found: kept however old
     people.save_looked_up("bob", None, old)
     people.save_looked_up("carol", None, NOW)
-    people.replace_imported({"erin": "e@x"})
+    people.save_looked_up("erin", "e@x", NOW)
     assert people.forget_misses_before(NOW - timedelta(days=90)) == 2  # bob and dan
     assert people.emails() == {"alice": "a@x", "carol": None, "erin": "e@x"}

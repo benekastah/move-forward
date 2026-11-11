@@ -159,17 +159,15 @@ class Harness:
 
     def collect(self) -> BaseModel:
         """Collect and keep the snapshot as a refresh of the server does: the plugin asked what
-        moved first (with a change check), its `collect` (or `collect_after`) given what moved
+        moved first (with a change check), its `collect` given what moved
         since its last collect that stored, and then `store`d. Returns the snapshot."""
         with self._installed():
             me = self._enabled()
             graph = self.graph()
             taken = self._checks.take(me, graph)
-            req = RefreshRequest(me.ctx, graph, taken.full, taken.subjects)
-            if self.plugin.collects_after_graph:
-                snapshot = self.plugin.collect_after(req)
-            else:
-                snapshot = self.plugin.collect(req)
+            snapshot = self.plugin.collect(
+                RefreshRequest(me.ctx, graph, taken.full, taken.subjects)
+            )
         self.store(snapshot)
         with self._installed():
             self._checks.stored(self._enabled(), taken)

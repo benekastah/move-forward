@@ -20,8 +20,6 @@ from move_forward.plugin import (
     ContextRequest,
     RefreshRequest,
     Request,
-    Subjects,
-    SubjectsRequest,
 )
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
@@ -46,9 +44,10 @@ class _Git(GitPlugin):
 class _JiraAfterGit(JiraPlugin):
     """Fetches an issue per repo git found, and remembers what after_collect saw."""
 
+    collects_after = True
     seen_by_after_collect: ClassVar[list[str]] = []
 
-    def collect_after(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
+    def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
         graph = req.graph
         return JiraSnapshot(
             issues=[issue(summary=f"about {r.ref.id}") for r in graph.of_kind("git.repo")]
@@ -234,9 +233,9 @@ def test_feedback_that_is_over_or_old_is_pruned() -> None:
     assert sorted(feedback.all()) == [("pull_request", "3", ""), ("pull_request", "4", "")]
 
 
-def test_a_plugin_collects_after_the_graph_when_it_implements_collect_after() -> None:
-    assert GitStackPlugin().collects_after_graph
-    assert not GitPlugin().collects_after_graph
+def test_git_stack_collects_after_the_others_and_git_doesnt() -> None:
+    assert GitStackPlugin().collects_after
+    assert not GitPlugin().collects_after
 
 
 def test_refreshing_some_plugins_refreshes_only_those(
@@ -251,8 +250,9 @@ def test_refreshing_some_plugins_refreshes_only_those(
 
     class JiraOnGit(JiraPlugin):
         requires: ClassVar[list[str]] = ["git"]
+        collects_after = True
 
-        def collect_after(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
+        def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
             calls.append("jira")
             return JiraSnapshot(issues=[])
 
@@ -488,14 +488,13 @@ def test_fetching_a_pr_again_tells_what_changed_once(monkeypatch: pytest.MonkeyP
     config, db = _merging(monkeypatch, subscribe, snapshot(mine=[_OPEN]), merged)
     refresh.refresh(config, db, NOW)
 
-    def again(
-        self: GitHubPlugin, req: SubjectsRequest[GitHubConfig, GitHubSnapshot]
-    ) -> Subjects[GitHubSnapshot]:
-        return Subjects(merged, req.refs)
+    def again(self: GitHubPlugin, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
+        assert not req.full and req.subjects == {_OPEN.url}
+        return merged
 
-    monkeypatch.setattr(GitHubPlugin, "refresh_subjects", again)
+    monkeypatch.setattr(GitHubPlugin, "collect", again)
     pr_ref = Ref(kind="pull_request", id=_OPEN.url)
-    assert refresh.refresh_subjects(config, db, [pr_ref], NOW) == set()
+    refresh.refresh_subjects(config, db, [pr_ref], NOW)
     assert _told(db) == _MERGE_TOLD
     refresh.refresh(config, db, NOW)
     assert _told(db) == []

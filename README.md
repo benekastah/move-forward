@@ -121,14 +121,13 @@ before the command's name.
 | `mfd serve --reload` | Development: also restart when a source file of the dashboard changes, not just the config (`--open` isn't repeated on restart). |
 | `mfd restart` | Ask a running `mfd serve` supervisor to check the code and config, then replace its server process. This works on macOS, Linux and Windows; on macOS and Linux, `SIGUSR1` to the supervisor process does the same. An already running supervisor must be started once with this version to accept restart requests. |
 | `mfd check` | Load the config and every plugin, print the enabled plugins, and exit; fails with what's wrong. |
-| `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), fetch just those entities again through their plugins, refreshing whole the plugins that can't. |
+| `mfd refresh [--subject KIND ID]...` | Refresh every source once, print each source's status, exit. With `--subject` (e.g. `--subject pull_request <URL>`), refresh just the plugins that publish those entities, each fetching only them where it can. |
 | `mfd dump` | Print the dashboard as JSON from what's stored. |
 | `mfd snooze <entity> [7d\|12h\|changed] [--kind K] [--task T]` | Snooze the items about an entity (named as for `mfd priority`; all its tasks, or `--task`'s), as their Snooze button does: each until it changes or the time is up (default: `[act_now]` `snooze_days` for its kind); with `changed`, only until it changes. It snoozes what has a Snooze button, in Act now or a panel, and says so when nothing does. `mfd unsnooze <entity> [--kind K] [--task T]` brings back anything snoozed (named as for `mfd priority`; all its tasks, or `--task`'s). |
 | `mfd priority <entity> <1\|2\|clear> [--kind K]` | Set how much an entity matters: 1 important, 2 critical. The entity is a PR's URL, a ticket's key or an entry's title; a todo or branch needs `--kind notes.todo` or `--kind git.branch` and its id. It replaces the importance a plugin gave the items about it (and counts for the PRs, tickets and entries around it), until the PR merges, the ticket is done or the todo is ticked off. The importance buttons on items do the same; Clear priority does `clear`. |
 | `mfd tag <entity> <tag> [--kind K] [--remove]` | Put a `#tag` on an entity (named as for `mfd priority`), or take one off it, whatever put it there; see [Tags](#tags). |
 | `mfd contact <address\|@domain> <type\|clear>` | Set what someone is to me, or everyone at a domain, e.g. `mfd contact @acme.com customer`, as the Set type button does (see [People](#people)). `mfd contacts` prints those I set as JSON (who, contact_type). |
 | `mfd snoozes` | Print the Act now items snoozed now, as the page has them (the snooze's time isn't up and the item hasn't changed since), including items on ice, which the page hides, as JSON (kind, id, task, until, fingerprint; `until` is null for a snooze until it changes), for the skill. |
-| `mfd import <dir> [--replace]` | Read the move-forward skill's markdown notes (`work-notes.md`, `on-ice.md`, `reviewer-map.md`) from `<dir>`: each enabled plugin imports what it knows of them, saying what, prefixed with its name. Notes already holding notes skip them, saying so, unless `--replace`, which overwrites the notes. One failing (a file it can't read) doesn't stop the others; the command fails then, and when nothing in `<dir>` is imported. See each plugin's page for what it reads. |
 | `mfd init [--example] [--force]` | Ask for each setting and write the config (`--example`: write a commented example instead). |
 | `mfd token set <plugin>` | Ask for a plugin's API token (jira, slack) or password (mail) without showing it (`<plugin>.<account>` for one of a plugin's accounts, when it reads several), and store it in the system's secret store (the macOS keychain, Windows' Credential Manager, or Linux's desktop keyring through `secret-tool`) under its `keychain_service` (the plugin's, or the account's), with `email` as the account; the config is refused when two tokens are kept under the same one, whatever its case. |
 | `mfd token rotate` | Make a new dashboard token (the one in `token` next to the database) and end every session; a running server picks it up by itself, and scripts need the new one. |
@@ -163,8 +162,8 @@ until unpinned), which act on all it shows: what else is due on its subject and 
 to it. A snoozed item comes back once it changes (its title, badges or details). Opening an
 item's link, or pressing a plugin's button on it, marks it opened: it's dimmed in its place,
 with when you opened it, until it changes (or for a day at most). Coming back to the tab
-fetches again just what you opened in the last half hour, not its plugins whole; an item's
-↻ button does the same for it at once.
+refreshes the plugins of what you opened in the last half hour, each fetching just that where
+it can (github a PR, git a branch's repo); an item's ↻ button does the same for it at once.
 
 Items with something to do have the same Snooze in their own panels. An item snoozed, in Act
 now or its panel, leaves Act now and waits in its panel, last and dimmed, with Unsnooze, until
@@ -309,7 +308,12 @@ Prev and Next (or the left and right arrow keys). Act now goes through its items
 order overall; a panel, in its own. Work entries are split into their todos
 ([notes](docs/plugins/notes.md#panels) says how). With tags selected (see [Tags](#tags)), it goes
 through only what carries one.
-Buttons on a focused item come back to the same item afterwards.
+Buttons on a focused item come back to the same item afterwards, wherever they moved it (a
+todo made quick comes first). One that takes it out of the category (a todo ticked off, an
+item snoozed) leaves it shown as the page has it now (the todo ticked, "done"; the item with
+Unsnooze, "set aside"), so what it did can be undone, or, when the page no longer shows it at
+all, as it was, without its buttons, "gone". A focus page's address names its item as
+`kept`: its anchor (`item-…`), or `title:` and its title for an item about nothing.
 
 ## API
 
@@ -343,7 +347,7 @@ Pages (GET, HTML):
 | `/` | The dashboard. `?tag=<tag>`, repeated for several, shows only what carries one of them (see [Tags](#tags)). |
 | `/settings` | The config's settings as a form (see [Settings](#settings)). |
 | `/focus` | Focus mode's category list. |
-| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `act` (Act now) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<plugin>:<key>` (set by an action's redirect) keeps an item an action just changed, such as a todo just ticked off, on the page so the change can be undone. |
+| `/focus?cat=<key>&i=<n>` | Item `n` of a category: `act` (Act now) or a panel key (its plugin's name and its own, e.g. `github.conflicts`). `&kept=<item>` (in a focus page's own address, and so in its buttons' redirects) names the item the page shows (its anchor, or `title:` and its title), found again wherever it is, and remembered to show in place of item `n` once it's left the category; follow a redirect rather than build it. |
 
 Both focus pages take `tag` as `/` does.
 
@@ -351,8 +355,10 @@ Plugins add pages and buttons of their own, listed on their pages (see
 [Plugins](#plugins)).
 
 `POST /refresh/subjects` (JSON, `[{"kind": ..., "id": ...}]`, at most 50) asks for those
-entities to be fetched again, ahead of any refresh that's due; a plugin that can't fetch
-one is refreshed whole. It answers `204 No Content`, or `400` for a body that isn't one.
+entities to be fetched again, ahead of any refresh that's due: a refresh of the plugins that
+publish them, each narrowed to them where it can be, recorded as any refresh. A plugin whose
+refresh is asked for by name or falls due in the same round is refreshed as it would have been,
+given them too. It answers `204 No Content`, or `400` for a body that isn't one.
 
 `POST /layout` (JSON, sent by the page's drag script) stores the page's order:
 `{"groups": [group keys], "panels": {group key: [panel keys]}}`. It answers
@@ -424,9 +430,9 @@ snoozed or pinned in Act now (core's `act_now_feedback`), the priorities, tags (
 on, and those you took off until their plugin refreshes) and contact types you set, the
 sign-in sessions, the notifications waiting to be told, what
 the panels last showed that notifies when new and the problems the plugins report (core's too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
-plugin's (from `mfd import`, or looked up from commits), and the messages
+plugin's (looked up from commits), and the messages
 mail reads in its own. It's the
-source of truth for the notes; `mfd notes export` writes them out as markdown.
+source of truth for the notes.
 The server's token sits next to it, in `token`. The
 database, its backups and the token are readable by you alone (on Windows, by their access lists).
 

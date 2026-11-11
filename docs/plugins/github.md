@@ -24,7 +24,7 @@ commit, and how far ahead of or behind their upstream) with what it saw last. Ot
 conflict, wait for `refresh_seconds`.
 
 An action that touched a PR (a ping, a reaction) and `mfd refresh --subject pull_request
-<URL>` fetch just that PR the same way (`refresh_subjects`).
+<URL>` fetch just that PR the same way: core's `collect` of it, by URL.
 
 Such a refresh fetches only the PRs that changed, in one request, and places them in the
 lists the searches fill (mine, merged or closed; requesting my review or my team's;
@@ -173,7 +173,6 @@ Requested from my teams and PR housekeeping aren't nominated.
 
 | Command | Does |
 | --- | --- |
-| `mfd import <dir>` | Core's command; github reads reviewers' emails from the skill's `reviewer-map.md` in `<dir>`, for reviewer suggestions, replacing what the last import read; they win over emails looked up from commits. Run it again, without `--replace`, whenever the map changes: notes skips its part then, where `--replace` would overwrite the notes too. |
 
 ## Notifications
 

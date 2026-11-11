@@ -17,7 +17,6 @@ from ...api import (
     Event,
     Graph,
     Identity,
-    ImportRequest,
     InitSetup,
     Item,
     KindSpec,
@@ -29,8 +28,6 @@ from ...api import (
     RefreshRequest,
     Request,
     Signals,
-    Subjects,
-    SubjectsRequest,
     attrs,
     collect_into,
 )
@@ -41,7 +38,7 @@ from .config import GitHubConfig
 from .kinds import GitHubPerson, GitHubPullRequest
 from .models import GitHubSnapshot, PullRequest
 from .panels import PR, REQUEST_REVIEWER_TASK, REVIEW_TASK, Builder
-from .people import REVIEWER_MAP_FILE, PeopleRepository, read_reviewer_map
+from .people import PeopleRepository
 from .prs import (
     changes_requested,
     last_review_activity,
@@ -70,9 +67,9 @@ EMAIL_LOOKUPS_FAILED = "email_lookups"
 """The problem of which reviewers' commit emails couldn't be looked up, and why."""
 
 
-def _pr_id(changed: str) -> client.PrId:
-    repo, _, number = changed.rpartition("#")
-    return client.PrId(repo=repo, number=int(number))
+def pr_url(host: str, repo: str, number: int) -> str:
+    """The URL of PR `number` of `repo` on `host`: its id, as `pr_id_of` reads it back."""
+    return f"https://{host}/{repo}/pull/{number}"
 
 
 def pr_id_of(host: str, url: str) -> client.PrId | None:
@@ -134,21 +131,22 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         return {"merge": {"method": "squash"}}
 
     def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
-        """Every search; or, after `changed` saw only some PRs (`owner/name#number`) change,
-        just those PRs (`req.subjects`), placed in the stored lists as the searches would find
-        them. Every search runs when core asks for a full collect (`refresh_seconds` since the
-        last, so frequent changes can't put it off, or a change that wasn't about a PR), when
-        more PRs changed than a search page holds (a request for them all would time out), and
-        when fetching them fails."""
+        """Every search; or, when only some PRs changed (`req.subjects`, by URL: those
+        `changed` saw move, or an action touched, or I opened), just those PRs, in one request,
+        placed in the stored lists as the searches would find them. Every search runs when core
+        asks for a full collect (`refresh_seconds` since the last, so frequent changes can't put
+        it off, or a change that wasn't about a PR), before the first, when a subject isn't one
+        of the host's PRs, when more PRs changed than a search page holds (a request for them
+        all would time out), and when fetching them fails."""
         ctx = req.ctx
         config = ctx.config
         changed = req.subjects
-        everything = req.full or len(changed) > client.PAGE_SIZE
+        ids = [pr_id_of(config.host, url) for url in sorted(changed)]
+        everything = req.full or len(changed) > client.PAGE_SIZE or None in ids
         previous = None if everything else self.load(ContextRequest(ctx))
         if previous is not None and changed:
-            ids = [_pr_id(pr) for pr in sorted(changed)]
             try:
-                fetched = client.fetch_prs(config.host, ids)
+                fetched = client.fetch_prs(config.host, [i for i in ids if i is not None])
             except CommandError as e:
                 ctx.log.warning("fetching the PRs that changed failed, so fetching all: %s", e)
             else:
@@ -200,7 +198,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         refresh of git, which it watches), or I have a notification about something my
         searches cover (`search_scope`), polled as often as GitHub allows. Which PRs changed are
         the answer's subjects, which core keeps for `collect`, to fetch just those; a
-        notification about something else asks for every search."""
+        notification about something else asks for every search. A PR is named by its URL."""
         ctx, graph, previous = req.ctx, req.graph, req.previous.graph
         notified = self._notified(ctx)
         # Against the graph at the last check that didn't raise: core keeps it for us.
@@ -263,7 +261,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         org = ctx.config.org if ctx.config.search_scope == "org" else None
         for n in found.new_in(org, seen):
             if n.pr is not None:
-                prs.add(f"{n.repo}#{n.pr}")
+                prs.add(pr_url(ctx.config.host, n.repo, n.pr))
             elif n.kind == notifications.CHECK_SUITE:
                 ci_repos.add(n.repo.lower())
             elif n.kind not in notifications.UNRELATED:
@@ -271,7 +269,7 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         if ci_repos:
             if (snapshot := self.load(ContextRequest(ctx))) is None:
                 return prs | {EVERYTHING}
-            prs |= {f"{pr.repo}#{pr.number}" for pr in snapshot.mine if pr.repo.lower() in ci_repos}
+            prs |= {pr.url for pr in snapshot.mine if pr.repo.lower() in ci_repos}
         return prs
 
     def events(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Event]:
@@ -455,23 +453,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         ]
         return [*entities.values(), *people]
 
-    def refresh_subjects(
-        self, req: SubjectsRequest[GitHubConfig, GitHubSnapshot]
-    ) -> Subjects[GitHubSnapshot] | None:
-        """These PRs fetched now, in one request, placed in the stored lists as the searches
-        would find them; None before the first full collect, or for a ref that isn't one of
-        the host's PRs."""
-        ctx, snapshot = req.ctx, req.snapshot
-        ids = [pr_id_of(ctx.config.host, ref.id) for ref in req.refs]
-        if snapshot is None or not ids or any(i is None for i in ids):
-            return None
-        fetched = client.fetch_prs(ctx.config.host, [i for i in ids if i is not None])
-        urls = {pr.url for pr in fetched}
-        return Subjects(
-            placing.place(snapshot, fetched, _team_slugs(ctx)),
-            [ref for ref in req.refs if ref.id in urls],
-        )
-
     def relate(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[tuple[Ref, Ref]]:
         """Each of its PRs to the local branch it comes from (see `relations`)."""
         return relations.relations(req.graph, f"{self.name}.{PR}")
@@ -497,15 +478,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
                 )
             )
         return found
-
-    def import_dir(self, req: ImportRequest[GitHubConfig]) -> list[str]:
-        """Reviewers' emails from `reviewer-map.md`, replacing what an earlier import read."""
-        path = req.dir / REVIEWER_MAP_FILE
-        if not path.exists():
-            return []
-        emails = read_reviewer_map(path.read_text(encoding="utf-8-sig", errors="replace"))
-        PeopleRepository(req.ctx.db).replace_imported(emails)
-        return [f"imported {len(emails)} reviewers' emails"]
 
     def prune(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[str]:
         """Forget email lookups that found none `prune_days` ago, to try them again."""
