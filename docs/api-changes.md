@@ -20,7 +20,9 @@ for themselves (a token, a request, an example config) is core's.
   locked without marking, as before. A field whose entries are tables by name is marked
   `api.TABLES` the same way, in place of `json_schema_extra={"tables": True}`, which core no
   longer reads. A field can carry both, alongside a `Field(...)` default. `Strict` refuses a
-  marker given as a default (`host: str = LOCKED`), which would mark nothing.
+  marker that would mark nothing: one given as a default (`host: str = LOCKED`), or one inside
+  the field's type rather than on it (`Annotated[str, LOCKED] | None`, `list[Annotated[str,
+  LOCKED]]`, a `type` alias carrying it); write `Annotated[str | None, LOCKED]`.
 - **No `cli_help`**: a plugin has a command when it overrides `cli`, and the first line of
   that override's docstring is its help; the registry refuses an override without one. Move
   the help text into the docstring.
