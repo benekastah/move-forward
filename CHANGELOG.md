@@ -7,9 +7,17 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ### Python 3.14 is required
 
-move-forward now needs Python 3.14 or newer (and pydantic 2.14.3 or newer). Install Python
-3.14, then reinstall mfd with it: `python3.14 dev.py install` (on Windows, `py -3.14 dev.py
-install`), after removing `.venv` if it was made with an older Python.
+move-forward now needs Python 3.14 or newer (and pydantic 2.14.3 or newer). A running
+`mfd serve` can't move over by itself: its supervisor and reloader run on the old Python, which
+can't read the new code, so the page would keep the old code. To move:
+
+1. Stop `mfd serve`.
+2. Pull.
+3. Install Python 3.14 if you haven't (with uv, `uv python install 3.14`).
+4. Reinstall with it: `python3.14 dev.py install` (on Windows, `py -3.14 dev.py install`).
+   dev.py now stops at once under an older Python, and makes `.venv` again when an older
+   Python made it.
+5. Start `mfd serve` again.
 
 ### A focus page's `kept` names the item it shows
 
