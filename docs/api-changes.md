@@ -14,6 +14,14 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **One `Init`**: what only `mfd init` reads is one class variable, `init`, an `api.Init`
+  (built in the plugin's `setup.py`), in place of the class variables `init_suggested`,
+  `init_example`, `init_example_on`, `init_tables`, `init_finds_teams` and `token_help`, and
+  the `init_questions(ask, setup)` hook. Its fields are `questions` (the function the hook
+  called, `(ask, setup) -> InitSection`; by default nothing is asked), `example`, `tables`,
+  `suggested`, `example_on`, `finds_teams` and `token_help`, each as the one it replaces.
+  `suggested` is False by default: `mfd init` suggests a plugin only when its `Init` says so
+  (git_stack's says whether git stack is installed).
 - **One `snapshots` hook for keeping the snapshot**: `store(req)` and `load(req)` are gone.
   `snapshots(req: ContextRequest)` gives a `Snapshots` (`save(snapshot)`, `load()`), most often
   the plugin's repository over its tables, which already had both; the built-ins' repositories'
@@ -149,30 +157,27 @@ for themselves (a token, a request, an example config) is core's.
   its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
   place under other names overrides `tokens(config)`, returning `{"": settings}`).
 - **`changed` returns a `Changed`**, never a bare bool (see "Core keeps what moved" above).
-- **`init_suggested` is a class variable**, False by default: `mfd init` suggests a plugin
-  only when it sets `init_suggested = True` (git_stack's says whether git stack is
-  installed).
-- **An `InitSection`**: `init_questions` returns `InitSection(values, shown)`, and
-  `init_example` is one too (no longer commented TOML text). `init_shown(section)` is gone: what
+- **An `InitSection`**: an `Init`'s `questions` return `InitSection(values, shown)`, and its
+  `example` is one too (no longer commented TOML text). `init_shown(section)` is gone: what
   it gave is the section's `shown`, the example values of optional keys, written commented
   out.
 - **`api.http` is `request` and `RequestError`**: `api.http.opener` and
   `api.http.require_https` have left `api`. Send a request with `api.http.request`, which
   checks for HTTPS and refuses redirects itself.
 - **The example config is the plugins'**: `mfd init --example` is built from each offered
-  plugin's section as `mfd init` writes it, installed plugins' too. A plugin setting
-  `init_example_on` has its section on there, with `init_example` uncommented; any other's
+  plugin's section as `mfd init` writes it, installed plugins' too. A plugin whose `Init`
+  says `example_on` has its section on there, with its `example` uncommented; any other's
   is commented out.
 - **Commented defaults come from the model**: `init_template` is gone, and a plugin still
   setting it is refused (`mfd check` says why). `mfd init` writes
   each optional key of `config_model` itself, commented out, with its default (a
   `TokenFields` section's `default_token_env` and `default_keychain_service` for an empty
   `token_env` and `keychain_service`) and its docstring's first sentence as its comment. A
-  plugin keeps what the model can't say: `init_tables`, commented tables of example entries
-  (`[github.teams]`), whose keys aren't written again (nor the tables, when the section's
-  answers have one), and a section's `shown` (see "An `InitSection`" above), an example value
+  plugin keeps what the model can't say: its `Init`'s `tables`, commented tables of example
+  entries (`[github.teams]`), whose keys aren't written again (nor the tables, when the
+  section's answers have one), and a section's `shown` (see "An `InitSection`" above), an example value
   for a key whose default is None or says less. A field marked
-  `json_schema_extra={"tables": True}` is left to `init_tables`.
+  `json_schema_extra={"tables": True}` is left to those `tables`.
 - **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
   its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;
   with neither, it raises `SourceError` with core's message ("no token: run `mfd token set

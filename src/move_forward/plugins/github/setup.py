@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from ...api import Asker, InitSection, InitSetup, checkout, choices, quiet, word
+from ...api import Asker, Init, InitSection, InitSetup, checkout, choices, quiet, word
 from .client import api
 from .config import DEFAULT_HOST
 
@@ -93,3 +93,14 @@ def questions(ask: Asker, setup: InitSetup) -> InitSection:
         choices(lambda: org_teams(name, host)),
     )
     return InitSection({"org": name, **({"host": host} if host != DEFAULT_HOST else {})}, SHOWN)
+
+
+INIT = Init(
+    questions=questions,
+    example=EXAMPLE,
+    tables=TABLES,
+    suggested=True,
+    example_on=True,
+    finds_teams=True,
+)
+"""Always suggested: init guesses its org from the checkout it runs in."""

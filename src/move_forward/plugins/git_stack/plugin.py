@@ -11,6 +11,7 @@ from ...api import (
     ContextRequest,
     Entity,
     Event,
+    Init,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
@@ -34,9 +35,8 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     title = "Git Stack"
     config_model = GitStackConfig
     api_version = API_VERSION
-    init_example_on = True
-    init_suggested = shutil.which("git-stack") is not None
-    """Only when git stack is installed, i.e. `git stack` would run."""
+    init = Init(suggested=shutil.which("git-stack") is not None, example_on=True)
+    """Suggested only when git stack is installed, i.e. `git stack` would run."""
     requires: ClassVar[list[str]] = ["git"]
     collects_after = True
     watches: ClassVar[list[str]] = ["git"]

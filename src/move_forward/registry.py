@@ -175,7 +175,7 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(
                 f"{plugin.name} sets init_template, which mfd init no longer reads: it writes"
                 " the optional keys from config_model's defaults and docstrings; put example"
-                " tables in init_tables, and example values in its sections' shown"
+                " tables in its Init's tables, and example values in its sections' shown"
             )
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():
