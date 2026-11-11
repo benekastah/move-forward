@@ -177,6 +177,10 @@ REMOVED_ATTRIBUTES: dict[str, str] = {
     "init_tables": f"{_INIT}, as its `tables`",
     "init_finds_teams": f"{_INIT}, as its `finds_teams`",
     "token_help": f"{_INIT}, as its `token_help`",
+    "snapshot_model": "a plugin collects when it overrides `collect` (and `snapshots`); its"
+    " snapshot's model is its type parameter `S`",
+    "cli_help": "a plugin has a command when it overrides `cli`, whose docstring's first line"
+    " is the command's help",
 }
 """`Plugin` attributes and hooks that are gone, each with what replaced it. A plugin still
 setting one is refused, naming its replacement, rather than core silently ignoring it (its

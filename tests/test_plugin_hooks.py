@@ -164,11 +164,13 @@ def test_a_plugins_command_help_is_its_cli_docstrings_first_line(
 ) -> None:
     plugins = [_Counted() if p.name == "jira" else p for p in registry.PLUGINS]
     monkeypatch.setattr(registry, "PLUGINS", plugins)
+    _, commands = cli._parser()  # pyright: ignore[reportPrivateUsage]
+    assert set(commands) == {"jira", "notes", "slack"}  # those overriding `cli`, and no other
     with pytest.raises(SystemExit):
         cli.main(["--help"])
     listed = " ".join(capsys.readouterr().out.split())
     assert "jira count things" in listed and "The rest" not in listed
-    assert "notes read and change the notes" in listed and "github" not in listed
+    assert "notes read and change the notes" in listed
 
 
 class _Fetching(JiraPlugin):

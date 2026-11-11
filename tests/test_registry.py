@@ -387,6 +387,8 @@ def test_a_plugins_command_without_a_docstring_is_refused() -> None:
         ("token_help", "`Init`, as its `token_help`"),
         ("url_for", "address(req)"),
         ("refresh_subjects", "req.subjects"),
+        ("snapshot_model", "overrides `collect`"),
+        ("cli_help", "docstring's first line"),
     ],
 )
 def test_a_plugin_setting_a_removed_attribute_is_told_what_replaced_it(
