@@ -101,7 +101,6 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),
         PERSON: KindSpec(GitHubPerson),
     }
-    snapshot_model = GitHubSnapshot
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
     watches: ClassVar[list[str]] = ["git"]
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS

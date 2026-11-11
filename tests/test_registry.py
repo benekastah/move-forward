@@ -14,7 +14,7 @@ from move_forward import cli, config, kinds, registry, render, server
 from move_forward.domain import KindModel
 from move_forward.graph import KindSpec
 from move_forward.kinds import FAMILIES, Family, Person, declaring, is_url
-from move_forward.plugin import API_VERSION, Plugin
+from move_forward.plugin import API_VERSION, ContextRequest, Plugin, RefreshRequest, Snapshots
 from move_forward.strict import Strict
 
 
@@ -301,6 +301,61 @@ def test_a_plugin_named_for_a_core_indexs_prefix_is_refused() -> None:
 
     with pytest.raises(RuntimeError, match="would own core's pings_"):
         registry.check_plugins([Pings()])
+
+
+class _Plain(Plugin[Strict, KindModel]):
+    name = "plain"
+    config_model = Strict
+    api_version = API_VERSION
+
+
+class _Collects(Plugin[Strict, KindModel]):
+    name = "collects"
+    config_model = Strict
+    api_version = API_VERSION
+
+    def collect(self, req: RefreshRequest[Strict]) -> KindModel:
+        return KindModel()
+
+
+class _Keeps(Plugin[Strict, KindModel]):
+    name = "keeps"
+    config_model = Strict
+    api_version = API_VERSION
+
+    def snapshots(self, req: ContextRequest[Strict]) -> Snapshots[KindModel]:
+        return _Nothing()
+
+
+class _Nothing:
+    def save(self, snapshot: KindModel) -> None:
+        pass
+
+    def load(self) -> KindModel | None:
+        return None
+
+
+class _CollectsAndKeeps(_Collects):
+    name = "both"
+
+    def snapshots(self, req: ContextRequest[Strict]) -> Snapshots[KindModel]:
+        return _Nothing()
+
+
+def test_a_plugin_collects_when_it_overrides_collect_and_snapshots() -> None:
+    registry.check_plugins([_CollectsAndKeeps()])
+    assert _CollectsAndKeeps().collects
+    assert not _Plain().collects
+
+
+def test_a_plugin_overriding_collect_without_snapshots_is_refused() -> None:
+    with pytest.raises(RuntimeError, match="collects overrides collect but not snapshots"):
+        registry.check_plugins([_Collects()])
+
+
+def test_a_plugin_overriding_snapshots_without_collect_is_refused() -> None:
+    with pytest.raises(RuntimeError, match="keeps overrides snapshots but not collect"):
+        registry.check_plugins([_Keeps()])
 
 
 def test_a_plugin_setting_the_removed_init_template_is_told_what_replaced_it() -> None:

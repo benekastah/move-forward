@@ -40,7 +40,6 @@ class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
     requires: ClassVar[list[str]] = ["git"]
     collects_after = True
     watches: ClassVar[list[str]] = ["git"]
-    snapshot_model = GitStackSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS

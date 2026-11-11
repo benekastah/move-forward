@@ -32,6 +32,7 @@ from .plugin import (
     Request,
     Snapshots,
     SourceError,
+    overrides,
 )
 from .repositories import KvRepository
 
@@ -151,8 +152,9 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     name is its own and fit to be one: lower-case, not two plugins', none of core's
     (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`).
     A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
-    declares (`Plugin.families`), whose model they must extend. A plugin setting the removed
-    `init_template` is refused, naming what replaced it."""
+    declares (`Plugin.families`), whose model they must extend. A plugin overriding `collect`
+    overrides `snapshots` too, and the reverse. A plugin setting the removed `init_template` is
+    refused, naming what replaced it."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -169,6 +171,13 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(
                 f"{plugin.name} is built against API version {plugin.api_version}; this"
                 f" dashboard's is {API_VERSION}"
+            )
+        if overrides(plugin, "collect") != overrides(plugin, "snapshots"):
+            # One without the other would fetch what nothing keeps, or keep what nothing fetches.
+            has, lacks = ("collect", "snapshots") if plugin.collects else ("snapshots", "collect")
+            raise RuntimeError(
+                f"{plugin.name} overrides {has} but not {lacks}: a plugin that collects keeps"
+                " what it fetched with snapshots, and only one that collects keeps a snapshot"
             )
         if hasattr(plugin, "init_template"):
             # No longer read: said, rather than its tables going missing from `mfd init`.

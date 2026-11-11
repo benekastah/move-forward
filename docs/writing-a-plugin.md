@@ -167,7 +167,6 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     title = "Linear"
     api_version = API_VERSION
     config_model = LinearConfig
-    snapshot_model = LinearSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
 
     def collect(self, req: RefreshRequest[LinearConfig]) -> LinearSnapshot:
@@ -194,7 +193,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   it each time it's checked rather than warning of it yourself: one not reported for
   `prune_days` is forgotten.
 
-- A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
+- A plugin collects (`collects`) when it overrides `collect`, and it then overrides
+  `snapshots` too: core refuses a plugin with one and not the other. It has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it
   that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a

@@ -367,13 +367,13 @@ class Snapshots[S: BaseModel](Protocol):
 
 
 class _NoSnapshots[S: BaseModel]:
-    """What a plugin without a snapshot model keeps: nothing."""
+    """What a plugin that doesn't collect keeps: nothing."""
 
     def __init__(self, plugin: str):
         self._plugin = plugin
 
     def save(self, snapshot: S) -> None:
-        raise NotImplementedError(f"{self._plugin} has a snapshot model but no snapshots")
+        raise NotImplementedError(f"{self._plugin} keeps no snapshot")
 
     def load(self) -> S | None:
         return None
@@ -411,9 +411,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     migrations: ClassVar[list[Migration]] = []
     """SQL scripts creating and changing the plugin's tables, applied in order. Append to it;
     never edit one that has shipped. Tables are prefixed with `name`."""
-    snapshot_model: ClassVar[type[BaseModel] | None] = None
-    """S, or None when the plugin fetches nothing and `collect` is never called (see
-    `collects`)."""
     api_version: ClassVar[int | None] = None
     """The `API_VERSION` the plugin was built against: one built against another is left
     out, with the reason in `mfd check` and the page's footer."""
@@ -453,9 +450,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     @property
     def collects(self) -> bool:
-        """Whether the plugin fetches anything: it has a `snapshot_model`, so a refresh
-        calls its `collect` and it has a schedule."""
-        return self.snapshot_model is not None
+        """Whether the plugin fetches anything: it overrides `collect` (and so `snapshots`, as
+        the registry checks), so a refresh calls its `collect` and it has a schedule."""
+        return overrides(self, "collect")
 
     def tokens(self, config: C) -> dict[str, TokenSettings]:
         """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
@@ -475,12 +472,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
         failed and goes on, and leaves it out of refreshes until its collect returns (a thread
         can't be stopped)."""
-        raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
+        raise NotImplementedError(f"{self.name} doesn't collect")
 
     def snapshots(self, req: ContextRequest[C]) -> "Snapshots[S]":
         """Where the plugin keeps what `collect` fetched, in its own tables: usually its
-        repository over them (see `Snapshots`). By default nothing is kept, for a plugin with
-        no snapshot model."""
+        repository over them (see `Snapshots`). A plugin overriding `collect` overrides this
+        too; by default nothing is kept, for a plugin that doesn't collect."""
         return _NoSnapshots[S](self.name)
 
     def events(self, req: Request[C, S]) -> list[Event]:
@@ -592,6 +589,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns
         what was done, one line each."""
         return []
+
+
+def overrides(plugin: Plugin[Any, Any], hook: str) -> bool:
+    """Whether `plugin`'s class overrides `Plugin`'s method `hook`: what some hooks' being
+    there says (`collects`)."""
+    return getattr(type(plugin), hook) is not getattr(Plugin, hook)
 
 
 def collect_into[T: BaseModel](

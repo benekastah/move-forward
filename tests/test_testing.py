@@ -20,6 +20,7 @@ from move_forward.api import (
     Panel,
     Plugin,
     Ref,
+    RefreshRequest,
     Request,
     Signals,
     attrs,
@@ -74,9 +75,12 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     title: ClassVar[str] = "Linear"
     api_version = API_VERSION
     config_model = LinearConfig
-    snapshot_model = LinearSnapshot
     kinds: ClassVar[dict[str, KindSpec]] = {ISSUE: KindSpec(IssueAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = {"to_triage": "an issue is to triage"}
+
+    def collect(self, req: RefreshRequest[LinearConfig]) -> LinearSnapshot:
+        """No Linear to ask: the tests `store` what it would have fetched."""
+        return LinearSnapshot(issues=[])
 
     def snapshots(self, req: ContextRequest[LinearConfig]) -> "_Issues":
         return _Issues(req.ctx.kv)

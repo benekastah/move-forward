@@ -14,6 +14,9 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **No `snapshot_model`**: a plugin collects when it overrides `collect`, and the registry
+  refuses one that overrides `collect` without `snapshots`, or `snapshots` without `collect`.
+  Drop the class variable; the snapshot's model is the plugin's second type parameter, `S`.
 - **One `Init`**: what only `mfd init` reads is one class variable, `init`, an `api.Init`
   (built in the plugin's `setup.py`), in place of the class variables `init_suggested`,
   `init_example`, `init_example_on`, `init_tables`, `init_finds_teams` and `token_help`, and

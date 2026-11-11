@@ -44,14 +44,16 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   declared `hides`, and core leaves items about hidden things off the page;
   plugins don't filter them out themselves.
 - A plugin keeps what `collect` fetched in its own tables, through what its `snapshots`
-  gives (its repository, which `save`s and `load`s it); nothing is kept as JSON. Core keeps
+  gives (its repository, which `save`s and `load`s it); nothing is kept as JSON. A plugin
+  collects when it overrides `collect`, and then overrides `snapshots` too (the registry
+  refuses one without the other). Core keeps
   only when each plugin last fetched and last stored, and why it failed; what its change
   checks last saw and said moved, until a collect started after stores (`change_checks.py`);
   and what else a plugin reports wrong with `ctx.problem(key, text | None)` (a lookup its
   token isn't allowed), shown with its state on the page and logged when it changes, rather
   than each plugin warning in its own way.
 - A plugin says what it is in class variables, each documented on `Plugin`: its `name`,
-  `title`, `config_model`, `snapshot_model`, `kinds` and `families`, `requires`, `migrations`,
+  `title`, `config_model`, `kinds` and `families`, `requires`, `migrations`,
   how it refreshes (`collects_after`, `watches`, `change_check_seconds`), its
   `notification_kinds`, its command (`cli_help`), and how `mfd init` and the settings page
   show it (`always_on`, `init`, `teams_field`, `locked_settings`), and `api_version`. `init`
