@@ -147,6 +147,42 @@ config, the commands and the server."""
 
 _CORE_FAMILY_NAMES = {family.name for family in CORE_FAMILIES}
 
+_INIT = "set it in the plugin's `init`, an `Init`"
+REMOVED_ATTRIBUTES: dict[str, str] = {
+    "store": "give a `Snapshots` (`save`, `load`) from `snapshots(req)`",
+    "load": "give a `Snapshots` (`save`, `load`) from `snapshots(req)`",
+    "act_now": "a panel's items are candidates; an item says otherwise with `Item.act_now`",
+    "identity": "publish me as a `person` with `me` True",
+    "url_for": "answer `address(req)` with an `Address(url, handle)` per id",
+    "handle_for": "answer `address(req)` with an `Address(url, handle)` per id",
+    "prepare_item_actions": "`item_actions(req)` returns the function core calls per item",
+    "graph_events": "`events(req)` compares `req.previous.graph` with `req.graph` too",
+    "import_dir": "`mfd import` is gone: give a command or a page to set the same",
+    "kept_item": "focus mode keeps the item itself, by its main subject",
+    "refresh_subjects": "`collect` is given what to fetch in `req.subjects`",
+    "collect_after": "set `collects_after = True` and read `req.graph` in `collect`",
+    "collects_after_graph": "set `collects_after = True` and read `req.graph` in `collect`",
+    "collect_timeout_seconds": "`collect` has five minutes, for every plugin",
+    "subjects_timeout_seconds": "`collect` has five minutes, for every plugin",
+    "token_settings": 'override `tokens(config)`, returning `{"": settings}`',
+    "sign_in_pages": "every page needs the dashboard's token; link to a tool's sign-in",
+    "init_shown": "put example values in the `shown` of its sections (`InitSection`)",
+    "init_template": "`mfd init` writes the optional keys from `config_model`'s defaults and"
+    " docstrings; put example tables in the plugin's `Init`'s `tables`, and example values in"
+    " its sections' `shown`",
+    "init_questions": f"{_INIT}, as its `questions`",
+    "init_suggested": f"{_INIT}, as its `suggested`",
+    "init_example": f"{_INIT}, as its `example`",
+    "init_example_on": f"{_INIT}, as its `example_on`",
+    "init_tables": f"{_INIT}, as its `tables`",
+    "init_finds_teams": f"{_INIT}, as its `finds_teams`",
+    "token_help": f"{_INIT}, as its `token_help`",
+}
+"""`Plugin` attributes and hooks that are gone, each with what replaced it. A plugin still
+setting one is refused, naming its replacement, rather than core silently ignoring it (its
+hook never called, its setting never read): the API version alone doesn't catch a plugin
+built before the name went, while the version stayed the same."""
+
 
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     """Raise unless every plugin is built against this dashboard's `API_VERSION`, and its
@@ -155,8 +191,8 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
     declares (`Plugin.families`), whose model they must extend. A plugin overriding `collect`
     overrides `snapshots` too, and the reverse; one overriding `cli` gives it a docstring, its
-    command's help. A plugin setting the removed `init_template` is
-    refused, naming what replaced it."""
+    command's help. A plugin setting one of the `REMOVED_ATTRIBUTES` is refused, naming what
+    replaced it."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -186,13 +222,11 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                 f"{plugin.name}'s cli has no docstring: its first line is the help of"
                 f" `mfd {plugin.name}`"
             )
-        if hasattr(plugin, "init_template"):
-            # No longer read: said, rather than its tables going missing from `mfd init`.
-            raise RuntimeError(
-                f"{plugin.name} sets init_template, which mfd init no longer reads: it writes"
-                " the optional keys from config_model's defaults and docstrings; put example"
-                " tables in its Init's tables, and example values in its sections' shown"
-            )
+        for removed, instead in REMOVED_ATTRIBUTES.items():
+            if hasattr(plugin, removed):
+                raise RuntimeError(
+                    f"{plugin.name} sets {removed}, which core no longer reads: {instead}"
+                )
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():
             family = FAMILIES.get(kind)
