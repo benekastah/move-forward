@@ -155,10 +155,12 @@ def test_a_snooze_days_key_with_a_kinds_old_name_says_its_new_one(tmp_path: Path
 
 def test_a_plugin_team_must_be_a_top_level_team(tmp_path: Path) -> None:
     with pytest.raises(
-        ValidationError, match=r"\[slack\] names the teams wbe, which the top-level"
+        ValidationError, match=r"\[slack\] names teams the top-level teams don't have: wbe\b"
     ):
         _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[slack.teams]\nwbe = "#web"\n')
-    with pytest.raises(ValidationError, match=r"\[github\] names the teams ops, which"):
+    with pytest.raises(
+        ValidationError, match=r"\[github\] names teams the top-level teams don't have: ops\b"
+    ):
         _load(
             tmp_path,
             MINIMAL + 'teams = ["web"]\n\n[github]\norg = "a"\n[github.teams]\nops = "o"\n',
