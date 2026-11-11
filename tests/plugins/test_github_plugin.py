@@ -406,6 +406,7 @@ def test_a_refresh_of_one_pr_keeps_the_rest_of_its_lists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config, db = stored(github=snapshot(mine=[pr(1), pr(2)]))
+    ChangeRepository(db).collected("github", 0, NOW)  # a full refresh just ran
     asked: list[list[client.PrId]] = []
 
     def fetch_prs(host: str, ids: list[client.PrId]) -> list[object]:
@@ -414,7 +415,7 @@ def test_a_refresh_of_one_pr_keeps_the_rest_of_its_lists(
 
     monkeypatch.setattr(client, "fetch_prs", fetch_prs)
     one = Ref(kind="pull_request", id=pr(1).url)
-    assert refresh.refresh_subjects(config, db, [one], NOW) == set()
+    refresh.refresh_subjects(config, db, [one], NOW)
     assert asked == [[client.PrId(repo="acme/widgets", number=1)]]
     kept = PrRepository(db).load()
     assert kept is not None
@@ -455,8 +456,7 @@ def test_after_collect_suggests_reviewers_only_where_one_may_be_picked(
 
     monkeypatch.setattr(derive, "collect", collect)
     ctx = _context()
-    PrRepository(ctx.db).save(snapshot(mine=[pr(1)]))
-    GitHubPlugin().after_collect(Request(ctx, Graph(), None))
+    GitHubPlugin().after_collect(Request(ctx, Graph(), snapshot(mine=[pr(1)])))
     assert picked == [1]
 
 
@@ -477,17 +477,15 @@ def test_reviewers_whose_email_lookup_fails_are_one_problem_until_none_does(
 
     monkeypatch.setattr(derive, "collect", derived)
     ctx = _context()
-    PrRepository(ctx.db).save(
-        snapshot(mine=[pr(1, requested_users=["alice", "bob"]), pr(2, requested_users=["carol"])])
-    )
+    gh = snapshot(mine=[pr(1, requested_users=["alice", "bob"]), pr(2, requested_users=["carol"])])
     for _ in range(2):  # tried again each refresh, but said once
-        GitHubPlugin().after_collect(Request(ctx, Graph(), None))
+        GitHubPlugin().after_collect(Request(ctx, Graph(), gh))
     said = "looking up the commit emails of bob, carol failed: no commits for bob"
     assert ProblemRepository(ctx.db).of([""]) == {"": [said]}
     assert [r.getMessage() for r in caplog.records if r.levelname == "WARNING"] == [said]
     assert PeopleRepository(ctx.db).emails() == {"alice": "alice@acme.com"}
     failing.clear()
-    GitHubPlugin().after_collect(Request(ctx, Graph(), None))
+    GitHubPlugin().after_collect(Request(ctx, Graph(), gh))
     assert ProblemRepository(ctx.db).of([""]) == {}
 
 

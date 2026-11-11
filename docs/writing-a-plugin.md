@@ -11,9 +11,9 @@ this page explains them as they apply to a plugin.
 
 ## Requests
 
-Every hook takes one argument, a request object, whose fields are the hook's inputs. There are
-five kinds, all in `move_forward.api`, and core can give one a new field without changing any
-hook's signature:
+Every hook takes one argument, a request object, whose fields are the hook's inputs, so core
+can give one a new field without changing any hook's signature. There are five kinds, all in
+`move_forward.api`:
 
 | Request | Fields | Hooks |
 | --- | --- | --- |
@@ -25,14 +25,15 @@ hook's signature:
 
 `ctx` is the plugin's context (below), `graph` every plugin's entities (empty for `entities`,
 which the graph is built from), and `snapshot` what the plugin last stored (None before its
-first refresh). A field a hook doesn't get is left at
-its default; each field's docstring names the hooks that get it.
+first refresh). A field a hook doesn't get is left at its default; each field's docstring
+names the hooks that get it.
 
 `previous` is a `Previous`, what held before, for the two hooks that compare: `changed` and
-`events`. Its `at` is when the plugin's last change check (`changed`) or refresh (`events`)
-ran, `fingerprint` what its last check answered (`changed`), `snapshot` its snapshot before
-this refresh (`events`), and `graph` the graph then: None at the first change check since the
-dashboard started, as it's the one thing a restart can't rebuild.
+`events`. Its `at` is when the plugin's last change check ran (`changed`), or when it last
+stored a snapshot, the one `events` compares with (`events`; a refresh that failed stored
+nothing); `fingerprint` what its last check answered (`changed`), `snapshot` its snapshot
+before this refresh (`events`), and `graph` the graph then: None at the first change check
+since the dashboard started, as it's the one thing a restart can't rebuild.
 
 ## The pieces
 
@@ -426,7 +427,8 @@ def panels(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Panel]:
 - An item or part whose work is done but kept a while to undo (a todo ticked off today) is
   `done`: it's dimmed and last, isn't counted, isn't in Act now, and focus mode skips it; nor
   does it count towards what brings back a snoozed item. Mark an item whose parts are all done
-  `done` too.
+  `done` too. A part that's `done` gets nothing from core or other plugins (no Tag, no
+  importance): only its own buttons act on it. An item that's `done` gets what any item does.
 - An item's `parts` (a work entry's todos) are listed beneath it when there are several, on the
   dashboard and in Act now, and shown one at a time in focus mode, each with its own buttons.
   A part listed beneath its item doesn't repeat a button the item has. Their titles count towards what brings back a snoozed item, so `details` needn't repeat them.
@@ -493,12 +495,12 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   something another plugin publishes (reacting to a PR, say) lists it in
   `ActionResult(notice, touched=[ref])`, and that entity is fetched again (below).
 - **Fetching a few entities again.** An action's `touched` refs, a tab coming back to
-  focus and `mfd refresh --subject` call the publisher's `collect` with `req.full` False and
-  the entities' ids as `req.subjects`, and core keeps what it returns as a refresh's (events
-  too), without counting it as the plugin's refresh. A `collect` that can fetch just those
-  does (github fetches the PRs in one request); one that can't, or gets a subject it doesn't
-  know, fetches everything. Failing, or taking longer than `collect` may, refreshes the
-  plugin whole.
+  focus and `mfd refresh --subject` refresh the publisher, its `collect` given the entities'
+  ids in `req.subjects` (with what its change checks said moved) and `req.full` False, unless
+  a full collect is due. It's the plugin's refresh like any other: recorded, told, and its
+  scheduled one waits its `refresh_seconds` again. A `collect` that can fetch just those does
+  (github fetches the PRs in one request); one that can't, or gets a subject it doesn't know,
+  fetches everything. One that fails is recorded as failed, as any refresh.
 - **Focus mode keeps the item** a button was pressed on, should the button take it out of
   the category (a todo ticked off): core remembers it and shows it as the page now has it (the
   todo ticked, to untick), found by its main subject, so give what an action leaves on the

@@ -1,7 +1,8 @@
 """The Slack plugin: review pings, and where they go.
 
-People's Slack ids, teams' channels and the pings sent live in its own tables; `mfd import`
-reads the first two from the skill's `reviewer-map.md`.
+People's Slack ids, teams' channels and the pings sent live in its own tables. A Slack id is
+set by hand (`mfd slack contact set`) or looked up in Slack by the person's email; a team's
+channel is set by hand (`mfd slack team set`).
 """
 
 import argparse

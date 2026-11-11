@@ -27,6 +27,7 @@ from move_forward.plugin import (
     PageHandler,
     Plugin,
     RefRequest,
+    RefreshRequest,
     Request,
 )
 from move_forward.plugins.github.config import GitHubConfig
@@ -524,3 +525,49 @@ def test_jira_knows_a_tickets_url_from_its_key_and_its_key_from_its_url() -> Non
     url = "https://j/browse/APP-9"
     found = JiraPlugin().address(RefRequest(jira.ctx, "ticket", ["APP-9", url, "nope"]))
     assert found == {"APP-9": Address(url=url), url: Address(url=url, handle="APP-9")}
+
+
+class _Given(JiraPlugin):
+    """Jira, collecting one ticket, and noting what each hook it overrides was given."""
+
+    def __init__(self) -> None:
+        self.graphs: dict[str, Graph] = {}
+        self.stored: dict[str, BaseModel | None] = {}
+
+    def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
+        self.graphs["collect"] = req.graph
+        return JiraSnapshot(issues=[issue("APP-1")])
+
+    def after_collect(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
+        self.stored["after_collect"] = req.snapshot
+
+    def prune(self, req: Request[JiraConfig, JiraSnapshot]) -> list[str]:
+        self.stored["prune"] = req.snapshot
+        return []
+
+    def relate(self, req: Request[JiraConfig, BaseModel]) -> list[tuple[Ref, Ref]]:
+        self.stored["relate"] = req.snapshot
+        return []
+
+    def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
+        self.stored["item_actions"] = req.snapshot
+        return super().item_actions(req)
+
+
+def test_hooks_are_given_the_graph_and_the_plugins_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    given = _Given()
+    plugins = [given if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config, db = stored(github=snapshot(mine=[pr(1)]), jira=JiraSnapshot(issues=[issue("APP-2")]))
+    refresh.refresh(config, db, NOW, only={"jira"})
+    build_dashboard(config, db, NOW)
+    assert given.graphs["collect"].get("pull_request", pr(1).url) is not None
+    now = JiraSnapshot(issues=[issue("APP-1")])
+    assert given.stored == {
+        "after_collect": now,
+        "prune": now,
+        "relate": now,
+        "item_actions": now,
+    }

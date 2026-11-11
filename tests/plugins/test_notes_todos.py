@@ -118,6 +118,19 @@ def test_a_todo_ticked_off_today_stays_listed_ticked_to_untick() -> None:
     assert list(items) == ["Chores", "Done today"]  # all ticked off: last
 
 
+def test_an_entry_all_ticked_off_today_offers_what_any_entry_does() -> None:
+    """It's still on the page until tomorrow, to tag, untag, ice or rank: only its ticked
+    parts, finished within it, get nothing added."""
+    today = localtime.day(NOW)
+    built = dashboard(work_items=[_with_done(entry("Done today", []), ("taxes", today))])
+    [item] = panel(built, "notes.todos").items
+    assert item.done
+    labels = [a.label for a in item.actions]
+    assert labels == ["Done", "Add todo", "Tag", "Put on ice", "Important", "Critical"]
+    [part] = item.parts
+    assert [a.label for a in part.actions] == ["Done"]
+
+
 def test_a_blank_new_todo_is_an_empty_todo() -> None:
     config, db = stored(work_items=[])
     with pytest.raises(ActionError, match="the todo is empty"):

@@ -5,7 +5,7 @@ import json
 import logging
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
@@ -89,14 +89,24 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
 
 
 STORED = "stored:"
-"""Core's kv key, `stored:<plugin>`, saying the plugin has stored a snapshot: until it has,
-its events have nothing to compare with."""
+"""Core's kv key, `stored:<plugin>`, saying the plugin has stored a snapshot (until it has,
+its events have nothing to compare with), and when it last did, in ISO 8601 (`1`, from before
+the time was kept, says only that it has)."""
 
 
 def store_snapshot(e: Enabled, snapshot: BaseModel) -> None:
-    """Keep a plugin's new snapshot, and remember that it has one."""
+    """Keep a plugin's new snapshot, and remember that it has one, and when."""
     e.kept().save(snapshot)
-    KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", "1")
+    KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", e.ctx.now.isoformat())
+
+
+def _stored_at(value: str) -> datetime | None:
+    """When a `STORED` value says the plugin last stored; None for one from before the time was
+    kept."""
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -106,13 +116,15 @@ class Before:
     graph: Graph
     snapshots: dict[str, BaseModel | None]
     """Each plugin's snapshot; None for one that had never stored one."""
-    fetched_at: dict[str, datetime]
-    """When each plugin's last refresh that stored ran; one that never did isn't here."""
+    stored_at: dict[str, datetime]
+    """When each plugin last stored its snapshot, by a refresh or a refresh of subjects; one
+    that never did (or did only before the time was kept) isn't here. A refresh that failed
+    stored nothing, so it doesn't count."""
 
     def previous(self, name: str) -> Previous[BaseModel]:
         """What held before for the plugin `name`, as its `events` gets it."""
         return Previous(
-            self.fetched_at.get(name), snapshot=self.snapshots.get(name), graph=self.graph
+            self.stored_at.get(name), snapshot=self.snapshots.get(name), graph=self.graph
         )
 
 
@@ -120,11 +132,11 @@ def before_refresh(db: Database, plugins: list[Enabled]) -> Before:
     """What's stored now, as a refresh about to start compares its events with."""
     graph, snapshots = stored_graph(db, plugins)
     kv = KvRepository(db, CORE)
-    fetched = SnapshotRepository(db).of(list(snapshots))
+    stored = {name: value for name in snapshots if (value := kv.get(f"{STORED}{name}"))}
     return Before(
         graph,
-        {name: s if kv.get(f"{STORED}{name}") else None for name, s in snapshots.items()},
-        {name: row.fetched_at for name, row in fetched.items() if name in snapshots},
+        {name: s if name in stored else None for name, s in snapshots.items()},
+        {name: at for name, value in stored.items() if (at := _stored_at(value)) is not None},
     )
 
 
@@ -198,10 +210,12 @@ def _collect_all(
     checks: ChangeChecks,
     graph: Graph,
     asking: bool,
+    asked: Mapping[str, frozenset[str]] | None = None,
 ) -> None:
     """Collect each plugin's snapshot with `collect`, in parallel, from `graph`, given what
-    moved since its last collect (`ChangeChecks.take`, asking its check first when `asking`),
-    and keep it where the plugin keeps it (`Plugin.snapshots`), which settles what it was given and lets the tags I
+    moved since its last collect and the ids of its entities `asked` for (`ChangeChecks.take`,
+    asking its check first when `asking`), and keep it where the plugin keeps it
+    (`Plugin.snapshots`), which settles what it was given and lets the tags I
     took off what it publishes come back (`TagRepository.put_back`): it has found them again,
     or not. Each plugin has
     `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh
@@ -222,7 +236,7 @@ def _collect_all(
 
                 def collector() -> BaseModel:  # taking within, so its failure is the plugin's
                     nonlocal taken
-                    taken = checks.take(e, graph if asking else None)
+                    taken = checks.take(e, graph if asking else None, (asked or {}).get(e.name))
                     return collect(e, taken)
 
                 def store(snapshot: BaseModel) -> None:
@@ -271,10 +285,13 @@ def refresh(
     now: datetime | None = None,
     only: set[str] | None = None,
     checks: ChangeChecks | None = None,
+    asked: Mapping[str, frozenset[str]] | None = None,
 ) -> None:
-    """Refresh every plugin, or `only` those. Each plugin fails on its own. Each collect is
-    given what moved since the plugin's last (`ChangeChecks.take`); with the server's
-    `checks`, a plugin with a change check is asked it as its collect starts. After collecting,
+    """Refresh every plugin, or `only` those and the plugins `asked` names. Each plugin fails
+    on its own, its outcome recorded as its status. Each collect is given what moved since the
+    plugin's last (`ChangeChecks.take`) and the ids of its entities `asked` for (see
+    `asked_of`); with the server's `checks`, a plugin with a change check is asked it as its
+    collect starts. After collecting,
     the graph is built again, the plugins' events found against what held before, the daily
     prune runs if due, and `after_collect` runs for the plugins collected and those that
     collect nothing (they work from the others' data). When the dashboard is stopping, it
@@ -283,6 +300,8 @@ def refresh(
     first, and then that refresh's events are lost (the next start compares with what it
     stored). Run outside that thread (`mfd refresh`, a test), it always gets that far."""
     now = now or datetime.now(UTC)
+    asked = asked or {}
+    only = None if only is None else only | set(asked)
     plugins = enabled(config, db, now)
     before = before_refresh(db, plugins)
     first, after = to_collect(plugins, only)
@@ -293,7 +312,7 @@ def refresh(
     def collect_first(e: Enabled, taken: Taken) -> BaseModel:
         return e.plugin.collect(RefreshRequest(e.ctx, before.graph, taken.full, taken.subjects))
 
-    _collect_all(db, first, now, collect_first, checks, before.graph, asking)
+    _collect_all(db, first, now, collect_first, checks, before.graph, asking, asked)
     graph, snapshots = stored_graph(db, plugins)
     if after and not shell.stopping():
         given = graph
@@ -301,7 +320,7 @@ def refresh(
         def collect_after(e: Enabled, taken: Taken) -> BaseModel:
             return e.plugin.collect(RefreshRequest(e.ctx, given, taken.full, taken.subjects))
 
-        _collect_all(db, after, now, collect_after, checks, given, asking)
+        _collect_all(db, after, now, collect_after, checks, given, asking, asked)
         graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
     _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)
@@ -342,65 +361,28 @@ def publishers(graph: Graph, refs: list[Ref]) -> dict[str, list[Ref]]:
     return found
 
 
+def asked_of(config: Config, db: Database, refs: list[Ref]) -> dict[str, frozenset[str]]:
+    """The ids of `refs` (entities asked to be fetched again: what an action touched, what I
+    opened or asked for with ↻ or `mfd refresh --subject`), by the plugin that publishes each,
+    for `refresh`'s `asked`. Refs the graph doesn't have, or whose publisher collects nothing,
+    are left out."""
+    plugins = enabled(config, db, datetime.now(UTC))
+    graph, _ = stored_graph(db, plugins)
+    collecting = {e.name for e in plugins if e.plugin.collects}
+    return {
+        name: frozenset(ref.id for ref in mine)
+        for name, mine in publishers(graph, refs).items()
+        if name in collecting
+    }
+
+
 def refresh_subjects(
     config: Config, db: Database, refs: list[Ref], now: datetime | None = None
-) -> set[str]:
-    """Fetch these entities again: each publisher's `collect`, given their ids as its
-    `subjects` and `full` False, kept as a refresh would (its events too). It doesn't count as
-    the plugin's refresh: `fetched_at` stays, and what its change checks said moved stays
-    pending. Returns the plugins whose collect failed, took longer than
-    `COLLECT_TIMEOUT_SECONDS` or was still running from a refresh, for a full refresh instead."""
-    now = now or datetime.now(UTC)
-    plugins = {e.name: e for e in enabled(config, db, now)}
-    before = before_refresh(db, list(plugins.values()))
-    stored = False
-    fallback: set[str] = set()
-    for name, mine in publishers(before.graph, refs).items():
-        e = plugins[name]
-        if not e.plugin.collects:
-            continue
-        snapshot = _collect_subjects(e, frozenset(ref.id for ref in mine), before.graph)
-        try:
-            if snapshot is None:
-                raise RuntimeError("no snapshot")
-            store_snapshot(e, snapshot)
-            stored = True
-        except Exception:
-            log.debug("%s: fetching %s again failed", name, mine, exc_info=True)
-            fallback.add(name)
-    if stored:
-        graph, snapshots = stored_graph(db, list(plugins.values()))
-        subscribed = set(config.notifications.subscribe)
-        _events(db, list(plugins.values()), before, graph, snapshots, subscribed, now)
-    return fallback
-
-
-def _collect_subjects(e: Enabled, subjects: frozenset[str], graph: Graph) -> BaseModel | None:
-    """The plugin's `collect` of just `subjects`, within `COLLECT_TIMEOUT_SECONDS`; None when
-    it fails, takes longer (the thread is left to finish, as a refresh's is) or a collect of
-    the plugin is still running."""
-    with _collecting_lock:
-        if e.name in _collecting:
-            return None
-        _collecting.add(e.name)
-
-    def run() -> BaseModel:
-        try:
-            return e.plugin.collect(RefreshRequest(e.ctx, graph, False, subjects))
-        finally:
-            with _collecting_lock:
-                _collecting.discard(e.name)
-
-    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"subjects-{e.name}")
-    future = pool.submit(run)
-    pool.shutdown(wait=False)
-    try:
-        return future.result(timeout=COLLECT_TIMEOUT_SECONDS)
-    except FutureTimeout:
-        log.warning("%s: fetching %s subject(s) again took too long", e.name, len(subjects))
-    except Exception:
-        log.exception("%s: fetching subjects again failed", e.name)
-    return None
+) -> None:
+    """Fetch these entities again: a refresh of just the plugins that publish them, each
+    collect given their ids (see `asked_of`), recorded and told as any refresh."""
+    if asked := asked_of(config, db, refs):
+        refresh(config, db, now, set(), None, asked)
 
 
 def _dashboard_events(

@@ -321,8 +321,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "refresh":
         if args.subject:
             refs = [Ref(kind=kind, id=id) for kind, id in args.subject]
-            if fallback := refresh_subjects(config, db, refs):
-                refresh(config, db, None, fallback)
+            refresh_subjects(config, db, refs)
         else:
             refresh(config, db)
         dashboard = build_dashboard(config, db)

@@ -5,12 +5,14 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
-### A focus page's `kept` is the server's token
+### A focus page's `kept` names the item it shows
 
-After a button pressed on a focus page, the redirect's `kept` parameter is a token the server
-remembers the item by (its last 50), no longer `<plugin>:<key>`, and every button there sets it,
-not only Done: a script following the redirect needs no change, but one that built `kept=notes:<id>`
-itself can't; it loads `/focus?cat=…&i=…` and finds the todo, ticked, in its panel instead.
+A focus page's address carries `kept`, naming the item it shows: its anchor (`item-…`, as on
+the dashboard), or `title:` and its title for an item about nothing. Its buttons post with it in
+`back`, and the redirect is that address, as is: the page finds the item wherever the button put
+it. `kept` is no longer `<plugin>:<key>`, and a button's redirect no longer adds it. A script
+that built `kept=notes:<id>` itself uses `kept=item-notes-todo-<id>` instead (the todo's
+anchor); one following the redirect needs no change.
 
 ### No more `mfd import` or `mfd notes export`
 
@@ -20,10 +22,17 @@ the notes live: change them with `mfd notes` (`add-entry`, `todo add`, `conditio
 `remember`) and read them with `mfd notes list --json`, `show` and `ices`. Set people's Slack
 ids and teams' channels with `mfd slack contact set` and `mfd slack team set`, which win over
 what an earlier import read; reviewers' emails are looked up from their commits. A script that
-ran `mfd import` after editing the markdown makes those calls instead. The notes' other
-sections of `work-notes.md` (text that wasn't an entry), kept only to export them, are dropped.
-An entry may now be titled "Reviews requested of me", which only the markdown read as a
-section.
+ran `mfd import` after editing the markdown makes those calls instead.
+
+Markdown notes not yet in the database can't be read by this version: have an agent turn them
+into `mfd notes …` calls, or run `mfd import <dir>` with the version before this one, then
+upgrade. A config's `notes_dir`, or `dir` in `[notes]`, is refused: delete the line.
+
+The notes' other sections of `work-notes.md` (text that wasn't an entry), kept only to export
+them, are deleted when you upgrade: the text before the first `##`, the "Reviews requested of
+me" section, and a section repeating another's title. To keep them, run `mfd notes export
+<dir>` with the version you have before upgrading. An entry may now be titled "Reviews
+requested of me", which only the markdown read as a section.
 
 ### Any tag can be taken off
 

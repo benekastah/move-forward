@@ -3,7 +3,6 @@
 import json
 import logging
 import re
-import secrets
 import sys
 import threading
 import time
@@ -14,7 +13,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 from typing import Annotated, cast
-from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from pydantic import Field, TypeAdapter, ValidationError
 
@@ -25,15 +24,15 @@ from .db import Database
 from .graph import Graph, Ref
 from .notifications import NotificationRepository
 from .page import Item
-from .panels import Layout
+from .panels import Layout, focus_key
 from .plugin import ActionError, Response
 from .refresh import (
     PageFailed,
+    asked_of,
     build_dashboard,
     perform_action,
     plugin_page,
     refresh,
-    refresh_subjects,
     stored_graph,
     to_collect,
 )
@@ -156,10 +155,11 @@ class App:
         """`time.monotonic()` when each plugin was last asked whether it `changed`."""
         self.checks = ChangeChecks()
         """What moved in each plugin's tool, as its change checks said."""
-        self._kept: OrderedDict[str, tuple[str, Item]] = OrderedDict()
-        """The item each focus page was on when a button there was pressed, with its panel's
-        key, by the `KEPT` parameter the button's redirect carries: the last `MAX_KEPT`."""
-        self._kept_lock = threading.Lock()
+        self._shown: OrderedDict[str, tuple[str, Item]] = OrderedDict()
+        """The item each focus page showed last, with its panel's key, by its `focus_key`
+        (the page's `KEPT`): the last `MAX_SHOWN`, for a page whose item a button took off the
+        page to show what it was."""
+        self._shown_lock = threading.Lock()
 
     @property
     def token(self) -> str:
@@ -190,18 +190,23 @@ class App:
             if name not in last or now - last[name] >= seconds
         }
 
-    def refresh_now(self, only: set[str] | None = None) -> bool:
-        """Refresh every plugin, or `only` those, unless a refresh is already running;
-        returns whether this call did it."""
+    def refresh_now(
+        self, only: set[str] | None = None, asked: dict[str, frozenset[str]] | None = None
+    ) -> bool:
+        """Refresh every plugin, or `only` those and the plugins `asked` names, each collect
+        given the ids of its entities asked for (see `refresh.refresh`), unless a refresh is
+        already running; returns whether this call did it. Each plugin refreshed waits its
+        `refresh_seconds` again before it's due."""
         if not self._refresh_lock.acquire(blocking=False):
             return False
         try:
+            only = None if only is None else only | set(asked or {})
             first, after = to_collect(enabled(self.config, self.db, datetime.now(UTC)), only)
             self.refreshing = frozenset(e.name for e in first + after)
             started = time.monotonic()
             for name in self.intervals() if only is None else only:
                 self.last_refreshed[name] = started
-            refresh(self.config, self.db, None, only, self.checks)
+            refresh(self.config, self.db, None, only, self.checks, asked)
             self._after_refresh(self.refreshing)
         finally:
             self.refreshing = frozenset()
@@ -286,17 +291,11 @@ class App:
         self._wake.set()
 
     def request_refresh_subjects(self, refs: list[Ref]) -> None:
-        """Ask the background loop to fetch these entities again, ahead of any full refresh
-        due (see `refresh.refresh_subjects`)."""
+        """Ask the background loop to fetch these entities again, ahead of any other refresh
+        asked for (see `refresh.asked_of`)."""
         with self._pending_lock:
             self._subjects = list(dict.fromkeys([*self._subjects, *refs]))
         self._wake.set()
-
-    def refresh_subjects_now(self, refs: list[Ref]) -> set[str]:
-        """Fetch these entities again, waiting for a refresh that's running (a subject's
-        `store` mustn't race a full collect's); returns the plugins to refresh in full."""
-        with self._refresh_lock:
-            return refresh_subjects(self.config, self.db, refs)
 
     def _seconds_to_next(self) -> float:
         """How long until the next plugin is due, at least a second."""
@@ -309,17 +308,20 @@ class App:
 
     def run_refresh_loop(self) -> None:
         """Refresh everything at start, then each plugin as it falls due, and what's asked
-        for (`request_refresh`) at once; entities asked for (`request_refresh_subjects`)
-        first, so a tab coming back to focus doesn't wait on a full collect."""
+        for (`request_refresh`) at once; the plugins publishing entities asked for
+        (`request_refresh_subjects`) first, narrowed to them, so a tab coming back to focus
+        doesn't wait on the other plugins, nor is any plugin refreshed twice in a round."""
         only: set[str] | None = None
         subjects: list[Ref] = []
         while True:
             try:
-                if subjects:
-                    fallback = self.refresh_subjects_now(subjects)
-                    only = None if only is None else only | fallback
-                if only is None or only:
-                    self.refresh_now(only)
+                asked = asked_of(self.config, self.db, subjects) if subjects else {}
+                if asked and only is not None:
+                    self.refresh_now(set(), asked)
+                    only -= set(asked)
+                    asked = {}
+                if only is None or only or asked:
+                    self.refresh_now(only, asked)
             except Exception:
                 log.exception("refresh failed")
             self._wake.wait(self._seconds_to_next())
@@ -336,60 +338,24 @@ class App:
         built = build_dashboard(self.config, self.db, selected=tags)
         return render.dashboard_page(built, self.refreshing, notice, spot, tags)
 
-    def run_action(
-        self, name: str, fields: dict[str, str], back: str | None = None
-    ) -> tuple[str, dict[str, str]]:
+    def run_action(self, name: str, fields: dict[str, str], back: str | None = None) -> str:
         """Run a button's action and refresh afterwards, so the page reflects it soon: the
         acting plugin, and what it says it touched (`ActionResult.touched`), fetched again
-        through its publisher's `collect` (see `refresh.refresh_subjects`).
+        by a refresh of its publisher (see `refresh.asked_of`).
         `back` is the page the button was on, when it wasn't the dashboard.
 
-        Returns the notice for the page and, when it succeeded, its redirect parameters: on
-        a focus page, the item it was on is remembered (`KEPT`), to show in its place once the
-        action has taken it out of the category (see `Dashboard.kept`).
+        Returns the notice for the page.
         """
-        shown = self._focused(back) if back else None
         try:
             result = perform_action(self.config, self.db, name, fields, back)
         except ActionError as e:
-            return f"failed: {e}", {}
+            return f"failed: {e}"
         plugin = name.partition("/")[0]
         if plugin != act_now.ACTIONS:  # Act now's own only change what's shown
             self.request_refresh({plugin})
             if result.touched:
                 self.request_refresh_subjects(result.touched)
-        if shown is None:
-            return result.notice, {}
-        token = secrets.token_urlsafe(8)
-        with self._kept_lock:
-            self._kept[token] = shown
-            while len(self._kept) > MAX_KEPT:
-                self._kept.popitem(last=False)
-        return result.notice, {KEPT: token}
-
-    def _remembered(self, kept: str) -> tuple[str, Item] | None:
-        with self._kept_lock:
-            return self._kept.get(kept) if kept else None
-
-    def _focused(self, page: str) -> tuple[str, Item] | None:
-        """The item the focus page at `page` (a path with its query) shows, with its panel's
-        key; None for another page, or a category with nothing in it."""
-        url = urlsplit(page)
-        params = parse_qs(url.query, keep_blank_values=True)
-        category = params.get("cat", [""])[0]
-        if url.path != "/focus" or not category:
-            return None
-        tags = tag_view.selected(params)
-        built = build_dashboard(self.config, self.db, surface="focus", selected=tags)
-        shown = tag_view.focused(built, tags)
-        remembered = self._remembered(params.get(KEPT, [""])[0])
-        if remembered is not None and (stand_in := shown.kept(category, remembered)):
-            return stand_in
-        items = shown.focus_items(category)
-        if not items:
-            return None
-        panel, item = items[max(0, min(_int(params, "i"), len(items) - 1))]
-        return panel.key, item
+        return result.notice
 
     def take_notifications(self) -> str:
         """The events waiting to be told, as the JSON list of notifications the page shows
@@ -418,17 +384,39 @@ class App:
         """The category list without a category, else that category's item at `index`; with
         `tags`, of only what carries one of them (see `tag_view`).
 
-        `kept` names the item the page was on when a button there was pressed (`run_action`):
-        once the button has taken it out of the category (a todo ticked off), it's shown in
-        place of the item at `index`, as it is now, so what the button did can be undone (see
-        `Dashboard.kept`).
+        `kept` names the item the page showed (its `focus_key`), which its buttons come back
+        to: it's found again wherever it is now (`Dashboard.kept`). While it's a step of the
+        category, it's shown at its index now, wherever a button moved it; once a button has
+        taken it out (a todo ticked off), it's shown in place of the item at `index`, so what
+        the button did can be undone: as it is now, or, gone from the page, as the page showed
+        it. The item shown is remembered for that.
         """
         built = build_dashboard(self.config, self.db, surface="focus", selected=tags)
         if not category:
             return render.focus_categories_page(built, tags)
-        remembered = self._remembered(kept)
-        done = tag_view.focused(built, tags).kept(category, remembered) if remembered else None
-        return render.focus_page(built, category, index, notice, done, tags, kept if done else "")
+        shown = tag_view.focused(built, tags)
+        found = shown.kept(category, kept, self._remembered(kept)) if kept else None
+        if isinstance(found, int):
+            index, found = found, None
+        page = render.focus_page(built, category, index, notice, found, tags)
+        if found is not None:
+            self._remember(focus_key(found.item), (found.panel, found.item))
+        elif (step := shown.focus_step(category, index)) is not None:
+            panel, item = step
+            self._remember(focus_key(item), (panel.key, item))
+        return page
+
+    def _remembered(self, key: str) -> tuple[str, Item] | None:
+        """The item a focus page showed last by its `focus_key`, with its panel's key."""
+        with self._shown_lock:
+            return self._shown.get(key)
+
+    def _remember(self, key: str, shown: tuple[str, Item]) -> None:
+        with self._shown_lock:
+            self._shown[key] = shown
+            self._shown.move_to_end(key)
+            while len(self._shown) > MAX_SHOWN:
+                self._shown.popitem(last=False)
 
 
 def _said(changed: dict[str, str]) -> str:
@@ -436,23 +424,20 @@ def _said(changed: dict[str, str]) -> str:
     return ", ".join(f"{name} ({why})" if why else name for name, why in sorted(changed.items()))
 
 
-KEPT = "kept"
-"""A focus page's parameter naming the item it was on when a button there was pressed (see
-`App.run_action`)."""
-MAX_KEPT = 50
-"""How many such items the server remembers: more than the focus pages anyone has open."""
+MAX_SHOWN = 50
+"""How many items focus pages showed the server remembers: more than the focus pages anyone
+has open."""
 NOTICE = "notice"
 PAGE_FAILED = "<p>This page failed; the log says why.</p>"
 """What a plugin's page answers when its handler raised."""
 """The query parameter a plugin's page reads its notice from (see `App.plugin_page`)."""
 
 
-def _back_to_page(query: str, extra: dict[str, str] | None = None) -> str:
+def _back_to_page(query: str) -> str:
     """Where a POST redirects: the request's `back` path (a focus page) if it's local, else the
     dashboard, at the panel the request's `at` names, filtered by the request's tags (see
-    `tag_view`; a `back` path has its own). The `extra` parameters ride along either way, in
-    place of a `back` path's own of the same name."""
-    params: dict[str, str] = dict(extra or {})
+    `tag_view`; a `back` path has its own)."""
+    params: dict[str, str] = {}
     query_params = parse_qs(query, keep_blank_values=True)
     back = query_params.get("back", [""])[0]
     at = query_params.get("at", [""])[0]
@@ -463,11 +448,7 @@ def _back_to_page(query: str, extra: dict[str, str] | None = None) -> str:
             params |= {"at": spot[0], "pos": str(spot[1])}
             anchor = f"#{render.SPOT_ID}"
     if render.local_path(back):
-        if not params:
-            return back + anchor
-        page = urlsplit(back)
-        kept = [(k, v) for k, v in parse_qsl(page.query, keep_blank_values=True) if k not in params]
-        return f"{page.path}?{urlencode([*kept, *params.items()])}{anchor}"
+        return back + anchor
     return tag_view.url("/", tag_view.selected(query_params), params) + anchor
 
 
@@ -682,7 +663,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 params = parse_qs(url.query, keep_blank_values=True)
                 category = params.get("cat", [""])[0]
                 notice = self._take_notice()
-                kept = params.get(KEPT, [""])[0]
+                kept = params.get(render.KEPT, [""])[0]
                 tags = tag_view.selected(params)
                 page = app.focus_page(category, _int(params, "i"), notice, kept, tags)
                 if page is None:
@@ -808,10 +789,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 name = url.path[len("/actions/") :]
                 fields = _form_fields(body)
                 back = parse_qs(url.query).get("back", [""])[0]
-                notice, extra = app.run_action(
-                    name, fields, back if render.local_path(back) else None
-                )
-                self._redirect(_back_to_page(url.query, extra), notice)
+                notice = app.run_action(name, fields, back if render.local_path(back) else None)
+                self._redirect(_back_to_page(url.query), notice)
             else:
                 self._html(HTTPStatus.NOT_FOUND, "<p>Not found.</p>")
 

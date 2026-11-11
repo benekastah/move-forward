@@ -133,8 +133,9 @@ class Previous[S: BaseModel]:
     """What held before, for `changed` and `events` to compare with now."""
 
     at: datetime | None = None
-    """When the plugin's last change check (`changed`) or refresh (`events`) ran; None before
-    the first."""
+    """For `changed`, when the plugin's last change check ran; for `events`, when the plugin
+    last stored a snapshot (a refresh, or a refresh of subjects), the one `snapshot` holds: a
+    refresh that failed stored nothing, so it doesn't count. None before the first."""
     fingerprint: str | None = None
     """What the plugin's last change check answered (`Changed.fingerprint`), for `changed`;
     None before the first."""
@@ -172,19 +173,20 @@ class RefreshRequest[C: BaseModel]:
     """Every plugin's entities, built from what's stored now: for a plugin that
     `collects_after` the others, with what they just stored."""
     full: bool = True
-    """For `collect`: whether to fetch everything: at the plugin's first collect since the
-    dashboard started, when its `refresh_seconds` have passed since the last full collect
-    that stored, when its change checks saw something move that no subject names, and when
-    they named nothing. Otherwise fetching `subjects` is enough, keeping the rest as
-    stored."""
+    """For `collect`: whether to fetch everything: at the plugin's first
+    collect since the dashboard started, when its `refresh_seconds` have passed since the last
+    full collect that stored, when its change checks saw something move that no subject
+    names, and when they named nothing. Otherwise fetching `subjects` is enough, keeping the
+    rest as stored. `changed` isn't told; it gets the default, which means nothing to it."""
     subjects: frozenset[str] = frozenset()
     """For `collect`: what moved, in the plugin's own terms. What its change checks said
     (`Changed.subjects`) since a collect last stored: core keeps each until a collect that
     started after it was said stores, so a collect that fails loses none of it, and what moves
-    again while one runs stays for the next. Or, with `full` False and nothing pending, the ids
-    of its entities to fetch again now: those an action touched (`ActionResult.touched`), or
-    that I opened or asked for again (↻, `mfd refresh --subject`). A collect that can't fetch
-    just those fetches everything."""
+    again while one runs stays for the next. With them, the ids of its entities asked to be
+    fetched again now: those an action touched (`ActionResult.touched`), or that I opened or
+    asked for again (↻, `mfd refresh --subject`). A collect that can't fetch just those
+    fetches everything. Empty for `changed`, which says what moved rather than
+    being told."""
     previous: Previous[BaseModel] = field(default_factory=Previous[BaseModel])
     """For `changed` only: when core took the plugin's last answer, its fingerprint, and the
     graph it was given, to compare with `graph` for what other plugins' refreshes moved since
@@ -286,7 +288,7 @@ class Changed:
     counts); None for a plugin that has none. Core keeps it and compares the next with it."""
     subjects: frozenset[str] = frozenset()
     """What moved since the last check, in the plugin's own terms (repos, PRs), for
-    `collect` to fetch just those (`CollectRequest.subjects`). Each asks for a refresh, so
+    `collect` to fetch just those (`RefreshRequest.subjects`). Each asks for a refresh, so
     name a subject only when it moved again, not while it's still as the last check saw it."""
     everything: bool = False
     """Something moved that `subjects` doesn't name, so the next collect is a full one."""
