@@ -88,14 +88,25 @@ def stored_graph(db: Database, plugins: list[Enabled]) -> tuple[Graph, dict[str,
 
 
 STORED = "stored:"
-"""Core's kv key, `stored:<plugin>`, saying the plugin has stored a snapshot: until it has,
-its events have nothing to compare with."""
+"""Core's kv key, `stored:<plugin>`, saying the plugin has stored a snapshot (until it has,
+its events have nothing to compare with), and when it last did, in ISO 8601 (`1`, from before
+the time was kept, says only that it has)."""
 
 
 def store_snapshot(e: Enabled, snapshot: BaseModel, graph: Graph) -> None:
-    """Keep a plugin's new snapshot, collected from `graph`, and remember that it has one."""
+    """Keep a plugin's new snapshot, collected from `graph`, and remember that it has one, and
+    when."""
     e.plugin.store(Request(e.ctx, graph, snapshot))
-    KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", "1")
+    KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", e.ctx.now.isoformat())
+
+
+def _stored_at(value: str) -> datetime | None:
+    """When a `STORED` value says the plugin last stored; None for one from before the time was
+    kept."""
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -105,13 +116,15 @@ class Before:
     graph: Graph
     snapshots: dict[str, BaseModel | None]
     """Each plugin's snapshot; None for one that had never stored one."""
-    fetched_at: dict[str, datetime]
-    """When each plugin's last refresh that stored ran; one that never did isn't here."""
+    stored_at: dict[str, datetime]
+    """When each plugin last stored its snapshot, by a refresh or a refresh of subjects; one
+    that never did (or did only before the time was kept) isn't here. A refresh that failed
+    stored nothing, so it doesn't count."""
 
     def previous(self, name: str) -> Previous[BaseModel]:
         """What held before for the plugin `name`, as its `events` gets it."""
         return Previous(
-            self.fetched_at.get(name), snapshot=self.snapshots.get(name), graph=self.graph
+            self.stored_at.get(name), snapshot=self.snapshots.get(name), graph=self.graph
         )
 
 
@@ -119,11 +132,11 @@ def before_refresh(db: Database, plugins: list[Enabled]) -> Before:
     """What's stored now, as a refresh about to start compares its events with."""
     graph, snapshots = stored_graph(db, plugins)
     kv = KvRepository(db, CORE)
-    fetched = SnapshotRepository(db).of(list(snapshots))
+    stored = {name: value for name in snapshots if (value := kv.get(f"{STORED}{name}"))}
     return Before(
         graph,
-        {name: s if kv.get(f"{STORED}{name}") else None for name, s in snapshots.items()},
-        {name: row.fetched_at for name, row in fetched.items() if name in snapshots},
+        {name: s if name in stored else None for name, s in snapshots.items()},
+        {name: at for name, value in stored.items() if (at := _stored_at(value)) is not None},
     )
 
 

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from move_forward import notifications, refresh, registry
 from move_forward.config import Config
-from move_forward.db import Database
+from move_forward.db import CORE, Database
 from move_forward.graph import Ref
 from move_forward.notifications import Event, NotificationRepository, NotificationsConfig
 from move_forward.page import Item, Notify, Panel, anchor
@@ -19,7 +19,7 @@ from move_forward.plugin import ContextRequest, RefreshRequest, Request
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
-from move_forward.repositories import SnapshotRepository
+from move_forward.repositories import KvRepository, SnapshotRepository
 
 KEEP = timedelta(hours=24)
 
@@ -173,11 +173,19 @@ def test_events_are_asked_after_a_refresh_of_anything_with_the_graph_before_and_
     """What another plugin's entities say may change what a plugin has to say, so it's asked
     even when it wasn't fetched: its snapshot then is the same before and after."""
     asked: list[tuple[bool, bool]] = []
+    befores: list[refresh.Before] = []
 
     def record(self: _Git, req: Request[GitConfig, LocalSnapshot]) -> list[Event]:
-        asked.append((req.previous.snapshot == req.snapshot, req.previous.graph is not req.graph))
+        [before] = befores
+        was = req.previous.graph is before.graph and before.graph is not req.graph
+        asked.append((req.previous.snapshot == req.snapshot, was))
         return []
 
+    def before_refresh(db: Database, plugins: list[registry.Enabled]) -> refresh.Before:
+        befores.append(found := real_before_refresh(db, plugins))
+        return found
+
+    real_before_refresh = refresh.before_refresh
     monkeypatch.setattr(_Git, "events", record)
     config = Config.model_validate(
         {"email": "me@x", "git": {"repos": []}, "notifications": {"subscribe": ["git.changed"]}}
@@ -185,18 +193,48 @@ def test_events_are_asked_after_a_refresh_of_anything_with_the_graph_before_and_
     db = Database(":memory:")
     registry.migrate(config, db)
     refresh.refresh(config, db, NOW)  # the first store: nothing to compare with
+    monkeypatch.setattr(refresh, "before_refresh", before_refresh)
     refresh.refresh(config, db, NOW, only=set())
     assert asked == [(True, True)]
 
 
 @pytest.mark.usefixtures("git")
-def test_events_are_told_when_the_plugins_last_refresh_ran(
+def test_events_are_told_when_the_plugin_last_stored_what_they_compare_with(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A refresh that failed stored nothing, so the snapshot before is still the one stored
+    earlier, and so is the time."""
     told: list[datetime | None] = []
 
     def record(self: _Git, req: Request[GitConfig, LocalSnapshot]) -> list[Event]:
         told.append(req.previous.at)
+        return []
+
+    def fail(self: _Git, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(_Git, "events", record)
+    config = Config.model_validate(
+        {"email": "me@x", "git": {"repos": []}, "notifications": {"subscribe": ["git.changed"]}}
+    )
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    refresh.refresh(config, db, NOW)
+    with monkeypatch.context() as offline:
+        offline.setattr(_Git, "collect", fail)
+        refresh.refresh(config, db, NOW + timedelta(minutes=5))
+    refresh.refresh(config, db, NOW + timedelta(minutes=10))
+    assert told == [NOW, NOW]
+
+
+@pytest.mark.usefixtures("git")
+def test_a_snapshot_stored_before_the_time_was_kept_is_compared_with_at_no_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    told: list[tuple[bool, datetime | None]] = []
+
+    def record(self: _Git, req: Request[GitConfig, LocalSnapshot]) -> list[Event]:
+        told.append((req.previous.snapshot is not None, req.previous.at))
         return []
 
     monkeypatch.setattr(_Git, "events", record)
@@ -206,8 +244,9 @@ def test_events_are_told_when_the_plugins_last_refresh_ran(
     db = Database(":memory:")
     registry.migrate(config, db)
     refresh.refresh(config, db, NOW)
+    KvRepository(db, CORE).set(f"{refresh.STORED}git", "1")
     refresh.refresh(config, db, NOW + timedelta(minutes=5))
-    assert told == [NOW]
+    assert told == [(True, None)]
 
 
 @pytest.mark.usefixtures("git")

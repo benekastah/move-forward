@@ -27,6 +27,7 @@ from move_forward.plugin import (
     PageHandler,
     Plugin,
     RefRequest,
+    RefreshRequest,
     Request,
     UrlRequest,
 )
@@ -520,3 +521,49 @@ def test_a_plugin_relates_only_its_own_entities(
     [ticket] = graph.of_kind("ticket")
     assert Ref(kind="pull_request", id=pr(1).url) in ticket.refs
     assert f"jira related pull_request {pr(1).url}, which it doesn't publish" in caplog.text
+
+
+class _Given(JiraPlugin):
+    """Jira, collecting one ticket, and noting what each hook it overrides was given."""
+
+    def __init__(self) -> None:
+        self.graphs: dict[str, Graph] = {}
+        self.snapshots: dict[str, BaseModel | None] = {}
+
+    def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
+        self.graphs["collect"] = req.graph
+        return JiraSnapshot(issues=[issue("APP-1")])
+
+    def after_collect(self, req: Request[JiraConfig, JiraSnapshot]) -> None:
+        self.snapshots["after_collect"] = req.snapshot
+
+    def prune(self, req: Request[JiraConfig, JiraSnapshot]) -> list[str]:
+        self.snapshots["prune"] = req.snapshot
+        return []
+
+    def relate(self, req: Request[JiraConfig, BaseModel]) -> list[tuple[Ref, Ref]]:
+        self.snapshots["relate"] = req.snapshot
+        return []
+
+    def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
+        self.snapshots["item_actions"] = req.snapshot
+        return super().item_actions(req)
+
+
+def test_hooks_are_given_the_graph_and_the_plugins_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    given = _Given()
+    plugins = [given if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config, db = stored(github=snapshot(mine=[pr(1)]), jira=JiraSnapshot(issues=[issue("APP-2")]))
+    refresh.refresh(config, db, NOW, only={"jira"})
+    build_dashboard(config, db, NOW)
+    assert given.graphs["collect"].get("pull_request", pr(1).url) is not None
+    now = JiraSnapshot(issues=[issue("APP-1")])
+    assert given.snapshots == {
+        "after_collect": now,
+        "prune": now,
+        "relate": now,
+        "item_actions": now,
+    }
