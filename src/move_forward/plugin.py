@@ -176,11 +176,13 @@ class RefreshRequest[C: BaseModel]:
     """Every plugin's entities, built from what's stored now: for a plugin that
     `collects_after` the others, with what they just stored."""
     full: bool = True
-    """For `collect`: whether to fetch everything: at the plugin's first
-    collect since the dashboard started, when its `refresh_seconds` have passed since the last
-    full collect that stored, when its change checks saw something move that no subject
-    names, and when they named nothing. Otherwise fetching `subjects` is enough, keeping the
-    rest as stored. `changed` isn't told; it gets the default, which means nothing to it."""
+    """For `collect`: whether to fetch everything: at the plugin's first collect since the
+    dashboard started, unless it collects only entities asked for (see `subjects`) and a full
+    collect stored within its `refresh_seconds`; when its `refresh_seconds` have passed since
+    the last full collect that stored; when its change checks saw something move that no
+    subject names; and when they named nothing. Otherwise fetching `subjects` is enough,
+    keeping the rest as stored. `changed` isn't told; it gets the default, which means nothing
+    to it."""
     subjects: frozenset[str] = frozenset()
     """For `collect`: what moved, in the plugin's own terms. What its change checks said
     (`Changed.subjects`) since a collect last stored: core keeps each until a collect that
@@ -340,7 +342,8 @@ class ActionResult:
     notice: str
     touched: list[Ref] = field(default_factory=list[Ref])
     """What the action changed outside its own plugin's tool, e.g. a PR it reacted to: the
-    server refreshes the plugin that publishes each, as well as the acting plugin."""
+    server refreshes the plugin that publishes each, its collect given their ids, as well as
+    the acting plugin, which is refreshed as it would have been even when it publishes them."""
 
 
 class ActionError(Exception):

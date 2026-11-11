@@ -85,17 +85,18 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   hold with `graph.fetch`. Buttons, badges, details and links on other plugins' items
   come from `item_actions`, called once per page (where a plugin reads its tables for them),
   which returns the function core calls per item with whose item it is and where it's
-  shown. Core adds its own to items, and plugins theirs, but not to a part that's `done` (a
-  todo ticked off, kept to untick, finished within its item: only its own buttons act on it):
-  the importance choices on
+  shown. Core adds its own to items, and plugins theirs: core's are the importance choices on
   every item about an entity (but what `hides`), with Clear priority once one's set; Snooze
-  (for a while, or until it changes) on every item with a task, wherever it's shown, and Pin in Act now; on an item
-  about a person (`people.py`) their contact type, and Set type for a
-  person with an address; and on every item about an
-  entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag
-  (`tags.py`), which it keeps in `Item.tags` and the page filters by (`tag_view.py`). A plugin nominates items for core's Act now with `act_now`, each with `Signals` (effort, what it closes,
-  who's waiting, and a `task`: the stable id Act now keeps a snooze or pin by); by
-  default, the items of its panels marked `act_now`.
+  (for a while, or until it changes) on every item with a task, wherever it's shown, and Pin
+  in Act now; on an item about a person (`people.py`) their contact type, and Set type for a
+  person with an address; and on every item about an entity (but what `hides`) its `#tag`
+  badges, a Tag field and an Untag per tag (`tags.py`), which it keeps in `Item.tags` and the
+  page filters by (`tag_view.py`). Nothing is added to a part that's `done` (a todo ticked
+  off, kept to untick, finished within its item), by core or by any plugin's `item_actions`:
+  only the part's own buttons act on it. A plugin nominates items for core's Act now with
+  `act_now`, each with `Signals` (effort, what it closes, who's waiting, and a `task`: the
+  stable id Act now keeps a snooze or pin by); by default, the items of its panels marked
+  `act_now`.
 - Every request needs the dashboard's token, a plugin's pages (served at
   `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
   static files.

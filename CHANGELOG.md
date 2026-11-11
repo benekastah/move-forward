@@ -10,9 +10,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 A focus page's address carries `kept`, naming the item it shows: its anchor (`item-…`, as on
 the dashboard), or `title:` and its title for an item about nothing. Its buttons post with it in
 `back`, and the redirect is that address, as is: the page finds the item wherever the button put
-it. `kept` is no longer `<plugin>:<key>`, and a button's redirect no longer adds it. A script
-that built `kept=notes:<id>` itself uses `kept=item-notes-todo-<id>` instead (the todo's
-anchor); one following the redirect needs no change.
+it. `kept` is no longer `<plugin>:<key>`, and a button's redirect no longer adds it. The
+anchor is that of the item the page shows, the `id` of its `<li>`, which isn't always the one
+a script would guess: `item-notes-todo-<id>` for a todo listed on its own, but
+`item-notes-entry-…` (made from its title) for an entry whose one todo the page shows as the
+entry. A script that built `kept=notes:<id>` itself stops building it, and follows the
+redirect of the button it posts instead (or takes `kept` from the focus page's address); one
+already following the redirect needs no change.
 
 ### No more `mfd import` or `mfd notes export`
 

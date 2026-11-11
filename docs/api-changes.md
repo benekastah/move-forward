@@ -58,8 +58,10 @@ for themselves (a token, a request, an example config) is core's.
   `checked_at`, the last answer's fingerprint and when it was taken, and `CollectRequest`
   and `CollectAfterRequest` gain `subjects` (what moved since a collect last stored, which
   core keeps until a collect started after it stores) and `full` (whether to fetch
-  everything: the plugin's first collect since the dashboard started, `refresh_seconds`
-  since the last full collect that stored, something unnamed moved, or nothing's pending).
+  everything: the plugin's first collect since the dashboard started, unless it collects
+  only entities asked for (below) and a full collect stored within `refresh_seconds`;
+  `refresh_seconds` since the last full collect that stored; something unnamed moved; or
+  nothing's pending).
   Core asks `changed` as each collect starts, and no longer once more after a refresh,
   ignoring the answer; it asks for a refresh whenever a check says something moved since
   the last, so a check names a subject only when it moved again, and what's pending after a
@@ -101,9 +103,13 @@ for themselves (a token, a request, an example config) is core's.
 - **Fetching some entities again is a collect**: `refresh_subjects`, `SubjectsRequest`,
   `Subjects` and `MAX_SUBJECTS` are gone. An action's `touched` refs, ↻ and `mfd refresh
   --subject` refresh the publisher, its `collect` given their ids in `subjects` and `full`
-  False (unless a full collect is due); one that can fetch just those does (github, by PR URL;
-  git, by a branch's id or a repo's common git directory), and one that can't fetches
-  everything, as `full` would. It's the plugin's refresh, recorded as any other. github's change checks name PRs by URL now, as its entities' ids.
+  False (unless a full collect is due), even at its first collect since the dashboard
+  started; a publisher refreshed this round by name or schedule too (its Refresh button, its
+  own action) is collected as it would have been, given the ids as well. One that can fetch
+  just those does (github, by PR URL; git, by a branch's id or a repo's common git
+  directory), and one that can't fetches everything, as `full` would. It's the plugin's
+  refresh, recorded as any other. github's change checks name PRs by URL now, as its
+  entities' ids.
 - **Collecting after the graph** is `collects_after = True`, and `collect` reads the graph
   (`req.graph`, which every collect gets): `collect_after` and `collects_after_graph` are
   gone. Such a plugin is refreshed on its own schedule, no longer with the plugins it

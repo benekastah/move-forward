@@ -220,8 +220,9 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   server started). The subjects stay pending until a collect that started after they moved
   stores, so one that fails loses none: `collect` gets them as `req.subjects`, with
   `req.full` saying whether to fetch everything anyway (its first collect since the server
-  started, `refresh_seconds` since the last full collect that stored, something unnamed
-  moved, or nothing's pending). With `changed`, `refresh_seconds` can be
+  started, unless it collects only entities asked for, below, and a full collect stored
+  within `refresh_seconds`; `refresh_seconds` since the last full collect that stored;
+  something unnamed moved; or nothing's pending). With `changed`, `refresh_seconds` can be
   long. A `changed` that
   reads another plugin's entities from the graph names that plugin in `watches`: the
   server asks it right after each refresh of that plugin (github watches git, to see my
@@ -502,8 +503,10 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
 - **Fetching a few entities again.** An action's `touched` refs, a tab coming back to
   focus and `mfd refresh --subject` refresh the publisher, its `collect` given the entities'
   ids in `req.subjects` (with what its change checks said moved) and `req.full` False, unless
-  a full collect is due. It's the plugin's refresh like any other: recorded, told, and its
-  scheduled one waits its `refresh_seconds` again. A `collect` that can fetch just those does
+  a full collect is due, even at its first collect since the server started. When the
+  publisher is refreshed by name or schedule in the same round (its Refresh button, its own
+  action), it's collected as it would have been, given the ids too. It's the plugin's refresh
+  like any other: recorded, told, and its scheduled one waits its `refresh_seconds` again. A `collect` that can fetch just those does
   (github fetches the PRs in one request); one that can't, or gets a subject it doesn't know,
   fetches everything. One that fails is recorded as failed, as any refresh.
 - **Focus mode keeps the item** a button was pressed on, should the button take it out of
