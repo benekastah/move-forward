@@ -919,6 +919,58 @@ def test_a_plugin_watching_another_is_asked_right_after_that_one_refreshes(
     assert app.check_for_changes() == set()  # no change_check_seconds: never polled
 
 
+def test_a_watcher_refreshed_this_round_isnt_asked_after_a_plugin_refreshed_alone_before_it(
+    app: server.App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ↻ on a git branch while github is due: git first, narrowed to the branch, then github,
+    once. Its collect asks its check as it starts, so asking it after git's would only have it
+    fetched again in the next round."""
+    swap = {"github": _GitHubWatchingGit()}
+    monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
+    app.config = app.config.with_section("git", GitConfig(repos=[]))
+    migrate(app.config, app.db)
+    monkeypatch.setattr(_GitHubWatchingGit, "answers", [True])  # the branch moved
+    branch = Ref(kind="git.branch", id="/repo/.git#topic")
+
+    def asked_of(config: Config, db: Database, refs: list[Ref]) -> dict[str, frozenset[str]]:
+        return {"git": frozenset(r.id for r in refs)}
+
+    collected: list[str] = []
+
+    def refresh(
+        config: Config,
+        db: Database,
+        now: datetime | None = None,
+        only: set[str] | None = None,
+        checks: ChangeChecks | None = None,
+        asked: dict[str, frozenset[str]] | None = None,
+    ) -> None:
+        collected.extend(sorted((only or set[str]()) | set(asked or {})))
+
+    rounds = [0]
+
+    def wait(timeout: float | None = None) -> bool:
+        rounds[0] += 1
+        if rounds[0] == 1:  # after the first refresh, of everything
+            collected.clear()
+            app.request_refresh({"github"})
+            app.request_refresh_subjects([branch])
+        elif rounds[0] > 2:  # one round more, for what the first asked for
+            raise KeyboardInterrupt
+        return True
+
+    def due(now: float | None = None) -> set[str]:
+        return set()
+
+    monkeypatch.setattr(server, "asked_of", asked_of)
+    monkeypatch.setattr(server, "refresh", refresh)
+    monkeypatch.setattr(app, "due", due)
+    monkeypatch.setattr(app._wake, "wait", wait)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(KeyboardInterrupt):
+        app.run_refresh_loop()
+    assert collected == ["git", "github"]
+
+
 def test_secrets_in_query_parameters_are_left_out_of_the_log() -> None:
     line = "GET /login?code=abc&ok=1 /?token=t0k HTTP/1.1"
     assert server._redact(line) == (  # pyright: ignore[reportPrivateUsage]
@@ -1129,7 +1181,7 @@ def test_entities_are_asked_to_be_fetched_again_through_the_endpoint(
     ("named", "expected"),
     [
         # github is refreshed for the PR alone: first, narrowed to it, then the rest.
-        ({"jira"}, ["refresh [] asked ['github']", "refresh ['jira']"]),
+        ({"jira"}, ["refresh [] asked ['github'] then ['jira']", "refresh ['jira']"]),
         # github is asked for by name too: refreshed as it would have been, given the PR.
         ({"github", "jira"}, ["refresh ['github', 'jira'] asked ['github']"]),
     ],
@@ -1143,10 +1195,13 @@ def test_entities_asked_for_are_fetched_before_a_refresh_comes_round(
     waits = [0]
 
     def refresh_now(
-        only: set[str] | None = None, asked: dict[str, frozenset[str]] | None = None
+        only: set[str] | None = None,
+        asked: dict[str, frozenset[str]] | None = None,
+        then: frozenset[str] = frozenset(),
     ) -> bool:
         named = f"refresh {sorted(only) if only is not None else 'all'}"
-        done.append(named + (f" asked {sorted(asked)}" if asked else ""))
+        named += f" asked {sorted(asked)}" if asked else ""
+        done.append(named + (f" then {sorted(then)}" if then else ""))
         return True
 
     def wait(timeout: float | None = None) -> bool:

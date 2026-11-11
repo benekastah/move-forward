@@ -191,13 +191,18 @@ class App:
         }
 
     def refresh_now(
-        self, only: set[str] | None = None, asked: dict[str, frozenset[str]] | None = None
+        self,
+        only: set[str] | None = None,
+        asked: dict[str, frozenset[str]] | None = None,
+        then: frozenset[str] = frozenset(),
     ) -> bool:
         """Refresh every plugin, or `only` those and the plugins `asked` names, each collect
         given the ids of its entities asked for, and narrowed to them when it's not one of
         `only` (see `refresh.refresh`), unless a refresh is already running; returns whether
         this call did it. Each plugin refreshed waits its `refresh_seconds` again before it's
-        due."""
+        due. The plugins refreshed right after, in the same round (`then`), aren't asked
+        whether they changed with these (see `_after_refresh`): their collects ask as they
+        start, so asking now would only have them refreshed again."""
         if not self._refresh_lock.acquire(blocking=False):
             return False
         try:
@@ -208,22 +213,25 @@ class App:
             for name in self.intervals() if every is None else every:
                 self.last_refreshed[name] = started
             refresh(self.config, self.db, None, only, self.checks, asked)
-            self._after_refresh(self.refreshing)
+            self._after_refresh(self.refreshing, then)
         finally:
             self.refreshing = frozenset()
             self._refresh_lock.release()
         return True
 
-    def _after_refresh(self, names: frozenset[str]) -> None:
+    def _after_refresh(self, names: frozenset[str], then: frozenset[str] = frozenset()) -> None:
         """Start the wait for the next change check over for the plugins just refreshed (each
         was asked as its collect started), and ask the plugins that watch them
-        (`Plugin.watches`) at once, refreshing those that did."""
+        (`Plugin.watches`), but those refreshed next (`then`), at once, refreshing those that
+        did."""
         now = time.monotonic()
         for name in names:
             self._last_checked[name] = now
         plugins = enabled(self.config, self.db, datetime.now(UTC))
         watchers = [
-            e for e in plugins if e.name not in names and names.intersection(e.plugin.watches)
+            e
+            for e in plugins
+            if e.name not in names | then and names.intersection(e.plugin.watches)
         ]
         if not watchers:
             return
@@ -321,7 +329,7 @@ class App:
                 asked = asked_of(self.config, self.db, subjects) if subjects else {}
                 alone = {n: ids for n, ids in asked.items() if only is not None and n not in only}
                 if alone:
-                    self.refresh_now(set(), alone)
+                    self.refresh_now(set(), alone, frozenset(only or ()))
                 if only is None or only:
                     self.refresh_now(only, {n: ids for n, ids in asked.items() if n not in alone})
             except Exception:

@@ -306,7 +306,8 @@ def refresh(
     data). When the dashboard is stopping, it collects no more, but still finds the events of
     what it stored, and ends there, as long as it gets that far: the server runs it in a daemon
     thread, which its own shutdown may freeze first, and then that refresh's events are lost
-    (the next start compares with what it stored). Run outside that thread (`mfd refresh`, a test), it always gets that far."""
+    (the next start compares with what it stored). Run outside that thread (`mfd refresh`, a
+    test), it always gets that far."""
     now = now or datetime.now(UTC)
     asked = asked or {}
     named = only
