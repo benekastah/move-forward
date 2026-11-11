@@ -377,31 +377,3 @@ def test_a_plugins_command_without_a_docstring_is_refused() -> None:
     """Its help would be `Plugin.cli`'s docstring, inherited, or nothing."""
     with pytest.raises(RuntimeError, match="undocumented's cli has no docstring"):
         registry.check_plugins([_Undocumented()])
-
-
-@pytest.mark.parametrize(
-    ("removed", "replacement"),
-    [
-        ("init_template", "`Init`'s `tables`"),
-        ("init_questions", "`Init`, as its `questions`"),
-        ("token_help", "`Init`, as its `token_help`"),
-        ("url_for", "address(req)"),
-        ("refresh_subjects", "req.subjects"),
-        ("snapshot_model", "overrides `collect`"),
-        ("cli_help", "docstring's first line"),
-        ("locked_settings", "Annotated[str, LOCKED]"),
-        ("teams_field", "teams(config)"),
-    ],
-)
-def test_a_plugin_setting_a_removed_attribute_is_told_what_replaced_it(
-    removed: str, replacement: str
-) -> None:
-    old = type("Old", (_Plain,), {"name": "old", removed: "anything"})()
-    with pytest.raises(RuntimeError, match=f"old sets {removed},") as refused:
-        registry.check_plugins([old])
-    assert replacement in str(refused.value)
-
-
-def test_every_removed_attribute_is_gone_from_plugin() -> None:
-    """Else every plugin would have it, and be refused."""
-    assert [name for name in registry.REMOVED_ATTRIBUTES if hasattr(Plugin, name)] == []

@@ -1,6 +1,6 @@
 """The base of config models, and the markers their fields can carry in `Annotated`."""
 
-from typing import Any
+from typing import Any, TypeAliasType, get_args
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.fields import FieldInfo
@@ -45,14 +45,42 @@ class Strict(BaseModel):
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        """Refuse a marker given as a field's default (`host: str = LOCKED`), which would mark
-        nothing: a locked field left editable, without a word."""
+        """Refuse a marker that would mark nothing, leaving a locked field editable without a
+        word: one given as a field's default (`host: str = LOCKED`), or one inside its type
+        rather than on it (`Annotated[str, LOCKED] | None`, `list[Annotated[str, LOCKED]]`, or
+        through a `type` alias), where pydantic doesn't put it in the field's metadata."""
         super().__pydantic_init_subclass__(**kwargs)
-        if misplaced := [k for k, f in cls.model_fields.items() if isinstance(f.default, Marker)]:
+        fields = cls.model_fields
+        if misplaced := [k for k, f in fields.items() if isinstance(f.default, Marker)]:
             raise TypeError(
                 f"{cls.__name__}: {', '.join(misplaced)} has a marker as its default; mark it"
                 " in its type, e.g. `host: Annotated[str, LOCKED]`"
             )
+        if buried := [k for k, f in fields.items() if _buried(f)]:
+            raise TypeError(
+                f"{cls.__name__}: {', '.join(buried)} has a marker inside its type, where it"
+                " marks nothing; put it on the field's own type, e.g. `host: Annotated[str |"
+                " None, LOCKED]`"
+            )
+
+
+def _markers_in(annotation: object, seen: set[int]) -> list[Marker]:
+    """The markers anywhere in `annotation`: its arguments' (an `Annotated`'s metadata among
+    them), and a `type` alias's value's, each looked into once."""
+    if id(annotation) in seen:
+        return []
+    seen.add(id(annotation))
+    if isinstance(annotation, Marker):
+        return [annotation]
+    inner: tuple[object, ...] = get_args(annotation)
+    if isinstance(annotation, TypeAliasType):
+        inner = (*inner, annotation.__value__)
+    return [m for arg in inner for m in _markers_in(arg, seen)]
+
+
+def _buried(field: FieldInfo) -> bool:
+    """Whether a marker is in `field`'s type but not on the field (its metadata)."""
+    return any(not marked(field, m) for m in _markers_in(field.annotation, set()))
 
 
 def marked(field: FieldInfo, marker: Marker) -> bool:
