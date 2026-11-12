@@ -18,10 +18,14 @@ Requires Python 3.14+, `gh` logged in, and git. `git stack` is optional (for
 the `git_stack` plugin).
 
 ```sh
-python3 ~/src/move-forward/dev.py install  # .venv, `mfd` on PATH, git hooks, then `mfd init`
-                                # (on Windows: py dev.py install)
+python3.14 ~/src/move-forward/dev.py install  # .venv, `mfd` on PATH, git hooks, then `mfd init`
+                                   # (on Windows: py -3.14 dev.py install)
 mfd serve --open
 ```
+
+With [uv](https://docs.astral.sh/uv/) installed, any `python3` from 3.11 on (`py` on Windows)
+runs `dev.py install`: uv finds Python 3.14 for `.venv`, or downloads it. Without uv, `.venv` is
+made with the Python that runs `dev.py`, so it has to be 3.14.
 
 The dashboard listens only on localhost, over plain HTTP. Browsers treat localhost as a
 secure context, so nothing it does needs HTTPS.
