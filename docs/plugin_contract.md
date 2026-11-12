@@ -191,8 +191,10 @@ What the function `item_actions` returns is asked about.
 
 ## Config markers
 
-A config model marks a field in its type, `Annotated[T, MARKER]`; `Strict` refuses a marker given
-as a default or buried inside the type (`Annotated[str, LOCKED] | None`, `list[...]`, an alias).
+A config model marks a field in its type, `Annotated[T, MARKER]`. A marker that would mark
+nothing is refused, as the class is defined and again at registration: one given as a default,
+or one buried inside the type (`Annotated[str, LOCKED] | None`, `list[...]`, a `type` alias,
+generic or not).
 
 | Marker | What it says |
 | --- | --- |
