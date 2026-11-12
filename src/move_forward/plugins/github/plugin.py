@@ -8,15 +8,12 @@ from urllib.parse import urlsplit
 from ...api import (
     API_VERSION,
     ActionHandler,
-    Asker,
     Changed,
     Context,
     ContextRequest,
     Entity,
     Event,
     Graph,
-    InitSection,
-    InitSetup,
     KindSpec,
     Migration,
     Panel,
@@ -44,7 +41,7 @@ from .prs import (
     review_blockers,
     reviewer_assignment_reasons,
 )
-from .setup import EXAMPLE, TABLES, questions
+from .setup import INIT
 from .snapshots import DerivedRepository, PrRepository
 from .tables import MIGRATIONS
 
@@ -93,23 +90,14 @@ def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
 class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
     name = "github"
     title = "GitHub"
-    init_tables = TABLES
-    init_example = EXAMPLE
-    init_example_on = True
-    init_suggested = True
-    """Always: init guesses its org from the checkout it runs in."""
-    init_finds_teams = True
+    init = INIT
     config_model = GitHubConfig
     api_version = API_VERSION
-    teams_field = "teams"
-    locked_settings: ClassVar[frozenset[str]] = frozenset({"host"})
-    """Its token, `gh`'s, goes to `host`."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),
         PERSON: KindSpec(GitHubPerson),
     }
-    snapshot_model = GitHubSnapshot
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
     watches: ClassVar[list[str]] = ["git"]
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
@@ -118,8 +106,9 @@ class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
         self._refusal_logged = False
         """Whether the token's refusal to read the notifications was logged this run."""
 
-    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
-        return questions(ask, setup)
+    def teams(self, config: GitHubConfig) -> set[str]:
+        """Those `[github.teams]` gives its slug for."""
+        return set(config.teams)
 
     def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, when only some PRs changed (`req.subjects`, by URL: those

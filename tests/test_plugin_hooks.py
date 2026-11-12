@@ -131,9 +131,10 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
 class _Counted(JiraPlugin):
     """Jira, plus `mfd jira count`, which prints how many tickets the graph has."""
 
-    cli_help: ClassVar[str | None] = "count things"
-
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        """count things
+
+        The rest of the docstring isn't the help."""
         parser.add_argument("what")
 
         def run(req: InputRequest[JiraConfig]) -> int:
@@ -157,6 +158,20 @@ def test_a_plugin_adds_an_mfd_command(
     config.write_text(config.read_text() + '\n[jira]\nsite = "https://j"\n')
     assert cli.main(["-c", str(config), "jira", "tickets"]) == 3
     assert capsys.readouterr().out == "tickets: 0 for me@x\n"
+
+
+def test_a_plugins_command_help_is_its_cli_docstrings_first_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plugins = [_Counted() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    _, commands = cli._parser()  # pyright: ignore[reportPrivateUsage]
+    assert set(commands) == {"jira", "notes", "slack"}  # those overriding `cli`, and no other
+    with pytest.raises(SystemExit):
+        cli.main(["--help"])
+    listed = " ".join(capsys.readouterr().out.split())
+    assert "jira count things" in listed and "The rest" not in listed
+    assert "notes read and change the notes" in listed
 
 
 class _Fetching(JiraPlugin):

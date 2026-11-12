@@ -5,6 +5,7 @@
 from ..act_now import due_pressure
 from ..asking import (
     Asker,
+    Init,
     InitSection,
     InitSetup,
     branch_prefix,
@@ -65,13 +66,15 @@ from ..plugin import (
     collect_into,
 )
 from ..repositories import KvRepository
-from ..strict import Strict
+from ..strict import LOCKED, TABLES, Strict
 
 __all__ = [
     "API_VERSION",
     "BY_HAND",
     "IMPORTED",
+    "LOCKED",
     "LOOKED_UP",
+    "TABLES",
     "Action",
     "ActionError",
     "ActionHandler",
@@ -90,6 +93,7 @@ __all__ = [
     "Event",
     "Form",
     "Graph",
+    "Init",
     "InitSection",
     "InitSetup",
     "InputRequest",

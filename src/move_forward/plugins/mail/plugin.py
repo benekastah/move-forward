@@ -4,13 +4,10 @@ from typing import ClassVar
 
 from ...api import (
     API_VERSION,
-    Asker,
     Changed,
     Context,
     ContextRequest,
     Entity,
-    InitSection,
-    InitSetup,
     InputRequest,
     KindSpec,
     Migration,
@@ -31,7 +28,7 @@ from .kinds import THREAD, MailPerson, ThreadAttrs
 from .models import MailSnapshot, Message
 from .panels import OPEN_PAGE, link, message_url, panels, threads
 from .repository import MIGRATIONS, MessageRepository
-from .setup import EXAMPLE, TABLES, questions
+from .setup import INIT
 
 
 def person_id(key: str) -> str:
@@ -82,16 +79,9 @@ def merged(read: list[Message], more: list[Message]) -> list[Message]:
 class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     name = "mail"
     title = "Mail"
-    init_tables = TABLES
-    init_example = EXAMPLE
+    init = INIT
     config_model = MailConfig
     api_version = API_VERSION
-    snapshot_model = MailSnapshot
-    locked_settings: ClassVar[frozenset[str]] = frozenset(
-        {"host", "port", "message_url", "auth_servers"}
-    )
-    """Where its passwords are sent, where its items link (with my username in the link), and
-    whose word decides a sender is who they claim."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         # Its title is a subject anyone can write: a #tag in it puts no tag on it.
@@ -100,9 +90,6 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     }
     """Threads are published while they have unread or flagged mail: one that's gone is done."""
     change_check_seconds: ClassVar[int | None] = 120
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
-        return questions(ask, setup)
 
     def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
         """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""

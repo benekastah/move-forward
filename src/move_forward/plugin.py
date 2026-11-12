@@ -8,6 +8,7 @@ what it uses.
 """
 
 import argparse
+import inspect
 import logging
 import traceback
 from collections.abc import Callable, Mapping
@@ -19,7 +20,7 @@ from pydantic import BaseModel
 
 from . import keychain, localtime, shell
 from .act_now import DUE_HORIZON
-from .asking import Asker, InitSection, InitSetup
+from .asking import Init
 from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
@@ -367,13 +368,13 @@ class Snapshots[S: BaseModel](Protocol):
 
 
 class _NoSnapshots[S: BaseModel]:
-    """What a plugin without a snapshot model keeps: nothing."""
+    """What a plugin that doesn't collect keeps: nothing."""
 
     def __init__(self, plugin: str):
         self._plugin = plugin
 
     def save(self, snapshot: S) -> None:
-        raise NotImplementedError(f"{self._plugin} has a snapshot model but no snapshots")
+        raise NotImplementedError(f"{self._plugin} keeps no snapshot")
 
     def load(self) -> S | None:
         return None
@@ -411,16 +412,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     migrations: ClassVar[list[Migration]] = []
     """SQL scripts creating and changing the plugin's tables, applied in order. Append to it;
     never edit one that has shipped. Tables are prefixed with `name`."""
-    snapshot_model: ClassVar[type[BaseModel] | None] = None
-    """S, or None when the plugin fetches nothing and `collect` is never called (see
-    `collects`)."""
     api_version: ClassVar[int | None] = None
     """The `API_VERSION` the plugin was built against: one built against another is left
     out, with the reason in `mfd check` and the page's footer."""
-    teams_field: ClassVar[str | None] = None
-    """The field of the plugin's section mapping each top-level team to what the tool calls
-    it (`teams`, e.g. `[github.teams]`), so the config can check it names only teams it has;
-    None for a plugin without one."""
     notification_kinds: ClassVar[dict[str, str]] = {}
     """The events the plugin's `events` makes, by kind, each with what it says, for the
     settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
@@ -438,45 +432,17 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
     rather than waiting for `change_check_seconds`."""
-    cli_help: ClassVar[str | None] = None
-    """The help line of `mfd <name>`; None means the plugin has no command."""
     always_on: ClassVar[bool] = False
     """On without a section (notes), so `mfd init` doesn't offer it."""
-    init_tables: ClassVar[str] = ""
-    """Commented-out tables of the section's that its model can't show, as `mfd init` writes
-    them after its optional keys: a table keyed by name, with example entries (`[github.teams]`,
-    `[mail.<name>]`). A key written here as `[<section>.<key>]` isn't written as a key too.
-    `mfd init` writes each other optional key itself, from `config_model`: its default, and its
-    docstring's first sentence as its comment (a section's `shown` for one it shows
-    otherwise)."""
-    init_example: ClassVar[InitSection] = InitSection()
-    """The section with example values for its required settings (and its `shown`), which `mfd
-    init` writes commented out for a plugin that wasn't chosen. `mfd init --example` writes
-    them uncommented for a plugin `init_example_on`."""
-    init_suggested: ClassVar[bool] = False
-    """Whether `mfd init` offers to set the plugin up by default: not unless the plugin says
-    so, as most need something of mine (a site, a mailbox) to be of use."""
-    init_example_on: ClassVar[bool] = False
-    """`mfd init --example` writes the section on, with `init_example`'s values, rather than
-    commented out like a plugin `mfd init` wasn't asked for: for a tool most use. Off by
-    default, so a plugin whose `init_example` lacks a required key can't make the example
-    a config that won't load."""
-    init_finds_teams: ClassVar[bool] = False
-    """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
-    locked_settings: ClassVar[frozenset[str]] = frozenset()
-    """Its settings the settings page shows but won't change, as they say where a credential
-    goes (a site, a host) or what runs where. Its token's `token_env` and `keychain_service`
-    are locked without naming them; settings its `tokens` reads a token's place from under
-    other names, or builds it from, it names here."""
-    token_help: ClassVar[str] = ""
-    """`mfd init`'s next step for its token(s), in place of the plain "`mfd token set <name>`
-    stores its token": where to get one, or another way in (signing in in the browser)."""
+    init: ClassVar[Init] = Init()
+    """How `mfd init` sets the section up: its questions, example and the like (`Init`). By
+    default nothing is asked and the plugin isn't suggested."""
 
     @property
     def collects(self) -> bool:
-        """Whether the plugin fetches anything: it has a `snapshot_model`, so a refresh
-        calls its `collect` and it has a schedule."""
-        return self.snapshot_model is not None
+        """Whether the plugin fetches anything: it overrides `collect` (and so `snapshots`, as
+        the registry checks), so a refresh calls its `collect` and it has a schedule."""
+        return overrides(self, "collect")
 
     def tokens(self, config: C) -> dict[str, TokenSettings]:
         """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
@@ -485,6 +451,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         `token_env` and `keychain_service`. Each needs a `keychain_service` of its own: the
         config is refused when two tokens share one. Its context's `token` reads them."""
         return _section_token(config)
+
+    def teams(self, config: C) -> set[str]:
+        """The top-level teams (`Context.teams`, by name) the plugin's section names, e.g. those
+        github's `[github.teams]` gives a slug for, so the config refuses a team the top level
+        doesn't have. Empty by default: core knows nothing of how a section keeps them."""
+        return set()
 
     # Refresh
 
@@ -496,12 +468,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
         failed and goes on, and leaves it out of refreshes until its collect returns (a thread
         can't be stopped)."""
-        raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
+        raise NotImplementedError(f"{self.name} doesn't collect")
 
     def snapshots(self, req: ContextRequest[C]) -> "Snapshots[S]":
         """Where the plugin keeps what `collect` fetched, in its own tables: usually its
-        repository over them (see `Snapshots`). By default nothing is kept, for a plugin with
-        no snapshot model."""
+        repository over them (see `Snapshots`). A plugin overriding `collect` overrides this
+        too; by default nothing is kept, for a plugin that doesn't collect."""
         return _NoSnapshots[S](self.name)
 
     def events(self, req: Request[C, S]) -> list[Event]:
@@ -604,20 +576,33 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         """Add the arguments of `mfd <name>` to `parser` and return what runs it, given an
-        `InputRequest` with the parsed `args`. Only called when `cli_help` is set."""
-        raise NotImplementedError(f"{self.name} has cli_help but no cli")
+        `InputRequest` with the parsed `args`. A plugin has a command when it overrides this,
+        with a docstring whose first line is the command's help (`command_help`)."""
+        raise NotImplementedError(f"{self.name} has no command")
 
-    # Set-up and upkeep
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
-        """Ask for the `[name]` section's settings in `mfd init`; returns the section to write.
-        `setup` has what init knows so far; a plugin can add to its `teams`."""
-        return InitSection()
+    # Upkeep
 
     def prune(self, req: Request[C, S]) -> list[str]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns
         what was done, one line each."""
         return []
+
+
+def overrides(plugin: Plugin[Any, Any], hook: str) -> bool:
+    """Whether `plugin`'s class overrides `Plugin`'s method `hook`: what some hooks' being
+    there says (`collects`, `command_help`)."""
+    return getattr(type(plugin), hook) is not getattr(Plugin, hook)
+
+
+def command_help(plugin: Plugin[Any, Any]) -> str | None:
+    """The help line of `mfd <name>`: the first line of the docstring of the plugin's `cli`;
+    None for a plugin without a command (not overriding `cli`), or whose `cli` has no
+    docstring (which the registry refuses). Its own docstring, not one inherited from
+    `Plugin.cli`."""
+    if not overrides(plugin, "cli"):
+        return None
+    doc = type(plugin).cli.__doc__
+    return inspect.cleandoc(doc).splitlines()[0] if doc and doc.strip() else None
 
 
 def collect_into[T: BaseModel](

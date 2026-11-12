@@ -108,7 +108,8 @@ class LinearConfig(TokenFields):
 - Config models subclass `Strict` (or `TokenFields`, which is one), which rejects unknown
   keys: a typo is an error. A field
   whose entries are tables of their own, by name (mail's `[mail.<name>]` accounts), says so
-  with `json_schema_extra={"tables": True}`, and its example is one such table.
+  with `api.TABLES` in its type (`Annotated[dict[str, Account], TABLES]`), and its example is one
+  such table.
 - Every field has a docstring.
 - A built-in's every key appears in two places: the model and the plugin's page in
   `docs/plugins/`. A plugin from another package can't add to those pages: its model and its
@@ -118,45 +119,47 @@ class LinearConfig(TokenFields):
   for, its unit, the value that turns it off ("0: never", "empty: no such convention"), and
   what an empty or unset value stands for where that isn't obvious. It ends at the first `.`,
   `?` or `!` before a space, but not at `e.g.`, `i.e.` or `etc.`.
-- `mfd init` asks which plugins to set up (offering by default those that set
-  `init_suggested = True`), then each chosen one's `init_questions(ask, setup)`, which
-  returns its section as an `InitSection`: its `values`, and its `shown` (below). `setup`
-  has my email, where init runs and the teams found so far; a plugin that
-  sets the teams (github does) says so with `init_finds_teams`, and otherwise core asks
-  for them by name before any plugin's questions. Init refuses a plugin chosen without the
-  plugins it `requires`. `ask(question, default, check, complete)` and `ask.list`
-  tab-complete with `complete`: `asking.choices(...)` (a list, or a function fetching it
-  on the first tab) or `asking.directories`. Keep the questions and guesses in a
-  `setup.py` (see github's), with `init_example` (an `InitSection` of the required keys
-  with example values, written commented out when the plugin isn't chosen) and what the
-  model can't say: in `init_tables`, commented tables of example entries (`[github.teams]`),
-  and in a section's `shown`, an example value for a key whose default is None or says less
-  than an example, where uncommenting it is right for that section (mail's `auth_servers`:
-  Gmail's servers for a Gmail host, `[]` for another, the same as unset there). Each comment goes above what it's about. A plugin still setting `init_template`
-  is refused, naming these.
+- How `mfd init` sets the plugin up is its `init`, an `Init` built in its `setup.py` (see
+  github's: `INIT = Init(questions=questions, example=EXAMPLE, ...)`), and read by nothing
+  else. `mfd init` asks which plugins to set up (offering by default those whose `Init` says
+  `suggested=True`), then each chosen one's `questions(ask, setup)`, which returns its section
+  as an `InitSection`: its `values`, and its `shown` (below). `setup` has my email, where init
+  runs and the teams found so far; a plugin whose questions set the teams (github's) says so
+  with `finds_teams=True`, and otherwise core asks for them by name before any plugin's
+  questions. Init refuses a plugin chosen without the plugins it `requires`. `ask(question,
+  default, check, complete)` and `ask.list` tab-complete with `complete`:
+  `asking.choices(...)` (a list, or a function fetching it on the first tab) or
+  `asking.directories`. Its `example` is an `InitSection` of the required keys with example
+  values, written commented out when the plugin isn't chosen; and it says what the model
+  can't: in `tables`, commented tables of example entries (`[github.teams]`), and in a
+  section's `shown`, an example value for a key whose default is None or says less than an
+  example, where uncommenting it is right for that section (mail's `auth_servers`: Gmail's
+  servers for a Gmail host, `[]` for another, the same as unset there). Each comment goes
+  above what it's about.
   `mfd init --example` writes each plugin's section as `mfd init` does when it isn't
-  chosen, or, with `init_example_on` (a tool most use: github, git), on, with
-  `init_example` uncommented.
-- Settings that say where a credential goes (a site, a host) are named in `locked_settings`,
-  so the settings page, reached with the dashboard's cookie, shows them without changing them;
-  `token_env` and `keychain_service` are locked already; a section keeping its token's place
-  under other names, or building it from other settings, names those too.
+  chosen, or, with `example_on=True` (a tool most use: github, git), on, with its `example`
+  uncommented.
+- Settings that say where a credential goes (a site, a host) are marked `LOCKED` in their type
+  (`site: Annotated[str, api.LOCKED]`), so the settings page, reached with the
+  dashboard's cookie, shows them without changing them; `token_env` and `keychain_service`
+  are locked already; a section keeping its token's place under other names, or building it
+  from other settings, marks those too.
 - Secrets never go in the config. Build the section on `api.keychain.TokenFields`, as jira,
   slack and mail do: it gives it `token_env` and `keychain_service`, defaulting to the
   `default_token_env` and `default_keychain_service` it sets. Read the token with
   `ctx.token()`, which raises `SourceError` saying how to give one when there's none: then
-  `mfd token set <plugin>` stores it and `mfd token check` finds it; `token_help` is `mfd
-  init`'s next step for it, saying where to get one (a section that keeps them under other
-  names overrides `tokens(config)`, returning `{"": settings}`, where `settings` is an
-  `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
+  `mfd token set <plugin>` stores it and `mfd token check` finds it; its `Init`'s
+  `token_help` is `mfd init`'s next step for it, saying where to get one (a section that
+  keeps them under other names overrides `tokens(config)`, returning `{"": settings}`, where
+  `settings` is an `api.keychain.TokenSettings`). Default `keychain_service` to one named for the plugin
   (`move-forward-linear`): the config is refused when two tokens share one. A plugin reading
   several accounts, each with its own token, names them all in `tokens(config)`, reads one
   with `ctx.token(account)`, and `mfd token set <plugin>.<account>` stores one. Anything sent with a
   token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
   the body, never the URL (its errors name the URL, without its query).
-- A section mapping the top-level teams to the tool's names for them (github's
-  `[github.teams]`) names that field in `teams_field`, so the config refuses a team it
-  doesn't have.
+- A section naming top-level teams (github's `[github.teams]`, mapping each to the tool's name
+  for it) says which in `teams(config)`, returning their names, so the config refuses a team the
+  top level doesn't have. Core reads nothing else about how a section keeps them.
 
 ## Collecting and storing
 
@@ -166,7 +169,6 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     title = "Linear"
     api_version = API_VERSION
     config_model = LinearConfig
-    snapshot_model = LinearSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
 
     def collect(self, req: RefreshRequest[LinearConfig]) -> LinearSnapshot:
@@ -193,7 +195,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   it each time it's checked rather than warning of it yourself: one not reported for
   `prune_days` is forgotten.
 
-- A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
+- A plugin collects (`collects`) when it overrides `collect`, and it then overrides
+  `snapshots` too: core refuses a plugin with one and not the other. It has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it
   that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
@@ -515,8 +518,9 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   `api.html.page` and `api.html.e` to escape everything), or a `Response`, e.g.
   `Response.redirect(url)`. Every page needs the
   dashboard's token, as every request does.
-- **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
-  a handler `(req: InputRequest) -> int` that gets the parsed `req.args`.
+- **Commands.** Implement `cli(parser)` for `mfd linear ...`, returning a handler `(req:
+  InputRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
+  the command's help in `mfd --help`; core refuses a `cli` without one.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the
 plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their
@@ -564,7 +568,7 @@ built-ins working together use `conftest.dashboard(...)` and `conftest.stored(..
 ## Docs to update in the same commit
 
 For a built-in, in this repository; a plugin from another package keeps the same in its own
-docs, and its `init_example`, `init_tables` and its sections' `shown`.
+docs, and its `Init`'s `example`, `tables` and its sections' `shown`.
 
 - The plugin's page, `docs/plugins/<name>.md` (copy one of the others): its config and
   setup, what it publishes, its panels, what it nominates for Act now, its buttons, pages
@@ -572,4 +576,4 @@ docs, and its `init_example`, `init_tables` and its sections' `shown`.
 - [entities.md](entities.md) for its kinds, [plugins.md](plugins.md) for what it publishes
   and reads.
 - Its config keys' docstrings, which `mfd init` writes from, and what its model can't say:
-  its `init_example`, `init_tables` and its sections' `shown`.
+  its `Init`'s `example`, `tables` and its sections' `shown`.
