@@ -98,28 +98,41 @@ def no_real_database(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(auth, "rotate", _guarded(auth.rotate, 0))
 
 
-ALLOWED_PROGRAMS = frozenset(
-    {"git", "git-stack"} | ({"icacls"} if sys.platform == "win32" else set())
-)
-"""The programs a test may run, by name: git (`git stack` included) in the repos tests make in
-`tmp_path`, and on Windows icacls, which `private.py` keeps a test's files private with. The
-Python running the tests is allowed too, for tests that run `mfd`."""
+ALLOWED_PROGRAMS = frozenset({"git"} | ({"icacls"} if sys.platform == "win32" else set()))
+"""The programs any test may run, by name: git (`git stack` is git too), in the repos tests make
+in `tmp_path`, and on Windows icacls, which `private.py` keeps a test's files private with."""
+
+GIT_ENVIRONMENT = {"GIT_ALLOW_PROTOCOL": "file", "GIT_TERMINAL_PROMPT": "0"}
+"""Set for every test, so git, and what it runs, fetches only from repos on this machine and
+never asks for a password."""
+
+REAL_ADVAPI32 = keychain._advapi32  # pyright: ignore[reportPrivateUsage]
+"""Windows' real Credential Manager, which `outside` replaces: for the one test of it, which
+only Windows CI runs."""
+
+_EXEC = ("execl", "execle", "execlp", "execlpe", "execv", "execve", "execvp", "execvpe")
+_SPAWN = ("spawnl", "spawnle", "spawnlp", "spawnlpe", "spawnv", "spawnve", "spawnvp", "spawnvpe")
+
+
+def _name(program: str | bytes | os.PathLike[str]) -> str:
+    """A program's name as the guard compares it: without its directory, `.exe` or case."""
+    return PurePath(os.fsdecode(program)).name.lower().removesuffix(".exe")
 
 
 class OutsideRefused(PermissionError):
-    """What a refused subprocess, connection or secret-store read raises in a test."""
+    """What a refused program, connection, name lookup or secret-store read raises in a test."""
 
 
 class Outside:
-    """What a test may reach outside itself, and what it tried to that it mayn't, which the
-    `outside` fixture fails it for. A test that means to try (a test of the guard) takes what
-    was refused with `take`; one that needs a program, `allow`s it."""
+    """What a test may reach outside itself, and what it tried to that it mayn't, which `check`
+    fails it for as it ends. A test that means to try (a test of the guard) takes what was
+    refused with `take`; one that needs a program, `allow`s it."""
 
     def __init__(self) -> None:
         self.refused: list[str] = []
         """What the test tried and was refused, in order."""
         self.programs: set[str] = set(ALLOWED_PROGRAMS)
-        """The programs it may run, by name, without `.exe`."""
+        """The programs it may run, by `_name`."""
 
     def refuse(self, what: str) -> NoReturn:
         """Note that the test tried `what`, and raise, though the code under test may catch it
@@ -133,13 +146,23 @@ class Outside:
         return taken
 
     def allow(self, *programs: str) -> None:
-        """Let this test run `programs` (by name: `"gh"`), which it needs for real."""
-        self.programs.update(programs)
+        """Let this test run `programs` (a name, `"gh"`, or a path, `sys.executable`), which it
+        needs for real. What such a program does isn't guarded."""
+        self.programs.update(_name(p) for p in programs)
 
-    def may_run(self, program: str) -> bool:
+    def may_run(self, program: str | bytes | os.PathLike[str]) -> bool:
         """Whether the test may start `program`, a name or a path (`C:\\...\\git.exe`)."""
-        name = PurePath(program).name.lower().removesuffix(".exe")
-        return name in self.programs or Path(program).resolve() == Path(sys.executable).resolve()
+        return _name(program) in self.programs
+
+    def check(self) -> None:
+        """Fail the test if it tried what it mayn't, naming what."""
+        if self.refused:
+            pytest.fail(
+                "the test reached outside itself, which tests never do: "
+                + "; ".join(self.refused)
+                + ". Stub it where the test isn't about it (see conftest's `outside`).",
+                pytrace=False,
+            )
 
 
 def _program(args: object, executable: object, shell: bool) -> str | None:
@@ -187,22 +210,43 @@ def _literal(host: object) -> bool:
     return True
 
 
+def _called(name: str, args: tuple[object, ...]) -> str:
+    return f"{name}({', '.join(repr(a) for a in args)})"
+
+
 @pytest.fixture(autouse=True)
 def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
-    """No test runs a program but git, git stack and Python, connects anywhere but this
-    machine, looks a name up, or reads the real secret store (the keychain's commands are
-    programs too; Windows' Credential Manager is `keychain._advapi32`). A refused call raises
-    `OutsideRefused`, but code under test often catches what it calls raising, so each is noted
-    too, and fails the test when it ends, naming what it tried. Stub it at the layer the test
-    isn't about (the plugin's client, `keychain.read`); a test that tries on purpose takes
-    what was refused (`outside.take()`), and one that needs a program `outside.allow`s it."""
+    """Keep each test to itself. It's refused, with `OutsideRefused`:
+    - starting a program but git, icacls on Windows, and those it `allow`s, through
+      `subprocess` (`Popen` and what's built on it, asyncio's too), `os.exec*`, `os.spawn*` or
+      `os.posix_spawn*`; and any shell or terminal: a shell command (`os.system`, `os.popen`,
+      `shell=True`), `pty.spawn`, `os.forkpty`, `os.startfile`;
+    - a socket connecting (`connect`, `connect_ex`) or sending (`sendto`, `sendmsg`) anywhere
+      but this machine;
+    - looking a name up (`getaddrinfo`, `gethostbyname`, `gethostbyname_ex`), but `localhost`,
+      or an address that isn't this machine's (`gethostbyaddr`, `getnameinfo`);
+    - Windows' Credential Manager (`keychain._advapi32`); the macOS and Linux secret stores are
+      programs, `security` and `secret-tool`.
+
+    The code under test often catches what it calls raising, so each refusal is noted too, and
+    `Outside.check` fails the test when it ends, naming what it tried. Stub it at the layer the
+    test isn't about (the plugin's client, `keychain.read`); a test that tries on purpose takes
+    what was refused (`outside.take()`), and one that needs a program `outside.allow`s it.
+
+    What a child does isn't guarded, being another process. git, and what it runs (`git stack`,
+    hooks, credential helpers), gets `GIT_ENVIRONMENT`, so it can't fetch from the network or
+    ask for a password; a program a test allows (Python, to run `mfd`) gets nothing: give it a
+    config that reaches nothing."""
     outside = Outside()
+    for name, value in GIT_ENVIRONMENT.items():
+        monkeypatch.setenv(name, value)
+
     spawn = subprocess.Popen._execute_child  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
     spawning = inspect.signature(spawn)  # pyright: ignore[reportUnknownArgumentType]
 
     def execute_child(self: subprocess.Popen[str], *args: object, **kwargs: object) -> object:
         """`Popen`'s own start of a process, which `run`, `check_output`, `os.popen`,
-        `webbrowser` and a `Popen` bound before the test (a default argument) all go
+        `webbrowser`, asyncio and a `Popen` bound before the test (a default argument) all go
         through."""
         called = spawning.bind(self, *args, **kwargs).arguments
         program = _program(called["args"], called["executable"], bool(called["shell"]))
@@ -211,18 +255,44 @@ def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
         return spawn(self, *args, **kwargs)  # pyright: ignore[reportUnknownVariableType]
 
     monkeypatch.setattr(subprocess.Popen, "_execute_child", execute_child)
-    if sys.platform == "win32":  # what `webbrowser` opens a page with there
 
-        def startfile(path: object, *args: object, **kwargs: object) -> None:
-            outside.refuse(f"os.startfile({path!r})")
+    def starting(name: str, at: int) -> Callable[..., Any]:
+        """`os`'s `name`, refusing a program the test mayn't run, its `at`th argument."""
+        start = cast(Callable[..., Any], getattr(os, name))
 
-        monkeypatch.setattr(os, "startfile", startfile)
+        def guarded(*args: Any, **kwargs: Any) -> Any:
+            if not outside.may_run(args[at]):
+                outside.refuse(f"the program `{os.fsdecode(args[at])}`, through os.{name}")
+            return start(*args, **kwargs)
 
-    connect, connect_ex = socket.socket.connect, socket.socket.connect_ex
+        return guarded
+
+    def refusing(name: str) -> Callable[..., NoReturn]:
+        def refused(*args: object, **kwargs: object) -> NoReturn:
+            outside.refuse(_called(name, args))
+
+        return refused
+
+    for name, at in [*((n, 0) for n in _EXEC), *((n, 1) for n in _SPAWN)]:
+        if hasattr(os, name):
+            monkeypatch.setattr(os, name, starting(name, at))
+    for name in ("posix_spawn", "posix_spawnp"):  # subprocess's own use of them is let through
+        if hasattr(os, name):
+            monkeypatch.setattr(os, name, starting(name, 0))
+    for name in ("system", "forkpty", "startfile"):
+        if hasattr(os, name):
+            monkeypatch.setattr(os, name, refusing(f"os.{name}"))
+    if sys.platform != "win32":
+        import pty
+
+        monkeypatch.setattr(pty, "spawn", refusing("pty.spawn"))
 
     def checked(address: object) -> None:
         if isinstance(address, tuple) and not _loopback(cast(tuple[object, ...], address)[0]):
             outside.refuse(f"the network, at {address}")
+
+    connect, connect_ex = socket.socket.connect, socket.socket.connect_ex
+    sendto = socket.socket.sendto
 
     def guarded_connect(self: socket.socket, address: Any) -> None:
         checked(address)
@@ -232,29 +302,49 @@ def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
         checked(address)
         return connect_ex(self, address)
 
-    lookup = socket.getaddrinfo
-
-    def getaddrinfo(host: Any, *args: Any, **kwargs: Any) -> Any:
-        if not _literal(host):
-            outside.refuse(f"the network, looking up {host!r}")
-        return lookup(host, *args, **kwargs)
+    def guarded_sendto(self: socket.socket, data: Any, *rest: Any) -> int:
+        checked(rest[-1])  # sendto(data, address) or sendto(data, flags, address)
+        return sendto(self, data, *rest)
 
     monkeypatch.setattr(socket.socket, "connect", guarded_connect)
     monkeypatch.setattr(socket.socket, "connect_ex", guarded_connect_ex)
-    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket.socket, "sendto", guarded_sendto)
+    if hasattr(socket.socket, "sendmsg"):  # not on Windows
+        sendmsg = socket.socket.sendmsg
+
+        def guarded_sendmsg(self: socket.socket, *args: Any) -> int:
+            if len(args) > 3:  # sendmsg(buffers, ancdata, flags, address)
+                checked(args[3])
+            return sendmsg(self, *args)
+
+        monkeypatch.setattr(socket.socket, "sendmsg", guarded_sendmsg)
+
+    def looking_up(name: str, allowed: Callable[[Any], bool]) -> Callable[..., Any]:
+        """`socket`'s `name`, refusing a first argument that isn't `allowed`."""
+        look_up = cast(Callable[..., Any], getattr(socket, name))
+
+        def guarded(first: Any, *args: Any, **kwargs: Any) -> Any:
+            if not allowed(first):
+                outside.refuse(f"the network, through {_called(f'socket.{name}', (first,))}")
+            return look_up(first, *args, **kwargs)
+
+        return guarded
+
+    for name in ("getaddrinfo", "gethostbyname", "gethostbyname_ex"):
+        monkeypatch.setattr(socket, name, looking_up(name, _literal))
+    monkeypatch.setattr(socket, "gethostbyaddr", looking_up("gethostbyaddr", _loopback))
+    monkeypatch.setattr(
+        socket,
+        "getnameinfo",
+        looking_up("getnameinfo", lambda address: _loopback(cast(tuple[object, ...], address)[0])),  # pyright: ignore[reportUnknownLambdaType]
+    )
 
     def advapi32() -> NoReturn:
         outside.refuse("Windows' Credential Manager")
 
     monkeypatch.setattr(keychain, "_advapi32", advapi32)
     yield outside
-    if outside.refused:
-        pytest.fail(
-            "the test reached outside itself, which tests never do: "
-            + "; ".join(outside.refused)
-            + ". Stub it where the test isn't about it (see conftest's `outside`).",
-            pytrace=False,
-        )
+    outside.check()
 
 
 @pytest.fixture(autouse=True)
