@@ -646,8 +646,9 @@ def _repo(path: Path) -> Path:
     return path
 
 
+@pytest.mark.parametrize("server", [False, True], ids=["mfd refresh", "server"])
 def test_a_repo_git_newly_finds_reaches_git_stack_in_the_same_refresh(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    server: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Both collect from the graph as it was; git_stack, watching git, is asked once git has
     stored, and collected again with git's new repo, before the refresh ends. A refresh in
@@ -662,13 +663,14 @@ def test_a_repo_git_newly_finds_reaches_git_stack_in_the_same_refresh(
 
     monkeypatch.setattr(client, "collect", collect)
     db = Database(":memory:")
+    checks = ChangeChecks() if server else None  # the server's, kept across refreshes
 
     def refreshed(*repos: Path, only: set[str] | None = None) -> list[str]:
         config = Config.model_validate(
             {"email": "me@x", "git": {"repos": [r.as_posix() for r in repos]}, "git_stack": {}}
         )
         registry.migrate(config, db)
-        refresh.refresh(config, db, NOW, only)
+        refresh.refresh(config, db, NOW, only, checks)
         kept = StackRepository(db).load()
         return [Path(r.dir).name for r in kept.repos] if kept else []
 

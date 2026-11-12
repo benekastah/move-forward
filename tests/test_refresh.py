@@ -10,10 +10,11 @@ from conftest import NOW, issue, local_branch, local_snapshot, panel, pr, snapsh
 
 from move_forward import refresh, registry
 from move_forward.act_now import OPENED_FOR, ActNowConfig, Feedback
+from move_forward.change_checks import ChangeChecks
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph, Ref
-from move_forward.notifications import NotificationRepository
+from move_forward.notifications import Event, NotificationRepository
 from move_forward.page import Badge, Item
 from move_forward.plugin import (
     ActionError,
@@ -72,29 +73,103 @@ def plugins(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
 
 
-def test_a_watcher_collects_again_from_what_the_plugin_it_watches_just_stored(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Every plugin collects from the graph as stored before the refresh; jira, watching git,
-    is asked once git has stored, and collected again from git's repos, in the same refresh.
-    In a refresh where its check says nothing moved, it's collected once."""
-    monkeypatch.setattr(_JiraWatchingGit, "collected_from", [])
+def _finds_b(self: _Git, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
+    """git's collect once it has found another repo, acme/b, in place of acme/widgets."""
+    return local_snapshot(github_repo="acme/b")
+
+
+def _git_and_jira() -> tuple[Config, Database]:
     config = Config.model_validate(
         {
             "email": "me@x",
             "git": {"repos": []},
             "jira": {"site": "https://j"},
+            "notifications": {"subscribe": ["jira.assigned"]},
         }
     )
     db = Database(":memory:")
     registry.migrate(config, db)
-    refresh.refresh(config, db, NOW)
+    return config, db
+
+
+@pytest.mark.parametrize("server", [False, True], ids=["mfd refresh", "server"])
+def test_a_watcher_collects_again_from_what_the_plugin_it_watches_just_stored(
+    server: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every plugin collects from the graph as stored before the refresh; jira, watching git,
+    is asked once git has stored, and collected again from git's repos, in the same refresh.
+    In a refresh where its check says nothing moved, it's collected once. The server's checks,
+    kept across refreshes and asked as each collect starts, give the same."""
+    monkeypatch.setattr(_JiraWatchingGit, "collected_from", [])
+    config, db = _git_and_jira()
+    checks = ChangeChecks() if server else None
+    assert refresh.refresh(config, db, NOW, None, checks) == {"git", "jira"}
     stored = IssueRepository(db).load()
     assert [i.summary for i in stored.issues] == ["about acme/widgets"]
     assert _JiraWatchingGit.collected_from == [[], ["acme/widgets"]]
     assert _JiraWatchingGit.seen_by_after_collect == ["https://jira/browse/APP-1"]
-    refresh.refresh(config, db, NOW)
+    refresh.refresh(config, db, NOW, None, checks)
     assert _JiraWatchingGit.collected_from == [[], ["acme/widgets"], ["acme/widgets"]]
+
+
+def test_a_settle_check_that_raises_collects_nothing_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_JiraWatchingGit, "collected_from", [])
+
+    def changed(self: _JiraWatchingGit, req: RefreshRequest[JiraConfig]) -> Changed:
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(_JiraWatchingGit, "changed", changed)
+    config, db = _git_and_jira()
+    assert refresh.refresh(config, db, NOW) == {"git", "jira"}  # and the refresh went on
+    assert _JiraWatchingGit.collected_from == [[]]
+
+
+def test_nothing_is_settled_while_the_dashboard_stops(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_JiraWatchingGit, "collected_from", [])
+    monkeypatch.setattr(refresh.shell, "stopping", lambda: True)
+    config, db = _git_and_jira()
+    refresh.refresh(config, db, NOW)
+    assert _JiraWatchingGit.collected_from == [[]]
+
+
+def test_a_watcher_still_collecting_isnt_collected_again_or_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Its collect from before, past its timeout, still runs: it's left out of the settle, and
+    the refresh doesn't say it collected it (the server would put off its next one)."""
+    monkeypatch.setattr(_JiraWatchingGit, "collected_from", [])
+    config, db = _git_and_jira()
+    refresh.refresh(config, db, NOW, {"git"})  # git's repo stored; jira settled once
+    monkeypatch.setattr(refresh, "_collecting", {"jira"})
+    monkeypatch.setattr(_Git, "collect", _finds_b)
+    assert refresh.refresh(config, db, NOW, {"git"}) == {"git"}
+    assert _JiraWatchingGit.collected_from == [["acme/widgets"]]
+
+
+def test_a_settled_watchers_events_compare_before_with_after_the_settle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One event from the snapshot before the refresh to the one the settle stored, not one
+    about the collect in between."""
+    monkeypatch.setattr(_JiraWatchingGit, "collected_from", [])
+    compared: list[tuple[list[str], list[str]]] = []
+
+    def events(self: _JiraWatchingGit, req: Request[JiraConfig, JiraSnapshot]) -> list[Event]:
+        before, after = req.previous.snapshot, req.snapshot
+        assert before is not None and after is not None
+        compared.append(([i.summary for i in before.issues], [i.summary for i in after.issues]))
+        return []
+
+    monkeypatch.setattr(_JiraWatchingGit, "events", events)
+    config, db = _git_and_jira()
+    refresh.refresh(config, db, NOW)
+    monkeypatch.setattr(_Git, "collect", _finds_b)
+    compared.clear()
+    refresh.refresh(config, db, NOW)
+    assert _JiraWatchingGit.collected_from[-2:] == [["acme/widgets"], ["acme/b"]]
+    assert compared == [(["about acme/widgets"], ["about acme/b"])]
 
 
 class _GitInKv(GitPlugin):

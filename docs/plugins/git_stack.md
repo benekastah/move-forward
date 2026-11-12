@@ -10,7 +10,9 @@ to an older config. `refresh_seconds` (1800) is how often it refreshes regardles
 watches git, which sees a change to `.git/config` as well as to branches: in each refresh of git, once git has stored, it compares git's branches in its repos, and each
 repo's `.git/config` (where git stack records each branch's parent, base and group), with
 what it saw last, and runs `git stack info` again only when they moved, so a repo git has just
-found is read in the same refresh. Its buttons need a git stack whose commands take `--json`.
+found is read in the same refresh. A refresh of everything in which git's branches moved (any
+commit) runs `git stack info` twice, once before git has stored and once after; it's local and
+offline, so cheap. Its buttons need a git stack whose commands take `--json`.
 
 ## Publishes
 

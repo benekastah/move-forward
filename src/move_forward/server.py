@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlsplit
 from pydantic import Field, TypeAdapter, ValidationError
 
 from . import act_now, auth, render, settings, shell, tag_view
-from .change_checks import ChangeChecks
+from .change_checks import ChangeChecks, said
 from .config import Config
 from .db import Database
 from .graph import Ref
@@ -242,7 +242,7 @@ class App:
             if (why := self.checks.moved(e, graph)) is not None:
                 changed[e.name] = why
         if changed:
-            log.info("changed: %s; refreshing", _said(changed))
+            log.info("changed: %s; refreshing", said(changed))
             self.request_refresh(set(changed))
         return set(changed)
 
@@ -394,11 +394,6 @@ class App:
             self._shown.move_to_end(key)
             while len(self._shown) > MAX_SHOWN:
                 self._shown.popitem(last=False)
-
-
-def _said(changed: dict[str, str]) -> str:
-    """The plugins that changed, each with why when it said, for the log."""
-    return ", ".join(f"{name} ({why})" if why else name for name, why in sorted(changed.items()))
 
 
 MAX_SHOWN = 50

@@ -112,7 +112,8 @@ the graph that collect works from, and in each refresh of a plugin it `watches`,
 has stored. A plugin that `watches` another compares the two to see what that one's refresh
 moved: github sees a branch of one of my PRs move from git's
 `git.branch` entities, without keeping where they stood itself. The first check since the
-server started has none to compare with.
+server (or `mfd refresh`) started has none to compare with, except in a refresh, where it
+compares with the graph from before the refresh.
 
 ## Reading it
 

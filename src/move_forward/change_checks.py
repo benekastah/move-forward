@@ -26,6 +26,11 @@ from .repositories import ChangeRepository
 log = logging.getLogger(__name__)
 
 
+def said(changed: dict[str, str]) -> str:
+    """The plugins that changed, each with why when it said, for the log."""
+    return ", ".join(f"{name} ({why})" if why else name for name, why in sorted(changed.items()))
+
+
 def checks(e: Enabled) -> bool:
     """Whether the plugin has a change check: `change_check_seconds`, or plugins it
     `watches`."""

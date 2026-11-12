@@ -172,9 +172,9 @@ class RefreshRequest[C: BaseModel]:
 
     ctx: Context[C]
     graph: Graph
-    """Every plugin's entities, built from what's stored now: for `collect`, as stored before
-    the refresh began, or, collected again for a plugin it `watches`, as that one just stored
-    it (see `watches`)."""
+    """Every plugin's entities, as stored: for `collect`, as stored before the refresh began,
+    or, for a plugin collected again because one it `watches` just stored, as that one stored
+    it; for `changed`, as stored when it's asked."""
     full: bool = True
     """For `collect`: whether to fetch everything: at the plugin's first collect since the
     dashboard started, unless it collects only entities asked for (see `subjects`) and a full

@@ -79,7 +79,8 @@ Every plugin due collects at once, in parallel, from the graph as stored before 
 Then each plugin that `watches` one just collected is asked whether it `changed`, with the graph
 they stored, and collected again from it if it did: git_stack, which reads git's repos, gets a
 repo git just found in the same refresh. A plugin's `requires` must be enabled too. Each
-plugin refreshes on its own schedule, and with the plugins it watches. Plugins add buttons to each other's items by the items' `subjects`.
+plugin refreshes on its own schedule, and again with the plugins it watches when its check says
+they moved. Plugins add buttons to each other's items by the items' `subjects`.
 
 ```mermaid
 flowchart TB
