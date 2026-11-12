@@ -2,9 +2,10 @@
 
 The plugin contract in one place: the class variables and hooks of `move_forward.api.Plugin`,
 the requests its hooks are given, its context (`ctx`), what `changed` answers, and the markers
-its config model can carry. The types hooks return or handlers are given beyond these
-(`Snapshots`, `Address`, `Panel`, `Entity`, `ActionResult`, `Response`) are documented on
-themselves, in `move_forward.api`. Each line says what the code's docstring says; the docstrings have the detail.
+its config model can carry. Other types hooks and handlers return or name (`Snapshots`,
+`Address`, `Panel`, `Entity`, `Event`, `ActionResult`, `Response` and the like) are documented
+on themselves, in `move_forward.api`. Each line says what the code's docstring says; the
+docstrings have the detail.
 [writing-a-plugin.md](writing-a-plugin.md) walks through making a plugin with these, and
 `tests/test_plugin_contract_doc.py` checks that this page names every one of them, and nothing
 that isn't.
@@ -20,9 +21,9 @@ the others do.
 
 | Name | Type, default | What it says |
 | --- | --- | --- |
-| `name` | `str`, required | e.g. `github`: the config section, snapshot source, table prefix and URL segment. Lower-case letters, digits and `_`, no other plugin's, none of core's (`registry.RESERVED_NAMES`), and no prefix of core's tables (`team` of `team_channels`); the registry refuses it otherwise. |
+| `name` | `str`, required | e.g. `github`: the config section, snapshot source, table prefix and URL segment. A lower-case letter, then lower-case letters, digits and `_`; no other plugin's, none of core's (`registry.RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`); the registry refuses it otherwise. |
 | `title` | `str`, required | e.g. `GitHub`: the heading of the plugin's group on the page. |
-| `config_model` | `type[BaseModel]`, required | The model of the `[name]` section: `C`. A `Strict` model, which rejects unknown keys. The registry refuses a plugin without one. |
+| `config_model` | `type[BaseModel]`, required | The model of the `[name]` section: `C`. Make it a `Strict` model, which rejects unknown keys (nothing checks this). The registry refuses a plugin without one. |
 | `api_version` | `int \| None`, `None` | The `API_VERSION` it was built against; one built against another is left out, said why in `mfd check` and the page's footer. |
 
 ### What it publishes and depends on
@@ -87,7 +88,7 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | --- | --- | --- |
 | `collect` | `collect(req: RefreshRequest[C]) -> S` | Fetches its snapshot: everything, or with `req.full` False just `req.subjects`. Called in each refresh it's due in (all of them, or one naming it or its entities), unless an earlier collect is still running, in parallel with the others', from the graph as stored before the refresh (or again in the settle step, see `watches`). Five minutes, then it's recorded as failed. |
 | `snapshots` | `snapshots(req: ContextRequest[C]) -> Snapshots[S]` | Where it keeps what `collect` fetched, in its own tables (`save`, `load`). Overridden together with `collect`. |
-| `changed` | `changed(req: RefreshRequest[C]) -> Changed` | A cheap check of what moved in its tool (a `Changed`, below), so it refreshes soon. Asked by `mfd serve` every `change_check_seconds` and as each of its collects starts (when it has a check: this, or `watches`), and in the settle step of a refresh of a plugin it `watches`. |
+| `changed` | `changed(req: RefreshRequest[C]) -> Changed` | A cheap check of what moved in its tool (a `Changed`, below), so it refreshes soon. Asked by `mfd serve` every `change_check_seconds` and as each of its collects starts (when it has a `change_check_seconds` or `watches` another), and in the settle step of a refresh of a plugin it `watches`. |
 | `events` | `events(req: Request[C, S]) -> list[Event]` | What became true since the last refresh, as events of its `notification_kinds`, comparing `req.previous` with now. Asked after every refresh when I've subscribed to one of its kinds, once it has stored a snapshot. |
 | `after_collect` | `after_collect(req: Request[C, S]) -> None` | Work that needs other plugins' entities (caching lookups in its tables). After each refresh's events and daily prune: for the plugins due in it (even one still collecting), those collected again in the settle step, and every plugin that collects nothing; not while the dashboard stops. It reads only what's stored. |
 
@@ -180,7 +181,7 @@ What held before, for `changed` and `events`.
 | `at` | `datetime \| None` | For `changed`, when its last check ran; for `events`, when the refresh that stored `snapshot` began. |
 | `fingerprint` | `str \| None` | For `changed`: what its last check answered. |
 | `snapshot` | `S \| None` | For `events`: its snapshot before this refresh. |
-| `graph` | `Graph \| None` | The graph at its last check that didn't raise (`changed`): None at the first since the dashboard started, except in the settle step, which gives the graph before the refresh. Or the graph before this refresh (`events`). |
+| `graph` | `Graph \| None` | The graph at its last check that didn't raise (`changed`): None at the first since the dashboard or `mfd refresh` started, except in the settle step, which gives the graph before the refresh. Or the graph before this refresh (`events`). |
 
 ### `ItemRequest`
 
@@ -209,7 +210,7 @@ What the function `item_actions` returns is called with, once per item.
 | `kv` | `KvRepository` | Key/value state in its namespace. |
 | `name` | `str` | Its name, as `Plugin.name`. |
 | `due_horizon` | `timedelta` | How far ahead a due date starts to count (`[act_now] due_warning_days`), for `due_pressure`. |
-| `tokens` | `Mapping[str, TokenSettings] \| None` | Where each of its tokens is, as `Plugin.tokens` says, for `token`. |
+| `tokens` | `Mapping[str, TokenSettings] \| None` | Where each of its tokens is, as `Plugin.tokens` says, for `token`; None for its default, the section's own when it says where a token is. |
 
 ### `Context`'s methods
 
@@ -237,9 +238,8 @@ fingerprint differs from the last, any subject is named, or `everything`.
 
 A config model marks a field in its type, `Annotated[T, MARKER]`. A marker that would mark
 nothing is refused, as a `Strict` class is defined and, for any plugin's config model, again at
-registration: one given as a default,
-or one buried inside the type (`Annotated[str, LOCKED] | None`, `list[...]`, a `type` alias,
-generic or not).
+registration: one given as a default, or one buried inside the type (`Annotated[str, LOCKED] |
+None`, `list[...]`, a `type` alias, generic or not).
 
 | Marker | What it says |
 | --- | --- |

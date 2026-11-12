@@ -1,5 +1,6 @@
-"""`docs/plugin_contract.md` lists the whole plugin contract: it must name every class variable,
-hook, `Init` field, request field and config marker there is, and nothing that isn't."""
+"""`docs/plugin_contract.md` lists the whole plugin contract: it must name every class variable
+and property, hook, `Init` field, request, context and answer field, context method and config
+marker there is, and nothing that isn't."""
 
 import dataclasses
 import re
@@ -56,7 +57,7 @@ def test_every_init_field_is_listed() -> None:
     assert _listed("## `Init`") == [f.name for f in dataclasses.fields(Init)]
 
 
-def test_every_request_field_is_listed() -> None:
+def test_every_request_context_and_answer_field_is_listed() -> None:
     for request in (
         Context,
         Changed,
