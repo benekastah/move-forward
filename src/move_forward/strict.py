@@ -1,5 +1,6 @@
 """The base of config models, and the markers their fields can carry in `Annotated`."""
 
+import sys
 from typing import Any, TypeAliasType, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict
@@ -56,7 +57,8 @@ def check_markers(model: type[BaseModel]) -> None:
     inside its type rather than on it (`Annotated[str, LOCKED] | None`,
     `list[Annotated[str, LOCKED]]`, a `type` alias, generic or not), where pydantic doesn't put
     it in the field's metadata. `Strict` checks as a class is defined, and the registry each
-    plugin's config model again, once a field naming a type defined later has been resolved."""
+    plugin's config model again (`check_resolved_markers`), once a field naming a type defined
+    later has been resolved."""
     fields = model.model_fields
     if misplaced := [k for k, f in fields.items() if isinstance(f.default, Marker)]:
         raise TypeError(
@@ -69,6 +71,15 @@ def check_markers(model: type[BaseModel]) -> None:
             " marks nothing; put it on the field's own type, e.g. `host: Annotated[str |"
             " None, LOCKED]`"
         )
+
+
+def check_resolved_markers(model: type[BaseModel]) -> None:
+    """`check_markers` once `model`'s fields naming a type defined after it are resolved: it's
+    rebuilt against its own module's names, so no name of the caller's can stand in for one of
+    them."""
+    module = sys.modules.get(model.__module__)
+    model.model_rebuild(_types_namespace=vars(module) if module else None)
+    check_markers(model)
 
 
 def _markers_in(annotation: object, seen: set[int]) -> list[Marker]:
