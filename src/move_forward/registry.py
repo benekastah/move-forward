@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from . import act_now, notifications, tags
+from . import act_now, notifications, strict, tags
 from . import plugins as builtin_plugins
 from .db import CORE, OWNER_RE, Database, core_objects
 from .domain import KindModel
@@ -153,7 +153,8 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     name is its own and fit to be one: lower-case, not two plugins', none of core's
     (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`).
     A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
-    declares (`Plugin.families`), whose model they must extend. A plugin overriding `collect`
+    declares (`Plugin.families`), whose model they must extend. It has a config model, whose
+    markers mark something (`strict.check_resolved_markers`). A plugin overriding `collect`
     overrides `snapshots` too, and the reverse; one overriding `cli` gives it a docstring, its
     command's help."""
     names = [p.name for p in plugins]
@@ -168,6 +169,9 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             # Its tables are named `<name>_...`: these would be its too.
             raise RuntimeError(f"plugin name {name!r} would own core's {', '.join(owned)}")
     for plugin in plugins:
+        if getattr(type(plugin), "config_model", None) is None:
+            raise RuntimeError(f"{plugin.name} has no config_model")
+        strict.check_resolved_markers(plugin.config_model)
         if plugin.api_version != API_VERSION:
             raise RuntimeError(
                 f"{plugin.name} is built against API version {plugin.api_version}; this"

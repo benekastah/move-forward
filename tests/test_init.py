@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import date
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import pytest
 from conftest import section
@@ -24,6 +24,7 @@ from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.plugins.mail import setup as mail_setup
 from move_forward.plugins.slack.config import SlackConfig
 from move_forward.shell import git
+from move_forward.strict import LOCKED, TABLES, Strict, marked
 
 
 def scripted(answers: dict[str, str | list[str]]) -> asking.Prompt:
@@ -380,7 +381,7 @@ def test_an_unknown_notification_is_asked_again(tmp_path: Path, no_machine_guess
 
 def _tables(field: FieldInfo) -> bool:
     """A field whose entries are tables of their own, by name (mail's `[mail.<name>]`)."""
-    return field.json_schema_extra == {"tables": True}
+    return marked(field, TABLES)
 
 
 LEFT_OUT = init.render_config(init.EXAMPLE_ANSWERS, {})
@@ -525,6 +526,24 @@ class _Odd(BaseModel):
     snooze: dict[str, int] = Field(default_factory=lambda: {"notes.entry": 2, "my key": 1, "a": 3})
     when: date = date(2026, 1, 2)
     where: Path = Path("~/data/dashboard.db")
+
+
+class _LockedTables(Strict):
+    """A table of tables by name that's locked too: both markers, with a `Field` as well."""
+
+    accounts: Annotated[dict[str, int], LOCKED, TABLES] = Field(
+        default_factory=dict[str, int], max_length=9
+    )
+    """Accounts."""
+    port: Annotated[int, LOCKED] = 993
+    """A port."""
+
+
+def test_a_table_of_tables_is_left_out_whatever_else_marks_it() -> None:
+    accounts = _LockedTables.model_fields["accounts"]
+    assert marked(accounts, LOCKED) and marked(accounts, TABLES)  # both kept, with the Field's
+    assert not marked(_LockedTables.model_fields["port"], TABLES)
+    assert init.commented_defaults(_LockedTables) == "\n# A port.\n# port = 993\n"
 
 
 def test_any_default_is_written_as_its_model_reads_it() -> None:

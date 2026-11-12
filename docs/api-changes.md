@@ -14,6 +14,17 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **Settings are marked in their types**: `Plugin.locked_settings` is gone. A config model
+  marks each setting the settings page shows but won't change with `api.LOCKED` in its type,
+  e.g. `site: Annotated[str, LOCKED]`; a section's `token_env` and `keychain_service` are
+  locked without marking, as before. A field whose entries are tables by name is marked
+  `api.TABLES` the same way, in place of `json_schema_extra={"tables": True}`, which core no
+  longer reads. A field can carry both, alongside a `Field(...)` default. `Strict` refuses a
+  marker that would mark nothing: one given as a default (`host: str = LOCKED`), or one
+  inside the field's type rather than on it (`Annotated[str, LOCKED] | None`,
+  `list[Annotated[str, LOCKED]]`, a `type` alias carrying it, generic or not), both as the
+  class is defined and, for a plugin's config model, again at registration; write
+  `Annotated[str | None, LOCKED]`.
 - **No `cli_help`**: a plugin has a command when it overrides `cli`, and the first line of
   that override's docstring is its help; the registry refuses an override without one. Move
   the help text into the docstring.
@@ -182,7 +193,7 @@ for themselves (a token, a request, an example config) is core's.
   entries (`[github.teams]`), whose keys aren't written again (nor the tables, when the
   section's answers have one), and a section's `shown` (see "An `InitSection`" above), an example value
   for a key whose default is None or says less. A field marked
-  `json_schema_extra={"tables": True}` is left to those `tables`.
+  `api.TABLES` (see "Settings are marked in their types") is left to those `tables`.
 - **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
   its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;
   with neither, it raises `SourceError` with core's message ("no token: run `mfd token set

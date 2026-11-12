@@ -438,11 +438,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     rather than waiting for `change_check_seconds`."""
     always_on: ClassVar[bool] = False
     """On without a section (notes), so `mfd init` doesn't offer it."""
-    locked_settings: ClassVar[frozenset[str]] = frozenset()
-    """Its settings the settings page shows but won't change, as they say where a credential
-    goes (a site, a host) or what runs where. Its token's `token_env` and `keychain_service`
-    are locked without naming them; settings its `tokens` reads a token's place from under
-    other names, or builds it from, it names here."""
     init: ClassVar[Init] = Init()
     """How `mfd init` sets the section up: its questions, example and the like (`Init`). By
     default nothing is asked and the plugin isn't suggested."""
