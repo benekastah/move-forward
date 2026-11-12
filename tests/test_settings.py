@@ -395,3 +395,33 @@ class _LaterPlugin(Plugin[_LaterConfig, BaseModel]):
 def test_a_marker_buried_in_a_type_resolved_later_is_refused_at_registration() -> None:
     with pytest.raises(TypeError, match="host has a marker inside its type"):
         registry.check_plugins([_LaterPlugin()])
+
+
+class _ShadowedConfig(Strict):
+    """A field naming a type defined after it whose name is also a local of the registry's."""
+
+    host: "plugin | None" = None
+
+
+type plugin = Annotated[str, LOCKED]  # noqa: PYI042 - named as `check_plugins`' loop variable
+
+
+class _ShadowedPlugin(Plugin[_ShadowedConfig, BaseModel]):
+    name = "shadowed"
+    config_model = _ShadowedConfig
+    api_version = API_VERSION
+
+
+def test_a_late_type_is_resolved_from_its_own_module_not_the_registrys_locals() -> None:
+    with pytest.raises(TypeError, match="host has a marker inside its type"):
+        registry.check_plugins([_ShadowedPlugin()])
+
+
+class _Unconfigured(Plugin[Strict, BaseModel]):
+    name = "unconfigured"
+    api_version = API_VERSION
+
+
+def test_a_plugin_without_a_config_model_is_refused_saying_so() -> None:
+    with pytest.raises(RuntimeError, match="unconfigured has no config_model"):
+        registry.check_plugins([_Unconfigured()])
