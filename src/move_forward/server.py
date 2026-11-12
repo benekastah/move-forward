@@ -18,10 +18,10 @@ from urllib.parse import parse_qs, urlsplit
 from pydantic import Field, TypeAdapter, ValidationError
 
 from . import act_now, auth, render, settings, shell, tag_view
-from .change_checks import ChangeChecks
+from .change_checks import ChangeChecks, said
 from .config import Config
 from .db import Database
-from .graph import Graph, Ref
+from .graph import Ref
 from .notifications import NotificationRepository
 from .page import Item
 from .panels import Layout, focus_key
@@ -172,8 +172,7 @@ class App:
     def refreshable(self) -> set[str]:
         """The plugins a refresh can be asked for: those that collect."""
         plugins = enabled(self.config, self.db, datetime.now(UTC))
-        first, after = to_collect(plugins)
-        return {e.name for e in first + after}
+        return {e.name for e in to_collect(plugins)}
 
     def intervals(self) -> dict[str, int]:
         """How often each plugin that refreshes on its own does: its `refresh_seconds`."""
@@ -194,65 +193,32 @@ class App:
         self,
         only: set[str] | None = None,
         asked: dict[str, frozenset[str]] | None = None,
-        then: frozenset[str] = frozenset(),
     ) -> bool:
         """Refresh every plugin, or `only` those and the plugins `asked` names, each collect
         given the ids of its entities asked for, and narrowed to them when it's not one of
         `only` (see `refresh.refresh`), unless a refresh is already running; returns whether
-        this call did it. Each plugin refreshed waits its `refresh_seconds` again before it's
-        due. The plugins refreshed right after, in the same round (`then`), aren't asked
-        whether they changed with these (see `_after_refresh`): their collects ask as they
-        start, so asking now would only have them refreshed again."""
+        this call did it. Each plugin refreshed, those the refresh collected again as they
+        watch one refreshed too, waits its `refresh_seconds` again before it's due, and its
+        `change_check_seconds` before it's checked (each was asked as its collect started)."""
         if not self._refresh_lock.acquire(blocking=False):
             return False
         try:
             every = None if only is None else only | set(asked or {})
-            first, after = to_collect(enabled(self.config, self.db, datetime.now(UTC)), every)
-            self.refreshing = frozenset(e.name for e in first + after)
+            due = to_collect(enabled(self.config, self.db, datetime.now(UTC)), every)
+            self.refreshing = frozenset(e.name for e in due)
             started = time.monotonic()
             for name in self.intervals() if every is None else every:
                 self.last_refreshed[name] = started
-            refresh(self.config, self.db, None, only, self.checks, asked)
-            self._after_refresh(self.refreshing, then)
+            collected = refresh(self.config, self.db, None, only, self.checks, asked)
+            checked = time.monotonic()
+            for name in collected:
+                self.last_refreshed[name] = started
+            for name in self.refreshing | collected:
+                self._last_checked[name] = checked
         finally:
             self.refreshing = frozenset()
             self._refresh_lock.release()
         return True
-
-    def _after_refresh(self, names: frozenset[str], then: frozenset[str] = frozenset()) -> None:
-        """Start the wait for the next change check over for the plugins just refreshed (each
-        was asked as its collect started), and at once ask the plugins that watch them
-        (`Plugin.watches`), except those refreshed next (`then`), whether they changed,
-        refreshing those that did."""
-        now = time.monotonic()
-        for name in names:
-            self._last_checked[name] = now
-        plugins = enabled(self.config, self.db, datetime.now(UTC))
-        watchers = [
-            e
-            for e in plugins
-            if e.name not in names | then and names.intersection(e.plugin.watches)
-        ]
-        if not watchers:
-            return
-        graph, _ = stored_graph(self.db, plugins)
-        changed = {e.name: why for e in watchers if (why := self._changed(e, graph)) is not None}
-        if changed:
-            log.info("changed with %s: %s; refreshing", ", ".join(sorted(names)), _said(changed))
-            self.request_refresh(set(changed))
-
-    def _changed(self, e: Enabled, graph: Graph) -> str | None:
-        """Why the plugin's change check says something new moved in its tool ("" when it
-        doesn't say), kept by `checks`; None when nothing did, or the check fails (raises, or
-        answers with something that isn't a `Changed`): logged at debug and tried again next
-        time, against the same as this one, so one plugin's check can't stop the others' and
-        what it missed isn't lost."""
-        try:
-            answer = self.checks.check(e, graph)
-            return None if answer is None else answer.reason
-        except Exception:
-            log.debug("%s: change check failed", e.name, exc_info=True)
-            return None
 
     def check_for_changes(self, now: float | None = None) -> set[str]:
         """Ask each plugin whose `change_check_seconds` have passed whether it `changed`,
@@ -273,10 +239,10 @@ class App:
         changed: dict[str, str] = {}
         for e in due:
             self._last_checked[e.name] = now
-            if (why := self._changed(e, graph)) is not None:
+            if (why := self.checks.moved(e, graph)) is not None:
                 changed[e.name] = why
         if changed:
-            log.info("changed: %s; refreshing", _said(changed))
+            log.info("changed: %s; refreshing", said(changed))
             self.request_refresh(set(changed))
         return set(changed)
 
@@ -321,7 +287,8 @@ class App:
         (`request_refresh_subjects`) and refreshed for them alone is refreshed first, narrowed
         to them, so a tab coming back to focus doesn't wait on the other plugins; one also
         refreshed by name or schedule this round is refreshed as it would have been, given
-        them too. No plugin is refreshed twice in a round."""
+        them too. No plugin is asked for twice in a round, though one watching a plugin
+        refreshed alone may be collected with it too (`refresh._settle`)."""
         only: set[str] | None = None
         subjects: list[Ref] = []
         while True:
@@ -329,7 +296,7 @@ class App:
                 asked = asked_of(self.config, self.db, subjects) if subjects else {}
                 alone = {n: ids for n, ids in asked.items() if only is not None and n not in only}
                 if alone:
-                    self.refresh_now(set(), alone, frozenset(only or ()))
+                    self.refresh_now(set(), alone)
                 if only is None or only:
                     self.refresh_now(only, {n: ids for n, ids in asked.items() if n not in alone})
             except Exception:
@@ -427,11 +394,6 @@ class App:
             self._shown.move_to_end(key)
             while len(self._shown) > MAX_SHOWN:
                 self._shown.popitem(last=False)
-
-
-def _said(changed: dict[str, str]) -> str:
-    """The plugins that changed, each with why when it said, for the log."""
-    return ", ".join(f"{name} ({why})" if why else name for name, why in sorted(changed.items()))
 
 
 MAX_SHOWN = 50

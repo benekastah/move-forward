@@ -22,8 +22,9 @@ from conftest import (
 )
 from legacy import save_json_snapshot
 
-from move_forward import refresh
+from move_forward import refresh, registry
 from move_forward.change_checks import ChangeChecks
+from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Ref
 from move_forward.plugin import ActionError, RefreshRequest
@@ -633,3 +634,51 @@ def test_a_merged_branch_links_its_merged_pr_even_with_an_open_one_of_its_name()
     [item] = panel(built, "git_stack.stacks").items
     assert item.url == merged.url
     assert Ref(kind="pull_request", id=reopened.url) not in item.subjects
+
+
+def _repo(path: Path) -> Path:
+    path.mkdir()
+    git(path, "init", "-q", "-b", "main")
+    git(path, "config", "user.email", "me@example.com")
+    git(path, "config", "user.name", "Me")
+    git(path, "config", "commit.gpgsign", "false")
+    git(path, "commit", "-q", "--allow-empty", "-m", "first")
+    return path
+
+
+@pytest.mark.parametrize("server", [False, True], ids=["mfd refresh", "server"])
+def test_a_repo_git_newly_finds_reaches_git_stack_in_the_same_refresh(
+    server: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Both collect from the graph as it was; git_stack, watching git, is asked once git has
+    stored, and collected again with git's new repo, before the refresh ends. A refresh in
+    which nothing of git's moved collects it once, and one of git alone collects it too."""
+    a, b, c = _repo(tmp_path / "a"), _repo(tmp_path / "b"), _repo(tmp_path / "c")
+    asked: list[list[str]] = []
+
+    def collect(repos: list[Path]) -> GitStackSnapshot:  # no `git stack` needed
+        asked.append([r.name for r in repos])
+        tracked = [StackBranch(name="me/a", parent="main")]
+        return GitStackSnapshot(repos=[StackRepo(dir=str(r), branches=tracked) for r in repos])
+
+    monkeypatch.setattr(client, "collect", collect)
+    db = Database(":memory:")
+    checks = ChangeChecks() if server else None  # the server's, kept across refreshes
+
+    def refreshed(*repos: Path, only: set[str] | None = None) -> list[str]:
+        config = Config.model_validate(
+            {"email": "me@x", "git": {"repos": [r.as_posix() for r in repos]}, "git_stack": {}}
+        )
+        registry.migrate(config, db)
+        refresh.refresh(config, db, NOW, only, checks)
+        kept = StackRepository(db).load()
+        return [Path(r.dir).name for r in kept.repos] if kept else []
+
+    assert refreshed(a) == ["a"] and asked == [[], ["a"]]  # nothing stored before the first
+    asked.clear()
+    assert refreshed(a, b) == ["a", "b"] and asked == [["a"], ["a", "b"]]
+    asked.clear()
+    assert refreshed(a, b) == ["a", "b"] and asked == [["a", "b"]]  # nothing moved: once
+    asked.clear()
+    # git refreshed alone: git_stack, though not asked for, is collected once git has stored.
+    assert refreshed(a, b, c, only={"git"}) == ["a", "b", "c"] and asked == [["a", "b", "c"]]
