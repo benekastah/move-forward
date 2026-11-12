@@ -1,15 +1,18 @@
 # The plugin contract
 
-Everything a plugin is to core, in one place: the class variables and hooks of
-`move_forward.api.Plugin`, the requests its hooks are given, and the markers its config model can
-carry. Each line says what the code's docstring says; the docstrings have the detail.
+The plugin contract in one place: the class variables and hooks of `move_forward.api.Plugin`,
+the requests its hooks are given, its context (`ctx`), what `changed` answers, and the markers
+its config model can carry. The types hooks return or handlers are given beyond these
+(`Snapshots`, `Address`, `Panel`, `Entity`, `ActionResult`, `Response`) are documented on
+themselves, in `move_forward.api`. Each line says what the code's docstring says; the docstrings have the detail.
 [writing-a-plugin.md](writing-a-plugin.md) walks through making a plugin with these, and
 `tests/test_plugin_contract_doc.py` checks that this page names every one of them, and nothing
 that isn't.
 
 `Plugin[C, S]`: `C` is the model of the plugin's config section, `S` its snapshot's (`BaseModel`
-for a plugin that collects nothing). Every hook has a do-nothing default, so a plugin overrides
-only what it uses.
+for a plugin that collects nothing). Every hook has a default, so a plugin overrides only what
+it uses: most do nothing, `collect` and `cli` exist only when overridden, and the rows say what
+the others do.
 
 ## Class variables
 
@@ -17,16 +20,16 @@ only what it uses.
 
 | Name | Type, default | What it says |
 | --- | --- | --- |
-| `name` | `str`, required | e.g. `github`: the config section, snapshot source, table prefix and URL segment. |
+| `name` | `str`, required | e.g. `github`: the config section, snapshot source, table prefix and URL segment. Lower-case letters, digits and `_`, no other plugin's, none of core's (`registry.RESERVED_NAMES`), and no prefix of core's tables (`team` of `team_channels`); the registry refuses it otherwise. |
 | `title` | `str`, required | e.g. `GitHub`: the heading of the plugin's group on the page. |
-| `config_model` | `type[BaseModel]`, required | The model of the `[name]` section: `C`. |
+| `config_model` | `type[BaseModel]`, required | The model of the `[name]` section: `C`. A `Strict` model, which rejects unknown keys. The registry refuses a plugin without one. |
 | `api_version` | `int \| None`, `None` | The `API_VERSION` it was built against; one built against another is left out, said why in `mfd check` and the page's footer. |
 
 ### What it publishes and depends on
 
 | Name | Type, default | What it says |
 | --- | --- | --- |
-| `kinds` | `dict[str, KindSpec]`, `{}` | The entity kinds it publishes, each with its spec: its attributes' model, which the graph checks entities against, and its flags (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `tags_from_text`). |
+| `kinds` | `dict[str, KindSpec]`, `{}` | The entity kinds it publishes, each with its spec: its attributes' model, which the graph checks entities against, and its flags (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `tags_from_text`). A kind is named `<name>.<x>` or for a family (core's, or one in `families`); its attributes are a `KindModel`, and a family kind's extend the family's model. |
 | `families` | `tuple[Family, ...]`, `()` | Families of kinds it declares, beyond core's pull request, ticket and person: the model its kinds extend and the rule its ids follow. One declaring a family differently from core or another plugin is left out. |
 | `requires` | `list[str]`, `[]` | Plugins whose entities it's built on (`["git"]`); the config must enable them too. |
 | `migrations` | `list[Migration]`, `[]` | Scripts creating and changing its tables (prefixed with `name`), applied in order. Append only. |
@@ -35,7 +38,7 @@ only what it uses.
 
 | Name | Type, default | What it says |
 | --- | --- | --- |
-| `change_check_seconds` | `int \| None`, `None` | How often `mfd serve` asks `changed`; None for no poll. `changed` is asked as each collect starts too, whether this is set or the plugin `watches` another. |
+| `change_check_seconds` | `int \| None`, `None` | How often `mfd serve` asks `changed`; None for no poll. In `mfd serve`, `changed` is also asked as each of its collects starts, when this is set or it `watches` another. |
 | `watches` | `list[str]`, `[]` | Plugins whose entities its `changed` reads from the graph (git_stack: `["git"]`). The settle step: in each refresh that collects one of them, once they've stored, `changed` is asked with the new graph, and the plugin is collected (again, if it collected in that refresh from the graph before) when it says something moved, in the same refresh (`refresh._settle`). |
 
 ### Notifications and setup
@@ -82,11 +85,11 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `collect` | `collect(req: RefreshRequest[C]) -> S` | Fetches its snapshot: everything, or with `req.full` False just `req.subjects`. Called in each refresh, in parallel with the others', from the graph as stored before it (or again in the settle step, see `watches`). Five minutes, then it's recorded as failed. |
+| `collect` | `collect(req: RefreshRequest[C]) -> S` | Fetches its snapshot: everything, or with `req.full` False just `req.subjects`. Called in each refresh it's due in (all of them, or one naming it or its entities), unless an earlier collect is still running, in parallel with the others', from the graph as stored before the refresh (or again in the settle step, see `watches`). Five minutes, then it's recorded as failed. |
 | `snapshots` | `snapshots(req: ContextRequest[C]) -> Snapshots[S]` | Where it keeps what `collect` fetched, in its own tables (`save`, `load`). Overridden together with `collect`. |
-| `changed` | `changed(req: RefreshRequest[C]) -> Changed` | A cheap check of what moved in its tool (a `fingerprint`, `subjects`, `everything`), so it refreshes soon. Asked every `change_check_seconds`, as each collect starts, and in the settle step of a refresh of a plugin it `watches`. |
+| `changed` | `changed(req: RefreshRequest[C]) -> Changed` | A cheap check of what moved in its tool (a `Changed`, below), so it refreshes soon. Asked by `mfd serve` every `change_check_seconds` and as each of its collects starts (when it has a check: this, or `watches`), and in the settle step of a refresh of a plugin it `watches`. |
 | `events` | `events(req: Request[C, S]) -> list[Event]` | What became true since the last refresh, as events of its `notification_kinds`, comparing `req.previous` with now. Asked after every refresh when I've subscribed to one of its kinds, once it has stored a snapshot. |
-| `after_collect` | `after_collect(req: Request[C, S]) -> None` | Work that needs other plugins' entities, once every snapshot is stored (caching lookups in its tables). |
+| `after_collect` | `after_collect(req: Request[C, S]) -> None` | Work that needs other plugins' entities (caching lookups in its tables). After each refresh's events and daily prune: for the plugins due in it (even one still collecting), those collected again in the settle step, and every plugin that collects nothing; not while the dashboard stops. It reads only what's stored. |
 
 ### Graph
 
@@ -102,7 +105,7 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `panels` | `panels(req: Request[C, S]) -> list[Panel]` | Its panels, from its snapshot and the graph: pure, no I/O. Called for each page. |
+| `panels` | `panels(req: Request[C, S]) -> list[Panel]` | Its panels, from its snapshot and the graph: pure, no I/O. Called for each page, and after each refresh for a plugin I've subscribed to some event of (to find items newly shown with `notify`). |
 | `item_actions` | `item_actions(req: Request[C, S]) -> ItemAdditionsFor` | What it adds to other plugins' items (buttons, badges, details, links). Called once per page; the function it returns once per item, with an `ItemRequest`. |
 
 ### Upkeep
@@ -177,11 +180,11 @@ What held before, for `changed` and `events`.
 | `at` | `datetime \| None` | For `changed`, when its last check ran; for `events`, when the refresh that stored `snapshot` began. |
 | `fingerprint` | `str \| None` | For `changed`: what its last check answered. |
 | `snapshot` | `S \| None` | For `events`: its snapshot before this refresh. |
-| `graph` | `Graph \| None` | The graph at its last check (`changed`; in a refresh, the graph before it when there was none) or before this refresh (`events`). |
+| `graph` | `Graph \| None` | The graph at its last check that didn't raise (`changed`): None at the first since the dashboard started, except in the settle step, which gives the graph before the refresh. Or the graph before this refresh (`events`). |
 
 ### `ItemRequest`
 
-What the function `item_actions` returns is asked about.
+What the function `item_actions` returns is called with, once per item.
 
 | Field | Type | What it holds |
 | --- | --- | --- |
@@ -189,10 +192,52 @@ What the function `item_actions` returns is asked about.
 | `owner` | `str` | The plugin whose item it is. |
 | `surface` | `Surface` | Where it's shown: the dashboard, focus mode or Act now. |
 
+## Context and answers
+
+### `Context`
+
+`req.ctx`, in every request: what a plugin gets to work with.
+
+| Field | Type | What it holds |
+| --- | --- | --- |
+| `config` | `C` | Its `[name]` section. |
+| `email` | `str` | My work email. |
+| `teams` | `list[str]` | The names of the teams I'm on or review for. |
+| `prune_days` | `int` | Work finished this long ago is cleared by `prune`. |
+| `now` | `datetime` | Now, aware, in UTC; shown, or a day taken from it, in local time. |
+| `db` | `Database` | For its own repository over its own tables. |
+| `kv` | `KvRepository` | Key/value state in its namespace. |
+| `name` | `str` | Its name, as `Plugin.name`. |
+| `due_horizon` | `timedelta` | How far ahead a due date starts to count (`[act_now] due_warning_days`), for `due_pressure`. |
+| `tokens` | `Mapping[str, TokenSettings] \| None` | Where each of its tokens is, as `Plugin.tokens` says, for `token`. |
+
+### `Context`'s methods
+
+| Name | What it does |
+| --- | --- |
+| `log` | Its logger, `move_forward.plugins.<name>`. |
+| `today` | Today where I am: the local date. |
+| `part(name)` | The source a part of its refresh is recorded as (`github.derived`). |
+| `problem(key, text)` | Reports something wrong that isn't its refresh failing, or with None that it's gone; shown with its state on the page, kept across restarts. |
+| `token(account=None, *, secret="token")` | Its token, or an account's: from its `token_env`, else the secret store. Raises `SourceError` saying how to give one. |
+
+### `Changed`
+
+What `changed` answers. `Changed()` says nothing moved; core asks for a refresh when the
+fingerprint differs from the last, any subject is named, or `everything`.
+
+| Field | Type | What it holds |
+| --- | --- | --- |
+| `fingerprint` | `str \| None` | The tool's state now, as text that changes whenever it moves; core compares the next with it. |
+| `subjects` | `frozenset[str]` | What moved since the last check, in its own terms, for `collect` to fetch just those. |
+| `everything` | `bool` | Something moved that no subject names, so the next collect is a full one. |
+| `reason` | `str` | What changed, for the log. |
+
 ## Config markers
 
 A config model marks a field in its type, `Annotated[T, MARKER]`. A marker that would mark
-nothing is refused, as the class is defined and again at registration: one given as a default,
+nothing is refused, as a `Strict` class is defined and, for any plugin's config model, again at
+registration: one given as a default,
 or one buried inside the type (`Annotated[str, LOCKED] | None`, `list[...]`, a `type` alias,
 generic or not).
 

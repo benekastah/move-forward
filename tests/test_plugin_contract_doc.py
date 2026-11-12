@@ -7,6 +7,8 @@ from pathlib import Path
 
 from move_forward import strict
 from move_forward.api import (
+    Changed,
+    Context,
     ContextRequest,
     Init,
     InputRequest,
@@ -38,7 +40,8 @@ def _listed(heading: str) -> list[str]:
 
 
 def test_every_class_variable_is_listed() -> None:
-    declared = {*Plugin.__annotations__, "collects"}
+    properties = {name for name, value in vars(Plugin).items() if isinstance(value, property)}
+    declared = {*Plugin.__annotations__, *properties}
     assert sorted(_listed("## Class variables")) == sorted(declared)
 
 
@@ -55,6 +58,8 @@ def test_every_init_field_is_listed() -> None:
 
 def test_every_request_field_is_listed() -> None:
     for request in (
+        Context,
+        Changed,
         ContextRequest,
         Request,
         RefreshRequest,
@@ -65,6 +70,16 @@ def test_every_request_field_is_listed() -> None:
     ):
         fields = [f.name for f in dataclasses.fields(request)]
         assert _listed(f"### `{request.__name__}`") == fields, request.__name__
+
+
+def test_every_context_method_is_listed() -> None:
+    methods = {
+        name
+        for name, value in vars(Context).items()
+        if not name.startswith("_") and (callable(value) or isinstance(value, property))
+    }
+    listed = re.findall(r"^\| `(\w+)", _section("### `Context`'s methods"), re.MULTILINE)
+    assert sorted(listed) == sorted(methods)
 
 
 def test_every_config_marker_is_listed() -> None:
