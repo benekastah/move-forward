@@ -99,11 +99,16 @@ def no_real_database(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 ALLOWED_PROGRAMS = frozenset({"git"} | ({"icacls"} if sys.platform == "win32" else set()))
-"""The programs any test may run, by name: git (`git stack` is git too), in the repos tests make
-in `tmp_path`, and on Windows icacls, which `private.py` keeps a test's files private with."""
+"""The programs any test may run, by name: git, in the repos tests make in `tmp_path` (but not
+`git stack`: see `GIT_STACK`), and on Windows icacls, which `private.py` keeps a test's files
+private with."""
+
+GIT_STACK = "git stack"
+"""What a test `allow`s to run `git stack`, which is git, but can start `gh` (its GitHub
+adapter), which neither the guard nor `GIT_ENVIRONMENT` sees."""
 
 GIT_ENVIRONMENT = {"GIT_ALLOW_PROTOCOL": "file", "GIT_TERMINAL_PROMPT": "0"}
-"""Set for every test, so git, and what it runs, fetches only from repos on this machine and
+"""Set for every test, so git's own transports fetch only from repos on this machine, and it
 never asks for a password."""
 
 REAL_ADVAPI32 = keychain._advapi32  # pyright: ignore[reportPrivateUsage]
@@ -165,18 +170,36 @@ class Outside:
             )
 
 
-def _program(args: object, executable: object, shell: bool) -> str | None:
+def _words(args: object) -> list[str]:
+    """`subprocess.Popen`'s args, a list or a command line as one string, as words."""
+    if isinstance(args, str | bytes | os.PathLike):
+        line = os.fsdecode(cast(str | bytes | os.PathLike[str], args))
+        return [w.strip('"') for w in shlex.split(line, posix=sys.platform != "win32")] or [line]
+    return [os.fsdecode(a) for a in cast(list[str | bytes], args)]
+
+
+def _program(words: list[str], executable: object, shell: bool) -> str | None:
     """The program `subprocess.Popen` was asked to start, or None for a shell command (which
-    could run anything). Its args may be a list, or a command line as one string."""
+    could run anything)."""
     if shell:
         return None
     if executable is not None:
         return os.fsdecode(cast(str | bytes, executable))
-    if isinstance(args, str | bytes | os.PathLike):
-        line = os.fsdecode(cast(str | bytes | os.PathLike[str], args))
-        words = shlex.split(line, posix=sys.platform != "win32")
-        return words[0].strip('"') if words else line
-    return os.fsdecode(cast(list[str | bytes], args)[0])
+    return words[0]
+
+
+_GIT_OPTIONS_WITH_VALUES = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace"})
+
+
+def _git_command(words: list[str]) -> str | None:
+    """The command git is asked to run (`stack` in `git -C repo stack info`), if any."""
+    rest = iter(words[1:])
+    for word in rest:
+        if word in _GIT_OPTIONS_WITH_VALUES:
+            next(rest, None)
+        elif not word.startswith("-"):
+            return word
+    return None
 
 
 def _shown(args: object) -> str:
@@ -219,8 +242,9 @@ def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
     """Keep each test to itself. It's refused, with `OutsideRefused`:
     - starting a program but git, icacls on Windows, and those it `allow`s, through
       `subprocess` (`Popen` and what's built on it, asyncio's too), `os.exec*`, `os.spawn*` or
-      `os.posix_spawn*`; and any shell or terminal: a shell command (`os.system`, `os.popen`,
-      `shell=True`), `pty.spawn`, `os.forkpty`, `os.startfile`;
+      `os.posix_spawn*`; `git stack` through `subprocess`, unless it allows `GIT_STACK`; and
+      any shell or terminal: a shell command (`os.system`, `os.popen`, `shell=True`),
+      `pty.spawn`, `os.forkpty`, `os.startfile`;
     - a socket connecting (`connect`, `connect_ex`) or sending (`sendto`, `sendmsg`) anywhere
       but this machine;
     - looking a name up (`getaddrinfo`, `gethostbyname`, `gethostbyname_ex`), but `localhost`,
@@ -233,10 +257,11 @@ def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
     test isn't about (the plugin's client, `keychain.read`); a test that tries on purpose takes
     what was refused (`outside.take()`), and one that needs a program `outside.allow`s it.
 
-    What a child does isn't guarded, being another process. git, and what it runs (`git stack`,
-    hooks, credential helpers), gets `GIT_ENVIRONMENT`, so it can't fetch from the network or
-    ask for a password; a program a test allows (Python, to run `mfd`) gets nothing: give it a
-    config that reaches nothing."""
+    What a child does isn't guarded, being another process. git gets `GIT_ENVIRONMENT`, so its
+    own transports can't fetch from the network and it can't ask for a password, but what it
+    runs (hooks, credential helpers, and `git stack`, which can start `gh`) isn't limited; a
+    program a test allows (Python, to run `mfd`) gets nothing: give it a config that reaches
+    nothing."""
     outside = Outside()
     for name, value in GIT_ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
@@ -249,8 +274,17 @@ def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
         `webbrowser`, asyncio and a `Popen` bound before the test (a default argument) all go
         through."""
         called = spawning.bind(self, *args, **kwargs).arguments
-        program = _program(called["args"], called["executable"], bool(called["shell"]))
-        if program is None or not outside.may_run(program):
+        words = _words(called["args"])
+        program = _program(words, called["executable"], bool(called["shell"]))
+        if (
+            program is None
+            or not outside.may_run(program)
+            or (
+                _name(program) == "git"
+                and _git_command(words) == "stack"
+                and not outside.may_run(GIT_STACK)
+            )
+        ):
             outside.refuse(f"the program `{_shown(called['args'])}`")
         return spawn(self, *args, **kwargs)  # pyright: ignore[reportUnknownVariableType]
 

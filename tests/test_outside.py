@@ -6,47 +6,51 @@ import os
 import socket
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
-from conftest import Outside, OutsideRefused
+from conftest import GIT_STACK, Outside, OutsideRefused
 
 from move_forward import keychain
 
 ELSEWHERE = ("192.0.2.1", 80)
 """An address in TEST-NET-1, which no machine has: refused before it's tried."""
 
+NOWHERE = "/nonexistent/mfd-no-such-program"
+"""A program no machine has, so a probe of a guard that stopped working runs nothing."""
+
 
 def test_a_program_but_git_is_refused(outside: Outside) -> None:
     popen = subprocess.Popen  # bound before, as `supervise`'s default argument is
     for start in (
-        lambda: subprocess.run(["gh", "api", "user"], check=False),
-        lambda: subprocess.check_output("gh auth status"),
+        lambda: subprocess.run([NOWHERE, "api", "user"], check=False),
+        lambda: subprocess.check_output(f"{NOWHERE} auth status"),
         lambda: subprocess.run("git --version", shell=True, check=False),  # sh could run anything
-        lambda: popen(["secret-tool", "lookup", "service", "s"]),
+        lambda: popen([NOWHERE, "lookup"]),
         lambda: subprocess.run([sys.executable, "-c", "pass"], check=False),  # unless allowed
     ):
         with pytest.raises(OutsideRefused):
             start()
     assert outside.take() == [
-        "the program `gh api user`",
-        "the program `gh auth status`",
+        f"the program `{NOWHERE} api user`",
+        f"the program `{NOWHERE} auth status`",
         "the program `git --version`",
-        "the program `secret-tool lookup service s`",
+        f"the program `{NOWHERE} lookup`",
         f"the program `{sys.executable} -c pass`",
     ]
 
 
 def test_os_and_pty_start_no_program_either(outside: Outside) -> None:
     with pytest.raises(OutsideRefused):
-        os.system("gh api user")  # pyright: ignore[reportDeprecated]
+        os.system(f"{NOWHERE} api user")  # pyright: ignore[reportDeprecated]
     with pytest.raises(OutsideRefused):
-        os.execv("/usr/bin/gh", ["gh"])
+        os.execv(NOWHERE, [NOWHERE])
     with pytest.raises(OutsideRefused):
-        os.spawnv(os.P_WAIT, "/usr/bin/gh", ["gh"])  # pyright: ignore[reportDeprecated]
+        os.spawnv(os.P_WAIT, NOWHERE, [NOWHERE])  # pyright: ignore[reportDeprecated]
     assert outside.take() == [
-        "os.system('gh api user')",
-        "the program `/usr/bin/gh`, through os.execv",
-        "the program `/usr/bin/gh`, through os.spawnv",
+        f"os.system('{NOWHERE} api user')",
+        f"the program `{NOWHERE}`, through os.execv",
+        f"the program `{NOWHERE}`, through os.spawnv",
     ]
 
 
@@ -55,14 +59,14 @@ def test_posix_spawn_and_a_terminal_are_refused(outside: Outside) -> None:
     import pty
 
     with pytest.raises(OutsideRefused):
-        os.posix_spawn("/usr/bin/gh", ["gh"], {})
+        os.posix_spawn(NOWHERE, [NOWHERE], {})
     with pytest.raises(OutsideRefused):
-        pty.spawn(["gh"])
+        pty.spawn([NOWHERE])
     with pytest.raises(OutsideRefused):
         os.forkpty()
     assert outside.take() == [
-        "the program `/usr/bin/gh`, through os.posix_spawn",
-        "pty.spawn(['gh'])",
+        f"the program `{NOWHERE}`, through os.posix_spawn",
+        f"pty.spawn([{NOWHERE!r}])",
         "os.forkpty()",
     ]
 
@@ -71,10 +75,27 @@ def test_git_runs_but_fetches_from_no_network(outside: Outside) -> None:
     assert subprocess.run(["git", "--version"], capture_output=True, check=True).stdout
     for program in ("git", "GIT.EXE", "C:/Program Files/Git/cmd/git.exe"):
         assert outside.may_run(program), program
-    assert not outside.may_run("/usr/bin/gh") and not outside.may_run("git-stack")
+    assert not outside.may_run(NOWHERE) and not outside.may_run("git-stack")
     fetch = ["git", "ls-remote", "https://example.invalid/r.git"]
-    fetched = subprocess.run(fetch, capture_output=True, encoding="utf-8", check=False)
-    assert fetched.returncode != 0 and "not allowed" in fetched.stderr
+    english = {**os.environ, "LC_ALL": "C"}  # git translates its messages
+    fetched = subprocess.run(fetch, capture_output=True, encoding="utf-8", env=english, check=False)
+    assert fetched.returncode != 0 and "transport 'https' not allowed" in fetched.stderr
+
+
+def test_git_stack_is_refused_unless_allowed(outside: Outside, tmp_path: Path) -> None:
+    """It's git, but can start `gh`, which git's environment doesn't stop."""
+    for stack in (["git", "stack", "info"], ["git", "-C", str(tmp_path), "-c", "a=b", "stack"]):
+        with pytest.raises(OutsideRefused):
+            subprocess.run(stack, check=False)
+    assert outside.take() == [
+        "the program `git stack info`",
+        f"the program `git -C {tmp_path} -c a=b stack`",
+    ]
+    # A repo named `stack` is no `git stack`.
+    subprocess.run(["git", "-C", "stack", "status"], cwd=tmp_path, capture_output=True, check=False)
+    assert outside.refused == [] and not outside.may_run(GIT_STACK)
+    outside.allow(GIT_STACK)
+    assert outside.may_run(GIT_STACK)
 
 
 def test_a_program_a_test_allows_runs(outside: Outside) -> None:
