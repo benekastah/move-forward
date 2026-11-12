@@ -342,8 +342,9 @@ def refresh(
     changed with what was stored, and collected once more if they did (`_settle`), so a refresh
     can take two `COLLECT_TIMEOUT_SECONDS` (and the server hold its refresh lock that long).
     After collecting, the graph is built again, the plugins' events found against what held
-    before, the daily prune runs if due, and `after_collect` runs for the plugins collected and
-    those that collect nothing (they work from the others' data). When the dashboard is
+    before, the daily prune runs if due, and `after_collect` runs for the plugins due, those
+    collected again, and those that collect nothing (they work from the others' data), even one
+    due but left out as still collecting: it reads only what's stored. When the dashboard is
     stopping, it collects no more, but still finds the events of what it stored, and ends there,
     as long as it gets that far: the server runs it in a daemon thread, which its own shutdown
     may freeze first, and then that refresh's events are lost (the next start compares with what
@@ -373,8 +374,9 @@ def refresh(
     prune_if_due(
         db, now, lambda: _prune_plugins(plugins, graph, snapshots, db, now, config.prune_days)
     )
+    ran = {e.name for e in due} | collected
     for e in plugins:
-        if e.name not in collected and e.plugin.collects:
+        if e.name not in ran and e.plugin.collects:
             continue
         try:
             e.plugin.after_collect(Request(e.ctx, graph, snapshots.get(e.name)))

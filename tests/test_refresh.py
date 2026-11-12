@@ -148,6 +148,23 @@ def test_a_watcher_still_collecting_isnt_collected_again_or_reported(
     assert _JiraWatchingGit.collected_from == [["acme/widgets"]]
 
 
+def test_a_due_plugin_still_collecting_still_gets_after_collect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """It reads only what's stored, which is whole while a collect runs: its derived tables
+    keep up with the others' entities while its collect is stuck."""
+    ran: list[str] = []
+
+    def after_collect(self: _JiraWatchingGit, req: Request[JiraConfig, JiraSnapshot]) -> None:
+        ran.append("jira")
+
+    monkeypatch.setattr(_JiraWatchingGit, "after_collect", after_collect)
+    monkeypatch.setattr(refresh, "_collecting", {"jira"})
+    config, db = _git_and_jira()
+    assert refresh.refresh(config, db, NOW) == {"git"}
+    assert ran == ["jira"]
+
+
 def test_a_settled_watchers_events_compare_before_with_after_the_settle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
