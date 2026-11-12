@@ -606,7 +606,6 @@ def test_panels_carry_the_skills_step_order_and_whether_they_need_acting_on_now(
         "github.ready_to_merge",
         "jira.jira_transitions",
         "jira.rollouts",
-        "git.cleanup",
         "slack.nudges",
     }
 

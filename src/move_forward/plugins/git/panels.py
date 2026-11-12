@@ -261,8 +261,7 @@ class Builder:
                         url=merged.url if merged else None,
                         subtitle=subtitle if risk is None else f"{subtitle} · {risk}",
                         badges=["git branch -D"] if risk is None else ["check first"],
-                        # Not a quick delete for Act now: what's on it may be the only copy, and
-                        # a squash-merged branch would stay there for good.
+                        # The commits may be the only copy, so leave this for a closer look.
                         deferred=risk is not None,
                         actions=[
                             action(
@@ -277,8 +276,7 @@ class Builder:
                                 icon="🗑️",
                             )
                         ],
-                        # The PR first: it keys Act now's feedback and anchors the item. The branch is
-                        # what Put on ice finds.
+                        # The PR first anchors the item. The branch is what Put on ice finds.
                         subjects=[merged.subject, branch_ref(repo.dir, b.name)]
                         if merged
                         else [branch_ref(repo.dir, b.name)],
@@ -304,7 +302,6 @@ class Builder:
         return Panel(
             key="cleanup",
             priority=Band.HOUSEKEEPING,
-            act_now=True,
             signals=Signals(verb="Delete the branch", task="delete_the_branch", effort="minutes"),
             title="Cleanup",
             description="Local branches whose PR merged or whose remote branch is gone.",

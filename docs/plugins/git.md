@@ -89,7 +89,7 @@ they were iced at (refused for one that exists again, or whose commit is gone).
 
 ## Act now
 
-git nominates the branches Cleanup lists, quick to delete; those to check first are left out.
+git does not nominate branch cleanup for Act now; find these branches in Cleanup.
 
 ## Buttons
 

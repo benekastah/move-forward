@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Branch cleanup leaves Act now
+
+Merged and gone local branches no longer appear in Act now. Find them in Git's Cleanup
+panel, and merged git stack branches in Git Stack's Stacks panel, where their delete and
+clean buttons remain. Subscribed branch notifications are unchanged.
+
 ### A focus page's `kept` names the item it shows
 
 A focus page's address carries `kept`, naming the item it shows: its anchor (`item-…`, as on

@@ -244,15 +244,16 @@ def test_git_keeps_its_snapshot_in_its_tables() -> None:
     assert db.query("SELECT * FROM git_branches") == []  # gone with their repo
 
 
-def test_a_merged_branch_still_here_is_nominated_to_delete() -> None:
+def test_a_merged_branch_is_available_in_cleanup_but_not_act_now() -> None:
     merged = pr(9, state="MERGED", merged_at=NOW - timedelta(days=1), head="me/done")
     local = local_snapshot(
         branches=[local_branch("me/done", upstream="origin/me/done", sha=MERGED_TIP)]
     )
-    act = build(github=snapshot(merged_recent=[merged]), local=local).act_now()
-    assert [(i.title, i.details[0]) for i in act] == [
-        ("Delete the branch: me/done: PR merged 1d ago", "why: quick")
-    ]
+    built = build(github=snapshot(merged_recent=[merged]), local=local)
+    assert built.act_now() == []
+    [item] = panel(built, "git.cleanup").items
+    assert item.title == "me/done: PR merged 1d ago"
+    assert any(a.name == "git/delete_branch" and a.confirm for a in item.actions)
 
 
 def test_reopening_a_stack_whose_branches_are_gone_asks_first() -> None:
@@ -348,14 +349,15 @@ def test_a_checkout_of_a_pr_that_moved_on_github_is_shown_without_fetching() -> 
     assert titles(unpushed, "git.local_work") == ["me/APP-8-fix: 1 unpushed commits"]
 
 
-def test_a_gone_branch_has_a_subject_so_deleting_it_can_hide_its_act_now_item() -> None:
+def test_a_gone_branch_keeps_its_subject_and_delete_in_cleanup() -> None:
     local = local_snapshot(
         branches=[local_branch("me/gone", upstream="origin/me/gone", gone=True, ahead_of_default=0)]
     )
     dashboard = build(github=snapshot(), local=local)
-    act = panel(dashboard, "act.git")
-    delete = next(a for a in act.items[0].actions if a.name == "git/delete_branch")
-    assert "opened" in delete.fields
+    [item] = panel(dashboard, "git.cleanup").items
+    assert item.subjects[0].kind == "git.branch"
+    assert any(a.name == "git/delete_branch" and a.confirm for a in item.actions)
+    assert dashboard.act_now() == []
 
 
 def test_a_branch_with_work_not_merged_is_listed_to_check_not_to_delete_with_the_rest() -> None:
