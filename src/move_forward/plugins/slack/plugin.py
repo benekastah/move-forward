@@ -144,7 +144,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     init = INIT
     config_model = SlackConfig
     api_version = API_VERSION
-    teams_field = "teams"
     migrations: ClassVar[list[Migration]] = MIGRATIONS
 
     def panels(self, req: Request[SlackConfig, BaseModel]) -> list[Panel]:
@@ -204,6 +203,10 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         found = contacts.look_up_requested(ctx, graph)
         if found:
             ctx.log.info("found Slack ids for %s", ", ".join(found))
+
+    def teams(self, config: SlackConfig) -> set[str]:
+        """Those `[slack.teams]` gives its channel for."""
+        return set(config.teams)
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         """see and set where review pings go"""

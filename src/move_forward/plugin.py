@@ -415,10 +415,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     api_version: ClassVar[int | None] = None
     """The `API_VERSION` the plugin was built against: one built against another is left
     out, with the reason in `mfd check` and the page's footer."""
-    teams_field: ClassVar[str | None] = None
-    """The field of the plugin's section mapping each top-level team to what the tool calls
-    it (`teams`, e.g. `[github.teams]`), so the config can check it names only teams it has;
-    None for a plugin without one."""
     notification_kinds: ClassVar[dict[str, str]] = {}
     """The events the plugin's `events` makes, by kind, each with what it says, for the
     settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
@@ -455,6 +451,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         `token_env` and `keychain_service`. Each needs a `keychain_service` of its own: the
         config is refused when two tokens share one. Its context's `token` reads them."""
         return _section_token(config)
+
+    def teams(self, config: C) -> set[str]:
+        """The top-level teams (`Context.teams`, by name) the plugin's section names, e.g. those
+        github's `[github.teams]` gives a slug for, so the config refuses a team the top level
+        doesn't have. Empty by default: core knows nothing of how a section keeps them."""
+        return set()
 
     # Refresh
 
