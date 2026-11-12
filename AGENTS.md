@@ -191,12 +191,18 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   plugin publishes. Tests touching git make real repos in `tmp_path`; tests
   never touch the network, nor the real database or its token
   (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor
-  the secret store, nor run a program but git (git stack included) and Python
-  (and icacls on Windows). `conftest`'s `outside` fixture fails a test that tries,
-  naming what it tried, even when the code under test catches the refusal: stub it
-  where the test isn't about it (the plugin's client, `keychain.read`), not by opting
-  out. A test that tries on purpose (a test of the guard) takes what was refused with
-  `outside.take()`; one that truly needs a program lets it run with `outside.allow("name")`.
+  the secret store, nor run a program but git (and icacls on Windows).
+  `conftest`'s `outside` fixture fails a test that tries, naming what it tried, even
+  when the code under test catches the refusal: stub it where the test isn't about it
+  (the plugin's client, `keychain.read`), not by opting out. A test that tries on
+  purpose (a test of the guard) takes what was refused with `outside.take()`; one that
+  truly needs a program lets it run with `outside.allow(...)` (`sys.executable`, to run
+  `mfd`). A child process isn't guarded: git runs with `GIT_ALLOW_PROTOCOL=file`, so it
+  can't fetch from the network, but a program a test allows can do anything, so give it
+  a config that reaches nothing. The one exception is
+  `test_the_real_credential_manager_keeps_a_secret`, the only check that `keychain.py`'s
+  ctypes binding agrees with Windows: it runs only where `MFD_REAL_SECRET_STORE=1`, which
+  only Windows CI sets, as that runner's store is thrown away after the job.
 - **No new runtime dependencies.** pydantic and watchfiles (git watching its repos) are
   the only ones; tools are
   reached through their CLIs (`gh`, `git`) or the standard library.

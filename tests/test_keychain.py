@@ -1,13 +1,16 @@
 """Tokens in the system's own secret store, and `mfd token`."""
 
 import ctypes
+import os
+import subprocess
 import sys
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
-from conftest import NOW
+from conftest import NOW, REAL_ADVAPI32, Outside
 from pydantic import ValidationError
 
 from move_forward import cli, keychain, registry
@@ -70,10 +73,14 @@ def test_no_store_or_no_secret_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
     assert keychain.read("svc", "me@x") is None
 
 
+REAL_SECRET_STORE = "MFD_REAL_SECRET_STORE"
+"""The environment variable that, set to 1, runs the test of the real Credential Manager."""
+
+
 class _CredentialManager:
-    """advapi32's Credential Manager functions over a dict of each target's secret, which,
-    as Windows does, ignores the target's case: what `keychain._advapi32` gives in its tests,
-    so they don't reach the real store."""
+    """advapi32's Credential Manager functions over a dict of each target's secret: what
+    `keychain._advapi32` gives in its tests, so they don't reach the real store (but one,
+    `test_the_real_credential_manager_keeps_a_secret`)."""
 
     def __init__(self) -> None:
         self.secrets: dict[str, bytes] = {}
@@ -82,13 +89,11 @@ class _CredentialManager:
 
     def CredWriteW(self, credential: Any, flags: int) -> int:
         given = credential._obj  # the CREDENTIALW `byref` points at
-        self.secrets[given.TargetName.lower()] = bytes(
-            given.CredentialBlob[: given.CredentialBlobSize]
-        )
+        self.secrets[given.TargetName] = bytes(given.CredentialBlob[: given.CredentialBlobSize])
         return 1
 
     def CredReadW(self, target: str, type: int, flags: int, found: Any) -> int:
-        blob = self.secrets.get(target.lower())
+        blob = self.secrets.get(target)
         if blob is None:
             return 0
         buffer = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
@@ -102,7 +107,7 @@ class _CredentialManager:
         return 1
 
     def CredDeleteW(self, target: str, type: int, flags: int) -> int:
-        return int(self.secrets.pop(target.lower(), None) is not None)
+        return int(self.secrets.pop(target, None) is not None)
 
     def CredFree(self, credential: object) -> None:
         pass
@@ -120,7 +125,7 @@ def test_a_secret_stored_as_cmdkey_does_is_read_from_credential_manager(
     credential_manager: _CredentialManager,
 ) -> None:
     credential_manager.secrets["move-forward-test"] = "s3cret-token".encode("utf-16-le")
-    assert keychain.read("Move-Forward-Test", "me@x") == "s3cret-token"
+    assert keychain.read("move-forward-test", "me@x") == "s3cret-token"
     credential_manager.secrets["move-forward-test"] = b"utf-8 token"  # another tool's
     assert keychain.read("move-forward-test", "me@x") == "utf-8 token"
     assert keychain.read("move-forward-other", "me@x") is None
@@ -138,6 +143,35 @@ def test_a_secret_written_to_credential_manager_reads_back_and_deletes(
     keychain.delete(target, "me@x")
     assert keychain.read(target, "me@x") is None
     keychain.delete(target, "me@x")  # nothing there: fine
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32" or os.environ.get(REAL_SECRET_STORE) != "1",
+    reason=f"the real Credential Manager: Windows CI's alone, whose store is thrown away"
+    f" after the run, sets ${REAL_SECRET_STORE}",
+)
+def test_the_real_credential_manager_keeps_a_secret(
+    monkeypatch: pytest.MonkeyPatch, outside: Outside
+) -> None:
+    """The one test of the real store (see AGENTS.md): whether `_Credential` and the calls on
+    it agree with Windows' own, which the fake, built on the same `_Credential`, can't tell."""
+    monkeypatch.setattr(keychain, "_advapi32", REAL_ADVAPI32)
+    outside.allow("cmdkey")
+    target = f"move-forward-test-{uuid.uuid4().hex}"
+    try:
+        subprocess.run(
+            ["cmdkey", f"/generic:{target}", "/user:me@x", "/pass:s3cret-token"],
+            check=True,
+            capture_output=True,
+        )
+        assert keychain.read(target.upper(), "me@x") == "s3cret-token"  # Windows ignores case
+        keychain.write(target, "me@x", "replaced")
+        assert keychain.read(target, "me@x") == "replaced"
+        keychain.delete(target, "me@x")
+        assert keychain.read(target, "me@x") is None
+        keychain.delete(target, "me@x")  # nothing there: fine
+    finally:
+        subprocess.run(["cmdkey", f"/delete:{target}"], check=False, capture_output=True)
 
 
 def test_on_macos_and_linux_a_secret_is_deleted_through_the_stores_command(
