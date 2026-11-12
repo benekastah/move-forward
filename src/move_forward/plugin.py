@@ -145,8 +145,9 @@ class Previous[S: BaseModel]:
     when the dashboard stopped."""
     graph: Graph | None = None
     """The graph then: at the plugin's last change check that didn't raise (`changed`), or
-    before this refresh (`events`). None at the first check since the dashboard started: it's
-    the one thing a restart can't rebuild."""
+    before this refresh (`events`). For `changed`, None at the first check since the dashboard
+    (or `mfd refresh`) started, as it's the one thing a restart can't rebuild; except in a
+    refresh's settle step, which gives the graph from before the refresh (see `watches`)."""
 
 
 @dataclass(frozen=True)
