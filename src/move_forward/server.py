@@ -519,7 +519,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             being written. End that connection quietly; other server errors still surface."""
             try:
                 super().handle()
-            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            except BrokenPipeError, ConnectionResetError, ConnectionAbortedError:
                 self.close_connection = True
                 log.debug("browser disconnected during a request")
 
@@ -733,7 +733,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 nonce, theirs, given = fields["nonce"], fields["client_nonce"], fields["proof"]
                 if not all(isinstance(v, str) for v in (nonce, theirs, given)):
                     raise TypeError
-            except (ValueError, KeyError, TypeError):
+            except ValueError, KeyError, TypeError:
                 self._json(HTTPStatus.BAD_REQUEST, {"error": "bad request"})
                 return
             expected = auth.proof(app.token, "client", nonce, theirs)

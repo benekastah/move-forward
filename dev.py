@@ -10,7 +10,10 @@
     python dev.py pre-push           # what the pre-push hook runs
 
 On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
-Standard library only: it runs before .venv exists.
+Standard library only: it runs before .venv exists. It runs under any Python from 3.11 (the
+first with tomllib; ruff checks it as 3.11), whatever the package needs, so the hooks work
+whichever `python3` comes first: everything but making .venv with venv and pip runs .venv's
+tools, and uv picks its own Python.
 """
 
 import os
@@ -18,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -26,6 +30,46 @@ WINDOWS = sys.platform == "win32"
 BIN = VENV / ("Scripts" if WINDOWS else "bin")
 STAMP = VENV / "installed"
 """Touched after installing; older than pyproject.toml or uv.lock means install again."""
+
+
+def required_python(pyproject: str) -> tuple[int, int]:
+    """The oldest Python the package runs on, from pyproject.toml's `requires-python`
+    (`>=3.14`)."""
+    spec: str = tomllib.loads(pyproject)["project"]["requires-python"]
+    major, minor = spec.removeprefix(">=").strip().split(".")[:2]
+    return int(major), int(minor)
+
+
+def venv_python(pyvenv_cfg: str) -> tuple[int, int] | None:
+    """The Python a venv was made with, from its pyvenv.cfg: `version` (venv) or
+    `version_info` (uv). None if it names neither."""
+    for line in pyvenv_cfg.splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() in ("version", "version_info"):
+            major, minor = value.strip().split(".")[:2]
+            return int(major), int(minor)
+    return None
+
+
+def too_old(running: tuple[int, int], required: tuple[int, int]) -> str | None:
+    """Why dev.py can't make .venv with venv and pip under Python `running`, or None if it
+    can."""
+    if running >= required:
+        return None
+    want = ".".join(map(str, required))
+    have = ".".join(map(str, running))
+    return (
+        f"dev.py: .venv needs Python {want} or newer, and this is {have}."
+        f" Run it with python{want} (on Windows, py -{want}), or install uv, which finds one."
+    )
+
+
+def _required() -> tuple[int, int]:
+    return required_python((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+
+def _running() -> tuple[int, int]:
+    return sys.version_info.major, sys.version_info.minor
 
 
 def tool(name: str) -> str:
@@ -44,7 +88,8 @@ def venv() -> None:
     """Create .venv with the package (editable) and the dev dependencies from
     pyproject.toml, or bring it up to date: they're reinstalled whenever pyproject.toml or
     uv.lock has changed since they were last installed, so it's quick when there's nothing
-    to do. Uses uv when it's installed, else venv and pip (25.1+ for --group)."""
+    to do. Uses uv when it's installed, else venv and pip (25.1+ for --group); either makes
+    .venv again when an older Python made it."""
     sources = [ROOT / "pyproject.toml", ROOT / "uv.lock"]
     newest = max(path.stat().st_mtime for path in sources if path.exists())
     if STAMP.exists() and STAMP.stat().st_mtime >= newest:
@@ -53,6 +98,18 @@ def venv() -> None:
     if shutil.which("uv"):
         run("uv", "sync", "--quiet")
     else:
+        required = _required()
+        cfg = VENV / "pyvenv.cfg"
+        made_with = venv_python(cfg.read_text(encoding="utf-8")) if cfg.exists() else None
+        if made_with is None or made_with < required:
+            # .venv is made (again) with the Python running this, so it has to be new enough;
+            # checked before removing the old one.
+            problem = too_old(_running(), required)
+            if problem:
+                sys.exit(problem)
+            if cfg.exists():
+                print("dev: .venv was made with an older Python; making it again", file=sys.stderr)
+                shutil.rmtree(VENV)
         if not Path(tool("python")).exists():
             run(sys.executable, "-m", "venv", str(VENV))
         run(tool("python"), "-m", "pip", "install", "--quiet", "--upgrade", "pip")

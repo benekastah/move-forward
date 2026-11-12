@@ -46,7 +46,7 @@ from move_forward.repositories import KvRepository
 class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /jira/hello."""
 
-    def item_actions(self, req: Request[JiraConfig, BaseModel]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
         def additions(each: ItemRequest) -> ItemAdditions:
             pr = each.item.subject("pull_request")
             if pr is None:
@@ -434,7 +434,7 @@ class _Prepared(JiraPlugin):
 
     prepared = 0
 
-    def item_actions(self, req: Request[JiraConfig, BaseModel]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
         _Prepared.prepared += 1
         prs = {e.ref.id for e in req.graph.of_kind("pull_request")}
 
@@ -504,7 +504,7 @@ def test_the_page_says_who_i_am_in_each_tool_that_knows() -> None:
 class _Relating(JiraPlugin):
     """Jira, relating its ticket to PR 1, and (wrongly) github's PR to its ticket."""
 
-    def relate(self, req: Request[JiraConfig, BaseModel]) -> list[tuple[Ref, Ref]]:
+    def relate(self, req: Request[JiraConfig, JiraSnapshot]) -> list[tuple[Ref, Ref]]:
         [ticket] = req.graph.of_kind("ticket")
         the_pr = Ref(kind="pull_request", id=pr(1).url)
         return [(ticket.ref, the_pr), (the_pr, ticket.ref)]
@@ -545,7 +545,7 @@ class _Given(JiraPlugin):
         self.stored["prune"] = req.snapshot
         return []
 
-    def relate(self, req: Request[JiraConfig, BaseModel]) -> list[tuple[Ref, Ref]]:
+    def relate(self, req: Request[JiraConfig, JiraSnapshot]) -> list[tuple[Ref, Ref]]:
         self.stored["relate"] = req.snapshot
         return []
 

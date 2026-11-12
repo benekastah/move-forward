@@ -101,7 +101,7 @@ def _no_url(kind: str, id: str) -> str | None:
     return None
 
 
-def _no_fetch(kind: str, ids: list[str]) -> list["Entity"]:
+def _no_fetch(kind: str, ids: list[str]) -> list[Entity]:
     return []
 
 

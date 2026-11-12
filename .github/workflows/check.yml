@@ -61,8 +61,10 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
-          python-version: "3.12"
-      - run: python dev.py static
+          python-version: "3.14"
+      # Through uv: the runner's own `python` may be older than the one uv provides, and
+      # dev.py stops under a Python older than the package needs.
+      - run: uv run --no-project python dev.py static
 
   # The tests, on every system, in parallel on each.
   tests:
@@ -79,8 +81,8 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
-          python-version: "3.12"
-      - run: python dev.py tests
+          python-version: "3.14"
+      - run: uv run --no-project python dev.py tests
 
   # The one check the ruleset on main requires, so changing the jobs doesn't change what's
   # required. It runs even if a check failed (a skipped required check would count as
