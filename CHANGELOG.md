@@ -13,11 +13,11 @@ can't read the new code, so the page would keep the old code. To move:
 
 1. Stop `mfd serve`.
 2. Pull.
-3. Install Python 3.14 if you haven't (with uv, `uv python install 3.14`).
-4. Reinstall with it: `python3.14 dev.py install` (on Windows, `py -3.14 dev.py install`).
-   dev.py now stops at once under an older Python, and makes `.venv` again when an older
-   Python made it.
-5. Start `mfd serve` again.
+3. Reinstall. With uv, `python3 dev.py install` (on Windows, `py dev.py install`) is enough:
+   uv finds Python 3.14, or downloads it. Without uv, install Python 3.14 if you haven't and
+   run it with that: `python3.14 dev.py install` (on Windows, `py -3.14 dev.py install`); dev.py
+   says so under an older one, and makes `.venv` again when an older Python made it.
+4. Start `mfd serve` again.
 
 ### A focus page's `kept` names the item it shows
 

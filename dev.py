@@ -10,9 +10,10 @@
     python dev.py pre-push           # what the pre-push hook runs
 
 On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
-Standard library only: it runs before .venv exists. It also runs under a Python older than
-the package needs, to say so, so it keeps to syntax that Python parses (ruff checks it as
-3.11, the first with tomllib).
+Standard library only: it runs before .venv exists. It runs under any Python from 3.11 (the
+first with tomllib; ruff checks it as 3.11), whatever the package needs, so the hooks work
+whichever `python3` comes first: everything but making .venv with venv and pip runs .venv's
+tools, and uv picks its own Python.
 """
 
 import os
@@ -51,19 +52,24 @@ def venv_python(pyvenv_cfg: str) -> tuple[int, int] | None:
 
 
 def too_old(running: tuple[int, int], required: tuple[int, int]) -> str | None:
-    """Why dev.py can't go on under Python `running`, or None if it can."""
+    """Why dev.py can't make .venv with venv and pip under Python `running`, or None if it
+    can."""
     if running >= required:
         return None
     want = ".".join(map(str, required))
     have = ".".join(map(str, running))
     return (
-        f"dev.py: move-forward needs Python {want} or newer, and this is {have}."
-        f" Run it with python{want} (on Windows, py -{want})."
+        f"dev.py: .venv needs Python {want} or newer, and this is {have}."
+        f" Run it with python{want} (on Windows, py -{want}), or install uv, which finds one."
     )
 
 
 def _required() -> tuple[int, int]:
     return required_python((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+
+def _running() -> tuple[int, int]:
+    return sys.version_info.major, sys.version_info.minor
 
 
 def tool(name: str) -> str:
@@ -92,10 +98,16 @@ def venv() -> None:
     if shutil.which("uv"):
         run("uv", "sync", "--quiet")
     else:
+        required = _required()
         cfg = VENV / "pyvenv.cfg"
-        if cfg.exists():
-            made_with = venv_python(cfg.read_text(encoding="utf-8"))
-            if made_with is None or made_with < _required():
+        made_with = venv_python(cfg.read_text(encoding="utf-8")) if cfg.exists() else None
+        if made_with is None or made_with < required:
+            # .venv is made (again) with the Python running this, so it has to be new enough;
+            # checked before removing the old one.
+            problem = too_old(_running(), required)
+            if problem:
+                sys.exit(problem)
+            if cfg.exists():
                 print("dev: .venv was made with an older Python; making it again", file=sys.stderr)
                 shutil.rmtree(VENV)
         if not Path(tool("python")).exists():
@@ -269,9 +281,6 @@ def pre_push() -> None:
 
 
 def main(argv: list[str]) -> None:
-    problem = too_old((sys.version_info.major, sys.version_info.minor), _required())
-    if problem:
-        sys.exit(problem)
     command, *rest = argv or ["help"]
     if command == "venv":
         venv()

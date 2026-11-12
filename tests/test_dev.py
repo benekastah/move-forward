@@ -1,6 +1,7 @@
 """dev.py: which Python it needs, and which pushes its pre-push hook checks."""
 
 import importlib.util
+import io
 import sys
 from pathlib import Path
 
@@ -40,14 +41,46 @@ def test_the_python_needed_is_read_from_requires_python() -> None:
     assert dev.required_python(pyproject) <= sys.version_info[:2]  # the tests' Python passes
 
 
-def test_an_older_python_is_told_which_to_run_dev_py_with() -> None:
-    problem = dev.too_old((3, 12), (3, 14))
-    assert problem is not None
-    assert "this is 3.12" in problem
-    assert "python3.14" in problem
-    assert "py -3.14" in problem
-    assert dev.too_old((3, 14), (3, 14)) is None
-    assert dev.too_old((3, 15), (3, 14)) is None
+def _not_installed(_command: str) -> None:
+    return None
+
+
+def _nothing_staged(*_args: str, stdin: bytes | None = None) -> bytes:
+    return b""
+
+
+def test_without_uv_an_older_python_is_told_which_to_make_venv_with(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nrequires-python = ">=3.14"\n', encoding="utf-8"
+    )
+    old = tmp_path / ".venv"
+    old.mkdir()
+    (old / "pyvenv.cfg").write_text("version = 3.12.3\n", encoding="utf-8")
+    monkeypatch.setattr(dev, "ROOT", tmp_path)
+    monkeypatch.setattr(dev, "VENV", old)
+    monkeypatch.setattr(dev, "STAMP", old / "installed")
+    monkeypatch.setattr(dev.shutil, "which", _not_installed)
+    monkeypatch.setattr(dev, "_running", lambda: (3, 12))
+
+    with pytest.raises(SystemExit) as stopped:
+        dev.venv()
+
+    assert "this is 3.12" in str(stopped.value.code)
+    assert "python3.14" in str(stopped.value.code)
+    assert "py -3.14" in str(stopped.value.code)
+    assert (old / "pyvenv.cfg").exists()  # not removed for a .venv it can't make
+
+
+def test_the_hooks_run_under_an_older_python(monkeypatch: pytest.MonkeyPatch) -> None:
+    """They run `python3`, whatever it is; with nothing to check, they pass."""
+    monkeypatch.setattr(dev, "_running", lambda: (3, 12))
+    monkeypatch.setattr(dev, "_git", _nothing_staged)
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))  # nothing pushed to main
+
+    dev.main(["pre-commit"])
+    dev.main(["pre-push"])
 
 
 @pytest.mark.parametrize(
