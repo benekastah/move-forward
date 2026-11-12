@@ -167,7 +167,6 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
     title = "Linear"
     api_version = API_VERSION
     config_model = LinearConfig
-    snapshot_model = LinearSnapshot
     migrations: ClassVar[list[Migration]] = MIGRATIONS
 
     def collect(self, req: RefreshRequest[LinearConfig]) -> LinearSnapshot:
@@ -194,7 +193,8 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   it each time it's checked rather than warning of it yourself: one not reported for
   `prune_days` is forgotten.
 
-- A plugin that collects (`collects`: it has a `snapshot_model`) has a `refresh_seconds`
+- A plugin collects (`collects`) when it overrides `collect`, and it then overrides
+  `snapshots` too: core refuses a plugin with one and not the other. It has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it
   that often, on its own schedule.
 - A plugin with a cheap way to tell that its tool has something new (a file's time, a
@@ -516,8 +516,9 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   `api.html.page` and `api.html.e` to escape everything), or a `Response`, e.g.
   `Response.redirect(url)`. Every page needs the
   dashboard's token, as every request does.
-- **Commands.** Set `cli_help` and implement `cli(parser)` for `mfd linear ...`, returning
-  a handler `(req: InputRequest) -> int` that gets the parsed `req.args`.
+- **Commands.** Implement `cli(parser)` for `mfd linear ...`, returning a handler `(req:
+  InputRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
+  the command's help in `mfd --help`; core refuses a `cli` without one.
 
 A hook that raises takes down only what it was building: a failing `entities` leaves the
 plugin's entities out of the graph, a failing `panels` shows one "(failed)" panel in their

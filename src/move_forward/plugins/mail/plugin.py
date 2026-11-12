@@ -82,7 +82,6 @@ class MailPlugin(Plugin[MailConfig, MailSnapshot]):
     init = INIT
     config_model = MailConfig
     api_version = API_VERSION
-    snapshot_model = MailSnapshot
     locked_settings: ClassVar[frozenset[str]] = frozenset(
         {"host", "port", "message_url", "auth_servers"}
     )

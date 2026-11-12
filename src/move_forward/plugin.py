@@ -8,6 +8,7 @@ what it uses.
 """
 
 import argparse
+import inspect
 import logging
 import traceback
 from collections.abc import Callable, Mapping
@@ -367,13 +368,13 @@ class Snapshots[S: BaseModel](Protocol):
 
 
 class _NoSnapshots[S: BaseModel]:
-    """What a plugin without a snapshot model keeps: nothing."""
+    """What a plugin that doesn't collect keeps: nothing."""
 
     def __init__(self, plugin: str):
         self._plugin = plugin
 
     def save(self, snapshot: S) -> None:
-        raise NotImplementedError(f"{self._plugin} has a snapshot model but no snapshots")
+        raise NotImplementedError(f"{self._plugin} keeps no snapshot")
 
     def load(self) -> S | None:
         return None
@@ -411,9 +412,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     migrations: ClassVar[list[Migration]] = []
     """SQL scripts creating and changing the plugin's tables, applied in order. Append to it;
     never edit one that has shipped. Tables are prefixed with `name`."""
-    snapshot_model: ClassVar[type[BaseModel] | None] = None
-    """S, or None when the plugin fetches nothing and `collect` is never called (see
-    `collects`)."""
     api_version: ClassVar[int | None] = None
     """The `API_VERSION` the plugin was built against: one built against another is left
     out, with the reason in `mfd check` and the page's footer."""
@@ -438,8 +436,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]`: after
     each refresh of one of them, `mfd serve` asks `changed` at once, with the new graph,
     rather than waiting for `change_check_seconds`."""
-    cli_help: ClassVar[str | None] = None
-    """The help line of `mfd <name>`; None means the plugin has no command."""
     always_on: ClassVar[bool] = False
     """On without a section (notes), so `mfd init` doesn't offer it."""
     locked_settings: ClassVar[frozenset[str]] = frozenset()
@@ -453,9 +449,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     @property
     def collects(self) -> bool:
-        """Whether the plugin fetches anything: it has a `snapshot_model`, so a refresh
-        calls its `collect` and it has a schedule."""
-        return self.snapshot_model is not None
+        """Whether the plugin fetches anything: it overrides `collect` (and so `snapshots`, as
+        the registry checks), so a refresh calls its `collect` and it has a schedule."""
+        return overrides(self, "collect")
 
     def tokens(self, config: C) -> dict[str, TokenSettings]:
         """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
@@ -475,12 +471,12 @@ class Plugin[C: BaseModel, S: BaseModel]:
         (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
         failed and goes on, and leaves it out of refreshes until its collect returns (a thread
         can't be stopped)."""
-        raise NotImplementedError(f"{self.name} has a snapshot model but no collect")
+        raise NotImplementedError(f"{self.name} doesn't collect")
 
     def snapshots(self, req: ContextRequest[C]) -> "Snapshots[S]":
         """Where the plugin keeps what `collect` fetched, in its own tables: usually its
-        repository over them (see `Snapshots`). By default nothing is kept, for a plugin with
-        no snapshot model."""
+        repository over them (see `Snapshots`). A plugin overriding `collect` overrides this
+        too; by default nothing is kept, for a plugin that doesn't collect."""
         return _NoSnapshots[S](self.name)
 
     def events(self, req: Request[C, S]) -> list[Event]:
@@ -583,8 +579,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         """Add the arguments of `mfd <name>` to `parser` and return what runs it, given an
-        `InputRequest` with the parsed `args`. Only called when `cli_help` is set."""
-        raise NotImplementedError(f"{self.name} has cli_help but no cli")
+        `InputRequest` with the parsed `args`. A plugin has a command when it overrides this,
+        with a docstring whose first line is the command's help (`command_help`)."""
+        raise NotImplementedError(f"{self.name} has no command")
 
     # Upkeep
 
@@ -592,6 +589,23 @@ class Plugin[C: BaseModel, S: BaseModel]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns
         what was done, one line each."""
         return []
+
+
+def overrides(plugin: Plugin[Any, Any], hook: str) -> bool:
+    """Whether `plugin`'s class overrides `Plugin`'s method `hook`: what some hooks' being
+    there says (`collects`, `command_help`)."""
+    return getattr(type(plugin), hook) is not getattr(Plugin, hook)
+
+
+def command_help(plugin: Plugin[Any, Any]) -> str | None:
+    """The help line of `mfd <name>`: the first line of the docstring of the plugin's `cli`;
+    None for a plugin without a command (not overriding `cli`), or whose `cli` has no
+    docstring (which the registry refuses). Its own docstring, not one inherited from
+    `Plugin.cli`."""
+    if not overrides(plugin, "cli"):
+        return None
+    doc = type(plugin).cli.__doc__
+    return inspect.cleandoc(doc).splitlines()[0] if doc and doc.strip() else None
 
 
 def collect_into[T: BaseModel](

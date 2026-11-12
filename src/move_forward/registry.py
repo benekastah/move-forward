@@ -32,6 +32,8 @@ from .plugin import (
     Request,
     Snapshots,
     SourceError,
+    command_help,
+    overrides,
 )
 from .repositories import KvRepository
 
@@ -151,7 +153,9 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     name is its own and fit to be one: lower-case, not two plugins', none of core's
     (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`).
     A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
-    declares (`Plugin.families`), whose model they must extend."""
+    declares (`Plugin.families`), whose model they must extend. A plugin overriding `collect`
+    overrides `snapshots` too, and the reverse; one overriding `cli` gives it a docstring, its
+    command's help."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -168,6 +172,18 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(
                 f"{plugin.name} is built against API version {plugin.api_version}; this"
                 f" dashboard's is {API_VERSION}"
+            )
+        if overrides(plugin, "collect") != overrides(plugin, "snapshots"):
+            # One without the other would fetch what nothing keeps, or keep what nothing fetches.
+            has, lacks = ("collect", "snapshots") if plugin.collects else ("snapshots", "collect")
+            raise RuntimeError(
+                f"{plugin.name} overrides {has} but not {lacks}: a plugin that collects keeps"
+                " what it fetched with snapshots, and only one that collects keeps a snapshot"
+            )
+        if overrides(plugin, "cli") and command_help(plugin) is None:
+            raise RuntimeError(
+                f"{plugin.name}'s cli has no docstring: its first line is the help of"
+                f" `mfd {plugin.name}`"
             )
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():

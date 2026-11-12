@@ -148,7 +148,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     locked_settings: ClassVar[frozenset[str]] = frozenset({"workspace_url"})
     """The workspace its links go to."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
-    cli_help = "see and set where review pings go"
 
     def panels(self, req: Request[SlackConfig, BaseModel]) -> list[Panel]:
         ctx, graph = req.ctx, req.graph
@@ -209,6 +208,7 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
             ctx.log.info("found Slack ids for %s", ", ".join(found))
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        """see and set where review pings go"""
         return cli.add_commands(parser)
 
     def actions(self) -> dict[str, ActionHandler]:
