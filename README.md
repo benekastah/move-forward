@@ -87,7 +87,8 @@ about each other's data only through a shared graph of entities (PRs,
 tickets, branches, ...), listed in [docs/entities.md](docs/entities.md);
 [docs/graph.md](docs/graph.md) explains how the graph works, and
 [docs/plugins.md](docs/plugins.md) draws who publishes and reads what;
-[docs/writing-a-plugin.md](docs/writing-a-plugin.md) walks through making one. A
+[docs/writing-a-plugin.md](docs/writing-a-plugin.md) walks through making one, and
+[docs/plugin_contract.md](docs/plugin_contract.md) lists everything a plugin is to core. A
 plugin built on another's entities needs that plugin's section too; the config
 fails to load without it, saying which (e.g. "[git_stack] needs [git]").
 
