@@ -10,7 +10,6 @@ from ...api import (
     Action,
     ActionHandler,
     Address,
-    Asker,
     Badge,
     Band,
     Changed,
@@ -18,8 +17,6 @@ from ...api import (
     Entity,
     Event,
     Graph,
-    InitSection,
-    InitSetup,
     Item,
     KindSpec,
     Link,
@@ -45,7 +42,7 @@ from .config import JiraConfig
 from .kinds import JiraTicket
 from .models import JiraIssue, JiraSnapshot
 from .repository import MIGRATIONS, IssueRepository
-from .setup import EXAMPLE, questions
+from .setup import INIT
 
 
 def ticket_ref(issue: JiraIssue) -> Ref:
@@ -395,12 +392,8 @@ def key_pattern(projects: list[str]) -> str | None:
 
 class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     name = "jira"
-    token_help: ClassVar[str] = (
-        "create an API token at https://id.atlassian.com/manage-profile/security/api-tokens,"
-        " then store it with `mfd token set jira` (or export it as JIRA_API_TOKEN)"
-    )
     title = "Jira"
-    init_example = EXAMPLE
+    init = INIT
     config_model = JiraConfig
     api_version = API_VERSION
     snapshot_model = JiraSnapshot
@@ -413,9 +406,6 @@ class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
     change_check_seconds: ClassVar[int | None] = 60
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
-        return questions(ask, setup)
 
     def events(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Event]:
         """What changed on my tickets. `closeable` is the transitions panel's

@@ -5,6 +5,7 @@
 from ..act_now import due_pressure
 from ..asking import (
     Asker,
+    Init,
     InitSection,
     InitSetup,
     branch_prefix,
@@ -90,6 +91,7 @@ __all__ = [
     "Event",
     "Form",
     "Graph",
+    "Init",
     "InitSection",
     "InitSetup",
     "InputRequest",

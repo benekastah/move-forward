@@ -14,7 +14,7 @@ small shared entity graph.
 ## First: a further look at the plugin API
 
 The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done. Next, a further look
-at the hooks that are left (18), and the class variables (23).
+at the hooks that are left (17), and the class variables (18).
 
 ## Next, in this order
 

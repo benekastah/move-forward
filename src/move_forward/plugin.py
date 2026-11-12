@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from . import keychain, localtime, shell
 from .act_now import DUE_HORIZON
-from .asking import Asker, InitSection, InitSetup
+from .asking import Init
 from .db import Database, Migration
 from .graph import Entity, Graph, KindSpec, Ref
 from .keychain import TokenSettings
@@ -442,35 +442,14 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The help line of `mfd <name>`; None means the plugin has no command."""
     always_on: ClassVar[bool] = False
     """On without a section (notes), so `mfd init` doesn't offer it."""
-    init_tables: ClassVar[str] = ""
-    """Commented-out tables of the section's that its model can't show, as `mfd init` writes
-    them after its optional keys: a table keyed by name, with example entries (`[github.teams]`,
-    `[mail.<name>]`). A key written here as `[<section>.<key>]` isn't written as a key too.
-    `mfd init` writes each other optional key itself, from `config_model`: its default, and its
-    docstring's first sentence as its comment (a section's `shown` for one it shows
-    otherwise)."""
-    init_example: ClassVar[InitSection] = InitSection()
-    """The section with example values for its required settings (and its `shown`), which `mfd
-    init` writes commented out for a plugin that wasn't chosen. `mfd init --example` writes
-    them uncommented for a plugin `init_example_on`."""
-    init_suggested: ClassVar[bool] = False
-    """Whether `mfd init` offers to set the plugin up by default: not unless the plugin says
-    so, as most need something of mine (a site, a mailbox) to be of use."""
-    init_example_on: ClassVar[bool] = False
-    """`mfd init --example` writes the section on, with `init_example`'s values, rather than
-    commented out like a plugin `mfd init` wasn't asked for: for a tool most use. Off by
-    default, so a plugin whose `init_example` lacks a required key can't make the example
-    a config that won't load."""
-    init_finds_teams: ClassVar[bool] = False
-    """Its `init_questions` set `setup.teams` (github's), so core needn't ask for them."""
     locked_settings: ClassVar[frozenset[str]] = frozenset()
     """Its settings the settings page shows but won't change, as they say where a credential
     goes (a site, a host) or what runs where. Its token's `token_env` and `keychain_service`
     are locked without naming them; settings its `tokens` reads a token's place from under
     other names, or builds it from, it names here."""
-    token_help: ClassVar[str] = ""
-    """`mfd init`'s next step for its token(s), in place of the plain "`mfd token set <name>`
-    stores its token": where to get one, or another way in (signing in in the browser)."""
+    init: ClassVar[Init] = Init()
+    """How `mfd init` sets the section up: its questions, example and the like (`Init`). By
+    default nothing is asked and the plugin isn't suggested."""
 
     @property
     def collects(self) -> bool:
@@ -607,12 +586,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
         `InputRequest` with the parsed `args`. Only called when `cli_help` is set."""
         raise NotImplementedError(f"{self.name} has cli_help but no cli")
 
-    # Set-up and upkeep
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
-        """Ask for the `[name]` section's settings in `mfd init`; returns the section to write.
-        `setup` has what init knows so far; a plugin can add to its `teams`."""
-        return InitSection()
+    # Upkeep
 
     def prune(self, req: Request[C, S]) -> list[str]:
         """Daily: drop the plugin's data about work finished over `prune_days` ago. Returns

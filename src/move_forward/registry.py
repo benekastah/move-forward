@@ -151,8 +151,7 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     name is its own and fit to be one: lower-case, not two plugins', none of core's
     (`RESERVED_NAMES`), and no prefix of core's tables or indexes (`team` of `team_channels`).
     A plugin's kinds are named for it (`git.branch`), or for a family, core's or one it
-    declares (`Plugin.families`), whose model they must extend. A plugin setting the removed
-    `init_template` is refused, naming what replaced it."""
+    declares (`Plugin.families`), whose model they must extend."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -169,13 +168,6 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
             raise RuntimeError(
                 f"{plugin.name} is built against API version {plugin.api_version}; this"
                 f" dashboard's is {API_VERSION}"
-            )
-        if hasattr(plugin, "init_template"):
-            # No longer read: said, rather than its tables going missing from `mfd init`.
-            raise RuntimeError(
-                f"{plugin.name} sets init_template, which mfd init no longer reads: it writes"
-                " the optional keys from config_model's defaults and docstrings; put example"
-                " tables in init_tables, and example values in its sections' shown"
             )
     for plugin in plugins:
         for kind, spec in plugin.kinds.items():

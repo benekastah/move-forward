@@ -1,7 +1,7 @@
 """`mfd init`: ask for each setting on the command line and write the config file.
 
 Core asks who I am, then which plugins to set up, then each chosen plugin asks for its own
-section (`Plugin.init_questions`), then core asks the port. Every question has a default
+section (its `Init.questions`), then core asks the port. Every question has a default
 guessed from the machine (the current repo's GitHub remote, `gh`'s idea of my teams, git's
 user.email), so pressing Enter through the questions gives a working config on a typical
 setup. Plugins left out are written as commented-out sections, and every optional key not
@@ -134,19 +134,19 @@ def commented_defaults(
 
 def plugin_defaults(plugin: Plugin[Any, Any], section: InitSection) -> str:
     """What `mfd init` writes, commented out, under the plugin's `section`: its optional keys
-    but those in the section's values, as its `shown` shows them, then its `init_tables` after
+    but those in the section's values, as its `shown` shows them, then its `Init.tables` after
     a blank line, less the keys those write, and none when the values have one of those tables
     (uncommented, it would be written twice)."""
-    values = section.values
+    values, example_tables = section.values, plugin.init.tables
     tables = {
         key
         for key in plugin.config_model.model_fields
-        if f"[{plugin.name}.{key}]" in plugin.init_tables
+        if f"[{plugin.name}.{key}]" in example_tables
     }
     keys = commented_defaults(plugin.config_model, {*values, *tables}, section.shown)
-    if not plugin.init_tables or tables & values.keys():
+    if not example_tables or tables & values.keys():
         return keys
-    return f"{keys}\n{plugin.init_tables}"
+    return f"{keys}\n{example_tables}"
 
 
 def _core_table_names() -> list[str]:
@@ -272,7 +272,7 @@ def render_config(
             text += _table(plugin.name, section.values, plugin_defaults(plugin, section))
         else:
             text += f"\n# Uncomment to turn {plugin.title} on.\n# [{plugin.name}]\n"
-            example = plugin.init_example
+            example = plugin.init.example
             text += "".join(f"# {k} = {tomledit.value(v)}\n" for k, v in example.values.items())
             text += plugin_defaults(plugin, example)
     text += core_tables() + "\n"
@@ -287,9 +287,9 @@ EXAMPLE_ANSWERS: dict[str, object] = {"email": "me@example.com", "teams": ["my-t
 
 def example() -> str:
     """`mfd init --example`: the config `mfd init` would write for `EXAMPLE_ANSWERS`, with
-    the section of each offered plugin `init_example_on` on, set to its `init_example`'s
+    the section of each offered plugin `Init.example_on` on, set to its `Init.example`'s
     values, and the others commented out."""
-    sections = {plugin.name: plugin.init_example for plugin in offered() if plugin.init_example_on}
+    sections = {p.name: p.init.example for p in offered() if p.init.example_on}
     return render_config(EXAMPLE_ANSWERS, sections)
 
 
@@ -323,18 +323,18 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     setup = InitSetup(email=email, cwd=cwd)
     answer = ask(
         f"Plugins to set up, comma-separated ({', '.join(p.name for p in offered())})",
-        ", ".join(p.name for p in offered() if p.init_suggested),
+        ", ".join(p.name for p in offered() if p.init.suggested),
         _plugins,
         choices([p.name for p in offered()]),
     )
     chosen = [p for p in offered() if p.name in answer.split(", ")]
-    if not any(p.init_finds_teams for p in chosen):  # else that plugin asks for them
+    if not any(p.init.finds_teams for p in chosen):  # else that plugin asks for them
         setup.teams = ask.list(
             "Teams you're on or review for, by name, comma-separated (blank for none)",
             [],
             asking.word("team name"),
         )
-    sections = {plugin.name: plugin.init_questions(ask, setup) for plugin in chosen}
+    sections = {plugin.name: plugin.init.questions(ask, setup) for plugin in chosen}
     port = ask(
         "Port for the local server (e.g. 8765)", str(config_module.DEFAULT_PORT), asking.port
     )
@@ -369,8 +369,8 @@ def init(path: Path, prompt: Prompt = console_prompt, cwd: Path | None = None) -
             f"`mfd token set {name}` (or export {t.token_env})"
             for name, t in zip(names, tokens.values(), strict=True)
         )
-        if plugin.token_help:
-            next_steps += f"\n\nFor {plugin.title}: {plugin.token_help}"
+        if plugin.init.token_help:
+            next_steps += f"\n\nFor {plugin.title}: {plugin.init.token_help}"
         else:
             verb = "stores its token" if len(names) == 1 else "store its tokens"
             next_steps += f"\n\nFor {plugin.title}: {stores} {verb}"

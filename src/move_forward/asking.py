@@ -1,6 +1,6 @@
 """Asking `mfd init`'s questions: an `Asker` that asks again until an answer passes its
 check, the checks themselves, and the machine guesses' quiet commands. Core asks its own
-questions with these, and each plugin its section's in `Plugin.init_questions`."""
+questions with these, and each plugin its section's in its `Init.questions`."""
 
 import re
 from collections.abc import Callable
@@ -29,8 +29,8 @@ MAX_RETRIES = 5
 
 @dataclass(frozen=True)
 class InitSection:
-    """A plugin's `[name]` section as `mfd init` writes it: what `Plugin.init_questions`
-    returns, and `Plugin.init_example`."""
+    """A plugin's `[name]` section as `mfd init` writes it: what its `Init.questions`
+    returns, and its `Init.example`."""
 
     values: dict[str, object] = field(default_factory=dict[str, object])
     """Its settings (a table's as a dict, e.g. `{"teams": {...}}` for `[name.teams]`): written
@@ -96,6 +96,49 @@ class Asker:
 
         answer = self(question, ", ".join(default), check_all, complete)
         return [part.strip() for part in answer.split(",") if part.strip()]
+
+
+Questions = Callable[[Asker, InitSetup], InitSection]
+"""Asks for a plugin's `[name]` section's settings in `mfd init` and returns the section to
+write; `InitSetup` has what init knows so far, and a plugin can add to its `teams`."""
+
+
+def _no_questions(ask: Asker, setup: InitSetup) -> InitSection:
+    """`Init.questions` by default: nothing asked, an empty section written."""
+    return InitSection()
+
+
+@dataclass(frozen=True, kw_only=True)
+class Init:
+    """How `mfd init` sets a plugin's section up (`Plugin.init`), and what it writes for one it
+    doesn't. Only `mfd init` (and `mfd init --example`) reads it."""
+
+    questions: Questions = _no_questions
+    """Asks for the section's settings when the plugin is chosen."""
+    example: InitSection = InitSection()
+    """The section with example values for its required settings (and its `shown`), which `mfd
+    init` writes commented out for a plugin that wasn't chosen, and `mfd init --example`
+    uncommented for one `example_on`."""
+    tables: str = ""
+    """Commented-out tables of the section's that its model can't show, as `mfd init` writes
+    them after its optional keys: a table keyed by name, with example entries (`[github.teams]`,
+    `[mail.<name>]`). A key written here as `[<section>.<key>]` isn't written as a key too.
+    `mfd init` writes each other optional key itself, from `config_model`: its default, and its
+    docstring's first sentence as its comment (a section's `shown` for one it shows
+    otherwise)."""
+    suggested: bool = False
+    """Whether `mfd init` offers to set the plugin up by default: not unless the plugin says
+    so, as most need something of mine (a site, a mailbox) to be of use."""
+    example_on: bool = False
+    """`mfd init --example` writes the section on, with `example`'s values, rather than
+    commented out like a plugin `mfd init` wasn't asked for: for a tool most use. Off by
+    default, so a plugin whose `example` lacks a required key can't make the example a config
+    that won't load."""
+    finds_teams: bool = False
+    """Its `questions` set `setup.teams` (github's), so core needn't ask for them."""
+    token_help: str = ""
+    """`mfd init`'s next step for its token(s), in place of the plain "`mfd token set <name>`
+    stores its token": where to get one, or another way in (signing in in the browser)."""
 
 
 def quiet(args: list[str], cwd: Path | None = None) -> str:

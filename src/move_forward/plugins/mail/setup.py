@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[mail]`."""
 
-from ...api import Asker, InitSection, InitSetup
+from ...api import Asker, Init, InitSection, InitSetup
 from .config import GMAIL_MESSAGE_URL, KNOWN_AUTH_SERVERS
 
 TABLES = """\
@@ -57,3 +57,6 @@ def questions(ask: Asker, setup: InitSetup) -> InitSection:
     if host == "imap.gmail.com":
         found["message_url"] = GMAIL_MESSAGE_URL
     return InitSection(found, shown(host))
+
+
+INIT = Init(questions=questions, example=EXAMPLE, tables=TABLES)
