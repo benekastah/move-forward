@@ -338,6 +338,7 @@ def test_a_marker_given_as_a_default_is_refused() -> None:
 
 
 type _Host = Annotated[str, LOCKED]
+type _Locked[T] = Annotated[T, LOCKED]
 
 
 def test_a_marker_inside_a_fields_type_is_refused() -> None:
@@ -357,9 +358,40 @@ def test_a_marker_inside_a_fields_type_is_refused() -> None:
         class _InAlias(Strict):  # pyright: ignore[reportUnusedClass]
             host: _Host = "h"
 
+    with pytest.raises(TypeError, match="host has a marker inside its type"):
+
+        class _InGenericAlias(Strict):  # pyright: ignore[reportUnusedClass]
+            host: _Locked[str] = "h"
+
+    with pytest.raises(TypeError, match="hosts has a marker inside its type"):
+
+        class _InGenericAliasInList(Strict):  # pyright: ignore[reportUnusedClass]
+            hosts: list[_Locked[str]] | None = None
+
 
 def test_a_marker_on_an_optional_type_marks_the_field() -> None:
     class _Optional(Strict):
         host: Annotated[str | None, LOCKED] = None
 
     assert strict.marked(_Optional.model_fields["host"], LOCKED)
+
+
+class _LaterConfig(Strict):
+    """A field naming a type defined after the class: unresolved, so unchecked, as the class is
+    defined."""
+
+    host: "_Later | None" = None
+
+
+type _Later = Annotated[str, LOCKED]
+
+
+class _LaterPlugin(Plugin[_LaterConfig, BaseModel]):
+    name = "later"
+    config_model = _LaterConfig
+    api_version = API_VERSION
+
+
+def test_a_marker_buried_in_a_type_resolved_later_is_refused_at_registration() -> None:
+    with pytest.raises(TypeError, match="host has a marker inside its type"):
+        registry.check_plugins([_LaterPlugin()])

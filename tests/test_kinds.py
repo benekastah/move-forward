@@ -17,6 +17,7 @@ from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
 from move_forward.plugins.jira.plugin import JiraPlugin
 from move_forward.refresh import stored_graph
+from move_forward.strict import Strict
 
 
 class _OwnTicket(KindModel):
@@ -27,7 +28,11 @@ def _plugin(name: str, kinds: dict[str, KindSpec]) -> Plugin[Any, Any]:
     """A plugin publishing `kinds`, as `name`."""
     return cast(
         Plugin[Any, Any],
-        type("Publishing", (Plugin,), {"name": name, "kinds": kinds, "api_version": API_VERSION})(),
+        type(
+            "Publishing",
+            (Plugin,),
+            {"name": name, "kinds": kinds, "api_version": API_VERSION, "config_model": Strict},
+        )(),
     )
 
 
