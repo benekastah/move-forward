@@ -19,6 +19,7 @@ from move_forward.plugin import Previous, Request
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
+from move_forward.plugins.github import notifications as github_notifications
 from move_forward.plugins.github.models import (
     Check,
     DerivedSnapshot,
@@ -47,6 +48,7 @@ from move_forward.refresh import (
 )
 from move_forward.registry import BUILTINS, enabled, migrate
 from move_forward.repositories import SnapshotRepository
+from move_forward.shell import CommandError
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
 ME = "me"
@@ -99,6 +101,18 @@ def git_polls(monkeypatch: pytest.MonkeyPatch) -> None:
         if isinstance(plugin, GitPlugin):
             monkeypatch.setattr(plugin, "_watching", False)
             monkeypatch.setattr(plugin, "_watcher", None)
+
+
+@pytest.fixture(autouse=True)
+def github_not_notified(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GitHub answers every notifications poll "not modified", so no test reaches it: github
+    watches git, and is asked whether it changed in each refresh that collects git. Tests of
+    the poll stub its `run` themselves."""
+
+    def not_modified(args: list[str], **_: object) -> str:
+        raise CommandError("gh: HTTP 304")
+
+    monkeypatch.setattr(github_notifications, "run", not_modified)
 
 
 def pr(number: int = 1, **overrides: object) -> PullRequest:
