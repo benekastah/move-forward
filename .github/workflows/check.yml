@@ -80,7 +80,11 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.12"
+      # On Windows, the one test of the real Credential Manager runs too: the runner's store
+      # is thrown away after the job (see AGENTS.md).
       - run: python dev.py tests
+        env:
+          MFD_REAL_SECRET_STORE: ${{ matrix.os == 'windows-latest' && '1' || '' }}
 
   # The one check the ruleset on main requires, so changing the jobs doesn't change what's
   # required. It runs even if a check failed (a skipped required check would count as

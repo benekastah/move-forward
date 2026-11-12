@@ -30,6 +30,7 @@ from move_forward.plugin import (
     RefreshRequest,
     Request,
 )
+from move_forward.plugins.github import client as github_client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -227,6 +228,13 @@ class _Asked(JiraPlugin):
 def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
     plugins = [_Asked() if p.name == "jira" else p for p in registry.PLUGINS]
     monkeypatch.setattr(registry, "PLUGINS", plugins)
+    github_asked: list[str] = []
+
+    def pr_state(url: str) -> tuple[str, datetime | None]:
+        github_asked.append(url)
+        return "open", None
+
+    monkeypatch.setattr(github_client, "pr_state", pr_state)
     config, db = stored(github=snapshot(), jira_site="https://j")
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
     _Asked.asked.clear()
@@ -234,7 +242,7 @@ def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPa
         graph.url_for(kind, id)
         graph.handle(kind, id)
         graph.fetch(kind, [id])
-    assert _Asked.asked == []
+    assert _Asked.asked == [] and github_asked == ["https://github.com/o/r/pull/9"]
     graph.url_for("ticket", "APP-9")
     graph.handle("ticket", "https://j/browse/APP-9")
     graph.fetch("ticket", ["https://j/browse/APP-9"])
