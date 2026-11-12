@@ -1,7 +1,6 @@
 """dev.py: which Python it needs, and which pushes its pre-push hook checks."""
 
 import importlib.util
-import io
 import sys
 from pathlib import Path
 
@@ -41,28 +40,48 @@ def test_the_python_needed_is_read_from_requires_python() -> None:
     assert dev.required_python(pyproject) <= sys.version_info[:2]  # the tests' Python passes
 
 
-def _not_installed(_command: str) -> None:
-    return None
+def test_only_an_older_python_is_too_old() -> None:
+    assert dev.too_old((3, 13), (3, 14)) is not None
+    assert dev.too_old((3, 14), (3, 14)) is None
+    assert dev.too_old((3, 15), (3, 14)) is None
 
 
-def _nothing_staged(*_args: str, stdin: bytes | None = None) -> bytes:
-    return b""
+def _clone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, venv_made_with: str, uv: str | None
+) -> list[tuple[str, ...]]:
+    """A clone needing 3.14 whose .venv an older dev.py install made with `venv_made_with`,
+    with dev.py running under 3.12 and `uv` on PATH (or not): the commands dev.py runs."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nrequires-python = ">=3.14"\n', encoding="utf-8"
+    )
+    venv = tmp_path / ".venv"
+    monkeypatch.setattr(dev, "ROOT", tmp_path)
+    monkeypatch.setattr(dev, "VENV", venv)
+    monkeypatch.setattr(dev, "BIN", venv / "bin")
+    monkeypatch.setattr(dev, "STAMP", venv / "installed")
+    python = Path(dev.tool("python"))
+    python.parent.mkdir(parents=True)
+    python.touch()
+    (venv / "pyvenv.cfg").write_text(f"version = {venv_made_with}\n", encoding="utf-8")
+
+    def which(_command: str) -> str | None:
+        return uv
+
+    calls: list[tuple[str, ...]] = []
+
+    def run(*args: str) -> None:
+        calls.append(args)
+
+    monkeypatch.setattr(dev.shutil, "which", which)
+    monkeypatch.setattr(dev, "run", run)
+    monkeypatch.setattr(dev, "_running", lambda: (3, 12))
+    return calls
 
 
 def test_without_uv_an_older_python_is_told_which_to_make_venv_with(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nrequires-python = ">=3.14"\n', encoding="utf-8"
-    )
-    old = tmp_path / ".venv"
-    old.mkdir()
-    (old / "pyvenv.cfg").write_text("version = 3.12.3\n", encoding="utf-8")
-    monkeypatch.setattr(dev, "ROOT", tmp_path)
-    monkeypatch.setattr(dev, "VENV", old)
-    monkeypatch.setattr(dev, "STAMP", old / "installed")
-    monkeypatch.setattr(dev.shutil, "which", _not_installed)
-    monkeypatch.setattr(dev, "_running", lambda: (3, 12))
+    calls = _clone(tmp_path, monkeypatch, "3.12.3", uv=None)
 
     with pytest.raises(SystemExit) as stopped:
         dev.venv()
@@ -70,17 +89,29 @@ def test_without_uv_an_older_python_is_told_which_to_make_venv_with(
     assert "this is 3.12" in str(stopped.value.code)
     assert "python3.14" in str(stopped.value.code)
     assert "py -3.14" in str(stopped.value.code)
-    assert (old / "pyvenv.cfg").exists()  # not removed for a .venv it can't make
+    assert (tmp_path / ".venv" / "pyvenv.cfg").exists()  # not removed for one it can't make
+    assert calls == []
 
 
-def test_the_hooks_run_under_an_older_python(monkeypatch: pytest.MonkeyPatch) -> None:
-    """They run `python3`, whatever it is; with nothing to check, they pass."""
-    monkeypatch.setattr(dev, "_running", lambda: (3, 12))
-    monkeypatch.setattr(dev, "_git", _nothing_staged)
-    monkeypatch.setattr("sys.stdin", io.StringIO(""))  # nothing pushed to main
+def test_without_uv_an_older_python_installs_into_a_new_enough_venv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """As the hooks do, whatever `python3` is."""
+    calls = _clone(tmp_path, monkeypatch, "3.14.0", uv=None)
 
-    dev.main(["pre-commit"])
-    dev.main(["pre-push"])
+    dev.venv()
+
+    assert calls
+    assert all(call[0] == dev.tool("python") for call in calls)  # pip in .venv; no new venv
+
+
+def test_with_uv_any_python_installs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """uv picks (or downloads) a Python that's new enough itself."""
+    calls = _clone(tmp_path, monkeypatch, "3.12.3", uv="/usr/bin/uv")
+
+    dev.venv()
+
+    assert calls == [("uv", "sync", "--quiet")]
 
 
 @pytest.mark.parametrize(
