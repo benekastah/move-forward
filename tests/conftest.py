@@ -188,7 +188,10 @@ def _program(words: list[str], executable: object, shell: bool) -> str | None:
     return words[0]
 
 
-_GIT_OPTIONS_WITH_VALUES = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace"})
+_GIT_OPTIONS_WITH_VALUES = frozenset(
+    {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--attr-source"}
+)
+"""git's own options that may take their value as the next word (their `=` forms are one)."""
 
 
 def _git_command(words: list[str]) -> str | None:

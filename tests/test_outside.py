@@ -84,15 +84,18 @@ def test_git_runs_but_fetches_from_no_network(outside: Outside) -> None:
 
 def test_git_stack_is_refused_unless_allowed(outside: Outside, tmp_path: Path) -> None:
     """It's git, but can start `gh`, which git's environment doesn't stop."""
-    for stack in (["git", "stack", "info"], ["git", "-C", str(tmp_path), "-c", "a=b", "stack"]):
+    # In a directory that isn't there, so a guard that let one through would run nothing.
+    for options in ([], ["-c", "a=b"], ["--config-env", "core.x=HOME"]):
         with pytest.raises(OutsideRefused):
-            subprocess.run(stack, check=False)
+            subprocess.run(["git", "-C", NOWHERE, *options, "stack"], check=False)
     assert outside.take() == [
-        "the program `git stack info`",
-        f"the program `git -C {tmp_path} -c a=b stack`",
+        f"the program `git -C {NOWHERE} stack`",
+        f"the program `git -C {NOWHERE} -c a=b stack`",
+        f"the program `git -C {NOWHERE} --config-env core.x=HOME stack`",
     ]
-    # A repo named `stack` is no `git stack`.
-    subprocess.run(["git", "-C", "stack", "status"], cwd=tmp_path, capture_output=True, check=False)
+    # A repo or a tree-ish named `stack` is no `git stack`.
+    for not_stack in (["-C", "stack", "status"], ["-C", NOWHERE, "--attr-source", "stack", "log"]):
+        subprocess.run(["git", *not_stack], cwd=tmp_path, capture_output=True, check=False)
     assert outside.refused == [] and not outside.may_run(GIT_STACK)
     outside.allow(GIT_STACK)
     assert outside.may_run(GIT_STACK)
