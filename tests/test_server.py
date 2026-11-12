@@ -34,6 +34,7 @@ from move_forward.plugin import (
     Response,
 )
 from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.github import notifications as github_notifications
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.plugin import GitHubPlugin
 from move_forward.plugins.github.snapshots import PrRepository
@@ -736,6 +737,12 @@ def test_the_loop_refreshes_each_plugin_as_it_falls_due(
 ) -> None:
     clock = [1000.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+
+    def no_notifications(host: str, if_modified_since: str | None) -> None:
+        return None
+
+    # A refresh of git asks github, which watches it, whether it changed.
+    monkeypatch.setattr(github_notifications, "fetch", no_notifications)
     app.config = app.config.with_section("git", GitConfig(repos=[], refresh_seconds=60))
     migrate(app.config, app.db)  # git's tables, as `mfd serve` makes them
     assert app.intervals() == {"github": 300, "git": 60}

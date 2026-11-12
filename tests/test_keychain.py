@@ -1,10 +1,10 @@
 """Tokens in the system's own secret store, and `mfd token`."""
 
-import subprocess
+import ctypes
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 from conftest import NOW
@@ -70,33 +70,74 @@ def test_no_store_or_no_secret_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
     assert keychain.read("svc", "me@x") is None
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows' Credential Manager")
-def test_a_secret_stored_with_cmdkey_is_read_from_credential_manager() -> None:
-    target = "move-forward-test"
-    subprocess.run(
-        ["cmdkey", f"/generic:{target}", "/user:me@x", "/pass:s3cret-token"],
-        check=True,
-        capture_output=True,
-    )
-    try:
-        assert keychain.read(target, "me@x") == "s3cret-token"
-    finally:
-        subprocess.run(["cmdkey", f"/delete:{target}"], check=False, capture_output=True)
-    assert keychain.read(target, "me@x") is None
+class _CredentialManager:
+    """advapi32's Credential Manager functions over a dict of each target's secret, which,
+    as Windows does, ignores the target's case: what `keychain._advapi32` gives in its tests,
+    so they don't reach the real store."""
+
+    def __init__(self) -> None:
+        self.secrets: dict[str, bytes] = {}
+        self._handed: list[object] = []
+        """What `CredReadW` pointed the caller at, kept alive as Windows keeps its own."""
+
+    def CredWriteW(self, credential: Any, flags: int) -> int:
+        given = credential._obj  # the CREDENTIALW `byref` points at
+        self.secrets[given.TargetName.lower()] = bytes(
+            given.CredentialBlob[: given.CredentialBlobSize]
+        )
+        return 1
+
+    def CredReadW(self, target: str, type: int, flags: int, found: Any) -> int:
+        blob = self.secrets.get(target.lower())
+        if blob is None:
+            return 0
+        buffer = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
+        credential = getattr(keychain, "_Credential")(  # noqa: B009  # defined on Windows only
+            TargetName=target,
+            CredentialBlobSize=len(blob),
+            CredentialBlob=ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte)),
+        )
+        self._handed.append((buffer, credential))
+        found._obj.contents = credential  # the caller's pointer, which `byref` points at
+        return 1
+
+    def CredDeleteW(self, target: str, type: int, flags: int) -> int:
+        return int(self.secrets.pop(target.lower(), None) is not None)
+
+    def CredFree(self, credential: object) -> None:
+        pass
+
+
+@pytest.fixture
+def credential_manager(monkeypatch: pytest.MonkeyPatch) -> _CredentialManager:
+    fake = _CredentialManager()
+    monkeypatch.setattr(keychain, "_advapi32", lambda: fake)
+    return fake
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows' Credential Manager")
-def test_a_secret_written_to_credential_manager_reads_back_and_deletes() -> None:
+def test_a_secret_stored_as_cmdkey_does_is_read_from_credential_manager(
+    credential_manager: _CredentialManager,
+) -> None:
+    credential_manager.secrets["move-forward-test"] = "s3cret-token".encode("utf-16-le")
+    assert keychain.read("Move-Forward-Test", "me@x") == "s3cret-token"
+    credential_manager.secrets["move-forward-test"] = b"utf-8 token"  # another tool's
+    assert keychain.read("move-forward-test", "me@x") == "utf-8 token"
+    assert keychain.read("move-forward-other", "me@x") is None
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows' Credential Manager")
+def test_a_secret_written_to_credential_manager_reads_back_and_deletes(
+    credential_manager: _CredentialManager,
+) -> None:
     target = "move-forward-test-write"
-    try:
-        keychain.write(target, "me@x", "first")
-        keychain.write(target, "me@x", "s3cret-token")  # replaces
-        assert keychain.read(target, "me@x") == "s3cret-token"
-        keychain.delete(target, "me@x")
-        assert keychain.read(target, "me@x") is None
-        keychain.delete(target, "me@x")  # nothing there: fine
-    finally:
-        subprocess.run(["cmdkey", f"/delete:{target}"], check=False, capture_output=True)
+    keychain.write(target, "me@x", "first")
+    keychain.write(target, "me@x", "s3cret-token")  # replaces
+    assert credential_manager.secrets == {target: "s3cret-token".encode("utf-16-le")}
+    assert keychain.read(target, "me@x") == "s3cret-token"
+    keychain.delete(target, "me@x")
+    assert keychain.read(target, "me@x") is None
+    keychain.delete(target, "me@x")  # nothing there: fine
 
 
 def test_on_macos_and_linux_a_secret_is_deleted_through_the_stores_command(
@@ -214,10 +255,18 @@ def test_mfd_token_finds_a_plugins_token_where_it_says(
     swap = {"github": _GitHubWithAToken()}
     monkeypatch.setattr(registry, "PLUGINS", [swap.get(p.name, p) for p in registry.PLUGINS])
     monkeypatch.setenv("GITHUB_PAT", "x")
+    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+    looked_up: list[str] = []
+
+    def read(service: str, account: str) -> None:
+        looked_up.append(service)
+
+    monkeypatch.setattr(keychain, "read", read)
     config = _config(tmp_path)
     config.write_text(config.read_text() + '[github]\norg = "acme"\n')
     assert cli.main(["-c", str(config), "token", "check"]) == 0
     assert "github: from $GITHUB_PAT" in capsys.readouterr().out
+    assert looked_up == ["move-forward-jira"]  # github's was in its variable
 
 
 def test_a_config_keeping_two_tokens_in_one_place_is_refused(tmp_path: Path) -> None:

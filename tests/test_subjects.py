@@ -63,6 +63,9 @@ class _Jira(JiraPlugin):
         assert kept is not None
         return kept
 
+    def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
+        return Changed()  # nothing moved, and nothing asked of Jira
+
 
 @pytest.fixture(autouse=True)
 def recording(monkeypatch: pytest.MonkeyPatch) -> None:
