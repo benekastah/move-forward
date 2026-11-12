@@ -1,14 +1,21 @@
 """Shared factories: small, fully populated domain objects that tests tweak."""
 
-from collections.abc import Callable
+import inspect
+import ipaddress
+import os
+import shlex
+import socket
+import subprocess
+import sys
+from collections.abc import Callable, Iterator
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
-from typing import cast
+from pathlib import Path, PurePath
+from typing import Any, NoReturn, cast
 
 import pytest
 from pydantic import BaseModel
 
-from move_forward import auth, localtime
+from move_forward import auth, keychain, localtime
 from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
@@ -89,6 +96,165 @@ def no_real_database(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(Database, "__init__", _guarded(Database.__init__, 1))
     monkeypatch.setattr(auth, "load_or_create", _guarded(auth.load_or_create, 0))
     monkeypatch.setattr(auth, "rotate", _guarded(auth.rotate, 0))
+
+
+ALLOWED_PROGRAMS = frozenset(
+    {"git", "git-stack"} | ({"icacls"} if sys.platform == "win32" else set())
+)
+"""The programs a test may run, by name: git (`git stack` included) in the repos tests make in
+`tmp_path`, and on Windows icacls, which `private.py` keeps a test's files private with. The
+Python running the tests is allowed too, for tests that run `mfd`."""
+
+
+class OutsideRefused(PermissionError):
+    """What a refused subprocess, connection or secret-store read raises in a test."""
+
+
+class Outside:
+    """What a test may reach outside itself, and what it tried to that it mayn't, which the
+    `outside` fixture fails it for. A test that means to try (a test of the guard) takes what
+    was refused with `take`; one that needs a program, `allow`s it."""
+
+    def __init__(self) -> None:
+        self.refused: list[str] = []
+        """What the test tried and was refused, in order."""
+        self.programs: set[str] = set(ALLOWED_PROGRAMS)
+        """The programs it may run, by name, without `.exe`."""
+
+    def refuse(self, what: str) -> NoReturn:
+        """Note that the test tried `what`, and raise, though the code under test may catch it
+        (a failed change check, say): the note fails the test all the same."""
+        self.refused.append(what)
+        raise OutsideRefused(f"a test may not reach {what}")
+
+    def take(self) -> list[str]:
+        """What was refused so far, which no longer fails the test."""
+        taken, self.refused = self.refused, []
+        return taken
+
+    def allow(self, *programs: str) -> None:
+        """Let this test run `programs` (by name: `"gh"`), which it needs for real."""
+        self.programs.update(programs)
+
+    def may_run(self, program: str) -> bool:
+        """Whether the test may start `program`, a name or a path (`C:\\...\\git.exe`)."""
+        name = PurePath(program).name.lower().removesuffix(".exe")
+        return name in self.programs or Path(program).resolve() == Path(sys.executable).resolve()
+
+
+def _program(args: object, executable: object, shell: bool) -> str | None:
+    """The program `subprocess.Popen` was asked to start, or None for a shell command (which
+    could run anything). Its args may be a list, or a command line as one string."""
+    if shell:
+        return None
+    if executable is not None:
+        return os.fsdecode(cast(str | bytes, executable))
+    if isinstance(args, str | bytes | os.PathLike):
+        line = os.fsdecode(cast(str | bytes | os.PathLike[str], args))
+        words = shlex.split(line, posix=sys.platform != "win32")
+        return words[0].strip('"') if words else line
+    return os.fsdecode(cast(list[str | bytes], args)[0])
+
+
+def _shown(args: object) -> str:
+    if isinstance(args, str | bytes | os.PathLike):
+        return os.fsdecode(cast(str | bytes | os.PathLike[str], args))
+    return " ".join(os.fsdecode(a) for a in cast(list[str | bytes], args))
+
+
+def _loopback(host: object) -> bool:
+    """Whether a socket address's host is this machine, without looking a name up."""
+    if isinstance(host, bytes):
+        host = host.decode()
+    if not isinstance(host, str):
+        return False
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.partition("%")[0]).is_loopback
+    except ValueError:
+        return False
+
+
+def _literal(host: object) -> bool:
+    """Whether `host` needs no name lookup: none, `localhost`, or an address."""
+    if host is None or host in ("", b"", "localhost", b"localhost"):
+        return True
+    try:
+        ipaddress.ip_address(os.fsdecode(cast(str | bytes, host)).partition("%")[0])
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+@pytest.fixture(autouse=True)
+def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
+    """No test runs a program but git, git stack and Python, connects anywhere but this
+    machine, looks a name up, or reads the real secret store (the keychain's commands are
+    programs too; Windows' Credential Manager is `keychain._advapi32`). A refused call raises
+    `OutsideRefused`, but code under test often catches what it calls raising, so each is noted
+    too, and fails the test when it ends, naming what it tried. Stub it at the layer the test
+    isn't about (the plugin's client, `keychain.read`); a test that tries on purpose takes
+    what was refused (`outside.take()`), and one that needs a program `outside.allow`s it."""
+    outside = Outside()
+    spawn = subprocess.Popen._execute_child  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
+    spawning = inspect.signature(spawn)  # pyright: ignore[reportUnknownArgumentType]
+
+    def execute_child(self: subprocess.Popen[str], *args: object, **kwargs: object) -> object:
+        """`Popen`'s own start of a process, which `run`, `check_output`, `os.popen`,
+        `webbrowser` and a `Popen` bound before the test (a default argument) all go
+        through."""
+        called = spawning.bind(self, *args, **kwargs).arguments
+        program = _program(called["args"], called["executable"], bool(called["shell"]))
+        if program is None or not outside.may_run(program):
+            outside.refuse(f"the program `{_shown(called['args'])}`")
+        return spawn(self, *args, **kwargs)  # pyright: ignore[reportUnknownVariableType]
+
+    monkeypatch.setattr(subprocess.Popen, "_execute_child", execute_child)
+    if sys.platform == "win32":  # what `webbrowser` opens a page with there
+
+        def startfile(path: object, *args: object, **kwargs: object) -> None:
+            outside.refuse(f"os.startfile({path!r})")
+
+        monkeypatch.setattr(os, "startfile", startfile)
+
+    connect, connect_ex = socket.socket.connect, socket.socket.connect_ex
+
+    def checked(address: object) -> None:
+        if isinstance(address, tuple) and not _loopback(cast(tuple[object, ...], address)[0]):
+            outside.refuse(f"the network, at {address}")
+
+    def guarded_connect(self: socket.socket, address: Any) -> None:
+        checked(address)
+        connect(self, address)
+
+    def guarded_connect_ex(self: socket.socket, address: Any) -> int:
+        checked(address)
+        return connect_ex(self, address)
+
+    lookup = socket.getaddrinfo
+
+    def getaddrinfo(host: Any, *args: Any, **kwargs: Any) -> Any:
+        if not _literal(host):
+            outside.refuse(f"the network, looking up {host!r}")
+        return lookup(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", guarded_connect_ex)
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+
+    def advapi32() -> NoReturn:
+        outside.refuse("Windows' Credential Manager")
+
+    monkeypatch.setattr(keychain, "_advapi32", advapi32)
+    yield outside
+    if outside.refused:
+        pytest.fail(
+            "the test reached outside itself, which tests never do: "
+            + "; ".join(outside.refused)
+            + ". Stub it where the test isn't about it (see conftest's `outside`).",
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)

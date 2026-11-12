@@ -190,7 +190,13 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   assert on panel contents; plugin contract tests assert on the entities a
   plugin publishes. Tests touching git make real repos in `tmp_path`; tests
   never touch the network, nor the real database or its token
-  (`conftest` fails one that opens them: use `:memory:` or `tmp_path`).
+  (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor
+  the secret store, nor run a program but git (git stack included) and Python
+  (and icacls on Windows). `conftest`'s `outside` fixture fails a test that tries,
+  naming what it tried, even when the code under test catches the refusal: stub it
+  where the test isn't about it (the plugin's client, `keychain.read`), not by opting
+  out. A test that tries on purpose (a test of the guard) takes what was refused with
+  `outside.take()`; one that truly needs a program lets it run with `outside.allow("name")`.
 - **No new runtime dependencies.** pydantic and watchfiles (git watching its repos) are
   the only ones; tools are
   reached through their CLIs (`gh`, `git`) or the standard library.

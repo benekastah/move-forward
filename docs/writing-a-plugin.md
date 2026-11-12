@@ -553,8 +553,9 @@ as a refresh does, given what moved since the last collect that stored.
 
 - **Panel tests** build the page as core does and assert on panel contents.
 - **Contract tests** assert on the entities the plugin publishes.
-- Tests never touch the network: monkeypatch the client. Tests touching git make real
-  repos in `tmp_path`.
+- Tests never touch the network: monkeypatch the client (a built-in's tests fail if
+  they reach it, or run a program but git and Python: see `outside` in `tests/conftest.py`).
+  Tests touching git make real repos in `tmp_path`.
 - Make sure each test would fail without the change it covers.
 
 A built-in's tests go in `tests/plugins/`, named after it (`test_jira_*.py`); those of
