@@ -5,6 +5,12 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Untracked files in Local work
+
+Local work now labels the count as untracked files and counts files within untracked
+directories separately. After Git refreshes, the count may be higher than the former
+count of Git status entries; ignored files remain excluded.
+
 ### Branch cleanup leaves Act now
 
 Merged and gone local branches no longer appear in Act now. Find them in Git's Cleanup

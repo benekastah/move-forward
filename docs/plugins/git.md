@@ -12,6 +12,9 @@ new or deleted branch, rebase, push or fetch, a change to its config (an upstrea
 git stack tracking a branch), staging, or an edit that changes what `git status` counts,
 refreshes the repo it happened in, reading only that one.
 
+Local work counts untracked files individually, including files inside untracked
+directories, with `git status --untracked-files=all`. Git-ignored files are excluded.
+
 It watches each repo's git directory, and each worktree where git tracks files: on Linux
 each directory in the index, on its own, so ignored trees (`node_modules`, `build`,
 `.venv`, wherever they are) aren't watched; on macOS and Windows the worktree, as a tree.

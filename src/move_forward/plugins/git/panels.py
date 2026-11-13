@@ -132,7 +132,7 @@ class Builder:
                     items.append(
                         Item(
                             title=f"{wt.branch or 'detached HEAD'}: {wt.modified} modified,"
-                            f" {wt.untracked} untracked",
+                            f" {wt.untracked} untracked {'file' if wt.untracked == 1 else 'files'}",
                             url=pr.url if pr else None,
                             subtitle=wt.path,
                             badges=[Badge(text="uncommitted", tone="warn")],

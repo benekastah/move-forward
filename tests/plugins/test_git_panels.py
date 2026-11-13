@@ -73,7 +73,7 @@ def test_local_work_shows_dirty_worktrees_and_unpushed_branches() -> None:
         iced_stacks=[iced("me/iced", "/src/widgets")],
     )
     items = {i.title: i for i in panel(dashboard, "git.local_work").items}
-    both = "me/APP-1-branch: 2 modified, 1 untracked, 3 unpushed commits"
+    both = "me/APP-1-branch: 2 modified, 1 untracked file, 3 unpushed commits"
     assert set(items) == {both, "me/new: 2 commits, never pushed"}  # me/iced is on ice: hidden
     assert items[both].url == pr(1).url
     assert items[both].badges == [Badge(text="uncommitted", tone="warn"), "has PR"]
