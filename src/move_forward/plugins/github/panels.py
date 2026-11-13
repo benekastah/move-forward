@@ -258,7 +258,11 @@ class Builder:
         if self.gh:
             for pr in self.gh.direct_requests:
                 approved_by_me = approved_by(pr, self.me)
-                if pr.is_draft or (approved_by_me and pr.review_decision != "REVIEW_REQUIRED"):
+                assigned_to_me = self.me.casefold() in {login.casefold() for login in pr.assignees}
+                if pr.is_draft or (
+                    approved_by_me
+                    and (not assigned_to_me or pr.review_decision != "REVIEW_REQUIRED")
+                ):
                     continue
                 items.append(
                     pr_item(
@@ -280,6 +284,7 @@ class Builder:
                     pr.is_draft
                     or pr.url in seen
                     or not approved_by_me
+                    or self.me.casefold() not in {login.casefold() for login in pr.assignees}
                     or pr.review_decision != "REVIEW_REQUIRED"
                     or reason is None
                     or not reason.startswith("pushed")
@@ -308,7 +313,7 @@ class Builder:
             priority=Band.ASKED,
             act_now=True,
             title="Ready for me to review",
-            description="Direct requests and my approvals needing a fresh review.",
+            description="Direct requests and my assigned approvals needing a fresh review.",
             items=items,
             sort_by_importance=True,
         )
@@ -460,10 +465,14 @@ class Builder:
                 details.insert(0, "changes requested")
             details += unanswered_feedback(pr, self.me, self.config.ignored_reviewers)
             if details:
-                authors = list(
-                    dict.fromkeys(t.author for t in threads if t.author and not is_bot(t.author))
-                )
-                since = min((t.created_at for t in threads if t.created_at), default=None)
+                own_logins = {login.casefold() for login in (self.me, pr.author) if login}
+                reviewers = [
+                    t
+                    for t in threads
+                    if t.author and t.author.casefold() not in own_logins and not is_bot(t.author)
+                ]
+                authors = list(dict.fromkeys(t.author for t in reviewers if t.author))
+                since = min((t.created_at for t in reviewers if t.created_at), default=None)
                 waiting = Signals(
                     verb="Reply",
                     task="reply",
