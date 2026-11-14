@@ -730,6 +730,7 @@ def test_mfd_init_example_writes_a_config_with_the_plugins_their_examples_turn_o
     # jira and mail start commented out
     assert registry.enabled_names(loaded) == ["git", "git_stack", "github", "notes", "slack"]
     assert section(loaded, "github", GitHubConfig).org == "example-org"
+    assert section(loaded, "github", GitHubConfig).teams == ["my-team"]  # slack's to look for
 
 
 def _example_section(plugin: Plugin[Any, Any]) -> list[str] | None:
