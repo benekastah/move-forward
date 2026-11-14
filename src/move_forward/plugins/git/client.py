@@ -47,7 +47,7 @@ def parse_worktrees(porcelain: str) -> list[tuple[str, str | None]]:
 
 
 def parse_status(porcelain: str) -> tuple[int, int]:
-    """(modified, untracked) counts from `git status --porcelain`."""
+    """(modified, untracked) counts from `git status --porcelain --untracked-files=all`."""
     lines = [line for line in porcelain.splitlines() if line]
     untracked = sum(1 for line in lines if line.startswith("??"))
     return len(lines) - untracked, untracked
@@ -57,7 +57,9 @@ def worktree_status(worktree: Path) -> tuple[int, int]:
     """A worktree's (modified, untracked) counts. Without taking git's optional locks: a
     plain `git status` refreshes the index under `index.lock`, and a git command of mine
     run meanwhile would fail on it."""
-    return parse_status(git(worktree, "--no-optional-locks", "status", "--porcelain"))
+    return parse_status(
+        git(worktree, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all")
+    )
 
 
 def parse_branches(for_each_ref: str) -> list[Branch]:

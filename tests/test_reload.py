@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import Outside
 
 from move_forward import reload
 
@@ -125,7 +126,9 @@ def test_check_command_keeps_the_global_options() -> None:
     ]
 
 
-def test_passes_check_runs_mfd_check_in_a_fresh_process(tmp_path: Path) -> None:
+def test_passes_check_runs_mfd_check_in_a_fresh_process(tmp_path: Path, outside: Outside) -> None:
+    # The `mfd check` child isn't guarded: it only loads the config.
+    outside.allow(sys.executable)
     config = tmp_path / "config.toml"
     config.write_text('email = "me@x"\n')
     assert reload.passes_check(["mfd", "-c", str(config), "serve"])

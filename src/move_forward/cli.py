@@ -207,7 +207,7 @@ def _token(config: config_module.Config, config_path: Path, args: argparse.Names
         return 1
     try:
         secret = getpass.getpass(f"{args.plugin} API token: ").strip()
-    except (EOFError, KeyboardInterrupt):
+    except EOFError, KeyboardInterrupt:
         print("\nnothing stored", file=sys.stderr)
         return 1
     try:
@@ -279,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         try:
             print(init.init(config_path))
-        except (EOFError, KeyboardInterrupt):
+        except EOFError, KeyboardInterrupt:
             print("\ninit cancelled; nothing written", file=sys.stderr)
             return 1
         return 0

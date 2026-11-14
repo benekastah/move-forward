@@ -8,6 +8,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+from conftest import Outside
+
 from move_forward import config as config_module
 from move_forward import tomledit
 from move_forward.plugins.github import codeowners
@@ -46,7 +48,10 @@ def test_every_text_read_and_write_says_its_encoding() -> None:
     assert [line for source in SOURCES for line in _unencoded(source)] == []
 
 
-def test_a_commands_output_is_read_as_utf_8_and_a_stray_byte_spoils_only_itself() -> None:
+def test_a_commands_output_is_read_as_utf_8_and_a_stray_byte_spoils_only_itself(
+    outside: Outside,
+) -> None:
+    outside.allow(sys.executable)  # the child, a script of our own, isn't guarded
     script = "import sys; sys.stdout.buffer.write('PR 🚀 \\u00e9'.encode() + b' \\xff')"
     out = run([sys.executable, "-c", script])
     assert out == "PR 🚀 é �"
@@ -57,7 +62,9 @@ def test_text_with_an_emoji_is_written_as_toml_that_reads_back() -> None:
     assert tomllib.loads(text)["slack"]["ping_first"] == "Ready 🚀 for review?"
 
 
-def test_mfd_prints_utf_8_whatever_the_systems_encoding(tmp_path: Path) -> None:
+def test_mfd_prints_utf_8_whatever_the_systems_encoding(tmp_path: Path, outside: Outside) -> None:
+    # The mfd child isn't guarded: its config has only notes, which reach nothing.
+    outside.allow(sys.executable)
     config = tmp_path / "config.toml"
     config.write_text(
         f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n', encoding="utf-8"

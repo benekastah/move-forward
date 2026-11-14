@@ -100,8 +100,10 @@ on others (Ready for review, Held by merge conditions, In the merge queue), then
   queue; not while the work notes hold it. Once on, every item about it is badged "merges when
   ready" ("…, though held" as a warning, if the work notes hold it since), with Cancel
   auto-merge.
-- **Ready for me to review**: non-draft PRs requesting me as an individual, plus PRs
-  pushed after my approval when GitHub says `REVIEW_REQUIRED`. Team-only requests stay in
+- **Ready for me to review**: non-draft PRs requesting me as an individual. After I approve,
+  a PR appears here only if I'm a GitHub PR assignee and GitHub says `REVIEW_REQUIRED`,
+  whether it's requested from me again or pushed since my approval. An assignee is distinct
+  from a requested reviewer. Team-only requests stay in
   Requested from my teams; a new push alone does not bring an approved PR back. Like
   other entity items, each has the core
   importance choices. Assigned importance sorts before recent updates.
@@ -162,8 +164,8 @@ members as far as they're known, then recent committers; any login can be typed.
 
 github nominates direct reviews (sized by the `quick_review_max_*` and `hour_review_max_*`
 limits, with the author waiting since my review was last asked for), mentions to reply to
-(quick), feedback to reply to (quick, the thread authors waiting since the oldest unresolved
-thread), CI failures (about an hour), PR policy failures (quick), merge conflicts (about an
+(quick), feedback to reply to (quick, other human thread authors waiting since their oldest
+unresolved thread; my own comments and bots don't count as someone waiting), CI failures (about an hour), PR policy failures (quick), merge conflicts (about an
 hour, or quick when restacking fixes them), PRs needing a reviewer (quick, but below anything else to do on the PR, where Act now
 shows it as an "also" line on that item; not when already approved or all that's missing is a
 team's members being readable) and PRs ready to merge (quick, closing the PR). Fix before review, Ready for review, Held, the merge queue,
