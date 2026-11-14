@@ -1,10 +1,10 @@
 """`[github]`."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field
 
-from ...api import Strict
+from ...api import LOCKED, Strict
 
 DEFAULT_REFRESH_SECONDS = 300
 DEFAULT_HOST = "github.com"
@@ -38,7 +38,8 @@ class GitHubConfig(Strict):
     refresh_seconds: int = Field(default=DEFAULT_REFRESH_SECONDS, ge=10)
     """How often the dashboard refreshes this plugin's data in the background (GitHub's API is rate-limited)."""
 
-    host: str = DEFAULT_HOST
+    # Locked: its token, `gh`'s, goes to it.
+    host: Annotated[str, LOCKED] = DEFAULT_HOST
     """GitHub's host: github.com, or a GitHub Enterprise Server's (e.g. `github.acme.com`),
     which `gh` must be logged in to (`gh auth login --hostname <host>`)."""
     org: str

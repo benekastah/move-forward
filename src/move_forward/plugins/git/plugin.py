@@ -10,13 +10,10 @@ from pydantic import TypeAdapter
 from ...api import (
     API_VERSION,
     ActionHandler,
-    Asker,
     Changed,
     Context,
     ContextRequest,
     Entity,
-    InitSection,
-    InitSetup,
     ItemAdditions,
     ItemAdditionsFor,
     ItemRequest,
@@ -44,7 +41,7 @@ from .panels import (
     restore_iced_action,
 )
 from .repository import MIGRATIONS, LocalRepository
-from .setup import EXAMPLE, questions
+from .setup import INIT
 
 REPO = "git.repo"
 BRANCH = "git.branch"
@@ -74,15 +71,9 @@ def _repos_of(repos: list[Path], subjects: frozenset[str]) -> set[str] | None:
 class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
     name = "git"
     title = "Git"
-    init_example = EXAMPLE
-    init_example_on = True
-    init_suggested = True
-    """Always: init guesses its repo from the checkout it runs in."""
+    init = INIT
     config_model = GitConfig
     api_version = API_VERSION
-    snapshot_model = LocalSnapshot
-    locked_settings: ClassVar[frozenset[str]] = frozenset({"repos", "github_hosts"})
-    """Where it runs git, and which remotes it takes for GitHub's (whose PRs it links)."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {
         REPO: KindSpec(RepoAttrs),
@@ -102,9 +93,6 @@ class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
         self._statuses: dict[Path, tuple[int, int]] = {}
         """Each worktree's (modified, untracked) counts as `_edited` last saw them, by its
         resolved path."""
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
-        return questions(ask, setup)
 
     def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         """Every repo; or, when only some moved (`req.subjects`: the common git directories

@@ -54,7 +54,6 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         ICED: KindSpec(IcedAttrs, hides=True),
         TODO: KindSpec(TodoAttrs, gone_means_done=True),
     }
-    cli_help = "read and change the notes"
 
     def entities(self, req: Request[NotesConfig, BaseModel]) -> list[Entity]:
         ctx = req.ctx
@@ -102,6 +101,7 @@ class NotesPlugin(Plugin[NotesConfig, BaseModel]):
         return prune.prune(NotesRepository(ctx.db), graph, cutoff)
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        """read and change the notes"""
         return cli.add_commands(parser)
 
     def actions(self) -> dict[str, ActionHandler]:

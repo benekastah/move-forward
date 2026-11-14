@@ -30,6 +30,7 @@ from move_forward.plugin import (
     RefreshRequest,
     Request,
 )
+from move_forward.plugins.github import client as github_client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -130,9 +131,10 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
 class _Counted(JiraPlugin):
     """Jira, plus `mfd jira count`, which prints how many tickets the graph has."""
 
-    cli_help: ClassVar[str | None] = "count things"
-
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        """count things
+
+        The rest of the docstring isn't the help."""
         parser.add_argument("what")
 
         def run(req: InputRequest[JiraConfig]) -> int:
@@ -156,6 +158,20 @@ def test_a_plugin_adds_an_mfd_command(
     config.write_text(config.read_text() + '\n[jira]\nsite = "https://j"\n')
     assert cli.main(["-c", str(config), "jira", "tickets"]) == 3
     assert capsys.readouterr().out == "tickets: 0 for me@x\n"
+
+
+def test_a_plugins_command_help_is_its_cli_docstrings_first_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    plugins = [_Counted() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    _, commands = cli._parser()  # pyright: ignore[reportPrivateUsage]
+    assert set(commands) == {"jira", "notes", "slack"}  # those overriding `cli`, and no other
+    with pytest.raises(SystemExit):
+        cli.main(["--help"])
+    listed = " ".join(capsys.readouterr().out.split())
+    assert "jira count things" in listed and "The rest" not in listed
+    assert "notes read and change the notes" in listed
 
 
 class _Fetching(JiraPlugin):
@@ -212,6 +228,13 @@ class _Asked(JiraPlugin):
 def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
     plugins = [_Asked() if p.name == "jira" else p for p in registry.PLUGINS]
     monkeypatch.setattr(registry, "PLUGINS", plugins)
+    github_asked: list[str] = []
+
+    def pr_state(url: str) -> tuple[str, datetime | None]:
+        github_asked.append(url)
+        return "open", None
+
+    monkeypatch.setattr(github_client, "pr_state", pr_state)
     config, db = stored(github=snapshot(), jira_site="https://j")
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
     _Asked.asked.clear()
@@ -219,7 +242,7 @@ def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPa
         graph.url_for(kind, id)
         graph.handle(kind, id)
         graph.fetch(kind, [id])
-    assert _Asked.asked == []
+    assert _Asked.asked == [] and github_asked == ["https://github.com/o/r/pull/9"]
     graph.url_for("ticket", "APP-9")
     graph.handle("ticket", "https://j/browse/APP-9")
     graph.fetch("ticket", ["https://j/browse/APP-9"])

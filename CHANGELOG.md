@@ -19,6 +19,31 @@ can't read the new code, so the page would keep the old code. To move:
    says so under an older one, and makes `.venv` again when an older Python made it.
 4. Start `mfd serve` again.
 
+### Untracked files in Local work
+
+Local work now labels the count as untracked files and counts files within untracked
+directories separately. After Git refreshes, the count may be higher than the former
+count of Git status entries; ignored files remain excluded.
+
+### Your own review comments don't count as someone waiting
+
+Feedback on your PR remains visible, including your own unresolved threads. Act now's
+waiting person and time now count only other human thread authors. Refresh GitHub to
+update the item; no config change is needed.
+
+### Fresh reviews after approval require assignment
+
+A PR pushed after your approval appears in Ready for me to review and Act now only if
+you are a GitHub assignee and GitHub requires a fresh review, including when you're
+requested again. Direct requests before you approve still appear without an assignment.
+Refresh GitHub to update the lists.
+
+### Branch cleanup leaves Act now
+
+Merged and gone local branches no longer appear in Act now. Find them in Git's Cleanup
+panel, and merged git stack branches in Git Stack's Stacks panel, where their delete and
+clean buttons remain. Subscribed branch notifications are unchanged.
+
 ### A focus page's `kept` names the item it shows
 
 A focus page's address carries `kept`, naming the item it shows: its anchor (`item-…`, as on

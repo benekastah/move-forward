@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[slack]`."""
 
-from ...api import Asker, InitSection, InitSetup, channel, url
+from ...api import Asker, Init, InitSection, InitSetup, channel, url
 
 TABLES = """\
 # Where review pings to a team go, by its name in `teams`.
@@ -33,3 +33,6 @@ def questions(ask: Asker, setup: InitSetup) -> InitSection:
             **({"teams": channels} if channels else {}),
         }
     )
+
+
+INIT = Init(questions=questions, example=EXAMPLE, tables=TABLES, example_on=True)

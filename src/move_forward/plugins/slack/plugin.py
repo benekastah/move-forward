@@ -17,12 +17,9 @@ from ...api import (
     Action,
     ActionError,
     ActionHandler,
-    Asker,
     CliHandler,
     Context,
     Graph,
-    InitSection,
-    InitSetup,
     InputRequest,
     ItemAdditions,
     ItemAdditionsFor,
@@ -41,7 +38,7 @@ from .config import SlackConfig
 from .models import Ping, TeamChannel
 from .pings import Pinger, PingTarget, PrPing
 from .repository import MIGRATIONS, SlackRepository
-from .setup import EXAMPLE, TABLES, questions
+from .setup import INIT
 
 PING = "ping"
 """The ping page for one of my PRs, `/slack/ping?pr=<PR URL>`."""
@@ -144,19 +141,10 @@ def ping_page(ping: PrPing, now: datetime, notice: str = "") -> str:
 class SlackPlugin(Plugin[SlackConfig, BaseModel]):
     name = "slack"
     title = "Slack"
-    init_tables = TABLES
-    init_example = EXAMPLE
-    init_example_on = True
+    init = INIT
     config_model = SlackConfig
     api_version = API_VERSION
-    teams_field = "teams"
-    locked_settings: ClassVar[frozenset[str]] = frozenset({"workspace_url"})
-    """The workspace its links go to."""
     migrations: ClassVar[list[Migration]] = MIGRATIONS
-    cli_help = "see and set where review pings go"
-
-    def init_questions(self, ask: Asker, setup: InitSetup) -> InitSection:
-        return questions(ask, setup)
 
     def panels(self, req: Request[SlackConfig, BaseModel]) -> list[Panel]:
         ctx, graph = req.ctx, req.graph
@@ -216,7 +204,12 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel]):
         if found:
             ctx.log.info("found Slack ids for %s", ", ".join(found))
 
+    def teams(self, config: SlackConfig) -> set[str]:
+        """Those `[slack.teams]` gives its channel for."""
+        return set(config.teams)
+
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        """see and set where review pings go"""
         return cli.add_commands(parser)
 
     def actions(self) -> dict[str, ActionHandler]:

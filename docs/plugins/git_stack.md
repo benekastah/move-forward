@@ -35,8 +35,7 @@ A merged branch has a Clean button of its own too, the same as its repo's.
 
 ## Act now
 
-git_stack nominates the branches git stack sees merged, quick to clean up: one per repo, since
-its Clean cleans them all, saying how many more there are.
+git_stack does not nominate merged branches for Act now; find them and Clean in Stacks.
 
 ## Other plugins' items
 

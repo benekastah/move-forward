@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[git]`."""
 
-from ...api import Asker, InitSection, InitSetup, branch_prefix, checkout, directories, path
+from ...api import Asker, Init, InitSection, InitSetup, branch_prefix, checkout, directories, path
 
 EXAMPLE = InitSection({"repos": ["~/src/app", "~/src/infra"]})
 
@@ -22,3 +22,7 @@ def questions(ask: Asker, setup: InitSetup) -> InitSection:
         branch_prefix,
     )
     return InitSection({"repos": repos, **({"my_branch_prefixes": prefixes} if prefixes else {})})
+
+
+INIT = Init(questions=questions, example=EXAMPLE, suggested=True, example_on=True)
+"""Always suggested: init guesses its repo from the checkout it runs in."""

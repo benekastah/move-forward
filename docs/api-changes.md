@@ -14,6 +14,34 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **A `teams` hook**: `Plugin.teams_field` is gone. `teams(config)` returns the top-level
+  teams a plugin's section names, which the config checks the top level has; empty by
+  default. A plugin that set `teams_field = "teams"` returns `set(config.teams)`.
+- **Settings are marked in their types**: `Plugin.locked_settings` is gone. A config model
+  marks each setting the settings page shows but won't change with `api.LOCKED` in its type,
+  e.g. `site: Annotated[str, LOCKED]`; a section's `token_env` and `keychain_service` are
+  locked without marking, as before. A field whose entries are tables by name is marked
+  `api.TABLES` the same way, in place of `json_schema_extra={"tables": True}`, which core no
+  longer reads. A field can carry both, alongside a `Field(...)` default. `Strict` refuses a
+  marker that would mark nothing: one given as a default (`host: str = LOCKED`), or one
+  inside the field's type rather than on it (`Annotated[str, LOCKED] | None`,
+  `list[Annotated[str, LOCKED]]`, a `type` alias carrying it, generic or not), both as the
+  class is defined and, for a plugin's config model, again at registration; write
+  `Annotated[str | None, LOCKED]`.
+- **No `cli_help`**: a plugin has a command when it overrides `cli`, and the first line of
+  that override's docstring is its help; the registry refuses an override without one. Move
+  the help text into the docstring.
+- **No `snapshot_model`**: a plugin collects when it overrides `collect`, and the registry
+  refuses one that overrides `collect` without `snapshots`, or `snapshots` without `collect`.
+  Drop the class variable; the snapshot's model is the plugin's second type parameter, `S`.
+- **One `Init`**: what only `mfd init` reads is one class variable, `init`, an `api.Init`
+  (built in the plugin's `setup.py`), in place of the class variables `init_suggested`,
+  `init_example`, `init_example_on`, `init_tables`, `init_finds_teams` and `token_help`, and
+  the `init_questions(ask, setup)` hook. Its fields are `questions` (the function the hook
+  called, `(ask, setup) -> InitSection`; by default nothing is asked), `example`, `tables`,
+  `suggested`, `example_on`, `finds_teams` and `token_help`, each as the one it replaces.
+  `suggested` is False by default: `mfd init` suggests a plugin only when its `Init` says so
+  (git_stack's says whether git stack is installed).
 - **One `snapshots` hook for keeping the snapshot**: `store(req)` and `load(req)` are gone.
   `snapshots(req: ContextRequest)` gives a `Snapshots` (`save(snapshot)`, `load()`), most often
   the plugin's repository over its tables, which already had both; the built-ins' repositories'
@@ -149,30 +177,26 @@ for themselves (a token, a request, an example config) is core's.
   its section's `refresh_seconds`) and `token_settings(config)` (a plugin keeping its token's
   place under other names overrides `tokens(config)`, returning `{"": settings}`).
 - **`changed` returns a `Changed`**, never a bare bool (see "Core keeps what moved" above).
-- **`init_suggested` is a class variable**, False by default: `mfd init` suggests a plugin
-  only when it sets `init_suggested = True` (git_stack's says whether git stack is
-  installed).
-- **An `InitSection`**: `init_questions` returns `InitSection(values, shown)`, and
-  `init_example` is one too (no longer commented TOML text). `init_shown(section)` is gone: what
+- **An `InitSection`**: an `Init`'s `questions` return `InitSection(values, shown)`, and its
+  `example` is one too (no longer commented TOML text). `init_shown(section)` is gone: what
   it gave is the section's `shown`, the example values of optional keys, written commented
   out.
 - **`api.http` is `request` and `RequestError`**: `api.http.opener` and
   `api.http.require_https` have left `api`. Send a request with `api.http.request`, which
   checks for HTTPS and refuses redirects itself.
 - **The example config is the plugins'**: `mfd init --example` is built from each offered
-  plugin's section as `mfd init` writes it, installed plugins' too. A plugin setting
-  `init_example_on` has its section on there, with `init_example` uncommented; any other's
+  plugin's section as `mfd init` writes it, installed plugins' too. A plugin whose `Init`
+  says `example_on` has its section on there, with its `example` uncommented; any other's
   is commented out.
-- **Commented defaults come from the model**: `init_template` is gone, and a plugin still
-  setting it is refused (`mfd check` says why). `mfd init` writes
+- **Commented defaults come from the model**: `init_template` is gone. `mfd init` writes
   each optional key of `config_model` itself, commented out, with its default (a
   `TokenFields` section's `default_token_env` and `default_keychain_service` for an empty
   `token_env` and `keychain_service`) and its docstring's first sentence as its comment. A
-  plugin keeps what the model can't say: `init_tables`, commented tables of example entries
-  (`[github.teams]`), whose keys aren't written again (nor the tables, when the section's
-  answers have one), and a section's `shown` (see "An `InitSection`" above), an example value
+  plugin keeps what the model can't say: its `Init`'s `tables`, commented tables of example
+  entries (`[github.teams]`), whose keys aren't written again (nor the tables, when the
+  section's answers have one), and a section's `shown` (see "An `InitSection`" above), an example value
   for a key whose default is None or says less. A field marked
-  `json_schema_extra={"tables": True}` is left to `init_tables`.
+  `api.TABLES` (see "Settings are marked in their types") is left to those `tables`.
 - **Reading a token**: `ctx.token(account=None, *, secret="token")` is the plugin's token (or
   its account's, as `Plugin.tokens` names it), from its `token_env`, else the secret store;
   with neither, it raises `SourceError` with core's message ("no token: run `mfd token set

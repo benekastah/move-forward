@@ -166,6 +166,14 @@ if sys.platform == "win32":
         ]
 
 
+def _advapi32() -> Any:
+    """Windows' advapi32, which holds Credential Manager's functions: the store itself, which
+    tests replace."""
+    if sys.platform != "win32":
+        raise OSError("Credential Manager is Windows' own")
+    return ctypes.WinDLL("advapi32", use_last_error=True)
+
+
 _GENERIC = 1  # CRED_TYPE_GENERIC: what `cmdkey /generic` stores
 _PERSIST_LOCAL_MACHINE = 2  # kept across sign-ins, on this machine only
 
@@ -175,7 +183,7 @@ def _credential_manager(target: str) -> str | None:
     own CredReadW."""
     if sys.platform != "win32":
         return None
-    advapi32 = ctypes.WinDLL("advapi32")
+    advapi32 = _advapi32()
     found = ctypes.POINTER(_Credential)()
     if not advapi32.CredReadW(target, _GENERIC, 0, ctypes.byref(found)):
         return None
@@ -206,7 +214,7 @@ def _credential_manager_write(target: str, account: str, secret: str) -> None:
         CredentialBlob=ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte)),
         Persist=_PERSIST_LOCAL_MACHINE,
     )
-    if not ctypes.WinDLL("advapi32", use_last_error=True).CredWriteW(ctypes.byref(credential), 0):
+    if not _advapi32().CredWriteW(ctypes.byref(credential), 0):
         raise CommandError(f"CredWriteW: {ctypes.FormatError(ctypes.get_last_error())}")
 
 
@@ -215,4 +223,4 @@ def _credential_manager_delete(target: str) -> None:
     fine."""
     if sys.platform != "win32":
         return
-    ctypes.WinDLL("advapi32").CredDeleteW(target, _GENERIC, 0)
+    _advapi32().CredDeleteW(target, _GENERIC, 0)
