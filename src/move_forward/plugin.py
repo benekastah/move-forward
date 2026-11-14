@@ -393,7 +393,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
     title: ClassVar[str]
     """e.g. "GitHub": the heading of the plugin's group on the page."""
     config_model: ClassVar[type[BaseModel]]
-    """The model of the `[name]` section: C."""
+    """The model of the `[name]` section: C. It must reject unknown keys (a `Strict`)."""
     families: ClassVar[tuple[Family, ...]] = ()
     """Families of kinds the plugin declares (`kinds.Family`): what more than one tool may
     represent, like core's pull request, ticket and person, with the model its kinds extend and

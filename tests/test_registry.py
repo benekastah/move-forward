@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 
 import pytest
 from conftest import dashboard
+from pydantic import BaseModel
 
 from move_forward import cli, config, kinds, registry, render, server
 from move_forward.domain import KindModel
@@ -289,6 +290,20 @@ def test_what_a_built_in_imports_failing_is_said_as_it_is(
     finally:
         for name in ("fake_broken", "fake_broken.plugin"):
             sys.modules.pop(name, None)
+
+
+class _Lenient(BaseModel):
+    team: str = ""
+
+
+def test_a_config_model_that_ignores_unknown_keys_is_refused() -> None:
+    class Lax(Plugin[_Lenient, KindModel]):
+        name = "lax"
+        config_model = _Lenient
+        api_version = API_VERSION
+
+    with pytest.raises(RuntimeError, match="lax's config_model must reject unknown keys"):
+        registry.check_plugins([Lax()])
 
 
 def test_a_plugin_named_for_a_core_tables_prefix_is_refused() -> None:

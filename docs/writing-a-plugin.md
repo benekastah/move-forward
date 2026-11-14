@@ -88,7 +88,7 @@ class LinearConfig(TokenFields):
 ```
 
 - Config models subclass `Strict` (or `TokenFields`, which is one), which rejects unknown
-  keys: a typo is an error. A field
+  keys: a typo is an error. The registry refuses a config model that doesn't. A field
   whose entries are tables of their own, by name (mail's `[mail.<name>]` accounts), says so
   with `api.TABLES` in its type (`Annotated[dict[str, Account], TABLES]`), and its example is one
   such table.
