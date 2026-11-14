@@ -29,6 +29,7 @@ flowchart LR
     subgraph Graph["Entity graph"]
         pr[pull_request]
         person[person]
+        team[team]
         repo[git.repo]
         branch[git.branch]
         ticket[ticket]
@@ -39,6 +40,7 @@ flowchart LR
 
     github([github]) -- "publishes, its labels as tags" --> pr
     github -- "publishes (me, emails)" --> person
+    github -- "publishes (mine, requested)" --> team
     git([git]) -- publishes --> repo
     git -- "publishes (repo_dir, ahead, ...)" --> branch
     git_stack([git_stack]) -- "publishes, pointing at branch" --> stack_branch[git_stack.stack_branch]

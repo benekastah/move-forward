@@ -8,7 +8,7 @@ sees the file change and starts the server again with it (see `supervisor`).
 
 The settings shown are the top level's, `[act_now]`'s and each enabled plugin's, of the
 kinds a form can hold (numbers, true or false, text, lists); tables such as
-`[github.teams]` stay for editing by hand. `db_path` and `port` are shown but not changed
+`[slack.teams]` stay for editing by hand. `db_path` and `port` are shown but not changed
 here: changing them moves the server. Nor are the settings that choose where a
 credential is sent or which one is read, where items link, whom mail trusts, or what runs
 where (see `SECRET_LOCKED`, a plugin's fields marked `LOCKED`, and its token's `token_env`
@@ -355,7 +355,7 @@ def page(config: Config, notice: str = "") -> str:
         (f"<p class='notice'>{e(notice)}</p>" if notice else "")
         + "<article class='panel padded settings'>"
         "<p>Saving writes the config file, keeping its comments, and the dashboard restarts"
-        " with it. Tables like <code>[github.teams]</code> are edited in the file.</p>"
+        " with it. Tables like <code>[slack.teams]</code> are edited in the file.</p>"
         f"<form method='post' action='{PATH}'>{tables}{_notifications(config)}"
         f"<p><button type='submit'>Save</button></p></form>{ENABLE_SCRIPT}</article>"
     )

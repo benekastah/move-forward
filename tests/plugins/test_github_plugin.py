@@ -55,7 +55,7 @@ def _context(**config: object) -> Context[GitHubConfig]:
     db = Database(":memory:")
     db.migrate("github", MIGRATIONS)
     return Context(
-        config=GitHubConfig.model_validate({"org": "acme", **config}),
+        config=GitHubConfig.model_validate({"org": "acme", "teams": ["core", "web"], **config}),
         email="me@acme.com",
         teams=["core", "web"],
         prune_days=90,
@@ -65,7 +65,7 @@ def _context(**config: object) -> Context[GitHubConfig]:
     )
 
 
-def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
+def test_pr_entities_carry_state_ownership_mentions_and_team_slugs() -> None:
     mine = pr(1, requested_teams=["web-reviewers"])
     merged = pr(2, state="MERGED")
     closed = pr(3)  # the closed list, not the PR's own state, says it's closed
@@ -75,9 +75,7 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
     )
     entities = {
         e.ref.id: e
-        for e in GitHubPlugin().entities(
-            Request(_context(teams={"web": "web-reviewers"}), Graph(), gh)
-        )
+        for e in GitHubPlugin().entities(Request(_context(teams=["web-reviewers"]), Graph(), gh))
         if e.ref.kind == "pull_request"
     }
     assert [(e.state, e.attrs["mine"]) for e in entities.values()] == [
@@ -90,7 +88,7 @@ def test_pr_entities_carry_state_ownership_mentions_and_team_names() -> None:
     # What alice's PR names can't hide it from me: she wrote it.
     assert [e.mentions_hide for e in entities.values()] == [True, True, True, False]
     first = entities[mine.url]
-    assert first.attrs["requested_teams"] == ["web"]
+    assert first.attrs["requested_teams"] == ["web-reviewers"]
     assert first.attrs["head_oid"] == mine.head_oid  # for git, to see a checkout fall behind
     assert first.mentions == [mine.head, mine.title, mine.body]  # where ticket keys turn up
     assert first.attrs["review_blockers"] == []
@@ -111,6 +109,35 @@ def test_i_am_a_person_and_so_is_everyone_with_a_known_email() -> None:
     assert people == {
         f"github.com/{ME}": {"handle": ME, "me": True, "email": "me@x"},
         "github.com/alice": {"handle": "alice", "me": False, "email": "a@x"},
+    }
+
+
+def test_my_teams_and_those_prs_request_are_teams() -> None:
+    elsewhere = pr(2, author="alice", requested_teams=["web"])
+    elsewhere = elsewhere.model_copy(update={"repo": "other/widgets"})
+    gh = snapshot(mine=[pr(1, requested_teams=["web", "ops"])], direct_requests=[elsewhere])
+    teams = {
+        e.ref.id: (e.url, e.attrs)
+        for e in GitHubPlugin().entities(Request(_context(), Graph(), gh))
+        if e.ref.kind == "team"
+    }
+    assert teams == {
+        "github.com/acme/core": (
+            "https://github.com/orgs/acme/teams/core",
+            {"handle": "core", "mine": True},
+        ),
+        "github.com/acme/web": (
+            "https://github.com/orgs/acme/teams/web",
+            {"handle": "web", "mine": True},
+        ),
+        "github.com/acme/ops": (
+            "https://github.com/orgs/acme/teams/ops",
+            {"handle": "ops", "mine": False},
+        ),
+        "github.com/other/web": (  # another org's team of the same slug isn't mine
+            "https://github.com/orgs/other/teams/web",
+            {"handle": "web", "mine": False},
+        ),
     }
 
 
@@ -387,7 +414,7 @@ def test_partial_collect_fetches_membership_for_a_new_individual_policy_team(
 def test_a_partial_collect_keeps_my_teams_members_by_their_slugs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ctx = _context(teams={"core": "core-squad"})  # a team whose slug isn't its name
+    ctx = _context(teams=["core-squad"])
     PrRepository(ctx.db).save(
         snapshot(mine=[pr(1)], team_memberships={"acme/core-squad": ["ann"], "acme/x": ["zed"]})
     )
@@ -610,3 +637,17 @@ def test_merge_settings_are_kept_between_refreshes() -> None:
     PrRepository(db).save(snapshot(mine=[settings]))
     kept = PrRepository(db).load()
     assert kept is not None and kept.mine == [settings]
+
+
+def test_a_team_of_my_org_spelt_another_way_is_one_team_and_mine() -> None:
+    """GitHub ignores case in an org's name: `Acme/widgets` is `acme`'s."""
+    shouty = pr(2, author="alice", requested_teams=["web"])
+    shouty = shouty.model_copy(update={"repo": "Acme/widgets"})
+    gh = snapshot(direct_requests=[shouty])
+    teams = {
+        e.ref.id: e.attrs
+        for e in GitHubPlugin().entities(Request(_context(), Graph(), gh))
+        if e.ref.kind == "team"
+    }
+    assert teams["github.com/acme/web"] == {"handle": "web", "mine": True}
+    assert "github.com/Acme/web" not in teams

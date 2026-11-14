@@ -553,6 +553,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     if enable_jira:
         jira.setdefault("site", "https://jira")
     teams = o.pop("my_teams", ["core"])
+    github["teams"] = teams
     if o:
         raise TypeError(f"unknown overrides: {', '.join(o)}")
     config = Config.model_validate(

@@ -28,11 +28,11 @@ from ...api import (
     attrs,
     collect_into,
 )
-from ...api.kinds import PERSON
+from ...api.kinds import PERSON, TEAM
 from ...api.shell import CommandError
 from . import actions, changes, client, derive, notifications, placing, pushes, relations
 from .config import GitHubConfig
-from .kinds import GitHubPerson, GitHubPullRequest
+from .kinds import GitHubPerson, GitHubPullRequest, GitHubTeam
 from .models import GitHubSnapshot, PullRequest
 from .panels import PR, Builder
 from .people import PeopleRepository
@@ -86,8 +86,29 @@ def wants_reviewer(config: GitHubConfig, pr: PullRequest) -> bool:
     return not pr.in_merge_queue and (not pr.is_draft or config.has_primary_reviewer(pr.repo))
 
 
-def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
-    return [ctx.config.slug(team) for team in ctx.teams]
+def _teams(config: GitHubConfig, groups: list[tuple[list[PullRequest], str, bool]]) -> list[Entity]:
+    """A `team` for each of mine (in `org`) and each a PR in `groups` requests (in its repo's
+    owner)."""
+
+    def org(owner: str) -> str:
+        """`owner`, spelt as `org` is where it's the same org: GitHub ignores case in both."""
+        return config.org if owner.casefold() == config.org.casefold() else owner
+
+    owned = [(config.org, slug) for slug in config.teams] + [
+        (org(pr.repo.partition("/")[0]), slug)
+        for prs, _, _ in groups
+        for pr in prs
+        for slug in pr.requested_teams
+    ]
+    return [
+        Entity(
+            ref=Ref(kind=TEAM, id=f"{config.host}/{owner}/{slug}"),
+            title=f"{owner}/{slug}",
+            url=f"https://{config.host}/orgs/{owner}/teams/{slug}",
+            attrs=attrs(GitHubTeam(handle=slug, mine=owner == config.org and slug in config.teams)),
+        )
+        for owner, slug in dict.fromkeys(owned)
+    ]
 
 
 class GitHubPlugin(
@@ -105,6 +126,7 @@ class GitHubPlugin(
     kinds: ClassVar[dict[str, KindSpec]] = {
         PR: KindSpec(GitHubPullRequest, fetchable=True, resolvable=True),
         PERSON: KindSpec(GitHubPerson),
+        TEAM: KindSpec(GitHubTeam),
     }
     change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
     watches: ClassVar[list[str]] = ["git"]
@@ -113,10 +135,6 @@ class GitHubPlugin(
     def __init__(self) -> None:
         self._refusal_logged = False
         """Whether the token's refusal to read the notifications was logged this run."""
-
-    def teams(self, config: GitHubConfig) -> set[str]:
-        """Those `[github.teams]` gives its slug for."""
-        return set(config.teams)
 
     def collect(self, req: RefreshRequest[GitHubConfig]) -> GitHubSnapshot:
         """Every search; or, when only some PRs changed (`req.subjects`, by URL: those
@@ -138,7 +156,7 @@ class GitHubPlugin(
             except CommandError as e:
                 ctx.log.warning("fetching the PRs that changed failed, so fetching all: %s", e)
             else:
-                placed = placing.place(previous, fetched, _team_slugs(ctx))
+                placed = placing.place(previous, fetched, config.teams)
                 memberships = dict(placed.team_memberships)
                 for pr in placed.mine:
                     owner = pr.repo.partition("/")[0]
@@ -159,14 +177,14 @@ class GitHubPlugin(
                     update={
                         "team_memberships": memberships,
                         "team_members": client.my_team_members(
-                            memberships, config.org, _team_slugs(ctx)
+                            memberships, config.org, config.teams
                         ),
                     }
                 )
         return client.collect(
             config.host,
             config.org,
-            _team_slugs(ctx),
+            config.teams,
             config.history_days,
             ctx.now,
             config.search_scope,
@@ -319,7 +337,7 @@ class GitHubPlugin(
                 checkouts,
                 PeopleRepository(ctx.db).emails(),
                 ctx.config.org,
-                _team_slugs(ctx),
+                ctx.config.teams,
                 ctx.config.required_owner_marker,
                 wants_reviewer=lambda pr: wants_reviewer(ctx.config, pr),
             ),
@@ -333,7 +351,6 @@ class GitHubPlugin(
         me: str,
         state: str,
         mine: bool,
-        team_names: dict[str, str],
         memberships: dict[str, list[str]],
     ) -> Entity:
         fields: dict[str, object] = {
@@ -349,7 +366,7 @@ class GitHubPlugin(
             "created_at": pr.created_at.isoformat(),
             "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
             "requested_users": list(pr.requested_users),
-            "requested_teams": [team_names.get(slug, slug) for slug in pr.requested_teams],
+            "requested_teams": list(pr.requested_teams),
         }
         if mine and state == "open":
             ignored = ctx.config.ignored_reviewers
@@ -393,13 +410,13 @@ class GitHubPlugin(
         )
 
     def entities(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Entity]:
-        """A `pull_request` for every PR in the snapshot, and a `person` (`<host>/<login>`)
-        for me (`me`, by the login the last refresh found) and for everyone whose email github
-        knows."""
+        """A `pull_request` for every PR in the snapshot; a `person` (`<host>/<login>`) for me
+        (`me`, by the login the last refresh found) and for everyone whose email github knows;
+        and a `team` (`<host>/<owner>/<slug>`) for each of mine (`mine`) and each a PR
+        requests."""
         ctx, snapshot = req.ctx, req.snapshot
         if snapshot is None:
             return []
-        team_names = {ctx.config.slug(team): team for team in ctx.teams}
         groups = [
             (snapshot.mine, "open", True),
             (snapshot.merged_recent, "merged", True),
@@ -414,7 +431,7 @@ class GitHubPlugin(
             for pr in prs:
                 if pr.url not in entities:
                     entities[pr.url] = self._pr_entity(
-                        ctx, pr, snapshot.login, state, mine, team_names, snapshot.team_memberships
+                        ctx, pr, snapshot.login, state, mine, snapshot.team_memberships
                     )
         emails = PeopleRepository(ctx.db).emails()
         people = [
@@ -427,7 +444,7 @@ class GitHubPlugin(
             )
             for login in dict.fromkeys([snapshot.login, *emails])
         ]
-        return [*entities.values(), *people]
+        return [*entities.values(), *people, *_teams(ctx.config, groups)]
 
     def relate(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[tuple[Ref, Ref]]:
         """Each of its PRs to the local branch it comes from (see `relations`)."""
@@ -468,4 +485,4 @@ class GitHubPlugin(
     def panels(self, req: Request[GitHubConfig, GitHubSnapshot]) -> list[Panel]:
         ctx, snapshot, graph = req.ctx, req.snapshot, req.graph
         derived = DerivedRepository(ctx.db).load()
-        return Builder(ctx.config, ctx.teams, ctx.now, snapshot, derived, graph).panels()
+        return Builder(ctx.config, ctx.now, snapshot, derived, graph).panels()

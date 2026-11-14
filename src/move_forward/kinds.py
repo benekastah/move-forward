@@ -59,7 +59,7 @@ class PullRequest(KindModel):
     merged_at: str | None
     requested_users: list[str] = Field(default_factory=list[str])
     requested_teams: list[str] = Field(default_factory=list[str])
-    """A team's top-level name where the plugin maps it, else the tool's own name for it."""
+    """The `handle`s of the teams it requests (`team`s)."""
     review_blockers: list[str] | None = None
     """On my open PRs only: why reviewers shouldn't be nudged yet; empty when it's in order.
     `already approved` says it has the approval it needs, so there's nobody to chase."""

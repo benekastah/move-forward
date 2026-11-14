@@ -191,14 +191,12 @@ class Builder:
     def __init__(
         self,
         config: GitHubConfig,
-        teams: list[str],
         now: datetime,
         snapshot: GitHubSnapshot | None,
         derived: DerivedSnapshot | None,
         graph: Graph,
     ):
         self.config = config
-        self.teams = teams
         self.now = now
         self.gh = snapshot
         self.derived = derived
@@ -232,10 +230,6 @@ class Builder:
         if score.my_files or not score.part_files:
             line += f", {score.my_files} in dirs I work in"
         return line
-
-    def _slugs(self) -> list[str]:
-        """My teams' GitHub slugs."""
-        return [self.config.slug(t) for t in self.teams]
 
     def _part(self, pr: PullRequest) -> TeamPrScore | None:
         """The part of a PR I or my teams own in CODEOWNERS; None when there is none."""
@@ -271,7 +265,7 @@ class Builder:
                         details=["review requested", *self._my_part(pr)],
                         rank=pr.updated_at.timestamp(),
                         signals=_review(
-                            pr, self.me, self.config, self._part(pr), team_slugs=self._slugs()
+                            pr, self.me, self.config, self._part(pr), team_slugs=self.config.teams
                         ),
                         fingerprint=pr.head_oid,
                     )
@@ -302,7 +296,7 @@ class Builder:
                             self.config,
                             self._part(pr),
                             waiting_since=last_push_at(pr),
-                            team_slugs=self._slugs(),
+                            team_slugs=self.config.teams,
                         ),
                         fingerprint=pr.head_oid,
                     )
@@ -753,7 +747,7 @@ class Builder:
             key="team_prs",
             priority=Band.ASKED,
             title="Requested from my teams",
-            description=f"PRs waiting on {', '.join(self.teams) or 'my teams'}, ranked by"
+            description=f"PRs waiting on {', '.join(self.config.teams) or 'my teams'}, ranked by"
             " CODEOWNERS and the paths I work in.",
             items=items,
         )

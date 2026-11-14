@@ -1,6 +1,6 @@
 """The entity kinds github publishes, with their attributes; see `docs/entities.md`."""
 
-from ...api.kinds import Person, PullRequest
+from ...api.kinds import Person, PullRequest, Team
 
 
 class GitHubPullRequest(PullRequest):
@@ -14,3 +14,7 @@ class GitHubPullRequest(PullRequest):
 
 class GitHubPerson(Person):
     """A `person`: me, or anyone github knows an email for; `handle` is their login."""
+
+
+class GitHubTeam(Team):
+    """A `team`: one of mine (`[github] teams`), or one a PR requests; `handle` is its slug."""

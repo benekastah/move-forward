@@ -114,7 +114,7 @@ class LinearConfig(TokenFields):
   `asking.choices(...)` (a list, or a function fetching it on the first tab) or
   `asking.directories`. Its `example` is an `InitSection` of the required keys with example
   values, written commented out when the plugin isn't chosen; and it says what the model
-  can't: in `tables`, commented tables of example entries (`[github.teams]`), and in a
+  can't: in `tables`, commented tables of example entries (`[slack.teams]`), and in a
   section's `shown`, an example value for a key whose default is None or says less than an
   example, where uncommenting it is right for that section (mail's `auth_servers`: Gmail's
   servers for a Gmail host, `[]` for another, the same as unset there). Each comment goes
@@ -140,8 +140,8 @@ class LinearConfig(TokenFields):
   with `ctx.token(account)`, and `mfd token set <plugin>.<account>` stores one. Anything sent with a
   token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
   the body, never the URL (its errors name the URL, without its query).
-- A section naming top-level teams (github's `[github.teams]`, mapping each to the tool's name
-  for it) says which in `teams(config)`, returning their names, so the config refuses a team the
+- A section naming top-level teams (slack's `[slack.teams]`, mapping each to its channel) says
+  which in `teams(config)`, returning their names, so the config refuses a team the
   top level doesn't have. Core reads nothing else about how a section keeps them.
 
 ## Collecting and storing
