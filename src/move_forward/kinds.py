@@ -102,8 +102,8 @@ class Team(KindModel):
 
     handle: str
     """Its name in the tool, e.g. a GitHub team's slug. Unlike its id, it's unique only within
-    its publisher (two orgs may each have a `web`), so a consumer matching teams by handle
-    reads one publisher's."""
+    its publisher (two orgs may each have a `web`): a consumer keying by handle takes two teams
+    of one handle for one."""
     mine: bool = False
     """I'm on it or review for it, as its plugin's section says."""
 

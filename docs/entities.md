@@ -154,7 +154,7 @@ The team family, modeled in core (`api.kinds.Team`). No built-in plugin publishe
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `handle` | string | its name in the tool, a slug; unique only within its publisher, unlike its id |
+| `handle` | string | its name in the tool, a slug; unique only within its publisher, unlike its id, so keying by it takes two teams of one handle for one |
 | `mine` | bool | I'm on it or review for it, as its plugin's section says |
 
 ### `mail.thread`
