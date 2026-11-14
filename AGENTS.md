@@ -71,8 +71,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`).
   `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the
   fingerprint, the snapshot and the graph then). Those called before there's a context take what
-  they need: `tokens(config)` (`mfd token`, and loading the config), `teams(config)` (the top-level
-  teams a section names, which loading the config checks), `cli(parser)` (its docstring's first
+  they need: `tokens(config)` (`mfd token`, and loading the config), `cli(parser)` (its docstring's first
   line is the command's help), `pages()` and `actions()`. Who I am in a tool is a `person` it
   publishes with `me`; what focus mode keeps on the page after a button is core's.
 - Times are kept in UTC and shown in local time, through `localtime`; a day

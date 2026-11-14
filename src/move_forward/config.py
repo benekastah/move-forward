@@ -1,6 +1,6 @@
 """Dashboard configuration, read from a TOML file.
 
-Top level: who I am, the teams I'm on, and the dashboard's own settings. Each plugin has a
+Top level: who I am, and the dashboard's own settings. Each plugin has a
 section, e.g. `[github]`; a plugin is enabled when its section is there.
 """
 
@@ -76,9 +76,6 @@ class Config(Strict):
     email: str
     """My work email: Jira logs in with it, and its domain picks reviewers' emails from
     their commits."""
-    teams: list[str] = Field(default_factory=list)
-    """The teams I'm on or review for, by name, for `mfd init` and a plugin whose section names
-    them (`Plugin.teams`); github and slack name teams by slug, in their own sections."""
     db_path: Path = DEFAULT_DB_PATH
     """The SQLite database holding the plugins' tables (what they fetched, and the notes), and
     core's: when each plugin last fetched, priorities, tags, sessions and the like."""
@@ -170,6 +167,12 @@ class Config(Strict):
                 "`https` is gone; the dashboard serves plain HTTP on localhost only: delete the"
                 " line"
             )
+        if "teams" in settings:
+            # Not `MOVED_SETTINGS`: they were names, and [github] takes slugs.
+            moved.append(
+                "the top-level `teams` are gone: list the slugs of the teams you're on or review"
+                " for in [github] `teams` (it may have them already), and delete the line"
+            )
         if "refresh_on_load_seconds" in settings:
             moved.append(
                 "`refresh_on_load_seconds` is gone; a page load no longer refreshes: each plugin"
@@ -190,20 +193,6 @@ class Config(Strict):
         if moved:
             raise ValueError("; ".join(moved))
         return settings
-
-    @model_validator(mode="after")
-    def _known_teams(self) -> Config:
-        """Every plugin section names only top-level teams (`Plugin.teams`)."""
-        for plugin in registry.PLUGINS:
-            section = self.section(plugin.name)
-            if section is None:
-                continue
-            if unknown := sorted(plugin.teams(section) - set(self.teams)):
-                raise ValueError(
-                    f"[{plugin.name}] names teams the top-level teams don't have:"
-                    f" {', '.join(unknown)}"
-                )
-        return self
 
     @model_validator(mode="after")
     def _known_notifications(self) -> Config:

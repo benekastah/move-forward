@@ -58,7 +58,6 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
         {
             "email": "me@acme.com",
             "github": GitHubConfig(org="acme"),
-            "teams": ["core"],
             "slack": SlackConfig(),
             "notes": {},
             "db_path": tmp_path / "x.db",
@@ -947,7 +946,7 @@ def test_the_settings_page_shows_and_saves_the_config(
     client: HTTPConnection, app: server.App, tmp_path: Path
 ) -> None:
     path = tmp_path / "config.toml"
-    path.write_text('email = "me@acme.com"\nteams = ["core"]\n\n[github]\norg = "acme"\n')
+    path.write_text('email = "me@acme.com"\n\n[github]\norg = "acme"\n')
     app.config_path = path
     body = get(client, "/settings").read().decode()
     assert "[github]" in body and "name='github:refresh_seconds'" in body

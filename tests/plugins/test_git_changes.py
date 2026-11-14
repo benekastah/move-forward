@@ -104,7 +104,6 @@ def test_the_plugin_says_changed_after_a_move_and_keeps_it_until_a_refresh_reads
     ctx = Context(
         config=GitConfig(repos=[repo]),
         email="me@example.com",
-        teams=[],
         prune_days=90,
         now=NOW,
         db=db,
@@ -134,7 +133,6 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
         return Context(
             config=GitConfig(repos=[a, b], refresh_seconds=600),
             email="me@example.com",
-            teams=[],
             prune_days=90,
             now=NOW + timedelta(minutes=minutes),
             db=db,
@@ -181,7 +179,6 @@ def test_uncommitted_edits_are_seen_every_status_seconds(tmp_path: Path) -> None
         return Context(
             config=GitConfig(repos=[repo], status_seconds=status_seconds),
             email="me@example.com",
-            teams=[],
             prune_days=90,
             now=NOW + timedelta(seconds=seconds),
             db=db,
@@ -212,7 +209,6 @@ def test_edits_after_a_collect_that_failed_ask_again_only_when_they_move_again(
         return Context(
             config=GitConfig(repos=[repo], status_seconds=30),
             email="me@example.com",
-            teams=[],
             prune_days=90,
             now=NOW + timedelta(seconds=seconds),
             db=db,
@@ -253,7 +249,6 @@ def test_edits_back_as_the_last_look_saw_them_after_a_newer_store_are_still_seen
         return Context(
             config=GitConfig(repos=[repo], status_seconds=30),
             email="me@example.com",
-            teams=[],
             prune_days=90,
             now=NOW + timedelta(seconds=seconds),
             db=db,
@@ -280,7 +275,6 @@ def test_a_collect_that_fails_isnt_counted_as_full_and_doesnt_ask_again_at_once(
     ctx = Context(
         config=GitConfig(repos=[repo]),
         email="me@example.com",
-        teams=[],
         prune_days=90,
         now=NOW,
         db=db,
@@ -316,7 +310,6 @@ def test_two_clones_of_one_github_repo_are_a_problem(
     ctx = Context(
         config=GitConfig(repos=clones),
         email="me@example.com",
-        teams=[],
         prune_days=90,
         now=NOW,
         db=db,
@@ -350,7 +343,6 @@ def test_a_collect_of_a_branch_reads_its_repo_alone_and_of_anything_else_every_r
     ctx = Context(
         config=GitConfig(repos=[a, b]),
         email="me@example.com",
-        teams=[],
         prune_days=90,
         now=NOW,
         db=db,

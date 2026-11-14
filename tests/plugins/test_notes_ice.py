@@ -112,7 +112,6 @@ def test_after_a_refresh_notes_finds_its_covers_again() -> None:
     ctx = Context(
         config=NotesConfig(),
         email="me@acme.com",
-        teams=[],
         prune_days=90,
         now=NOW,
         db=db,

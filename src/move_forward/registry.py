@@ -110,7 +110,7 @@ RESERVED_NAMES = frozenset(
         "prune_days",
         "refresh_on_load_seconds",  # gone, as `https`
         "sections",
-        "teams",
+        "teams",  # gone, as `https`
         # Core's commands, `mfd <command>`.
         "check",
         "contact",
@@ -445,7 +445,6 @@ def enabled(config: Config, db: Database, now: datetime) -> list[Enabled]:
         ctx = Context(
             config=section,
             email=config.email,
-            teams=list(config.teams),
             prune_days=config.prune_days,
             now=now,
             due_horizon=timedelta(days=config.act_now.due_warning_days),

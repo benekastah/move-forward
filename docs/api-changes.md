@@ -43,9 +43,11 @@ for themselves (a token, a request, an example config) is core's.
   doesn't (pydantic's `BaseModel` ignores them), or holds a model in a field that doesn't (a
   `RootModel` aside), so a typo in its section is an error rather than dropped. Subclass
   `api.Strict`, for those models too.
-- **A `teams` hook**: `Plugin.teams_field` is gone. `teams(config)` returns the top-level
-  teams a plugin's section names, which the config checks the top level has; empty by
-  default. A plugin that set `teams_field = "teams"` returns `set(config.teams)`.
+- **No teams in core**: `Plugin.teams_field` is gone, and so are the config's top-level
+  `teams`, `Context.teams`, `InitSetup.teams`, `Init.finds_teams` and `api.channel` (an init
+  check only slack's team questions used). A plugin keeps the teams it needs in its own section,
+  and one whose tool has teams publishes them as `team`s (`api.kinds.TEAM`) for others to read
+  from the graph.
 - **Settings are marked in their types**: `Plugin.locked_settings` is gone. A config model
   marks each setting the settings page shows but won't change with `api.LOCKED` in its type,
   e.g. `site: Annotated[str, LOCKED]`; a section's `token_env` and `keychain_service` are

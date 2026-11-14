@@ -106,10 +106,8 @@ class LinearConfig(TokenFields):
   github's: `INIT = Init(questions=questions, example=EXAMPLE, ...)`), and read by nothing
   else. `mfd init` asks which plugins to set up (offering by default those whose `Init` says
   `suggested=True`), then each chosen one's `questions(ask, setup)`, which returns its section
-  as an `InitSection`: its `values`, and its `shown` (below). `setup` has my email, where init
-  runs and the teams found so far; a plugin whose questions set the teams (github's) says so
-  with `finds_teams=True`, and otherwise core asks for them by name before any plugin's
-  questions. Init refuses a plugin chosen without the plugins it `requires`. `ask(question,
+  as an `InitSection`: its `values`, and its `shown` (below). `setup` has my email and where init
+  runs. Init refuses a plugin chosen without the plugins it `requires`. `ask(question,
   default, check, complete)` and `ask.list` tab-complete with `complete`:
   `asking.choices(...)` (a list, or a function fetching it on the first tab) or
   `asking.directories`. Its `example` is an `InitSection` of the required keys with example
@@ -140,9 +138,9 @@ class LinearConfig(TokenFields):
   with `ctx.token(account)`, and `mfd token set <plugin>.<account>` stores one. Anything sent with a
   token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
   the body, never the URL (its errors name the URL, without its query).
-- A section naming top-level teams by name (no built-in plugin's does now: slack keys its
-  channels by github's slugs) says which in `teams(config)`, returning their names, so the
-  config refuses a team the top level doesn't have. Core reads nothing else about how a section keeps them.
+- Core knows no teams. A plugin keeps the ones it needs in its section (github's `teams`, by
+  slug), and one whose tool has teams publishes them as the `team` family (`mine` for mine), so
+  another reads them from the graph: slack keys its channels by a team's `handle`.
 
 ## Collecting and storing
 
@@ -167,7 +165,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig,
   keys and paths, `core` and `act_now` among them) nor a prefix of one of core's tables or
   indexes (`team` of `team_channels`). The registry checks this when it's imported.
 - Every hook gets `ctx`, the plugin's context: its section (`ctx.config`), `ctx.name`,
-  `ctx.now`, `ctx.today`, `ctx.email`, `ctx.teams`, `ctx.due_horizon` (how far ahead a due
+  `ctx.now`, `ctx.today`, `ctx.email`, `ctx.due_horizon` (how far ahead a due
   date starts to count, as `[act_now] due_warning_days` says), its database (`ctx.db`) and key/value
   state (`ctx.kv`: `get`/`set`, `get_json(key, type)`/`set_json`, `delete`, `keys(prefix)`),
   and a logger named for it (`ctx.log`).

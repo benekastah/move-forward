@@ -429,7 +429,6 @@ def _token_ctx(tokens: dict[str, keychain.TokenSettings] | None = None) -> Conte
     return Context(
         config=_SiteConfig(),
         email="me@x",
-        teams=[],
         prune_days=90,
         now=NOW,
         db=db,

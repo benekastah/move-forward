@@ -4,11 +4,10 @@ from typing import ClassVar
 
 import pytest
 from conftest import NOW, section
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import ValidationError
 
 from move_forward import config, registry
 from move_forward.db import Database, Migration
-from move_forward.plugin import API_VERSION, Plugin
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github.config import DEFAULT_PLACEHOLDER_LABELS, GitHubConfig
 from move_forward.plugins.jira.config import DEFAULT_JIRA_TOKEN_ENV, JiraConfig
@@ -19,7 +18,6 @@ from move_forward.plugins.slack.config import (
     SlackConfig,
 )
 from move_forward.registry import enabled
-from move_forward.strict import Strict
 
 MINIMAL = 'email = "me@acme.com"\n'
 
@@ -49,7 +47,7 @@ def _load(tmp_path: Path, text: str) -> config.Config:
 def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
     loaded = _load(
         tmp_path,
-        'email = "me@acme.com"\nteams = ["core", "web"]\n\n'
+        'email = "me@acme.com"\n\n'
         '[github]\norg = "acme"\nteams = ["core", "web-reviewers"]\n\n'
         '[git]\nrepos = ["~/src/a"]\n\n[slack.teams]\ncore = "#team-core"\n\n'
         '[jira]\nsite = "https://j"\n',
@@ -81,7 +79,6 @@ def test_a_config_with_no_sections_enables_no_plugins(tmp_path: Path) -> None:
         loaded.section("jira"),
         loaded.section("slack"),
     ) == (None, None, None, None)
-    assert loaded.teams == []
 
 
 def test_unknown_keys_are_errors(tmp_path: Path) -> None:
@@ -119,7 +116,7 @@ def test_a_removed_plugins_section_says_it_was_removed(tmp_path: Path) -> None:
 
 
 def test_a_jira_teams_table_says_its_gone(tmp_path: Path) -> None:
-    text = MINIMAL + 'teams = ["core"]\n\n[git]\nrepos = []\n\n[jira]\nsite = "https://j"\n'
+    text = MINIMAL + '[git]\nrepos = []\n\n[jira]\nsite = "https://j"\n'
     with pytest.raises(ValidationError, match=r"`\[jira.teams\]` is gone; .*delete the table"):
         _load(tmp_path, text + '\n[jira.teams]\ncore = "12345"\n')
 
@@ -155,47 +152,10 @@ def test_a_github_teams_table_says_its_teams_are_slugs_now(tmp_path: Path) -> No
         _load(tmp_path, MINIMAL + '[github]\norg = "a"\n\n[github.teams]\nweb = "web-reviewers"\n')
 
 
-class _RotaConfig(Strict):
-    teams: dict[str, str] = Field(default_factory=dict[str, str])
-    """Who's on call, by rota: not the top-level teams."""
-
-
-class _RotaPlugin(Plugin[_RotaConfig, BaseModel]):
-    """A plugin whose `teams` table isn't about the top-level teams, and so doesn't override
-    `teams`."""
-
-    name = "rota"
-    config_model = _RotaConfig
-    api_version = API_VERSION
-
-
-class _OnCallPlugin(Plugin[_RotaConfig, BaseModel]):
-    """A plugin whose `teams` table names top-level teams."""
-
-    name = "oncall"
-    config_model = _RotaConfig
-    api_version = API_VERSION
-
-    def teams(self, config: _RotaConfig) -> set[str]:
-        return set(config.teams)
-
-
-def test_a_plugin_team_must_be_a_top_level_team(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _OnCallPlugin()])
-    with pytest.raises(
-        ValidationError, match=r"\[oncall\] names teams the top-level teams don't have: wbe\b"
-    ):
-        _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[oncall.teams]\nwbe = "ann"\n')
-
-
-def test_a_plugin_not_naming_teams_is_not_checked(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _RotaPlugin()])
-    loaded = _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[rota.teams]\nnights = "ann"\n')
-    assert loaded.section("rota") == _RotaConfig(teams={"nights": "ann"})
+def test_the_top_level_teams_say_github_takes_their_slugs(tmp_path: Path) -> None:
+    """Not "moved": they were names, and moving them as they are would empty my teams."""
+    with pytest.raises(ValidationError, match=r"list the slugs of the teams .* in \[github\]"):
+        _load(tmp_path, MINIMAL + 'teams = ["web"]\n')
 
 
 def test_naming_settings_have_defaults_and_load(tmp_path: Path) -> None:

@@ -57,7 +57,6 @@ def _context(**config: object) -> Context[GitHubConfig]:
     return Context(
         config=GitHubConfig.model_validate({"org": "acme", "teams": ["core", "web"], **config}),
         email="me@acme.com",
-        teams=["core", "web"],
         prune_days=90,
         now=NOW,
         db=db,

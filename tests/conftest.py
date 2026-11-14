@@ -559,7 +559,6 @@ def stored(**overrides: object) -> tuple[Config, Database]:
     config = Config.model_validate(
         {
             "email": "me@acme.com",
-            "teams": teams,
             "github": github,
             "git": git,
             "notes": {},

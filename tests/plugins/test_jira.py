@@ -208,7 +208,6 @@ def _ctx(db: Database) -> Context[JiraConfig]:
     return Context(
         config=JiraConfig(site="https://j"),
         email="me@x",
-        teams=[],
         prune_days=90,
         now=datetime(2026, 10, 30, tzinfo=UTC),
         db=db,

@@ -25,8 +25,7 @@ def test_discovery_batches_missing_teams_and_preserves_known_destinations(
     config = tmp_path / "config.toml"
     db = tmp_path / "d.db"
     config.write_text(
-        f'email = "me@x"\ndb_path = "{db.as_posix()}"\nteams = ["bacon"]\n'
-        '[slack]\n[slack.teams]\nbacon = "#chosen"\n',
+        f'email = "me@x"\ndb_path = "{db.as_posix()}"\n[slack]\n[slack.teams]\nbacon = "#chosen"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv("SLACK_API_TOKEN", "test-token")
@@ -99,7 +98,6 @@ def test_discovery_looks_for_my_teams_from_the_graph(monkeypatch: pytest.MonkeyP
     ctx = Context(
         config=SlackConfig(),
         email="me@x",
-        teams=[],
         prune_days=90,
         now=NOW,
         db=db,

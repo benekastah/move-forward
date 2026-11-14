@@ -44,7 +44,7 @@ for example answers without asking, with mail and jira commented out; `--force` 
 existing file.
 
 The top level of the config says who you are and how the dashboard runs:
-`email`, `teams` (the names of the teams you're on or review for), `port`,
+`email`, `port`,
 `db_path`, `db_backups` and `prune_days`. Each plugin that
 fetches refreshes on its own schedule, the `refresh_seconds` in its section
 (github every 5 minutes, jira and mail every 15, git and git stack every 30 behind
@@ -76,10 +76,6 @@ for a kind of subject (`snooze_days = { pull_request = 7 }` snoozes a PR for a w
 or until the item changes, whichever comes first; with Snooze's "until it changes", only when
 it changes (or once it's `prune_days` old). A timed snooze ends at local midnight, or at
 `snooze_until_hour` (9: nine in the morning) on its last day.
-
-The top-level `teams` names teams for a plugin's own `teams` table to map; a name there that
-the top-level `teams` doesn't have is an error. No built-in plugin reads it: github's are
-`[github] teams`, by slug, and `[slack.teams]` is keyed by slug.
 
 ## Plugins
 

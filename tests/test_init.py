@@ -73,7 +73,7 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
     assert message.startswith(f"wrote {path}")
     loaded = config.load(path)
     assert loaded.section("github") is not None and loaded.section("git") is not None
-    assert section(loaded, "github", GitHubConfig).org == "acme" and loaded.teams == ["core"]
+    assert section(loaded, "github", GitHubConfig).org == "acme"
     assert section(loaded, "github", GitHubConfig).teams == ["core"]
     assert loaded.section("slack") is None
     assert loaded.email == "jane@acme.com"
@@ -121,7 +121,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     )
     loaded = config.load(path)
     assert loaded.section("github") is not None and loaded.section("git") is not None
-    assert section(loaded, "github", GitHubConfig).org == "other" and loaded.teams == ["a", "b"]
+    assert section(loaded, "github", GitHubConfig).org == "other"
     assert section(loaded, "github", GitHubConfig).teams == ["a", "b"]
     assert loaded.section("slack") is not None
     assert section(loaded, "slack", SlackConfig).workspace_url == "https://o.slack.com"
@@ -201,7 +201,7 @@ def test_repo_paths_must_exist(tmp_path: Path, no_machine_guesses: None) -> None
 
 def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> None:
     text = init.render_config(
-        {"email": "e@x.y", "teams": ["t", "u"]},
+        {"email": "e@x.y"},
         {
             "github": InitSection({"org": "a"}),
             "git": InitSection({"repos": []}),
@@ -210,7 +210,6 @@ def test_rendered_config_is_valid_toml_with_every_optional_key_commented() -> No
     )
     assert tomllib.loads(text) == {
         "email": "e@x.y",
-        "teams": ["t", "u"],
         "github": {"org": "a"},
         "git": {"repos": []},
         "slack": {"teams": {"t": "#t"}},
@@ -262,21 +261,6 @@ def test_the_org_is_guessed_from_the_remote_the_branch_tracks(tmp_path: Path) ->
     assert github_setup.guess_org(repo) == "me"  # main tracks upstream, which isn't on GitHub
     git(repo, "remote", "set-url", "upstream", "git@github.com:acme/widgets.git")
     assert github_setup.guess_org(repo) == "acme"  # the tracked one first
-
-
-def test_without_github_the_teams_are_asked_by_name(
-    tmp_path: Path, no_machine_guesses: None
-) -> None:
-    path = tmp_path / "config.toml"
-    answers: dict[str, str | list[str]] = {
-        "Plugins": "git, slack",
-        "Teams": "web, api",
-    }
-    init.init(path, scripted(answers), cwd=tmp_path)
-    loaded = config.load(path)
-    assert loaded.section("github") is None and loaded.teams == ["web", "api"]
-    assert loaded.section("slack") is not None
-    assert "# [github]" in path.read_text()
 
 
 def test_team_question_shows_the_orgs_teams_as_examples(no_machine_guesses: None) -> None:
@@ -642,7 +626,7 @@ def test_a_tokens_place_shows_the_sections_own_default() -> None:
 
 def test_answered_keys_are_not_commented_defaults_too() -> None:
     text = init.render_config(
-        {"email": "e@x.y", "teams": ["web"], "port": 9000},
+        {"email": "e@x.y", "port": 9000},
         {
             "github": InitSection({"org": "a", "host": "h", "teams": ["web-reviewers"]}),
             "slack": InitSection({"teams": {"web": "#web"}}),

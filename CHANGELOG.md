@@ -12,14 +12,14 @@ teams. `mfd slack destinations --discover` with no teams looks for channels for 
 `[github] teams` (once github has refreshed), not the top-level `teams`. `mfd init` no longer asks
 for each team's Slack channel: `/slack/contacts` offers one for each of your teams.
 
-### GitHub's teams are listed by slug in `[github]`
+### Teams are listed by slug in `[github]`
 
-`[github.teams]` is gone, and github no longer reads the top-level `teams`: list the slugs of the
-teams you're on or review for in `[github]`, e.g. `teams = ["web-reviewers"]`. A config with the
-table is refused, saying so. A PR's requested teams are named by slug now too: where a team's
-name isn't its slug, rekey its `[slack.teams]` entry by the slug, and set a channel you set with
-`mfd slack team set` again, under the slug. Pings to the team before this count as never sent, so
-its next nudge is a first ping.
+The top-level `teams` and `[github.teams]` are gone: list the slugs of the teams you're on or
+review for in `[github]`, e.g. `teams = ["web-reviewers"]`. A config with either is refused,
+saying so. A PR's requested teams are named by slug now too: where a team's name isn't its slug,
+rekey its `[slack.teams]` entry by the slug, and set a channel you set with `mfd slack team set`
+again, under the slug. Pings to the team before this count as never sent, so its next nudge is a
+first ping.
 
 ### Notes need a `[notes]` section
 

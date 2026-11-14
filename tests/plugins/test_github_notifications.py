@@ -154,7 +154,6 @@ def _context(db: Database, minutes: int = 0, **config: object) -> Context[GitHub
     return Context(
         config=GitHubConfig.model_validate({"org": "acme", **config}),
         email="me@acme.com",
-        teams=[],
         prune_days=90,
         now=NOW + timedelta(minutes=minutes),
         db=db,
