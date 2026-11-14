@@ -637,3 +637,17 @@ def test_merge_settings_are_kept_between_refreshes() -> None:
     PrRepository(db).save(snapshot(mine=[settings]))
     kept = PrRepository(db).load()
     assert kept is not None and kept.mine == [settings]
+
+
+def test_a_team_of_my_org_spelt_another_way_is_one_team_and_mine() -> None:
+    """GitHub ignores case in an org's name: `Acme/widgets` is `acme`'s."""
+    shouty = pr(2, author="alice", requested_teams=["web"])
+    shouty = shouty.model_copy(update={"repo": "Acme/widgets"})
+    gh = snapshot(direct_requests=[shouty])
+    teams = {
+        e.ref.id: e.attrs
+        for e in GitHubPlugin().entities(Request(_context(), Graph(), gh))
+        if e.ref.kind == "team"
+    }
+    assert teams["github.com/acme/web"] == {"handle": "web", "mine": True}
+    assert "github.com/Acme/web" not in teams

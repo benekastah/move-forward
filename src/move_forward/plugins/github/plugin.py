@@ -89,8 +89,13 @@ def wants_reviewer(config: GitHubConfig, pr: PullRequest) -> bool:
 def _teams(config: GitHubConfig, groups: list[tuple[list[PullRequest], str, bool]]) -> list[Entity]:
     """A `team` for each of mine (in `org`) and each a PR in `groups` requests (in its repo's
     owner)."""
+
+    def org(owner: str) -> str:
+        """`owner`, spelt as `org` is where it's the same org: GitHub ignores case in both."""
+        return config.org if owner.casefold() == config.org.casefold() else owner
+
     owned = [(config.org, slug) for slug in config.teams] + [
-        (pr.repo.partition("/")[0], slug)
+        (org(pr.repo.partition("/")[0]), slug)
         for prs, _, _ in groups
         for pr in prs
         for slug in pr.requested_teams

@@ -11,7 +11,7 @@ GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 SHOWN: dict[str, object] = {"merge": {"method": "squash"}, "teams": ["my-team"]}
 """`[github.merge]`'s method, whose default (GitHub's pick) TOML can't write, and a team, where
 none was given."""
-EXAMPLE = InitSection({"org": "example-org"}, SHOWN)
+EXAMPLE = InitSection({"org": "example-org", "teams": ["my-team"]}, SHOWN)
 
 
 def guess_org(cwd: Path) -> str:
