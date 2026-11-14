@@ -51,7 +51,7 @@ breaks its family's rule:
 | `pull_request` | its URL | `#7`, `!12` |
 | `ticket` | its URL | its key, `APP-12` |
 | `person` | `<host>/<login>`, e.g. `github.com/alice`; mail's are `mail/<address>` (`mail/<login>` for a mailbox signing in with a bare login) | the login, or the address |
-| `team` | `<host>/<org>/<slug>`, e.g. `github.com/acme/web` | the slug |
+| `team` | `<host>/<org>/<slug>`, or deeper (a GitLab subgroup's), e.g. `github.com/acme/web` | the slug |
 
 What the dashboard kept by a handle before (a priority on `APP-12`, a todo linked to it)
 gets the entity's id at each refresh, once the graph can say it (`Graph.identify`); until
@@ -154,7 +154,7 @@ The team family, modeled in core (`api.kinds.Team`). No built-in plugin publishe
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |
-| `handle` | string | its name in the tool, a slug: what PRs' `requested_teams` name it by |
+| `handle` | string | its name in the tool, a slug; unique only within its publisher, unlike its id |
 | `mine` | bool | I'm on it or review for it, as its plugin's section says |
 
 ### `mail.thread`

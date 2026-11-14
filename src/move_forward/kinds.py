@@ -101,7 +101,9 @@ class Team(KindModel):
     """What every team has, whoever publishes it."""
 
     handle: str
-    """Its name in the tool, e.g. a GitHub team's slug: what PRs' `requested_teams` name it by."""
+    """Its name in the tool, e.g. a GitHub team's slug. Unlike its id, it's unique only within
+    its publisher (two orgs may each have a `web`), so a consumer matching teams by handle
+    reads one publisher's."""
     mine: bool = False
     """I'm on it or review for it, as its plugin's section says."""
 
@@ -138,8 +140,8 @@ _HOST_PATH = re.compile(r"[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^/\s]+){2,}")
 
 
 def is_host_path(id: str) -> bool:
-    """Whether `id` is `<host>/<owner>/<name>` or deeper, e.g. `github.com/acme/web`: a
-    team's id."""
+    """Whether `id` is `<host>/<owner>/<name>`, or deeper (a GitLab subgroup's team), e.g.
+    `github.com/acme/web`: a team's id."""
     return _HOST_PATH.fullmatch(id) is not None
 
 

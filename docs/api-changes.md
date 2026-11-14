@@ -14,8 +14,8 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
-- **A `team` family**: `api.kinds.TEAM`, modeled by `api.kinds.Team` (its `handle`, what PRs'
-  `requested_teams` name it by, and whether it's `mine`), with ids `<host>/<org>/<slug>`
+- **A `team` family**: `api.kinds.TEAM`, modeled by `api.kinds.Team` (its `handle`, unique only
+  within its publisher, and whether it's `mine`), with ids `<host>/<org>/<slug>` or deeper
   (`api.kinds.is_host_path`), so a plugin can publish the teams its tool has and another read
   them without knowing which tool that is.
 - **Mixins for what only some plugins do**: a plugin that collects adds `api.Collector[C, S]`

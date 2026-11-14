@@ -1,5 +1,5 @@
 """Each family's ids are unique whoever publishes them (PRs' and tickets' URLs, people's
-`<host>/<login>`, teams' `<host>/<org>/<slug>`), and what was kept by a handle (a ticket's key) gets its entity's id."""
+`<host>/<login>`, teams' `<host>/<org>/<slug>` or deeper), and what was kept by a handle (a ticket's key) gets its entity's id."""
 
 from datetime import timedelta
 

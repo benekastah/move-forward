@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from move_forward import registry, tags
-from move_forward.kinds import FAMILIES, TAG
+from move_forward.kinds import CORE_FAMILIES, FAMILIES, TAG
 
 DOC = Path(__file__).parent.parent / "docs" / "entities.md"
 _ROW_RE = re.compile(r"^\| `([\w.]+)`( \((\w+)\))? \| (\w+)", re.MULTILINE)
@@ -35,9 +35,12 @@ def test_the_kinds_table_names_every_kind_its_publisher_and_whether_it_links_or_
 
 
 def test_each_kind_documents_exactly_its_models_attributes() -> None:
-    """A family's section lists what every publisher's model has, each one's own marked."""
+    """A family's section lists what core's model and every publisher's has, each one's own
+    marked; core's families are documented even before a plugin publishes them."""
     text = DOC.read_text()
     fields: dict[str, set[str]] = {TAG: set(tags.SPEC.attrs.model_fields)}
+    for family in CORE_FAMILIES:
+        fields.setdefault(family.name, set()).update(family.model.model_fields)
     for plugin in registry.BUILTINS:
         for kind, spec in plugin.kinds.items():
             fields.setdefault(kind, set()).update(spec.attrs.model_fields)
