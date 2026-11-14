@@ -9,31 +9,13 @@ This page walks through what a plugin is made of, using a made-up `linear` plugi
 from Linear) as the example. [AGENTS.md](../AGENTS.md) has the rules every change follows;
 this page explains them as they apply to a plugin.
 
-## Requests
+## The contract
 
-Every hook takes one argument, a request object, whose fields are the hook's inputs, so core
-can give one a new field without changing any hook's signature. There are five kinds, all in
-`move_forward.api`:
-
-| Request | Fields | Hooks |
-| --- | --- | --- |
-| `ContextRequest` | `ctx` | `snapshots`, `linking_patterns` |
-| `Request` | `ctx`, `graph`, `snapshot`, and `previous` for `events` | `entities`, `relate`, `panels`, `item_actions`, `after_collect`, `prune`, `events` |
-| `RefreshRequest` | `ctx`, `graph`, `full`, `subjects`, and `previous` for `changed` | `collect`, `changed` |
-| `RefRequest` | `ctx`, `kind`, `ids` | `address`, `fetch` |
-| `InputRequest` | `ctx`, `graph`, and one of `page` (a `Page`: `query`, `path`), `form` (a `Form`: `fields`, `surface`, `back`) or `args` | pages, buttons (`actions`), `mfd <plugin>` (`cli`) |
-
-`ctx` is the plugin's context (below), `graph` every plugin's entities (empty for `entities`,
-which the graph is built from), and `snapshot` what the plugin last stored (None before its
-first refresh). A field a hook doesn't get is left at its default; each field's docstring
-names the hooks that get it.
-
-`previous` is a `Previous`, what held before, for the two hooks that compare: `changed` and
-`events`. Its `at` is when the plugin's last change check ran (`changed`), or when the refresh
-that last stored a snapshot began, the one `events` compares with (`events`; a refresh that
-failed stored nothing); `fingerprint` what its last check answered (`changed`), `snapshot` its snapshot
-before this refresh (`events`), and `graph` the graph then: None at the first change check
-since the dashboard started, as it's the one thing a restart can't rebuild.
+[plugin_contract.md](plugin_contract.md) lists every class variable and hook of `Plugin`, each
+with its signature and when core calls it, the requests its hooks are given, and the config
+markers. Every hook takes one argument, a request object, whose fields are the hook's inputs,
+so core can give one a new field without changing any hook's signature; a field a hook
+doesn't get keeps its default. `ctx` is the plugin's context (below).
 
 ## The pieces
 

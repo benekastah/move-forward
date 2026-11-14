@@ -3,7 +3,8 @@
 Notes for agents (and people) changing this repo. The README says what the
 dashboard does; `docs/entities.md` is the contract between plugins,
 `docs/graph.md` explains the graph they go through, `docs/plugins.md`
-draws how the plugins use each other's entities, and `docs/writing-a-plugin.md`
+draws how the plugins use each other's entities, `docs/plugin_contract.md` lists
+every class variable, hook and request of `Plugin`, and `docs/writing-a-plugin.md`
 walks through making one; `docs/review.md` says how PRs and the whole code
 are reviewed; `docs/roadmap.md` is what's left to build.
 
@@ -138,6 +139,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
     actions, its `requires`, or the plugins it `watches`.
   - `docs/graph.md`: a change to how the graph is built or read (its methods,
     views, kinds, `related`, `fetch`), or to the kinds in its overview diagram.
+  - `docs/plugin_contract.md`: a change to a `Plugin` class variable or hook, a request
+    type, `Init`, or a config marker. `tests/test_plugin_contract_doc.py` checks it names
+    each one.
   - this file, when the shape of the code or a rule here changes, e.g. a new
     plugin hook.
   - docstrings and comments on the code you touch.

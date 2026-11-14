@@ -422,8 +422,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
     `github.pr_mergeable`."""
     change_check_seconds: ClassVar[int | None] = None
-    """How often `mfd serve` asks `changed`; None for a plugin without such a check. It's
-    asked as each collect starts too, whether it's set or the plugin `watches` another."""
+    """How often `mfd serve` asks `changed`; None for a plugin without such a check. In `mfd
+    serve`, it's also asked as each of its collects starts, when this is set or it `watches`
+    another."""
     watches: ClassVar[list[str]] = []
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]` for
     git_stack, whose `collect` needs the repos git found: in each refresh that collects one of
@@ -501,7 +502,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
         and a tool asked what moved since a time is given `req.previous.at`. Say
         why in `reason`, for the log; `Changed()` says nothing moved.
 
-        Core asks again as each collect of the plugin starts, so what moves while it runs is
+        In `mfd serve`, core asks again as each collect of the plugin starts (when it has a
+        `change_check_seconds` or `watches` another), so what moves while it runs is
         compared with what it read, and gives `collect` what moved since a collect last
         stored. It asks for a refresh whenever something moved since the last check: a
         different fingerprint, any subject (one still pending after a collect that failed
