@@ -143,7 +143,7 @@ class _Git(GitPlugin):
     def collect(self, req: RefreshRequest[GitConfig]) -> LocalSnapshot:
         return local_snapshot()
 
-    def snapshots(self, req: ContextRequest[GitConfig]) -> "_Kept":
+    def snapshots(self, req: ContextRequest[GitConfig]) -> _Kept:
         return _Kept(req.ctx.kv, self.repos)
 
     def events(self, req: Request[GitConfig, LocalSnapshot]) -> list[Event]:

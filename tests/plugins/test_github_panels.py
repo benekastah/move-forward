@@ -239,6 +239,7 @@ def test_a_pr_i_approved_then_commented_on_wants_my_re_review_after_a_push() -> 
         author="alice",
         review_decision="REVIEW_REQUIRED",
         last_commit_at=pushed_at,
+        assignees=[ME],
         reviews=[
             Review(author=ME, state="COMMENTED", submitted_at=approved_at + timedelta(hours=1))
         ],
@@ -298,10 +299,15 @@ def test_reviews_for_me_contains_direct_requests_and_stale_approvals_not_team_re
         author="alice",
         reviews=[approved_review(ME, reviewed_at)],
         last_commit_at=NOW - timedelta(hours=2),
+        assignees=[ME],
     )
     unchanged = pr(3, author="alice", reviews=[approved_review(ME, reviewed_at)])
     re_requested = pr(
-        4, author="alice", reviews=[approved_review(ME, reviewed_at)], requested_users=[ME]
+        4,
+        author="alice",
+        reviews=[approved_review(ME, reviewed_at)],
+        requested_users=[ME],
+        assignees=[ME],
     )
     team_only = pr(5, author="alice", requested_teams=["core"])
     dashboard = build(
@@ -334,6 +340,7 @@ def test_a_direct_request_i_approved_only_returns_when_review_is_required() -> N
         reviews=[review],
         last_commit_at=NOW,
         review_decision="REVIEW_REQUIRED",
+        assignees=[ME],
     )
     other_changes_requested = pr(
         3,
@@ -342,13 +349,28 @@ def test_a_direct_request_i_approved_only_returns_when_review_is_required() -> N
         last_commit_at=NOW,
         review_decision="CHANGES_REQUESTED",
     )
+    requested_but_unassigned = pr(
+        4,
+        author="alice",
+        reviews=[review],
+        last_commit_at=NOW,
+        review_decision="REVIEW_REQUIRED",
+        requested_users=[ME],
+    )
     built = build(
-        github=snapshot(direct_requests=[still_approved, needs_review, other_changes_requested])
+        github=snapshot(
+            direct_requests=[
+                still_approved,
+                needs_review,
+                other_changes_requested,
+                requested_but_unassigned,
+            ]
+        )
     )
     assert titles(built, "github.reviews_for_me") == ["PR 2"]
 
 
-def test_a_new_push_after_my_approval_needs_github_to_require_review() -> None:
+def test_a_new_push_after_my_approval_needs_assignment_and_a_required_review() -> None:
     approved_at = NOW - timedelta(days=1)
     old_approval = [approved_review(ME, approved_at)]
     stale = pr(
@@ -357,6 +379,7 @@ def test_a_new_push_after_my_approval_needs_github_to_require_review() -> None:
         reviews=old_approval,
         last_commit_at=NOW,
         review_decision="REVIEW_REQUIRED",
+        assignees=[ME.upper()],
     )
     still_valid = pr(
         2,
@@ -364,6 +387,7 @@ def test_a_new_push_after_my_approval_needs_github_to_require_review() -> None:
         reviews=old_approval,
         last_commit_at=NOW,
         review_decision="APPROVED",
+        assignees=[ME],
     )
     no_new_push = pr(
         3,
@@ -371,9 +395,30 @@ def test_a_new_push_after_my_approval_needs_github_to_require_review() -> None:
         reviews=old_approval,
         last_commit_at=approved_at - timedelta(hours=1),
         review_decision="REVIEW_REQUIRED",
+        assignees=[ME],
     )
-    built = build(github=snapshot(reviewed_by_me=[stale, still_valid, no_new_push]))
+    unassigned = pr(
+        4,
+        author="alice",
+        reviews=old_approval,
+        last_commit_at=NOW,
+        review_decision="REVIEW_REQUIRED",
+    )
+    assigned_to_someone_else = pr(
+        5,
+        author="alice",
+        reviews=old_approval,
+        last_commit_at=NOW,
+        review_decision="REVIEW_REQUIRED",
+        assignees=["someone-else"],
+    )
+    built = build(
+        github=snapshot(
+            reviewed_by_me=[stale, still_valid, no_new_push, unassigned, assigned_to_someone_else]
+        )
+    )
     assert titles(built, "github.reviews_for_me") == ["PR 1"]
+    assert [item.title for item in built.act_now()] == ["Review: PR 1"]
 
 
 def test_act_now_does_not_suggest_reviewing_a_draft() -> None:
@@ -858,6 +903,24 @@ def test_a_ticket_link_line_starts_with_any_prefix_and_names_a_key_or_a_url() ->
     assert not has_ticket_link_line("Linkage RD-123", prefixes)  # a word boundary
 
 
+def test_feedback_counts_only_other_humans_as_waiting() -> None:
+    own = thread(author=ME.upper()).model_copy(update={"created_at": NOW - timedelta(days=5)})
+    bot = thread(author="copilot[bot]").model_copy(update={"created_at": NOW - timedelta(days=4)})
+    reviewer = thread(author="alice").model_copy(update={"created_at": NOW - timedelta(hours=2)})
+    built = build(github=snapshot(mine=[pr(1, threads=[own, bot]), pr(2, threads=[own, reviewer])]))
+    items = {item.title: item for item in panel(built, "github.feedback").items}
+    assert items["PR 1"].signals is not None
+    assert items["PR 1"].signals.waiting == []
+    assert items["PR 1"].signals.waiting_since is None
+    assert any(ME.upper() in detail for detail in items["PR 1"].details)
+    assert items["PR 2"].signals is not None
+    assert items["PR 2"].signals.waiting == ["alice"]
+    assert items["PR 2"].signals.waiting_since == NOW - timedelta(hours=2)
+    act = {item.url: item for item in built.act_now()}
+    assert not any("waiting" in detail for detail in act[pr(1).url].details)
+    assert any("alice waiting 2h" in detail for detail in act[pr(2).url].details)
+
+
 def test_threads_of_ignored_reviewers_dont_hold_a_merge_or_a_ready_draft() -> None:
     bot_thread = thread(author="policy-bot")
     ready = pr(1, reviews=[approved_review()], review_decision="APPROVED", threads=[bot_thread])
@@ -961,6 +1024,7 @@ def test_a_direct_review_waits_since_the_request_and_a_stale_approval_since_the_
         author="alice",
         reviews=[approved_review(ME, reviewed_at)],
         last_commit_at=NOW - timedelta(days=4),  # an old commit, force-pushed two hours ago
+        assignees=[ME],
         events=[event("HeadRefForcePushedEvent", pushed_at)],
     )
     direct = pr(

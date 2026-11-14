@@ -30,6 +30,7 @@ from move_forward.plugin import (
     RefreshRequest,
     Request,
 )
+from move_forward.plugins.github import client as github_client
 from move_forward.plugins.github.config import GitHubConfig
 from move_forward.plugins.github.models import GitHubSnapshot
 from move_forward.plugins.github.plugin import GitHubPlugin
@@ -46,7 +47,7 @@ from move_forward.repositories import KvRepository
 class Hooked(JiraPlugin):
     """Jira, plus a link on every PR item and a page at /jira/hello."""
 
-    def item_actions(self, req: Request[JiraConfig, BaseModel]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
         def additions(each: ItemRequest) -> ItemAdditions:
             pr = each.item.subject("pull_request")
             if pr is None:
@@ -227,6 +228,13 @@ class _Asked(JiraPlugin):
 def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
     plugins = [_Asked() if p.name == "jira" else p for p in registry.PLUGINS]
     monkeypatch.setattr(registry, "PLUGINS", plugins)
+    github_asked: list[str] = []
+
+    def pr_state(url: str) -> tuple[str, datetime | None]:
+        github_asked.append(url)
+        return "open", None
+
+    monkeypatch.setattr(github_client, "pr_state", pr_state)
     config, db = stored(github=snapshot(), jira_site="https://j")
     graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
     _Asked.asked.clear()
@@ -234,7 +242,7 @@ def test_a_plugin_is_asked_only_about_its_own_kinds(monkeypatch: pytest.MonkeyPa
         graph.url_for(kind, id)
         graph.handle(kind, id)
         graph.fetch(kind, [id])
-    assert _Asked.asked == []
+    assert _Asked.asked == [] and github_asked == ["https://github.com/o/r/pull/9"]
     graph.url_for("ticket", "APP-9")
     graph.handle("ticket", "https://j/browse/APP-9")
     graph.fetch("ticket", ["https://j/browse/APP-9"])
@@ -449,7 +457,7 @@ class _Prepared(JiraPlugin):
 
     prepared = 0
 
-    def item_actions(self, req: Request[JiraConfig, BaseModel]) -> ItemAdditionsFor:
+    def item_actions(self, req: Request[JiraConfig, JiraSnapshot]) -> ItemAdditionsFor:
         _Prepared.prepared += 1
         prs = {e.ref.id for e in req.graph.of_kind("pull_request")}
 
@@ -519,7 +527,7 @@ def test_the_page_says_who_i_am_in_each_tool_that_knows() -> None:
 class _Relating(JiraPlugin):
     """Jira, relating its ticket to PR 1, and (wrongly) github's PR to its ticket."""
 
-    def relate(self, req: Request[JiraConfig, BaseModel]) -> list[tuple[Ref, Ref]]:
+    def relate(self, req: Request[JiraConfig, JiraSnapshot]) -> list[tuple[Ref, Ref]]:
         [ticket] = req.graph.of_kind("ticket")
         the_pr = Ref(kind="pull_request", id=pr(1).url)
         return [(ticket.ref, the_pr), (the_pr, ticket.ref)]
@@ -560,7 +568,7 @@ class _Given(JiraPlugin):
         self.stored["prune"] = req.snapshot
         return []
 
-    def relate(self, req: Request[JiraConfig, BaseModel]) -> list[tuple[Ref, Ref]]:
+    def relate(self, req: Request[JiraConfig, JiraSnapshot]) -> list[tuple[Ref, Ref]]:
         self.stored["relate"] = req.snapshot
         return []
 
