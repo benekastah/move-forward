@@ -9,7 +9,8 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 Notes are no longer on without one: a config without `[notes]` shows no todos, work entries or
 ice, and `mfd notes` refuses to run. Add an empty `[notes]` table to keep them; what they hold
-is still in the database. `mfd init` writes one unless you leave notes out.
+is still in the database, and the page's footer says notes is off until you do. `mfd init`
+writes one unless you leave notes out.
 
 ### Python 3.14 is required
 

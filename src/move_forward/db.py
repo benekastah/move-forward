@@ -522,6 +522,13 @@ class Database:
                     raise
             return ran
 
+    def owners(self) -> set[str]:
+        """Whose migrations the database has run: core and every plugin ever enabled here,
+        whether or not it still is."""
+        with self._lock:
+            rows = self._conn.execute("SELECT DISTINCT owner FROM migrations").fetchall()
+        return {row["owner"] for row in rows}
+
     def _applied(self, owner: str, names: list[str]) -> list[str]:
         """The names of `owner`'s migrations the database has run, in order. A database from
         before the ledger counted them in `schema_versions`: those are the first of `names`,

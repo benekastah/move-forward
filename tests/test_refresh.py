@@ -621,3 +621,16 @@ def test_the_known_actions_are_the_enabled_plugins_declared_ones() -> None:
     known = refresh._known_action(registry.enabled(config, db, NOW))  # pyright: ignore[reportPrivateUsage]
     assert known("notes/todo_done") and known("git/push_branch")
     assert not known("notes/nope") and not known("jira/transition")  # jira isn't on
+
+
+def test_a_plugin_set_up_here_but_without_a_section_now_is_said_to_be_off() -> None:
+    """Notes, on without a section before, has a database's worth of todos after an upgrade
+    that turns it off: the page says why they're gone, and what to add."""
+    with_notes = Config.model_validate({"email": "me@x", "notes": {}})
+    db = Database(":memory:")
+    registry.migrate(with_notes, db)
+    assert not refresh.build_dashboard(with_notes, db, NOW).problems
+    without = Config.model_validate({"email": "me@x"})
+    said = "notes has data here but no [notes] section in the config, so it's off: add [notes]"
+    assert refresh.build_dashboard(without, db, NOW).problems == [f"{said} to turn it back on"]
+    assert not refresh.build_dashboard(without, Database(":memory:"), NOW).problems
