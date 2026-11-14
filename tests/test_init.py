@@ -109,7 +109,6 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
                 "Plugins": "github, git, jira, slack",
                 "organization": "other",
                 "team slugs": "a, b ,",
-                "pings to a": "#team-a",
                 "checkout": f"{tmp_path}/x, {tmp_path}/y",
                 "workspace URL": "https://o.slack.com",
                 "Prefixes": "jane/",
@@ -124,9 +123,8 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     assert loaded.section("github") is not None and loaded.section("git") is not None
     assert section(loaded, "github", GitHubConfig).org == "other" and loaded.teams == ["a", "b"]
     assert section(loaded, "github", GitHubConfig).teams == ["a", "b"]
-    assert loaded.section("slack") is not None and section(loaded, "slack", SlackConfig).teams == {
-        "a": "#team-a"
-    }
+    assert loaded.section("slack") is not None
+    assert section(loaded, "slack", SlackConfig).workspace_url == "https://o.slack.com"
     assert loaded.email == "jane@other.com"
     # Each token chosen is named, or its plugin says what to do instead.
     assert "For Jira: create an API token at https://id.atlassian.com/" in message
@@ -273,14 +271,11 @@ def test_without_github_the_teams_are_asked_by_name(
     answers: dict[str, str | list[str]] = {
         "Plugins": "git, slack",
         "Teams": "web, api",
-        "pings to web": "#web",
     }
     init.init(path, scripted(answers), cwd=tmp_path)
     loaded = config.load(path)
     assert loaded.section("github") is None and loaded.teams == ["web", "api"]
-    assert loaded.section("slack") is not None and section(loaded, "slack", SlackConfig).teams == {
-        "web": "#web"
-    }
+    assert loaded.section("slack") is not None
     assert "# [github]" in path.read_text()
 
 

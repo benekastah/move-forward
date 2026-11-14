@@ -5,17 +5,18 @@ import json
 import re
 import sys
 
-from ...api import ActionError, CliHandler, Context, InputRequest, SourceError, http
+from ...api import ActionError, CliHandler, Context, Graph, InputRequest, SourceError, http
 from . import client, contacts, discovery
 from .config import SlackConfig
 from .repository import SlackRepository
 
 
 def list_destinations(
-    ctx: Context[SlackConfig], as_json: bool, teams: list[str], discover: bool
+    ctx: Context[SlackConfig], graph: Graph, as_json: bool, teams: list[str], discover: bool
 ) -> str:
-    """Known destinations, or selected teams; optionally discover only missing mappings.
-    Discovery is read-only, and ambiguous matches stay candidates rather than being saved."""
+    """Known destinations, or selected teams; optionally discover only missing mappings, of my
+    teams (`contacts.my_teams`) too. Discovery is read-only, and ambiguous matches stay
+    candidates rather than being saved."""
     slack = SlackRepository(ctx.db)
     sources = slack.sources()
     people = [
@@ -37,13 +38,13 @@ def list_destinations(
             else None,
             "source": "config",
         }
+    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", t) for t in teams):
+        raise ValueError("use GitHub team slugs, e.g. bacon ai-agents")
     selected = (
         list(dict.fromkeys(teams))
         if teams
-        else sorted(set(known) | (set(ctx.teams) if discover else set()))
+        else sorted(set(known) | (contacts.my_teams(graph) if discover else set()))
     )
-    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", t) for t in selected):
-        raise ValueError("use GitHub team slugs, e.g. bacon ai-agents")
     missing = [t for t in selected if t not in known]
     channels = client.channels(ctx.token()) if discover and missing else []
     team_rows = []
@@ -86,11 +87,11 @@ def list_destinations(
     return "\n".join(lines)
 
 
-def run_command(ctx: Context[SlackConfig], args: argparse.Namespace) -> str:
+def run_command(ctx: Context[SlackConfig], graph: Graph, args: argparse.Namespace) -> str:
     slack = SlackRepository(ctx.db)
     command = args.slack_command
     if command == "destinations":
-        return list_destinations(ctx, args.json, args.teams, args.discover)
+        return list_destinations(ctx, graph, args.json, args.teams, args.discover)
     if command == "contact" and args.contact_command == "set":
         return contacts.set_contact(slack, args.login, args.slack_id)
     if command == "contact":
@@ -131,7 +132,7 @@ def add_commands(parser: argparse.ArgumentParser) -> CliHandler:
     def run(req: InputRequest[SlackConfig]) -> int:
         ctx, args = req.ctx, req.args
         try:
-            print(run_command(ctx, args))
+            print(run_command(ctx, req.graph, args))
         except (ValueError, ActionError, SourceError, client.SlackError, http.RequestError) as e:
             hint = (
                 "; channel discovery needs channels:read and groups:read on the Slack token"

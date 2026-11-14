@@ -27,6 +27,12 @@ def test_the_page_lists_requested_reviewers_and_where_their_pings_go() -> None:
     assert "action='/actions/slack/set_contact?back=/slack/contacts'" in page
 
 
+def test_the_page_offers_a_channel_for_each_of_my_teams() -> None:
+    config, db = stored(slack=True, github=snapshot(), my_teams=["core"])  # github's teams
+    page = str(refresh.plugin_page(config, db, "/slack/contacts", {}))
+    assert "<td>core</td>" in page and "name='team' value='core'" in page
+
+
 def test_setting_by_hand_checks_the_ids_and_wins_over_a_lookup() -> None:
     config, db = stored(slack=True)
     notice = refresh.run_action(

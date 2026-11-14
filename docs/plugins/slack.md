@@ -7,11 +7,14 @@ section.
 ## Config
 
 `workspace_url` makes the ping page link to channels and people, `ping_first` and
-`ping_follow_up` are the messages, and `[slack.teams]` the channel each team's pings go to.
+`ping_follow_up` are the messages, and `[slack.teams]` the channel each team's pings go to, by
+the team's slug, as PRs name it.
 
 A team's channel comes from `[slack.teams]`, or is set by hand on `/slack/contacts` or with
 `mfd slack team set`; `[slack.teams]` wins. A team named in neither has no channel, and its
-ping says only `team <name>`.
+ping says only `team <name>`. `mfd init` asks only for the workspace: `/slack/contacts` offers a
+channel field for each of my teams (the `team`s published as mine, e.g. github's `teams`) as
+well as each team my PRs request, and `mfd slack destinations --discover` looks for theirs.
 
 For missing destinations, `mfd slack destinations bacon ai-agents --discover --json`
 searches active Slack channels by exact team/channel name or the team's words in a topic
@@ -22,7 +25,7 @@ scope. It reads channel metadata only. No token is needed when all requested tea
 already have destinations. Known mappings win; discovery never overwrites or saves them.
 
 Pass several GitHub team slugs to limit the result to those teams (and omit people).
-Without team arguments, `--discover` checks the top-level teams plus known mappings;
+Without team arguments, `--discover` checks my teams (from the graph) plus known mappings;
 without `--discover`, the command stays offline. Discovery lists Slack channels once for
 the whole batch, following pagination. A single match has `source: "discovered"`; missing
 and ambiguous mappings have null channel fields and source. Each attempted discovery

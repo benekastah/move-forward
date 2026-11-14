@@ -17,7 +17,7 @@ from ...api import (
     html,
     http,
 )
-from ...api.kinds import PERSON
+from ...api.kinds import PERSON, TEAM
 from . import client
 from .config import SlackConfig
 from .pings import my_open_prs
@@ -47,6 +47,18 @@ class _PersonView(Model):
     email."""
 
     email: str | None = None
+
+
+class _TeamView(Model):
+    """What slack reads of a `team`: its `handle`, which PRs name it by, and whether it's mine."""
+
+    handle: str
+    mine: bool = False
+
+
+def my_teams(graph: Graph) -> set[str]:
+    """The handles of the teams I'm on or review for, as the plugins publishing teams say."""
+    return {team.handle for team in graph.view(TEAM, _TeamView) if team.mine}
 
 
 def _optional(value: str, pattern: re.Pattern[str], what: str) -> str | None:
@@ -138,8 +150,8 @@ def _form(action: str, hidden: dict[str, str], inputs: list[tuple[str, str, str]
 
 
 def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
-    """Everyone and every team pings can go to: the ones my open PRs ask for, and the ones
-    imported or set, with where their pings go and an edit form each; and why the last
+    """Everyone and every team pings can go to: the ones my open PRs ask for, my teams, and the
+    ones imported or set, with where their pings go and an edit form each; and why the last
     lookup by email failed, if it did."""
     e = html.e
     slack = SlackRepository(ctx.db)
@@ -179,7 +191,7 @@ def contacts_page(ctx: Context[SlackConfig], graph: Graph) -> str:
         for login in sorted(users | set(contacts))
     )
     team_rows = ""
-    for team in sorted(teams | set(channels) | set(ctx.config.teams)):
+    for team in sorted(teams | my_teams(graph) | set(channels) | set(ctx.config.teams)):
         channel = channels.get(team)
         configured = ctx.config.teams.get(team)
         note = f"{how(f'team:{team}')}" + (

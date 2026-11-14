@@ -64,6 +64,7 @@ flowchart LR
     pr -. "transitions (related)" .-> jira
     pr -. "pings, nudges" .-> slack([slack])
     person -. "emails, to look up Slack ids" .-> slack
+    team -. "my teams, to offer and discover their channels" .-> slack
     ticket -. "title, lifecycle: what a verified sender's mail is about" .-> mail
     tag[tag] -. "the tags a verified sender's mail has (its subject's, or mine), if something else open carries them" .-> mail
     pr -. "todo link states; an iced branch's PRs" .-> notes

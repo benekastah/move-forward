@@ -205,10 +205,6 @@ class SlackPlugin(Plugin[SlackConfig, BaseModel], Command[SlackConfig]):
         if found:
             ctx.log.info("found Slack ids for %s", ", ".join(found))
 
-    def teams(self, config: SlackConfig) -> set[str]:
-        """Those `[slack.teams]` gives its channel for."""
-        return set(config.teams)
-
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
         """see and set where review pings go"""
         return cli.add_commands(parser)

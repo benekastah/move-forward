@@ -77,8 +77,8 @@ class Config(Strict):
     """My work email: Jira logs in with it, and its domain picks reviewers' emails from
     their commits."""
     teams: list[str] = Field(default_factory=list)
-    """The teams I'm on or review for, by name, which a plugin's own `teams` table maps to what
-    its tool has for the team, e.g. `[slack.teams]`."""
+    """The teams I'm on or review for, by name, for `mfd init` and a plugin whose section names
+    them (`Plugin.teams`); github and slack name teams by slug, in their own sections."""
     db_path: Path = DEFAULT_DB_PATH
     """The SQLite database holding the plugins' tables (what they fetched, and the notes), and
     core's: when each plugin last fetched, priorities, tags, sessions and the like."""
