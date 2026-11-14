@@ -424,9 +424,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return _section_token(config)
 
     def teams(self, config: C) -> set[str]:
-        """The top-level teams (`Context.teams`, by name) the plugin's section names, e.g. those
-        slack's `[slack.teams]` gives a channel for, so the config refuses a team the top level
-        doesn't have. Empty by default: core knows nothing of how a section keeps them."""
+        """The top-level teams (`Context.teams`, by name) the plugin's section names, so the
+        config refuses a team the top level doesn't have; no built-in plugin's names any now.
+        Empty by default: core knows nothing of how a section keeps them."""
         return set()
 
     # Refresh

@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Slack finds your teams in github's
+
+`[slack.teams]` is keyed by a team's slug, as PRs name it, and no longer has to name top-level
+teams. `mfd slack destinations --discover` with no teams looks for channels for the teams in
+`[github] teams` (once github has refreshed), not the top-level `teams`. `mfd init` no longer asks
+for each team's Slack channel: `/slack/contacts` offers one for each of your teams.
+
 ### GitHub's teams are listed by slug in `[github]`
 
 `[github.teams]` is gone, and github no longer reads the top-level `teams`: list the slugs of the

@@ -114,6 +114,11 @@ def test_discovery_looks_for_my_teams_from_the_graph(monkeypatch: pytest.MonkeyP
     graph = Graph([_team("github.com/acme/web", True), _team("github.com/acme/ops", False)])
     found = json.loads(list_destinations(ctx, graph, True, [], True))
     assert [(t["slug"], t["channel_id"]) for t in found["teams"]] == [("web", "C111111")]
+    # A handle that's no GitHub slug, from some other plugin's team, is looked for too, not
+    # blamed on teams nobody passed.
+    odd = Graph([_team("github.com/acme/web", True), _team("gitlab.com/acme/eng.team", True)])
+    found = json.loads(list_destinations(ctx, odd, True, [], True))
+    assert [t["slug"] for t in found["teams"]] == ["eng.team", "web"]
 
 
 def test_ambiguous_channels_are_candidates_not_a_guessed_destination() -> None:

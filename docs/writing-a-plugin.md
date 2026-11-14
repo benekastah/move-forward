@@ -140,9 +140,9 @@ class LinearConfig(TokenFields):
   with `ctx.token(account)`, and `mfd token set <plugin>.<account>` stores one. Anything sent with a
   token must go over HTTPS: send it with `api.http.request`, which checks, in a header or
   the body, never the URL (its errors name the URL, without its query).
-- A section naming top-level teams (slack's `[slack.teams]`, mapping each to its channel) says
-  which in `teams(config)`, returning their names, so the config refuses a team the
-  top level doesn't have. Core reads nothing else about how a section keeps them.
+- A section naming top-level teams by name (no built-in plugin's does now: slack keys its
+  channels by github's slugs) says which in `teams(config)`, returning their names, so the
+  config refuses a team the top level doesn't have. Core reads nothing else about how a section keeps them.
 
 ## Collecting and storing
 

@@ -38,13 +38,13 @@ def list_destinations(
             else None,
             "source": "config",
         }
+    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", t) for t in teams):
+        raise ValueError("use GitHub team slugs, e.g. bacon ai-agents")
     selected = (
         list(dict.fromkeys(teams))
         if teams
         else sorted(set(known) | (contacts.my_teams(graph) if discover else set()))
     )
-    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", t) for t in selected):
-        raise ValueError("use GitHub team slugs, e.g. bacon ai-agents")
     missing = [t for t in selected if t not in known]
     channels = client.channels(ctx.token()) if discover and missing else []
     team_rows = []
