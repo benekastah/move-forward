@@ -16,11 +16,10 @@ for each team's Slack channel: `/slack/contacts` offers one for each of your tea
 
 `[github.teams]` is gone, and github no longer reads the top-level `teams`: list the slugs of the
 teams you're on or review for in `[github]`, e.g. `teams = ["web-reviewers"]`. A config with the
-table is refused, saying so. A PR's requested teams are named by slug now too, so a team whose
-name isn't its slug needs it in slack: rename it to its slug in the top-level `teams` and in
-`[slack.teams]` (which slack still checks against them), and set a channel you set with `mfd slack
-team set` again, under the slug. Pings to the team before this count as never sent, so its next
-nudge is a first ping.
+table is refused, saying so. A PR's requested teams are named by slug now too: where a team's
+name isn't its slug, rekey its `[slack.teams]` entry by the slug, and set a channel you set with
+`mfd slack team set` again, under the slug. Pings to the team before this count as never sent, so
+its next nudge is a first ping.
 
 ### Notes need a `[notes]` section
 
