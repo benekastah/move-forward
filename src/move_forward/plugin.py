@@ -431,8 +431,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
     them, once they've stored, `changed` is asked with the new graph, and the plugin collected
     (again, if it was collected in that refresh, from the graph as it was before) when it says
     something moved, rather than waiting for `change_check_seconds` (see `refresh._settle`)."""
-    always_on: ClassVar[bool] = False
-    """On without a section (notes), so `mfd init` doesn't offer it."""
     init: ClassVar[Init] = Init()
     """How `mfd init` sets the section up: its questions, example and the like (`Init`). By
     default nothing is asked and the plugin isn't suggested."""

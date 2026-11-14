@@ -1,8 +1,8 @@
 # notes
 
 The move-forward skill's work notes, in the database: work entries with their todos, merge
-conditions and links, and what's on ice. Always on; a `[notes]` section only changes its
-settings, and it has none yet. The smallest config, `email` alone, is a todo list.
+conditions and links, and what's on ice. On when the config has a `[notes]` section, which has
+no settings yet: `email` and an empty `[notes]` make a todo list. `mfd init` suggests it.
 
 ## Publishes
 

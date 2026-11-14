@@ -62,7 +62,6 @@ class _Seed(Plugin[BaseModel, BaseModel]):
     (`<plugin>.<kind>`), as that plugin would publish them."""
 
     title: ClassVar[str] = "Seeded"
-    always_on: ClassVar[bool] = True
     api_version = API_VERSION
     config_model = _NoSettings
 
@@ -277,6 +276,7 @@ class Harness:
                 "teams": self._teams,
                 "db_path": Path(self._dir.name) / "dashboard.db",
                 self.name: self._section,
+                **{seed.name: {} for seed in self._seeds},
             }
         )
 

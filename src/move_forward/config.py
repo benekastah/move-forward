@@ -99,8 +99,7 @@ class Config(Strict):
     """`[notifications]`: which events to be told of in the browser; none until subscribed."""
     sections: dict[str, BaseModel] = Field(default_factory=dict[str, BaseModel])
     """The plugins' sections, by plugin name, each its plugin's `config_model`: a plugin is
-    enabled when its section is there. An `always_on` plugin's is there without one in the
-    file. Read with `section`."""
+    enabled when its section is there. Read with `section`."""
 
     @overload
     def section(self, name: str) -> BaseModel | None: ...
@@ -150,9 +149,6 @@ class Config(Strict):
                 ]
         if errors:
             raise ValidationError.from_exception_data(cls.__name__, errors)
-        for plugin in registry.PLUGINS:
-            if plugin.always_on and plugin.name not in sections:
-                sections[plugin.name] = plugin.config_model()
         settings["sections"] = sections
         return settings
 

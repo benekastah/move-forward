@@ -223,11 +223,6 @@ def guess_email() -> str:
     return quiet(["git", "config", "user.email"])
 
 
-def offered() -> list[Plugin[Any, Any]]:
-    """The plugins `mfd init` offers to set up: all but those always on (notes)."""
-    return [p for p in registry.PLUGINS if not p.always_on]
-
-
 def _table(name: str, values: dict[str, object], optional: str = "") -> str:
     """A section: its keys, its optional settings commented out, then its own tables (a dict
     value, e.g. `teams` for `[slack.teams]`)."""
@@ -261,13 +256,13 @@ def render_config(
     sections: dict[str, InitSection],
     subscribe: list[str] | None = None,
 ) -> str:
-    """The config file: the top-level `answers`, then a section per offered plugin, the
-    chosen ones' with their `sections` values and the others commented out, then core's own
-    tables; each key not given commented out with its default (`commented_defaults`)."""
+    """The config file: the top-level `answers`, then a section per plugin, the chosen ones'
+    with their `sections` values and the others commented out, then core's own tables; each
+    key not given commented out with its default (`commented_defaults`)."""
     lines = ["# move-forward configuration. Paths may start with ~.", ""]
     lines += [f"{key} = {tomledit.value(value)}" for key, value in answers.items()]
     text = "\n".join(lines) + "\n" + core_defaults(answers)
-    for plugin in offered():
+    for plugin in registry.PLUGINS:
         if plugin.name in sections:
             section = sections[plugin.name]
             text += _table(plugin.name, section.values, plugin_defaults(plugin, section))
@@ -288,15 +283,15 @@ EXAMPLE_ANSWERS: dict[str, object] = {"email": "me@example.com", "teams": ["my-t
 
 def example() -> str:
     """`mfd init --example`: the config `mfd init` would write for `EXAMPLE_ANSWERS`, with
-    the section of each offered plugin `Init.example_on` on, set to its `Init.example`'s
-    values, and the others commented out."""
-    sections = {p.name: p.init.example for p in offered() if p.init.example_on}
+    the section of each plugin `Init.example_on` on, set to its `Init.example`'s values, and
+    the others commented out."""
+    sections = {p.name: p.init.example for p in registry.PLUGINS if p.init.example_on}
     return render_config(EXAMPLE_ANSWERS, sections)
 
 
 def _plugins(answer: str) -> str:
-    """Plugins `mfd init` offers, by name, comma-separated, each with those it requires."""
-    by_name = {p.name: p for p in offered()}
+    """Plugins to set up, by name, comma-separated, each with those it requires."""
+    by_name = {p.name: p for p in registry.PLUGINS}
     chosen = [part.strip() for part in answer.split(",") if part.strip()]
     for name in chosen:
         if name not in by_name:
@@ -323,12 +318,12 @@ def interview(prompt: Prompt, cwd: Path) -> str:
     email = ask("Your work email (e.g. jane@acme.com)", guess_email(), asking.email)
     setup = InitSetup(email=email, cwd=cwd)
     answer = ask(
-        f"Plugins to set up, comma-separated ({', '.join(p.name for p in offered())})",
-        ", ".join(p.name for p in offered() if p.init.suggested),
+        f"Plugins to set up, comma-separated ({', '.join(p.name for p in registry.PLUGINS)})",
+        ", ".join(p.name for p in registry.PLUGINS if p.init.suggested),
         _plugins,
-        choices([p.name for p in offered()]),
+        choices([p.name for p in registry.PLUGINS]),
     )
-    chosen = [p for p in offered() if p.name in answer.split(", ")]
+    chosen = [p for p in registry.PLUGINS if p.name in answer.split(", ")]
     if not any(p.init.finds_teams for p in chosen):  # else that plugin asks for them
         setup.teams = ask.list(
             "Teams you're on or review for, by name, comma-separated (blank for none)",

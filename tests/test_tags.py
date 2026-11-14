@@ -228,7 +228,7 @@ def test_the_tag_command_puts_a_tag_on_and_takes_it_off(
 ) -> None:
     config = tmp_path / "config.toml"
     db_path = tmp_path / "dashboard.db"
-    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n')
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n[notes]\n')
     assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
     assert cli.main(["-c", str(config), "tag", "Chores", "#Garbage_Day"]) == 0
     assert cli.main(["-c", str(config), "tag", "Chores", "#7"]) == 1
@@ -467,7 +467,9 @@ def test_the_tag_command_takes_off_a_tag_from_text(
 ) -> None:
     config = tmp_path / "config.toml"
     db_path = tmp_path / "dashboard.db"
-    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
+    config.write_text(
+        f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n[notes]\n', encoding="utf-8"
+    )
     assert cli.main(["-c", str(config), "notes", "add-entry", "Chores #errand"]) == 0
     assert cli.main(["-c", str(config), "tag", "Chores #errand", "errand", "--remove"]) == 0
     assert cli.main(["-c", str(config), "tag", "Chores #errand", "errand", "--remove"]) == 0

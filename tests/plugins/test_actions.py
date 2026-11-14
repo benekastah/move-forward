@@ -82,6 +82,7 @@ def config(repo: Path, tmp_path: Path) -> Config:
             "github": GitHubConfig(org="acme"),
             "teams": ["core"],
             "git": GitConfig(repos=[repo]),
+            "notes": {},
             "db_path": tmp_path / "dashboard.db",
         }
     )

@@ -288,12 +288,13 @@ def test_the_dashboards_own_events_are_stored_when_subscribed(tmp_path: Path) ->
         {
             "email": "me@x",
             "db_path": str(tmp_path / "x.db"),
+            "notes": {},
             "notifications": {"subscribe": ["dashboard.source_failing"], "failing_minutes": 1},
         }
     )
     db = Database(":memory:")
     registry.migrate(config, db)
-    # A part of notes (always on), which the refresh doesn't overwrite.
+    # A part of notes, which the refresh doesn't overwrite.
     SnapshotRepository(db).save_error("notes.part", NOW, "boom")
     refresh.refresh(config, db, NOW)
     refresh.refresh(config, db, NOW + timedelta(minutes=2))

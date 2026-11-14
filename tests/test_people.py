@@ -302,7 +302,6 @@ class _InboxPlugin(Plugin[BaseModel, BaseModel]):
     title = "Inbox"
     api_version = API_VERSION
     config_model = _NoSettings
-    always_on = True
     kinds: ClassVar[dict[str, KindSpec]] = {"inbox.thread": KindSpec(KindModel)}
 
     def entities(self, req: Request[BaseModel, BaseModel]) -> list[Entity]:

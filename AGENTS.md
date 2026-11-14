@@ -55,7 +55,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 - A plugin says what it is in class variables, each documented on `Plugin`: its `name`, `title`,
   `config_model`, `kinds` and `families`, `requires`, `migrations`, how it refreshes (`watches`,
   `change_check_seconds`), its `notification_kinds`, and how `mfd init` and the settings page show
-  it (`always_on`, `init`), and `api_version`. `init` is an `Init`, built in the plugin's
+  it (`init`), and `api_version`. `init` is an `Init`, built in the plugin's
   `setup.py`: its questions, its example section and tables, whether `mfd init` suggests it, and its
   token's next step. A setting the settings page mustn't change (where a credential goes) is marked
   on its config model's field, with `LOCKED`.
