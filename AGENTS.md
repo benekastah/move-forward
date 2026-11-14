@@ -58,7 +58,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   (a collector's `changed`, with `change_check_seconds` and `watches`), `Command` (`cli`) and
   `Fetcher` (`fetch`, for its `fetchable` kinds). A mixin's abstract hooks must all be implemented,
   and the registry refuses a combination that makes no sense (a change checker that doesn't collect,
-  a fetchable kind of a plugin that isn't a fetcher). `init` is an `Init`, built in the plugin's
+  a fetchable kind of a plugin that isn't a fetcher, a mixin's hook without the mixin). `init` is an `Init`, built in the plugin's
   `setup.py`: its questions, its example section and tables, whether `mfd init` suggests it, and its
   token's next step. A setting the settings page mustn't change (where a credential goes) is marked
   on its config model's field, with `LOCKED`.

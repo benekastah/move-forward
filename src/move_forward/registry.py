@@ -152,12 +152,11 @@ _CORE_FAMILY_NAMES = {family.name for family in CORE_FAMILIES}
 
 
 _MIXIN_MEMBERS: dict[type, tuple[str, ...]] = {
-    Collector: ("collect", "snapshots", "events"),
-    ChangeChecker: ("changed", "change_check_seconds", "watches"),
-    Fetcher: ("fetch",),
-    Command: ("cli",),
+    mixin: tuple(name for name in vars(mixin) if not name.startswith("_"))
+    for mixin in (Collector, ChangeChecker, Fetcher, Command)
 }
-"""What a plugin has only as one of the mixins, which core finds with isinstance."""
+"""What a plugin has only as one of the mixins, which core finds with isinstance: each one's
+public hooks and class variables, e.g. `Command`'s `cli`."""
 
 
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:

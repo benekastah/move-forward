@@ -23,6 +23,8 @@ for themselves (a token, a request, an example config) is core's.
   plugin with `mfd <name>` adds `api.Command[C]`, holding `cli`; one with `fetchable` kinds adds
   `api.Fetcher[C]`, holding `fetch`, and the registry refuses a fetchable kind without it, or it
   without a fetchable kind. `Graph.fetch` asks only a fetcher, about its fetchable kinds. The
+  registry refuses a mixin's hook or class variable on a plugin without the mixin (a `cli` without
+  `Command`), which core would never call. The
   `collects` property is gone: core asks `isinstance(plugin, Collector)`.
 - **No `always_on`**: a plugin is on only when the config has its section, notes included.
   Drop the class variable; a plugin with nothing to ask suggests itself with
