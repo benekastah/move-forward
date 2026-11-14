@@ -286,7 +286,7 @@ class IssueAttrs(KindModel):
 
 class LinearPlugin(...):
     kinds: ClassVar[dict[str, KindSpec]] = {
-        ISSUE: KindSpec(IssueAttrs, linking=True, fetchable=True, resolvable=True)
+        ISSUE: KindSpec(IssueAttrs, linking=True, resolvable=True)
     }
 
     def entities(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Entity]:

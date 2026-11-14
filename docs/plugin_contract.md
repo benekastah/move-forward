@@ -99,7 +99,9 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 What only some plugins do is a mixin a plugin adds to its bases beside `Plugin[C, S]`, with the
 same type parameters, and core finds with `isinstance`. A mixin's abstract hooks must be
 overridden, so a plugin can't half-implement one: Python refuses to make an instance without
-them, and basedpyright says so first.
+them, and basedpyright says so first. A plugin with one of a mixin's hooks or class variables
+but not the mixin (a `cli` without `Command`) is refused by the registry, as core would never
+call it.
 
 ### `Collector`
 

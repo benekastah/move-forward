@@ -151,6 +151,15 @@ config, the commands and the server."""
 _CORE_FAMILY_NAMES = {family.name for family in CORE_FAMILIES}
 
 
+_MIXIN_MEMBERS: dict[type, tuple[str, ...]] = {
+    Collector: ("collect", "snapshots", "events"),
+    ChangeChecker: ("changed", "change_check_seconds", "watches"),
+    Fetcher: ("fetch",),
+    Command: ("cli",),
+}
+"""What a plugin has only as one of the mixins, which core finds with isinstance."""
+
+
 def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     """Raise unless every plugin is built against this dashboard's `API_VERSION`, and its
     name is its own and fit to be one: lower-case, not two plugins', none of core's
@@ -159,6 +168,7 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     declares (`Plugin.families`), whose model they must extend. It has a config model, which
     rejects unknown keys, as does every model a field holds (`strict.loose_models`), and whose
     markers mark something (`strict.check_resolved_markers`).
+    What a mixin has comes with it (`_MIXIN_MEMBERS`): a plugin with a `cli` is a `Command`.
     A `ChangeChecker` collects, and has a `change_check_seconds` or plugins it `watches`; a
     plugin with a `fetchable` kind is a `Fetcher`, and a `Fetcher` has one; a `Command`'s
     `cli` has a docstring, its command's help."""
@@ -188,6 +198,15 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                 f"{plugin.name}'s config_model must reject unknown keys, in every model it"
                 f" holds: make {', '.join(loose)} a Strict"
             )
+        for mixin, members in _MIXIN_MEMBERS.items():
+            if not isinstance(plugin, mixin) and (
+                has := [m for m in members if hasattr(plugin, m)]
+            ):
+                # Core finds what a plugin does by its mixins: this would never be called.
+                raise TypeError(
+                    f"{plugin.name} has {', '.join(has)} but isn't a {mixin.__name__}: add it"
+                    " to its bases"
+                )
         if isinstance(plugin, ChangeChecker):
             if not isinstance(plugin, Collector):
                 raise TypeError(

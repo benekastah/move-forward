@@ -504,3 +504,26 @@ def test_a_plugins_command_without_a_docstring_is_refused() -> None:
     """Its help would be nothing: a function's docstring isn't inherited."""
     with pytest.raises(RuntimeError, match="undocumented's cli has no docstring"):
         registry.check_plugins([_Undocumented()])
+
+
+class _NotACommand(_Plain):
+    """A `cli` without `Command` among its bases."""
+
+    name = "not_a_command"
+
+    def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        """Never asked: core finds commands by `Command`."""
+        return lambda req: 0
+
+
+class _NotAChecker(_Plain):
+    name = "not_a_checker"
+    change_check_seconds = 60
+
+
+def test_what_a_mixin_has_without_the_mixin_is_refused() -> None:
+    """Before mixins, a `cli` made a command; now it would never be called."""
+    with pytest.raises(TypeError, match="not_a_command has cli but isn't a Command"):
+        registry.check_plugins([_NotACommand()])
+    with pytest.raises(TypeError, match="has change_check_seconds but isn't a ChangeChecker"):
+        registry.check_plugins([_NotAChecker()])

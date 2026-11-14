@@ -544,9 +544,8 @@ class ChangeChecker[C: BaseModel](ABC):
     it."""
 
     change_check_seconds: ClassVar[int | None] = None
-    """How often `mfd serve` asks `changed`; None for a plugin without such a check. In `mfd
-    serve`, it's also asked as each of its collects starts, when this is set or it `watches`
-    another."""
+    """How often `mfd serve` asks `changed`; None to ask it only after a refresh of a plugin it
+    `watches`. In `mfd serve`, it's also asked as each of its collects starts."""
     watches: ClassVar[list[str]] = []
     """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]` for
     git_stack, whose `collect` needs the repos git found: in each refresh that collects one of

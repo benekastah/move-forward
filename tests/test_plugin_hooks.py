@@ -215,6 +215,34 @@ def test_the_graph_fetches_through_the_plugin_that_owns_the_kind(
     assert _Fetching.asked == [["APP-1", "APP-2", "APP-3"]]  # not about PRs: not its kind
 
 
+class _FetchingOthers(JiraPlugin):
+    """Jira, a `Fetcher` of a kind of its own, but not of its tickets."""
+
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        "ticket": replace(JiraPlugin.kinds["ticket"], fetchable=False),
+        "jira.other": KindSpec(KindModel, fetchable=True),
+    }
+    asked: ClassVar[list[str]] = []
+
+    def fetch(self, req: RefRequest[JiraConfig]) -> list[Entity]:
+        self.asked.append(req.kind)
+        return []
+
+
+def test_a_fetcher_is_asked_only_about_its_fetchable_kinds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plugins = [_FetchingOthers() if p.name == "jira" else p for p in registry.PLUGINS]
+    monkeypatch.setattr(registry, "PLUGINS", plugins)
+    config = Config.model_validate({"email": "me@x", "jira": {"site": "https://j"}})
+    db = Database(":memory:")
+    registry.migrate(config, db)
+    graph, _ = refresh.stored_graph(db, registry.enabled(config, db, NOW))
+    assert graph.fetch("ticket", ["APP-1"]) == {}
+    graph.fetch("jira.other", ["x"])
+    assert _FetchingOthers.asked == ["jira.other"]
+
+
 class _Asked(JiraPlugin):
     """Jira, noting each kind core asks it about, by hook."""
 
