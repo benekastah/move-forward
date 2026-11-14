@@ -20,6 +20,10 @@ for themselves (a token, a request, an example config) is core's.
   `req.previous.graph`: once they've stored, in the same refresh (the server's and `mfd
   refresh`'s alike), it's asked, and collected again from the new graph if it says something
   moved. That replaces asking a watcher only after the refresh, in the server.
+- **A config model rejects unknown keys**: the registry refuses a plugin whose `config_model`
+  doesn't (pydantic's `BaseModel` ignores them), or holds a model in a field that doesn't (a
+  `RootModel` aside), so a typo in its section is an error rather than dropped. Subclass
+  `api.Strict`, for those models too.
 - **A `teams` hook**: `Plugin.teams_field` is gone. `teams(config)` returns the top-level
   teams a plugin's section names, which the config checks the top level has; empty by
   default. A plugin that set `teams_field = "teams"` returns `set(config.teams)`.
