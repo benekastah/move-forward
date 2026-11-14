@@ -91,7 +91,7 @@ class _GitInKv(GitPlugin):
             raise RuntimeError("git is gone")
         return local_snapshot()
 
-    def snapshots(self, req: ContextRequest[GitConfig]) -> "_InKv":
+    def snapshots(self, req: ContextRequest[GitConfig]) -> _InKv:
         return _InKv(req.ctx.kv)
 
 

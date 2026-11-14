@@ -87,7 +87,7 @@ def read(service: str, account: str) -> str | None:
         command = ["secret-tool", "lookup", "service", service, "account", account]
     try:
         return run(command).strip() or None
-    except (CommandError, FileNotFoundError):
+    except CommandError, FileNotFoundError:
         return None
 
 

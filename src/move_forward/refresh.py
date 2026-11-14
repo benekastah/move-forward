@@ -863,5 +863,5 @@ def _mark_opened(db: Database, opened: str) -> None:
     try:
         fields: dict[str, str] = json.loads(opened)
         _act_now_action(act_now.ActNowConfig(), db, "opened", fields)
-    except (ValueError, ActionError, TypeError):
+    except ValueError, ActionError, TypeError:
         log.debug("ignoring malformed opened fields: %r", opened)

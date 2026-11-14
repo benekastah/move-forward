@@ -231,7 +231,7 @@ def _literal(host: object) -> bool:
         return True
     try:
         ipaddress.ip_address(os.fsdecode(cast(str | bytes, host)).partition("%")[0])
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
     return True
 

@@ -82,7 +82,7 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
         """No Linear to ask: the tests `store` what it would have fetched."""
         return LinearSnapshot(issues=[])
 
-    def snapshots(self, req: ContextRequest[LinearConfig]) -> "_Issues":
+    def snapshots(self, req: ContextRequest[LinearConfig]) -> _Issues:
         return _Issues(req.ctx.kv)
 
     def entities(self, req: Request[LinearConfig, LinearSnapshot]) -> list[Entity]:

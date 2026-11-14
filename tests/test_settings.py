@@ -380,7 +380,7 @@ class _LaterConfig(Strict):
     """A field naming a type defined after the class: unresolved, so unchecked, as the class is
     defined."""
 
-    host: "_Later | None" = None
+    host: _Later | None = None
 
 
 type _Later = Annotated[str, LOCKED]
@@ -400,7 +400,7 @@ def test_a_marker_buried_in_a_type_resolved_later_is_refused_at_registration() -
 class _ShadowedConfig(Strict):
     """A field naming a type defined after it whose name is also a local of the registry's."""
 
-    host: "plugin | None" = None
+    host: plugin | None = None
 
 
 type plugin = Annotated[str, LOCKED]  # noqa: PYI042 - named as `check_plugins`' loop variable
