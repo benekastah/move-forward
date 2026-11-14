@@ -1,9 +1,9 @@
 """The families of entity kinds: what more than one tool may represent, core's (a pull
-request, a ticket, a person) and those plugins declare (`Plugin.families`). A plugin's kind
-named for a family must extend its model,
-adding the plugin's own fields, so every publisher's entities of the family carry what the
-family's model says and other plugins read them through it. A plugin's other kinds are its
-own, named for it (`git.branch`). See `docs/entities.md`."""
+request, a ticket, a person, a team) and those plugins declare (`Plugin.families`). A
+plugin's kind named for a family must extend its model, adding the plugin's own fields, so
+every publisher's entities of the family carry what the family's model says and other plugins
+read them through it. A plugin's other kinds are its own, named for it (`git.branch`). See
+`docs/entities.md`."""
 
 import re
 from collections.abc import Callable, Generator, Iterable
@@ -21,6 +21,8 @@ TICKET = "ticket"
 """The family of tickets (issues), which link what's about them."""
 PERSON = "person"
 """The family of people."""
+TEAM = "team"
+"""The family of teams: a group a review can be requested of."""
 TAG = "tag"
 """Core's own kind: a `#tag`, carried by the entities whose title or mentions have it, or that I put it on
 (see `tags`); text naming it only points at it. No plugin publishes it, nor declares a
@@ -95,6 +97,15 @@ class Person(KindModel):
     """What they are to me, when the tool knows: "customer", say, from a CRM. See `people`."""
 
 
+class Team(KindModel):
+    """What every team has, whoever publishes it."""
+
+    handle: str
+    """Its name in the tool, e.g. a GitHub team's slug: what PRs' `requested_teams` name it by."""
+    mine: bool = False
+    """I'm on it or review for it, as its plugin's section says."""
+
+
 _EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 _SHARED_MAILBOX = re.compile(r"(no-?reply|do-?not-?reply|notifications?)(\+.*)?")
 """The local parts of addresses many people's mail or commits come from, e.g.
@@ -121,6 +132,15 @@ _HOST_LOGIN = re.compile(r"[A-Za-z0-9.-]+(?::[0-9]+)?/[^/\s]+")
 def is_host_login(id: str) -> bool:
     """Whether `id` is `<host>/<login>`, e.g. `github.com/alice`: a person's id."""
     return _HOST_LOGIN.fullmatch(id) is not None
+
+
+_HOST_PATH = re.compile(r"[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^/\s]+){2,}")
+
+
+def is_host_path(id: str) -> bool:
+    """Whether `id` is `<host>/<owner>/<name>` or deeper, e.g. `github.com/acme/web`: a
+    team's id."""
+    return _HOST_PATH.fullmatch(id) is not None
 
 
 class PullRequestFetched(KindModel):
@@ -155,6 +175,7 @@ CORE_FAMILIES = (
     Family(PULL_REQUEST, "PR", PullRequest, is_url, PullRequestFetched),
     Family(TICKET, "ticket", Ticket, is_url, TicketFetched),
     Family(PERSON, "person", Person, is_host_login),
+    Family(TEAM, "team", Team, is_host_path),
 )
 """The families core declares itself, as a plugin declares its own (`Plugin.families`)."""
 FAMILIES: dict[str, Family] = {}

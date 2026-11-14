@@ -13,7 +13,7 @@ means, is a deliberate change: update this file in the same commit.
 
 A plugin's own kinds are named for it, `<plugin>.<name>` (`git.branch`,
 `notes.entry`), so only it publishes them. A family's kind (`pull_request`, `ticket`,
-`person`; see below) can have several publishers: its entities' refs name the family, and
+`person`, `team`; see below) can have several publishers: its entities' refs name the family, and
 each says which plugin's kind it is in `kind` (`github.pull_request`). An entity of a kind
 its plugin doesn't declare, or a second entity of the same ref (two plugins publishing one
 PR), is left out of the graph and logged; the first stands.
@@ -31,8 +31,8 @@ in, e.g. `APP-12`, so `UTF-8` isn't one) is found in other entities'
 ## Families
 
 Core models what more than one tool may represent, in `move_forward.api.kinds`: the
-`pull_request` family (`PullRequest`, shown as "PR"), `ticket` (`Ticket`) and `person`
-(`Person`). A plugin may declare more (`Plugin.families`, see
+`pull_request` family (`PullRequest`, shown as "PR"), `ticket` (`Ticket`), `person`
+(`Person`) and `team` (`Team`). A plugin may declare more (`Plugin.families`, see
 [writing-a-plugin.md](writing-a-plugin.md)), each with a `handle` in its model, and publishes
 kinds only of core's families and those it declares. A plugin's kind named for a family must extend its model, adding its own fields
 (github's `number`, jira's `status`); the registry refuses one that doesn't. Refs to a
@@ -51,6 +51,7 @@ breaks its family's rule:
 | `pull_request` | its URL | `#7`, `!12` |
 | `ticket` | its URL | its key, `APP-12` |
 | `person` | `<host>/<login>`, e.g. `github.com/alice`; mail's are `mail/<address>` (`mail/<login>` for a mailbox signing in with a bare login) | the login, or the address |
+| `team` | `<host>/<org>/<slug>`, e.g. `github.com/acme/web` | the slug |
 
 What the dashboard kept by a handle before (a priority on `APP-12`, a todo linked to it)
 gets the entity's id at each refresh, once the graph can say it (`Graph.identify`); until
@@ -146,6 +147,15 @@ points at a person is about them, so core ranks and badges its items by their co
 
 No built-in plugin gives a person a `contact_type` yet: today it comes from what I set (see
 the README's People).
+
+### `team`
+
+The team family, modeled in core (`api.kinds.Team`). No built-in plugin publishes teams yet.
+
+| Attribute | Type | Meaning |
+| --- | --- | --- |
+| `handle` | string | its name in the tool, a slug: what PRs' `requested_teams` name it by |
+| `mine` | bool | I'm on it or review for it, as its plugin's section says |
 
 ### `mail.thread`
 

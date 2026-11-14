@@ -1,5 +1,5 @@
 """Each family's ids are unique whoever publishes them (PRs' and tickets' URLs, people's
-`<host>/<login>`), and what was kept by a handle (a ticket's key) gets its entity's id."""
+`<host>/<login>`, teams' `<host>/<org>/<slug>`), and what was kept by a handle (a ticket's key) gets its entity's id."""
 
 from datetime import timedelta
 
@@ -10,7 +10,7 @@ from move_forward import priority, registry
 from move_forward.act_now import Feedback
 from move_forward.db import Database
 from move_forward.graph import Entity, Graph, Ref
-from move_forward.kinds import FAMILIES, PERSON, TICKET, fits
+from move_forward.kinds import FAMILIES, PERSON, TEAM, TICKET, fits
 from move_forward.plugin import Request
 from move_forward.plugins.jira.config import JiraConfig
 from move_forward.plugins.jira.models import JiraSnapshot
@@ -33,6 +33,8 @@ def test_ids_fit_their_familys_rule() -> None:
     assert fits(TICKET, APP_1) and not fits(TICKET, "APP-1")
     assert fits(PERSON, "github.com/alice") and fits(PERSON, "git.acme.com:8443/alice")
     assert not fits(PERSON, "alice") and not fits(PERSON, "https://github.com/alice")
+    assert fits(TEAM, "github.com/acme/web") and fits(TEAM, "gitlab.com/acme/eng/web")
+    assert not fits(TEAM, "web") and not fits(TEAM, "github.com/web")
     assert fits("git.branch", "/src/w\tme/x")  # a plugin's own kind: any id
 
 
