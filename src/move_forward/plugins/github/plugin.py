@@ -8,11 +8,14 @@ from urllib.parse import urlsplit
 from ...api import (
     API_VERSION,
     ActionHandler,
+    ChangeChecker,
     Changed,
+    Collector,
     Context,
     ContextRequest,
     Entity,
     Event,
+    Fetcher,
     Graph,
     KindSpec,
     Migration,
@@ -87,7 +90,12 @@ def _team_slugs(ctx: Context[GitHubConfig]) -> list[str]:
     return [ctx.config.slug(team) for team in ctx.teams]
 
 
-class GitHubPlugin(Plugin[GitHubConfig, GitHubSnapshot]):
+class GitHubPlugin(
+    Plugin[GitHubConfig, GitHubSnapshot],
+    Collector[GitHubConfig, GitHubSnapshot],
+    ChangeChecker[GitHubConfig],
+    Fetcher[GitHubConfig],
+):
     name = "github"
     title = "GitHub"
     init = INIT

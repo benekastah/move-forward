@@ -97,8 +97,12 @@ the time was kept, says only that it has)."""
 
 
 def store_snapshot(e: Enabled, snapshot: BaseModel) -> None:
-    """Keep a plugin's new snapshot, and remember that it has one, and when."""
-    e.kept().save(snapshot)
+    """Keep a plugin's new snapshot, and remember that it has one, and when. Only a plugin that
+    collects has one."""
+    kept = e.kept()
+    if kept is None:
+        raise TypeError(f"{e.name} doesn't collect, so keeps no snapshot")
+    kept.save(snapshot)
     KvRepository(e.ctx.db, CORE).set(f"{STORED}{e.name}", e.ctx.now.isoformat())
 
 
@@ -149,9 +153,9 @@ def changes_of(
     """The events a plugin's `events` makes of a refresh, subscribed to or not, from what held
     `previous`ly and its snapshot `after` and the graph now; none while it has no snapshot to
     compare with."""
-    if previous.snapshot is None or after is None:
+    if e.collector is None or previous.snapshot is None or after is None:
         return []
-    return e.plugin.events(Request(e.ctx, graph, after, previous))
+    return e.collector.events(Request(e.ctx, graph, after, previous))
 
 
 def newly_shown_of(e: Enabled, after: BaseModel | None, graph: Graph) -> list[Event]:
@@ -220,7 +224,7 @@ def _collect_all(
     moved since its last collect and the ids of its entities `asked` for (`ChangeChecks.take`,
     asking its check first when `asking`; a plugin not `named`, None meaning all, was asked
     for them alone, so they narrow its collect), and keep it where the plugin keeps it
-    (`Plugin.snapshots`), which settles what it was given and lets the tags I took off what it
+    (`Collector.snapshots`), which settles what it was given and lets the tags I took off what it
     publishes come back (`TagRepository.put_back`): it has found them again, or not. Each
     plugin has
     `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh
@@ -282,16 +286,24 @@ def _wants(e: Enabled, subscribed: set[str]) -> bool:
 
 def to_collect(plugins: list[Enabled], only: set[str] | None = None) -> list[Enabled]:
     """What a refresh of `only` (None: every plugin) collects: the plugins that collect."""
-    return [e for e in plugins if e.plugin.collects and (only is None or e.name in only)]
+    return [e for e in plugins if e.collector is not None and (only is None or e.name in only)]
 
 
 def _collector(graph: Graph) -> Callable[[Enabled, Taken], BaseModel]:
     """Collects a plugin from `graph`, given what `ChangeChecks.take` took."""
 
     def collect(e: Enabled, taken: Taken) -> BaseModel:
-        return e.plugin.collect(RefreshRequest(e.ctx, graph, taken.full, taken.subjects))
+        collector = e.collector
+        if collector is None:
+            raise TypeError(f"{e.name} doesn't collect")
+        return collector.collect(RefreshRequest(e.ctx, graph, taken.full, taken.subjects))
 
     return collect
+
+
+def _watches(e: Enabled) -> list[str]:
+    """The plugins whose entities the plugin's `changed` reads (`ChangeChecker.watches`)."""
+    return [] if e.change_checker is None else e.change_checker.watches
 
 
 def _settle(
@@ -311,14 +323,12 @@ def _settle(
     this brings it up to date in the same refresh. Once, not until nothing moves. Returns the
     plugins whose collect it started: not one still collecting, its first collect past its
     timeout."""
-    watching = [
-        e for e in plugins if e.plugin.collects and collected.intersection(e.plugin.watches)
-    ]
+    watching = [e for e in plugins if collected.intersection(_watches(e))]
     moved = {e.name: why for e in watching if (why := checks.moved(e, graph, before)) is not None}
     if not moved:
         return set()
     again = [e for e in watching if e.name in moved]
-    watched = sorted({name for e in again for name in e.plugin.watches} & collected)
+    watched = sorted({name for e in again for name in _watches(e)} & collected)
     log.info("changed with %s: %s; collecting", ", ".join(watched), said(moved))
     return _collect_all(db, again, now, _collector(graph), checks, graph, asking=False)
 
@@ -377,7 +387,7 @@ def refresh(
     )
     ran = {e.name for e in due} | collected
     for e in plugins:
-        if e.name not in ran and e.plugin.collects:
+        if e.name not in ran and e.collector is not None:
             continue
         try:
             e.plugin.after_collect(Request(e.ctx, graph, snapshots.get(e.name)))
@@ -415,7 +425,7 @@ def asked_of(config: Config, db: Database, refs: list[Ref]) -> dict[str, frozens
     are left out."""
     plugins = enabled(config, db, datetime.now(UTC))
     graph, _ = stored_graph(db, plugins)
-    collecting = {e.name for e in plugins if e.plugin.collects}
+    collecting = {e.name for e in plugins if e.collector is not None}
     return {
         name: frozenset(ref.id for ref in mine)
         for name, mine in publishers(graph, refs).items()
@@ -749,7 +759,7 @@ def _tag(config: Config, db: Database, action: str, fields: dict[str, str]) -> A
 
 def refreshing(plugins: list[Enabled]) -> dict[str, str]:
     """The titles of the plugins that refresh (collect), by name."""
-    return {e.name: e.plugin.title for e in plugins if e.plugin.collects}
+    return {e.name: e.plugin.title for e in plugins if e.collector is not None}
 
 
 def _members(fields: dict[str, str]) -> list[tuple[str, str, str, str]]:

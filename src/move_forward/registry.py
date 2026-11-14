@@ -25,15 +25,18 @@ from .kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named
 from .plugin import (
     API_VERSION,
     Address,
+    ChangeChecker,
+    Collector,
+    Command,
     Context,
     ContextRequest,
+    Fetcher,
     Plugin,
     RefRequest,
     Request,
     Snapshots,
     SourceError,
     command_help,
-    overrides,
 )
 from .repositories import KvRepository, SetAsideRepository
 
@@ -156,8 +159,9 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     declares (`Plugin.families`), whose model they must extend. It has a config model, which
     rejects unknown keys, as does every model a field holds (`strict.loose_models`), and whose
     markers mark something (`strict.check_resolved_markers`).
-    A plugin overriding `collect` overrides `snapshots` too, and the reverse; one overriding
-    `cli` gives it a docstring, its command's help."""
+    A `ChangeChecker` collects, and has a `change_check_seconds` or plugins it `watches`; a
+    plugin with a `fetchable` kind is a `Fetcher`, and a `Fetcher` has one; a `Command`'s
+    `cli` has a docstring, its command's help."""
     names = [p.name for p in plugins]
     if duplicates := sorted({name for name in names if names.count(name) > 1}):
         raise RuntimeError(f"two plugins are named {', '.join(duplicates)}")
@@ -184,14 +188,25 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                 f"{plugin.name}'s config_model must reject unknown keys, in every model it"
                 f" holds: make {', '.join(loose)} a Strict"
             )
-        if overrides(plugin, "collect") != overrides(plugin, "snapshots"):
-            # One without the other would fetch what nothing keeps, or keep what nothing fetches.
-            has, lacks = ("collect", "snapshots") if plugin.collects else ("snapshots", "collect")
+        if isinstance(plugin, ChangeChecker):
+            if not isinstance(plugin, Collector):
+                raise TypeError(
+                    f"{plugin.name} is a ChangeChecker but not a Collector: what it says moved"
+                    " is for a collect"
+                )
+            if plugin.change_check_seconds is None and not plugin.watches:
+                raise RuntimeError(
+                    f"{plugin.name} is a ChangeChecker with neither change_check_seconds nor"
+                    " watches, so its changed would never be asked"
+                )
+        fetchable = sorted(kind for kind, spec in plugin.kinds.items() if spec.fetchable)
+        if fetchable and not isinstance(plugin, Fetcher):
             raise RuntimeError(
-                f"{plugin.name} overrides {has} but not {lacks}: a plugin that collects keeps"
-                " what it fetched with snapshots, and only one that collects keeps a snapshot"
+                f"{plugin.name}'s {', '.join(fetchable)} is fetchable, but it isn't a Fetcher"
             )
-        if overrides(plugin, "cli") and command_help(plugin) is None:
+        if isinstance(plugin, Fetcher) and not fetchable:
+            raise RuntimeError(f"{plugin.name} is a Fetcher, but none of its kinds is fetchable")
+        if isinstance(plugin, Command) and command_help(plugin) is None:
             raise RuntimeError(
                 f"{plugin.name}'s cli has no docstring: its first line is the help of"
                 f" `mfd {plugin.name}`"
@@ -267,23 +282,47 @@ class Enabled:
         return self.plugin.name
 
     @property
+    def collector(self) -> Collector[Any, Any] | None:
+        """The plugin, when it collects (`Collector`); else None."""
+        return self.plugin if isinstance(self.plugin, Collector) else None
+
+    @property
+    def change_checker(self) -> ChangeChecker[Any] | None:
+        """The plugin, when it checks what moved (`ChangeChecker`); else None."""
+        return self.plugin if isinstance(self.plugin, ChangeChecker) else None
+
+    @property
+    def fetcher(self) -> Fetcher[Any] | None:
+        """The plugin, when it looks entities up by id (`Fetcher`); else None."""
+        return self.plugin if isinstance(self.plugin, Fetcher) else None
+
+    @property
     def refresh_seconds(self) -> int | None:
         """How often the plugin refreshes on its own: its section's `refresh_seconds`; None
         for one that doesn't collect, or has no such setting."""
-        if not self.plugin.collects:
+        if self.collector is None:
             return None
         seconds: object = getattr(self.ctx.config, "refresh_seconds", None)
         return seconds if isinstance(seconds, int) else None
 
     def snapshot(self) -> BaseModel | None:
-        """What the plugin last stored; None when it has nothing, or loading it through its
-        `snapshots` fails (logged as `snapshots.load`)."""
-        with self.ctx.db.reading():  # all of one refresh's, never half of the next's
-            return call(self.name, "snapshots.load", lambda: self.kept().load(), None)
+        """What the plugin last stored; None when it doesn't collect, has nothing, or loading
+        it through its `snapshots` fails (logged as `snapshots.load`)."""
+        collector = self.collector
+        if collector is None:
+            return None
 
-    def kept(self) -> Snapshots[Any]:
-        """Where the plugin keeps its snapshot (`Plugin.snapshots`)."""
-        return self.plugin.snapshots(ContextRequest(self.ctx))
+        def load() -> BaseModel | None:
+            return collector.snapshots(ContextRequest(self.ctx)).load()
+
+        with self.ctx.db.reading():  # all of one refresh's, never half of the next's
+            return call(self.name, "snapshots.load", load, None)
+
+    def kept(self) -> Snapshots[Any] | None:
+        """Where the plugin keeps its snapshot (`Collector.snapshots`); None when it doesn't
+        collect."""
+        collector = self.collector
+        return None if collector is None else collector.snapshots(ContextRequest(self.ctx))
 
 
 def call[T](name: str, hook: str, fn: Callable[[], T], default: T) -> T:
@@ -496,8 +535,11 @@ def build_graph(
         what its kind's fetched entities carry (see `_unfit_fetched`)."""
         found: list[Entity] = []
         for e in owners(kind):
+            fetcher = e.fetcher
+            if fetcher is None or not e.plugin.kinds[kind].fetchable:
+                continue
             try:
-                answer = e.plugin.fetch(RefRequest(e.ctx, kind, ids))
+                answer = fetcher.fetch(RefRequest(e.ctx, kind, ids))
             except SourceError:
                 raise
             except Exception:

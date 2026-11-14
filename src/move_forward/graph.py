@@ -84,7 +84,7 @@ class KindSpec:
     hides: bool = False
     """Whether its entities hide what they point at (notes' ice); see `Graph.hidden`."""
     fetchable: bool = False
-    """Whether `Plugin.fetch` can look its entities up when the graph no longer has them, as
+    """Whether `Fetcher.fetch` can look its entities up when the graph no longer has them, as
     the daily prune does to learn whether long-gone work ended."""
     gone_means_done: bool = False
     """Whether an entity missing from the graph is done: its plugin publishes only open ones
@@ -335,10 +335,11 @@ class Graph:
         return self._url_for(kind, id)
 
     def fetch(self, kind: str, ids: list[str]) -> dict[str, Entity]:
-        """Entities of `kind` by id, fetched now from every plugin that publishes the kind (a
-        family may have several), whether or not the graph has them: e.g. PRs merged months ago,
-        for the daily prune. Slow (it calls the tools), so only for work that runs rarely; ids no
-        plugin can find are left out."""
+        """Entities of `kind` by id, fetched now from every plugin that publishes the kind and
+        can fetch it (a `Fetcher`, whose kind is `fetchable`; a family may have several),
+        whether or not the graph has them: e.g. PRs merged months ago, for the daily prune.
+        Slow (it calls the tools), so only for work that runs rarely; ids no plugin can find are
+        left out."""
         if not ids:
             return {}
         return {e.ref.id: e for e in self._fetch(kind, ids) if e.ref.kind == kind}

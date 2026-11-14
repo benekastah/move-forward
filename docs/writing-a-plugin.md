@@ -147,7 +147,7 @@ class LinearConfig(TokenFields):
 ## Collecting and storing
 
 ```python
-class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
+class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig, LinearSnapshot]):
     name = "linear"
     title = "Linear"
     api_version = API_VERSION
@@ -178,34 +178,35 @@ class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
   it each time it's checked rather than warning of it yourself: one not reported for
   `prune_days` is forgotten.
 
-- A plugin collects (`collects`) when it overrides `collect`, and it then overrides
-  `snapshots` too: core refuses a plugin with one and not the other. It has a `refresh_seconds`
+- A plugin collects when it's a `Collector`, a mixin beside `Plugin` with the same type
+  parameters, whose `collect` and `snapshots` it must implement: Python makes no instance
+  without both. One that collects nothing (notes) leaves it out, and its snapshot type is
+  `BaseModel`. A plugin that collects has a `refresh_seconds`
   setting in its section (with a default that suits its tool): the server refreshes it
   that often, on its own schedule.
-- A plugin with a cheap way to tell that its tool has something new (a file's time, a
-  request answered "not modified", another plugin's entities in the graph) sets
-  `change_check_seconds` and implements `changed(req)`, which says what moved in its tool
-  (a `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the `subjects`
-  that moved in the plugin's own terms (repos, PRs), `everything=True` for something moved
-  that no subject names, or more than one of these, and a `reason` for the log; `Changed()`
-  says nothing moved. Core keeps the answer, not the plugin: the server asks that often,
-  compares each fingerprint with the last, and refreshes the plugin as soon as something
-  moved since the last check (a different fingerprint, any subject, or `everything`), so name
-  a subject only when it moved again. It asks again as each collect of the plugin starts,
-  so what moves while it runs is compared with what it read. The last fingerprint and when
-  it was taken are `req.previous.fingerprint` and `req.previous.at`, for a check that needs
-  them (which repos moved, what was updated since); other plugins' entities it compares with
-  `req.previous.graph`, the graph its last check was given (None at the first since the
-  server started). The subjects stay pending until a collect that started after they moved
-  stores, so one that fails loses none: `collect` gets them as `req.subjects`, with
-  `req.full` saying whether to fetch everything anyway (its first collect since the server
-  started, unless it collects only entities asked for, below, and a full collect stored
-  within `refresh_seconds`; `refresh_seconds` since the last full collect that stored;
-  something unnamed moved; or nothing's pending). With `changed`, `refresh_seconds` can be
-  long. A `changed` that
-  reads another plugin's entities from the graph names that plugin in `watches`: the
-  server asks it right after each refresh of that plugin (github watches git, to see my
-  PRs' branches move), whether or not it also has `change_check_seconds`.
+- A plugin with a cheap way to tell that its tool has something new (a file's time, a request
+  answered "not modified", another plugin's entities in the graph) is also a `ChangeChecker`: it
+  sets `change_check_seconds` and implements `changed(req)`, which says what moved in its tool (a
+  `Changed`): a `fingerprint` of its state (a digest, a mailbox's counts), the `subjects` that moved
+  in the plugin's own terms (repos, PRs), `everything=True` for something moved that no subject
+  names, or more than one of these, and a `reason` for the log; `Changed()` says nothing moved. Core
+  keeps the answer, not the plugin: the server asks that often, compares each fingerprint with the
+  last, and refreshes the plugin as soon as something moved since the last check (a different
+  fingerprint, any subject, or `everything`), so name a subject only when it moved again. It asks
+  again as each collect of the plugin starts, so what moves while it runs is compared with what it
+  read. The last fingerprint and when it was taken are `req.previous.fingerprint` and
+  `req.previous.at`, for a check that needs them (which repos moved, what was updated since); other
+  plugins' entities it compares with `req.previous.graph`, the graph its last check was given (None
+  at the first since the server started). The subjects stay pending until a collect that started
+  after they moved stores, so one that fails loses none: `collect` gets them as `req.subjects`, with
+  `req.full` saying whether to fetch everything anyway (its first collect since the server started,
+  unless it collects only entities asked for, below, and a full collect stored within
+  `refresh_seconds`; `refresh_seconds` since the last full collect that stored; something unnamed
+  moved; or nothing's pending). With `changed`, `refresh_seconds` can be long. A `changed` that
+  reads another plugin's entities from the graph names that plugin in `watches`: it's asked right
+  after each refresh of that plugin (git_stack watches git, to see its repos), whether or not it
+  also has `change_check_seconds`. A plugin with no cheap check isn't a `ChangeChecker`, and
+  refreshes every `refresh_seconds`.
 - `collect` runs in a refresh, in parallel with the other plugins due, and may be slow: it's
   the only place a plugin talks to its tool, along with `after_collect`
   and `fetch`. A plugin that fails is recorded with its error and the page carries on with
@@ -347,9 +348,9 @@ class LinearPlugin(...):
 - **Lifecycle.** Each entity says whether its work is over: `lifecycle="done"` for a merged
   PR or a resolved issue (its `state` keeps the tool's own word). Core clears priorities by
   it. A kind whose entities are published only while open (notes' todos) is
-  `gone_means_done`; one whose entities `fetch` can look up after they've left the
-  snapshot is `fetchable`; one `mfd priority <id>` should look in without `--kind` is
-  `resolvable`.
+  `gone_means_done`; one whose entities the plugin can look up after they've left the
+  snapshot is `fetchable`, and the plugin a `Fetcher`, implementing `fetch(req)`; one `mfd
+  priority <id>` should look in without `--kind` is `resolvable`.
 - **Tags.** A `#tag` in an entity's title or `mentions` (out of Markdown code and HTML
   comments) puts the tag on it, and text there naming one points it at the tag (see the
   README's Tags). Put the tool's labels in `Entity.tags`, as written ("Garbage Day"): core
@@ -503,7 +504,8 @@ name, a count) without losing them. Core leaves out, and logs, a nomination with
   `api.html.page` and `api.html.e` to escape everything), or a `Response`, e.g.
   `Response.redirect(url)`. Every page needs the
   dashboard's token, as every request does.
-- **Commands.** Implement `cli(parser)` for `mfd linear ...`, returning a handler `(req:
+- **Commands.** Add `Command[LinearConfig]` to the bases and implement `cli(parser)` for `mfd
+  linear ...`, returning a handler `(req:
   InputRequest) -> int` that gets the parsed `req.args`. The first line of its docstring is
   the command's help in `mfd --help`; core refuses a `cli` without one.
 

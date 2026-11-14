@@ -143,8 +143,8 @@ class Harness:
 
     def store(self, snapshot: BaseModel) -> None:
         """Keep `snapshot` as a refresh would after collecting it: where the plugin keeps it
-        (`Plugin.snapshots`), and when it was fetched. Its events are found then, as the refresh would (see
-        `events`)."""
+        (`Collector.snapshots`), and when it was fetched. Its events are found then, as the
+        refresh would (see `events`)."""
         with self._installed():
             before = refresh.before_refresh(
                 self.db, registry.enabled(self.config, self.db, self.now)
@@ -164,7 +164,9 @@ class Harness:
             me = self._enabled()
             graph = self.graph()
             taken = self._checks.take(me, graph)
-            snapshot = self.plugin.collect(
+            if me.collector is None:
+                raise TypeError(f"{self.name} doesn't collect")
+            snapshot = me.collector.collect(
                 RefreshRequest(me.ctx, graph, taken.full, taken.subjects)
             )
         self.store(snapshot)

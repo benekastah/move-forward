@@ -1,6 +1,7 @@
 """Core's hooks for plugins: buttons on other plugins' items, pages and commands."""
 
 import argparse
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import ClassVar
@@ -15,12 +16,15 @@ from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.domain import KindModel
 from move_forward.graph import Entity, Graph, KindSpec, Ref
+from move_forward.kinds import PERSON
 from move_forward.page import Action, Identity, ItemAdditions, Panel
 from move_forward.plugin import (
     Address,
     CliHandler,
+    Command,
     Context,
     ContextRequest,
+    Fetcher,
     InputRequest,
     ItemAdditionsFor,
     ItemRequest,
@@ -128,7 +132,7 @@ def test_plugin_pages_are_served_from_the_graph() -> None:
     assert refresh.plugin_page(config, db, "/nowhere", {}) is None
 
 
-class _Counted(JiraPlugin):
+class _Counted(JiraPlugin, Command[JiraConfig]):
     """Jira, plus `mfd jira count`, which prints how many tickets the graph has."""
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
@@ -260,6 +264,11 @@ def _person(id: str, **attrs: JsonValue) -> Entity:
 class _GitHubPeople(GitHubPlugin):
     """GitHub, knowing no person's handle and fetching alice."""
 
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        **GitHubPlugin.kinds,
+        PERSON: replace(GitHubPlugin.kinds[PERSON], fetchable=True),
+    }
+
     def address(self, req: RefRequest[GitHubConfig]) -> dict[str, Address]:
         _family_asked.append((self.name, "address"))
         return {}
@@ -269,8 +278,13 @@ class _GitHubPeople(GitHubPlugin):
         return [_person("github.com/alice", handle="alice", me=False)]
 
 
-class _MailPeople(MailPlugin):
+class _MailPeople(MailPlugin, Fetcher[MailConfig]):
     """Mail, knowing every person's handle and fetching bob."""
+
+    kinds: ClassVar[dict[str, KindSpec]] = {
+        **MailPlugin.kinds,
+        PERSON: replace(MailPlugin.kinds[PERSON], fetchable=True),
+    }
 
     def address(self, req: RefRequest[MailConfig]) -> dict[str, Address]:
         _family_asked.append((self.name, "address"))

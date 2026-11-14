@@ -32,7 +32,7 @@ from .act_now import PRIORITIES, UNTIL_CHANGED
 from .db import Database
 from .graph import Ref
 from .kinds import label
-from .plugin import CliHandler, InputRequest, command_help
+from .plugin import CliHandler, Command, InputRequest, command_help
 from .refresh import (
     build_dashboard,
     refresh,
@@ -172,7 +172,7 @@ def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:
     plugin_commands = {
         plugin.name: plugin.cli(commands.add_parser(plugin.name, help=about))
         for plugin in registry.PLUGINS
-        if (about := command_help(plugin)) is not None
+        if isinstance(plugin, Command) and (about := command_help(plugin)) is not None
     }
     return parser, plugin_commands
 

@@ -14,13 +14,19 @@ from pydantic import BaseModel, RootModel
 
 from move_forward import cli, config, kinds, registry, render, server
 from move_forward.domain import KindModel
-from move_forward.graph import KindSpec
+from move_forward.graph import Entity, KindSpec
 from move_forward.kinds import FAMILIES, Family, Person, declaring, is_url
 from move_forward.plugin import (
     API_VERSION,
+    ChangeChecker,
+    Changed,
     CliHandler,
+    Collector,
+    Command,
     ContextRequest,
+    Fetcher,
     Plugin,
+    RefRequest,
     RefreshRequest,
     Snapshots,
 )
@@ -403,24 +409,6 @@ class _Plain(Plugin[Strict, KindModel]):
     api_version = API_VERSION
 
 
-class _Collects(Plugin[Strict, KindModel]):
-    name = "collects"
-    config_model = Strict
-    api_version = API_VERSION
-
-    def collect(self, req: RefreshRequest[Strict]) -> KindModel:
-        return KindModel()
-
-
-class _Keeps(Plugin[Strict, KindModel]):
-    name = "keeps"
-    config_model = Strict
-    api_version = API_VERSION
-
-    def snapshots(self, req: ContextRequest[Strict]) -> Snapshots[KindModel]:
-        return _Nothing()
-
-
 class _Nothing:
     def save(self, snapshot: KindModel) -> None:
         pass
@@ -429,30 +417,83 @@ class _Nothing:
         return None
 
 
-class _CollectsAndKeeps(_Collects):
-    name = "both"
+class _Collects(Plugin[Strict, KindModel], Collector[Strict, KindModel]):
+    name = "collects"
+    config_model = Strict
+    api_version = API_VERSION
+
+    def collect(self, req: RefreshRequest[Strict]) -> KindModel:
+        return KindModel()
 
     def snapshots(self, req: ContextRequest[Strict]) -> Snapshots[KindModel]:
         return _Nothing()
 
 
-def test_a_plugin_collects_when_it_overrides_collect_and_snapshots() -> None:
-    registry.check_plugins([_CollectsAndKeeps()])
-    assert _CollectsAndKeeps().collects
-    assert not _Plain().collects
+class _CollectsHalf(Plugin[Strict, KindModel], Collector[Strict, KindModel]):
+    name = "half"
+    config_model = Strict
+    api_version = API_VERSION
+
+    def collect(self, req: RefreshRequest[Strict]) -> KindModel:
+        return KindModel()
 
 
-def test_a_plugin_overriding_collect_without_snapshots_is_refused() -> None:
-    with pytest.raises(RuntimeError, match="collects overrides collect but not snapshots"):
-        registry.check_plugins([_Collects()])
+def test_a_collector_is_one_that_collects_and_keeps_what_it_found() -> None:
+    registry.check_plugins([_Collects(), _Plain()])
+    assert isinstance(_Collects(), Collector) and not isinstance(_Plain(), Collector)
+    with pytest.raises(TypeError, match="abstract method 'snapshots'"):
+        _CollectsHalf()  # pyright: ignore[reportAbstractUsage]
 
 
-def test_a_plugin_overriding_snapshots_without_collect_is_refused() -> None:
-    with pytest.raises(RuntimeError, match="keeps overrides snapshots but not collect"):
-        registry.check_plugins([_Keeps()])
+class _Checks(_Collects, ChangeChecker[Strict]):
+    name = "checks"
+    change_check_seconds: ClassVar[int | None] = 30
+
+    def changed(self, req: RefreshRequest[Strict]) -> Changed:
+        return Changed()
 
 
-class _Undocumented(_Plain):
+class _NeverAsked(_Checks):
+    name = "never"
+    change_check_seconds: ClassVar[int | None] = None
+
+
+class _ChecksNothing(_Plain, ChangeChecker[Strict]):
+    name = "checks_nothing"
+    change_check_seconds: ClassVar[int | None] = 30
+
+    def changed(self, req: RefreshRequest[Strict]) -> Changed:
+        return Changed()
+
+
+def test_a_change_checker_collects_and_is_asked() -> None:
+    registry.check_plugins([_Checks()])
+    with pytest.raises(TypeError, match="checks_nothing is a ChangeChecker but not a Collector"):
+        registry.check_plugins([_ChecksNothing()])
+    with pytest.raises(RuntimeError, match="never is a ChangeChecker with neither"):
+        registry.check_plugins([_NeverAsked()])
+
+
+class _FetchesNothing(_Plain, Fetcher[Strict]):
+    name = "fetches_nothing"
+
+    def fetch(self, req: RefRequest[Strict]) -> list[Entity]:
+        return []
+
+
+class _CantFetch(_Plain):
+    name = "cant_fetch"
+    kinds: ClassVar[dict[str, KindSpec]] = {"cant_fetch.x": KindSpec(KindModel, fetchable=True)}
+
+
+def test_a_fetchable_kind_and_a_fetcher_go_together() -> None:
+    with pytest.raises(RuntimeError, match="cant_fetch's cant_fetch.x is fetchable, but it isn't"):
+        registry.check_plugins([_CantFetch()])
+    with pytest.raises(RuntimeError, match="fetches_nothing is a Fetcher, but none of its kinds"):
+        registry.check_plugins([_FetchesNothing()])
+
+
+class _Undocumented(_Plain, Command[Strict]):
     name = "undocumented"
 
     def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
@@ -460,6 +501,6 @@ class _Undocumented(_Plain):
 
 
 def test_a_plugins_command_without_a_docstring_is_refused() -> None:
-    """Its help would be `Plugin.cli`'s docstring, inherited, or nothing."""
+    """Its help would be nothing: a function's docstring isn't inherited."""
     with pytest.raises(RuntimeError, match="undocumented's cli has no docstring"):
         registry.check_plugins([_Undocumented()])

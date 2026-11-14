@@ -1,4 +1,4 @@
-"""What changed between two Jira snapshots, as notification events (`Plugin.events`).
+"""What changed between two Jira snapshots, as notification events (`Collector.events`).
 `closeable`, a ticket newly in the transitions panel to be closed, is the panel's
 (`Item.notify`).
 

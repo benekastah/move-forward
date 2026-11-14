@@ -1,4 +1,4 @@
-"""What changed between two GitHub snapshots, as notification events (`Plugin.events`).
+"""What changed between two GitHub snapshots, as notification events (`Collector.events`).
 
 Each kind says something once, when a state changes; a PR the earlier snapshot didn't hold
 has no state to compare, so it only ever says it's new (a review requested of me).

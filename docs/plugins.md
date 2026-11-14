@@ -118,7 +118,7 @@ flowchart TB
     urls -. "ticket links" .-> notes
 ```
 
-slack and notes have no snapshot, so they don't collect.
+slack and notes have no snapshot: they aren't `Collector`s.
 
 The daily prune is the one place a plugin reaches past the graph built from snapshots:
 notes asks `graph.fetch` when old PRs closed (github) and tickets resolved (jira), to know

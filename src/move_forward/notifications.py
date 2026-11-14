@@ -2,7 +2,7 @@
 track of what I've been told.
 
 A plugin compares its snapshot and the graph from before a refresh with the ones after
-(`Plugin.events`) and says what happened as `Event`s; core adds an event for each item with
+(`Collector.events`) and says what happened as `Event`s; core adds an event for each item with
 a notification (`Item.notify`) newly in the plugin's panels (`newly_shown`), and the ones
 about the dashboard itself (a plugin that keeps failing). Nothing is on until I subscribe to its kind
 (`[notifications] subscribe`, set on the settings page or by `mfd init`): events of kinds I

@@ -14,6 +14,16 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **Mixins for what only some plugins do**: a plugin that collects adds `api.Collector[C, S]`
+  to its bases beside `Plugin[C, S]`, and `collect`, `snapshots` and `events` moved there from
+  `Plugin` (`collect` and `snapshots` are abstract, so one without the other is refused as the
+  plugin is made, rather than by the registry). A collector with a change check also adds
+  `api.ChangeChecker[C]`, which holds `changed` (abstract), `change_check_seconds` and
+  `watches`; the registry refuses one that isn't a `Collector` or sets neither of the two. A
+  plugin with `mfd <name>` adds `api.Command[C]`, holding `cli`; one with `fetchable` kinds adds
+  `api.Fetcher[C]`, holding `fetch`, and the registry refuses a fetchable kind without it, or it
+  without a fetchable kind. `Graph.fetch` asks only a fetcher, about its fetchable kinds. The
+  `collects` property is gone: core asks `isinstance(plugin, Collector)`.
 - **No `always_on`**: a plugin is on only when the config has its section, notes included.
   Drop the class variable; a plugin with nothing to ask suggests itself with
   `Init(suggested=True)`.

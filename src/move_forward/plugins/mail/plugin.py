@@ -4,7 +4,9 @@ from typing import ClassVar
 
 from ...api import (
     API_VERSION,
+    ChangeChecker,
     Changed,
+    Collector,
     Context,
     ContextRequest,
     Entity,
@@ -76,7 +78,9 @@ def merged(read: list[Message], more: list[Message]) -> list[Message]:
     return found
 
 
-class MailPlugin(Plugin[MailConfig, MailSnapshot]):
+class MailPlugin(
+    Plugin[MailConfig, MailSnapshot], Collector[MailConfig, MailSnapshot], ChangeChecker[MailConfig]
+):
     name = "mail"
     title = "Mail"
     init = INIT
