@@ -306,6 +306,36 @@ def test_a_config_model_that_ignores_unknown_keys_is_refused() -> None:
         registry.check_plugins([Lax()])
 
 
+class _Account(BaseModel):
+    host: str = ""
+
+
+class _Accounts(Strict):
+    accounts: dict[str, _Account]
+
+
+def test_a_config_model_holding_one_that_ignores_unknown_keys_is_refused() -> None:
+    """`[lax.accounts.work] hots = ...` would be dropped as surely as a top-level typo."""
+
+    class Lax(Plugin[_Accounts, KindModel]):
+        name = "lax"
+        config_model = _Accounts
+        api_version = API_VERSION
+
+    with pytest.raises(RuntimeError, match="make _Account a Strict"):
+        registry.check_plugins([Lax()])
+
+
+def test_a_plugin_built_against_another_api_is_told_so_before_its_config_is_checked() -> None:
+    class Old(Plugin[_Lenient, KindModel]):
+        name = "old"
+        config_model = _Lenient
+        api_version = API_VERSION - 1
+
+    with pytest.raises(RuntimeError, match="built against API version"):
+        registry.check_plugins([Old()])
+
+
 def test_a_plugin_named_for_a_core_tables_prefix_is_refused() -> None:
     class Team(Plugin[Strict, KindModel]):
         name = "team"

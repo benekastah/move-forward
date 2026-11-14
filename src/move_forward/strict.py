@@ -82,6 +82,42 @@ def check_resolved_markers(model: type[BaseModel]) -> None:
     check_markers(model)
 
 
+def _model(annotation: object) -> type[BaseModel] | None:
+    """`annotation`, if it's a model class."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    return None
+
+
+def loose_models(model: type[BaseModel]) -> list[str]:
+    """The names of the models, `model` and any a field's type holds (`dict[str, Account]`,
+    `Account | None`, a `type` alias's value), that ignore unknown keys rather than reject
+    them, as a `Strict` does: a typo there would be dropped without a word. Run on a model
+    whose late types are resolved (`check_resolved_markers`)."""
+    loose: list[str] = []
+    seen: set[int] = set()
+
+    def visit(annotation: object) -> None:
+        if id(annotation) in seen:
+            return
+        seen.add(id(annotation))
+        if (held := _model(annotation)) is not None:
+            if held.model_config.get("extra") != "forbid":
+                loose.append(held.__name__)
+            for field in held.model_fields.values():
+                visit(field.annotation)
+            return
+        inner: tuple[object, ...] = get_args(annotation)
+        for alias in (annotation, get_origin(annotation)):
+            if isinstance(alias, TypeAliasType):
+                inner = (*inner, alias.__value__)
+        for arg in inner:
+            visit(arg)
+
+    visit(model)
+    return loose
+
+
 def _markers_in(annotation: object, seen: set[int]) -> list[Marker]:
     """The markers anywhere in `annotation`: its arguments' (an `Annotated`'s metadata among
     them), and a `type` alias's value's, generic (`Locked[str]`) or not, each looked into
