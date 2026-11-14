@@ -16,6 +16,7 @@ from xml.etree import ElementTree
 
 import pytest
 from conftest import ME, NOW, pr, snapshot
+from pydantic import BaseModel
 
 from move_forward import auth, registry, server, settings
 from move_forward.change_checks import ChangeChecks
@@ -28,10 +29,14 @@ from move_forward.panels import Layout
 from move_forward.plugin import (
     ActionError,
     ActionResult,
+    ChangeChecker,
     Changed,
+    Collector,
+    ContextRequest,
     InputRequest,
     RefreshRequest,
     Response,
+    Snapshots,
 )
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.github import notifications as github_notifications
@@ -883,8 +888,16 @@ def test_a_change_check_is_given_the_graph_of_the_last_that_didnt_fail(
     assert third is seen  # the failed check's graph isn't the one compared with
 
 
-class _SlackChanging(SlackPlugin):
+class _SlackChanging(SlackPlugin, Collector[SlackConfig, BaseModel], ChangeChecker[SlackConfig]):
+    """Slack, as though it collected and had a change check, which always says it moved."""
+
     change_check_seconds: ClassVar[int | None] = 60
+
+    def collect(self, req: RefreshRequest[SlackConfig]) -> BaseModel:
+        return BaseModel()
+
+    def snapshots(self, req: ContextRequest[SlackConfig]) -> Snapshots[BaseModel]:
+        raise NotImplementedError("only checked, never stored")
 
     def changed(self, req: RefreshRequest[SlackConfig]) -> Changed:
         return Changed(everything=True, reason="a message")

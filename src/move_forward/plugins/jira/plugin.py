@@ -12,10 +12,13 @@ from ...api import (
     Address,
     Badge,
     Band,
+    ChangeChecker,
     Changed,
+    Collector,
     ContextRequest,
     Entity,
     Event,
+    Fetcher,
     Graph,
     Item,
     KindSpec,
@@ -390,7 +393,12 @@ def key_pattern(projects: list[str]) -> str | None:
     return rf"\b(?:{alternatives})-\d+\b"
 
 
-class JiraPlugin(Plugin[JiraConfig, JiraSnapshot]):
+class JiraPlugin(
+    Plugin[JiraConfig, JiraSnapshot],
+    Collector[JiraConfig, JiraSnapshot],
+    ChangeChecker[JiraConfig],
+    Fetcher[JiraConfig],
+):
     name = "jira"
     title = "Jira"
     init = INIT

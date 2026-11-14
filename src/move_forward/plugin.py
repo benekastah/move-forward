@@ -1,16 +1,19 @@
 """The plugin protocol: what core asks of each external tool's plugin.
 
-A plugin owns one config section, one snapshot (what it fetches on each refresh), its own
-tables, and the panels, actions, pages and commands for its tool. Plugins never see each
-other's config, snapshots or tables; they learn about each other's data only through the
-entity graph (`graph`). Every method has a do-nothing default, so a plugin implements only
-what it uses.
+A plugin owns one config section, its own tables, and the panels, actions, pages and
+commands for its tool. Plugins never see each other's config, snapshots or tables; they learn
+about each other's data only through the entity graph (`graph`). Every method of `Plugin` has
+a do-nothing default, so a plugin implements only what it uses. What only some plugins do is a
+mixin a plugin adds to its bases, which core finds with `isinstance`: `Collector` (it fetches
+a snapshot on each refresh), `ChangeChecker` (a collector that checks cheaply what moved),
+`Command` (it has `mfd <name>`) and `Fetcher` (it looks entities up by id).
 """
 
 import argparse
 import inspect
 import logging
 import traceback
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -287,7 +290,7 @@ def adds_nothing(req: ItemRequest) -> ItemAdditions:
 @dataclass(frozen=True, kw_only=True)
 class Changed:
     """`changed`'s answer: what moved in the plugin's tool, which core keeps (see
-    `Plugin.changed`). `Changed()` says nothing moved."""
+    `ChangeChecker.changed`). `Changed()` says nothing moved."""
 
     fingerprint: str | None = None
     """The tool's state now, as text that changes whenever it moves (a digest, a mailbox's
@@ -354,7 +357,7 @@ parameters too) and raises `ActionError` with the reason when it can't."""
 
 
 class Snapshots[S: BaseModel](Protocol):
-    """Where a plugin keeps its snapshot (`Plugin.snapshots`): usually its repository over the
+    """Where a plugin keeps its snapshot (`Collector.snapshots`): usually its repository over the
     tables its migrations made. Nothing is kept as JSON."""
 
     def save(self, snapshot: S) -> None:
@@ -367,19 +370,6 @@ class Snapshots[S: BaseModel](Protocol):
         nothing. Core holds the database while it runs (`Database.reading`), so a refresh can't
         store between its queries: it mustn't wait on another thread using `ctx.db`."""
         ...
-
-
-class _NoSnapshots[S: BaseModel]:
-    """What a plugin that doesn't collect keeps: nothing."""
-
-    def __init__(self, plugin: str):
-        self._plugin = plugin
-
-    def save(self, snapshot: S) -> None:
-        raise NotImplementedError(f"{self._plugin} keeps no snapshot")
-
-    def load(self) -> S | None:
-        return None
 
 
 class Plugin[C: BaseModel, S: BaseModel]:
@@ -421,25 +411,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The events the plugin's `events` makes, by kind, each with what it says, for the
     settings page and `mfd init` to offer: `pr_mergeable` is stored and subscribed to as
     `github.pr_mergeable`."""
-    change_check_seconds: ClassVar[int | None] = None
-    """How often `mfd serve` asks `changed`; None for a plugin without such a check. In `mfd
-    serve`, it's also asked as each of its collects starts, when this is set or it `watches`
-    another."""
-    watches: ClassVar[list[str]] = []
-    """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]` for
-    git_stack, whose `collect` needs the repos git found: in each refresh that collects one of
-    them, once they've stored, `changed` is asked with the new graph, and the plugin collected
-    (again, if it was collected in that refresh, from the graph as it was before) when it says
-    something moved, rather than waiting for `change_check_seconds` (see `refresh._settle`)."""
     init: ClassVar[Init] = Init()
     """How `mfd init` sets the section up: its questions, example and the like (`Init`). By
     default nothing is asked and the plugin isn't suggested."""
-
-    @property
-    def collects(self) -> bool:
-        """Whether the plugin fetches anything: it overrides `collect` (and so `snapshots`, as
-        the registry checks), so a refresh calls its `collect` and it has a schedule."""
-        return overrides(self, "collect")
 
     def tokens(self, config: C) -> dict[str, TokenSettings]:
         """Every token the plugin keeps, for `mfd token`, by name: `""` for its own, and one per
@@ -457,57 +431,9 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     # Refresh
 
-    def collect(self, req: RefreshRequest[C]) -> S:
-        """Fetch the plugin's snapshot: everything, or with `req.full` False just what its
-        change checks said moved (`req.subjects`), from the graph (`req.graph`: as stored
-        before the refresh, or after for a plugin collected again as it `watches` one that
-        refreshed). Runs in parallel with other plugins' and
-        may raise; the error is shown and the last good snapshot kept. It has five minutes
-        (`refresh.COLLECT_TIMEOUT_SECONDS`): past that, the refresh records the plugin as
-        failed and goes on, and leaves it out of refreshes until its collect returns (a thread
-        can't be stopped)."""
-        raise NotImplementedError(f"{self.name} doesn't collect")
-
-    def snapshots(self, req: ContextRequest[C]) -> Snapshots[S]:
-        """Where the plugin keeps what `collect` fetched, in its own tables: usually its
-        repository over them (see `Snapshots`). A plugin overriding `collect` overrides this
-        too; by default nothing is kept, for a plugin that doesn't collect."""
-        return _NoSnapshots[S](self.name)
-
-    def events(self, req: Request[C, S]) -> list[Event]:
-        """What happened since the last refresh, as events of its `notification_kinds`:
-        compare its snapshot (`req.previous.snapshot`, `req.snapshot`) and what other plugins'
-        entities say (`req.previous.graph`, `req.graph`) before and after it, and say what
-        became true. Asked after every refresh, of anything, when I've subscribed to one of its
-        kinds, but never before the plugin has stored a snapshot to compare with (so neither
-        snapshot is None). Say it only when the state changed (not mergeable to mergeable), and
-        never about something new now that the snapshot before hasn't any state for. A failure
-        is logged and the refresh goes on."""
-        return []
-
     def after_collect(self, req: Request[C, S]) -> None:
         """Work that needs other plugins' entities, once every snapshot is stored, e.g.
         caching lookups in the plugin's tables."""
-
-    def changed(self, req: RefreshRequest[C]) -> Changed:
-        """What moved in the plugin's tool, by a check far cheaper than `collect` (files'
-        times, a request answered "not modified", other plugins' entities in `graph`, built
-        from what's stored), so the plugin refreshes soon after a change rather than at its
-        next `refresh_seconds`. Say it as a `fingerprint` of the tool's state, which core
-        compares with the last (`req.previous.fingerprint`), the `subjects` that moved, or that
-        something moved that no subject names (`everything`); or more than one of these.
-        Other plugins' entities are compared with `req.previous.graph`, which core keeps too,
-        and a tool asked what moved since a time is given `req.previous.at`. Say
-        why in `reason`, for the log; `Changed()` says nothing moved.
-
-        In `mfd serve`, core asks again as each collect of the plugin starts (when it has a
-        `change_check_seconds` or `watches` another), so what moves while it runs is
-        compared with what it read, and gives `collect` what moved since a collect last
-        stored. It asks for a refresh whenever something moved since the last check: a
-        different fingerprint, any subject (one still pending after a collect that failed
-        too), or `everything`. May raise; the error is logged and the next check tries
-        again."""
-        return Changed()
 
     # Reading
 
@@ -527,12 +453,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def entities(self, req: Request[C, S]) -> list[Entity]:
         """What the plugin publishes to the graph, from its snapshot and tables."""
-        return []
-
-    def fetch(self, req: RefRequest[C]) -> list[Entity]:
-        """Entities of one of its `kinds`, by id, fetched from its tool now, even ones its
-        snapshot doesn't hold; `Graph.fetch` asks. Core asks only about the plugin's own kinds
-        (about a family, each plugin that publishes it), so `req.kind` is one of them."""
         return []
 
     def address(self, req: RefRequest[C]) -> dict[str, Address]:
@@ -573,12 +493,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         `InputRequest` with the `form` posted."""
         return {}
 
-    def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
-        """Add the arguments of `mfd <name>` to `parser` and return what runs it, given an
-        `InputRequest` with the parsed `args`. A plugin has a command when it overrides this,
-        with a docstring whose first line is the command's help (`command_help`)."""
-        raise NotImplementedError(f"{self.name} has no command")
-
     # Upkeep
 
     def prune(self, req: Request[C, S]) -> list[str]:
@@ -587,18 +501,108 @@ class Plugin[C: BaseModel, S: BaseModel]:
         return []
 
 
-def overrides(plugin: Plugin[Any, Any], hook: str) -> bool:
-    """Whether `plugin`'s class overrides `Plugin`'s method `hook`: what some hooks' being
-    there says (`collects`, `command_help`)."""
-    return getattr(type(plugin), hook) is not getattr(Plugin, hook)
+class Collector[C: BaseModel, S: BaseModel](ABC):
+    """A plugin that fetches from its tool on each refresh it's due in, keeping what it found
+    in its tables: its snapshot, `S`. One that doesn't publishes from its own tables (notes)
+    or from other plugins' entities alone. Add it to the bases beside `Plugin[C, S]`, with
+    the same `C` and `S`."""
+
+    @abstractmethod
+    def collect(self, req: RefreshRequest[C]) -> S:
+        """Fetch the plugin's snapshot: everything, or with `req.full` False just what its
+        change checks said moved (`req.subjects`), from the graph (`req.graph`: as stored
+        before the refresh, or after for a plugin collected again as it `watches` one that
+        refreshed). Runs in parallel with other plugins' and may raise; the error is shown and
+        the last good snapshot kept. It has five minutes (`refresh.COLLECT_TIMEOUT_SECONDS`):
+        past that, the refresh records the plugin as failed and goes on, and leaves it out of
+        refreshes until its collect returns (a thread can't be stopped)."""
+
+    @abstractmethod
+    def snapshots(self, req: ContextRequest[C]) -> Snapshots[S]:
+        """Where the plugin keeps what `collect` fetched, in its own tables: usually its
+        repository over them (see `Snapshots`)."""
+
+    def events(self, req: Request[C, S]) -> list[Event]:
+        """What happened since the last refresh, as events of its `notification_kinds`:
+        compare its snapshot (`req.previous.snapshot`, `req.snapshot`) and what other plugins'
+        entities say (`req.previous.graph`, `req.graph`) before and after it, and say what
+        became true. Asked after every refresh, of anything, when I've subscribed to one of its
+        kinds, but never before the plugin has stored a snapshot to compare with (so neither
+        snapshot is None). Say it only when the state changed (not mergeable to mergeable), and
+        never about something new now that the snapshot before hasn't any state for. A failure
+        is logged and the refresh goes on. None by default."""
+        return []
+
+
+class ChangeChecker[C: BaseModel](ABC):
+    """A `Collector` with a check of what moved in its tool far cheaper than collecting, so it
+    refreshes soon after a change rather than at its next `refresh_seconds`; or one whose
+    `collect` reads other plugins' entities, and so `watches` them. One without a cheap check
+    leaves it out and refreshes on its schedule. Add it to the bases beside `Plugin[C, S]` and
+    `Collector[C, S]`, with the same `C`. The registry refuses one that doesn't collect, or
+    has neither a `change_check_seconds` nor a plugin it `watches`, as core would never ask
+    it."""
+
+    change_check_seconds: ClassVar[int | None] = None
+    """How often `mfd serve` asks `changed`; None to ask it only after a refresh of a plugin it
+    `watches`. In `mfd serve`, it's also asked as each of its collects starts."""
+    watches: ClassVar[list[str]] = []
+    """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]` for
+    git_stack, whose `collect` needs the repos git found: in each refresh that collects one of
+    them, once they've stored, `changed` is asked with the new graph, and the plugin collected
+    (again, if it was collected in that refresh, from the graph as it was before) when it says
+    something moved, rather than waiting for `change_check_seconds` (see `refresh._settle`)."""
+
+    @abstractmethod
+    def changed(self, req: RefreshRequest[C]) -> Changed:
+        """What moved in the plugin's tool, by a check far cheaper than `collect` (files'
+        times, a request answered "not modified", other plugins' entities in `graph`, built
+        from what's stored), so the plugin refreshes soon after a change rather than at its
+        next `refresh_seconds`. Say it as a `fingerprint` of the tool's state, which core
+        compares with the last (`req.previous.fingerprint`), the `subjects` that moved, or that
+        something moved that no subject names (`everything`); or more than one of these.
+        Other plugins' entities are compared with `req.previous.graph`, which core keeps too,
+        and a tool asked what moved since a time is given `req.previous.at`. Say
+        why in `reason`, for the log; `Changed()` says nothing moved.
+
+        In `mfd serve`, core asks again as each collect of the plugin starts (when it has a
+        `change_check_seconds` or `watches` another), so what moves while it runs is
+        compared with what it read, and gives `collect` what moved since a collect last
+        stored. It asks for a refresh whenever something moved since the last check: a
+        different fingerprint, any subject (one still pending after a collect that failed
+        too), or `everything`. May raise; the error is logged and the next check tries
+        again."""
+
+
+class Command[C: BaseModel](ABC):
+    """A plugin with a command of its own, `mfd <name>`. Add it to the bases beside
+    `Plugin[C, S]`, with the same `C`."""
+
+    @abstractmethod
+    def cli(self, parser: argparse.ArgumentParser) -> CliHandler:
+        """Add the arguments of `mfd <name>` to `parser` and return what runs it, given an
+        `InputRequest` with the parsed `args`. Its docstring's first line is the command's help
+        (`command_help`): the registry refuses an override without one."""
+
+
+class Fetcher[C: BaseModel](ABC):
+    """A plugin that looks its entities up in its tool by id, even ones its snapshot doesn't
+    hold, for `Graph.fetch`: the kinds it can are marked `KindSpec.fetchable`, and the registry
+    refuses a fetchable kind of a plugin that isn't one, and one with no fetchable kind. Add it
+    to the bases beside `Plugin[C, S]`, with the same `C`."""
+
+    @abstractmethod
+    def fetch(self, req: RefRequest[C]) -> list[Entity]:
+        """Entities of one of its fetchable `kinds`, by id, fetched from its tool now. Core asks
+        only about the plugin's own kinds (about a family, each plugin that publishes it), so
+        `req.kind` is one of them."""
 
 
 def command_help(plugin: Plugin[Any, Any]) -> str | None:
     """The help line of `mfd <name>`: the first line of the docstring of the plugin's `cli`;
-    None for a plugin without a command (not overriding `cli`), or whose `cli` has no
-    docstring (which the registry refuses). Its own docstring, not one inherited from
-    `Plugin.cli`."""
-    if not overrides(plugin, "cli"):
+    None for a plugin without a command (not a `Command`), or whose `cli` has no docstring
+    (which the registry refuses). Its own docstring, not one inherited from `Command.cli`."""
+    if not isinstance(plugin, Command):
         return None
     doc = type(plugin).cli.__doc__
     return inspect.cleandoc(doc).splitlines()[0] if doc and doc.strip() else None

@@ -1,19 +1,18 @@
 # The plugin contract
 
-The plugin contract in one place: the class variables and hooks of `move_forward.api.Plugin`,
-the requests its hooks are given, its context (`ctx`), what `changed` answers, and the markers
-its config model can carry. Other types hooks and handlers return or name (`Snapshots`,
-`Address`, `Panel`, `Entity`, `Event`, `ActionResult`, `Response` and the like) are documented
-on themselves, in `move_forward.api`. Each line says what the code's docstring says; the
-docstrings have the detail.
-[writing-a-plugin.md](writing-a-plugin.md) walks through making a plugin with these, and
-`tests/test_plugin_contract_doc.py` checks that this page names every one of them, and nothing
-that isn't.
+The plugin contract in one place: the class variables and hooks of `move_forward.api.Plugin` and of
+the mixins a plugin may add, the requests its hooks are given, its context (`ctx`), what `changed`
+answers, and the markers its config model can carry. Other types hooks and handlers return or name
+(`Snapshots`, `Address`, `Panel`, `Entity`, `Event`, `ActionResult`, `Response` and the like) are
+documented on themselves, in `move_forward.api`. Each line says what the code's docstring says; the
+docstrings have the detail. [writing-a-plugin.md](writing-a-plugin.md) walks through making a plugin
+with these, and `tests/test_plugin_contract_doc.py` checks that this page names every one of them,
+and nothing that isn't.
 
 `Plugin[C, S]`: `C` is the model of the plugin's config section, `S` its snapshot's (`BaseModel`
-for a plugin that collects nothing). Every hook has a default, so a plugin overrides only what
-it uses: most do nothing, `collect` and `cli` exist only when overridden, and the rows say what
-the others do.
+for a plugin that collects nothing). Every hook of `Plugin` has a default, so a plugin overrides
+only what it uses: most do nothing, and the rows say what the others do. What only some plugins
+do (collecting, a change check, a command, fetching by id) is a mixin (below).
 
 ## Class variables
 
@@ -35,25 +34,12 @@ the others do.
 | `requires` | `list[str]`, `[]` | Plugins whose entities it's built on (`["git"]`); the config must enable them too. |
 | `migrations` | `list[Migration]`, `[]` | Scripts creating and changing its tables (prefixed with `name`), applied in order. Append only. |
 
-### Scheduling
-
-| Name | Type, default | What it says |
-| --- | --- | --- |
-| `change_check_seconds` | `int \| None`, `None` | How often `mfd serve` asks `changed`; None for no poll. In `mfd serve`, `changed` is also asked as each of its collects starts, when this is set or it `watches` another. |
-| `watches` | `list[str]`, `[]` | Plugins whose entities its `changed` reads from the graph (git_stack: `["git"]`). The settle step: in each refresh that collects one of them, once they've stored, `changed` is asked with the new graph, and the plugin is collected (again, if it collected in that refresh from the graph before) when it says something moved, in the same refresh (`refresh._settle`). |
-
 ### Notifications and setup
 
 | Name | Type, default | What it says |
 | --- | --- | --- |
 | `notification_kinds` | `dict[str, str]`, `{}` | The events its `events` makes, by kind, each with what it says, for the settings page and `mfd init`: `pr_mergeable` is subscribed to as `github.pr_mergeable`. |
 | `init` | `Init`, `Init()` | How `mfd init` sets the section up (below). By default nothing is asked and it isn't suggested. |
-
-### Derived
-
-| Name | Type | What it says |
-| --- | --- | --- |
-| `collects` | `bool` (property) | Whether it fetches anything: it overrides `collect` (and so `snapshots`; the registry refuses one without the other), so a refresh calls its `collect` and it has a schedule. |
 
 ## `Init`
 
@@ -77,7 +63,6 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | --- | --- | --- |
 | `tokens` | `tokens(config: C) -> dict[str, TokenSettings]` | Every token it keeps, by name (`""` for its own, one per account otherwise), for `mfd token` and loading the config. By default its section, when that has `token_env` and `keychain_service`. |
 | `teams` | `teams(config: C) -> set[str]` | The top-level teams its section names, which loading the config checks the top level has. Empty by default. |
-| `cli` | `cli(parser: ArgumentParser) -> CliHandler` | Adds the arguments of `mfd <name>` and returns what runs it, given an `InputRequest` with `args`. It has a command only when it overrides this; the override's docstring's first line is the command's help. |
 | `pages` | `pages() -> dict[str, PageHandler]` | Extra pages by key, served at `/<plugin>/<key>` (`""`: `/<plugin>`), each given an `InputRequest` with `page`. |
 | `actions` | `actions() -> dict[str, ActionHandler]` | Button handlers by name, posted to `/actions/<plugin>/<name>`, each given an `InputRequest` with `form`. |
 
@@ -85,10 +70,6 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
-| `collect` | `collect(req: RefreshRequest[C]) -> S` | Fetches its snapshot: everything, or with `req.full` False just `req.subjects`. Called in each refresh it's due in (all of them, or one naming it or its entities), unless an earlier collect is still running, in parallel with the others', from the graph as stored before the refresh (or again in the settle step, see `watches`). Five minutes, then it's recorded as failed. |
-| `snapshots` | `snapshots(req: ContextRequest[C]) -> Snapshots[S]` | Where it keeps what `collect` fetched, in its own tables (`save`, `load`). Overridden together with `collect`. |
-| `changed` | `changed(req: RefreshRequest[C]) -> Changed` | A cheap check of what moved in its tool (a `Changed`, below), so it refreshes soon. Asked by `mfd serve` every `change_check_seconds` and as each of its collects starts (when it has a `change_check_seconds` or `watches` another), and in the settle step of a refresh of a plugin it `watches`. |
-| `events` | `events(req: Request[C, S]) -> list[Event]` | What became true since the last refresh, as events of its `notification_kinds`, comparing `req.previous` with now. Asked after every refresh when I've subscribed to one of its kinds, once it has stored a snapshot. |
 | `after_collect` | `after_collect(req: Request[C, S]) -> None` | Work that needs other plugins' entities (caching lookups in its tables). After each refresh's events and daily prune: for the plugins due in it (even one still collecting), those collected again in the settle step, and every plugin that collects nothing; not while the dashboard stops. It reads only what's stored. |
 
 ### Graph
@@ -98,7 +79,6 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | `entities` | `entities(req: Request[C, S]) -> list[Entity]` | What it publishes to the graph, from its snapshot and tables. Called every time the graph is built (`req.graph` empty). |
 | `relate` | `relate(req: Request[C, S]) -> list[tuple[Ref, Ref]]` | Relations between one of its entities and another plugin's that neither's data says (a PR and its local branch). Every time the graph is built: no I/O. |
 | `linking_patterns` | `linking_patterns(req: ContextRequest[C]) -> dict[str, str \| None]` | Its `linking` kinds with the patterns of their ids now. Every time the graph is built, so read from its tables. |
-| `fetch` | `fetch(req: RefRequest[C]) -> list[Entity]` | Entities of one of its kinds, by id, fetched from its tool now, even ones its snapshot doesn't hold, for `Graph.fetch`. |
 | `address` | `address(req: RefRequest[C]) -> dict[str, Address]` | Where each entity of one of its kinds is (`url`) and what text names it (`handle`), by id, even one not in the graph. By default the id as the URL for a family whose ids are URLs. |
 
 ### Page
@@ -113,6 +93,63 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
 | `prune` | `prune(req: Request[C, S]) -> list[str]` | Daily: drops its data about work finished over `prune_days` ago, and says what it did. |
+
+## Mixins
+
+What only some plugins do is a mixin a plugin adds to its bases beside `Plugin[C, S]`, with the
+same type parameters, and core finds with `isinstance`. A mixin's abstract hooks must be
+overridden, so a plugin can't half-implement one: Python refuses to make an instance without
+them, and basedpyright says so first. A plugin with one of a mixin's hooks or class variables
+but not the mixin (a `cli` without `Command`) is refused by the registry, as core would never
+call it.
+
+### `Collector`
+
+`Collector[C, S]`: it fetches from its tool on each refresh it's due in, and keeps what it
+found, its snapshot `S`, in its own tables. One that isn't publishes from its own tables
+(notes) or other plugins' entities alone, has no `refresh_seconds` schedule, and its `S` is
+`BaseModel`.
+
+| Hook | Signature | Purpose, and when core calls it |
+| --- | --- | --- |
+| `collect` | `collect(req: RefreshRequest[C]) -> S` (abstract) | Fetches its snapshot: everything, or with `req.full` False just `req.subjects`. Called in each refresh it's due in (all of them, or one naming it or its entities), unless an earlier collect is still running, in parallel with the others', from the graph as stored before the refresh (or again in the settle step, see `ChangeChecker.watches`). Five minutes, then it's recorded as failed. |
+| `snapshots` | `snapshots(req: ContextRequest[C]) -> Snapshots[S]` (abstract) | Where it keeps what `collect` fetched, in its own tables (`save`, `load`). |
+| `events` | `events(req: Request[C, S]) -> list[Event]` | What became true since the last refresh, as events of its `notification_kinds`, comparing `req.previous` with now. Asked after every refresh when I've subscribed to one of its kinds, once it has stored a snapshot. |
+
+### `ChangeChecker`
+
+`ChangeChecker[C]`: a `Collector` with a check of what moved in its tool far cheaper than
+collecting, so it refreshes soon after a change; or one whose `collect` reads other plugins'
+entities, so it `watches` them. One with no cheap check isn't one, and refreshes on its
+schedule. The registry refuses one that isn't a `Collector`, or has neither
+`change_check_seconds` nor `watches`, as `changed` would never be asked.
+
+| Name | Type, default | What it says |
+| --- | --- | --- |
+| `change_check_seconds` | `int \| None`, `None` | How often `mfd serve` asks `changed`; None for no poll. In `mfd serve`, `changed` is also asked as each of its collects starts, when this is set or it `watches` another. |
+| `watches` | `list[str]`, `[]` | Plugins whose entities its `changed` reads from the graph (git_stack: `["git"]`). The settle step: in each refresh that collects one of them, once they've stored, `changed` is asked with the new graph, and the plugin is collected (again, if it collected in that refresh from the graph before) when it says something moved, in the same refresh (`refresh._settle`). |
+
+| Hook | Signature | Purpose, and when core calls it |
+| --- | --- | --- |
+| `changed` | `changed(req: RefreshRequest[C]) -> Changed` (abstract) | A cheap check of what moved in its tool (a `Changed`, below), so it refreshes soon. Asked by `mfd serve` every `change_check_seconds` and as each of its collects starts (when it has a `change_check_seconds` or `watches` another), and in the settle step of a refresh of a plugin it `watches`. |
+
+### `Command`
+
+`Command[C]`: it has a command of its own, `mfd <name>`.
+
+| Hook | Signature | Purpose, and when core calls it |
+| --- | --- | --- |
+| `cli` | `cli(parser: ArgumentParser) -> CliHandler` (abstract) | Adds the arguments of `mfd <name>` and returns what runs it, given an `InputRequest` with `args`. Its docstring's first line is the command's help; the registry refuses it without one. |
+
+### `Fetcher`
+
+`Fetcher[C]`: it looks its entities up in its tool by id, for `Graph.fetch`. The kinds it can
+are marked `fetchable`; the registry refuses a fetchable kind of a plugin that isn't a
+`Fetcher`, and a `Fetcher` with no fetchable kind.
+
+| Hook | Signature | Purpose, and when core calls it |
+| --- | --- | --- |
+| `fetch` | `fetch(req: RefRequest[C]) -> list[Entity]` (abstract) | Entities of one of its `fetchable` kinds, by id, fetched from its tool now, even ones its snapshot doesn't hold, for `Graph.fetch`. |
 
 ## Requests
 

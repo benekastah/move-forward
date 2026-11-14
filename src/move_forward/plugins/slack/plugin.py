@@ -18,6 +18,7 @@ from ...api import (
     ActionError,
     ActionHandler,
     CliHandler,
+    Command,
     Context,
     Graph,
     InputRequest,
@@ -138,7 +139,7 @@ def ping_page(ping: PrPing, now: datetime, notice: str = "") -> str:
     return html.page(f"Ping: {ping.title}", "ping", body, COPY_SCRIPT)
 
 
-class SlackPlugin(Plugin[SlackConfig, BaseModel]):
+class SlackPlugin(Plugin[SlackConfig, BaseModel], Command[SlackConfig]):
     name = "slack"
     title = "Slack"
     init = INIT

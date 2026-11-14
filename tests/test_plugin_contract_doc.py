@@ -1,6 +1,6 @@
 """`docs/plugin_contract.md` lists the whole plugin contract: it must name every class variable
-and property, hook, `Init` field, request, context and answer field, context method and config
-marker there is, and nothing that isn't."""
+and property, hook, mixin's class variable and hook, `Init` field, request, context and answer
+field, context method and config marker there is, and nothing that isn't."""
 
 import dataclasses
 import re
@@ -8,9 +8,13 @@ from pathlib import Path
 
 from move_forward import strict
 from move_forward.api import (
+    ChangeChecker,
     Changed,
+    Collector,
+    Command,
     Context,
     ContextRequest,
+    Fetcher,
     Init,
     InputRequest,
     ItemRequest,
@@ -51,6 +55,18 @@ def test_every_hook_is_listed() -> None:
         name for name, value in vars(Plugin).items() if callable(value) and not name.startswith("_")
     }
     assert sorted(_listed("## Hooks")) == sorted(hooks)
+
+
+def test_every_mixins_class_variable_and_hook_is_listed() -> None:
+    for mixin in (Collector, ChangeChecker, Command, Fetcher):
+        members = {
+            name
+            for name, value in vars(mixin).items()
+            if not name.startswith("_") and callable(value)
+        }
+        assert sorted(_listed(f"### `{mixin.__name__}`")) == sorted(
+            {*mixin.__annotations__, *members}
+        ), mixin.__name__
 
 
 def test_every_init_field_is_listed() -> None:

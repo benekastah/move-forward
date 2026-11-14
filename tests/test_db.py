@@ -11,8 +11,8 @@ from move_forward import db as db_module
 from move_forward.config import DEFAULT_DB_PATH
 from move_forward.db import BACKUPS_DIR, CORE, CORE_MIGRATIONS, V1_SCHEMA, Database, Migration
 from move_forward.plugin import ContextRequest
-from move_forward.plugins.notes.config import NotesConfig
-from move_forward.plugins.notes.plugin import NotesPlugin
+from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.private import is_private
 from move_forward.repositories import KvRepository, SetAsideRepository
 from move_forward.shell import CommandError
@@ -566,15 +566,15 @@ def test_a_migration_another_process_ran_first_is_taken_as_done(
 
 def test_a_plugins_load_sees_no_write_between_its_reads(monkeypatch: pytest.MonkeyPatch) -> None:
     config, db = conftest.stored(work_items=[])
-    db.execute("CREATE TABLE notes_probe (x INTEGER)")
-    db.execute("INSERT INTO notes_probe VALUES (1)")
+    db.execute("CREATE TABLE git_probe (x INTEGER)")
+    db.execute("INSERT INTO git_probe VALUES (1)")
     seen: list[int] = []
 
     started = threading.Event()
 
     def write() -> None:
         started.set()
-        db.execute("UPDATE notes_probe SET x = 2")  # a refresh storing: it waits for the load
+        db.execute("UPDATE git_probe SET x = 2")  # a refresh storing: it waits for the load
 
     writer = threading.Thread(target=write)
 
@@ -583,21 +583,21 @@ def test_a_plugins_load_sees_no_write_between_its_reads(monkeypatch: pytest.Monk
             raise AssertionError("not stored")
 
         def load(self) -> None:
-            seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
+            seen.append(db.query("SELECT x FROM git_probe")[0]["x"])
             writer.start()
             started.wait()
             writer.join(0.2)
-            seen.append(db.query("SELECT x FROM notes_probe")[0]["x"])
+            seen.append(db.query("SELECT x FROM git_probe")[0]["x"])
 
-    def snapshots(self: NotesPlugin, req: ContextRequest[NotesConfig]) -> Probe:
+    def snapshots(self: GitPlugin, req: ContextRequest[GitConfig]) -> Probe:
         return Probe()
 
-    monkeypatch.setattr(NotesPlugin, "snapshots", snapshots)
-    [notes] = [e for e in registry.enabled(config, db, conftest.NOW) if e.name == "notes"]
-    notes.snapshot()
+    monkeypatch.setattr(GitPlugin, "snapshots", snapshots)
+    [git] = [e for e in registry.enabled(config, db, conftest.NOW) if e.name == "git"]
+    git.snapshot()
     writer.join()
     assert seen == [1, 1]
-    assert db.query("SELECT x FROM notes_probe")[0]["x"] == 2  # once the load was done
+    assert db.query("SELECT x FROM git_probe")[0]["x"] == 2  # once the load was done
 
 
 def test_a_transaction_within_a_transaction_is_refused_not_half_committed() -> None:

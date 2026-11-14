@@ -10,6 +10,7 @@ from ...api import (
     API_VERSION,
     ActionHandler,
     CliHandler,
+    Command,
     Context,
     Entity,
     Graph,
@@ -42,7 +43,7 @@ def _builder(ctx: Context[NotesConfig], graph: Graph) -> Builder:
     return Builder(ctx.now, graph, notes.entries(), notes.ices(), ctx.today)
 
 
-class NotesPlugin(Plugin[NotesConfig, BaseModel]):
+class NotesPlugin(Plugin[NotesConfig, BaseModel], Command[NotesConfig]):
     name = "notes"
     title = "Notes"
     init = INIT

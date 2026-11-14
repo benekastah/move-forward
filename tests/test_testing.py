@@ -7,6 +7,7 @@ import pytest
 from move_forward.api import (
     API_VERSION,
     ActionHandler,
+    Collector,
     ContextRequest,
     Entity,
     InputRequest,
@@ -68,7 +69,7 @@ class _Issues:
         return LinearSnapshot.model_validate_json(kept) if kept else None
 
 
-class LinearPlugin(Plugin[LinearConfig, LinearSnapshot]):
+class LinearPlugin(Plugin[LinearConfig, LinearSnapshot], Collector[LinearConfig, LinearSnapshot]):
     """A plugin of its own: its issues, by key, kept in kv."""
 
     name: ClassVar[str] = "linear"

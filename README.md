@@ -290,7 +290,7 @@ question, or listing them in `[notifications] subscribe` (for example
 `["dashboard.source_failing"]`). Press "Allow in this browser" on the settings page once.
 
 - Each plugin compares what it fetched, and what the others did, with what they had last
-  time (`Plugin.events`), and core compares the plugins' panels with the last refresh's for
+  time (`Collector.events`), and core compares the plugins' panels with the last refresh's for
   what's newly in them (a branch joining Cleanup), so the first fetch never notifies, and
   only a change does, after a restart too. Events of kinds you haven't subscribed to are never
   stored.

@@ -464,7 +464,7 @@ def test_no_password_says_how_to_set_that_mailboxs(monkeypatch: pytest.MonkeyPat
     with pytest.raises(
         SourceError, match=r"mfd token set mail\.work`, or set \$MAIL_PASSWORD_WORK"
     ):
-        harness.plugin.collect(RefreshRequest(harness.ctx, Graph()))
+        MailPlugin().collect(RefreshRequest(harness.ctx, Graph()))
 
 
 def _passwords(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1222,7 +1222,7 @@ def test_every_mailbox_is_read_and_a_message_in_two_is_one(
 
     monkeypatch.setattr(client, "collect", collect)
     harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
-    snapshot = cast(MailSnapshot, harness.plugin.collect(RefreshRequest(harness.ctx, Graph())))
+    snapshot = MailPlugin().collect(RefreshRequest(harness.ctx, Graph()))
     assert [(m.subject, m.account, m.flagged) for m in snapshot.messages] == [
         ("For home", "home", False),
         ("To both", "home", True),  # home's copy, flagged in work
@@ -1322,7 +1322,7 @@ def test_a_message_claiming_anothers_message_id_takes_nothing_from_it(
 
     monkeypatch.setattr(client, "collect", collect)
     harness = Harness(MailPlugin(), SECTION, now=NOW)  # one mailbox: nothing is merged in it
-    snapshot = cast(MailSnapshot, harness.plugin.collect(RefreshRequest(harness.ctx, Graph())))
+    snapshot = MailPlugin().collect(RefreshRequest(harness.ctx, Graph()))
     assert [(m.sender_email, m.flagged) for m in snapshot.messages] == [
         ("evil@evil.com", False),
         ("alice@acme.com", True),
@@ -1344,7 +1344,7 @@ def test_a_copy_in_another_mailbox_adds_whats_about_me_there_once(
 
     monkeypatch.setattr(client, "collect", collect)
     harness = Harness(MailPlugin(), {"home": HOME, "work": WORK}, now=NOW)
-    snapshot = cast(MailSnapshot, harness.plugin.collect(RefreshRequest(harness.ctx, Graph())))
+    snapshot = MailPlugin().collect(RefreshRequest(harness.ctx, Graph()))
     found = [(m.account, m.uid, m.to_me, m.replies_to_me, m.important) for m in snapshot.messages]
     assert sorted(found) == [
         ("home", 1, True, True, False),  # what work's copy says of me

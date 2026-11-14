@@ -10,7 +10,9 @@ from pydantic import TypeAdapter
 from ...api import (
     API_VERSION,
     ActionHandler,
+    ChangeChecker,
     Changed,
+    Collector,
     Context,
     ContextRequest,
     Entity,
@@ -68,7 +70,9 @@ def _repos_of(repos: list[Path], subjects: frozenset[str]) -> set[str] | None:
     return found
 
 
-class GitPlugin(Plugin[GitConfig, LocalSnapshot]):
+class GitPlugin(
+    Plugin[GitConfig, LocalSnapshot], Collector[GitConfig, LocalSnapshot], ChangeChecker[GitConfig]
+):
     name = "git"
     title = "Git"
     init = INIT

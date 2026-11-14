@@ -1,4 +1,4 @@
-"""What moved in each plugin's tool, as its change checks (`Plugin.changed`) say: core keeps
+"""What moved in each plugin's tool, as its change checks (`ChangeChecker.changed`) say: core keeps
 it, rather than each plugin in its kv.
 
 A check's answer is kept as it's taken, numbered after the last: its fingerprint, for the next
@@ -32,9 +32,9 @@ def said(changed: dict[str, str]) -> str:
 
 
 def checks(e: Enabled) -> bool:
-    """Whether the plugin has a change check: `change_check_seconds`, or plugins it
-    `watches`."""
-    return e.plugin.change_check_seconds is not None or bool(e.plugin.watches)
+    """Whether the plugin has a change check (`ChangeChecker`), which the registry makes sure
+    has a `change_check_seconds` or plugins it `watches`."""
+    return e.change_checker is not None
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,9 @@ class ChangeChecks:
         repo = ChangeRepository(e.ctx.db)
         held = repo.get(e.name)
         previous = self._graphs.get(e.name, since)
-        answer = e.plugin.changed(
+        if e.change_checker is None:
+            raise TypeError(f"{e.name} has no change check")
+        answer = e.change_checker.changed(
             RefreshRequest(
                 e.ctx, graph, previous=Previous(held.checked_at, held.fingerprint, graph=previous)
             )

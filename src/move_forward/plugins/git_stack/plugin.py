@@ -7,7 +7,9 @@ from typing import ClassVar
 from ...api import (
     API_VERSION,
     ActionHandler,
+    ChangeChecker,
     Changed,
+    Collector,
     ContextRequest,
     Entity,
     Event,
@@ -30,7 +32,11 @@ from .panels import STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_act
 from .repository import MIGRATIONS, StackRepository
 
 
-class GitStackPlugin(Plugin[GitStackConfig, GitStackSnapshot]):
+class GitStackPlugin(
+    Plugin[GitStackConfig, GitStackSnapshot],
+    Collector[GitStackConfig, GitStackSnapshot],
+    ChangeChecker[GitStackConfig],
+):
     name = "git_stack"
     title = "Git Stack"
     config_model = GitStackConfig

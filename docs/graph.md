@@ -60,7 +60,7 @@ points at them by their contact type, or by the importance a tool states for the
 
 ```mermaid
 flowchart TB
-    tables[("each plugin's tables")] -->|"Plugin.snapshots"| snapshot["snapshot<br/>(the plugin's model)"]
+    tables[("each plugin's tables")] -->|"Collector.snapshots"| snapshot["snapshot<br/>(the plugin's model)"]
     snapshot -->|"Plugin.entities"| published["entities, per plugin"]
     published --> check{"a kind the plugin owns, a ref not<br/>seen yet, fitting the kind's model?"}
     check -->|no| dropped["left out, logged:<br/>a plugin bug"]
@@ -266,7 +266,8 @@ ticket's key from its URL), else the id. A plugin is never asked about a kind it
 family's ids were what they are: a ticket kept by its key gets the ticket with that handle,
 or else the URL jira makes. Core and notes run what they keep through it at each refresh.
 
-`fetch(kind, ids)` asks the plugins that publish a kind (and only those) to fetch entities now, from its tool,
+`fetch(kind, ids)` asks the plugins that publish a kind and can fetch it (each a `Fetcher`, its kind
+`fetchable`) to fetch entities now, from its tool,
 even ones long gone from its tables: notes' daily prune asks when old PRs closed and tickets
 were resolved. It's slow, so it's only for work that runs rarely; a plugin that fails is
 left out, and what it would have answered counts as unknown.
