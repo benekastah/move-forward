@@ -277,7 +277,7 @@ def render_config(
     return text + OPTIONAL_NOTIFICATION_SETTINGS
 
 
-EXAMPLE_ANSWERS: dict[str, object] = {"email": "me@example.com", "teams": ["my-team"]}
+EXAMPLE_ANSWERS: dict[str, object] = {"email": "me@example.com"}
 """The top-level answers of `mfd init --example`."""
 
 
@@ -324,12 +324,6 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         choices([p.name for p in registry.PLUGINS]),
     )
     chosen = [p for p in registry.PLUGINS if p.name in answer.split(", ")]
-    if not any(p.init.finds_teams for p in chosen):  # else that plugin asks for them
-        setup.teams = ask.list(
-            "Teams you're on or review for, by name, comma-separated (blank for none)",
-            [],
-            asking.word("team name"),
-        )
     sections = {plugin.name: plugin.init.questions(ask, setup) for plugin in chosen}
     port = ask(
         "Port for the local server (e.g. 8765)", str(config_module.DEFAULT_PORT), asking.port
@@ -341,7 +335,7 @@ def interview(prompt: Prompt, cwd: Path) -> str:
         lambda kind: _kind(kind, kinds),
         choices(list(kinds)),
     )
-    answers: dict[str, object] = {"email": setup.email, "teams": setup.teams}
+    answers: dict[str, object] = {"email": setup.email}
     if port != str(config_module.DEFAULT_PORT):
         answers["port"] = int(port)
     text = render_config(answers, sections, subscribe)

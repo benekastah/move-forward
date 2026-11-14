@@ -33,6 +33,7 @@ MOVED_SETTINGS = {
     "email_domains": "github.email_domains",
     "stale_review_hours": "github.stale_review_hours",
     "github.reviewer_history_days": "git.commit_history_days",
+    "teams": "github.teams",
 }
 """Settings that moved, from where they were (a top-level key, or a plugin's as
 `<section>.<key>`) to where they are now (`<section>.<key>`), to say so instead of just "extra
@@ -76,9 +77,6 @@ class Config(Strict):
     email: str
     """My work email: Jira logs in with it, and its domain picks reviewers' emails from
     their commits."""
-    teams: list[str] = Field(default_factory=list)
-    """The teams I'm on or review for, by name, for `mfd init` and a plugin whose section names
-    them (`Plugin.teams`); github and slack name teams by slug, in their own sections."""
     db_path: Path = DEFAULT_DB_PATH
     """The SQLite database holding the plugins' tables (what they fetched, and the notes), and
     core's: when each plugin last fetched, priorities, tags, sessions and the like."""
@@ -190,20 +188,6 @@ class Config(Strict):
         if moved:
             raise ValueError("; ".join(moved))
         return settings
-
-    @model_validator(mode="after")
-    def _known_teams(self) -> Config:
-        """Every plugin section names only top-level teams (`Plugin.teams`)."""
-        for plugin in registry.PLUGINS:
-            section = self.section(plugin.name)
-            if section is None:
-                continue
-            if unknown := sorted(plugin.teams(section) - set(self.teams)):
-                raise ValueError(
-                    f"[{plugin.name}] names teams the top-level teams don't have:"
-                    f" {', '.join(unknown)}"
-                )
-        return self
 
     @model_validator(mode="after")
     def _known_notifications(self) -> Config:

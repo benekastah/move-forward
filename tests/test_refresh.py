@@ -483,7 +483,6 @@ def _merging(
     config = Config.model_validate(
         {
             "email": "me@acme.com",
-            "teams": ["core"],
             "github": {"org": "acme"},
             "git": {"repos": []},
             "notifications": {"subscribe": subscribe},

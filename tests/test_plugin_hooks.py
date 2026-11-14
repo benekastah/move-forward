@@ -529,7 +529,6 @@ def test_today_is_the_local_date(monkeypatch: pytest.MonkeyPatch) -> None:
     ctx = Context(
         config=JiraConfig(site="https://j"),
         email="me@x",
-        teams=[],
         prune_days=90,
         now=late_evening,
         db=Database(":memory:"),

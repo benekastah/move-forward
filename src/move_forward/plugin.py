@@ -50,9 +50,6 @@ class Context[C: BaseModel]:
     """The plugin's `[name]` section."""
     email: str
     """My work email."""
-    teams: list[str]
-    """The names of the teams I'm on or review for; the plugin maps them to its tool's own
-    names in its section's `teams` table."""
     prune_days: int
     """Work finished this long ago is cleared by `prune`."""
     now: datetime
@@ -422,12 +419,6 @@ class Plugin[C: BaseModel, S: BaseModel]:
         `token_env` and `keychain_service`. Each needs a `keychain_service` of its own: the
         config is refused when two tokens share one. Its context's `token` reads them."""
         return _section_token(config)
-
-    def teams(self, config: C) -> set[str]:
-        """The top-level teams (`Context.teams`, by name) the plugin's section names, so the
-        config refuses a team the top level doesn't have; no built-in plugin's names any now.
-        Empty by default: core knows nothing of how a section keeps them."""
-        return set()
 
     # Refresh
 

@@ -181,7 +181,6 @@ def _plugin_context(repo: Path, db: Database) -> Callable[[float], Context[GitCo
         return Context(
             config=GitConfig(repos=[repo], status_seconds=0),  # watching alone
             email="me@example.com",
-            teams=[],
             prune_days=90,
             now=NOW + timedelta(seconds=seconds),
             db=db,

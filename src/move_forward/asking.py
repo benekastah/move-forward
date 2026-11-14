@@ -50,9 +50,6 @@ class InitSetup:
     email: str
     cwd: Path
     """Where `mfd init` runs: its git checkout is a good guess for a repo."""
-    teams: list[str] = field(default_factory=list[str])
-    """The teams I'm on or review for. A plugin that can find them (github) sets them, and
-    later plugins' questions may use them."""
 
 
 class Asker:
@@ -100,7 +97,7 @@ class Asker:
 
 Questions = Callable[[Asker, InitSetup], InitSection]
 """Asks for a plugin's `[name]` section's settings in `mfd init` and returns the section to
-write; `InitSetup` has what init knows so far, and a plugin can add to its `teams`."""
+write; `InitSetup` has what init knows so far."""
 
 
 def _no_questions(ask: Asker, setup: InitSetup) -> InitSection:
@@ -134,8 +131,6 @@ class Init:
     commented out like a plugin `mfd init` wasn't asked for: for a tool most use. Off by
     default, so a plugin whose `example` lacks a required key can't make the example a config
     that won't load."""
-    finds_teams: bool = False
-    """Its `questions` set `setup.teams` (github's), so core needn't ask for them."""
     token_help: str = ""
     """`mfd init`'s next step for its token(s), in place of the plain "`mfd token set <name>`
     stores its token": where to get one, or another way in (signing in in the browser)."""
@@ -182,13 +177,6 @@ def email(answer: str) -> str:
     answer = answer.strip()
     if "@" not in answer or " " in answer:
         raise ValueError(f"{answer!r} isn't an email address")
-    return answer
-
-
-def channel(answer: str) -> str:
-    answer = answer.strip()
-    if answer and " " in answer:
-        raise ValueError(f"{answer!r} isn't a channel name (e.g. #team-a)")
     return answer
 
 

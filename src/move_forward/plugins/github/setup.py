@@ -70,8 +70,7 @@ def org_teams(org: str, host: str = DEFAULT_HOST) -> list[str]:
 
 
 def questions(ask: Asker, setup: InitSetup) -> InitSection:
-    """The org (and, from an Enterprise org's URL, the host), and the teams I review for
-    (which later plugins' questions are given, too)."""
+    """The org (and, from an Enterprise org's URL, the host), and the teams I review for."""
     host, name = host_and_org(
         ask(
             "GitHub organization, or its URL (e.g. acme, https://github.com/acme, or an"
@@ -81,7 +80,7 @@ def questions(ask: Asker, setup: InitSetup) -> InitSection:
         )
     )
     examples = org_team_examples(name, host) or ["team-a", "team-b"]
-    setup.teams = ask.list(
+    teams = ask.list(
         "GitHub team slugs you review for, comma-separated (tab completes); leave out"
         f" org-wide teams (e.g. {', '.join(examples)})",
         guess_teams(name, host),
@@ -92,7 +91,7 @@ def questions(ask: Asker, setup: InitSetup) -> InitSection:
         {
             "org": name,
             **({"host": host} if host != DEFAULT_HOST else {}),
-            **({"teams": setup.teams} if setup.teams else {}),
+            **({"teams": teams} if teams else {}),
         },
         SHOWN,
     )
@@ -103,6 +102,5 @@ INIT = Init(
     example=EXAMPLE,
     suggested=True,
     example_on=True,
-    finds_teams=True,
 )
 """Always suggested: init guesses its org from the checkout it runs in."""

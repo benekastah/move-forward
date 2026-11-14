@@ -39,7 +39,6 @@ def test_the_plugin_says_changed_when_a_ticket_of_mine_was_updated_since_it_look
         ctx = Context(
             config=JiraConfig(site="https://j.example"),
             email="me@x",
-            teams=[],
             prune_days=90,
             now=NOW + timedelta(seconds=seconds),
             db=db,

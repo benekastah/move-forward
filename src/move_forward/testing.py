@@ -96,7 +96,6 @@ class Harness:
         *,
         now: datetime = NOW,
         email: str = "me@x",
-        teams: Sequence[str] = (),
         families: Sequence[Family] = (),
     ):
         self.plugin = plugin
@@ -107,7 +106,6 @@ class Harness:
         folder; gone with the harness."""
         self._section = dict(section or {})
         self._email = email
-        self._teams = list(teams)
         self._families = (*plugin.families, *families)
         self._seeds: list[_Seed] = []
         self._events: list[Event] | None = None
@@ -275,7 +273,6 @@ class Harness:
         return Config.model_validate(
             {
                 "email": self._email,
-                "teams": self._teams,
                 "db_path": Path(self._dir.name) / "dashboard.db",
                 self.name: self._section,
                 **{seed.name: {} for seed in self._seeds},

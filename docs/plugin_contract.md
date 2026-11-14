@@ -47,12 +47,11 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 
 | Field | Type, default | What it says |
 | --- | --- | --- |
-| `questions` | `(Asker, InitSetup) -> InitSection`, asks nothing | Asks for the section's settings when the plugin is chosen; `InitSetup` has what init knows so far: my email, where it runs, and the teams I'm on or review for (the top-level `teams`), which a plugin that finds them sets (github's, with `finds_teams`) for later plugins' questions. |
+| `questions` | `(Asker, InitSetup) -> InitSection`, asks nothing | Asks for the section's settings when the plugin is chosen; `InitSetup` has what init knows so far: my email and where it runs. |
 | `example` | `InitSection`, empty | Example values for the required settings (and its `shown`): written commented out for a plugin not chosen, uncommented by `--example` for one `example_on`. |
 | `tables` | `str`, `""` | Commented-out tables the model can't show, written after the optional keys (`[slack.teams]`, `[mail.<name>]`). |
 | `suggested` | `bool`, `False` | Whether `mfd init` offers to set it up by default. |
 | `example_on` | `bool`, `False` | `mfd init --example` writes the section on, with `example`'s values, rather than commented out. |
-| `finds_teams` | `bool`, `False` | Its `questions` set `setup.teams` (github's), so core doesn't ask for them. |
 | `token_help` | `str`, `""` | `mfd init`'s next step for its tokens, in place of the plain "`mfd token set <name>` stores its token". |
 
 ## Hooks
@@ -62,7 +61,6 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
 | `tokens` | `tokens(config: C) -> dict[str, TokenSettings]` | Every token it keeps, by name (`""` for its own, one per account otherwise), for `mfd token` and loading the config. By default its section, when that has `token_env` and `keychain_service`. |
-| `teams` | `teams(config: C) -> set[str]` | The top-level teams its section names, which loading the config checks the top level has. Empty by default. |
 | `pages` | `pages() -> dict[str, PageHandler]` | Extra pages by key, served at `/<plugin>/<key>` (`""`: `/<plugin>`), each given an `InputRequest` with `page`. |
 | `actions` | `actions() -> dict[str, ActionHandler]` | Button handlers by name, posted to `/actions/<plugin>/<name>`, each given an `InputRequest` with `form`. |
 
@@ -239,7 +237,6 @@ What the function `item_actions` returns is called with, once per item.
 | --- | --- | --- |
 | `config` | `C` | Its `[name]` section. |
 | `email` | `str` | My work email. |
-| `teams` | `list[str]` | The names of the teams I'm on or review for. |
 | `prune_days` | `int` | Work finished this long ago is cleared by `prune`. |
 | `now` | `datetime` | Now, aware, in UTC; shown, or a day taken from it, in local time. |
 | `db` | `Database` | For its own repository over its own tables. |
