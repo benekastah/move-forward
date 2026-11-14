@@ -47,7 +47,7 @@ Read only by `mfd init` and `mfd init --example`; built in the plugin's `setup.p
 
 | Field | Type, default | What it says |
 | --- | --- | --- |
-| `questions` | `(Asker, InitSetup) -> InitSection`, asks nothing | Asks for the section's settings when the plugin is chosen; `InitSetup` has what init knows so far: my email, where it runs, and the teams I'm on or review for (the top-level `teams`), which a plugin that finds them sets (github's, with `finds_teams`) for later plugins' questions (slack's channel per team). |
+| `questions` | `(Asker, InitSetup) -> InitSection`, asks nothing | Asks for the section's settings when the plugin is chosen; `InitSetup` has what init knows so far: my email, where it runs, and the teams I'm on or review for (the top-level `teams`), which a plugin that finds them sets (github's, with `finds_teams`) for later plugins' questions. |
 | `example` | `InitSection`, empty | Example values for the required settings (and its `shown`): written commented out for a plugin not chosen, uncommented by `--example` for one `example_on`. |
 | `tables` | `str`, `""` | Commented-out tables the model can't show, written after the optional keys (`[slack.teams]`, `[mail.<name>]`). |
 | `suggested` | `bool`, `False` | Whether `mfd init` offers to set it up by default. |

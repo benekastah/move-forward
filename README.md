@@ -77,9 +77,9 @@ or until the item changes, whichever comes first; with Snooze's "until it change
 it changes (or once it's `prune_days` old). A timed snooze ends at local midnight, or at
 `snooze_until_hour` (9: nine in the morning) on its last day.
 
-The top-level `teams` names the teams slack's `[slack.teams]` gives a channel for: a name
-there that the top-level `teams` doesn't have is an error. GitHub's own are `[github] teams`,
-by slug.
+The top-level `teams` names teams for a plugin's own `teams` table to map; a name there that
+the top-level `teams` doesn't have is an error. No built-in plugin reads it: github's are
+`[github] teams`, by slug, and `[slack.teams]` is keyed by slug.
 
 ## Plugins
 

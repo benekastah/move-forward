@@ -44,8 +44,8 @@ class SlackConfig(TokenFields):
     """The reminder once a reviewer has been pinged about the PR, as written: nothing in it is
     filled in, and a brace is a brace."""
     teams: dict[str, str] = Field(default_factory=dict)
-    """Where review pings to a team go, e.g. `#team-a`, by its name in the top-level `teams`.
-    Wins over a channel set by hand (`mfd slack team set`)."""
+    """Where review pings to a team go, e.g. `#team-a`, by its slug, as PRs name it. Wins over a
+    channel set by hand (`mfd slack team set`)."""
 
     @model_validator(mode="before")
     @classmethod

@@ -155,13 +155,6 @@ def test_a_github_teams_table_says_its_teams_are_slugs_now(tmp_path: Path) -> No
         _load(tmp_path, MINIMAL + '[github]\norg = "a"\n\n[github.teams]\nweb = "web-reviewers"\n')
 
 
-def test_a_plugin_team_must_be_a_top_level_team(tmp_path: Path) -> None:
-    with pytest.raises(
-        ValidationError, match=r"\[slack\] names teams the top-level teams don't have: wbe\b"
-    ):
-        _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[slack.teams]\nwbe = "#web"\n')
-
-
 class _RotaConfig(Strict):
     teams: dict[str, str] = Field(default_factory=dict[str, str])
     """Who's on call, by rota: not the top-level teams."""
@@ -174,6 +167,27 @@ class _RotaPlugin(Plugin[_RotaConfig, BaseModel]):
     name = "rota"
     config_model = _RotaConfig
     api_version = API_VERSION
+
+
+class _OnCallPlugin(Plugin[_RotaConfig, BaseModel]):
+    """A plugin whose `teams` table names top-level teams."""
+
+    name = "oncall"
+    config_model = _RotaConfig
+    api_version = API_VERSION
+
+    def teams(self, config: _RotaConfig) -> set[str]:
+        return set(config.teams)
+
+
+def test_a_plugin_team_must_be_a_top_level_team(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(registry, "PLUGINS", [*registry.PLUGINS, _OnCallPlugin()])
+    with pytest.raises(
+        ValidationError, match=r"\[oncall\] names teams the top-level teams don't have: wbe\b"
+    ):
+        _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[oncall.teams]\nwbe = "ann"\n')
 
 
 def test_a_plugin_not_naming_teams_is_not_checked(

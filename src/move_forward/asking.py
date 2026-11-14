@@ -52,7 +52,7 @@ class InitSetup:
     """Where `mfd init` runs: its git checkout is a good guess for a repo."""
     teams: list[str] = field(default_factory=list[str])
     """The teams I'm on or review for. A plugin that can find them (github) sets them, and
-    later plugins' questions use them (slack's channel per team)."""
+    later plugins' questions may use them."""
 
 
 class Asker:

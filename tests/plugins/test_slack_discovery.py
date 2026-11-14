@@ -5,11 +5,18 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import NOW
 
 from move_forward import cli
 from move_forward.db import Database
+from move_forward.graph import Entity, Graph, Ref
+from move_forward.kinds import TEAM
+from move_forward.plugin import Context
 from move_forward.plugins.slack import client, discovery
-from move_forward.plugins.slack.repository import SlackRepository
+from move_forward.plugins.slack.cli import list_destinations
+from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.repository import MIGRATIONS, SlackRepository
+from move_forward.repositories import KvRepository
 
 
 def test_discovery_batches_missing_teams_and_preserves_known_destinations(
@@ -78,6 +85,35 @@ def test_discovery_batches_missing_teams_and_preserves_known_destinations(
     monkeypatch.delenv("SLACK_API_TOKEN")
     assert cli.main([*prefix, "destinations", "bacon", "--discover"]) == 0
     assert calls == ["", "next"]
+
+
+def _team(id: str, mine: bool) -> Entity:
+    return Entity(
+        ref=Ref(kind=TEAM, id=id), title=id, attrs={"handle": id.rpartition("/")[2], "mine": mine}
+    )
+
+
+def test_discovery_looks_for_my_teams_from_the_graph(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = Database(":memory:")
+    db.migrate("slack", MIGRATIONS)
+    ctx = Context(
+        config=SlackConfig(),
+        email="me@x",
+        teams=[],
+        prune_days=90,
+        now=NOW,
+        db=db,
+        kv=KvRepository(db, "slack"),
+    )
+    monkeypatch.setenv("SLACK_API_TOKEN", "test-token")
+
+    def channels(token: str) -> list[client.Channel]:
+        return [client.Channel(id="C111111", name="team-web")]
+
+    monkeypatch.setattr(client, "channels", channels)
+    graph = Graph([_team("github.com/acme/web", True), _team("github.com/acme/ops", False)])
+    found = json.loads(list_destinations(ctx, graph, True, [], True))
+    assert [(t["slug"], t["channel_id"]) for t in found["teams"]] == [("web", "C111111")]
 
 
 def test_ambiguous_channels_are_candidates_not_a_guessed_destination() -> None:
