@@ -35,7 +35,7 @@ from .plugin import (
     command_help,
     overrides,
 )
-from .repositories import KvRepository
+from .repositories import KvRepository, SetAsideRepository
 
 if TYPE_CHECKING:
     # Only for annotations: `Config` checks `unmet_requirements` as it loads.
@@ -370,9 +370,11 @@ def notification_kinds_of(plugin_names: list[str]) -> dict[str, str]:
 def migrate(config: Config, db: Database) -> None:
     """Apply the enabled plugins' migrations. Once, when `mfd` opens the database."""
     owners = [p.name for p in PLUGINS]
+    on = [p.name for p in PLUGINS if config.section(p.name) is not None]
     for plugin in PLUGINS:
-        if config.section(plugin.name) is not None:
+        if plugin.name in on:
             db.migrate(plugin.name, plugin.migrations, owners)
+    SetAsideRepository(db).clear(on)
 
 
 def enabled(config: Config, db: Database, now: datetime) -> list[Enabled]:

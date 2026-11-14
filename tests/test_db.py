@@ -14,7 +14,7 @@ from move_forward.plugin import ContextRequest
 from move_forward.plugins.notes.config import NotesConfig
 from move_forward.plugins.notes.plugin import NotesPlugin
 from move_forward.private import is_private
-from move_forward.repositories import KvRepository
+from move_forward.repositories import KvRepository, SetAsideRepository
 from move_forward.shell import CommandError
 
 CREATE_A = Migration("0001_a", "CREATE TABLE p_a (x INTEGER);")
@@ -378,9 +378,9 @@ def test_a_database_from_before_the_ledger_gets_its_migrations_names(tmp_path: P
     path = tmp_path / "old.db"
     conn = sqlite3.connect(path)
     conn.execute("CREATE TABLE schema_versions (plugin TEXT PRIMARY KEY, version INTEGER)")
-    for migration in CORE_MIGRATIONS:
+    for migration in CORE_MIGRATIONS[:21]:  # from before 0022, which reads the ledger
         conn.executescript(str(migration.run))
-    conn.execute("INSERT INTO schema_versions VALUES ('core', ?)", (len(CORE_MIGRATIONS),))
+    conn.execute("INSERT INTO schema_versions VALUES ('core', 21)")
     conn.execute("CREATE TABLE p_a (x INTEGER)")
     conn.execute("INSERT INTO schema_versions VALUES ('p', 1)")
     conn.commit()
@@ -450,6 +450,7 @@ def test_feedback_kept_as_pending_is_opened(tmp_path: Path) -> None:
     db.execute("DROP TABLE change_checks")
     db.execute("DROP TABLE change_subjects")
     db.execute("DROP TABLE tag_removals")
+    db.execute("DROP TABLE set_aside")
     db.execute("DELETE FROM migrations WHERE owner = 'core' AND name >= '0013'")
     db.execute("UPDATE schema_versions SET version = 12 WHERE plugin = 'core'")
     db.execute(
@@ -474,6 +475,7 @@ def test_a_dismissal_is_kept_as_a_snooze_until_it_changes(tmp_path: Path) -> Non
     db.execute("DROP TABLE change_checks")
     db.execute("DROP TABLE change_subjects")
     db.execute("DROP TABLE tag_removals")
+    db.execute("DROP TABLE set_aside")
     db.execute("DELETE FROM migrations WHERE owner = 'core' AND name >= '0017'")
     db.execute("UPDATE schema_versions SET version = 16 WHERE plugin = 'core'")
     rows = [
@@ -606,3 +608,20 @@ def test_a_transaction_within_a_transaction_is_refused_not_half_committed() -> N
         with db.transaction():
             pass
     assert db.query("SELECT x FROM t") == []
+
+
+def test_the_plugins_set_up_before_sections_turned_them_on_are_set_aside(tmp_path: Path) -> None:
+    """Notes, on without a section until then: the page says it's off until it's on again
+    (see `refresh._set_aside`), but not of a plugin set up later, nor in a new database."""
+    path = tmp_path / "old.db"
+    db = Database(path)
+    db.execute("DELETE FROM migrations WHERE owner = 'core' AND name = '0022_set_aside'")
+    db.execute("DROP TABLE set_aside")
+    db.migrate("notes", [Migration("0001_x", "CREATE TABLE notes_x (x INTEGER);")])
+
+    db = Database(path)
+    db.migrate("later", [Migration("0001_x", "CREATE TABLE later_x (x INTEGER);")])
+    assert SetAsideRepository(db).all() == {"notes"}
+    SetAsideRepository(db).clear(["notes"])
+    assert SetAsideRepository(db).all() == set()
+    assert SetAsideRepository(Database(tmp_path / "new.db")).all() == set()

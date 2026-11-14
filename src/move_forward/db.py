@@ -363,6 +363,19 @@ CREATE TABLE tag_removals (            -- kept until its plugin next refreshes: 
 """Any tag can be taken off. One I put on goes from `tags`; one its tool or text gives the
 entity is kept off here, until the refresh that would find it again."""
 
+_V22_SET_ASIDE = """
+CREATE TABLE set_aside (               -- kept until it's enabled again: a plugin set up here
+                                       -- when a section became what turns every plugin on
+    owner TEXT PRIMARY KEY
+);
+INSERT OR IGNORE INTO set_aside SELECT DISTINCT owner FROM migrations WHERE owner != 'core';
+INSERT OR IGNORE INTO set_aside SELECT plugin FROM schema_versions WHERE plugin != 'core';
+"""
+"""Notes was on without a section; an upgraded config without `[notes]` turns it off, with its
+todos and entries still here. The page says so of each plugin the database had then (from the
+ledger, or `schema_versions` before it) until it's on again; one turned off later, on purpose,
+isn't said to be."""
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -385,6 +398,7 @@ CORE_MIGRATIONS = [
     Migration("0019_problems", _V19_PROBLEMS),
     Migration("0020_change_checks", _V20_CHANGE_CHECKS),
     Migration("0021_tag_removals", _V21_TAG_REMOVALS),
+    Migration("0022_set_aside", _V22_SET_ASIDE),
 ]
 
 _SCHEMA_VERSIONS = """
@@ -521,13 +535,6 @@ class Database:
                         continue  # another process ran it meanwhile
                     raise
             return ran
-
-    def owners(self) -> set[str]:
-        """Whose migrations the database has run: core and every plugin ever enabled here,
-        whether or not it still is."""
-        with self._lock:
-            rows = self._conn.execute("SELECT DISTINCT owner FROM migrations").fetchall()
-        return {row["owner"] for row in rows}
 
     def _applied(self, owner: str, names: list[str]) -> list[str]:
         """The names of `owner`'s migrations the database has run, in order. A database from

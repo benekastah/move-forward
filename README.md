@@ -208,7 +208,7 @@ failed" with the reason on hover, and how many problems the plugin reports besid
 refresh (a lookup its token isn't allowed, say), each said above its panels until it's
 gone. Its Refresh button refreshes just that plugin,
 and then the plugins that watch it (git_stack watches git) if what they read
-changed; the header's Refresh refreshes them all. The footer lists only plugins without a group, and their problems, and an installed plugin that has data here but no section, so it's off (notes, once on without one).
+changed; the header's Refresh refreshes them all. The footer lists only plugins without a group, and their problems, and a plugin set up here before a section was what turned every plugin on that has had none since, so it's off (notes, once on without one).
 While any plugin refreshes, the tab icon shows a dotted version of the
 dashboard arrow, highlighting one dot at a time. If the browser pauses the
 animation in a background tab, it still shows a complete refresh icon. The

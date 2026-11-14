@@ -529,3 +529,19 @@ def _rekey(
             )
             conn.execute(f"DELETE FROM {table} WHERE {kind} = ? AND {id} = ?", (k, old))
     return len(moves)
+
+
+class SetAsideRepository:
+    """The plugins set up here when a section became what turns each on, and not on since
+    (`set_aside`, core's migration 0022)."""
+
+    def __init__(self, db: Database):
+        self._db = db
+
+    def all(self) -> set[str]:
+        return {row["owner"] for row in self._db.query("SELECT owner FROM set_aside")}
+
+    def clear(self, owners: list[str]) -> None:
+        """Forget `owners`, enabled again."""
+        with self._db.transaction() as conn:
+            conn.executemany("DELETE FROM set_aside WHERE owner = ?", [(o,) for o in owners])
