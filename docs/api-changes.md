@@ -14,6 +14,12 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **One collect phase**: `collects_after` is gone. Every plugin due collects at once, from the
+  graph as stored before the refresh. A plugin that needs other plugins' entities to know what
+  to fetch `watches` them, with a `changed` that compares their entities in `req.graph` with
+  `req.previous.graph`: once they've stored, in the same refresh (the server's and `mfd
+  refresh`'s alike), it's asked, and collected again from the new graph if it says something
+  moved. That replaces asking a watcher only after the refresh, in the server.
 - **A `teams` hook**: `Plugin.teams_field` is gone. `teams(config)` returns the top-level
   teams a plugin's section names, which the config checks the top level has; empty by
   default. A plugin that set `teams_field = "teams"` returns `set(config.teams)`.
@@ -159,10 +165,10 @@ for themselves (a token, a request, an example config) is core's.
   directory), and one that can't fetches everything, as `full` would. It's the plugin's
   refresh, recorded as any other. github's change checks name PRs by URL now, as its
   entities' ids.
-- **Collecting after the graph** is `collects_after = True`, and `collect` reads the graph
-  (`req.graph`, which every collect gets): `collect_after` and `collects_after_graph` are
-  gone. Such a plugin is refreshed on its own schedule, no longer with the plugins it
-  `requires`; to refresh soon after they change, it `watches` them.
+- **Collecting after the graph**: `collect` reads the graph (`req.graph`, which every collect
+  gets), and `collect_after` and `collects_after_graph` are gone (see "One collect phase" for
+  how such a plugin gets what the others just stored). Such a plugin is no longer refreshed
+  with the plugins it `requires`, but with those it `watches`.
 - **No `ctx.data_dir`**: `Context` loses `data_dir` and `data_root`. A plugin keeps what it
   needs in its tables or `ctx.kv`.
 - **No `KindSpec.fetched_attrs`**: a fetched entity's attributes fit its family's fetched

@@ -88,27 +88,32 @@ flowchart TB
 5. The graph indexes entities by ref, by kind, and by the refs pointing at each, for the
    lookups below.
 
-During a refresh the graph is built twice:
+During a refresh the graph is built from what's stored before it, after the collects, and
+again when a plugin watching one collected is collected once more:
 
 ```mermaid
 sequenceDiagram
     participant R as refresh
     participant P as plugins
     participant G as graph
-    R->>P: collect (in parallel), then store
     R->>G: build from what's stored
-    R->>P: collect(graph) for plugins that collects_after, e.g. git_stack
-    R->>G: build again, now with their entities
+    R->>P: collect(graph) (in parallel), then store
+    R->>G: build again, now with what they stored
+    R->>P: changed(graph) for plugins that watch one collected, e.g. git_stack
+    R->>P: collect(graph) again for those that changed, then store
+    R->>G: build again, with their entities
     R->>P: daily prune, then after_collect(graph)
 ```
 
 `mfd serve` also builds it from what's stored for each round of change checks (`changed`),
 and keeps the one each plugin's last check was given (unless that check raised), to give it
 to the next as `req.previous.graph`; a plugin is asked as each of its collects starts too, with
-the graph that collect works from. A plugin that `watches` another compares the two to see
-what that one's refresh moved: github sees a branch of one of my PRs move from git's
+the graph that collect works from, and in each refresh of a plugin it `watches`, once that one
+has stored. A plugin that `watches` another compares the two to see what that one's refresh
+moved: github sees a branch of one of my PRs move from git's
 `git.branch` entities, without keeping where they stood itself. The first check since the
-server started has none to compare with.
+server (or `mfd refresh`) started has none to compare with, except in a refresh, where it
+compares with the graph from before the refresh.
 
 ## Reading it
 

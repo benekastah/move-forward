@@ -26,7 +26,7 @@ from . import (
     tags,
 )
 from .act_now import Feedback
-from .change_checks import ChangeChecks, Taken
+from .change_checks import ChangeChecks, Taken, said
 from .config import Config
 from .db import CORE, Database
 from .domain import Model
@@ -67,7 +67,8 @@ log = logging.getLogger(__name__)
 COLLECT_TIMEOUT_SECONDS = 300
 """How long a plugin's `collect` may take. Past it, the refresh records
 the plugin as failed and goes on; the plugin is left out of refreshes until its collect
-returns (a thread can't be stopped)."""
+returns (a thread can't be stopped). A refresh that collects a watcher again (`_settle`) can
+take twice this."""
 
 _collecting: set[str] = set()
 """The plugins whose `collect` is still running, maybe past its timeout: a thread can't be
@@ -213,7 +214,7 @@ def _collect_all(
     asking: bool,
     asked: Mapping[str, frozenset[str]] | None = None,
     named: set[str] | None = None,
-) -> None:
+) -> set[str]:
     """Collect each plugin's snapshot with `collect`, in parallel, from `graph`, given what
     moved since its last collect and the ids of its entities `asked` for (`ChangeChecks.take`,
     asking its check first when `asking`; a plugin not `named`, None meaning all, was asked
@@ -222,14 +223,15 @@ def _collect_all(
     publishes come back (`TagRepository.put_back`): it has found them again, or not. Each
     plugin has
     `COLLECT_TIMEOUT_SECONDS`: one that takes longer is recorded as failed, and the refresh
-    goes on without it; one still running from an earlier refresh is left out."""
+    goes on without it; one still running from an earlier collect is left out. Returns the
+    plugins whose collect it started."""
     started = time.monotonic()
     pool = ThreadPoolExecutor(max_workers=max(1, len(plugins)))
     running: list[tuple[Enabled, Future[None]]] = []
     for e in plugins:
         with _collecting_lock:
             if e.name in _collecting:
-                log.warning("%s: still collecting from an earlier refresh; left out", e.name)
+                log.warning("%s: still collecting from an earlier collect; left out", e.name)
                 continue
             _collecting.add(e.name)
 
@@ -267,6 +269,7 @@ def _collect_all(
             log.warning("%s: collect timed out after %ss", e.name, limit)
             SnapshotRepository(db).save_error(e.name, now, f"timed out after {limit}s")
     pool.shutdown(wait=False)
+    return {e.name for e, _ in running}
 
 
 def _wants(e: Enabled, subscribed: set[str]) -> bool:
@@ -276,15 +279,47 @@ def _wants(e: Enabled, subscribed: set[str]) -> bool:
     )
 
 
-def to_collect(
-    plugins: list[Enabled], only: set[str] | None = None
-) -> tuple[list[Enabled], list[Enabled]]:
-    """What a refresh of `only` (None: every plugin) collects: first the plugins that collect
-    on their own, then those that collect after the graph."""
-    due = [e for e in plugins if e.plugin.collects and (only is None or e.name in only)]
-    first = [e for e in due if not e.plugin.collects_after]
-    after = [e for e in due if e.plugin.collects_after]
-    return first, after
+def to_collect(plugins: list[Enabled], only: set[str] | None = None) -> list[Enabled]:
+    """What a refresh of `only` (None: every plugin) collects: the plugins that collect."""
+    return [e for e in plugins if e.plugin.collects and (only is None or e.name in only)]
+
+
+def _collector(graph: Graph) -> Callable[[Enabled, Taken], BaseModel]:
+    """Collects a plugin from `graph`, given what `ChangeChecks.take` took."""
+
+    def collect(e: Enabled, taken: Taken) -> BaseModel:
+        return e.plugin.collect(RefreshRequest(e.ctx, graph, taken.full, taken.subjects))
+
+    return collect
+
+
+def _settle(
+    db: Database,
+    plugins: list[Enabled],
+    collected: set[str],
+    now: datetime,
+    checks: ChangeChecks,
+    before: Graph,
+    graph: Graph,
+) -> set[str]:
+    """Ask each plugin that collects and `watches` one of those `collected` this refresh
+    whether it changed, with the `graph` they stored (and, for one not checked since `checks`
+    started, `before` as the graph to compare with); collect those that did once more, from
+    `graph`, given what their checks said moved. A watcher collected this refresh worked from
+    `before`, without what the plugins it watches just found (git_stack, git's new repos):
+    this brings it up to date in the same refresh. Once, not until nothing moves. Returns the
+    plugins whose collect it started: not one still collecting, its first collect past its
+    timeout."""
+    watching = [
+        e for e in plugins if e.plugin.collects and collected.intersection(e.plugin.watches)
+    ]
+    moved = {e.name: why for e in watching if (why := checks.moved(e, graph, before)) is not None}
+    if not moved:
+        return set()
+    again = [e for e in watching if e.name in moved]
+    watched = sorted({name for e in again for name in e.plugin.watches} & collected)
+    log.info("changed with %s: %s; collecting", ", ".join(watched), said(moved))
+    return _collect_all(db, again, now, _collector(graph), checks, graph, asking=False)
 
 
 def refresh(
@@ -294,60 +329,60 @@ def refresh(
     only: set[str] | None = None,
     checks: ChangeChecks | None = None,
     asked: Mapping[str, frozenset[str]] | None = None,
-) -> None:
-    """Refresh every plugin, or `only` those and the plugins `asked` names. Each plugin fails
-    on its own, its outcome recorded as its status. Each collect is given what moved since the
+) -> set[str]:
+    """Refresh every plugin, or `only` those and the plugins `asked` names, and return those
+    whose collect started (not one still running past its timeout). Each plugin fails on its
+    own, its outcome recorded as its status. Every plugin due collects at once, in parallel,
+    from the graph as stored before the refresh. Each collect is given what moved since the
     plugin's last (`ChangeChecks.take`) and the ids of its entities `asked` for (see
     `asked_of`): a plugin that isn't one of `only` is refreshed for them alone, its collect
     narrowed to them; one that is (or every plugin, with no `only`) is collected as it would
-    have been, given them too. With the server's `checks`, a plugin with a change check is
-    asked it as its collect starts. After collecting, the graph is built again, the plugins'
-    events found against what held before, the daily prune runs if due, and `after_collect`
-    runs for the plugins collected and those that collect nothing (they work from the others'
-    data). When the dashboard is stopping, it collects no more, but still finds the events of
-    what it stored, and ends there, as long as it gets that far: the server runs it in a daemon
-    thread, which its own shutdown may freeze first, and then that refresh's events are lost
-    (the next start compares with what it stored). Run outside that thread (`mfd refresh`, a
-    test), it always gets that far."""
+    have been, given them too. With the server's `checks`, a plugin with a change check is asked
+    it as its collect starts. Then the plugins watching those collected are asked whether they
+    changed with what was stored, and collected once more if they did (`_settle`), so a refresh
+    can take two `COLLECT_TIMEOUT_SECONDS` (and the server hold its refresh lock that long).
+    After collecting, the graph is built again, the plugins' events found against what held
+    before, the daily prune runs if due, and `after_collect` runs for the plugins due, those
+    collected again, and those that collect nothing (they work from the others' data), even one
+    due but left out as still collecting: it reads only what's stored. When the dashboard is
+    stopping, it collects no more, but still finds the events of what it stored, and ends there,
+    as long as it gets that far: the server runs it in a daemon thread, which its own shutdown
+    may freeze first, and then that refresh's events are lost (the next start compares with what
+    it stored). Run outside that thread (`mfd refresh`, a test), it always gets that far."""
     now = now or datetime.now(UTC)
     asked = asked or {}
     named = only
     only = None if only is None else only | set(asked)
     plugins = enabled(config, db, now)
     before = before_refresh(db, plugins)
-    first, after = to_collect(plugins, only)
-    collected = {e.name for e in first + after}
+    due = to_collect(plugins, only)
     asking = checks is not None
     checks = checks or ChangeChecks()
-
-    def collect_first(e: Enabled, taken: Taken) -> BaseModel:
-        return e.plugin.collect(RefreshRequest(e.ctx, before.graph, taken.full, taken.subjects))
-
-    _collect_all(db, first, now, collect_first, checks, before.graph, asking, asked, named)
+    collect = _collector(before.graph)
+    collected = _collect_all(db, due, now, collect, checks, before.graph, asking, asked, named)
     graph, snapshots = stored_graph(db, plugins)
-    if after and not shell.stopping():
-        given = graph
-
-        def collect_after(e: Enabled, taken: Taken) -> BaseModel:
-            return e.plugin.collect(RefreshRequest(e.ctx, given, taken.full, taken.subjects))
-
-        _collect_all(db, after, now, collect_after, checks, given, asking, asked, named)
+    if not shell.stopping() and (
+        settled := _settle(db, plugins, collected, now, checks, before.graph, graph)
+    ):
+        collected |= settled
         graph, snapshots = stored_graph(db, plugins)
     _identify_kept(db, graph)
     _events(db, plugins, before, graph, snapshots, set(config.notifications.subscribe), now)
     if shell.stopping():  # what was stored is told above, if the thread got that far
-        return
+        return collected
     _dashboard_events(config, db, plugins, set(config.notifications.subscribe), now)
     prune_if_due(
         db, now, lambda: _prune_plugins(plugins, graph, snapshots, db, now, config.prune_days)
     )
+    ran = {e.name for e in due} | collected
     for e in plugins:
-        if e.name not in collected and e.plugin.collects:
+        if e.name not in ran and e.plugin.collects:
             continue
         try:
             e.plugin.after_collect(Request(e.ctx, graph, snapshots.get(e.name)))
         except Exception:
             log.exception("%s: after_collect failed", e.name)
+    return collected
 
 
 def _identify_kept(db: Database, graph: Graph) -> None:

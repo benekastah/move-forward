@@ -52,12 +52,12 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   isn't allowed), shown with its state on the page and logged when it changes, rather than each
   plugin warning in its own way.
 - A plugin says what it is in class variables, each documented on `Plugin`: its `name`, `title`,
-  `config_model`, `kinds` and `families`, `requires`, `migrations`, how it refreshes
-  (`collects_after`, `watches`, `change_check_seconds`), its `notification_kinds`, and how `mfd
-  init` and the settings page show it (`always_on`, `init`), and `api_version`. `init` is an `Init`,
-  built in the plugin's `setup.py`: its questions, its example section and tables, whether `mfd
-  init` suggests it, and its token's next step. A setting the settings page mustn't change (where a
-  credential goes) is marked on its config model's field, with `LOCKED`.
+  `config_model`, `kinds` and `families`, `requires`, `migrations`, how it refreshes (`watches`,
+  `change_check_seconds`), its `notification_kinds`, and how `mfd init` and the settings page show
+  it (`always_on`, `init`), and `api_version`. `init` is an `Init`, built in the plugin's
+  `setup.py`: its questions, its example section and tables, whether `mfd init` suggests it, and its
+  token's next step. A setting the settings page mustn't change (where a credential goes) is marked
+  on its config model's field, with `LOCKED`.
 - Every plugin hook that runs with the plugin's context takes one request object, of five kinds, so
   a hook can gain an input without breaking its overrides: `ContextRequest(ctx)` (`snapshots`,
   `linking_patterns`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
@@ -74,37 +74,35 @@ are reviewed; `docs/roadmap.md` is what's left to build.
 - Times are kept in UTC and shown in local time, through `localtime`; a day
   recorded as "today" (a todo done, an entry touched) is the local one,
   `ctx.today`.
-- Panel builders are pure: no I/O, no clock (use `ctx.now`), no database
-  reads beyond what the plugin passes in. Everything slow happens in
-  `collect` or `after_collect` (a plugin whose `collect` needs other plugins' entities to
-  know what to fetch sets `collects_after`, and collects once they've stored); `changed`, polled
-  every `change_check_seconds`, right after each refresh of a plugin it
-  `watches` and as each of its own collects starts, is a cheap check of what moved in its
-  tool, so the plugin refreshes sooner: a fingerprint, the subjects that moved, or both.
-  Core keeps them (`change_checks.py`), never the plugin: it compares each fingerprint with
-  the last, keeps the subjects pending until a collect started after they moved stores, owns the
-  full-collect timer, and gives `collect` what's pending and whether it's a full one. A
-  check compares other plugins' entities with `req.previous.graph`, the graph its last check was
-  given, which core keeps too. Notifications come from two places: `events`,
-  asked after every refresh with the plugin's snapshot and the graph before and after it, for
-  what changed; and an item's `notify`, which core raises when the item is newly in its
-  plugin's panels. Rare work (the daily
-  prune) can ask the plugins that publish a kind for entities their snapshots no longer
-  hold with `graph.fetch`. Buttons, badges, details and links on other plugins' items
-  come from `item_actions`, called once per page (where a plugin reads its tables for them),
-  which returns the function core calls per item with whose item it is and where it's
-  shown. Core adds its own to items, and plugins theirs: core's are the importance choices on
-  every item about an entity (but what `hides`), with Clear priority once one's set; Snooze
-  (for a while, or until it changes) on every item with a task, wherever it's shown, and Pin
-  in Act now; on an item about a person (`people.py`) their contact type, and Set type for a
-  person with an address; and on every item about an entity (but what `hides`) its `#tag`
-  badges, a Tag field and an Untag per tag (`tags.py`), which it keeps in `Item.tags` and the
-  page filters by (`tag_view.py`). Nothing is added to a part that's `done` (a todo ticked
-  off, kept to untick, finished within its item), by core or by any plugin's `item_actions`:
-  only the part's own buttons act on it. A plugin's panels' items are core's Act now's
-  candidates, each with `Signals` (effort, what it closes, who's waiting, and a `task`: the
-  stable id Act now keeps a snooze or pin by): those of its panels marked `act_now`, but
-  deferred ones, unless an item says otherwise (`Item.act_now`).
+- Panel builders are pure: no I/O, no clock (use `ctx.now`), no database reads beyond what the
+  plugin passes in. Everything slow happens in `collect` or `after_collect`. Every plugin due
+  collects at once, from the graph as stored before the refresh; one whose `collect` needs other
+  plugins' entities to know what to fetch `watches` them, and is asked whether it `changed` once
+  they've stored, in the same refresh, and collected again from the new graph if so. `changed`,
+  polled every `change_check_seconds`, in each refresh of a plugin it `watches` and as each of its
+  own collects starts, is a cheap check of what moved in its tool, so the plugin refreshes sooner: a
+  fingerprint, the subjects that moved, or both. Core keeps them (`change_checks.py`), never the
+  plugin: it compares each fingerprint with the last, keeps the subjects pending until a collect
+  started after they moved stores, owns the full-collect timer, and gives `collect` what's pending
+  and whether it's a full one. A check compares other plugins' entities with `req.previous.graph`,
+  the graph its last check was given, which core keeps too. Notifications come from two places:
+  `events`, asked after every refresh with the plugin's snapshot and the graph before and after it,
+  for what changed; and an item's `notify`, which core raises when the item is newly in its plugin's
+  panels. Rare work (the daily prune) can ask the plugins that publish a kind for entities their
+  snapshots no longer hold with `graph.fetch`. Buttons, badges, details and links on other plugins'
+  items come from `item_actions`, called once per page (where a plugin reads its tables for them),
+  which returns the function core calls per item with whose item it is and where it's shown. Core
+  adds its own to items, and plugins theirs: core's are the importance choices on every item about
+  an entity (but what `hides`), with Clear priority once one's set; Snooze (for a while, or until it
+  changes) on every item with a task, wherever it's shown, and Pin in Act now; on an item about a
+  person (`people.py`) their contact type, and Set type for a person with an address; and on every
+  item about an entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag
+  (`tags.py`), which it keeps in `Item.tags` and the page filters by (`tag_view.py`). Nothing is
+  added to a part that's `done` (a todo ticked off, kept to untick, finished within its item), by
+  core or by any plugin's `item_actions`: only the part's own buttons act on it. A plugin's panels'
+  items are core's Act now's candidates, each with `Signals` (effort, what it closes, who's waiting,
+  and a `task`: the stable id Act now keeps a snooze or pin by): those of its panels marked
+  `act_now`, but deferred ones, unless an item says otherwise (`Item.act_now`).
 - Every request needs the dashboard's token, a plugin's pages (served at
   `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
   static files.
@@ -137,7 +135,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
     one means or who publishes it. `tests/test_entities_doc.py` checks its
     kinds and attributes against the plugins' kind models.
   - `docs/plugins.md`: a change to what a plugin publishes or reads, its item
-    actions, its `requires`, or the phase it collects in.
+    actions, its `requires`, or the plugins it `watches`.
   - `docs/graph.md`: a change to how the graph is built or read (its methods,
     views, kinds, `related`, `fetch`), or to the kinds in its overview diagram.
   - this file, when the shape of the code or a rule here changes, e.g. a new
