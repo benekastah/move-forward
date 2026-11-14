@@ -158,7 +158,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   built the same way) writes each optional key from its model, commented out with its default
   and its docstring's first sentence. A plugin writes by hand, in its `setup.py`, only what
   its model can't say, in its `Init`: a required key with an example value in its `example`, a
-  table of example entries (`[github.teams]`, `[mail.<name>]`) in its `tables`, and in a
+  table of example entries (`[slack.teams]`, `[mail.<name>]`) in its `tables`, and in a
   section's `shown` (its `example`'s, and what its `questions` return) an example
   value for a key whose default says less (or is None), where it's right for that section. A key's comment goes above it, after a blank line, wrapped
   to 100 columns (never inside a code span); write its `tables`' comments the same way.

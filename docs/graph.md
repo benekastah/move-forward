@@ -50,6 +50,7 @@ flowchart LR
     thread -->|mentions| ticket
     tag["tag<br/>(core)"] -->|carried by| pr
     thread -->|names| tag
+    team["team<br/>(github)"]
 ```
 
 `notes.iced` hides what it points at; see [hidden entities](#hidden-entities). Slack reads

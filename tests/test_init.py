@@ -74,6 +74,7 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
     loaded = config.load(path)
     assert loaded.section("github") is not None and loaded.section("git") is not None
     assert section(loaded, "github", GitHubConfig).org == "acme" and loaded.teams == ["core"]
+    assert section(loaded, "github", GitHubConfig).teams == ["core"]
     assert loaded.section("slack") is None
     assert loaded.email == "jane@acme.com"
     assert section(loaded, "git", GitConfig).repos == [tmp_path / "app"]
@@ -122,6 +123,7 @@ def test_init_takes_answers_and_sets_up_jira(tmp_path: Path, no_machine_guesses:
     loaded = config.load(path)
     assert loaded.section("github") is not None and loaded.section("git") is not None
     assert section(loaded, "github", GitHubConfig).org == "other" and loaded.teams == ["a", "b"]
+    assert section(loaded, "github", GitHubConfig).teams == ["a", "b"]
     assert loaded.section("slack") is not None and section(loaded, "slack", SlackConfig).teams == {
         "a": "#team-a"
     }
@@ -493,7 +495,7 @@ def test_every_commented_key_has_its_docstrings_first_sentence() -> None:
         elif (key := _COMMENTED_KEY.match(line)) and table in models:
             field = models[table].model_fields.get(key[1])
             if field is None or key[1] in examples.get(table, {}):
-                continue  # an example table's key (`[github.teams]`'s), or the example's
+                continue  # an example table's key (`[slack.teams]`'s), or the example's
             assert field.description, f"{table}.{key[1]} has no docstring"
             comment, start = _comment_above(lines, n)
             assert comment == init.summary(field.description), f"{table}.{key[1]}"
@@ -647,7 +649,7 @@ def test_answered_keys_are_not_commented_defaults_too() -> None:
     text = init.render_config(
         {"email": "e@x.y", "teams": ["web"], "port": 9000},
         {
-            "github": InitSection({"org": "a", "host": "h", "teams": {"web": "web-reviewers"}}),
+            "github": InitSection({"org": "a", "host": "h", "teams": ["web-reviewers"]}),
             "slack": InitSection({"teams": {"web": "#web"}}),
         },
     )
@@ -656,7 +658,7 @@ def test_answered_keys_are_not_commented_defaults_too() -> None:
     slack = "\n".join(_section_lines(text, "slack") or [])
     assert "# port =" not in top and "\nport = 9000" in top
     assert "# host =" not in github and 'host = "h"' in github
-    assert "# [github.teams]" not in github and "\n[github.teams]\n" in github
+    assert "# teams =" not in github and '\nteams = ["web-reviewers"]\n' in github
     assert "# [slack.teams]" not in slack and "\n[slack.teams]\n" in slack
     tomllib.loads(_uncomment(text))  # no table twice
 

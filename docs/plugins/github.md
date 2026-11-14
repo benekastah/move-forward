@@ -54,8 +54,9 @@ complexity grows faster than size), `stale_draft_days` (my drafts untouched that
 `split_pr_suggest_lines` and `split_pr_lines` (my PRs at least that many lines "may need
 splitting" or are "worth splitting", in PR housekeeping) and `split_pr_labels` (labels that
 mean worth splitting whatever the lines). Reviewer suggestions count commits as far back as
-`[git] commit_history_days`. `[github.teams]` gives a team's GitHub
-slug where it isn't the team's name. `[github.merge]` `method` (`merge`, `squash` or `rebase`) is
+`[git] commit_history_days`. `teams` lists the slugs of `org`'s teams I'm on or review for
+(not org-wide ones): PRs requesting their review are in Requested from my teams, and CODEOWNERS
+lines naming them count as mine. `[github.merge]` `method` (`merge`, `squash` or `rebase`) is
 how Merge merges where a repo allows several; a repo allowing just one uses that, and one that
 doesn't allow it uses the one GitHub picks for me (my last used, else the repo's default).
 `default_team_reviewer_assignment` is `"team"` by default: a team request is enough.
@@ -75,8 +76,9 @@ described under [Buttons](#buttons).
 tickets they name, and a `#tag` in them, out of code, tags it: see the README's Tags; a ticket
 on ice that only another's PR names doesn't hide it, as its author wrote that text), with its
 labels as its tags but `placeholder_labels` and `split_pr_labels`, which are about its shape
-(only those listed: a size labeler's other sizes are tags), and `person` (`<host>/<login>`) for me and everyone it knows an email for; see
-[entities.md](../entities.md).
+(only those listed: a size labeler's other sizes are tags); `person` (`<host>/<login>`) for me and everyone it knows an email for;
+and `team` (`<host>/<owner>/<slug>`) for each of my `teams` (`mine`) and each team a PR requests;
+see [entities.md](../entities.md).
 
 ## Panels
 

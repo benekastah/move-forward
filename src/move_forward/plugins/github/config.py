@@ -1,8 +1,8 @@
 """`[github]`."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ...api import LOCKED, Strict
 
@@ -68,8 +68,10 @@ class GitHubConfig(Strict):
     placeholder_labels: list[str] = Field(default_factory=lambda: list(DEFAULT_PLACEHOLDER_LABELS))
     """PR labels the template leaves to be replaced, e.g. `needs-team`; PR housekeeping
     flags them."""
-    teams: dict[str, str] = Field(default_factory=dict)
-    """A team's slug, by its name in the top-level `teams`, where the slug isn't the name."""
+    teams: list[str] = Field(default_factory=list)
+    """The slugs of `org`'s teams I'm on or review for, e.g. `["web", "core"]`: PRs requesting
+    their review are in Requested from my teams, and CODEOWNERS lines naming them count as
+    mine. Leave out org-wide teams."""
     merge: MergeConfig = Field(default_factory=MergeConfig)
     """`[github.merge]`: how I like PRs merged, where a repo allows several methods; unset,
     GitHub picks for me."""
@@ -114,8 +116,15 @@ class GitHubConfig(Strict):
     """My draft PRs untouched for this many days, e.g. `14`, get a "stale draft" line in PR
     housekeeping; 0: never."""
 
-    def slug(self, team: str) -> str:
-        return self.teams.get(team, team)
+    @model_validator(mode="before")
+    @classmethod
+    def _teams_are_slugs(cls, data: object) -> object:
+        if isinstance(data, dict) and isinstance(cast(dict[str, object], data).get("teams"), dict):
+            raise ValueError(  # noqa: TRY004 - pydantic shows only a ValueError
+                "`[github.teams]` is gone: list the teams' slugs in [github] instead, e.g."
+                ' teams = ["web-reviewers"]'
+            )
+        return cast(object, data)
 
     def has_primary_reviewer(self, repo: str) -> bool:
         """Whether PRs in `repo` (`owner/name`) have a primary reviewer."""

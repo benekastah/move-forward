@@ -121,7 +121,7 @@ class Init:
     uncommented for one `example_on`."""
     tables: str = ""
     """Commented-out tables of the section's that its model can't show, as `mfd init` writes
-    them after its optional keys: a table keyed by name, with example entries (`[github.teams]`,
+    them after its optional keys: a table keyed by name, with example entries (`[slack.teams]`,
     `[mail.<name>]`). A key written here as `[<section>.<key>]` isn't written as a key too.
     `mfd init` writes each other optional key itself, from `config_model`: its default, and its
     docstring's first sentence as its comment (a section's `shown` for one it shows

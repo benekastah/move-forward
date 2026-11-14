@@ -288,8 +288,8 @@ set of tables, pages and actions, and settles what two of them both see the way 
 - **First-run setup in the browser.** `/settings` edits a config that's there; `mfd serve`
   without one could open a form to make it (still behind the token and same-site checks,
   writing only the config file), filling in what can be fetched as it goes (the org's
-  teams once the org is given, like `mfd init`'s tab completion). Tables (`[github.teams]`,
-  `[slack.teams]`) could join the settings page then too.
+  teams once the org is given, like `mfd init`'s tab completion). Tables (`[slack.teams]`,
+  `[mail.<name>]`) could join the settings page then too.
 - **Act now, after living with it.** Questions to answer from use: whether quick wins
   should lead at the end of the day and important work in the morning (a weight profile
   per part of the day, which could also rank personal mail down at 10am and work mail down

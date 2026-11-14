@@ -425,7 +425,7 @@ class Plugin[C: BaseModel, S: BaseModel]:
 
     def teams(self, config: C) -> set[str]:
         """The top-level teams (`Context.teams`, by name) the plugin's section names, e.g. those
-        github's `[github.teams]` gives a slug for, so the config refuses a team the top level
+        slack's `[slack.teams]` gives a channel for, so the config refuses a team the top level
         doesn't have. Empty by default: core knows nothing of how a section keeps them."""
         return set()
 

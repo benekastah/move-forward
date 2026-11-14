@@ -77,11 +77,9 @@ or until the item changes, whichever comes first; with Snooze's "until it change
 it changes (or once it's `prune_days` old). A timed snooze ends at local midnight, or at
 `snooze_until_hour` (9: nine in the morning) on its last day.
 
-Teams are named once, at the top level. A plugin that has its own idea of a
-team maps the names in a `teams` table of its section: `[github.teams]` gives
-a team's GitHub slug where it isn't the name, and `[slack.teams]` the channel
-its review pings go to. A name there that the top-level `teams` doesn't have is
-an error.
+The top-level `teams` names the teams slack's `[slack.teams]` gives a channel for: a name
+there that the top-level `teams` doesn't have is an error. GitHub's own are `[github] teams`,
+by slug.
 
 ## Plugins
 
@@ -273,7 +271,7 @@ level's, `[act_now]`'s, `[notifications]`' and each enabled plugin's, each with 
 only the settings that changed into the config file, each on its own line, keeping the
 file's comments and hand edits, and only if the result loads; otherwise the page says why
 and nothing is written. `mfd serve` then restarts with it, as it does whenever the file
-changes. Tables such as `[github.teams]` are edited in the file, and `db_path` and `port`
+changes. Tables such as `[slack.teams]` are edited in the file, and `db_path` and `port`
 aren't changed here, since changing them moves the server. Nor are the settings that
 say where a credential goes or comes from, whom mail trusts, or where commands run: `email`,
 `[github] host`, `[jira] site`/`token_env`/`keychain_service`, `[mail]`

@@ -68,6 +68,7 @@ gone.
 | --- | --- | --- | --- | --- |
 | `pull_request` | github | the PR's URL | `open`, `merged` or `closed` | the `ticket`s its branch, title and body mention by key |
 | `person` | github: me, and everyone it knows an email for; mail: me, by each mailbox's `username` (an address, or a bare login without `email`; none with a `/`), and whoever wrote a thread's latest message, when the server verified them (DMARC) | `<host>/<login>`; mail's `mail/<address>`, or `mail/<login>` | | |
+| `team` | github: each of my `teams`, and each team a PR requests | `<host>/<owner>/<slug>` | | |
 | `mail.thread` | mail, while it has unread or flagged mail (gone means done) | the Message-ID it started with; for a message with none, `uid:<uid>` (`uid:<account>:<uid>` in one of several mailboxes) | `unread` or `flagged` | the `person` who wrote its latest message, if verified; it mentions its subject, then too |
 | `git.repo` | git | GitHub `owner/name` | | |
 | `git.branch` | git | `<repo dir>\t<branch>` | | its `git.repo` |
@@ -119,7 +120,7 @@ The pull request family, modeled in core (`api.kinds.PullRequest`); github adds 
 | `created_at` | ISO datetime | |
 | `merged_at` | ISO datetime or null | |
 | `requested_users` | list of logins | reviewers requested as people |
-| `requested_teams` | list of strings | teams requested: a team's top-level name where `[github.teams]` maps it, else its GitHub slug |
+| `requested_teams` | list of strings | the `handle`s (slugs) of the teams requested, each a `team` in the repo's owner |
 
 On my open PRs only:
 
@@ -150,7 +151,7 @@ the README's People).
 
 ### `team`
 
-The team family, modeled in core (`api.kinds.Team`). No built-in plugin publishes teams yet.
+The team family, modeled in core (`api.kinds.Team`).
 
 | Attribute | Type | Meaning |
 | --- | --- | --- |

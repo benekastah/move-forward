@@ -50,7 +50,7 @@ def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
     loaded = _load(
         tmp_path,
         'email = "me@acme.com"\nteams = ["core", "web"]\n\n'
-        '[github]\norg = "acme"\n\n[github.teams]\nweb = "web-reviewers"\n\n'
+        '[github]\norg = "acme"\nteams = ["core", "web-reviewers"]\n\n'
         '[git]\nrepos = ["~/src/a"]\n\n[slack.teams]\ncore = "#team-core"\n\n'
         '[jira]\nsite = "https://j"\n',
     )
@@ -61,10 +61,7 @@ def test_load_expands_paths_and_defaults(tmp_path: Path) -> None:
         loaded.section("github") is not None
         and section(loaded, "github", GitHubConfig).policy_checks == []
     )
-    assert [section(loaded, "github", GitHubConfig).slug(t) for t in loaded.teams] == [
-        "core",
-        "web-reviewers",
-    ]
+    assert section(loaded, "github", GitHubConfig).teams == ["core", "web-reviewers"]
     assert loaded.section("slack") is not None and section(loaded, "slack", SlackConfig).teams == {
         "core": "#team-core"
     }
@@ -153,18 +150,16 @@ def test_a_snooze_days_key_with_a_kinds_old_name_says_its_new_one(tmp_path: Path
     assert config.act_now.snooze_days == {"pull_request": 7, "notes.entry": 2}
 
 
+def test_a_github_teams_table_says_its_teams_are_slugs_now(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match=r"`\[github.teams\]` is gone: list the teams' slugs"):
+        _load(tmp_path, MINIMAL + '[github]\norg = "a"\n\n[github.teams]\nweb = "web-reviewers"\n')
+
+
 def test_a_plugin_team_must_be_a_top_level_team(tmp_path: Path) -> None:
     with pytest.raises(
         ValidationError, match=r"\[slack\] names teams the top-level teams don't have: wbe\b"
     ):
         _load(tmp_path, MINIMAL + 'teams = ["web"]\n\n[slack.teams]\nwbe = "#web"\n')
-    with pytest.raises(
-        ValidationError, match=r"\[github\] names teams the top-level teams don't have: ops\b"
-    ):
-        _load(
-            tmp_path,
-            MINIMAL + 'teams = ["web"]\n\n[github]\norg = "a"\n[github.teams]\nops = "o"\n',
-        )
 
 
 class _RotaConfig(Strict):

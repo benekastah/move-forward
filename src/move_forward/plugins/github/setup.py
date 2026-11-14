@@ -8,13 +8,9 @@ from .client import api
 from .config import DEFAULT_HOST
 
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
-TABLES = """\
-# A team's slug, by its name in `teams`, where it isn't the team's name.
-# [github.teams]
-# my-team = "my-team-reviewers"
-"""
-SHOWN: dict[str, object] = {"merge": {"method": "squash"}}
-"""`[github.merge]`'s method, whose default (GitHub's pick) TOML can't write."""
+SHOWN: dict[str, object] = {"merge": {"method": "squash"}, "teams": ["my-team"]}
+"""`[github.merge]`'s method, whose default (GitHub's pick) TOML can't write, and a team, where
+none was given."""
 EXAMPLE = InitSection({"org": "example-org"}, SHOWN)
 
 
@@ -75,7 +71,7 @@ def org_teams(org: str, host: str = DEFAULT_HOST) -> list[str]:
 
 def questions(ask: Asker, setup: InitSetup) -> InitSection:
     """The org (and, from an Enterprise org's URL, the host), and the teams I review for
-    (which become the config's top-level teams)."""
+    (which later plugins' questions are given, too)."""
     host, name = host_and_org(
         ask(
             "GitHub organization, or its URL (e.g. acme, https://github.com/acme, or an"
@@ -92,13 +88,19 @@ def questions(ask: Asker, setup: InitSetup) -> InitSection:
         word("team slug"),
         choices(lambda: org_teams(name, host)),
     )
-    return InitSection({"org": name, **({"host": host} if host != DEFAULT_HOST else {})}, SHOWN)
+    return InitSection(
+        {
+            "org": name,
+            **({"host": host} if host != DEFAULT_HOST else {}),
+            **({"teams": setup.teams} if setup.teams else {}),
+        },
+        SHOWN,
+    )
 
 
 INIT = Init(
     questions=questions,
     example=EXAMPLE,
-    tables=TABLES,
     suggested=True,
     example_on=True,
     finds_teams=True,
