@@ -84,7 +84,8 @@ def test_init_takes_the_guesses_by_default(tmp_path: Path, no_machine_guesses: N
     assert loaded.section("jira") is None and loaded.section("git_stack") is None
     text = path.read_text()
     assert "# prune_days = 90" in text and "# [jira]" in text and "# [slack]" in text
-    assert "[notes]" not in text and "# [git_stack]" in text and "Jira" not in message
+    assert loaded.section("notes") is not None  # suggested: it needs nothing of mine
+    assert "# [git_stack]" in text and "Jira" not in message
 
 
 def test_init_turns_on_git_stack_when_it_is_installed(
@@ -333,6 +334,7 @@ def test_tab_completes_plugins_the_orgs_teams_and_directories(
         "github",
         "jira",
         "mail",
+        "notes",
         "slack",
     ]
     assert completions["GitHub"] == ["core", "core-infra"] and fetched == ["acme"]
@@ -385,13 +387,13 @@ def _tables(field: FieldInfo) -> bool:
 
 
 LEFT_OUT = init.render_config(init.EXAMPLE_ANSWERS, {})
-"""What `mfd init` writes when asked for no plugin: every offered plugin's section commented
+"""What `mfd init` writes when asked for no plugin: every plugin's section commented
 out."""
 _COMMENTED_KEY = re.compile(r"^# ([a-z_]+) = (.*)$")
 """A commented-out key as `mfd init` writes it: its name and value."""
 
 
-@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_every_key_of_a_plugin_left_out_is_a_commented_line(plugin: Plugin[Any, Any]) -> None:
     """A plugin's required keys (with its example values), its optional keys (with their
     defaults), and its tables (with an example), each commented out."""
@@ -406,7 +408,7 @@ def test_every_key_of_a_plugin_left_out_is_a_commented_line(plugin: Plugin[Any, 
     assert missing == []
 
 
-@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_what_mfd_init_writes_for_a_plugin_loads_uncommented(plugin: Plugin[Any, Any]) -> None:
     """Its section left out, uncommented, and its section chosen (with its example's
     values), its commented defaults uncommented, are each a section it takes."""
@@ -419,7 +421,7 @@ def test_what_mfd_init_writes_for_a_plugin_loads_uncommented(plugin: Plugin[Any,
     _check_uncommented(plugin, chosen)
 
 
-@pytest.mark.parametrize("plugin", init.offered(), ids=lambda plugin: plugin.name)
+@pytest.mark.parametrize("plugin", registry.PLUGINS, ids=lambda plugin: plugin.name)
 def test_a_plugins_commented_defaults_are_its_defaults(plugin: Plugin[Any, Any]) -> None:
     """Uncommenting a left-out section's optional keys changes nothing, but for the keys it
     shows an example of instead (its example's `shown`) and its example tables (`Init.tables`)."""
@@ -480,8 +482,8 @@ def test_every_commented_key_has_its_docstrings_first_sentence() -> None:
         and issubclass(field.annotation, BaseModel)
         and key not in init.HAND_WRITTEN
     }
-    models |= {plugin.name: plugin.config_model for plugin in init.offered()}
-    examples = {p.name: p.init.example.values for p in init.offered()}
+    models |= {plugin.name: plugin.config_model for plugin in registry.PLUGINS}
+    examples = {p.name: p.init.example.values for p in registry.PLUGINS}
     table = ""
     checked: list[str] = []
     lines = LEFT_OUT.splitlines()
@@ -562,7 +564,7 @@ WRITTEN = {
     "example": init.example(),
     "chosen": init.render_config(
         init.EXAMPLE_ANSWERS,
-        {p.name: p.init.example for p in init.offered()},
+        {p.name: p.init.example for p in registry.PLUGINS},
         ["github.pr_mergeable"],
     ),
 }
@@ -723,8 +725,8 @@ def test_mfd_init_example_writes_a_config_with_the_plugins_their_examples_turn_o
     assert cli.main(["-c", str(path), "init", "--example"]) == 0
     assert "wrote" in capsys.readouterr().out
     loaded = config.load(path)
-    on = [name for name in registry.enabled_names(loaded) if name != "notes"]  # always on
-    assert on == ["git", "git_stack", "github", "slack"]  # jira and mail start commented out
+    # jira and mail start commented out
+    assert registry.enabled_names(loaded) == ["git", "git_stack", "github", "notes", "slack"]
     assert section(loaded, "github", GitHubConfig).org == "example-org"
 
 
@@ -757,8 +759,7 @@ def test_a_plugins_example_uncommented_is_a_config_it_takes(plugin: Plugin[Any, 
     so does taking what's behind `##` instead (several mailboxes, say): its tables, each a
     mailbox of its own, and what any of them sets moved out of the section."""
     section = _example_section(plugin)
-    if section is None:
-        return  # no section to give (notes: always on)
+    assert section is not None
     _check_uncommented(plugin, section)
 
 

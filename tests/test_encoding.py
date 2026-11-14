@@ -67,7 +67,7 @@ def test_mfd_prints_utf_8_whatever_the_systems_encoding(tmp_path: Path, outside:
     outside.allow(sys.executable)
     config = tmp_path / "config.toml"
     config.write_text(
-        f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n', encoding="utf-8"
+        f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n[notes]\n', encoding="utf-8"
     )
     env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONPATH": str(ROOT / "src")}
     mfd = [sys.executable, "-m", "move_forward.cli", "-c", str(config), "notes"]

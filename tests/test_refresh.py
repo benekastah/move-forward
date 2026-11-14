@@ -411,7 +411,7 @@ def test_each_plugin_refreshes_on_its_own_setting() -> None:
     )
     plugins = registry.enabled(config, Database(":memory:"), NOW)
     seconds = {e.name: e.refresh_seconds for e in plugins}
-    assert seconds == {"github": 300, "git": 30, "notes": None}
+    assert seconds == {"github": 300, "git": 30}
 
 
 def test_an_item_opened_elsewhere_is_dimmed_in_its_place_until_it_changes() -> None:
@@ -621,3 +621,17 @@ def test_the_known_actions_are_the_enabled_plugins_declared_ones() -> None:
     known = refresh._known_action(registry.enabled(config, db, NOW))  # pyright: ignore[reportPrivateUsage]
     assert known("notes/todo_done") and known("git/push_branch")
     assert not known("notes/nope") and not known("jira/transition")  # jira isn't on
+
+
+def test_a_plugin_set_aside_by_the_upgrade_is_said_to_be_off_until_it_is_on() -> None:
+    """Notes, on without a section before, has a database's worth of todos after an upgrade
+    that turns it off: the page says why they're gone, and what to add; but not of a plugin
+    turned off on purpose since, nor once it's been on again."""
+    without = Config.model_validate({"email": "me@x", "github": {"org": "acme"}})
+    db = Database(":memory:")
+    registry.migrate(Config.model_validate({"email": "me@x", "github": {"org": "acme"}}), db)
+    db.execute("INSERT INTO set_aside VALUES ('notes')")  # as core's 0022 finds it
+    said = "notes has data here but no [notes] section in the config, so it's off: add [notes]"
+    assert refresh.build_dashboard(without, db, NOW).problems == [f"{said} to turn it back on"]
+    registry.migrate(Config.model_validate({"email": "me@x", "notes": {}}), db)
+    assert not refresh.build_dashboard(without, db, NOW).problems  # on since, and github too

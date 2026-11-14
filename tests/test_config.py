@@ -209,7 +209,7 @@ def test_naming_settings_have_defaults_and_load(tmp_path: Path) -> None:
 
 def test_only_plugins_with_a_section_are_enabled(tmp_path: Path) -> None:
     loaded = _load(tmp_path, MINIMAL + "\n[git]\nrepos = []\n")
-    assert [e.name for e in enabled(loaded, Database(":memory:"), NOW)] == ["git", "notes"]
+    assert [e.name for e in enabled(loaded, Database(":memory:"), NOW)] == ["git"]
 
 
 class _JiraOnGit(JiraPlugin):
@@ -280,10 +280,10 @@ def test_refresh_seconds_moved_into_each_plugins_section(tmp_path: Path) -> None
 
 def test_each_plugin_section_is_its_plugins_model(tmp_path: Path) -> None:
     loaded = _load(tmp_path, MINIMAL + '\n[git]\nrepos = []\n\n[github]\norg = "acme"\n')
-    for name in ("git", "github", "notes"):  # notes is always on
+    for name in ("git", "github"):
         plugin = next(p for p in registry.PLUGINS if p.name == name)
         assert isinstance(loaded.section(name), plugin.config_model)
-    assert loaded.section("jira") is None
+    assert loaded.section("jira") is None and loaded.section("notes") is None
 
 
 def test_an_unknown_section_names_the_plugins(tmp_path: Path) -> None:

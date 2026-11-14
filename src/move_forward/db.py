@@ -363,6 +363,27 @@ CREATE TABLE tag_removals (            -- kept until its plugin next refreshes: 
 """Any tag can be taken off. One I put on goes from `tags`; one its tool or text gives the
 entity is kept off here, until the refresh that would find it again."""
 
+
+def _v22_set_aside(conn: sqlite3.Connection) -> None:
+    """Notes was on without a section, the one plugin that was; an upgraded config without
+    `[notes]` turns it off, with its todos and entries still here. When notes holds anything,
+    it's set aside, and the page says it's off until it's on again (`refresh._set_aside`). Like
+    0004, it's a core migration that names notes, whose tables it reads only to know whether
+    they're empty. A plugin turned off on purpose, before or since, is never set aside."""
+    conn.execute(
+        "CREATE TABLE set_aside ("  # kept until it's enabled again: a plugin an upgrade turned off
+        " owner TEXT PRIMARY KEY)"
+    )
+    tables = [
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name GLOB 'notes_*'"
+        )
+    ]
+    if any(conn.execute(f'SELECT 1 FROM "{table}" LIMIT 1').fetchone() for table in tables):
+        conn.execute("INSERT INTO set_aside VALUES ('notes')")
+
+
 CORE_MIGRATIONS = [
     Migration("0001_schema", V1_SCHEMA),
     Migration("0002_kv_and_layout", _V2_KV_AND_LAYOUT),
@@ -385,6 +406,7 @@ CORE_MIGRATIONS = [
     Migration("0019_problems", _V19_PROBLEMS),
     Migration("0020_change_checks", _V20_CHANGE_CHECKS),
     Migration("0021_tag_removals", _V21_TAG_REMOVALS),
+    Migration("0022_set_aside", _v22_set_aside),
 ]
 
 _SCHEMA_VERSIONS = """

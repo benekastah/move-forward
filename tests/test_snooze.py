@@ -106,7 +106,7 @@ def test_unsnooze_brings_back_anything_set_aside(
 ) -> None:
     config = tmp_path / "config.toml"
     db_path = tmp_path / "dashboard.db"
-    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n')
+    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n[notes]\n')
     assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
     feedback = FeedbackRepository(Database(db_path))
     tomorrow = datetime.now(UTC) + timedelta(days=1)
@@ -144,7 +144,9 @@ def test_mfd_snooze_takes_any_entity_and_refuses_one_it_cannot_snooze(
 ) -> None:
     config = tmp_path / "config.toml"
     db_path = tmp_path / "dashboard.db"
-    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
+    config.write_text(
+        f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n[notes]\n', encoding="utf-8"
+    )
     assert cli.main(["-c", str(config), "notes", "add-entry", "Bob's chores"]) == 0
     assert (
         cli.main(
@@ -171,7 +173,9 @@ def test_mfd_snooze_changed_snoozes_until_the_item_changes(
 ) -> None:
     config = tmp_path / "config.toml"
     db_path = tmp_path / "dashboard.db"
-    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
+    config.write_text(
+        f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n[notes]\n', encoding="utf-8"
+    )
     assert cli.main(["-c", str(config), "notes", "add-entry", "Chores"]) == 0
     todo = ["notes", "todo", "add", "Chores", "sweep", "--size", "quick"]
     assert cli.main(["-c", str(config), *todo]) == 0
@@ -196,7 +200,9 @@ def test_mfd_snoozes_lists_only_the_snoozes_whose_time_isnt_up_and_no_pins(
 ) -> None:
     config = tmp_path / "config.toml"
     db_path = tmp_path / "dashboard.db"
-    config.write_text(f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n', encoding="utf-8")
+    config.write_text(
+        f'email = "me@x"\ndb_path = "{db_path.as_posix()}"\n[notes]\n', encoding="utf-8"
+    )
     assert cli.main(["-c", str(config), "snoozes"]) == 0  # creates and migrates the database
     assert json.loads(capsys.readouterr().out) == []
     for title in ("Chores", "Errands", "Laundry"):

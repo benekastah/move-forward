@@ -106,7 +106,7 @@ Each plugin's page has its config, setup, panels, commands and buttons:
 | [jira](docs/plugins/jira.md) | `[jira]` | my open tickets |
 | [slack](docs/plugins/slack.md) | `[slack]` | review pings: who to ask about my PRs, and the messages |
 | [mail](docs/plugins/mail.md) | `[mail]` | unread and flagged mail over IMAP, by subject and sender, the people who matter first |
-| [notes](docs/plugins/notes.md) | `[notes]`, optional: always on | the skill's work notes (entries and todos) and what's on ice, in the database |
+| [notes](docs/plugins/notes.md) | `[notes]` | the skill's work notes (entries and todos) and what's on ice, in the database |
 
 Plugins from other packages are found by their `move_forward.plugins` entry point: install
 one beside the dashboard, e.g. `uv tool install move-forward --with move-forward-linear`,
@@ -208,7 +208,7 @@ failed" with the reason on hover, and how many problems the plugin reports besid
 refresh (a lookup its token isn't allowed, say), each said above its panels until it's
 gone. Its Refresh button refreshes just that plugin,
 and then the plugins that watch it (git_stack watches git) if what they read
-changed; the header's Refresh refreshes them all. The footer lists only plugins without a group, and their problems.
+changed; the header's Refresh refreshes them all. The footer lists only plugins without a group, and their problems, and, after the upgrade that made notes need a `[notes]` section, that notes is off if it held something then and has had no section since; adding `[notes]` turns it on and clears the line for good.
 While any plugin refreshes, the tab icon shows a dotted version of the
 dashboard arrow, highlighting one dot at a time. If the browser pauses the
 animation in a background tab, it still shows a complete refresh icon. The

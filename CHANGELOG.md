@@ -5,6 +5,13 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Notes need a `[notes]` section
+
+Notes are no longer on without one: a config without `[notes]` shows no todos, work entries or
+ice, and `mfd notes` refuses to run. Add an empty `[notes]` table to keep them; what they hold
+is still in the database, and the page's footer says notes is off until you do. `mfd init`
+writes one unless you leave notes out.
+
 ### Python 3.14 is required
 
 move-forward now needs Python 3.14 or newer (and pydantic 2.14.3 or newer). A running

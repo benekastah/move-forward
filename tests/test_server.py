@@ -55,6 +55,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
             "github": GitHubConfig(org="acme"),
             "teams": ["core"],
             "slack": SlackConfig(),
+            "notes": {},
             "db_path": tmp_path / "x.db",
         }
     )

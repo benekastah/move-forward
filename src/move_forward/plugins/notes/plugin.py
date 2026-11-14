@@ -29,6 +29,7 @@ from .covers import covers
 from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
 from .panels import ENTRY, ICED, TODO, Builder, entities
 from .repository import MIGRATIONS, NotesRepository
+from .setup import INIT
 
 EMPTY_NOTES = (
     "No notes yet: New todo starts one here, and `mfd notes add-entry <title>` starts an entry."
@@ -44,7 +45,7 @@ def _builder(ctx: Context[NotesConfig], graph: Graph) -> Builder:
 class NotesPlugin(Plugin[NotesConfig, BaseModel]):
     name = "notes"
     title = "Notes"
-    always_on = True
+    init = INIT
     config_model = NotesConfig
     api_version = API_VERSION
     migrations: ClassVar[list[Migration]] = MIGRATIONS

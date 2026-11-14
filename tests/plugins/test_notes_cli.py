@@ -27,7 +27,7 @@ def config(tmp_path: Path) -> Path:
     path = tmp_path / "config.toml"
     path.write_text(
         f'email = "me@x"\ndb_path = "{(tmp_path / "dashboard.db").as_posix()}"\n\n'
-        '[jira]\nsite = "https://j.example"\n\n[git]\nrepos = []\n'
+        '[jira]\nsite = "https://j.example"\n\n[git]\nrepos = []\n\n[notes]\n'
     )
     db = Database(tmp_path / "dashboard.db")
     migrate(load(path), db)
@@ -175,8 +175,10 @@ def test_a_plugin_command_needs_its_section(
 ) -> None:
     config = tmp_path / "config.toml"
     config.write_text(f'email = "me@x"\ndb_path = "{(tmp_path / "d.db").as_posix()}"\n')
+    assert cli.main(["-c", str(config), "notes", "list", "--json"]) != 0
+    config.write_text(config.read_text(encoding="utf-8") + "\n[notes]\n", encoding="utf-8")
     assert cli.main(["-c", str(config), "notes", "list", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out) == []  # notes is always on
+    assert json.loads(capsys.readouterr().out) == []
 
 
 def test_ice_a_work_entry_by_kind_and_id(run: Run) -> None:

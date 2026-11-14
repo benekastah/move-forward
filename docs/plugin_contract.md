@@ -47,7 +47,6 @@ the others do.
 | Name | Type, default | What it says |
 | --- | --- | --- |
 | `notification_kinds` | `dict[str, str]`, `{}` | The events its `events` makes, by kind, each with what it says, for the settings page and `mfd init`: `pr_mergeable` is subscribed to as `github.pr_mergeable`. |
-| `always_on` | `bool`, `False` | On without a section (notes), so `mfd init` doesn't offer it. |
 | `init` | `Init`, `Init()` | How `mfd init` sets the section up (below). By default nothing is asked and it isn't suggested. |
 
 ### Derived

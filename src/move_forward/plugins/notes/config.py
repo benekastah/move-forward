@@ -15,8 +15,8 @@ IN_THE_DATABASE = (
 
 
 class NotesConfig(Strict):
-    """`[notes]`: the work notes and what's on ice. Always on; the section is optional and has
-    no settings yet."""
+    """`[notes]`: the work notes and what's on ice. On when the section is there, which has no
+    settings yet."""
 
     @model_validator(mode="before")
     @classmethod

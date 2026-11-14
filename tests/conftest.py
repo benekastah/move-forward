@@ -489,8 +489,8 @@ SLACK_OVERRIDES = (
 def stored(**overrides: object) -> tuple[Config, Database]:
     """A config and a database holding stored snapshots and notes. Overrides name a snapshot
     (`github`, `local`, `stacks`, `jira`, `derived`), notes (`work_items`, `iced_stacks`,
-    `users`, `teams`, `pings`) or a setting of a plugin's section. github and git are always
-    on; git_stack, jira and slack when an override is about them."""
+    `users`, `teams`, `pings`) or a setting of a plugin's section. github, git and notes are
+    always on; git_stack, jira and slack when an override is about them."""
     o = dict(overrides)
     enable_slack = any(key in o for key in SLACK_OVERRIDES)
     o.pop("slack", None)
@@ -561,6 +561,7 @@ def stored(**overrides: object) -> tuple[Config, Database]:
             "teams": teams,
             "github": github,
             "git": git,
+            "notes": {},
             **({"git_stack": {}} if enable_git_stack else {}),
             **({"slack": slack} if enable_slack else {}),
             **({"jira": jira} if enable_jira else {}),

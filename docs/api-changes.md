@@ -14,6 +14,9 @@ name, a hook, a request field or an optional `KindSpec` flag doesn't.
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each
 for themselves (a token, a request, an example config) is core's.
 
+- **No `always_on`**: a plugin is on only when the config has its section, notes included.
+  Drop the class variable; a plugin with nothing to ask suggests itself with
+  `Init(suggested=True)`.
 - **One collect phase**: `collects_after` is gone. Every plugin due collects at once, from the
   graph as stored before the refresh. A plugin that needs other plugins' entities to know what
   to fetch `watches` them, with a `changed` that compares their entities in `req.graph` with

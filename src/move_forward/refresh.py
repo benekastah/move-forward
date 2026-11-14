@@ -57,6 +57,7 @@ from .repositories import (
     LayoutRepository,
     PriorityRepository,
     ProblemRepository,
+    SetAsideRepository,
     SnapshotRepository,
     TagRepository,
 )
@@ -627,10 +628,23 @@ def build_dashboard(
     )
     return built.model_copy(
         update={
-            "problems": list(registry.DISCOVERY_ERRORS),
+            "problems": [*registry.DISCOVERY_ERRORS, *_set_aside(db, plugins)],
             "plugin_problems": ProblemRepository(db).of([e.name for e in plugins]),
         }
     )
+
+
+def _set_aside(db: Database, plugins: Sequence[Enabled]) -> list[str]:
+    """What's said of a plugin an upgrade turned off, and without a section since
+    (`SetAsideRepository`): notes, once on without one, when it held something."""
+    on = {e.name for e in plugins}
+    aside = SetAsideRepository(db).all()
+    return [
+        f"{p.name} has data here but no [{p.name}] section in the config, so it's off: add"
+        f" [{p.name}] to turn it back on"
+        for p in registry.PLUGINS
+        if p.name not in on and p.name in aside
+    ]
 
 
 def _failed(e: Enabled) -> Panel:
