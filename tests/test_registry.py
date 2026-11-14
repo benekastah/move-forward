@@ -10,7 +10,7 @@ from typing import Any, ClassVar
 
 import pytest
 from conftest import dashboard
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 
 from move_forward import cli, config, kinds, registry, render, server
 from move_forward.domain import KindModel
@@ -324,6 +324,47 @@ def test_a_config_model_holding_one_that_ignores_unknown_keys_is_refused() -> No
 
     with pytest.raises(RuntimeError, match="make _Account a Strict"):
         registry.check_plugins([Lax()])
+
+
+class _Outer(Strict):
+    inner: _Inner | None = None
+
+
+class _Inner(Strict):
+    """Naming a model defined after it, which rebuilding `_Outer` doesn't resolve."""
+
+    later: _LaterLoose | None = None
+
+
+class _LaterLoose(BaseModel):
+    host: str = ""
+
+
+class _Names(RootModel[list[str]]):
+    pass
+
+
+class _WithRoot(Strict):
+    names: _Names = _Names([])
+
+
+def test_a_loose_model_behind_a_held_models_late_type_is_refused() -> None:
+    class Lax(Plugin[_Outer, KindModel]):
+        name = "lax"
+        config_model = _Outer
+        api_version = API_VERSION
+
+    with pytest.raises(RuntimeError, match="make _LaterLoose a Strict"):
+        registry.check_plugins([Lax()])
+
+
+def test_a_root_model_held_in_a_config_has_no_keys_to_reject() -> None:
+    class Rooted(Plugin[_WithRoot, KindModel]):
+        name = "rooted"
+        config_model = _WithRoot
+        api_version = API_VERSION
+
+    registry.check_plugins([Rooted()])
 
 
 def test_a_plugin_built_against_another_api_is_told_so_before_its_config_is_checked() -> None:

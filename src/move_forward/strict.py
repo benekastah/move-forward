@@ -3,7 +3,7 @@
 import sys
 from typing import Any, TypeAliasType, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, RootModel
 from pydantic.fields import FieldInfo
 
 
@@ -77,9 +77,15 @@ def check_resolved_markers(model: type[BaseModel]) -> None:
     """`check_markers` once `model`'s fields naming a type defined after it are resolved: it's
     rebuilt against its own module's names, so no name of the caller's can stand in for one of
     them."""
+    _resolve(model)
+    check_markers(model)
+
+
+def _resolve(model: type[BaseModel]) -> None:
+    """Rebuild `model` against its own module's names, resolving its fields naming a type
+    defined after it."""
     module = sys.modules.get(model.__module__)
     model.model_rebuild(_types_namespace=vars(module) if module else None)
-    check_markers(model)
 
 
 def _model(annotation: object) -> type[BaseModel] | None:
@@ -92,8 +98,10 @@ def _model(annotation: object) -> type[BaseModel] | None:
 def loose_models(model: type[BaseModel]) -> list[str]:
     """The names of the models, `model` and any a field's type holds (`dict[str, Account]`,
     `Account | None`, a `type` alias's value), that ignore unknown keys rather than reject
-    them, as a `Strict` does: a typo there would be dropped without a word. Run on a model
-    whose late types are resolved (`check_resolved_markers`)."""
+    them, as a `Strict` does: a typo there would be dropped without a word. Each held model's
+    late types are resolved before it's looked into; a `RootModel`, which has no keys, is
+    looked into but never loose. Run on a model whose late types are resolved
+    (`check_resolved_markers`)."""
     loose: list[str] = []
     seen: set[int] = set()
 
@@ -102,7 +110,9 @@ def loose_models(model: type[BaseModel]) -> list[str]:
             return
         seen.add(id(annotation))
         if (held := _model(annotation)) is not None:
-            if held.model_config.get("extra") != "forbid":
+            _resolve(held)  # its own late types, which `model`'s rebuild leaves alone
+            # A RootModel has no keys to misspell, and can't set `extra`.
+            if not issubclass(held, RootModel) and held.model_config.get("extra") != "forbid":
                 loose.append(held.__name__)
             for field in held.model_fields.values():
                 visit(field.annotation)
