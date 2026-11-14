@@ -4,11 +4,13 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import Outside
 
 from move_forward.shell import CommandError, git, git_common_dir, run
 
 
-def test_a_failing_command_keeps_what_it_printed() -> None:
+def test_a_failing_command_keeps_what_it_printed(outside: Outside) -> None:
+    outside.allow(sys.executable)  # the child, a script of our own, isn't guarded
     script = "import sys; print('so far'); print('broke', file=sys.stderr); sys.exit(3)"
     with pytest.raises(CommandError, match="broke") as failed:
         run([sys.executable, "-c", script])

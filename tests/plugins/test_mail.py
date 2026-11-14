@@ -312,7 +312,7 @@ class FakeImap:
         """What Gmail files under Promotions or Social; None, a search that fails."""
         self.calls: list[tuple[object, ...]] = []
 
-    def __call__(self, host: str, port: int, ssl_context: object, timeout: int) -> "FakeImap":
+    def __call__(self, host: str, port: int, ssl_context: object, timeout: int) -> FakeImap:
         self.calls.append(("connect", host, port, timeout))
         return self
 

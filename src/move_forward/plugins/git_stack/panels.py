@@ -141,26 +141,6 @@ class Builder:
             " progress, for you to resolve.",
         )
 
-    def _one_clean_for_act_now(self, items: list[Item]) -> list[Item]:
-        """A repo's items, its first merged branch a candidate for Act now, as git's merged
-        branches it can delete are, saying how many more Clean cleans: the rest of Stacks is
-        news rather than something to do. One per repo, as its Clean cleans them all, so more
-        would only take Act now's places with the same button; and not one on ice, which core
-        would leave out of Act now, and with it the repo's only Clean."""
-        merged = [
-            n
-            for n, item in enumerate(items)
-            if item.signals and not any(self.graph.hidden(ref) for ref in item.subjects)
-        ]
-        if not merged:
-            return items
-        first = items[merged[0]]
-        more = [f"and {len(merged) - 1} more merged here"] if len(merged) > 1 else []
-        items[merged[0]] = first.model_copy(
-            update={"act_now": True, "details": [*first.details, *more]}
-        )
-        return items
-
     def stacks(self) -> Panel:
         items: list[Item] = []
         actions: list[Action] = []
@@ -183,7 +163,6 @@ class Builder:
                 label = f"Clean about {len(merged)} merged in {Path(repo.dir).name}"
                 actions.append(clean.model_copy(update={"label": label}))
             listed: set[str] = set()
-            first = len(items)
             for b in repo.branches:
                 if b.status in (None, "up-to-date"):
                     continue
@@ -216,7 +195,6 @@ class Builder:
                         ],
                     )
                 )
-            items[first:] = self._one_clean_for_act_now(items[first:])
             for b in repo.branches:
                 if b.parent is None or b.name in listed:
                     continue

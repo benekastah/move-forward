@@ -90,6 +90,22 @@ def _commit(path: Path, name: str) -> None:
     git(path, "commit", "-q", "-m", name)
 
 
+def test_worktree_status_counts_files_inside_untracked_directories(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    (repo / ".gitignore").write_text("ignored/\n", encoding="utf-8")
+    git(repo, "add", ".gitignore")
+    git(repo, "commit", "-q", "-m", "ignore generated files")
+    (repo / "new" / "nested").mkdir(parents=True)
+    (repo / "new" / "one.txt").write_text("one", encoding="utf-8")
+    (repo / "new" / "nested" / "two.txt").write_text("two", encoding="utf-8")
+    (repo / "third.txt").write_text("three", encoding="utf-8")
+    (repo / "ignored").mkdir()
+    (repo / "ignored" / "file.txt").write_text("ignored", encoding="utf-8")
+
+    assert local.worktree_status(repo) == (0, 3)
+
+
 def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
     origin = tmp_path / "origin"
     _init_repo(origin)
