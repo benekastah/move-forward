@@ -110,7 +110,7 @@ RESERVED_NAMES = frozenset(
         "prune_days",
         "refresh_on_load_seconds",  # gone, as `https`
         "sections",
-        "teams",  # moved to [github], as `https`
+        "teams",  # gone, as `https`
         # Core's commands, `mfd <command>`.
         "check",
         "contact",

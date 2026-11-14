@@ -1,6 +1,6 @@
 """Dashboard configuration, read from a TOML file.
 
-Top level: who I am, the teams I'm on, and the dashboard's own settings. Each plugin has a
+Top level: who I am, and the dashboard's own settings. Each plugin has a
 section, e.g. `[github]`; a plugin is enabled when its section is there.
 """
 
@@ -33,7 +33,6 @@ MOVED_SETTINGS = {
     "email_domains": "github.email_domains",
     "stale_review_hours": "github.stale_review_hours",
     "github.reviewer_history_days": "git.commit_history_days",
-    "teams": "github.teams",
 }
 """Settings that moved, from where they were (a top-level key, or a plugin's as
 `<section>.<key>`) to where they are now (`<section>.<key>`), to say so instead of just "extra
@@ -167,6 +166,12 @@ class Config(Strict):
             moved.append(
                 "`https` is gone; the dashboard serves plain HTTP on localhost only: delete the"
                 " line"
+            )
+        if "teams" in settings:
+            # Not `MOVED_SETTINGS`: they were names, and [github] takes slugs.
+            moved.append(
+                "the top-level `teams` are gone: list the slugs of the teams you're on or review"
+                " for in [github] `teams` (it may have them already), and delete the line"
             )
         if "refresh_on_load_seconds" in settings:
             moved.append(

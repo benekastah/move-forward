@@ -152,8 +152,9 @@ def test_a_github_teams_table_says_its_teams_are_slugs_now(tmp_path: Path) -> No
         _load(tmp_path, MINIMAL + '[github]\norg = "a"\n\n[github.teams]\nweb = "web-reviewers"\n')
 
 
-def test_the_top_level_teams_say_they_moved_to_github(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match=r"`teams` is now in \[github\]"):
+def test_the_top_level_teams_say_github_takes_their_slugs(tmp_path: Path) -> None:
+    """Not "moved": they were names, and moving them as they are would empty my teams."""
+    with pytest.raises(ValidationError, match=r"list the slugs of the teams .* in \[github\]"):
         _load(tmp_path, MINIMAL + 'teams = ["web"]\n')
 
 
