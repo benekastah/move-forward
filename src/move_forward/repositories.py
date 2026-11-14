@@ -532,8 +532,8 @@ def _rekey(
 
 
 class SetAsideRepository:
-    """The plugins set up here when a section became what turns each on, and not on since
-    (`set_aside`, core's migration 0022)."""
+    """The plugins an upgrade turned off, holding something, and not on since (`set_aside`, core's
+    migration 0022): notes, once on without a section."""
 
     def __init__(self, db: Database):
         self._db = db

@@ -610,18 +610,23 @@ def test_a_transaction_within_a_transaction_is_refused_not_half_committed() -> N
     assert db.query("SELECT x FROM t") == []
 
 
-def test_the_plugins_set_up_before_sections_turned_them_on_are_set_aside(tmp_path: Path) -> None:
+def test_notes_holding_something_when_it_stopped_being_always_on_is_set_aside(
+    tmp_path: Path,
+) -> None:
     """Notes, on without a section until then: the page says it's off until it's on again
-    (see `refresh._set_aside`), but not of a plugin set up later, nor in a new database."""
-    path = tmp_path / "old.db"
-    db = Database(path)
-    db.execute("DELETE FROM migrations WHERE owner = 'core' AND name = '0022_set_aside'")
-    db.execute("DROP TABLE set_aside")
-    db.migrate("notes", [Migration("0001_x", "CREATE TABLE notes_x (x INTEGER);")])
-
-    db = Database(path)
-    db.migrate("later", [Migration("0001_x", "CREATE TABLE later_x (x INTEGER);")])
-    assert SetAsideRepository(db).all() == {"notes"}
-    SetAsideRepository(db).clear(["notes"])
-    assert SetAsideRepository(db).all() == set()
+    (see `refresh._set_aside`). Not when it holds nothing, nor another plugin, set up and
+    turned off before, nor in a new database."""
+    for notes_rows, set_aside in ((1, {"notes"}), (0, set[str]())):
+        path = tmp_path / f"old-{notes_rows}.db"
+        db = Database(path)
+        db.execute("DELETE FROM migrations WHERE owner = 'core' AND name = '0022_set_aside'")
+        db.execute("DROP TABLE set_aside")
+        db.migrate("notes", [Migration("0001_x", "CREATE TABLE notes_x (x INTEGER);")])
+        db.migrate("jira", [Migration("0001_x", "CREATE TABLE jira_x (x INTEGER);")])
+        db.execute("INSERT INTO jira_x VALUES (1)")
+        for _ in range(notes_rows):
+            db.execute("INSERT INTO notes_x VALUES (1)")
+        assert SetAsideRepository(Database(path)).all() == set_aside
+    SetAsideRepository(Database(tmp_path / "old-1.db")).clear(["notes"])
+    assert SetAsideRepository(Database(tmp_path / "old-1.db")).all() == set()
     assert SetAsideRepository(Database(tmp_path / "new.db")).all() == set()

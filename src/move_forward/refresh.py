@@ -635,8 +635,8 @@ def build_dashboard(
 
 
 def _set_aside(db: Database, plugins: Sequence[Enabled]) -> list[str]:
-    """What's said of an installed plugin set up here before a section was what turned every
-    plugin on, and without one since (`SetAsideRepository`): notes, once on without one."""
+    """What's said of a plugin an upgrade turned off, and without a section since
+    (`SetAsideRepository`): notes, once on without one, when it held something."""
     on = {e.name for e in plugins}
     aside = SetAsideRepository(db).all()
     return [
