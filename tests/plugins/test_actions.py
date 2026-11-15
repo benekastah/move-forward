@@ -1,8 +1,18 @@
+import shutil
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from conftest import entry, iced, issue, keep_notes, know_jira_projects, section, todo
+from conftest import (
+    entry,
+    git_environment,
+    iced,
+    issue,
+    keep_notes,
+    know_jira_projects,
+    section,
+    todo,
+)
 
 from move_forward import refresh
 from move_forward.config import Config
@@ -45,20 +55,33 @@ def _commit(repo: Path, name: str) -> None:
     git(repo, "commit", "-q", "-m", name)
 
 
+@pytest.fixture(scope="session")
+def repo_template(tmp_path_factory: pytest.TempPathFactory, git_config: Path) -> Path:
+    """`repo` and its origin, made once for the run: each test gets a copy."""
+    root = tmp_path_factory.mktemp("repo")
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        git_environment(monkeypatch, git_config)
+        origin = root / "origin.git"
+        _init(origin, bare=True)
+        repo = root / "repo"
+        _init(repo)
+        _commit(repo, "a.txt")
+        git(repo, "remote", "add", "origin", str(origin))
+        git(repo, "push", "-q", "-u", "origin", "main")
+        git(repo, "branch", "done")
+        git(repo, "switch", "-q", "-c", "wip")
+        _commit(repo, "b.txt")
+        git(repo, "switch", "-q", "main")
+    return root
+
+
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def repo(repo_template: Path, tmp_path: Path) -> Path:
     """A clone of a bare origin, on main with one commit, plus branches `done` and `wip`."""
-    origin = tmp_path / "origin.git"
-    _init(origin, bare=True)
+    for name in ("origin.git", "repo"):
+        shutil.copytree(repo_template / name, tmp_path / name, symlinks=True)
     repo = tmp_path / "repo"
-    _init(repo)
-    _commit(repo, "a.txt")
-    git(repo, "remote", "add", "origin", str(origin))
-    git(repo, "push", "-q", "-u", "origin", "main")
-    git(repo, "branch", "done")
-    git(repo, "switch", "-q", "-c", "wip")
-    _commit(repo, "b.txt")
-    git(repo, "switch", "-q", "main")
+    git(repo, "remote", "set-url", "origin", str(tmp_path / "origin.git"))
     return repo
 
 
