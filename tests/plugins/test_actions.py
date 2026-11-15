@@ -30,24 +30,12 @@ from move_forward.shell import CommandError, git
 def _init(path: Path, bare: bool = False) -> None:
     path.mkdir()
     git(path, "init", "-q", "-b", "main", *(["--bare"] if bare else []))
-    if not bare:
-        for key, value in (
-            ("user.email", "me@x"),
-            ("user.name", "Me"),
-            ("commit.gpgsign", "false"),
-        ):
-            git(path, "config", key, value)
 
 
 def _clone(origin: Path, path: Path, branch: str) -> Path:
-    """A clone of `origin` on `branch`, with an identity to commit as (CI has none)."""
-    git(path.parent, "clone", "-q", "-b", branch, str(origin), str(path))
-    for key, value in (
-        ("user.email", "other@x"),
-        ("user.name", "Other"),
-        ("commit.gpgsign", "false"),
-    ):
-        git(path, "config", key, value)
+    """A clone of `origin` on `branch`, committing as someone else."""
+    identity = ("-c", "user.email=other@x", "-c", "user.name=Other")
+    git(path.parent, "clone", "-q", "-b", branch, *identity, str(origin), str(path))
     return path
 
 
@@ -306,7 +294,7 @@ def test_wip_commit_refuses_a_checkout_that_isnt_the_repos(
     git(elsewhere, "init", "-q")
     (elsewhere / "f").write_text("x")
     git(elsewhere, "add", "f")
-    git(elsewhere, "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "init")
+    git(elsewhere, "commit", "-qm", "init")
     (elsewhere / "f").write_text("changed")
     with pytest.raises(ActionError, match="not a worktree of"):
         run("git/wip_commit", config, {"repo": str(repo), "worktree": str(elsewhere)})

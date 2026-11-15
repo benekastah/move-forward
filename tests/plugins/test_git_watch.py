@@ -31,9 +31,6 @@ def _repo(path: Path) -> Path:
     """A repo tracking `src/deep/a.py`, and ignoring `node_modules/` nested in `src/`."""
     path.mkdir()
     git(path, "init", "-q", "-b", "main")
-    git(path, "config", "user.email", "me@example.com")
-    git(path, "config", "user.name", "Me")
-    git(path, "config", "commit.gpgsign", "false")
     (path / "src" / "deep").mkdir(parents=True)
     (path / "src" / "deep" / "a.py").write_text("a\n")
     (path / ".gitignore").write_text("node_modules/\n")

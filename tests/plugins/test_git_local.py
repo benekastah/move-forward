@@ -74,13 +74,6 @@ def test_github_repo_from_remote_urls() -> None:
 def _init_repo(path: Path) -> None:
     path.mkdir()
     git(path, "init", "-q", "-b", "main")
-    _configure(path)
-
-
-def _configure(path: Path) -> None:
-    git(path, "config", "user.email", "me@example.com")
-    git(path, "config", "user.name", "Me")
-    git(path, "config", "commit.gpgsign", "false")
 
 
 def _commit(path: Path, name: str) -> None:
@@ -112,7 +105,6 @@ def test_collect_repo_against_a_real_repo(tmp_path: Path) -> None:
     _commit(origin, "src/a.txt")
     repo = tmp_path / "repo"
     git(tmp_path, "clone", "-q", str(origin), str(repo))
-    _configure(repo)
     git(repo, "switch", "-q", "-c", "feature")
     _commit(repo, "b.txt")
     (repo / "dirty.txt").write_text("x")
@@ -146,7 +138,6 @@ def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) 
     _commit(origin, "a.txt")
     repo = tmp_path / "repo"
     git(tmp_path, "clone", "-q", str(origin), str(repo))
-    _configure(repo)
     git(repo, "switch", "-q", "-c", "mine")
     _commit(repo, "m.txt")
     git(repo, "switch", "-q", "-c", "stacked")  # on mine, with someone else's commit on top
@@ -183,11 +174,9 @@ def test_remotes_are_read_whatever_they_are_called(tmp_path: Path) -> None:
     _commit(org, "a.txt")
     fork = tmp_path / "fork"
     git(tmp_path, "clone", "-q", str(org), str(fork))
-    _configure(fork)
     _commit(fork, "f.txt")  # on the fork's main only
     repo = tmp_path / "repo"
     git(tmp_path, "clone", "-q", "-o", "upstream", str(org), str(repo))
-    _configure(repo)
     git(repo, "remote", "add", "fork", str(fork))
     git(repo, "fetch", "-q", "fork")
     git(repo, "switch", "-q", "--no-track", "-c", "synced", "fork/main")  # all on a remote
@@ -260,7 +249,6 @@ def test_a_repo_on_master_with_no_remote_head_counts_against_master(tmp_path: Pa
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "master")
-    _configure(repo)
     _commit(repo, "a.txt")
     git(repo, "remote", "add", "origin", str(origin))
     git(repo, "push", "-q", "-u", "origin", "master")  # sets no origin/HEAD
@@ -277,7 +265,6 @@ def test_with_nothing_to_count_against_nothing_is_counted(tmp_path: Path) -> Non
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "trunk")
-    _configure(repo)
     _commit(repo, "a.txt")
     found = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     assert found.default_refs == []
