@@ -4,10 +4,11 @@ import json
 import socket
 import threading
 from datetime import UTC, datetime, timedelta
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 import pytest
+from conftest import serving
 
 from move_forward import auth, cli
 from move_forward.config import Config
@@ -89,13 +90,11 @@ def test_nonces_and_codes_are_single_use_short_lived_and_bounded() -> None:
     assert issued.count(None) >= 5  # a flood can't grow the server's memory
 
 
-def _server(tmp_path: Path, token: str) -> tuple[ThreadingHTTPServer, int]:
+def _handler(tmp_path: Path, token: str) -> type[BaseHTTPRequestHandler]:
     config = Config(email="me@x", db_path=tmp_path / "dashboard.db")
     db = Database(":memory:")
     migrate(config, db)
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(App(config, db, token)))
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    return httpd, httpd.server_port
+    return make_handler(App(config, db, token))
 
 
 def _config(tmp_path: Path, port: int) -> Path:
@@ -110,7 +109,6 @@ def test_mfd_open_proves_the_server_knows_the_token_then_opens_a_login_code(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     token = auth.load_or_create(auth.token_path(tmp_path / "dashboard.db"))
-    httpd, port = _server(tmp_path, token)
     opened: list[str] = []
 
     def record_open(url: str) -> bool:
@@ -118,10 +116,9 @@ def test_mfd_open_proves_the_server_knows_the_token_then_opens_a_login_code(
         return True
 
     monkeypatch.setattr(cli.webbrowser, "open", record_open)
-    try:
+    with serving(_handler(tmp_path, token)) as httpd:
+        port = httpd.server_port
         assert cli.main(["-c", str(_config(tmp_path, port)), "open"]) == 0
-    finally:
-        httpd.shutdown()
     [url] = opened
     assert url.startswith(f"http://mfd.localhost:{port}/login?code=") and token not in url
 
@@ -148,8 +145,6 @@ def test_mfd_open_sends_no_token_to_a_server_that_cannot_prove_it_has_it(
         def log_message(self, format: str, *args: object) -> None:
             pass
 
-    squatting = ThreadingHTTPServer(("127.0.0.1", 0), Squatter)
-    threading.Thread(target=squatting.serve_forever, daemon=True).start()
     opened: list[str] = []
 
     def record_open(url: str) -> bool:
@@ -157,11 +152,9 @@ def test_mfd_open_sends_no_token_to_a_server_that_cannot_prove_it_has_it(
         return True
 
     monkeypatch.setattr(cli.webbrowser, "open", record_open)
-    try:
+    with serving(Squatter) as squatting:
         config = _config(tmp_path, squatting.server_port)
         assert cli.main(["-c", str(config), "open"]) == 1
-    finally:
-        squatting.shutdown()
     assert opened == [] and "didn't prove" in capsys.readouterr().err
     assert token.encode() not in b"".join(heard)  # it never saw the token
 
