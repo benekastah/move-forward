@@ -76,13 +76,14 @@ jobs:
           took=$((SECONDS - start))
           echo "took ${took}s, of ${LIMIT}s"
           if [ "$took" -gt "$LIMIT" ]; then
-            echo "::error::took ${took}s, over the ${LIMIT}s it's allowed: find what slowed it, or raise the limit with a reason"
+            echo "::error::took ${took}s, over the ${LIMIT}s it's allowed: speed the tests up, or raise the limit, saying why (see AGENTS.md)"
             exit 1
           fi
 
   # The tests, on every system, in parallel on each. Each system's limit (`seconds`, and the
-  # static checks' `LIMIT`) is about 20% over its slowest run of late, after installing: a run
-  # over it is slower for a reason to find, or to raise the limit for, saying why.
+  # static checks' `LIMIT`) is about 20% over its slowest run of late, after installing. A run
+  # over it means speeding the tests up, or, where that can't be done, raising the limit, saying
+  # why (see AGENTS.md).
   tests:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -129,7 +130,7 @@ jobs:
           took=$((SECONDS - start))
           echo "took ${took}s, of ${LIMIT}s"
           if [ "$took" -gt "$LIMIT" ]; then
-            echo "::error::took ${took}s, over the ${LIMIT}s it's allowed: find what slowed it, or raise the limit with a reason"
+            echo "::error::took ${took}s, over the ${LIMIT}s it's allowed: speed the tests up, or raise the limit, saying why (see AGENTS.md)"
             exit 1
           fi
 
