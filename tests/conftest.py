@@ -271,6 +271,14 @@ def git_config(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return path
 
 
+def git_environment(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> None:
+    """Give git `GIT_ENVIRONMENT`, and `git_config` as its global config: for every test, and for
+    a session fixture making repos, which runs before the test's `outside`."""
+    for name, value in GIT_ENVIRONMENT.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(git_config))
+
+
 @pytest.fixture(autouse=True)
 def outside(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> Iterator[Outside]:
     """Keep each test to itself. It's refused, with `OutsideRefused`:
@@ -297,9 +305,7 @@ def outside(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> Iterator[Outsi
     program a test allows (Python, to run `mfd`) gets nothing: give it a config that reaches
     nothing."""
     outside = Outside()
-    for name, value in GIT_ENVIRONMENT.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(git_config))
+    git_environment(monkeypatch, git_config)
 
     spawn = subprocess.Popen._execute_child  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
     spawning = inspect.signature(spawn)  # pyright: ignore[reportUnknownArgumentType]
