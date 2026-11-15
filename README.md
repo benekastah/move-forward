@@ -431,7 +431,8 @@ sign-in sessions, the notifications waiting to be told, what
 the panels last showed that notifies when new and the problems the plugins report (core's too), where pings go and the pings sent in the slack plugin's, reviewers' emails in the github
 plugin's (looked up from commits), and the messages
 mail reads in its own. It's the
-source of truth for the notes.
+source of truth for the notes. A change is saved as it's made, but an OS crash or power cut
+(not an `mfd` crash) can lose the last few seconds of them; the database itself survives.
 The server's token sits next to it, in `token`. The
 database, its backups and the token are readable by you alone (on Windows, by their access lists).
 
