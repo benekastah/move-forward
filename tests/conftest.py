@@ -1,5 +1,6 @@
 """Shared factories: small, fully populated domain objects that tests tweak."""
 
+import contextlib
 import inspect
 import ipaddress
 import os
@@ -7,15 +8,17 @@ import shlex
 import socket
 import subprocess
 import sys
-from collections.abc import Callable, Iterator
+import threading
+from collections.abc import Callable, Generator, Iterator
 from datetime import UTC, date, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePath
 from typing import Any, NoReturn, cast
 
 import pytest
 from pydantic import BaseModel
 
-from move_forward import auth, keychain, localtime
+from move_forward import auth, keychain, localtime, server
 from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
@@ -406,6 +409,22 @@ def github_not_notified(monkeypatch: pytest.MonkeyPatch) -> None:
         raise CommandError("gh: HTTP 304")
 
     monkeypatch.setattr(github_notifications, "run", not_modified)
+
+
+@contextlib.contextmanager
+def serving(handler: type[BaseHTTPRequestHandler]) -> Generator[ThreadingHTTPServer]:
+    """Serves `handler` on a free port of 127.0.0.1, in a thread, until the block ends, with the
+    dashboard's own server class. It checks for a shutdown every 10ms, rather than `serve_forever`'s
+    default half second, which every test with a server would wait out as it ends."""
+    httpd = server._HTTPServer(("127.0.0.1", 0), handler)  # pyright: ignore[reportPrivateUsage]
+    thread = threading.Thread(target=httpd.serve_forever, args=(0.01,), daemon=True)
+    thread.start()
+    try:
+        yield httpd
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join()
 
 
 def pr(number: int = 1, **overrides: object) -> PullRequest:

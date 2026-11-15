@@ -8,14 +8,14 @@ import threading
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from http.client import HTTPConnection, HTTPResponse
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, ClassVar
 from urllib.parse import quote, urlencode
 from xml.etree import ElementTree
 
 import pytest
-from conftest import ME, NOW, pr, snapshot
+from conftest import ME, NOW, pr, serving, snapshot
 from pydantic import BaseModel
 
 from move_forward import auth, registry, server, settings
@@ -82,13 +82,10 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> server.App:
 
 @pytest.fixture
 def client(app: server.App) -> Iterator[HTTPConnection]:
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(app))
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
-    connection = HTTPConnection("127.0.0.1", httpd.server_port, timeout=5)
-    yield connection
-    connection.close()
-    httpd.shutdown()
+    with serving(server.make_handler(app)) as httpd:
+        connection = HTTPConnection("127.0.0.1", httpd.server_port, timeout=5)
+        yield connection
+        connection.close()
 
 
 TOKEN = "s3cret"
@@ -1018,14 +1015,12 @@ def test_a_connection_that_stalls_mid_request_is_dropped(
     app: server.App, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.3)
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(app))
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    try:
-        with socket.create_connection(("127.0.0.1", httpd.server_port), timeout=5) as stalled:
-            stalled.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1")  # never finished
-            assert stalled.recv(1024) == b""  # the server gave up and closed
-    finally:
-        httpd.shutdown()
+    with (
+        serving(server.make_handler(app)) as httpd,
+        socket.create_connection(("127.0.0.1", httpd.server_port), timeout=5) as stalled,
+    ):
+        stalled.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1")  # never finished
+        assert stalled.recv(1024) == b""  # the server gave up and closed
 
 
 def test_every_answer_forbids_framing(client: HTTPConnection) -> None:
