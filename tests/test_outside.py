@@ -12,6 +12,7 @@ import pytest
 from conftest import GIT_STACK, Outside, OutsideRefused
 
 from move_forward import keychain
+from move_forward.shell import git
 
 ELSEWHERE = ("192.0.2.1", 80)
 """An address in TEST-NET-1, which no machine has: refused before it's tried."""
@@ -80,6 +81,22 @@ def test_git_runs_but_fetches_from_no_network(outside: Outside) -> None:
     english = {**os.environ, "LC_ALL": "C"}  # git translates its messages
     fetched = subprocess.run(fetch, capture_output=True, encoding="utf-8", env=english, check=False)
     assert fetched.returncode != 0 and "transport 'https' not allowed" in fetched.stderr
+
+
+def test_git_reads_the_tests_config_not_mine_nor_the_systems(
+    outside: Outside, tmp_path: Path
+) -> None:
+    listed = git(tmp_path, "config", "--list", "--show-scope").splitlines()
+    assert [line.split("\t") for line in listed] == [
+        ["global", setting]
+        for setting in (
+            "user.name=Me",
+            "user.email=me@example.com",
+            "commit.gpgsign=false",
+            "maintenance.auto=false",
+            "gc.auto=0",
+        )
+    ]
 
 
 def test_git_stack_is_refused_unless_allowed(outside: Outside, tmp_path: Path) -> None:

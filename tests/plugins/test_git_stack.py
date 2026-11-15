@@ -569,10 +569,6 @@ def test_a_linked_worktrees_config_is_its_main_repositorys(tmp_path: Path) -> No
     git(repo, "init", "-q", "-b", "main")
     git(
         repo,
-        "-c",
-        "user.email=me@x",
-        "-c",
-        "user.name=Me",
         "commit",
         "-q",
         "--allow-empty",
@@ -634,9 +630,6 @@ def test_a_merged_branch_links_its_merged_pr_even_with_an_open_one_of_its_name()
 def _repo(path: Path) -> Path:
     path.mkdir()
     git(path, "init", "-q", "-b", "main")
-    git(path, "config", "user.email", "me@example.com")
-    git(path, "config", "user.name", "Me")
-    git(path, "config", "commit.gpgsign", "false")
     git(path, "commit", "-q", "--allow-empty", "-m", "first")
     return path
 
