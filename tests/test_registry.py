@@ -462,6 +462,11 @@ class _StillAClassVariable(_Checks):
     change_check_seconds = 60  # pyright: ignore[reportAssignmentType, reportIncompatibleMethodOverride]
 
 
+class _StillWatching(_Checks):
+    name = "still_watching"
+    watches = ("git",)  # pyright: ignore[reportAssignmentType, reportIncompatibleMethodOverride]
+
+
 class _ChecksNothing(_Plain, ChangeChecker[Strict]):
     name = "checks_nothing"
 
@@ -475,6 +480,8 @@ def test_a_change_checker_collects_and_is_asked() -> None:
         registry.check_plugins([_ChecksNothing()])
     with pytest.raises(TypeError, match="still's change_check_seconds is a method now"):
         registry.check_plugins([_StillAClassVariable()])
+    with pytest.raises(TypeError, match="still_watching's watches is a method now"):
+        registry.check_plugins([_StillWatching()])
 
 
 class _FetchesNothing(_Plain, Fetcher[Strict]):

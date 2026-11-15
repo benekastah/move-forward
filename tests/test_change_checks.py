@@ -265,3 +265,33 @@ def test_a_section_can_set_how_often_its_plugin_is_checked_or_turn_checks_off(
     rare = Config.model_validate({"email": "me@x", "git": {"repos": [], "refresh_seconds": 7200}})
     e = _git(rare, db, NOW)
     assert e.change_check_seconds is None and e.watches == [] and not checks(e)
+
+
+@pytest.mark.parametrize(
+    "answer", [RuntimeError("its section is broken"), "60", 0, -5, True, 1.5], ids=repr
+)
+def test_a_bad_answer_is_logged_and_means_no_poll_nor_anything_watched(
+    git: _Git,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    answer: object,
+) -> None:
+    """A plugin needn't be type-checked: a raise, or an answer that isn't seconds (a list of
+    names, for `watches`), stops only that plugin's checks, not the change loop."""
+
+    def answering(self: GitPlugin, req: ContextRequest[GitConfig]) -> object:
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(_Git, "change_check_seconds", answering)
+    monkeypatch.setattr(_Git, "watches", answering)
+    monkeypatch.setattr(registry, "_last_logged", {})
+    config, db = _config(tmp_path / "x.db"), Database(":memory:")
+    registry.migrate(config, db)
+    e = _git(config, db, NOW)
+    assert e.change_check_seconds is None and e.watches == [] and not checks(e)
+    assert {"git: change_check_seconds failed", "git: watches failed"} <= {
+        r.getMessage() for r in caplog.records
+    }

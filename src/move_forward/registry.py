@@ -313,27 +313,41 @@ class Enabled:
     @property
     def change_check_seconds(self) -> int | None:
         """How often `mfd serve` asks the plugin's `changed` (`ChangeChecker.change_check_seconds`
-        with its context); None for one without a change check, or that polls none (logged
-        as `change_check_seconds` if asking fails)."""
+        with its context); None for one without a change check, or that polls none. One that
+        raises, or answers other than a positive whole number or None, is logged (as
+        `change_check_seconds`) and polls none."""
         checker = self.change_checker
         if checker is None:
             return None
-        return call(
-            self.name,
-            "change_check_seconds",
-            lambda: checker.change_check_seconds(ContextRequest(self.ctx)),
-            None,
-        )
+
+        def ask() -> int | None:
+            seconds = cast(object, checker.change_check_seconds(ContextRequest(self.ctx)))
+            # A plugin needn't be type-checked, and a bad answer would stop every plugin's checks.
+            if seconds is not None and (type(seconds) is not int or seconds <= 0):
+                raise TypeError(f"change_check_seconds gave {seconds!r}, not seconds or None")
+            return seconds
+
+        return call(self.name, "change_check_seconds", ask, None)
 
     @property
     def watches(self) -> list[str]:
         """The plugins whose entities the plugin's `changed` reads (`ChangeChecker.watches`,
-        with its context); empty for one without a change check (logged as `watches` if asking
-        fails)."""
+        with its context); empty for one without a change check. One that raises, or answers
+        other than a list of plugin names, is logged (as `watches`) and watches none."""
         checker = self.change_checker
         if checker is None:
             return []
-        return call(self.name, "watches", lambda: checker.watches(ContextRequest(self.ctx)), [])
+
+        def ask() -> list[str]:
+            names = cast(object, checker.watches(ContextRequest(self.ctx)))
+            # A bare "git" would be read as letters, and the settle step never run.
+            if not isinstance(names, list) or not all(
+                isinstance(n, str) for n in cast(list[object], names)
+            ):
+                raise TypeError(f"watches gave {names!r}, not a list of plugin names")
+            return cast(list[str], names)
+
+        return call(self.name, "watches", ask, [])
 
     @property
     def fetcher(self) -> Fetcher[Any] | None:
