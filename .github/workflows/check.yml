@@ -82,8 +82,8 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.14"
-      # Defender scans every file the tests write and every git they start. The runner is thrown
-      # away after the job, and runs nothing but this repo's code.
+      # Defender scans every file the tests write and every git they start, on a runner thrown
+      # away after the job.
       - if: runner.os == 'Windows'
         shell: pwsh
         run: Set-MpPreference -DisableRealtimeMonitoring $true
