@@ -217,7 +217,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   reached through their CLIs (`gh`, `git`) or the standard library.
 - **Linux, macOS and Windows, with every change.** Each change must keep working
   on all three; CI runs `dev.py tests` on each (and `dev.py static`, the same everywhere, once),
-  and they must pass on all of them.
+  and they must pass on all of them, each within its time limit in `check.yml` (raise one only
+  for a reason, said in the commit).
   Use `pathlib` rather than joining paths with `/`, and write paths into TOML or
   URLs with `as_posix()`. Read and write text as UTF-8 (`encoding="utf-8"`, or `"utf-8-sig"`
   with `errors="replace"` for files people write by hand; Windows' default is its code page):
