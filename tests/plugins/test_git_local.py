@@ -165,6 +165,70 @@ def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) 
     assert counted == {"main": None, "mine": 1, "stacked": 1, "theirs": 0}
 
 
+def test_a_merge_counts_the_commits_of_both_its_sides(tmp_path: Path) -> None:
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _commit(origin, "a.txt")
+    repo = tmp_path / "repo"
+    git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _configure(repo)
+    git(repo, "switch", "-q", "-c", "side")
+    (repo / "s.txt").write_text("s")
+    git(repo, "add", "s.txt")
+    git(repo, "-c", "user.email=other@example.com", "commit", "-q", "-m", "theirs")
+    git(repo, "switch", "-q", "-c", "topic", "main")
+    _commit(repo, "t.txt")
+    git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+    git(repo, "switch", "-q", "main")
+
+    result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
+    counted = {b.name: (b.ahead_of_default, b.my_commits) for b in result.branches}
+    assert counted == {"main": (None, None), "side": (1, 0), "topic": (3, 2)}
+
+
+def test_config_is_read_whatever_its_case_and_remotes_as_git_lists_them(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    git(repo, "remote", "add", "zeta", "https://github.com/acme/z.git")
+    git(repo, "remote", "add", "alpha", "https://github.com/acme/a.git")
+    git(repo, "config", "remote.Mid.pushurl", "https://github.com/acme/m.git")  # no url
+    git(repo, "config", "branch.FeAture.pushRemote", "zeta")
+    config = local.RepoConfig.read(repo)
+    assert config.remotes() == git(repo, "remote").split() == ["Mid", "alpha", "zeta"]
+    assert config.get("branch.FeAture.pushRemote") == config.get("BRANCH.FeAture.PUSHREMOTE")
+    assert config.get("branch.FeAture.pushRemote") == "zeta"
+    assert config.get("branch.feature.pushRemote") is None  # a branch's name keeps its case
+
+
+def test_a_collect_starts_one_git_for_each_kind_of_thing_it_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not one for each remote, key, ref or branch: on Windows each start costs tens of ms."""
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _commit(origin, "a.txt")
+    repo = tmp_path / "repo"
+    git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _configure(repo)
+    git(repo, "remote", "add", "fork", str(origin))
+    git(repo, "fetch", "-q", "fork")
+    for name in ("one", "two", "three"):
+        git(repo, "switch", "-q", "-c", name, "main")
+        _commit(repo, f"{name}.txt")
+    started: list[str] = []
+    real = local.git
+
+    def counting(repo: Path, *args: str, **kwargs: Any) -> str:
+        started.append(args[0])
+        return real(repo, *args, **kwargs)
+
+    monkeypatch.setattr(local, "git", counting)
+    local.collect([repo], datetime.now(UTC) + timedelta(seconds=1), 30, [])
+    assert sorted(started) == sorted(
+        ["worktree", "config", "for-each-ref", "--no-optional-locks", "rev-list", "log"]
+    )
+
+
 def test_a_repo_without_a_remote_is_collected(tmp_path: Path) -> None:
     repo = tmp_path / "local-only"
     _init_repo(repo)
@@ -307,10 +371,10 @@ def test_a_repo_whose_git_hangs_doesnt_fail_the_rest(
         _commit(repo, "a.txt")
     real = local.collect_repo
 
-    def hanging(repo: Path, *args: Any) -> LocalRepo:
+    def hanging(repo: Path, *args: Any, **kwargs: Any) -> LocalRepo:
         if repo == hung:
             raise subprocess.TimeoutExpired(["git", "status"], 120)
-        return real(repo, *args)
+        return real(repo, *args, **kwargs)
 
     monkeypatch.setattr(local, "collect_repo", hanging)
     found = local.collect([hung, good], datetime.now(UTC), 30, [])

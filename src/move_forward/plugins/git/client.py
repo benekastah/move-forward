@@ -27,6 +27,9 @@ _FOR_EACH_REF_FORMAT = (
     "%(refname:short)%09%(upstream:short)%09%(upstream:track)%09%(committerdate:iso-strict)"
     "%09%(objectname)%09%(upstream:remotename)"
 )
+_REFS_FORMAT = f"%(refname)%09%(symref)%09{_FOR_EACH_REF_FORMAT}"
+"""`Refs.read`'s: each ref's full name and what it points at if it's symbolic, then a branch's
+fields as `parse_branches` reads them."""
 FALLBACK_DEFAULT_BRANCH = "main"
 
 
@@ -129,79 +132,130 @@ class Remotes:
     """`owner/name` of the main remote on GitHub, else of the first remote on GitHub."""
 
 
-def remotes(repo: Path) -> list[str]:
-    """The repository's remotes, by name, in the order git lists them."""
-    return git(repo, "remote").split()
+@dataclass(frozen=True)
+class RepoConfig:
+    """A repository's git config as git reads it (its own, mine and the system's), from one
+    `git config --list`."""
+
+    values: dict[str, str]
+    """Each key's last value, by the key as git lists it: its section and name lower-cased, a
+    subsection (a branch's or a remote's name) as it is."""
+
+    @classmethod
+    def read(cls, repo: Path) -> RepoConfig:
+        values: dict[str, str] = {}
+        for entry in git(repo, "config", "--list", "-z").split("\0"):
+            if entry:
+                key, _, value = entry.partition("\n")  # a key set without a value has none
+                values[key] = value
+        return cls(values)
+
+    def get(self, key: str) -> str | None:
+        """`key`'s value (`branch.<name>.remote`, in any case but the subsection's), or None when
+        it's unset or empty."""
+        section, _, rest = key.partition(".")
+        subsection, _, name = rest.rpartition(".")
+        listed = ".".join(part for part in (section.lower(), subsection, name.lower()) if part)
+        return self.values.get(listed) or None
+
+    def remotes(self) -> list[str]:
+        """The remotes, by name, as `git remote` lists them: each with a key of its own, sorted."""
+        return sorted(
+            {
+                key.removeprefix("remote.").rpartition(".")[0]
+                for key in self.values
+                if key.startswith("remote.") and key.count(".") >= 2
+            }
+        )
 
 
-def _remote_head(repo: Path, remote: str) -> str | None:
-    """The branch `remote`'s `HEAD` points at, e.g. `main`; None when git doesn't know."""
-    try:
-        ref = git(repo, "symbolic-ref", "--short", f"refs/remotes/{remote}/HEAD").strip()
-    except CommandError:
-        return None
-    return ref.removeprefix(f"{remote}/")
+@dataclass(frozen=True)
+class Refs:
+    """A repository's branches and remote-tracking branches, from one `git for-each-ref`."""
+
+    names: set[str]
+    """Every ref's full name (`refs/remotes/origin/main`)."""
+    targets: dict[str, str]
+    """What each symbolic ref points at, by full name (`refs/remotes/origin/HEAD`)."""
+    branches: str
+    """The branches' lines, as `parse_branches` reads them."""
+
+    @classmethod
+    def read(cls, repo: Path) -> Refs:
+        names: set[str] = set()
+        targets: dict[str, str] = {}
+        branches: list[str] = []
+        listed = git(repo, "for-each-ref", f"--format={_REFS_FORMAT}", "refs/heads", "refs/remotes")
+        for line in listed.splitlines():
+            name, target, fields = (line.split("\t", 2) + ["", ""])[:3]
+            names.add(name)
+            if target:
+                targets[name] = target
+            if name.startswith("refs/heads/"):
+                branches.append(fields)
+        return cls(names, targets, "\n".join(branches))
+
+    def remote_head(self, remote: str) -> str | None:
+        """The branch `remote`'s `HEAD` points at, e.g. `main`; None when git doesn't know."""
+        target = self.targets.get(f"refs/remotes/{remote}/HEAD")
+        return target.removeprefix(f"refs/remotes/{remote}/") if target else None
 
 
-def _config(repo: Path, key: str) -> str | None:
-    try:
-        return git(repo, "config", "--get", key).strip() or None
-    except CommandError:  # git exits 1 for a key that isn't set
-        return None
-
-
-def _ref_exists(repo: Path, ref: str) -> bool:
-    try:
-        git(repo, "rev-parse", "--verify", "--quiet", ref)
-    except CommandError:
-        return False
-    return True
-
-
-def _local_default(repo: Path) -> str:
+def _local_default(config: RepoConfig, refs: Refs) -> str:
     """The default branch when no remote's `HEAD` says: `init.defaultBranch`, `main` or
     `master`, the first there is locally."""
-    configured = _config(repo, "init.defaultBranch")
+    configured = config.get("init.defaultBranch")
     for name in [*([configured] if configured else []), FALLBACK_DEFAULT_BRANCH, "master"]:
-        if _ref_exists(repo, f"refs/heads/{name}"):
+        if f"refs/heads/{name}" in refs.names:
             return name
     return configured or FALLBACK_DEFAULT_BRANCH
 
 
 def read_remotes(repo: Path, hosts: Sequence[str] = GITHUB_HOSTS) -> Remotes:
-    """The repository's default branch and GitHub repo, from all its remotes. The main
-    remote is the one the local default branch tracks (`upstream` in a fork, often), else
-    the first whose `HEAD` git knows. With no `HEAD` known (no remotes, or one pushed to
-    without `git remote set-head`), the default branch is the local one (`_local_default`)."""
-    names = remotes(repo)
-    heads = {name: head for name in names if (head := _remote_head(repo, name))}
+    """The repository's default branch and GitHub repo, from all its remotes (see `_remotes`)."""
+    return _remotes(RepoConfig.read(repo), Refs.read(repo), hosts)
+
+
+def _remotes(config: RepoConfig, refs: Refs, hosts: Sequence[str]) -> Remotes:
+    """The main remote is the one the local default branch tracks (`upstream` in a fork,
+    often), else the first whose `HEAD` git knows. With no `HEAD` known (no remotes, or one
+    pushed to without `git remote set-head`), the default branch is the local one
+    (`_local_default`)."""
+    names = config.remotes()
+    heads = {name: head for name in names if (head := refs.remote_head(name))}
     main = next(
-        (name for name, head in heads.items() if _config(repo, f"branch.{head}.remote") == name),
+        (name for name, head in heads.items() if config.get(f"branch.{head}.remote") == name),
         next(iter(heads), names[0] if names else None),
     )
-    default_branch = heads.get(main or "") or _local_default(repo)
+    default_branch = heads.get(main or "") or _local_default(config, refs)
     default_refs = [
         f"{name}/{heads.get(name, default_branch)}"
         for name in names
-        if _ref_exists(repo, f"refs/remotes/{name}/{heads.get(name, default_branch)}")
+        if f"refs/remotes/{name}/{heads.get(name, default_branch)}" in refs.names
     ]
-    if not default_refs and _ref_exists(repo, f"refs/heads/{default_branch}"):
+    if not default_refs and f"refs/heads/{default_branch}" in refs.names:
         default_refs = [f"refs/heads/{default_branch}"]
-    urls = {name: _config(repo, f"remote.{name}.url") or "" for name in names}
     on_github = [
-        r for name in [main, *names] if name and (r := github_repo(urls.get(name, ""), hosts))
+        r
+        for name in [main, *names]
+        if name and (r := github_repo(config.get(f"remote.{name}.url") or "", hosts))
     ]
     return Remotes(default_branch, default_refs, on_github[0] if on_github else None)
 
 
 def push_remote(repo: Path, branch: str) -> str | None:
-    """Where a branch without an upstream should be pushed, as git would choose: its push
-    remote, `remote.pushDefault`, its remote, or the only remote there is. None when there
-    are several and nothing says which."""
+    """Where a branch without an upstream should be pushed, as git would choose (see
+    `_push_remote`)."""
+    return _push_remote(RepoConfig.read(repo), branch)
+
+
+def _push_remote(config: RepoConfig, branch: str) -> str | None:
+    """Its push remote, `remote.pushDefault`, its remote, or the only remote there is. None
+    when there are several and nothing says which."""
     for key in (f"branch.{branch}.pushRemote", "remote.pushDefault", f"branch.{branch}.remote"):
-        if (name := _config(repo, key)) and name != ".":
+        if (name := config.get(key)) and name != ".":
             return name
-    names = remotes(repo)
+    names = config.remotes()
     return names[0] if len(names) == 1 else None
 
 
@@ -251,11 +305,14 @@ def collect_repo(
     commit_history_days: int,
     ignored_worktree_globs: list[str],
     github_hosts: Sequence[str] = GITHUB_HOSTS,
+    listed: list[tuple[str, str | None]] | None = None,
 ) -> LocalRepo:
-    found = read_remotes(repo, github_hosts)
+    """`repo` as git has it. `listed` is its `git worktree list`, when that's been read."""
+    config, refs = RepoConfig.read(repo), Refs.read(repo)
+    found = _remotes(config, refs, github_hosts)
     default_branch = found.default_branch
     worktrees: list[Worktree] = []
-    for path, branch in parse_worktrees(git(repo, "worktree", "list", "--porcelain")):
+    for path, branch in listed if listed is not None else _worktrees(repo):
         if any(fnmatch.fnmatch(path, glob) for glob in ignored_worktree_globs):
             continue
         if not Path(path).exists():  # deleted without `git worktree remove`: git lists it
@@ -263,39 +320,30 @@ def collect_repo(
         modified, untracked = worktree_status(Path(path))
         worktrees.append(Worktree(path=path, branch=branch, modified=modified, untracked=untracked))
 
-    refs = git(repo, "for-each-ref", "refs/heads", f"--format={_FOR_EACH_REF_FORMAT}")
-    tracking = local_tracking(refs)
-    branches = [_pushed_copy(repo, b) if b.name in tracking else b for b in parse_branches(refs)]
+    tracking = local_tracking(refs.branches)
+    branches = [
+        _pushed_copy(repo, b, config, refs) if b.name in tracking else b
+        for b in parse_branches(refs.branches)
+    ]
     recent = now - timedelta(days=commit_history_days)
-    try:
-        email = my_email(repo)  # a repo can have its own, e.g. a personal project's
-    except CommandError:  # none set: nothing counts as mine
-        email = ""
+    email = config.get("user.email") or ""  # a repo can have its own, e.g. a personal project's
+    # Without a default branch to count against, there's nothing to count.
+    to_count = {
+        b.name
+        for b in branches
+        if found.default_refs
+        and b.name != default_branch
+        and (b.gone or (b.upstream is None and b.committed_at >= recent))
+    }
+    mine = {b.name for b in branches if b.name != default_branch and b.committed_at >= recent}
+    counts = _off_default(repo, [b for b in branches if b.name in to_count | mine], found, email)
     with_counts: list[Branch] = []
     for branch in branches:
-        # Without a default branch to count against, there's nothing to count.
-        if (
-            found.default_refs
-            and branch.name != default_branch
-            and (branch.gone or (branch.upstream is None and branch.committed_at >= recent))
-        ):
-            try:
-                count = int(
-                    git(
-                        repo,
-                        "rev-list",
-                        "--count",
-                        f"refs/heads/{branch.name}",
-                        "--not",
-                        *found.default_refs,
-                    )
-                )
-            except CommandError:
-                count = None
-            branch = branch.model_copy(update={"ahead_of_default": count})
-        if branch.name != default_branch and branch.committed_at >= recent:
-            mine = _my_commits(repo, found.default_refs, branch.name, email)
-            branch = branch.model_copy(update={"my_commits": mine})
+        ahead, my_commits = counts.get(branch.name, (None, None))
+        if branch.name in to_count:
+            branch = branch.model_copy(update={"ahead_of_default": ahead})
+        if branch.name in mine:
+            branch = branch.model_copy(update={"my_commits": my_commits})
         with_counts.append(branch)
 
     return LocalRepo(
@@ -309,12 +357,53 @@ def collect_repo(
     )
 
 
-def _pushed_copy(repo: Path, branch: Branch) -> Branch:
+def _off_default(
+    repo: Path, branches: list[Branch], found: Remotes, email: str
+) -> dict[str, tuple[int | None, int | None]]:
+    """Each of `branches`' commits that aren't on the default branch (on any remote), and of
+    those mine, by my email exactly (None without one), from one walk of them all; both None
+    when git can't say, and empty without a default branch to count against."""
+    if not branches or not found.default_refs:
+        return {}
+    try:
+        walked = git(
+            repo,
+            "rev-list",
+            "--format=%H %P%x09%ae",
+            *(f"refs/heads/{b.name}" for b in branches),
+            "--not",
+            *found.default_refs,
+        )
+    except CommandError:
+        return {b.name: (None, None) for b in branches}
+    parents: dict[str, list[str]] = {}
+    authors: dict[str, str] = {}
+    for line in walked.splitlines():
+        if line.startswith("commit "):  # rev-list's header above each, which `--format` keeps
+            continue
+        shas, _, author = line.partition("\t")
+        sha, *of = shas.split()
+        parents[sha], authors[sha] = of, author
+    counts: dict[str, tuple[int | None, int | None]] = {}
+    for branch in branches:
+        reached: set[str] = set()
+        todo = [branch.sha] if branch.sha in parents else []
+        while todo:
+            sha = todo.pop()
+            if sha not in reached:
+                reached.add(sha)
+                todo.extend(p for p in parents[sha] if p in parents)
+        mine = sum(1 for sha in reached if authors[sha] == email) if email else None
+        counts[branch.name] = (len(reached), mine)
+    return counts
+
+
+def _pushed_copy(repo: Path, branch: Branch, config: RepoConfig, refs: Refs) -> Branch:
     """A branch tracking a local one, counted against its copy on the remote Push sends it to
     (`<remote>/<branch>`) once there is one; as it is (no upstream) before."""
-    remote = push_remote(repo, branch.name)
+    remote = _push_remote(config, branch.name)
     copy = f"{remote}/{branch.name}"
-    if remote is None or not _ref_exists(repo, f"refs/remotes/{copy}"):
+    if remote is None or f"refs/remotes/{copy}" not in refs.names:
         return branch
     ahead, behind = git(
         repo,
@@ -326,50 +415,28 @@ def _pushed_copy(repo: Path, branch: Branch) -> Branch:
     return branch.model_copy(update={"upstream": copy, "ahead": int(ahead), "behind": int(behind)})
 
 
-def _my_commits(repo: Path, default_refs: list[str], branch: str, email: str) -> int | None:
-    """My commits on `branch` that aren't on the default branch (on any remote), by my email
-    (taken as a fixed string, not a pattern); None when git can't say."""
-    if not email or not default_refs:
-        return None
-    try:
-        return int(
-            git(
-                repo,
-                "rev-list",
-                "--count",
-                "--fixed-strings",
-                f"--author=<{email}>",
-                f"refs/heads/{branch}",
-                "--not",
-                *default_refs,
-            )
-        )
-    except CommandError:
-        return None
-
-
-def main_worktree(repo: Path) -> Path:
-    """The repository's main checkout: `git worktree list` names it first."""
-    [(path, _), *_] = parse_worktrees(git(repo, "worktree", "list", "--porcelain"))
-    return Path(path).resolve()
+def _worktrees(repo: Path) -> list[tuple[str, str | None]]:
+    return parse_worktrees(git(repo, "worktree", "list", "--porcelain"))
 
 
 def folded(repos: list[Path]) -> list[Path]:
     """`repos` with one path per repository: a path that's a worktree of another listed one
     is folded into it, keeping the main checkout if it's listed, else the first listed."""
-    by_main: dict[Path, Path] = {}
+    return list(_folded(repos))
+
+
+def _folded(repos: list[Path]) -> dict[Path, list[tuple[str, str | None]] | None]:
+    """`folded`'s repos, each with its `git worktree list` (None where git can't read it)."""
+    by_main: dict[Path, tuple[Path, list[tuple[str, str | None]] | None]] = {}
     for repo in repos:
         try:
-            main = main_worktree(repo)
+            listed = _worktrees(repo)
+            main = Path(listed[0][0]).resolve()
         except CommandError:  # not a repository: left to fail, and be said, on its own
-            main = repo.resolve()
+            listed, main = None, repo.resolve()
         if main not in by_main or repo.resolve() == main:
-            by_main[main] = repo
-    return list(by_main.values())
-
-
-def my_email(repo: Path) -> str:
-    return git(repo, "config", "user.email").strip()
+            by_main[main] = (repo, listed)
+    return dict(by_main.values())
 
 
 def collect(
@@ -386,7 +453,7 @@ def collect(
     `previous` lacks is read anyway. A repo git can't read (or that times out) is logged and
     kept as `previous` has it, or left out, so it doesn't fail the rest; when none can be
     read, the first error is raised."""
-    existing = folded([repo for repo in repos if repo.exists()])
+    existing = _folded([repo for repo in repos if repo.exists()])
     before = {r.dir: r for r in previous.repos} if previous else {}
     failed: list[Exception] = []
 
@@ -395,7 +462,12 @@ def collect(
             return before[str(repo)]
         try:
             return collect_repo(
-                repo, now, commit_history_days, ignored_worktree_globs, github_hosts
+                repo,
+                now,
+                commit_history_days,
+                ignored_worktree_globs,
+                github_hosts,
+                listed=existing[repo],
             )
         except (CommandError, subprocess.SubprocessError, OSError) as e:  # a hung git, say
             failed.append(e)
