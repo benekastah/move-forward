@@ -537,7 +537,8 @@ class ChangeChecker[C: BaseModel](ABC):
         """How often `mfd serve` asks `changed`, which may depend on the plugin's section; None
         (the default) to ask it only after a refresh of a plugin it `watches`. In `mfd serve`,
         it's also asked as each of its collects starts. With neither (a section turning its
-        polling off, say), `changed` is never asked."""
+        polling off, say), `changed` is never asked. One that raises, or answers other than a
+        positive whole number or None, is logged and polls none."""
         return None
 
     def watches(self, req: ContextRequest[C]) -> list[str]:
@@ -546,7 +547,8 @@ class ChangeChecker[C: BaseModel](ABC):
         of them, once they've stored, `changed` is asked with the new graph, and the plugin
         collected (again, if it was collected in that refresh, from the graph as it was before)
         when it says something moved, rather than waiting for `change_check_seconds` (see
-        `refresh._settle`). None by default."""
+        `refresh._settle`). None by default. One that raises, or answers other than a list of
+        plugin names, is logged and watches none."""
         return []
 
     @abstractmethod

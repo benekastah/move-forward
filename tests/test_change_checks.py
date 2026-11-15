@@ -268,7 +268,9 @@ def test_a_section_can_set_how_often_its_plugin_is_checked_or_turn_checks_off(
 
 
 @pytest.mark.parametrize(
-    "answer", [RuntimeError("its section is broken"), "60", 0, -5, True, 1.5], ids=repr
+    "answer",
+    [RuntimeError("its section is broken"), "60", 0, -5, True, 1.5, ["git", None], [["git"]]],
+    ids=repr,
 )
 def test_a_bad_answer_is_logged_and_means_no_poll_nor_anything_watched(
     git: _Git,
