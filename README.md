@@ -15,7 +15,8 @@ All state lives in one SQLite database.
 ## Setup
 
 Requires Python 3.14+, `gh` logged in, and git. `git stack` is optional (for
-the `git_stack` plugin).
+the `git_stack` plugin). The dashboard runs the git on PATH, or the one the environment
+variable `MOVE_FORWARD_GIT` names (a path), looked up once as it starts.
 
 ```sh
 python3.14 ~/src/move-forward/dev.py install  # .venv, `mfd` on PATH, git hooks, then `mfd init`

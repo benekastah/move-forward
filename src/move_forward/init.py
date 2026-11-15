@@ -28,6 +28,7 @@ from .asking import Asker, Complete, InitSection, InitSetup, Prompt, choices, qu
 from .config import Config
 from .keychain import TokenFields
 from .plugin import Plugin
+from .shell import git_program
 from .strict import TABLES, marked
 
 LINE_WIDTH = 100
@@ -220,7 +221,7 @@ def _completing(complete: Complete | None) -> Generator[None]:
 
 
 def guess_email() -> str:
-    return quiet(["git", "config", "user.email"])
+    return quiet([git_program(), "config", "user.email"])
 
 
 def _table(name: str, values: dict[str, object], optional: str = "") -> str:
