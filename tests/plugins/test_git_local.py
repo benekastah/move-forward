@@ -162,7 +162,6 @@ def test_a_merge_counts_the_commits_of_both_its_sides(tmp_path: Path) -> None:
     _commit(origin, "a.txt")
     repo = tmp_path / "repo"
     git(tmp_path, "clone", "-q", str(origin), str(repo))
-    _configure(repo)
     git(repo, "switch", "-q", "-c", "side")
     (repo / "s.txt").write_text("s")
     git(repo, "add", "s.txt")
@@ -200,7 +199,6 @@ def test_a_collect_starts_one_git_for_each_kind_of_thing_it_reads(
     _commit(origin, "a.txt")
     repo = tmp_path / "repo"
     git(tmp_path, "clone", "-q", str(origin), str(repo))
-    _configure(repo)
     git(repo, "remote", "add", "fork", str(origin))
     git(repo, "fetch", "-q", "fork")
     for name in ("one", "two", "three"):
