@@ -8,6 +8,8 @@ import pytest
 from move_forward import private
 from move_forward.shell import CommandError
 
+pytestmark = pytest.mark.private_files
+
 
 def _explain(path: Path) -> str:
     """What the system says of `path`'s access, for a failure's message."""

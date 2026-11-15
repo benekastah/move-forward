@@ -135,6 +135,15 @@ def test_git_stack_is_refused_unless_allowed(outside: Outside, tmp_path: Path) -
     assert outside.may_run(GIT_STACK)
 
 
+def test_icacls_is_refused_unless_the_test_is_about_private_files(outside: Outside) -> None:
+    assert not outside.may_run("icacls")
+
+
+@pytest.mark.private_files
+def test_a_test_about_private_files_may_run_icacls(outside: Outside) -> None:
+    assert outside.may_run("icacls")
+
+
 def test_a_program_a_test_allows_runs(outside: Outside) -> None:
     outside.allow("MFD-No-Such-Program.exe")  # as `may_run` compares it
     with pytest.raises(FileNotFoundError):  # tried, and not there

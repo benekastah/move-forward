@@ -185,6 +185,7 @@ def test_a_file_database_commits_without_waiting_for_the_disk(tmp_path: Path) ->
     assert db.query("PRAGMA synchronous")[0][0] == 1  # NORMAL: only checkpoints wait
 
 
+@pytest.mark.private_files
 def test_the_database_and_its_backups_are_mine_alone(tmp_path: Path) -> None:
     path = tmp_path / "data" / "dashboard.db"
     db = Database(path)

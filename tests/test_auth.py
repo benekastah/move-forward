@@ -19,6 +19,7 @@ from move_forward.repositories import SessionRepository
 from move_forward.server import App, make_handler
 
 
+@pytest.mark.private_files
 def test_the_token_is_made_once_and_only_i_can_read_it(tmp_path: Path) -> None:
     path = auth.token_path(tmp_path / "data" / "dashboard.db")
     token = auth.load_or_create(path)
@@ -26,6 +27,7 @@ def test_the_token_is_made_once_and_only_i_can_read_it(tmp_path: Path) -> None:
     assert auth.load_or_create(path) == token
 
 
+@pytest.mark.private_files
 def test_a_token_file_others_can_read_is_made_private(tmp_path: Path) -> None:
     path = tmp_path / auth.TOKEN_FILE
     path.write_text("abc\n")
@@ -34,6 +36,7 @@ def test_a_token_file_others_can_read_is_made_private(tmp_path: Path) -> None:
     assert is_private(path)
 
 
+@pytest.mark.private_files
 def test_an_empty_token_file_gets_a_new_token(tmp_path: Path) -> None:
     path = tmp_path / auth.TOKEN_FILE
     path.write_text("")
@@ -176,6 +179,7 @@ def test_mfd_open_says_when_nothing_is_listening(
     assert "is `mfd serve` running?" in capsys.readouterr().err
 
 
+@pytest.mark.private_files
 def test_a_rotated_token_signs_everyone_out_and_a_running_server_takes_it_up(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
