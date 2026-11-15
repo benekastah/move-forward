@@ -55,6 +55,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # for a hang; the step's own limit is for slowing down
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -64,16 +65,39 @@ jobs:
           python-version: "3.14"
       # Through uv: the runner's own `python` may be older than the one uv provides, and
       # dev.py stops under a Python older than the package needs.
-      - run: uv run --no-project python dev.py static
+      - run: uv run --no-project python dev.py venv
+      - name: Static checks, within their time
+        shell: bash
+        env:
+          LIMIT: 30
+        run: |
+          start=$SECONDS
+          uv run --no-project python dev.py static
+          took=$((SECONDS - start))
+          echo "took ${took}s, of ${LIMIT}s"
+          if [ "$took" -gt "$LIMIT" ]; then
+            echo "::error::took ${took}s, over the ${LIMIT}s it's allowed: speed the tests up, or raise the limit, saying why (see AGENTS.md)"
+            exit 1
+          fi
 
-  # The tests, on every system, in parallel on each.
+  # The tests, on every system, in parallel on each. Each system's limit (`seconds`, and the
+  # static checks' `LIMIT`) is about 20% over its slowest run of late, after installing. A run
+  # over it means speeding the tests up, or, where that can't be done, raising the limit, saying
+  # why (see AGENTS.md).
   tests:
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    timeout-minutes: 15  # for a hang
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            seconds: 30
+          - os: macos-latest
+            seconds: 60
+          - os: windows-latest
+            seconds: 150
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -82,11 +106,33 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.14"
+      # Defender scans every file the tests write and every git they start, on a runner thrown
+      # away after the job.
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+      # git itself, ahead of Git for Windows' git.exe on PATH, which only starts it: each git
+      # starts in two thirds of the time.
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: (Resolve-Path (git --exec-path)).Path | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - run: uv run --no-project python dev.py venv
       # On Windows, the one test of the real Credential Manager runs too: the runner's store
       # is thrown away after the job (see AGENTS.md).
-      - run: uv run --no-project python dev.py tests
+      - name: Tests, within their time
+        shell: bash
         env:
+          LIMIT: ${{ matrix.seconds }}
           MFD_REAL_SECRET_STORE: ${{ matrix.os == 'windows-latest' && '1' || '' }}
+        run: |
+          start=$SECONDS
+          uv run --no-project python dev.py tests
+          took=$((SECONDS - start))
+          echo "took ${took}s, of ${LIMIT}s"
+          if [ "$took" -gt "$LIMIT" ]; then
+            echo "::error::took ${took}s, over the ${LIMIT}s it's allowed: speed the tests up, or raise the limit, saying why (see AGENTS.md)"
+            exit 1
+          fi
 
   # The one check the ruleset on main requires, so changing the jobs doesn't change what's
   # required. It runs even if a check failed (a skipped required check would count as
