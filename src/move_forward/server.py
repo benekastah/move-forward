@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import socketserver
 import sys
 import threading
 import time
@@ -776,6 +777,13 @@ class _HTTPServer(ThreadingHTTPServer):
     would both bind, and binding over any other listener fails as `WSAEACCES`, not as in use."""
 
     allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self) -> None:
+        """Binds without `HTTPServer`'s reverse lookup of the address (`socket.getfqdn`), which
+        can take half a minute on macOS, for a name nothing here reads."""
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name, self.server_port = str(host), int(port)
 
 
 def serve(
