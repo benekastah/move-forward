@@ -180,6 +180,11 @@ def test_a_file_database_lets_another_process_read_while_one_writes(tmp_path: Pa
     assert db.query("PRAGMA journal_mode")[0][0] == "wal"
 
 
+def test_a_file_database_commits_without_waiting_for_the_disk(tmp_path: Path) -> None:
+    db = Database(tmp_path / "a.db")
+    assert db.query("PRAGMA synchronous")[0][0] == 1  # NORMAL: only checkpoints wait
+
+
 def test_the_database_and_its_backups_are_mine_alone(tmp_path: Path) -> None:
     path = tmp_path / "data" / "dashboard.db"
     db = Database(path)
