@@ -128,8 +128,6 @@ class GitHubPlugin(
         PERSON: KindSpec(GitHubPerson),
         TEAM: KindSpec(GitHubTeam),
     }
-    change_check_seconds: ClassVar[int | None] = notifications.DEFAULT_POLL_SECONDS
-    watches: ClassVar[list[str]] = ["git"]
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
 
     def __init__(self) -> None:
@@ -193,6 +191,15 @@ class GitHubPlugin(
                 == "individual"
             ),
         )
+
+    def change_check_seconds(self, req: ContextRequest[GitHubConfig]) -> int | None:
+        """Every `DEFAULT_POLL_SECONDS`; the notifications are asked no more often than GitHub
+        allows."""
+        return notifications.DEFAULT_POLL_SECONDS
+
+    def watches(self, req: ContextRequest[GitHubConfig]) -> list[str]:
+        """Git, whose branches' pushes move my PRs."""
+        return ["git"]
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         """Whether a branch of one of my open PRs moved (see `pushes`; asked right after each

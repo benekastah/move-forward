@@ -227,8 +227,7 @@ class App:
         plugins = enabled(self.config, self.db, datetime.now(UTC))
         due: list[Enabled] = []
         for e in plugins:
-            checker = e.change_checker
-            seconds = None if checker is None else checker.change_check_seconds
+            seconds = e.change_check_seconds
             last = self._last_checked.get(e.name)
             if seconds is None or e.name in self.refreshing:
                 continue

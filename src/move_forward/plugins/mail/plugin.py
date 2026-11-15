@@ -93,7 +93,6 @@ class MailPlugin(
         PERSON: KindSpec(MailPerson),
     }
     """Threads are published while they have unread or flagged mail: one that's gone is done."""
-    change_check_seconds: ClassVar[int | None] = 120
 
     def tokens(self, config: MailConfig) -> dict[str, TokenSettings]:
         """Each mailbox's password, by its account's name (`mail.work`), or `[mail]`'s own."""
@@ -111,6 +110,10 @@ class MailPlugin(
 
     def snapshots(self, req: ContextRequest[MailConfig]) -> MessageRepository:
         return MessageRepository(req.ctx.db)
+
+    def change_check_seconds(self, req: ContextRequest[MailConfig]) -> int | None:
+        """Every 120 seconds: the mailbox's STATUS, one cheap command."""
+        return 120
 
     def changed(self, req: RefreshRequest[MailConfig]) -> Changed:
         """The mailboxes' counts, as the fingerprint core compares with the last: they move

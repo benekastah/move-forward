@@ -168,7 +168,7 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
     rejects unknown keys, as does every model a field holds (`strict.loose_models`), and whose
     markers mark something (`strict.check_resolved_markers`).
     What a mixin has comes with it (`_MIXIN_MEMBERS`): a plugin with a `cli` is a `Command`.
-    A `ChangeChecker` collects, and has a `change_check_seconds` or plugins it `watches`; a
+    A `ChangeChecker` collects; a
     plugin with a `fetchable` kind is a `Fetcher`, and a `Fetcher` has one; a `Command`'s
     `cli` has a docstring, its command's help."""
     names = [p.name for p in plugins]
@@ -206,16 +206,17 @@ def check_plugins(plugins: list[Plugin[Any, Any]]) -> None:
                     f"{plugin.name} has {', '.join(has)} but isn't a {mixin.__name__}: add it"
                     " to its bases"
                 )
-        if isinstance(plugin, ChangeChecker):
-            if not isinstance(plugin, Collector):
+        if isinstance(plugin, ChangeChecker) and not isinstance(plugin, Collector):
+            raise TypeError(
+                f"{plugin.name} is a ChangeChecker but not a Collector: what it says moved is"
+                " for a collect"
+            )
+        for hook in ("change_check_seconds", "watches"):
+            if isinstance(plugin, ChangeChecker) and not callable(getattr(plugin, hook)):
+                # Set as before version 2's hooks, it hides the method core calls.
                 raise TypeError(
-                    f"{plugin.name} is a ChangeChecker but not a Collector: what it says moved"
-                    " is for a collect"
-                )
-            if plugin.change_check_seconds is None and not plugin.watches:
-                raise RuntimeError(
-                    f"{plugin.name} is a ChangeChecker with neither change_check_seconds nor"
-                    " watches, so its changed would never be asked"
+                    f"{plugin.name}'s {hook} is a method now: def {hook}(self, req), returning"
+                    " what it was set to"
                 )
         fetchable = sorted(kind for kind, spec in plugin.kinds.items() if spec.fetchable)
         if fetchable and not isinstance(plugin, Fetcher):
@@ -308,6 +309,31 @@ class Enabled:
     def change_checker(self) -> ChangeChecker[Any] | None:
         """The plugin, when it checks what moved (`ChangeChecker`); else None."""
         return self.plugin if isinstance(self.plugin, ChangeChecker) else None
+
+    @property
+    def change_check_seconds(self) -> int | None:
+        """How often `mfd serve` asks the plugin's `changed` (`ChangeChecker.change_check_seconds`
+        with its context); None for one without a change check, or that polls none (logged
+        as `change_check_seconds` if asking fails)."""
+        checker = self.change_checker
+        if checker is None:
+            return None
+        return call(
+            self.name,
+            "change_check_seconds",
+            lambda: checker.change_check_seconds(ContextRequest(self.ctx)),
+            None,
+        )
+
+    @property
+    def watches(self) -> list[str]:
+        """The plugins whose entities the plugin's `changed` reads (`ChangeChecker.watches`,
+        with its context); empty for one without a change check (logged as `watches` if asking
+        fails)."""
+        checker = self.change_checker
+        if checker is None:
+            return []
+        return call(self.name, "watches", lambda: checker.watches(ContextRequest(self.ctx)), [])
 
     @property
     def fetcher(self) -> Fetcher[Any] | None:

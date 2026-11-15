@@ -303,7 +303,7 @@ def _collector(graph: Graph) -> Callable[[Enabled, Taken], BaseModel]:
 
 def _watches(e: Enabled) -> list[str]:
     """The plugins whose entities the plugin's `changed` reads (`ChangeChecker.watches`)."""
-    return [] if e.change_checker is None else e.change_checker.watches
+    return e.watches
 
 
 def _settle(

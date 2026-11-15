@@ -32,7 +32,6 @@ from move_forward.plugins.git.repository import LocalRepository
 from move_forward.plugins.git_stack import actions, changes, client
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 from move_forward.plugins.git_stack.panels import repo_dirs, stack_of
-from move_forward.plugins.git_stack.plugin import GitStackPlugin
 from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 from move_forward.registry import enabled
 from move_forward.shell import CommandError, git
@@ -385,7 +384,8 @@ def test_stacks_are_looked_at_again_when_git_moves_a_branch_or_git_stack_its_rec
     git(repo, "config", "branch.me/a.stackParent", "develop")  # as `git stack` records it
     assert changed()
     assert not changed()
-    assert GitStackPlugin.watches == ["git"]
+    e = next(e for e in enabled(config, db, NOW) if e.name == "git_stack")
+    assert e.watches == ["git"] and e.change_check_seconds is None
 
 
 def test_a_branchs_stack_is_its_own_then_its_groups_others_bottom_first() -> None:

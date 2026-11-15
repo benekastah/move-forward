@@ -410,7 +410,6 @@ class JiraPlugin(
     }
     """Tickets link; `linking_patterns` gives the pattern of their keys."""
     notification_kinds: ClassVar[dict[str, str]] = changes.KINDS
-    change_check_seconds: ClassVar[int | None] = 60
 
     def events(self, req: Request[JiraConfig, JiraSnapshot]) -> list[Event]:
         """What changed on my tickets. `closeable` is the transitions panel's
@@ -425,6 +424,10 @@ class JiraPlugin(
     def collect(self, req: RefreshRequest[JiraConfig]) -> JiraSnapshot:
         ctx = req.ctx
         return client.collect(ctx.config, ctx.email, ctx.token())
+
+    def change_check_seconds(self, req: ContextRequest[JiraConfig]) -> int | None:
+        """Every 60 seconds: a one-result search for a ticket of mine updated since."""
+        return 60
 
     def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
         """Whether a ticket of mine was updated since the last look core took

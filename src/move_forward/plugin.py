@@ -124,7 +124,8 @@ def _section_token(config: BaseModel) -> dict[str, TokenSettings]:
 
 @dataclass(frozen=True)
 class ContextRequest[C: BaseModel]:
-    """A hook given only the plugin's context: `snapshots` and `linking_patterns`."""
+    """A hook given only the plugin's context: `snapshots`, `linking_patterns`, and a change
+    checker's `change_check_seconds` and `watches`."""
 
     ctx: Context[C]
 
@@ -530,19 +531,23 @@ class ChangeChecker[C: BaseModel](ABC):
     refreshes soon after a change rather than at its next `refresh_seconds`; or one whose
     `collect` reads other plugins' entities, and so `watches` them. One without a cheap check
     leaves it out and refreshes on its schedule. Add it to the bases beside `Plugin[C, S]` and
-    `Collector[C, S]`, with the same `C`. The registry refuses one that doesn't collect, or
-    has neither a `change_check_seconds` nor a plugin it `watches`, as core would never ask
-    it."""
+    `Collector[C, S]`, with the same `C`. The registry refuses one that doesn't collect."""
 
-    change_check_seconds: ClassVar[int | None] = None
-    """How often `mfd serve` asks `changed`; None to ask it only after a refresh of a plugin it
-    `watches`. In `mfd serve`, it's also asked as each of its collects starts."""
-    watches: ClassVar[list[str]] = []
-    """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]` for
-    git_stack, whose `collect` needs the repos git found: in each refresh that collects one of
-    them, once they've stored, `changed` is asked with the new graph, and the plugin collected
-    (again, if it was collected in that refresh, from the graph as it was before) when it says
-    something moved, rather than waiting for `change_check_seconds` (see `refresh._settle`)."""
+    def change_check_seconds(self, req: ContextRequest[C]) -> int | None:
+        """How often `mfd serve` asks `changed`, which may depend on the plugin's section; None
+        (the default) to ask it only after a refresh of a plugin it `watches`. In `mfd serve`,
+        it's also asked as each of its collects starts. With neither (a section turning its
+        polling off, say), `changed` is never asked."""
+        return None
+
+    def watches(self, req: ContextRequest[C]) -> list[str]:
+        """Plugins whose data this one's `changed` reads from the graph, e.g. `["git"]` for
+        git_stack, whose `collect` needs the repos git found: in each refresh that collects one
+        of them, once they've stored, `changed` is asked with the new graph, and the plugin
+        collected (again, if it was collected in that refresh, from the graph as it was before)
+        when it says something moved, rather than waiting for `change_check_seconds` (see
+        `refresh._settle`). None by default."""
+        return []
 
     @abstractmethod
     def changed(self, req: RefreshRequest[C]) -> Changed:

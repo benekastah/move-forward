@@ -10,11 +10,11 @@ import pytest
 from conftest import NOW, local_snapshot
 
 from move_forward import refresh, registry
-from move_forward.change_checks import ChangeChecks, Taken
+from move_forward.change_checks import ChangeChecks, Taken, checks
 from move_forward.config import Config
 from move_forward.db import Database
 from move_forward.graph import Graph
-from move_forward.plugin import Changed, RefreshRequest
+from move_forward.plugin import Changed, ContextRequest, RefreshRequest
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.models import LocalSnapshot
 from move_forward.plugins.git.plugin import GitPlugin
@@ -230,8 +230,15 @@ def test_a_plugin_that_only_watches_another_is_asked_as_its_collect_starts(
     """With no poll of its own (git_stack's way), it's asked as its collect starts as any
     plugin with a check is: a collect that didn't ask would leave the fingerprint from before
     the move, and the check after what it watches refreshes would report the move again."""
-    monkeypatch.setattr(_Git, "change_check_seconds", None)
-    monkeypatch.setattr(_Git, "watches", ["github"])
+
+    def no_poll(self: GitPlugin, req: ContextRequest[GitConfig]) -> int | None:
+        return None
+
+    def watching_github(self: GitPlugin, req: ContextRequest[GitConfig]) -> list[str]:
+        return ["github"]
+
+    monkeypatch.setattr(_Git, "change_check_seconds", no_poll)
+    monkeypatch.setattr(_Git, "watches", watching_github)
     config, db, checks = _config(tmp_path / "x.db"), Database(":memory:"), ChangeChecks()
     registry.migrate(config, db)
     refresh.refresh(config, db, _minutes(0), {"git"}, checks)  # the first: a full collect
@@ -239,3 +246,22 @@ def test_a_plugin_that_only_watches_another_is_asked_as_its_collect_starts(
     refresh.refresh(config, db, _minutes(1), {"git"}, checks)
     assert len(git.asked) == 2 and git.given[1:] == [(False, {"a"})]
     assert ChangeRepository(db).get("git").fingerprint == "b"
+
+
+def test_a_section_can_set_how_often_its_plugin_is_checked_or_turn_checks_off(
+    git: _Git, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`change_check_seconds` is asked with the plugin's context, so its section decides; with
+    no poll and nothing watched, its `changed` is never asked."""
+
+    def from_section(self: GitPlugin, req: ContextRequest[GitConfig]) -> int | None:
+        return None if req.ctx.config.refresh_seconds > 3600 else req.ctx.config.refresh_seconds
+
+    monkeypatch.setattr(_Git, "change_check_seconds", from_section)
+    config, db = _config(tmp_path / "x.db"), Database(":memory:")
+    registry.migrate(config, db)
+    e = _git(config, db, NOW)
+    assert e.change_check_seconds == 600 and checks(e)
+    rare = Config.model_validate({"email": "me@x", "git": {"repos": [], "refresh_seconds": 7200}})
+    e = _git(rare, db, NOW)
+    assert e.change_check_seconds is None and e.watches == [] and not checks(e)

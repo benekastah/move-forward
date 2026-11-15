@@ -22,8 +22,11 @@ for themselves (a token, a request, an example config) is core's.
   to its bases beside `Plugin[C, S]`, and `collect`, `snapshots` and `events` moved there from
   `Plugin` (`collect` and `snapshots` are abstract, so one without the other is refused as the
   plugin is made, rather than by the registry). A collector with a change check also adds
-  `api.ChangeChecker[C]`, which holds `changed` (abstract), `change_check_seconds` and
-  `watches`; the registry refuses one that isn't a `Collector` or sets neither of the two. A
+  `api.ChangeChecker[C]`, which holds `changed` (abstract) and the hooks
+  `change_check_seconds(req)` and `watches(req)`, class variables before: asked with the plugin's
+  `ContextRequest`, so its section can decide how often it's polled and what it watches (a plugin
+  still setting either as a class variable is refused, saying so). The registry refuses one that
+  isn't a `Collector`; one whose answers are no poll and nothing watched is never asked. A
   plugin with `mfd <name>` adds `api.Command[C]`, holding `cli`; one with `fetchable` kinds adds
   `api.Fetcher[C]`, holding `fetch`, and the registry refuses a fetchable kind without it, or it
   without a fetchable kind. `Graph.fetch` asks only a fetcher, about its fetchable kinds. The
@@ -95,7 +98,7 @@ for themselves (a token, a request, an example config) is core's.
   each of `req.ids` it knows as an `Address(url, handle)`, by id. By default it gives the id as
   the URL where its family's ids are URLs, as `url_for` did.
 - **Five request types**: a hook's request is one of `ContextRequest(ctx)` (`snapshots`,
-  `linking_patterns`), `Request(ctx, graph, snapshot, previous)` (`entities`, `relate`,
+  `linking_patterns`, and later `change_check_seconds` and `watches`), `Request(ctx, graph, snapshot, previous)` (`entities`, `relate`,
   `panels`, `item_actions`, `after_collect`, `prune`, `events`), `RefreshRequest(ctx, graph,
   full, subjects, previous)` (`collect`, `changed`), `RefRequest(ctx, kind, ids)` (`address`,
   `fetch`) and `InputRequest(ctx, graph, page, form, args)` (pages, buttons and `mfd

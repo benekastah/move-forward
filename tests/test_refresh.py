@@ -46,10 +46,14 @@ class _JiraWatchingGit(JiraPlugin):
     """Fetches an issue per repo git found, as git_stack reads git's, so it watches git; and
     remembers what it collected from and what after_collect saw."""
 
-    change_check_seconds: ClassVar[int | None] = None
-    watches: ClassVar[list[str]] = ["git"]
     collected_from: ClassVar[list[list[str]]] = []
     seen_by_after_collect: ClassVar[list[str]] = []
+
+    def change_check_seconds(self, req: ContextRequest[JiraConfig]) -> int | None:
+        return None
+
+    def watches(self, req: ContextRequest[JiraConfig]) -> list[str]:
+        return ["git"]
 
     def changed(self, req: RefreshRequest[JiraConfig]) -> Changed:
         def repos(graph: Graph | None) -> list[str]:
