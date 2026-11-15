@@ -4,6 +4,7 @@ import functools
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -63,8 +64,10 @@ def run(
         errors="replace",
         timeout=timeout,
         # Python's own files aren't inherited anyway (PEP 446). Without closing the rest, macOS
-        # starts a program given by its path with posix_spawn rather than fork, a quarter faster.
-        close_fds=False,
+        # starts a program given by its path (and no `cwd`) with posix_spawn rather than fork, a
+        # quarter faster. Not on Windows, where a child would inherit the pipes another thread's
+        # command is being given as it starts, and could keep that command's output open.
+        close_fds=sys.platform == "win32",
         check=False,
     )
     if result.returncode != 0:

@@ -203,7 +203,7 @@ def port(answer: str) -> str:
 
 def checkout(cwd: Path) -> Path | None:
     """The git checkout `cwd` is in, if any."""
-    top = quiet([git_program(), "rev-parse", "--show-toplevel"], cwd)
+    top = quiet([git_program(), "-C", str(cwd), "rev-parse", "--show-toplevel"])
     return Path(top) if top else None
 
 
