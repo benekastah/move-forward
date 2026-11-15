@@ -84,12 +84,19 @@ def test_git_runs_but_fetches_from_no_network(outside: Outside) -> None:
 
 
 def test_git_reads_the_tests_config_not_mine_nor_the_systems(
-    outside: Outside, git_config: Path, tmp_path: Path
+    outside: Outside, tmp_path: Path
 ) -> None:
-    listed = git(tmp_path, "config", "--list", "--show-origin", "--show-scope")
-    origins = {line.split("\t")[1] for line in listed.splitlines()}
-    assert {Path(origin.removeprefix("file:")) for origin in origins} == {git_config}
-    assert "user.email=me@example.com" in listed and "maintenance.auto=false" in listed
+    listed = git(tmp_path, "config", "--list", "--show-scope").splitlines()
+    assert [line.split("\t") for line in listed] == [
+        ["global", setting]
+        for setting in (
+            "user.name=Me",
+            "user.email=me@example.com",
+            "commit.gpgsign=false",
+            "maintenance.auto=false",
+            "gc.auto=0",
+        )
+    ]
 
 
 def test_git_stack_is_refused_unless_allowed(outside: Outside, tmp_path: Path) -> None:
