@@ -32,9 +32,9 @@ def said(changed: dict[str, str]) -> str:
 
 
 def checks(e: Enabled) -> bool:
-    """Whether the plugin has a change check (`ChangeChecker`), which the registry makes sure
-    has a `change_check_seconds` or plugins it `watches`."""
-    return e.change_checker is not None
+    """Whether the plugin's change check is ever asked: it's a `ChangeChecker` with a
+    `change_check_seconds` or plugins it `watches`, as its section may say."""
+    return e.change_check_seconds is not None or bool(e.watches)
 
 
 @dataclass(frozen=True)

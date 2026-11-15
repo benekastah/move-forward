@@ -810,9 +810,11 @@ def test_a_page_load_asks_for_no_refresh(app: server.App, monkeypatch: pytest.Mo
 class _GitHubWithChecks(GitHubPlugin):
     """github whose change check answers from `answers`, raising for an exception."""
 
-    change_check_seconds: ClassVar[int | None] = 60
     answers: ClassVar[list[bool | Changed | Exception]] = []
     """Each a `Changed`, or a bare bool for one without a reason."""
+
+    def change_check_seconds(self, req: ContextRequest[GitHubConfig]) -> int | None:
+        return 60
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         answer = self.answers.pop(0)
@@ -861,9 +863,11 @@ def test_why_a_plugin_changed_is_logged(
 class _GitHubComparingGraphs(GitHubPlugin):
     """github whose change check notes the graphs it's given, and raises while `failing`."""
 
-    change_check_seconds: ClassVar[int | None] = 60
     given: ClassVar[list[tuple[Graph | None, Graph]]] = []
     failing: ClassVar[list[bool]] = []
+
+    def change_check_seconds(self, req: ContextRequest[GitHubConfig]) -> int | None:
+        return 60
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         self.given.append((req.previous.graph, req.graph))
@@ -890,7 +894,8 @@ def test_a_change_check_is_given_the_graph_of_the_last_that_didnt_fail(
 class _SlackChanging(SlackPlugin, Collector[SlackConfig, BaseModel], ChangeChecker[SlackConfig]):
     """Slack, as though it collected and had a change check, which always says it moved."""
 
-    change_check_seconds: ClassVar[int | None] = 60
+    def change_check_seconds(self, req: ContextRequest[SlackConfig]) -> int | None:
+        return 60
 
     def collect(self, req: RefreshRequest[SlackConfig]) -> BaseModel:
         return BaseModel()
@@ -903,7 +908,8 @@ class _SlackChanging(SlackPlugin, Collector[SlackConfig, BaseModel], ChangeCheck
 
 
 class _GitHubAnsweringBadly(GitHubPlugin):
-    change_check_seconds: ClassVar[int | None] = 60
+    def change_check_seconds(self, req: ContextRequest[GitHubConfig]) -> int | None:
+        return 60
 
     def changed(self, req: RefreshRequest[GitHubConfig]) -> Changed:
         return True  # pyright: ignore[reportReturnType]  # not a Changed

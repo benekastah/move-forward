@@ -83,7 +83,6 @@ class GitPlugin(
         REPO: KindSpec(RepoAttrs),
         BRANCH: KindSpec(BranchAttrs, resolvable=True),
     }
-    change_check_seconds: ClassVar[int | None] = 2
     notification_kinds: ClassVar[dict[str, str]] = NOTIFICATION_KINDS
     """`branch_deletable`: a branch newly in Cleanup (`Item.notify`)."""
 
@@ -174,6 +173,10 @@ class GitPlugin(
             for wt in repo.worktrees:
                 worktrees[Path(wt.path).resolve()] = common.resolve()
         self._watcher.sync(worktrees)
+
+    def change_check_seconds(self, req: ContextRequest[GitConfig]) -> int | None:
+        """Every 2 seconds: what the watched repos said, and the polled ones' files' times."""
+        return 2
 
     def changed(self, req: RefreshRequest[GitConfig]) -> Changed:
         """Whether a repo moved (a commit, checkout, branch, rebase, push or fetch), or a

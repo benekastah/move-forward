@@ -301,11 +301,6 @@ def _collector(graph: Graph) -> Callable[[Enabled, Taken], BaseModel]:
     return collect
 
 
-def _watches(e: Enabled) -> list[str]:
-    """The plugins whose entities the plugin's `changed` reads (`ChangeChecker.watches`)."""
-    return [] if e.change_checker is None else e.change_checker.watches
-
-
 def _settle(
     db: Database,
     plugins: list[Enabled],
@@ -323,12 +318,12 @@ def _settle(
     this brings it up to date in the same refresh. Once, not until nothing moves. Returns the
     plugins whose collect it started: not one still collecting, its first collect past its
     timeout."""
-    watching = [e for e in plugins if collected.intersection(_watches(e))]
+    watching = [e for e in plugins if collected.intersection(e.watches)]
     moved = {e.name: why for e in watching if (why := checks.moved(e, graph, before)) is not None}
     if not moved:
         return set()
     again = [e for e in watching if e.name in moved]
-    watched = sorted({name for e in again for name in _watches(e)} & collected)
+    watched = sorted({name for e in again for name in e.watches} & collected)
     log.info("changed with %s: %s; collecting", ", ".join(watched), said(moved))
     return _collect_all(db, again, now, _collector(graph), checks, graph, asking=False)
 

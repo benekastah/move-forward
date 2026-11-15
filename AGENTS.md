@@ -56,7 +56,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   `mfd init` and the settings page show it (`init`), and `api_version`. What only some plugins do is
   a mixin beside `Plugin` in its bases, which core finds with `isinstance` rather than by which
   methods a plugin overrides: `Collector` (`collect` and `snapshots`, and `events`), `ChangeChecker`
-  (a collector's `changed`, with `change_check_seconds` and `watches`), `Command` (`cli`) and
+  (a collector's `changed`, with the hooks `change_check_seconds` and `watches`), `Command` (`cli`) and
   `Fetcher` (`fetch`, for its `fetchable` kinds). A mixin's abstract hooks must all be implemented,
   and the registry refuses a combination that makes no sense (a change checker that doesn't collect,
   a fetchable kind of a plugin that isn't a fetcher, a mixin's hook without the mixin). `init` is an `Init`, built in the plugin's
@@ -65,7 +65,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   on its config model's field, with `LOCKED`.
 - Every plugin hook that runs with the plugin's context takes one request object, of five kinds, so
   a hook can gain an input without breaking its overrides: `ContextRequest(ctx)` (`snapshots`,
-  `linking_patterns`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
+  `linking_patterns`, `change_check_seconds`, `watches`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
   `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
   (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`address`, `fetch`); and `InputRequest(ctx,
   graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`).
@@ -241,7 +241,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   it's lower-case words ("a branch git stack tracks"). The plugin's own name stays its config
   section's (`git_stack`).
 - **A class's variables come first.** Its class variables (a plugin's `name`,
-  `kinds`, `change_check_seconds` and the like) go at the top, then `__init__`, which
+  `kinds`, `notification_kinds` and the like) go at the top, then `__init__`, which
   sets every instance variable, then the methods. Don't define a class variable between
   methods, next to the method it's for, or set a new instance variable outside
   `__init__`.

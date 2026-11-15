@@ -119,16 +119,14 @@ found, its snapshot `S`, in its own tables. One that isn't publishes from its ow
 `ChangeChecker[C]`: a `Collector` with a check of what moved in its tool far cheaper than
 collecting, so it refreshes soon after a change; or one whose `collect` reads other plugins'
 entities, so it `watches` them. One with no cheap check isn't one, and refreshes on its
-schedule. The registry refuses one that isn't a `Collector`, or has neither
-`change_check_seconds` nor `watches`, as `changed` would never be asked.
-
-| Name | Type, default | What it says |
-| --- | --- | --- |
-| `change_check_seconds` | `int \| None`, `None` | How often `mfd serve` asks `changed`; None for no poll. In `mfd serve`, `changed` is also asked as each of its collects starts, when this is set or it `watches` another. |
-| `watches` | `list[str]`, `[]` | Plugins whose entities its `changed` reads from the graph (git_stack: `["git"]`). The settle step: in each refresh that collects one of them, once they've stored, `changed` is asked with the new graph, and the plugin is collected (again, if it collected in that refresh from the graph before) when it says something moved, in the same refresh (`refresh._settle`). |
+schedule. The registry refuses one that isn't a `Collector`, and one still setting
+`change_check_seconds` or `watches` as a class variable. Both are asked with its context, so its
+section can decide; with no poll and nothing watched, `changed` is never asked.
 
 | Hook | Signature | Purpose, and when core calls it |
 | --- | --- | --- |
+| `change_check_seconds` | `change_check_seconds(req: ContextRequest[C]) -> int \| None` | How often `mfd serve` asks `changed`; None (the default) for no poll. In `mfd serve`, `changed` is also asked as each of its collects starts, when this gives a number or it `watches` another. Asked by the server's change loop and as each collect starts. An answer that isn't a positive whole number or None, or a raise, is logged and polls none. |
+| `watches` | `watches(req: ContextRequest[C]) -> list[str]` | Plugins whose entities its `changed` reads from the graph (git_stack: `["git"]`); none by default. The settle step: in each refresh that collects one of them, once they've stored, `changed` is asked with the new graph, and the plugin is collected (again, if it collected in that refresh from the graph before) when it says something moved, in the same refresh (`refresh._settle`). An answer that isn't a list of plugin names, or a raise, is logged and watches none. |
 | `changed` | `changed(req: RefreshRequest[C]) -> Changed` (abstract) | A cheap check of what moved in its tool (a `Changed`, below), so it refreshes soon. Asked by `mfd serve` every `change_check_seconds` and as each of its collects starts (when it has a `change_check_seconds` or `watches` another), and in the settle step of a refresh of a plugin it `watches`. |
 
 ### `Command`
@@ -155,7 +153,7 @@ Every hook with a context takes one request; a field a hook isn't given keeps it
 
 ### `ContextRequest`
 
-For `snapshots` and `linking_patterns`.
+For `snapshots`, `linking_patterns`, `change_check_seconds` and `watches`.
 
 | Field | Type | What it holds |
 | --- | --- | --- |

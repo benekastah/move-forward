@@ -44,7 +44,6 @@ class GitStackPlugin(
     init = Init(suggested=shutil.which("git-stack") is not None, example_on=True)
     """Suggested only when git stack is installed, i.e. `git stack` would run."""
     requires: ClassVar[list[str]] = ["git"]
-    watches: ClassVar[list[str]] = ["git"]
     migrations: ClassVar[list[Migration]] = MIGRATIONS
     kinds: ClassVar[dict[str, KindSpec]] = {STACK_BRANCH: KindSpec(StackBranchAttrs)}
     notification_kinds: ClassVar[dict[str, str]] = events.KINDS
@@ -53,6 +52,10 @@ class GitStackPlugin(
         """`git stack info` in each repo git has branches in."""
         graph = req.graph
         return client.collect([Path(d) for d in repo_dirs(graph)])
+
+    def watches(self, req: ContextRequest[GitStackConfig]) -> list[str]:
+        """Git, whose repos it reads stacks in."""
+        return ["git"]
 
     def changed(self, req: RefreshRequest[GitStackConfig]) -> Changed:
         """Whether a stack may have moved since the last look (see `changes`): asked right

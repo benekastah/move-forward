@@ -447,20 +447,28 @@ def test_a_collector_is_one_that_collects_and_keeps_what_it_found() -> None:
 
 class _Checks(_Collects, ChangeChecker[Strict]):
     name = "checks"
-    change_check_seconds: ClassVar[int | None] = 30
+
+    def change_check_seconds(self, req: ContextRequest[Strict]) -> int | None:
+        return 30
 
     def changed(self, req: RefreshRequest[Strict]) -> Changed:
         return Changed()
 
 
-class _NeverAsked(_Checks):
-    name = "never"
-    change_check_seconds: ClassVar[int | None] = None
+class _StillAClassVariable(_Checks):
+    """As a plugin from before the hooks: the number hides the method."""
+
+    name = "still"
+    change_check_seconds = 60  # pyright: ignore[reportAssignmentType, reportIncompatibleMethodOverride]
+
+
+class _StillWatching(_Checks):
+    name = "still_watching"
+    watches = ("git",)  # pyright: ignore[reportAssignmentType, reportIncompatibleMethodOverride]
 
 
 class _ChecksNothing(_Plain, ChangeChecker[Strict]):
     name = "checks_nothing"
-    change_check_seconds: ClassVar[int | None] = 30
 
     def changed(self, req: RefreshRequest[Strict]) -> Changed:
         return Changed()
@@ -470,8 +478,10 @@ def test_a_change_checker_collects_and_is_asked() -> None:
     registry.check_plugins([_Checks()])
     with pytest.raises(TypeError, match="checks_nothing is a ChangeChecker but not a Collector"):
         registry.check_plugins([_ChecksNothing()])
-    with pytest.raises(RuntimeError, match="never is a ChangeChecker with neither"):
-        registry.check_plugins([_NeverAsked()])
+    with pytest.raises(TypeError, match="still's change_check_seconds is a method now"):
+        registry.check_plugins([_StillAClassVariable()])
+    with pytest.raises(TypeError, match="still_watching's watches is a method now"):
+        registry.check_plugins([_StillWatching()])
 
 
 class _FetchesNothing(_Plain, Fetcher[Strict]):
