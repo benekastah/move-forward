@@ -1,0 +1,17 @@
+# Weekly pull requests for new versions of the Python packages in uv.lock (the package's and the
+# dev group's) and of the actions the workflows use. A version waits a week after its release
+# before it's proposed, so one that's pulled or found to be malicious soon after is skipped.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

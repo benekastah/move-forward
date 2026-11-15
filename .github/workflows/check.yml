@@ -64,6 +64,9 @@ jobs:
         with:
           enable-cache: false  # uv installs in seconds; saving its cache takes as long
           python-version: "3.14"
+      # uv.lock says what CI and Dependabot install; a change to pyproject.toml's dependencies
+      # has to come with it.
+      - run: uv lock --check
       # Through uv: the runner's own `python` may be older than the one uv provides, and
       # dev.py stops under a Python older than the package needs.
       - run: uv run --no-project python dev.py venv
