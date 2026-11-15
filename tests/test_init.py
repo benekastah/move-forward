@@ -245,10 +245,6 @@ def test_the_org_is_guessed_from_the_remote_the_branch_tracks(tmp_path: Path) ->
     git(tmp_path, "init", "-q", "-b", "main", str(org))
     git(
         org,
-        "-c",
-        "user.email=me@x",
-        "-c",
-        "user.name=Me",
         "commit",
         "-q",
         "--allow-empty",

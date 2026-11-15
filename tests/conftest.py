@@ -109,9 +109,27 @@ GIT_STACK = "git stack"
 """What a test `allow`s to run `git stack`, which is git, but can start `gh` (its GitHub
 adapter), which neither the guard nor `GIT_ENVIRONMENT` sees."""
 
-GIT_ENVIRONMENT = {"GIT_ALLOW_PROTOCOL": "file", "GIT_TERMINAL_PROMPT": "0"}
-"""Set for every test, so git's own transports fetch only from repos on this machine, and it
-never asks for a password."""
+GIT_ENVIRONMENT = {
+    "GIT_ALLOW_PROTOCOL": "file",
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_CONFIG_NOSYSTEM": "1",
+}
+"""Set for every test, so git's own transports fetch only from repos on this machine, it
+never asks for a password, and it reads no system config (nor, with `GIT_CONFIG`, mine)."""
+
+GIT_CONFIG = """\
+[user]
+\tname = Me
+\temail = me@example.com
+[commit]
+\tgpgsign = false
+[maintenance]
+\tauto = false
+[gc]
+\tauto = 0
+"""
+"""git's global config in every test, in place of mine: who commits, unsigned. Without
+maintenance: each commit, fetch and push would start another git to do it."""
 
 REAL_ADVAPI32 = keychain._advapi32  # pyright: ignore[reportPrivateUsage]
 """Windows' real Credential Manager, which `outside` replaces: for the one test of it, which
@@ -242,8 +260,16 @@ def _called(name: str, args: tuple[object, ...]) -> str:
     return f"{name}({', '.join(repr(a) for a in args)})"
 
 
+@pytest.fixture(scope="session")
+def git_config(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """`GIT_CONFIG`, written once for the run."""
+    path = tmp_path_factory.mktemp("git") / "config"
+    path.write_text(GIT_CONFIG, encoding="utf-8")
+    return path
+
+
 @pytest.fixture(autouse=True)
-def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
+def outside(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> Iterator[Outside]:
     """Keep each test to itself. It's refused, with `OutsideRefused`:
     - starting a program but git, icacls on Windows, and those it `allow`s, through
       `subprocess` (`Popen` and what's built on it, asyncio's too), `os.exec*`, `os.spawn*` or
@@ -270,6 +296,7 @@ def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
     outside = Outside()
     for name, value in GIT_ENVIRONMENT.items():
         monkeypatch.setenv(name, value)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(git_config))
 
     spawn = subprocess.Popen._execute_child  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
     spawning = inspect.signature(spawn)  # pyright: ignore[reportUnknownArgumentType]

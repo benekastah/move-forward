@@ -22,10 +22,6 @@ def _checkout(path: Path) -> Path:
     git(path, "init", "-q", "-b", "main")
     git(
         path,
-        "-c",
-        "user.email=me@x",
-        "-c",
-        "user.name=Me",
         "commit",
         "-q",
         "--allow-empty",
