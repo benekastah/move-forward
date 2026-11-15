@@ -82,6 +82,11 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.14"
+      # Defender scans every file the tests write and every git they start. The runner is thrown
+      # away after the job, and runs nothing but this repo's code.
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
       # On Windows, the one test of the real Credential Manager runs too: the runner's store
       # is thrown away after the job (see AGENTS.md).
       - run: uv run --no-project python dev.py tests
