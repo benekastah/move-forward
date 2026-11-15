@@ -2,7 +2,8 @@
 
 What's left to build in move-forward. Only what's still to do lives here: when something
 is done, remove it in the same change, and delete this file once it's empty. The code,
-`AGENTS.md` and the rest of `docs/` are the reference for what's built.
+`AGENTS.md` and the rest of `docs/` are the reference for what's built, and
+[issues.md](issues.md) says what's wrong with it.
 
 ## Goal
 
@@ -18,10 +19,10 @@ at the hooks that are left (20), and the class variables (11).
 
 ## Next, in this order
 
-1. **[Buttons and consistency](#buttons-and-consistency)**, below.
-2. **Gmail links that open the message**: see [mail](#mail), below.
-3. **Read the address book where it lives**: see [Contacts](#contacts), below.
-4. **HTML escaped by construction**: see [The page](#the-page), below.
+1. **[Buttons](#buttons)**, below, after [issues.md](issues.md)'s items that don't offer the
+   same everywhere and its Gmail links.
+2. **Read the address book where it lives**: see [Contacts](#contacts), below.
+3. **HTML escaped by construction**: see [The page](#the-page), below.
 
 ## Slack as a source of work
 
@@ -88,65 +89,23 @@ Sending, off by default:
 8. **Focus sets my status**: entering focus mode sets "Focusing" and Do Not Disturb for a
    while, and leaving it clears them.
 
-## Buttons and consistency
+## Buttons
 
-An item should offer the same wherever it's shown, and what the page tells me to do should
-come with a button where the dashboard can do it. Each step here stands alone; a plugin step
-that needs a core one says so, and lands on top of it.
+What the page tells me to do should come with a button where the dashboard can do it.
 
-### Core
+- **Account on the settings page.** A Sign out everywhere button (`mfd logout`), and where
+  each plugin's token is found (`mfd token check`). Setting or rotating a token stays in
+  the terminal.
+- **The rest of github's Merge.** Ready to merge has Merge and Add to queue, and Ready for
+  review has Merge when ready and Cancel auto-merge. Still to do:
+  - Merge when ready on Fix before review's PRs waiting only on checks.
+  - Per-repo settings, `[github.merge.repos."owner/name"]`: `method`, `auto_merge`, and
+    `delete_branch` (the repo's `deleteBranchOnMerge` unless set). A branch with PRs based on
+    it is never deleted: with `deleteBranchOnMerge` on, Merge retargets those PRs first.
 
-2. **Set aside from anywhere.** An item only Act now shows (nominated with no panel item) has
-   nowhere to come back from but `mfd unsnooze`.
-3. **An empty panel with a field opens.** A panel with no items is drawn collapsed, so a
-   panel-wide field (notes' New todo) is hidden just when it's wanted: draw such a panel open.
-6. **Importance where it means something.** Say whether every panel sorts by it, since only two
-   do now, not What next or Feedback.
-7. **Focus mode's missing buttons.** Panel-wide buttons (Delete all, Clean) don't show there,
-   nor do those of an item that focus mode splits into parts (an entry's Put on ice).
-10. **Account on the settings page.** A Sign out everywhere button (`mfd logout`), and where
-    each plugin's token is found (`mfd token check`). Setting or rotating a token stays in
-    the terminal.
-11. **Snooze a PR waiting on review.** slack's Nudge reviewers nominates a PR of mine (task
-    `ping`), with Snooze, but the PR's item in github's Ready for review has no task, so it
-    has neither Snooze nor Unsnooze. A snooze is kept by its subject's kind and id and its
-    task, so snoozing the nudge sets aside only the nudge: give github's item a task, and
-    decide whether snoozing it sets aside the nudge too.
-
-### github
-
-Each button runs `gh`, checks its fields (a PR on `host`, a login's form), and returns the PR
-as `touched`, so it's fetched again at once.
-
-12. **The rest of Merge.** Ready to merge has Merge and Add to queue, and Ready for review has
-    Merge when ready and Cancel auto-merge. Still to do:
-    - Merge when ready on Fix before review's PRs waiting only on checks.
-    - Per-repo settings, `[github.merge.repos."owner/name"]`: `method`, `auto_merge`, and
-      `delete_branch` (the repo's `deleteBranchOnMerge` unless set). A branch with PRs based on
-      it is never deleted: with `deleteBranchOnMerge` on, Merge retargets those PRs first.
-15. **A base merge isn't an answer.** Comments count as answered once they're older than my last
-    push, by the head commit's date, so merging the base into a branch (Update branch, or by hand)
-    clears them with nothing said. Read past merge commits: it needs their parents fetched. Then
-    Update branch's confirm no longer needs to warn of it.
-
-Approving stays on GitHub: a review should come from having read the PR there.
-
-### git and git_stack
-
-20. **Restack on a conflict.** Stacks' `needs-restack` items have Restack; github's merge
-    conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
-    force-push (with lease), which the rule against force-pushing from a button forbids unless
-    that's changed.
-
-### notes
-
-24. **Size a todo, and say why something's on ice, from the CLI.** `todo add --size` sizes a
-    new one; nothing sizes an existing one but the page's Quick and Big, and nothing changes
-    an ice note but its Replace note, so the work-notes skill can't do either.
-25. **Edit an entry.** What the CLI can do to one: `blocked-on` (its badge can't be cleared from
-    the page), status and where (not shown at all), `link`, and `remove`.
-26. **Merge conditions.** Held's "held: …" has no way out but `mfd notes condition remove`. Add
-    and remove them on the PR's items.
+  Each github button runs `gh`, checks its fields (a PR on `host`, a login's form), and returns
+  the PR as `touched`, so it's fetched again at once. Approving stays on GitHub: a review should
+  come from having read the PR there.
 
 ## Plugins without core changes
 
@@ -214,12 +173,6 @@ set of tables, pages and actions, and settles what two of them both see the way 
 
 ### mail
 
-- **Gmail links that open the message.** The `message_url` `mfd init` suggests for Gmail,
-  `https://mail.google.com/mail/u/{username}/#search/rfc822msgid:{message_id}`, doesn't
-  open the message (seen on a personal Gmail). Find what does: the Message-ID's encoding in
-  the fragment (`message_url` percent-encodes all but `@`, so `+`, `=` and `/` change), its
-  angle brackets, `u/<address>` against `u/0`, or a link by Gmail's own ids (`X-GM-MSGID`,
-  `X-GM-THRID`, which IMAP gives), then fix the suggestion and `GMAIL_MESSAGE_URL`.
 - **Read Gmail without a password that can do more.** IMAP signs in to Gmail with an app
   password or OAuth's `https://mail.google.com/` scope, and either can send and delete mail;
   mail only promises, in its own code, to read headers. Gmail's API has a scope Google enforces
@@ -319,22 +272,3 @@ set of tables, pages and actions, and settles what two of them both see the way 
   [plugins/notes.md](plugins/notes.md) says); the skill still keeps them its old way until
   it's changed to use them. Its `reviewer-map.md` is read by nothing now, so it should set
   Slack ids with `mfd slack contact set` rather than editing the map.
-- **Keep the skill and the dashboard in step.** The CLI's JSON output is the contract the
-  skill is written against: change it deliberately, with the skill. The skill's own rule
-  against cleaning while something's on ice no longer matches the dashboard, which cleans
-  regardless (`git stack clean` never restacks or pushes).
-
-### Windows, on a real machine
-
-CI passes on Windows, but these need trying by hand: `py dev.py install` (the PATH
-change, the `mfd.cmd` shim, the hooks through `py -3`);
-`mfd serve` replacing its server on a config change, and ctrl-c stopping it;
-`mfd token set` with Credential Manager; Slack's Connect; git stack itself; git watching its
-repos while you work (the watcher holds handles on the watched directories, and Windows can
-refuse to delete or rename a directory with handles open in it: `git worktree remove`, a
-checkout that deletes a top-level directory, renaming a repo's folder); and repo paths
-compared as `Path`s (case, `~`, separators), including those stored in `notes_ice`. On a
-Windows that isn't in English, `icacls` names SYSTEM and Administrators in its language,
-so `private.is_private` wouldn't recognize them and the token file would be warned about
-on every start: look their names up from their well-known SIDs (`LookupAccountSidW`)
-rather than matching English ones.
