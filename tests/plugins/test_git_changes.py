@@ -139,9 +139,9 @@ def test_after_a_change_only_the_repos_that_moved_are_read_again(
     read: list[str] = []
     real = client.collect_repo
 
-    def counting(repo: Path, *args: Any) -> LocalRepo:
+    def counting(repo: Path, *args: Any, **kwargs: Any) -> LocalRepo:
         read.append(repo.name)
-        return real(repo, *args)
+        return real(repo, *args, **kwargs)
 
     monkeypatch.setattr(client, "collect_repo", counting)
 
@@ -350,9 +350,9 @@ def test_a_collect_of_a_branch_reads_its_repo_alone_and_of_anything_else_every_r
     read: list[str] = []
     real = client.collect_repo
 
-    def counting(repo: Path, *args: Any) -> LocalRepo:
+    def counting(repo: Path, *args: Any, **kwargs: Any) -> LocalRepo:
         read.append(repo.name)
-        return real(repo, *args)
+        return real(repo, *args, **kwargs)
 
     monkeypatch.setattr(client, "collect_repo", counting)
     plugin.collect(RefreshRequest(ctx, Graph(), False, frozenset({branch_id(str(b), "main")})))
