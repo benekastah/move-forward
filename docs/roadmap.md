@@ -14,8 +14,10 @@ small shared entity graph.
 
 ## First: a further look at the plugin API
 
-The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done. Next, a further look
-at the hooks that are left (20), and the class variables (11).
+The simplicity pass ([simplicity_review.md](simplicity_review.md)) is done, and what only some
+plugins do is a mixin. Next, a further look at what's left, as
+[plugin_contract.md](plugin_contract.md) lists it: `Plugin`'s 10 class variables and 11 hooks, and
+the 8 hooks of its four mixins (`Collector`, `ChangeChecker`, `Command`, `Fetcher`).
 
 ## Next, in this order
 
