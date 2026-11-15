@@ -482,7 +482,7 @@ class Database:
             self._conn.execute("PRAGMA journal_mode = WAL")
             # With WAL, a commit then waits for no flush to disk, only a checkpoint does: still
             # never corrupt, but an OS crash or power cut can lose the last commits. A flush is
-            # slow on Windows, and migrating a new database took four times as long there.
+            # slow on Windows: flushing each commit, a new database migrates four times slower.
             self._conn.execute("PRAGMA synchronous = NORMAL")
         self._lock = threading.RLock()
         """Held by whoever uses the connection; re-entered by `reading`'s holder's queries."""
