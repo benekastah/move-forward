@@ -18,14 +18,22 @@ in the same change.
   Then Update branch's confirm no longer needs to warn of it.
 - **An empty panel with a field is hidden.** A panel with no items is drawn collapsed, so a
   panel-wide field (notes' New todo) is hidden just when it's wanted: draw such a panel open.
-- **Two teams of one handle are one in slack.** slack keys a team's channel and pings by its
-  `handle`, which is unique only within its publisher, so two plugins' teams of one handle would
-  share them. No two plugins publish teams now.
+- **Another org's team pings my team's channel.** slack keys a team's channel and pings by the
+  slug a PR requests, but github publishes a team for each org whose PRs request one. With
+  `search_scope = "everywhere"`, a PR of mine in another org requesting `web` is nudged to my
+  org's `web` channel, and its pings count as theirs. Key them by the team's id; `Team.handle`'s
+  docstring ("unique only within its publisher") is wrong too, as one publisher has several
+  orgs' teams.
+- **Windows' accounts in another language.** On a Windows that isn't in English, `icacls` names
+  SYSTEM and Administrators in its language, so `private.is_private` wouldn't recognize them
+  and the token file would be warned about on every start: look their names up from their
+  well-known SIDs (`LookupAccountSidW`) rather than matching English ones.
 
-## An item doesn't offer the same everywhere
+## What one surface offers and another doesn't
 
-What `AGENTS.md` asks ("An item offers the same wherever it's shown") and doesn't hold yet. Each
-stands alone; a plugin fix that needs a core one says so, and lands on top of it.
+Where `AGENTS.md`'s "An item offers the same wherever it's shown" doesn't hold yet (Act now, the
+panels, focus mode), and where the CLI can't do what the page does, which the work-notes skill
+needs. Each stands alone; a plugin fix that needs a core one says so, and lands on top of it.
 
 - **Set aside from anywhere.** An item only Act now shows (nominated with no panel item) has
   nowhere to come back from but `mfd unsnooze`.
@@ -52,10 +60,10 @@ stands alone; a plugin fix that needs a core one says so, and lands on top of it
 
 ## The skill and the dashboard disagree
 
-The CLI's JSON output is the contract the work-notes skill is written against: change it
-deliberately, with the skill. The skill's own rule against cleaning while something's on ice no
-longer matches the dashboard, which cleans regardless (`git stack clean` never restacks or
-pushes).
+The work-notes skill won't clean while something's on ice, but the dashboard cleans regardless
+(`git stack clean` never restacks or pushes), so the skill's rule no longer matches. The CLI's
+JSON output is the contract the skill is written against: change it deliberately, with the
+skill. (Moving the skill onto the notes is on the [roadmap](roadmap.md#notes-and-the-skill).)
 
 ## Windows, on a real machine
 
@@ -67,8 +75,3 @@ repos while you work (the watcher holds handles on the watched directories, and 
 refuse to delete or rename a directory with handles open in it: `git worktree remove`, a
 checkout that deletes a top-level directory, renaming a repo's folder); and repo paths
 compared as `Path`s (case, `~`, separators), including those stored in `notes_ice`.
-
-On a Windows that isn't in English, `icacls` names SYSTEM and Administrators in its language,
-so `private.is_private` wouldn't recognize them and the token file would be warned about
-on every start: look their names up from their well-known SIDs (`LookupAccountSidW`)
-rather than matching English ones.

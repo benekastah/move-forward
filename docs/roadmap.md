@@ -21,10 +21,12 @@ the 8 hooks of its four mixins (`Collector`, `ChangeChecker`, `Command`, `Fetche
 
 ## Next, in this order
 
-1. **[Buttons](#buttons)**, below, after [issues.md](issues.md)'s items that don't offer the
-   same everywhere and its Gmail links.
-2. **Read the address book where it lives**: see [Contacts](#contacts), below.
-3. **HTML escaped by construction**: see [The page](#the-page), below.
+1. **Buttons**: [What one surface offers and another
+   doesn't](issues.md#what-one-surface-offers-and-another-doesnt), in issues.md, and
+   [Buttons](#buttons), below.
+2. **Gmail links that open the message**: see issues.md's [Bugs](issues.md#bugs).
+3. **Read the address book where it lives**: see [Contacts](#contacts), below.
+4. **HTML escaped by construction**: see [The page](#the-page), below.
 
 ## Slack as a source of work
 
@@ -93,7 +95,7 @@ Sending, off by default:
 
 ## Buttons
 
-What the page tells me to do should come with a button where the dashboard can do it.
+New buttons, for what only the terminal or GitHub can do now.
 
 - **Account on the settings page.** A Sign out everywhere button (`mfd logout`), and where
   each plugin's token is found (`mfd token check`). Setting or rotating a token stays in

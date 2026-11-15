@@ -7,7 +7,7 @@ draws how the plugins use each other's entities, `docs/plugin_contract.md` lists
 every class variable, hook and request of `Plugin`, and `docs/writing-a-plugin.md`
 walks through making one; `docs/review.md` says how PRs and the whole code
 are reviewed; `docs/roadmap.md` is what's left to build, and `docs/issues.md` what's wrong
-with what's built (bugs, and gaps against the rules below).
+with what's built (bugs, gaps against the rules below, and what's untried where it runs).
 
 ## Shape of the code
 
