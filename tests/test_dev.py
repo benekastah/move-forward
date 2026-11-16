@@ -1,8 +1,9 @@
-"""dev.py: which Python it needs, and which pushes its pre-push hook checks."""
+"""dev.py: which Python it needs, which pushes its pre-push hook checks, and CI's time limits."""
 
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -135,7 +136,7 @@ def test_a_command_run_within_a_limit_fails_only_over_it(
     ran: list[str] = []
     monkeypatch.setattr(dev, "static", lambda: ran.append("static"))
     clock = iter([100.0, 100.0 + took])
-    monkeypatch.setattr(dev.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(dev, "time", SimpleNamespace(monotonic=lambda: next(clock)))
     if passes:
         dev.main(["within", "15", "static"])
     else:
