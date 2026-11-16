@@ -196,25 +196,24 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
   A plugin's tests go in `tests/plugins/`, named after it (`test_github_*.py`),
   as do tests of plugins working together (`test_actions.py`); core's stay in
   `tests/`.
-  Panel tests build the page as core does (`conftest.dashboard(...)`) and
-  assert on panel contents; plugin contract tests assert on the entities a
-  plugin publishes. Tests touching git make real repos in `tmp_path`; tests
-  never touch the network, nor the real database or its token
-  (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor
-  the secret store, nor run a program but git (not `git stack`, which can start `gh`).
-  Files are made private only in a test marked `private_files`, which may run icacls on
-  Windows; in an unmarked test, on every system, `conftest` skips it. `conftest`'s `outside` fixture fails a test that tries,
-  naming what it tried, even when the code under test catches the refusal: stub it
-  where the test isn't about it (the plugin's client, `keychain.read`), not by opting
-  out. A test that tries on purpose (a test of the guard) takes what was refused with
-  `outside.take()`; one that truly needs a program lets it run with `outside.allow(...)`
-  (`sys.executable`, to run `mfd`; `conftest.GIT_STACK`, for `git stack`). A child
-  process isn't guarded: git runs with `GIT_ALLOW_PROTOCOL=file`, so its own transports
-  can't fetch from the network, and with conftest's `TESTS_GIT_CONFIG` in place of mine
-  and the system's (an identity, no signing, no background maintenance, none of my ignore
-  or attributes files), but what it runs (hooks, credential helpers, `git stack`) and a
-  program a test allows can do anything, so give them a config and repos that reach
-  nothing. The one exception is
+  Panel tests build the page as core does (`conftest.dashboard(...)`) and assert on panel
+  contents; plugin contract tests assert on the entities a plugin publishes. Tests touching
+  git make real repos in `tmp_path`; tests never touch the network, nor the real database or
+  its token (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor the
+  secret store, nor run a program but git (not `git stack`, which can start `gh`). Files are
+  made private only in a test marked `private_files`, which may run icacls on Windows; in an
+  unmarked test, on every system, `conftest` skips it. `conftest`'s `outside` fixture fails
+  a test that tries, naming what it tried, even when the code under test catches the
+  refusal: stub it where the test isn't about it (the plugin's client, `keychain.read`), not
+  by opting out. A test that tries on purpose (a test of the guard) takes what was refused
+  with `outside.take()`; one that truly needs a program lets it run with
+  `outside.allow(...)` (`sys.executable`, to run `mfd`; `conftest.GIT_STACK`, for
+  `git stack`). A child process isn't guarded: git runs with `GIT_ALLOW_PROTOCOL=file`, so
+  its own transports can't fetch from the network, and with conftest's `TESTS_GIT_CONFIG` in
+  place of mine and the system's (an identity, no signing, no background maintenance, none
+  of my ignore or attributes files), but what it runs (hooks, credential helpers,
+  `git stack`) and a program a test allows can do anything, so give them a config and repos
+  that reach nothing. The one exception is
   `test_the_real_credential_manager_keeps_a_secret`, the only check that `keychain.py`'s
   ctypes binding agrees with Windows: it runs only where `MFD_REAL_SECRET_STORE=1`, which
   only Windows CI sets, as that runner's store is thrown away after the job.
