@@ -47,6 +47,8 @@ def _modules(file: Path, node: ast.ImportFrom | ast.Import) -> list[list[str]]:
             return []
         base = module.split(".")[1:]
     else:
+        # Ruff bans relative imports (TID252), but this still resolves them, so the plugin
+        # import ban holds even if that rule is ever relaxed.
         package = file.parent.relative_to(PACKAGE).parts  # e.g. ("plugins", "git")
         up = node.level - 1  # `.` is the file's own package, `...` two packages up
         if up > len(package):
