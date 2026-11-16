@@ -126,3 +126,21 @@ def test_the_python_a_venv_was_made_with_is_read_from_pyvenv_cfg(
     cfg: str, made_with: tuple[int, int] | None
 ) -> None:
     assert dev.venv_python(cfg) == made_with
+
+
+@pytest.mark.parametrize(("took", "passes"), [(15.0, True), (15.5, False)])
+def test_a_command_run_within_a_limit_fails_only_over_it(
+    took: float, passes: bool, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ran: list[str] = []
+    monkeypatch.setattr(dev, "static", lambda: ran.append("static"))
+    clock = iter([100.0, 100.0 + took])
+    monkeypatch.setattr(dev.time, "monotonic", lambda: next(clock))
+    if passes:
+        dev.main(["within", "15", "static"])
+    else:
+        with pytest.raises(SystemExit) as exited:
+            dev.main(["within", "15", "static"])
+        assert exited.value.code == 1
+        assert "::error::" in capsys.readouterr().out
+    assert ran == ["static"]

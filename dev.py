@@ -8,6 +8,7 @@
     python dev.py install            # venv, `mfd` on PATH, the git hooks, then `mfd init`
     python dev.py pre-commit         # what the pre-commit hook runs
     python dev.py pre-push           # what the pre-push hook runs
+    python dev.py within SECONDS COMMAND...  # COMMAND, failing if it takes longer (CI's limits)
 
 On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
 Standard library only: it runs before .venv exists. It runs under any Python from 3.11 (the
@@ -21,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from pathlib import Path
 
@@ -280,6 +282,21 @@ def pre_push() -> None:
         check(["-q"])
 
 
+def within(seconds: int, argv: list[str]) -> None:
+    """Run a command of this script, then fail if it took longer than `seconds`: CI's time
+    limits, in check.yml (see AGENTS.md)."""
+    start = time.monotonic()
+    main(argv)
+    took = time.monotonic() - start
+    print(f"dev: took {took:.1f}s, of {seconds}s")
+    if took > seconds:
+        print(
+            f"::error::took {took:.1f}s, over the {seconds}s allowed: speed it up, or raise the"
+            " limit in check.yml, saying why (see AGENTS.md)"
+        )
+        sys.exit(1)
+
+
 def main(argv: list[str]) -> None:
     command, *rest = argv or ["help"]
     if command == "venv":
@@ -298,6 +315,8 @@ def main(argv: list[str]) -> None:
         pre_commit()
     elif command == "pre-push":
         pre_push()
+    elif command == "within" and len(rest) >= 2 and rest[0].isdigit():
+        within(int(rest[0]), rest[1:])
     else:
         sys.exit(__doc__)
 

@@ -62,29 +62,17 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
-          enable-cache: false
+          enable-cache: false  # uv installs in seconds; saving its cache takes as long
           python-version: "3.14"
       # Through uv: the runner's own `python` may be older than the one uv provides, and
       # dev.py stops under a Python older than the package needs.
       - run: uv run --no-project python dev.py venv
-      - name: Static checks, within their time
-        shell: bash
-        env:
-          LIMIT: 15
-        run: |
-          start=$SECONDS
-          uv run --no-project python dev.py static
-          took=$((SECONDS - start))
-          echo "took ${took}s, of ${LIMIT}s"
-          if [ "$took" -gt "$LIMIT" ]; then
-            echo "::error::took ${took}s, over the ${LIMIT}s it's allowed: speed the tests up, or raise the limit, saying why (see AGENTS.md)"
-            exit 1
-          fi
+      - run: uv run --no-project python dev.py within 15 static
 
-  # The tests, on every system, in parallel on each. Each system's limit (`seconds`, and the
-  # static checks' `LIMIT`) is about 20% over its slowest run of late, after installing. A run
-  # over it means speeding the tests up, or, where that can't be done, raising the limit, saying
-  # why (see AGENTS.md).
+  # The tests, on every system, in parallel on each. Each system's limit (`seconds`, like the
+  # static checks' in their step) is about 20% over its slowest run of late, after installing. A
+  # run over it means speeding the tests up, or, where that can't be done, raising the limit,
+  # saying why (see AGENTS.md).
   tests:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -106,25 +94,14 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
-          enable-cache: false
+          enable-cache: false  # uv installs in seconds; saving its cache takes as long
           python-version: "3.14"
       - run: uv run --no-project python dev.py venv
       # On Windows, the one test of the real Credential Manager runs too: the runner's store
       # is thrown away after the job (see AGENTS.md).
-      - name: Tests, within their time
-        shell: bash
+      - run: uv run --no-project python dev.py within ${{ matrix.seconds }} tests
         env:
-          LIMIT: ${{ matrix.seconds }}
           MFD_REAL_SECRET_STORE: ${{ matrix.os == 'windows-latest' && '1' || '' }}
-        run: |
-          start=$SECONDS
-          uv run --no-project python dev.py tests
-          took=$((SECONDS - start))
-          echo "took ${took}s, of ${LIMIT}s"
-          if [ "$took" -gt "$LIMIT" ]; then
-            echo "::error::took ${took}s, over the ${LIMIT}s it's allowed: speed the tests up, or raise the limit, saying why (see AGENTS.md)"
-            exit 1
-          fi
 
   # The one check the ruleset on main requires, so changing the jobs doesn't change what's
   # required. It runs even if a check failed (a skipped required check would count as
