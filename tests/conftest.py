@@ -442,7 +442,9 @@ def private_files(
 ) -> None:
     """Files are made private, and checked, only in a test marked `private_files`, which may run
     icacls for it on Windows. Elsewhere it's skipped: on Windows each file takes icacls a process
-    or two, which would be half the programs the tests start there."""
+    or two, which would be half the programs the tests start there. An unmarked test that calls
+    `private`'s functions itself is caught only on Windows, by the guard: on Unix they're only
+    file modes, which no program is started for."""
     if request.node.get_closest_marker("private_files"):
         outside.allow("icacls")
         return
