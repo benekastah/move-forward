@@ -5,26 +5,32 @@
     python dev.py static             # format, lint and types: the same on every system
     python dev.py tests [ARGS...]    # the tests, in parallel (ARGS go to pytest)
     python dev.py coverage [ARGS...] # the tests under coverage.py, and what they don't run
-    python dev.py install            # venv, `mfd` on PATH, the git hooks, then `mfd init`
+    python dev.py install            # venv, the package's commands on PATH, the git hooks
     python dev.py pre-commit         # what the pre-commit hook runs
     python dev.py pre-push           # what the pre-push hook runs
-    python dev.py within SECONDS COMMAND...  # COMMAND, failing if it takes longer (CI's limits)
 
 On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
+
+It comes from python-template, and `copier update` replaces it: a project adds to it in
+dev_project.py, its own file, if it has one. That can define `COMMANDS`, a dict of extra
+commands (a name to a function taking the command's arguments, a list of strings), and
+`after_install()`, which `install` runs last. It's held to the same rules as this file.
 Standard library only: it runs before .venv exists. It runs under any Python from 3.11 (the
 first with tomllib; ruff checks it as 3.11), whatever the package needs, so the hooks work
 whichever `python3` comes first: everything but making .venv with venv and pip runs .venv's
 tools, and uv picks its own Python.
 """
 
+import importlib
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 
 ROOT = Path(__file__).resolve().parent
 VENV = ROOT / ".venv"
@@ -36,10 +42,15 @@ STAMP = VENV / "installed"
 
 def required_python(pyproject: str) -> tuple[int, int]:
     """The oldest Python the package runs on, from pyproject.toml's `requires-python`
-    (`>=3.14`)."""
+    (`>=3.11`)."""
     spec: str = tomllib.loads(pyproject)["project"]["requires-python"]
     major, minor = spec.removeprefix(">=").strip().split(".")[:2]
     return int(major), int(minor)
+
+
+def scripts(pyproject: str) -> list[str]:
+    """The commands the package installs, from pyproject.toml's `[project.scripts]`."""
+    return list(tomllib.loads(pyproject)["project"].get("scripts", {}))
 
 
 def venv_python(pyvenv_cfg: str) -> tuple[int, int] | None:
@@ -66,8 +77,15 @@ def too_old(running: tuple[int, int], required: tuple[int, int]) -> str | None:
     )
 
 
-def _required() -> tuple[int, int]:
-    return required_python((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+def _project() -> ModuleType | None:
+    """dev_project.py, the project's own additions to this script, or None if it has none."""
+    if not (ROOT / "dev_project.py").exists():
+        return None
+    return importlib.import_module("dev_project")
+
+
+def _pyproject_text() -> str:
+    return (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
 
 def _running() -> tuple[int, int]:
@@ -87,20 +105,23 @@ def run(*args: str) -> None:
 
 
 def venv() -> None:
-    """Create .venv with the package (editable) and the dev dependencies from
-    pyproject.toml, or bring it up to date: they're reinstalled whenever pyproject.toml or
-    uv.lock has changed since they were last installed, so it's quick when there's nothing
-    to do. Uses uv when it's installed, else venv and pip (25.1+ for --group); either makes
-    .venv again when an older Python made it."""
+    """Create .venv with the package (editable) and the dev dependencies, or bring it up to
+    date: they're reinstalled whenever pyproject.toml or uv.lock has changed since they were
+    last installed, so it's quick when there's nothing to do.
+
+    Uses uv when it's installed: from uv.lock, which it updates when pyproject.toml's
+    dependencies change, except in CI (where $CI is set), where an out-of-date uv.lock is an
+    error. Without uv, it uses venv and pip (25.1+ for --group), which don't read uv.lock.
+    Either makes .venv again when an older Python made it."""
     sources = [ROOT / "pyproject.toml", ROOT / "uv.lock"]
     newest = max(path.stat().st_mtime for path in sources if path.exists())
     if STAMP.exists() and STAMP.stat().st_mtime >= newest:
         return
     print("dev: installing the package and dev dependencies into .venv", file=sys.stderr)
     if shutil.which("uv"):
-        run("uv", "sync", "--quiet")
+        run("uv", "sync", "--quiet", *(["--locked"] if os.environ.get("CI") else []))
     else:
-        required = _required()
+        required = required_python(_pyproject_text())
         cfg = VENV / "pyvenv.cfg"
         made_with = venv_python(cfg.read_text(encoding="utf-8")) if cfg.exists() else None
         if made_with is None or made_with < required:
@@ -136,16 +157,18 @@ def static() -> None:
 
 
 def tests(pytest_args: list[str]) -> None:
-    """The tests, spread over the machine's cores (pytest-xdist)."""
+    """The tests, spread over the machine's cores (pytest-xdist, through pyproject.toml's
+    `addopts`)."""
     venv()
-    run(tool("python"), "-m", "pytest", "--numprocesses", "auto", *pytest_args)
+    run(tool("python"), "-m", "pytest", *pytest_args)
 
 
 def coverage(pytest_args: list[str]) -> None:
-    """The tests under coverage.py, then each file's lines and branches they didn't run
-    (see `[tool.coverage]` in pyproject.toml); htmlcov/index.html shows them in the source."""
+    """The tests under coverage.py, in one process, then each file's lines and branches they
+    didn't run (see `[tool.coverage]` in pyproject.toml); htmlcov/index.html shows them in the
+    source."""
     venv()
-    run(tool("coverage"), "run", "-m", "pytest", "-q", *pytest_args)
+    run(tool("coverage"), "run", "-m", "pytest", "-q", "--numprocesses", "0", *pytest_args)
     run(tool("coverage"), "report")
     run(tool("coverage"), "html", "--quiet")
     print("line by line: htmlcov/index.html")
@@ -156,41 +179,38 @@ def _bin_dir() -> Path:
 
 
 def install() -> None:
-    """Set up this clone for development and use: .venv, the `mfd` command on PATH (a link
-    in ~/.local/bin, or on Windows a `mfd.cmd` there), and this repository's hooks. Safe to
-    rerun, e.g. after pyproject.toml changes."""
+    """Set up this clone for development and use: .venv, each of the package's commands on
+    PATH (a link in ~/.local/bin, or on Windows a `.cmd` there), and this repository's
+    hooks. Safe to rerun, e.g. after pyproject.toml changes."""
     venv()
     print(f"set up {VENV}")
     bin_dir = _bin_dir()
     bin_dir.mkdir(parents=True, exist_ok=True)
-    if WINDOWS:
-        shim = bin_dir / "mfd.cmd"
-        shim.write_text(f'@"{tool("mfd")}" %*\r\n', encoding="utf-8")
-        print(f"wrote {shim}")
-    else:
-        link = bin_dir / "mfd"
-        if link.exists() and not link.is_symlink():
-            sys.exit(f"install: {link} exists and isn't a link; move it out of the way and rerun")
-        link.unlink(missing_ok=True)
-        link.symlink_to(tool("mfd"))
-        print(f"linked {link} -> {tool('mfd')}")
+    for name in scripts(_pyproject_text()):
+        if WINDOWS:
+            shim = bin_dir / f"{name}.cmd"
+            shim.write_text(f'@"{tool(name)}" %*\r\n', encoding="utf-8")
+            print(f"wrote {shim}")
+        else:
+            link = bin_dir / name
+            if link.exists() and not link.is_symlink():
+                sys.exit(
+                    f"install: {link} exists and isn't a link; move it out of the way and rerun"
+                )
+            link.unlink(missing_ok=True)
+            link.symlink_to(tool(name))
+            print(f"linked {link} -> {tool(name)}")
     run("git", "config", "core.hooksPath", "git_hooks")
     print("set this repository's hooks to git_hooks/")
+    after_install = getattr(_project(), "after_install", None)
+    if after_install is not None:
+        after_install()
     if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
-        if sys.platform == "win32":
+        if WINDOWS:
             _add_to_user_path(bin_dir)
-            print(f"added {bin_dir} to your PATH; open a new terminal for `mfd`")
+            print(f"added {bin_dir} to your PATH; open a new terminal to use it")
         else:
             print(f"warning: {bin_dir} isn't on your PATH; add it", file=sys.stderr)
-    base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    config = Path(base) / "move-forward" / "config.toml"
-    if config.exists():
-        print(f"config: {config}")
-    elif sys.stdin.isatty():
-        print(f"\nNo config yet; let's write {config}.")
-        run(tool("mfd"), "init")
-    else:
-        print(f"no config at {config}; run `mfd init` to write one")
 
 
 def _add_to_user_path(folder: Path) -> None:
@@ -282,21 +302,6 @@ def pre_push() -> None:
         check(["-q"])
 
 
-def within(seconds: int, argv: list[str]) -> None:
-    """Run a command of this script, then fail if it took longer than `seconds`: CI's time
-    limits, in check.yml (see AGENTS.md)."""
-    start = time.monotonic()
-    main(argv)
-    took = time.monotonic() - start
-    print(f"dev: took {took:.1f}s, of {seconds}s")
-    if took > seconds:
-        print(
-            f"::error::took {took:.1f}s, over the {seconds}s allowed: speed it up, or raise the"
-            " limit in check.yml, saying why (see AGENTS.md)"
-        )
-        sys.exit(1)
-
-
 def main(argv: list[str]) -> None:
     command, *rest = argv or ["help"]
     if command == "venv":
@@ -315,10 +320,11 @@ def main(argv: list[str]) -> None:
         pre_commit()
     elif command == "pre-push":
         pre_push()
-    elif command == "within" and len(rest) >= 2 and rest[0].isdigit():
-        within(int(rest[0]), rest[1:])
     else:
-        sys.exit(__doc__)
+        commands: dict[str, Callable[[list[str]], None]] = getattr(_project(), "COMMANDS", {})
+        if command not in commands:
+            sys.exit((__doc__ or "") + "".join(f"    python dev.py {name}\n" for name in commands))
+        commands[command](rest)
 
 
 if __name__ == "__main__":
