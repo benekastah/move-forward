@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 *.db
 .coverage
+.coverage.*
 htmlcov/
 build/
 dist/

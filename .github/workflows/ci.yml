@@ -1,0 +1,243 @@
+# Runs the static checks (formatting, lint, types) once, the tests on Linux, macOS and Windows
+# with the oldest and newest Python supported, a coverage report once, and the project's own
+# jobs (project.yml): once per pull request (on the merge GitHub would make), and on whatever
+# lands on main.
+#
+# This file is the template's: `copier update` keeps it current, and merges its changes with
+# any made here. Put the project's own jobs in project.yml instead, which is the project's.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push cancels the branch's run still going, which no longer says anything about the
+# branch and holds runners the new one needs (an account runs only so many jobs at once). On
+# main too: merging a stack pushes several commits at once, and only the newest one's run
+# matters when a ruleset requires "CI passed" before merging (setup-github-repo sets one).
+# A re-run cancels no running run, so re-running an older commit's run waits for the newest's
+# (though, like any queued run, it replaces another one waiting in the group). Here, not in a
+# job: project.yml's jobs are part of this run, so they're cancelled with it.
+#
+# A pull request's group is its number, the group cancel.yml's run joins when the pull request
+# merges or closes, to cancel this run: keep the two names the same.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.run_attempt == 1 }}
+
+# Each job's time limit (timeout-minutes) is about 20% over how long it takes, and at most 5
+# minutes, so a hung job fails soon and no job keeps a run waiting long. If a job runs into it,
+# speed it up, or split it (see AGENTS.md); raise the limit only while it stays within 5.
+jobs:
+  # Whether anything but docs changed. A pull request touching only Markdown skips the checks
+  # (CI passed still reports); main always runs them. docs/entities.md counts as code: a test
+  # checks it against the plugins' models.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2  # the merge GitHub would make, and its first parent: the base
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -eu
+          if [ "$EVENT" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Its own line, so a failing diff fails the step rather than reading as no code.
+          files=$(git diff --name-only --no-renames HEAD^1 HEAD)
+          if printf '%s\n' "$files" | grep -vE '\.md$' | grep -q . \
+            || printf '%s\n' "$files" | grep -qx 'docs/entities.md'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Formatting, lint and types are the same on every system: once, on Linux.
+  static:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1  # it takes 20-27s
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          # The oldest Python supported, which basedpyright checks for too.
+          python-version: "3.14"
+      # Through uv: the runner's own `python` may be older than the one uv provides, and
+      # dev.py stops under a Python older than the package needs. dev.py installs from
+      # uv.lock, and in CI fails if it's out of date.
+      - run: uv run --no-project python dev.py static
+
+  # The tests, on every system, with the oldest and newest Python, each split into as many jobs
+  # (shards) as the project's Copier answers say for that system: test_shards_linux,
+  # test_shards_macos and test_shards_windows (see AGENTS.md).
+  tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # They take 25-35s on Linux and macOS, and 85-100s on Windows.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 2 || 1 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, python: "3.14", shard: 1, shards: 1}
+          - {os: macos-latest, python: "3.14", shard: 1, shards: 1}
+          - {os: windows-latest, python: "3.14", shard: 1, shards: 1}
+    # "windows-latest, Python 3.11", and " (2/3)" after it for the second of three shards.
+    name: >-
+      ${{ matrix.os }}, Python ${{ matrix.python }}${{ matrix.shards > 1 &&
+      format(' ({0}/{1})', matrix.shard, matrix.shards) || '' }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: ${{ matrix.python }}
+      # On Windows, the one test of the real Credential Manager runs too: the runner's store
+      # is thrown away after the job (see PROJECT_AGENTS.md).
+      - run: uv run --no-project python dev.py tests --shard ${{ matrix.shard }}/${{ matrix.shards }}
+        env:
+          MFD_REAL_SECRET_STORE: ${{ matrix.os == 'windows-latest' && '1' || '' }}
+
+  # What the tests run, once, on Linux with the newest Python: each file's lines and branches
+  # they don't, in the job's summary. A report rather than a check until pyproject.toml's
+  # [tool.coverage.report] sets fail_under, below which this job, and so CI, fails. In parallel
+  # like the tests job, so it takes about as long. Were that ever over the limit, it could be
+  # sharded too: `coverage run -m pytest -p dev --shard I/N` in each job, each uploading its
+  # .coverage.* files, then one job to `coverage combine` them and report.
+  coverage:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          python-version: "3.14"
+      - run: uv run --no-project python dev.py coverage
+      # Also when the tests failed or fell short of fail_under, unless there's nothing to report;
+      # the step above already failed for a shortfall, so this one doesn't again.
+      - name: Put the coverage report in the job's summary
+        if: ${{ !cancelled() && hashFiles('.coverage') != '' }}
+        run: .venv/bin/coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"
+
+  # The project's own jobs, in project.yml, from this same commit. It runs even when docs alone
+  # changed, and is told so in `code`, so a job there can check docs too. All in one JSON
+  # input, whose keys project.yml lists: a key can be added without breaking a project, where
+  # an input project.yml doesn't declare would be an error.
+  project:
+    needs: changes
+    uses: ./.github/workflows/project.yml
+    # Without permissions here, a called workflow gets the repository's default ones. This is
+    # the most project.yml's jobs can have: a called workflow can only lower it.
+    permissions:
+      contents: read
+    secrets: inherit  # project.yml is this repository's own code, like this file
+    with:
+      context: >-
+        {"code": ${{ needs.changes.outputs.code == 'true' }},
+        "min_python": "3.14", "newest_python": "3.14"}
+
+  # The one check a ruleset on main should require, so changing the jobs doesn't change what's
+  # required. It runs even if a check failed (a skipped required check would count as
+  # passing), and fails unless project.yml's jobs passed and, unless docs alone changed, so
+  # did every other check.
+  passed:
+    name: CI passed
+    if: always()
+    needs: [changes, static, tests, coverage, project]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2  # time for the force-cancel step's minute, below
+    permissions:
+      actions: write  # force-cancel, below
+      checks: read  # the cancelled jobs' annotations, below
+      pull-requests: read  # whether a fork's pull request merged into the default branch
+    steps:
+      # A cancelled run still runs this job, because of always(). Cancelling it too, which only
+      # force-cancel can, marks it cancelled rather than failed, which blocks a merge just the
+      # same. If the run was cancelled before this job started, cancelled() is false here, but
+      # a job's result is cancelled, so either one runs this step. A job that ran out of time,
+      # or that GitHub never found a runner for, is cancelled too, but that's a failure, which
+      # GitHub says only in the job's annotations: then this job fails. (Matching those two
+      # rather than the supersede message: a job cancelled before it started may have none.)
+      # A run in which a job failed isn't cancelled here either: it ends red, since the commit
+      # really failed. If the force-cancel hasn't stopped this job within a minute, it fails.
+      #
+      # A fork's pull request has a read-only token, which can't force-cancel. There, this job
+      # passes if the pull request merged into the default branch (cancel.yml cancelled this
+      # run, and a merged pull request can't be reopened), so it isn't left red, and fails at
+      # once otherwise: merely closed, or merged elsewhere, its head could reach main in another
+      # pull request with this green check on code no run finished checking. The one gap left:
+      # the same head opened against another protected branch. Not head.repo.fork: that's also
+      # true of a branch in a repository that's itself a fork.
+      - name: Cancel this job if the run was cancelled
+        id: cancel
+        if: >-
+          (cancelled() || contains(needs.*.result, 'cancelled')) &&
+          !contains(needs.*.result, 'failure')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORK: >-
+            ${{ github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name != github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          run="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          jobs=$(gh api --paginate "$run/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
+            --jq '.jobs[] | select(.conclusion == "cancelled") | .id')
+          for job in $jobs; do
+            messages=$(gh api --paginate "repos/$GITHUB_REPOSITORY/check-runs/$job/annotations" \
+              --jq '.[].message')
+            if grep -q -e 'exceeded the maximum execution time' -e 'was not acquired by Runner' \
+              <<<"$messages"; then
+              echo "A job ran out of time, or never got a runner."
+              exit 1
+            fi
+          done
+          if [ "$FORK" = true ]; then
+            test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" \
+              --jq '.merged and .base.ref == .base.repo.default_branch')" = true
+            exit 0
+          fi
+          gh api --method POST "$run/force-cancel"
+          sleep 60
+          exit 1
+      # project.yml's result is skipped when each of its jobs skipped itself (on a docs-only
+      # change, say); once changes succeeded, nothing else skips it. always(): without it, this
+      # step doesn't run in a cancelled run, so one in which a job failed would end green.
+      # Skipped only when the step above passed, which only a fork's pull request merged into
+      # the default branch does.
+      - name: Fail unless every check passed
+        if: always() && steps.cancel.outcome != 'success'
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          STATIC: ${{ needs.static.result }}
+          TESTS: ${{ needs.tests.result }}
+          COVERAGE: ${{ needs.coverage.result }}
+          PROJECT: ${{ needs.project.result }}
+        run: |
+          [ "$CHANGES" = success ] || exit 1
+          [ "$PROJECT" = success ] || [ "$PROJECT" = skipped ] || exit 1
+          [ "$CODE" = false ] && exit 0
+          [ "$STATIC" = success ] && [ "$TESTS" = success ] && [ "$COVERAGE" = success ]

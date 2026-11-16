@@ -120,6 +120,12 @@ reportMissingModuleSource = false
 [tool.coverage.run]
 source = ["move_forward"]
 branch = true
+# Measure each pytest-xdist worker, a process of its own, in a data file of its own, which
+# `dev.py coverage` combines.
+parallel = true
+patch = ["subprocess"]
+# pytest-xdist's main process runs no tests, so it measures nothing: not worth a warning.
+disable_warnings = ["module-not-imported", "no-data-collected"]
 
 [tool.coverage.report]
 show_missing = true

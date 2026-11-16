@@ -1,0 +1,35 @@
+# Cancels a pull request's CI run (ci.yml) still going when the pull request merges or closes:
+# its result no longer matters, and main's own run follows a merge straight away. This is the
+# template's, like ci.yml.
+#
+# Its own workflow, not a `closed` type in ci.yml: there, the closed run would leave a skipped
+# "CI passed" on the pull request's head, and a skipped check counts as passing, so reopening
+# the pull request would meet the required check before its new run had checked anything.
+name: cancel
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+# ci.yml's group, by name on purpose: a concurrency group is shared by every workflow in the
+# repository, so this run cancels ci.yml's run in it. By the pull request's number, since a
+# merged pull request's closed event has main's ref, which would cancel main's run instead. No
+# run starts for a pull request with conflicts, so closing one leaves its run going; and runs
+# in a group aren't certain to start in order, so closing and reopening quickly can cancel
+# the reopened run: re-run it.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # A workflow needs a job. This one never runs, so it takes no runner: only the run's place in
+  # the group matters. (Its condition is never true here; actionlint rejects a constant one.)
+  cancel:
+    name: Join CI's group to cancel its run (never runs)
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: "true"

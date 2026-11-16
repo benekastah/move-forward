@@ -1,11 +1,11 @@
 """dev.py: which Python it needs and which pushes its pre-push hook checks; and dev_project.py,
-what move-forward adds to it: `install` writing the config, and CI's time limits."""
+what move-forward adds to it: `install` writing the config."""
 
 import importlib
 import importlib.util
 import sys
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import ModuleType
 
 import pytest
 
@@ -219,35 +219,3 @@ def test_install_leaves_a_config_alone_and_asks_nothing_outside_a_terminal(
 
     assert calls == []
     assert str(tmp_path / "move-forward" / "config.toml") in capsys.readouterr().out
-
-
-@pytest.mark.parametrize(("took", "passes"), [(15.0, True), (15.5, False)])
-def test_a_command_run_within_a_limit_fails_only_over_it(
-    took: float, passes: bool, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Through dev.py, as CI runs it: dev_project.py's `within` times one of dev.py's commands."""
-    project = dev_project(monkeypatch)
-    ran: list[str] = []
-    monkeypatch.setattr(dev, "static", lambda: ran.append("static"))
-    clock = iter([100.0, 100.0 + took])
-    monkeypatch.setattr(project, "time", SimpleNamespace(monotonic=lambda: next(clock)))
-    if passes:
-        dev.main(["within", "15", "static"])
-    else:
-        with pytest.raises(SystemExit) as exited:
-            dev.main(["within", "15", "static"])
-        assert exited.value.code == 1
-        assert "::error::" in capsys.readouterr().out
-    assert ran == ["static"]
-
-
-@pytest.mark.parametrize("args", [[], ["15"], ["soon", "static"]])
-def test_within_without_a_limit_and_a_command_says_how_to_run_it(
-    args: list[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    dev_project(monkeypatch)
-
-    with pytest.raises(SystemExit) as exited:
-        dev.main(["within", *args])
-
-    assert "usage: python dev.py within SECONDS COMMAND" in str(exited.value.code)
