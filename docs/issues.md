@@ -2,7 +2,8 @@
 
 What's wrong with what's built: bugs, gaps against the rules in `AGENTS.md`, and what hasn't been
 tried where it runs. New work is in [roadmap.md](roadmap.md). When a change fixes one, remove it
-in the same change.
+in the same change, with any roadmap step that points at it; when a change leaves something
+wrong, add it.
 
 ## Bugs
 
@@ -44,8 +45,8 @@ needs. Each stands alone; a plugin fix that needs a core one says so, and lands 
   has neither Snooze nor Unsnooze. A snooze is kept by its subject's kind and id and its
   task, so snoozing the nudge sets aside only the nudge: give github's item a task, and
   decide whether snoozing it sets aside the nudge too.
-- **Importance where it means something.** Say whether every panel sorts by it, since only two
-  do now, not What next or Feedback.
+- **Importance where it means something.** Say whether every panel sorts by it: Ready for me
+  to review, Fix before review and Mail do, What next and Feedback to address don't.
 - **Restack on a conflict.** Stacks' `needs-restack` items have Restack; github's merge
   conflicts that say restacking fixes them don't yet. It stays local: `sync` and `push`
   force-push (with lease), which the rule against force-pushing from a button forbids unless
