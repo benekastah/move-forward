@@ -458,7 +458,7 @@ python3 dev.py coverage  # the tests under coverage.py: what they miss, and html
 
 On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points the repo at
 `git_hooks/`: `pre-commit` formats and lint-fixes staged Python, `pre-push` runs
-`dev.py check` on a push to `main`, as a branch has CI. GitHub Actions
+`dev.py static` on every push (the tests are CI's). GitHub Actions
 (`.github/workflows/ci.yml`) runs `dev.py static` once, on Linux, `dev.py tests` on Linux, macOS
 and Windows, and `dev.py coverage` on Linux, for each pull request and push to `main`, each job
 within a time limit about 20% over how long it takes; a pull request that changes only Markdown

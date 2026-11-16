@@ -1,5 +1,5 @@
-"""dev.py: which Python it needs and which pushes its pre-push hook checks; and dev_project.py,
-what move-forward adds to it: `install` writing the config."""
+"""dev.py: which Python it needs; and dev_project.py, what move-forward adds to it: `install`
+writing the config."""
 
 import importlib
 import importlib.util
@@ -14,28 +14,6 @@ SPEC = importlib.util.spec_from_file_location("dev", ROOT / "dev.py")
 assert SPEC is not None and SPEC.loader is not None
 dev = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(dev)
-
-SHA = "a" * 40
-GONE = "0" * 40
-
-
-@pytest.mark.parametrize(
-    ("refs", "checked"),
-    [
-        (f"refs/heads/main {SHA} refs/heads/main {GONE}\n", True),
-        (f"refs/heads/x {SHA} refs/heads/main {GONE}\n", True),
-        (f"refs/heads/x {SHA} refs/heads/x {GONE}\n", False),
-        (
-            f"refs/heads/x {SHA} refs/heads/x {GONE}\nrefs/heads/main {SHA} refs/heads/main {SHA}\n",
-            True,
-        ),
-        (f"(delete) {GONE} refs/heads/main {SHA}\n", False),
-        (f"(delete) {GONE} refs/heads/x {SHA}\n", False),
-        ("", False),
-    ],
-)
-def test_only_a_push_bringing_commits_to_main_is_checked(refs: str, checked: bool) -> None:
-    assert dev.pushes_to_main(refs) is checked
 
 
 def test_the_python_needed_is_read_from_requires_python() -> None:

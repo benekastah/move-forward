@@ -8,7 +8,6 @@
     python dev.py coverage [ARGS...] # the tests under coverage.py, and what they don't run
     python dev.py install            # venv, the package's commands on PATH, the git hooks
     python dev.py pre-commit         # what the pre-commit hook runs
-    python dev.py pre-push           # what the pre-push hook runs
 
 On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
 
@@ -343,20 +342,6 @@ def pre_commit() -> None:
             run(tool("ruff"), "format", "--quiet", "--", path)
 
 
-def pushes_to_main(refs: str) -> bool:
-    """Whether a push brings commits to `main`. git passes each ref being pushed on stdin as
-    "<local ref> <local sha> <remote ref> <remote sha>"; a deletion's local sha is all zeros."""
-    pushed = [line.split() for line in refs.splitlines() if line.split()]
-    return any(sha.strip("0") and remote == "refs/heads/main" for _, sha, remote, _ in pushed)
-
-
-def pre_push() -> None:
-    """Run every check before pushing to `main`, which nothing else stands in front of. A
-    branch has CI, on every system. Skip it with `git push --no-verify`."""
-    if pushes_to_main(sys.stdin.read()):
-        check(["-q"])
-
-
 def main(argv: list[str]) -> None:
     command, *rest = argv or ["help"]
     if command == "venv":
@@ -373,8 +358,6 @@ def main(argv: list[str]) -> None:
         install()
     elif command == "pre-commit":
         pre_commit()
-    elif command == "pre-push":
-        pre_push()
     else:
         commands: dict[str, Callable[[list[str]], None]] = getattr(_project(), "COMMANDS", {})
         if command not in commands:
