@@ -53,9 +53,6 @@ class _Server:
 def _repo(path: Path) -> Path:
     path.mkdir()
     git(path, "init", "-q", "-b", "main")
-    git(path, "config", "user.email", "me@example.com")
-    git(path, "config", "user.name", "Me")
-    git(path, "config", "commit.gpgsign", "false")
     git(path, "commit", "-q", "--allow-empty", "-m", "first")
     return path
 

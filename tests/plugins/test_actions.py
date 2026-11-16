@@ -1,8 +1,18 @@
+import shutil
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from conftest import entry, iced, issue, keep_notes, know_jira_projects, section, todo
+from conftest import (
+    entry,
+    git_environment,
+    iced,
+    issue,
+    keep_notes,
+    know_jira_projects,
+    section,
+    todo,
+)
 
 from move_forward import refresh
 from move_forward.config import Config
@@ -30,24 +40,12 @@ from move_forward.shell import CommandError, git
 def _init(path: Path, bare: bool = False) -> None:
     path.mkdir()
     git(path, "init", "-q", "-b", "main", *(["--bare"] if bare else []))
-    if not bare:
-        for key, value in (
-            ("user.email", "me@x"),
-            ("user.name", "Me"),
-            ("commit.gpgsign", "false"),
-        ):
-            git(path, "config", key, value)
 
 
 def _clone(origin: Path, path: Path, branch: str) -> Path:
-    """A clone of `origin` on `branch`, with an identity to commit as (CI has none)."""
-    git(path.parent, "clone", "-q", "-b", branch, str(origin), str(path))
-    for key, value in (
-        ("user.email", "other@x"),
-        ("user.name", "Other"),
-        ("commit.gpgsign", "false"),
-    ):
-        git(path, "config", key, value)
+    """A clone of `origin` on `branch`, committing as someone else."""
+    identity = ("-c", "user.email=other@x", "-c", "user.name=Other")
+    git(path.parent, "clone", "-q", "-b", branch, *identity, str(origin), str(path))
     return path
 
 
@@ -57,20 +55,33 @@ def _commit(repo: Path, name: str) -> None:
     git(repo, "commit", "-q", "-m", name)
 
 
+@pytest.fixture(scope="session")
+def repo_template(tmp_path_factory: pytest.TempPathFactory, git_config: Path) -> Path:
+    """`repo` and its origin, made once for the run: each test gets a copy."""
+    root = tmp_path_factory.mktemp("repo")
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        git_environment(monkeypatch, git_config)
+        origin = root / "origin.git"
+        _init(origin, bare=True)
+        repo = root / "repo"
+        _init(repo)
+        _commit(repo, "a.txt")
+        git(repo, "remote", "add", "origin", str(origin))
+        git(repo, "push", "-q", "-u", "origin", "main")
+        git(repo, "branch", "done")
+        git(repo, "switch", "-q", "-c", "wip")
+        _commit(repo, "b.txt")
+        git(repo, "switch", "-q", "main")
+    return root
+
+
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def repo(repo_template: Path, tmp_path: Path) -> Path:
     """A clone of a bare origin, on main with one commit, plus branches `done` and `wip`."""
-    origin = tmp_path / "origin.git"
-    _init(origin, bare=True)
+    for name in ("origin.git", "repo"):
+        shutil.copytree(repo_template / name, tmp_path / name, symlinks=True)
     repo = tmp_path / "repo"
-    _init(repo)
-    _commit(repo, "a.txt")
-    git(repo, "remote", "add", "origin", str(origin))
-    git(repo, "push", "-q", "-u", "origin", "main")
-    git(repo, "branch", "done")
-    git(repo, "switch", "-q", "-c", "wip")
-    _commit(repo, "b.txt")
-    git(repo, "switch", "-q", "main")
+    git(repo, "remote", "set-url", "origin", str(tmp_path / "origin.git"))
     return repo
 
 
@@ -306,7 +317,7 @@ def test_wip_commit_refuses_a_checkout_that_isnt_the_repos(
     git(elsewhere, "init", "-q")
     (elsewhere / "f").write_text("x")
     git(elsewhere, "add", "f")
-    git(elsewhere, "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-qm", "init")
+    git(elsewhere, "commit", "-qm", "init")
     (elsewhere / "f").write_text("changed")
     with pytest.raises(ActionError, match="not a worktree of"):
         run("git/wip_commit", config, {"repo": str(repo), "worktree": str(elsewhere)})

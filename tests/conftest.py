@@ -112,9 +112,32 @@ GIT_STACK = "git stack"
 """What a test `allow`s to run `git stack`, which is git, but can start `gh` (its GitHub
 adapter), which neither the guard nor `GIT_ENVIRONMENT` sees."""
 
-GIT_ENVIRONMENT = {"GIT_ALLOW_PROTOCOL": "file", "GIT_TERMINAL_PROMPT": "0"}
-"""Set for every test, so git's own transports fetch only from repos on this machine, and it
-never asks for a password."""
+GIT_ENVIRONMENT = {
+    "GIT_ALLOW_PROTOCOL": "file",
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_CONFIG_NOSYSTEM": "1",
+}
+"""Set for every test, so git's own transports fetch only from repos on this machine, it
+never asks for a password, and it reads no system config (nor, with `TESTS_GIT_CONFIG`,
+mine)."""
+
+TESTS_GIT_CONFIG = """\
+[user]
+\tname = Me
+\temail = me@example.com
+[commit]
+\tgpgsign = false
+[maintenance]
+\tauto = false
+[gc]
+\tauto = 0
+[core]
+\texcludesFile =
+\tattributesFile =
+"""
+"""git's global config in every test, in place of mine: who commits, unsigned. Without
+maintenance: each commit, fetch and push would start another git to do it. Without my global
+ignore and attributes files, which git reads from `~/.config/git` unless told otherwise."""
 
 REAL_ADVAPI32 = keychain._advapi32  # pyright: ignore[reportPrivateUsage]
 """Windows' real Credential Manager, which `outside` replaces: for the one test of it, which
@@ -245,8 +268,24 @@ def _called(name: str, args: tuple[object, ...]) -> str:
     return f"{name}({', '.join(repr(a) for a in args)})"
 
 
+@pytest.fixture(scope="session")
+def git_config(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """`TESTS_GIT_CONFIG`, written once for the run."""
+    path = tmp_path_factory.mktemp("git") / "config"
+    path.write_text(TESTS_GIT_CONFIG, encoding="utf-8")
+    return path
+
+
+def git_environment(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> None:
+    """Give git `GIT_ENVIRONMENT`, and `git_config` as its global config: for every test, and for
+    a session fixture making repos, which runs before the test's `outside`."""
+    for name, value in GIT_ENVIRONMENT.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(git_config))
+
+
 @pytest.fixture(autouse=True)
-def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
+def outside(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> Iterator[Outside]:
     """Keep each test to itself. It's refused, with `OutsideRefused`:
     - starting a program but git, icacls on Windows, and those it `allow`s, through
       `subprocess` (`Popen` and what's built on it, asyncio's too), `os.exec*`, `os.spawn*` or
@@ -265,14 +304,13 @@ def outside(monkeypatch: pytest.MonkeyPatch) -> Iterator[Outside]:
     test isn't about (the plugin's client, `keychain.read`); a test that tries on purpose takes
     what was refused (`outside.take()`), and one that needs a program `outside.allow`s it.
 
-    What a child does isn't guarded, being another process. git gets `GIT_ENVIRONMENT`, so its
-    own transports can't fetch from the network and it can't ask for a password, but what it
-    runs (hooks, credential helpers, and `git stack`, which can start `gh`) isn't limited; a
-    program a test allows (Python, to run `mfd`) gets nothing: give it a config that reaches
-    nothing."""
+    What a child does isn't guarded, being another process. git gets `GIT_ENVIRONMENT` and
+    `TESTS_GIT_CONFIG`, so its own transports can't fetch from the network, it can't ask for a
+    password and it reads none of my config, but what it runs (hooks, credential helpers, and
+    `git stack`, which can start `gh`) isn't limited; a program a test allows (Python, to run
+    `mfd`) gets nothing: give it a config that reaches nothing."""
     outside = Outside()
-    for name, value in GIT_ENVIRONMENT.items():
-        monkeypatch.setenv(name, value)
+    git_environment(monkeypatch, git_config)
 
     spawn = subprocess.Popen._execute_child  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
     spawning = inspect.signature(spawn)  # pyright: ignore[reportUnknownArgumentType]
