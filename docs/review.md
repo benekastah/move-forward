@@ -50,6 +50,10 @@ whole code takes several (see [A full review](#a-full-review)).
   (`<reviewed sha>..HEAD`), so a fix can't bring in a bug no one looked at.
 - A PR merges once its reviews are answered and CI passes, in stack order, squashed into
   one commit; `git stack sync` then drops its commits from the branches above.
+- **A Dependabot PR** (`.github/dependabot.yml`) is reviewed the same way, with no author to
+  answer: the agent asked to take it on reads the review, and the release notes of each
+  version it brings in, for what breaks or what the code relies on, and fixes what the update
+  needs in that PR.
 
 ## A full review
 
