@@ -6,7 +6,8 @@ dashboard does; `docs/entities.md` is the contract between plugins,
 draws how the plugins use each other's entities, `docs/plugin_contract.md` lists
 every class variable, hook and request of `Plugin`, and `docs/writing-a-plugin.md`
 walks through making one; `docs/review.md` says how PRs and the whole code
-are reviewed; `docs/roadmap.md` is what's left to build.
+are reviewed; `docs/roadmap.md` is what's left to build, and `docs/issues.md` what's wrong
+with what's built (bugs, gaps against the rules below, and what's untried where it runs).
 
 ## Shape of the code
 
@@ -149,6 +150,8 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   - docstrings and comments on the code you touch.
   - `docs/roadmap.md`: remove what the change finishes, whether a step, a bullet or a
     design section, and delete the file once nothing is left.
+  - `docs/issues.md`: remove what the change fixes, and add what it leaves wrong (a bug
+    found and not fixed, a button one surface lacks).
 
   Before committing, look for docs the change made untrue: search the docs
   and docstrings for the names you renamed, moved or removed.
@@ -237,7 +240,7 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   it also has in its panel and in focus mode, but for what only concerns Act now's
   ranking (Pin); what can be ticked off is tickable wherever it's listed; and a line
   telling me to do something comes with the button, where the dashboard can do it.
-  What doesn't yet is in `docs/roadmap.md`. When adding a button, look at every surface
+  What doesn't yet is in `docs/issues.md`. When adding a button, look at every surface
   the item appears on.
 - **Name a tool as its users do.** A plugin's title is its tool's name ("GitHub", "Git", "Git
   Stack"); a command shown to the user is written as it's typed (`git stack restack`); in prose

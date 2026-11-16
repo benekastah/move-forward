@@ -384,8 +384,8 @@ class Plugin[C: BaseModel, S: BaseModel]:
     """The model of the `[name]` section: C. It must reject unknown keys (a `Strict`)."""
     families: ClassVar[tuple[Family, ...]] = ()
     """Families of kinds the plugin declares (`kinds.Family`): what more than one tool may
-    represent, like core's pull request, ticket and person, with the model its kinds extend and
-    the rule its ids follow; its model needs a `handle`. Declared by the plugin, or by a
+    represent, like core's pull request, ticket, person and team, with the model its kinds extend
+    and the rule its ids follow; its model needs a `handle`. Declared by the plugin, or by a
     package several share, it needs no change to core. A plugin publishes kinds only of core's
     families and those it declares, and one declaring a family differently from core or
     another plugin is left out, and said why."""
