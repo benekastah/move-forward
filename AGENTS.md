@@ -49,8 +49,9 @@ Development section says how to set up a clone and run the checks.
 ## Tests and checks
 
 - **Before committing, run `python3 dev.py static`** (Ruff's formatter and linter,
-  basedpyright in strict mode) **and the tests near your change** (`python3 dev.py tests
-  PATH`). CI runs the full suite, and a PR merges only once it passes.
+  basedpyright in strict mode; each runs even if another fails) **and the tests near your
+  change** (`python3 dev.py tests PATH`). CI runs the full suite, and a PR merges only once it
+  passes.
   `python3 dev.py coverage` shows what the tests don't run.
 - **PRs are squash-merged**, so the checks must pass on a PR's last commit, and CI must pass
   on it too (the "CI passed" check, which main's ruleset should require).
