@@ -145,9 +145,28 @@ def test_the_python_a_venv_was_made_with_is_read_from_pyvenv_cfg(
     assert dev.venv_python(cfg) == made_with
 
 
-def test_install_ends_with_dev_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    """dev.py finds this repo's dev_project.py, whose `after_install` writes the config."""
-    assert getattr(dev._project(), "after_install", None) is dev_project(monkeypatch).after_install
+def test_install_links_mfd_and_runs_dev_projects_after_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`install` puts `mfd` on PATH and runs this repo's dev_project.py `after_install`, which
+    writes the config (stubbed here; its own tests are below)."""
+    after: list[bool] = []
+    monkeypatch.setattr(dev_project(monkeypatch), "after_install", lambda: after.append(True))
+    calls: list[tuple[str, ...]] = []
+
+    def run(*args: str) -> None:
+        calls.append(args)
+
+    monkeypatch.setattr(dev, "venv", lambda: None)
+    monkeypatch.setattr(dev, "run", run)
+    monkeypatch.setattr(dev, "_bin_dir", lambda: tmp_path)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    dev.install()
+
+    assert after == [True]
+    assert (tmp_path / ("mfd.cmd" if dev.WINDOWS else "mfd")).exists(follow_symlinks=False)
+    assert ("git", "config", "core.hooksPath", "git_hooks") in calls
 
 
 def dev_project(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
