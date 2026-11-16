@@ -1,12 +1,13 @@
-# Working on move-forward
+# move-forward's own rules
 
-Notes for agents (and people) changing this repo. The README says what the
+What's true of move-forward alone. `AGENTS.md` has the rules it shares with every project made
+from python-template; where the two disagree, this file wins. The README says what the
 dashboard does; `docs/entities.md` is the contract between plugins,
 `docs/graph.md` explains the graph they go through, `docs/plugins.md`
 draws how the plugins use each other's entities, `docs/plugin_contract.md` lists
 every class variable, hook and request of `Plugin`, and `docs/writing-a-plugin.md`
-walks through making one; `docs/review.md` says how PRs and the whole code
-are reviewed; `docs/roadmap.md` is what's left to build, and `docs/issues.md` what's wrong
+walks through making one; `docs/review.md` says what move-forward adds to
+`AGENTS.md`'s reviews, and how the whole code is reviewed; `docs/roadmap.md` is what's left to build, and `docs/issues.md` what's wrong
 with what's built (bugs, gaps against the rules below, and what's untried where it runs).
 
 ## Shape of the code
@@ -113,18 +114,11 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
 
 ## Rules for changes
 
-- **One kind of change per PR.** Don't change core in the PR that adds or
+- **Core and a plugin change in separate PRs.** Don't change core in the PR that adds or
   changes a plugin. If a plugin needs something new from core (a hook, a
   `Context` field, a graph method), land that first, on its own, with its own
-  tests, and stack the plugin PR on it (`git stack branch`, from
-  [git stack](https://github.com/benekastah/git-stack/), which keeps stacked branches and
-  their PRs in order).
-- **Small enough to review well.** One reviewer reads a PR whole, and it reads a small one
-  better: split a large change into a stack of PRs that each do one step and pass `dev.py
-  check` and CI on their own (a model, then what uses it; a refactor, then the feature on it)
-  rather than one PR of everything.
-- **Keep the docs up to date as you code**, in the same commit as the change,
-  not in a docs pass afterwards:
+  tests, and build the plugin PR on it.
+- **The docs to keep up to date**, besides `AGENTS.md`'s:
   - the README for core: its config keys, commands, command-line options,
     HTTP endpoints and the page; its plugins table must match the code.
   - `docs/api-changes.md` for a change to `move_forward.api`; one that could
@@ -147,14 +141,9 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
     each one.
   - this file, when the shape of the code or a rule here changes, e.g. a new
     plugin hook.
-  - docstrings and comments on the code you touch.
   - `docs/roadmap.md`: remove what the change finishes, whether a step, a bullet or a
     design section, and delete the file once nothing is left.
-  - `docs/issues.md`: remove what the change fixes, and add what it leaves wrong (a bug
-    found and not fixed, a button one surface lacks).
-
-  Before committing, look for docs the change made untrue: search the docs
-  and docstrings for the names you renamed, moved or removed.
+  - `docs/issues.md`: a button one surface lacks, too.
 - **Every config key appears in two places**: its model (with a docstring), and the README
   (core's) or the plugin's page in `docs/plugins/`. `mfd init` (and `mfd init --example`,
   built the same way) writes each optional key from its model, commented out with its default
@@ -192,8 +181,7 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
   moving out of core into a plugin is copied by the plugin's own migration,
   from core's table if it's still there; core never writes into a plugin's
   tables.
-- **Add tests** with every change, and make sure they would fail without it.
-  A plugin's tests go in `tests/plugins/`, named after it (`test_github_*.py`),
+- **Where tests go, and what they mustn't touch.** A plugin's tests go in `tests/plugins/`, named after it (`test_github_*.py`),
   as do tests of plugins working together (`test_actions.py`); core's stay in
   `tests/`.
   Panel tests build the page as core does (`conftest.dashboard(...)`) and assert on panel
@@ -220,23 +208,10 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
 - **No new runtime dependencies.** pydantic and watchfiles (git watching its repos) are
   the only ones; tools are
   reached through their CLIs (`gh`, `git`) or the standard library.
-- **Linux, macOS and Windows, with every change.** Each change must keep working
-  on all three; CI runs `dev.py tests` on each (and `dev.py static`, the same everywhere, once),
-  and they must pass on all of them, each within its time limit in `check.yml`. When a run goes
-  over, speed the tests up if that can be done; if it can't, raise the limit, saying why in the
-  commit.
-  Use `pathlib` rather than joining paths with `/`, and write paths into TOML or
-  URLs with `as_posix()`. Read and write text as UTF-8 (`encoding="utf-8"`, or `"utf-8-sig"`
-  with `errors="replace"` for files people write by hand; Windows' default is its code page):
-  `tests/test_encoding.py` checks every `read_text`, `write_text`, builtin `open` and
-  `fdopen`. Branch on `sys.platform` rather than assuming POSIX
-  (modes, process groups, `os.execv`, `time.tzset`), and when a system needs its
-  own way (`private.py`'s access lists, `keychain.py`'s stores), give it one
-  rather than skipping it there. Dev tooling goes in `dev_project.py` (commands and install
-  steps `dev.py` runs), not shell scripts; `dev.py` and the hooks are python-template's, which
-  `uvx copier update --defaults` updates (see the README's Development).
-  A test that can only run on one system says why in its `skipif`, and the other
-  systems get a test of their own.
+- **Linux, macOS and Windows**, as in `AGENTS.md`, and here: text people write by hand is
+  read as `"utf-8-sig"` with `errors="replace"`, and `tests/test_encoding.py` checks every
+  `read_text`, `write_text`, builtin `open` and `fdopen` names its encoding. The systems that
+  need their own way have one: `private.py`'s access lists, `keychain.py`'s stores.
 - **Nothing destructive without a confirm.** Buttons that delete or rewrite
   set `confirm`, never force-push, reset or stash.
 - **An item offers the same wherever it's shown.** A button an item has in Act now
@@ -262,17 +237,7 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
   before restarting and waits out a failure, but until the code is fixed the
   page runs the old code.
 
-## Before committing
-
-```sh
-python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest -n auto
-python3 dev.py coverage  # optional: what the tests don't run
-```
-
-It must pass on a PR's last commit: PRs are squash-merged, so that's what reaches `main`.
-Commit in small, logical steps with messages that say why, not just what.
-
 ## Reviewing
 
-Every PR is reviewed before it merges, by a fresh agent, and the whole code is reviewed
-by several after a run of merges: see [docs/review.md](docs/review.md) for how.
+`docs/review.md` has what move-forward adds to `AGENTS.md`'s reviews: Dependabot's PRs, and the
+parts of a review of the whole code.

@@ -470,4 +470,6 @@ Copier template (`.copier-answers.yml` records its answers and commit): `dev.py`
 `uvx copier update --defaults` takes in its later changes, merged with ours.
 `dev.py` stays the template's: what's move-forward's own (`install` ending with `mfd init`, and
 `within`, which times CI's steps) is in `dev_project.py`.
-The README, AGENTS.md and `check.yml` are ours alone.
+`AGENTS.md`, the rules every python-template project shares, is the template's too;
+`PROJECT_AGENTS.md` has move-forward's own. The README, `PROJECT_AGENTS.md` and `check.yml` are
+ours alone.

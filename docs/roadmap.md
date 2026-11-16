@@ -2,7 +2,7 @@
 
 What's left to build in move-forward. Only what's still to do lives here: when something
 is done, remove it in the same change, and delete this file once it's empty. The code,
-`AGENTS.md` and the rest of `docs/` are the reference for what's built, and
+`PROJECT_AGENTS.md` and the rest of `docs/` are the reference for what's built, and
 [issues.md](issues.md) says what's wrong with it.
 
 ## Goal

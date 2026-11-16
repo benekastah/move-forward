@@ -57,7 +57,7 @@ extend-select = [
     "TID251",
 ]
 
-# Plugins use core only through move_forward.api (see AGENTS.md); core itself may use all.
+# Plugins use core only through move_forward.api (see PROJECT_AGENTS.md); core itself may use all.
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "move_forward.act_now".msg = "plugins import from move_forward.api"
 "move_forward.asking".msg = "plugins import from move_forward.api"
