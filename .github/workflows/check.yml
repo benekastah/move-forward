@@ -15,7 +15,8 @@ permissions:
 # branch and holds runners the new one needs (an account runs only so many jobs at once). On
 # main too: merging a stack pushes several commits at once, and only the newest one's run
 # matters, as the ruleset on main requires "CI passed" before a PR merges. A re-run cancels
-# nothing, so re-running an older commit's run waits for the newest's.
+# nothing, so re-running an older commit's run waits for the newest's, unless that's still
+# waiting to start, which it replaces.
 concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: ${{ github.run_attempt == 1 }}
