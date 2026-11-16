@@ -89,8 +89,9 @@ jobs:
   tests:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # They take 25-40s on Linux and macOS, and 85-110s on Windows.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 3 || 1 }}
+    # They take 25-40s on Linux, 25-50s on macOS (whose runners vary more), and 85-125s on Windows.
+    timeout-minutes: >-
+      ${{ matrix.os == 'windows-latest' && 3 || matrix.os == 'macos-latest' && 2 || 1 }}
     strategy:
       fail-fast: false
       matrix:
