@@ -1,13 +1,16 @@
-"""dev.py: which Python it needs, which pushes its pre-push hook checks, and CI's time limits."""
+"""dev.py: which Python it needs and which pushes its pre-push hook checks; and dev_project.py,
+what move-forward adds to it: `install` writing the config, and CI's time limits."""
 
+import importlib
 import importlib.util
 import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
-SPEC = importlib.util.spec_from_file_location("dev", Path(__file__).parent.parent / "dev.py")
+ROOT = Path(__file__).parent.parent
+SPEC = importlib.util.spec_from_file_location("dev", ROOT / "dev.py")
 assert SPEC is not None and SPEC.loader is not None
 dev = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(dev)
@@ -109,10 +112,23 @@ def test_without_uv_an_older_python_installs_into_a_new_enough_venv(
 def test_with_uv_any_python_installs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """uv picks (or downloads) a Python that's new enough itself."""
     calls = _clone(tmp_path, monkeypatch, "3.12.3", uv="/usr/bin/uv")
+    monkeypatch.delenv("CI", raising=False)
 
     dev.venv()
 
     assert calls == [("uv", "sync", "--quiet")]
+
+
+def test_with_uv_ci_installs_only_what_uv_lock_pins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In CI, an out-of-date uv.lock fails rather than being updated."""
+    calls = _clone(tmp_path, monkeypatch, "3.14.0", uv="/usr/bin/uv")
+    monkeypatch.setenv("CI", "true")
+
+    dev.venv()
+
+    assert calls == [("uv", "sync", "--quiet", "--locked")]
 
 
 @pytest.mark.parametrize(
@@ -129,14 +145,92 @@ def test_the_python_a_venv_was_made_with_is_read_from_pyvenv_cfg(
     assert dev.venv_python(cfg) == made_with
 
 
+def test_install_links_mfd_and_runs_dev_projects_after_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`install` puts `mfd` on PATH and runs this repo's dev_project.py `after_install`, which
+    writes the config (stubbed here; its own tests are below)."""
+    after: list[bool] = []
+    monkeypatch.setattr(dev_project(monkeypatch), "after_install", lambda: after.append(True))
+    calls: list[tuple[str, ...]] = []
+
+    def run(*args: str) -> None:
+        calls.append(args)
+
+    monkeypatch.setattr(dev, "venv", lambda: None)
+    monkeypatch.setattr(dev, "run", run)
+    monkeypatch.setattr(dev, "_bin_dir", lambda: tmp_path)
+    # On PATH already, so install leaves the user's PATH alone (on Windows, the registry).
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    dev.install()
+
+    assert after == [True]
+    assert (tmp_path / ("mfd.cmd" if dev.WINDOWS else "mfd")).exists(follow_symlinks=False)
+    assert ("git", "config", "core.hooksPath", "git_hooks") in calls
+
+
+def dev_project(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """dev_project.py, imported as dev.py imports it, calling back into this test's `dev`."""
+    monkeypatch.setattr(sys, "path", [str(ROOT), *sys.path])
+    project = importlib.import_module("dev_project")
+    monkeypatch.setattr(project, "dev", dev)
+    return project
+
+
+def _after_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, config: bool, terminal: bool
+) -> list[tuple[str, ...]]:
+    """Run `after_install` with the config there (or not) and stdin a terminal (or not): the
+    commands it runs."""
+    project = dev_project(monkeypatch)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    if config:
+        (tmp_path / "move-forward").mkdir()
+        (tmp_path / "move-forward" / "config.toml").touch()
+    calls: list[tuple[str, ...]] = []
+
+    def run(*args: str) -> None:
+        calls.append(args)
+
+    monkeypatch.setattr(dev, "run", run)
+    monkeypatch.setattr(project.sys.stdin, "isatty", lambda: terminal)
+    project.after_install()
+    return calls
+
+
+def test_install_asks_for_a_config_in_a_terminal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _after_install(tmp_path, monkeypatch, config=False, terminal=True)
+
+    assert calls == [(dev.tool("mfd"), "init")]
+
+
+@pytest.mark.parametrize(("config", "terminal"), [(True, True), (False, False)])
+def test_install_leaves_a_config_alone_and_asks_nothing_outside_a_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    config: bool,
+    terminal: bool,
+) -> None:
+    calls = _after_install(tmp_path, monkeypatch, config=config, terminal=terminal)
+
+    assert calls == []
+    assert str(tmp_path / "move-forward" / "config.toml") in capsys.readouterr().out
+
+
 @pytest.mark.parametrize(("took", "passes"), [(15.0, True), (15.5, False)])
 def test_a_command_run_within_a_limit_fails_only_over_it(
     took: float, passes: bool, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Through dev.py, as CI runs it: dev_project.py's `within` times one of dev.py's commands."""
+    project = dev_project(monkeypatch)
     ran: list[str] = []
     monkeypatch.setattr(dev, "static", lambda: ran.append("static"))
     clock = iter([100.0, 100.0 + took])
-    monkeypatch.setattr(dev, "time", SimpleNamespace(monotonic=lambda: next(clock)))
+    monkeypatch.setattr(project, "time", SimpleNamespace(monotonic=lambda: next(clock)))
     if passes:
         dev.main(["within", "15", "static"])
     else:
@@ -145,3 +239,15 @@ def test_a_command_run_within_a_limit_fails_only_over_it(
         assert exited.value.code == 1
         assert "::error::" in capsys.readouterr().out
     assert ran == ["static"]
+
+
+@pytest.mark.parametrize("args", [[], ["15"], ["soon", "static"]])
+def test_within_without_a_limit_and_a_command_says_how_to_run_it(
+    args: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dev_project(monkeypatch)
+
+    with pytest.raises(SystemExit) as exited:
+        dev.main(["within", *args])
+
+    assert "usage: python dev.py within SECONDS COMMAND" in str(exited.value.code)

@@ -232,7 +232,9 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
   `fdopen`. Branch on `sys.platform` rather than assuming POSIX
   (modes, process groups, `os.execv`, `time.tzset`), and when a system needs its
   own way (`private.py`'s access lists, `keychain.py`'s stores), give it one
-  rather than skipping it there. Dev tooling goes in `dev.py`, not shell scripts.
+  rather than skipping it there. Dev tooling goes in `dev_project.py` (commands and install
+  steps `dev.py` runs), not shell scripts; `dev.py` and the hooks are python-template's, which
+  `uvx copier update --defaults` updates (see the README's Development).
   A test that can only run on one system says why in its `skipif`, and the other
   systems get a test of their own.
 - **Nothing destructive without a confirm.** Buttons that delete or rewrite

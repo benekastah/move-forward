@@ -6,4 +6,6 @@ __pycache__/
 *.db
 .coverage
 htmlcov/
+build/
+dist/
 .claude/

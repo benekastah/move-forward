@@ -76,7 +76,8 @@ to expect, and each reads all of its part.
   - **what cuts across** (`cross`): what one change made inconsistent elsewhere, the same item
     offering the same wherever it's shown, security (the token, what a sender or
     another tool controls), Linux, macOS and Windows, the plugin API's contract, and the
-    tooling (`dev.py`, `pyproject.toml`, `.github/workflows/`, `git_hooks/`);
+    tooling (`dev.py`, `dev_project.py`, `pyproject.toml`, `.github/`, `git_hooks/`, what
+    python-template owns);
   - **the docs** (`docs`): the README, `docs/`, AGENTS.md, CHANGELOG and docstrings against
     what the code does, and dead or stale text.
 - **The author** (the agent running the review) opens the issue first, saying who wrote it (an
