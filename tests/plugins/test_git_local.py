@@ -193,6 +193,7 @@ def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Pa
 
     result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     counted = {b.name: (b.ahead_of_default, b.my_commits) for b in result.branches}
+    # `heads/v1` is git's short name for the branch while a tag is `v1` too.
     assert counted == {"main": (None, None), "good": (1, 1), "heads/v1": (1, 1)}
 
 
