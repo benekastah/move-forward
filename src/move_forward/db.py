@@ -479,7 +479,13 @@ class Database:
         self._conn.execute("PRAGMA foreign_keys = ON")
         if self._path:
             # Readers don't block the writer, so other processes can use it while we do.
-            self._conn.execute("PRAGMA journal_mode = WAL")
+            [(mode,)] = self._conn.execute("PRAGMA journal_mode = WAL").fetchall()
+            if mode == "wal":
+                # Commits don't wait for the disk; only checkpoints do. The database can't be
+                # corrupted, and an mfd crash loses nothing, but an OS crash or power cut can
+                # lose the last commits. Waiting is slow on Windows: a new database migrates
+                # four times slower. Without WAL (it can't always be had), NORMAL could corrupt.
+                self._conn.execute("PRAGMA synchronous = NORMAL")
         self._lock = threading.RLock()
         """Held by whoever uses the connection; re-entered by `reading`'s holder's queries."""
         with self._lock:
