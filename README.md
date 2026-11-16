@@ -459,15 +459,20 @@ python3 dev.py coverage  # the tests under coverage.py: what they miss, and html
 On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points the repo at
 `git_hooks/`: `pre-commit` formats and lint-fixes staged Python, `pre-push` runs
 `dev.py check` on a push to `main`, as a branch has CI. GitHub Actions
-(`.github/workflows/check.yml`) runs `dev.py static` once, on Linux, and `dev.py tests` on
-Linux, macOS and Windows, for each pull request and push to `main`; a pull request that changes
-only Markdown (but `docs/entities.md`, which a test reads) skips them.
+(`.github/workflows/ci.yml`) runs `dev.py static` once, on Linux, `dev.py tests` on Linux, macOS
+and Windows, and `dev.py coverage` on Linux, for each pull request and push to `main`, each job
+within a time limit about 20% over how long it takes; a pull request that changes only Markdown
+(but `docs/entities.md`, which a test reads) skips them. `CI passed` is the one check main's
+ruleset requires.
 
 The tooling comes from the [python-template](https://github.com/benekastah/python-template)
 Copier template (`.copier-answers.yml` records its answers and commit): `dev.py`, the git hooks,
-`.github/dependabot.yml`, `.gitignore`, `.gitattributes`, `CLAUDE.md` and much of
-`pyproject.toml` (its dev tools are the `template-dev` group; ours, like tzdata, go in `dev`).
-`uvx copier update --defaults` takes in its later changes, merged with ours.
-`dev.py` stays the template's: what's move-forward's own (`install` ending with `mfd init`, and
-`within`, which times CI's steps) is in `dev_project.py`.
-The README, AGENTS.md and `check.yml` are ours alone.
+`AGENTS.md` (the rules every project made from it shares) and `CLAUDE.md`, CI (`ci.yml`,
+`cancel.yml` and `.github/actions/setup`), `.github/dependabot.yml`, `.gitignore`,
+`.gitattributes` and much of `pyproject.toml` (its dev tools are the `template-dev` group; ours,
+like tzdata, go in `dev`). `uvx copier update --defaults` takes in its later changes, merged with
+ours, which in `ci.yml` are counting `docs/entities.md` as code, the Windows tests' real
+Credential Manager, and the time limits. `dev.py` stays the template's: what's move-forward's own
+(`install` ending with `mfd init`) is in `dev_project.py`. The README, `PROJECT_AGENTS.md`
+(move-forward's own rules), `docs/issues.md`, `docs/roadmap.md` and
+`.github/workflows/project.yml` (CI jobs of our own, none yet) are ours alone.

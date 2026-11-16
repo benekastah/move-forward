@@ -4,12 +4,18 @@
     python dev.py check [ARGS...]    # static, then tests (ARGS go to pytest)
     python dev.py static             # format, lint and types: the same on every system
     python dev.py tests [ARGS...]    # the tests, in parallel (ARGS go to pytest)
+    python dev.py tests --shard I/N  # the Ith of N even parts of the tests, as CI splits them
     python dev.py coverage [ARGS...] # the tests under coverage.py, and what they don't run
     python dev.py install            # venv, the package's commands on PATH, the git hooks
     python dev.py pre-commit         # what the pre-commit hook runs
     python dev.py pre-push           # what the pre-push hook runs
 
 On Windows, run it with `py` (`py dev.py check`). The hooks in git_hooks/ call it.
+
+`tests` runs pytest with this file as a plugin (`-p dev`), which adds `--shard I/N`: it sorts
+the tests by node id and keeps every Nth from the Ith, so the N shards run each test exactly
+once between them, and as many tests each, give or take one. CI runs a system's tests in N
+jobs this way when the project's Copier answers say so (see AGENTS.md).
 
 It comes from python-template, and `copier update` replaces it: a project adds to it in
 dev_project.py, its own file, if it has one. That can define `COMMANDS`, a dict of extra
@@ -21,6 +27,7 @@ whichever `python3` comes first: everything but making .venv with venv and pip r
 tools, and uv picks its own Python.
 """
 
+import argparse
 import importlib
 import os
 import shutil
@@ -31,6 +38,10 @@ import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # only for the plugin's types: pytest is .venv's, not standard library
+    import pytest
 
 ROOT = Path(__file__).resolve().parent
 VENV = ROOT / ".venv"
@@ -158,17 +169,61 @@ def static() -> None:
 
 def tests(pytest_args: list[str]) -> None:
     """The tests, spread over the machine's cores (pytest-xdist, through pyproject.toml's
-    `addopts`)."""
+    `addopts`), with this file as a plugin, for `--shard`. pytest imports it as `dev`, which
+    works because `run` starts it in this directory, and `python -m` puts the working directory
+    on `sys.path`."""
     venv()
-    run(tool("python"), "-m", "pytest", *pytest_args)
+    run(tool("python"), "-m", "pytest", "-p", "dev", *pytest_args)
+
+
+def shard(value: str) -> tuple[int, int]:
+    """`--shard`'s value, `I/N`: the Ith of N shards, from 1."""
+    index, _, count = value.partition("/")
+    if not (index.isdecimal() and count.isdecimal() and 1 <= int(index) <= int(count)):
+        raise argparse.ArgumentTypeError(f"{value!r} isn't I/N with 1 <= I <= N, e.g. 2/3")
+    return int(index), int(count)
+
+
+def pytest_addoption(parser: "pytest.Parser") -> None:
+    """Add `--shard` to pytest when it loads this file as a plugin (`-p dev`, as `tests`
+    does)."""
+    parser.addoption(
+        "--shard",
+        type=shard,
+        default=(1, 1),
+        metavar="I/N",
+        help="run only the Ith of N shards of the tests (see dev.py)",
+    )
+
+
+def pytest_collection_modifyitems(config: "pytest.Config", items: "list[pytest.Item]") -> None:
+    """Keep only `--shard`'s tests: of the tests sorted by node id, every Nth from the Ith.
+    Every shard collects the same tests, so they split them exactly; the kept ones run in
+    pytest's order."""
+    index, count = config.option.shard
+    if count == 1:
+        return
+    ordered = sorted(item.nodeid for item in items)
+    kept = set(ordered[index - 1 :: count])
+    config.hook.pytest_deselected(items=[item for item in items if item.nodeid not in kept])
+    items[:] = [item for item in items if item.nodeid in kept]
 
 
 def coverage(pytest_args: list[str]) -> None:
-    """The tests under coverage.py, in one process, then each file's lines and branches they
-    didn't run (see `[tool.coverage]` in pyproject.toml); htmlcov/index.html shows them in the
-    source."""
+    """The tests under coverage.py, spread over the cores as in `tests` (pyproject.toml has it
+    measure each worker), then each file's lines and branches they didn't run (see
+    `[tool.coverage]`); htmlcov/index.html shows them in the source. The workers' data is
+    combined into .coverage even when a test fails, for CI's report."""
     venv()
-    run(tool("coverage"), "run", "-m", "pytest", "-q", "--numprocesses", "0", *pytest_args)
+    run(tool("coverage"), "erase")  # an interrupted run's data files would be combined too
+    tested = subprocess.run(
+        [tool("coverage"), "run", "-m", "pytest", "-q", "-p", "dev", *pytest_args],
+        cwd=ROOT,
+        check=False,
+    )
+    combined = subprocess.run([tool("coverage"), "combine", "--quiet"], cwd=ROOT, check=False)
+    if tested.returncode != 0 or combined.returncode != 0:
+        sys.exit(tested.returncode or combined.returncode)
     run(tool("coverage"), "report")
     run(tool("coverage"), "html", "--quiet")
     print("line by line: htmlcov/index.html")

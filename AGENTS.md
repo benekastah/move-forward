@@ -1,278 +1,162 @@
-# Working on move-forward
+# Working on this project
 
-Notes for agents (and people) changing this repo. The README says what the
-dashboard does; `docs/entities.md` is the contract between plugins,
-`docs/graph.md` explains the graph they go through, `docs/plugins.md`
-draws how the plugins use each other's entities, `docs/plugin_contract.md` lists
-every class variable, hook and request of `Plugin`, and `docs/writing-a-plugin.md`
-walks through making one; `docs/review.md` says how PRs and the whole code
-are reviewed; `docs/roadmap.md` is what's left to build, and `docs/issues.md` what's wrong
-with what's built (bugs, gaps against the rules below, and what's untried where it runs).
+Read `PROJECT_AGENTS.md` too: it has this project's own shape of the code, rules and
+decisions. Where the two disagree, `PROJECT_AGENTS.md` wins.
 
-## Shape of the code
+This file holds the rules every project made from
+[python-template](https://github.com/benekastah/python-template) shares. It's the template's:
+`uvx copier update --defaults` keeps it current, so change it in the template, and put what's
+this project's own in `PROJECT_AGENTS.md`. The README is the user documentation; its
+Development section says how to set up a clone and run the checks.
 
-- Core (`src/move_forward/`) knows no tool. It loads the config, enables the
-  plugins whose section is there (`registry.py`), runs their collectors,
-  builds the entity graph (`graph.py`), and renders the page.
-- Each tool is a plugin in `src/move_forward/plugins/<name>/`: `config.py`
-  (its section's model), `models.py` (its data), `client.py` (talking to the
-  tool), a repository module with its tables' migrations and queries,
-  `panels.py` (pure functions from its snapshot and the graph to panels),
-  `plugin.py` (the `Plugin` subclass), and `actions.py` if it has buttons.
-  Core's `domain.py` has only the base `Model` and `KindModel`.
-- Plugins import core only from `move_forward.api` (ruff enforces it, and `tests/test_api.py`
-  every form of import), and never import each other (`tests/test_api.py` again) or read
-  each other's config, snapshots or tables. What one needs
-  from another goes through the graph. A plugin that's built on another declares it in
-  `requires`.
-- A plugin declares the kinds it publishes in `kinds`, named for it (`git.branch`) or for a
-  family (below), each with a `KindSpec`: the
-  model of its attributes, which the graph checks its entities against, and its flags
-  (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `tags_from_text`). An entity says
-  whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
-  states. What more than one tool may represent (a pull request, a ticket, a person, a team) is
-  a family (`api.kinds.Family`): core declares those four, and a plugin (or a package several
-  share) declares others in `families`. A plugin's kind of a family extends its model, and its
-  ids follow the family's rule (a URL; `<host>/<login>` for a person, `<host>/<org>/<slug>`, or deeper,
-  for a team), so they're
-  unique whoever publishes them. A consumer reads
-  another plugin's entities with `graph.view(kind, View)`, through its own
-  small model of the fields it uses, not `attrs.get`. A kind that stands for a
-  unit of work (a ticket, a work entry) is declared `linking` (with
-  `linking_patterns` giving its id pattern from the plugin's data); an entity
-  that may name one publishes the text in `mentions` (with `mentions_hide=False` where someone
-  else wrote it, so what it names can't hide it) rather than refs to
-  another plugin's kind. Core adds `tag`s (`tags.py`): what carries one points at it, but
-  it's no unit of work. A kind whose entities hide what they point at (ice) is
-  declared `hides`, and core leaves items about hidden things off the page;
-  plugins don't filter them out themselves.
-- A plugin keeps what `collect` fetched in its own tables, through what its `snapshots` gives (its
-  repository, which `save`s and `load`s it); nothing is kept as JSON. Core keeps only when each
-  plugin last fetched and last stored, and why it failed; what its change checks last saw and said
-  moved, until a collect started after stores (`change_checks.py`); and what else a plugin reports
-  wrong with `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its
-  state on the page and logged when it changes, rather than each plugin warning in its own way.
-- A plugin says what it is in class variables, each documented on `Plugin`: its `name`, `title`,
-  `config_model`, `kinds` and `families`, `requires`, `migrations`, its `notification_kinds`, how
-  `mfd init` and the settings page show it (`init`), and `api_version`. What only some plugins do is
-  a mixin beside `Plugin` in its bases, which core finds with `isinstance` rather than by which
-  methods a plugin overrides: `Collector` (`collect` and `snapshots`, and `events`), `ChangeChecker`
-  (a collector's `changed`, with the hooks `change_check_seconds` and `watches`), `Command` (`cli`) and
-  `Fetcher` (`fetch`, for its `fetchable` kinds). A mixin's abstract hooks must all be implemented,
-  and the registry refuses a combination that makes no sense (a change checker that doesn't collect,
-  a fetchable kind of a plugin that isn't a fetcher, a mixin's hook without the mixin). `init` is an `Init`, built in the plugin's
-  `setup.py`: its questions, its example section and tables, whether `mfd init` suggests it, and its
-  token's next step. A setting the settings page mustn't change (where a credential goes) is marked
-  on its config model's field, with `LOCKED`.
-- Every plugin hook that runs with the plugin's context takes one request object, of five kinds, so
-  a hook can gain an input without breaking its overrides: `ContextRequest(ctx)` (`snapshots`,
-  `linking_patterns`, `change_check_seconds`, `watches`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
-  `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
-  (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`address`, `fetch`); and `InputRequest(ctx,
-  graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`).
-  `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the
-  fingerprint, the snapshot and the graph then). Those called before there's a context take what
-  they need: `tokens(config)` (`mfd token`, and loading the config), `cli(parser)` (its docstring's first
-  line is the command's help), `pages()` and `actions()`. Who I am in a tool is a `person` it
-  publishes with `me`; what focus mode keeps on the page after a button is core's.
-- Times are kept in UTC and shown in local time, through `localtime`; a day
-  recorded as "today" (a todo done, an entry touched) is the local one,
-  `ctx.today`.
-- Panel builders are pure: no I/O, no clock (use `ctx.now`), no database reads beyond what the
-  plugin passes in. Everything slow happens in `collect` or `after_collect`. Every plugin due
-  collects at once, from the graph as stored before the refresh; one whose `collect` needs other
-  plugins' entities to know what to fetch `watches` them, and is asked whether it `changed` once
-  they've stored, in the same refresh, and collected again from the new graph if so. `changed`,
-  polled every `change_check_seconds`, in each refresh of a plugin it `watches` and as each of its
-  own collects starts, is a cheap check of what moved in its tool, so the plugin refreshes sooner: a
-  fingerprint, the subjects that moved, or both. Core keeps them (`change_checks.py`), never the
-  plugin: it compares each fingerprint with the last, keeps the subjects pending until a collect
-  started after they moved stores, owns the full-collect timer, and gives `collect` what's pending
-  and whether it's a full one. A check compares other plugins' entities with `req.previous.graph`,
-  the graph its last check was given, which core keeps too. Notifications come from two places:
-  `events`, asked after every refresh with the plugin's snapshot and the graph before and after it,
-  for what changed; and an item's `notify`, which core raises when the item is newly in its plugin's
-  panels. Rare work (the daily prune) can ask the plugins that publish a kind for entities their
-  snapshots no longer hold with `graph.fetch`. Buttons, badges, details and links on other plugins'
-  items come from `item_actions`, called once per page (where a plugin reads its tables for them),
-  which returns the function core calls per item with whose item it is and where it's shown. Core
-  adds its own to items, and plugins theirs: core's are the importance choices on every item about
-  an entity (but what `hides`), with Clear priority once one's set; Snooze (for a while, or until it
-  changes) on every item with a task, wherever it's shown, and Pin in Act now; on an item about a
-  person (`people.py`) their contact type, and Set type for a person with an address; and on every
-  item about an entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag
-  (`tags.py`), which it keeps in `Item.tags` and the page filters by (`tag_view.py`). Nothing is
-  added to a part that's `done` (a todo ticked off, kept to untick, finished within its item), by
-  core or by any plugin's `item_actions`: only the part's own buttons act on it. A plugin's panels'
-  items are core's Act now's candidates, each with `Signals` (effort, what it closes, who's waiting,
-  and a `task`: the stable id Act now keeps a snooze or pin by): those of its panels marked
-  `act_now`, but deferred ones, unless an item says otherwise (`Item.act_now`).
-- Every request needs the dashboard's token, a plugin's pages (served at
-  `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
-  static files.
+## Making a change
 
-## Rules for changes
+- **One kind of change per PR**: a refactor, a feature and a fix are separate PRs, each small
+  enough to review whole. When one needs another first, that one lands first, on its own,
+  with its own tests.
+- **Every change to behavior comes with tests**, in the same commit, that would fail without
+  it, and changes the tests that cover the old behavior. Tests say what's correct, not what
+  the code happens to do: don't add a test that pins down a bug.
+- **Work test-first**: write the tests for a change (or a bug) first, run them and see them
+  fail for the reason you expect, then make the change and see them pass. If the code has to
+  be reshaped first for the tests to run (e.g. to inject what they replace), do only that
+  before seeing them fail, so the failure still shows the old behavior.
+- **Docs change with the code**, in the same commit: the README for behavior,
+  `PROJECT_AGENTS.md` for the shape of the code and its rules, and the docstrings and
+  comments on the code you touch. Before committing, search the docs for the names you
+  renamed, moved or removed.
+- **Keep `docs/roadmap.md` (what's left to build) and `docs/issues.md` (what's wrong with
+  what's built) current**: a change removes what it finishes or fixes, and adds what it
+  leaves wrong.
+- **Commit messages say why**, not just what.
+- **No new runtime dependency** without a good reason: prefer the standard library.
 
-- **One kind of change per PR.** Don't change core in the PR that adds or
-  changes a plugin. If a plugin needs something new from core (a hook, a
-  `Context` field, a graph method), land that first, on its own, with its own
-  tests, and stack the plugin PR on it (`git stack branch`, from
-  [git stack](https://github.com/benekastah/git-stack/), which keeps stacked branches and
-  their PRs in order).
-- **Small enough to review well.** One reviewer reads a PR whole, and it reads a small one
-  better: split a large change into a stack of PRs that each do one step and pass `dev.py
-  check` and CI on their own (a model, then what uses it; a refactor, then the feature on it)
-  rather than one PR of everything.
-- **Keep the docs up to date as you code**, in the same commit as the change,
-  not in a docs pass afterwards:
-  - the README for core: its config keys, commands, command-line options,
-    HTTP endpoints and the page; its plugins table must match the code.
-  - `docs/api-changes.md` for a change to `move_forward.api`; one that could
-    break a plugin built against it also raises `API_VERSION`.
-  - `CHANGELOG.md`, under Unreleased, for a change someone driving `mfd` from
-    outside must act on (the work-notes skill reads it): a command, its options
-    or JSON, a config key, an HTTP endpoint's fields, a page link. Say what to do.
-  - the plugin's page, `docs/plugins/<name>.md`, for a plugin: its config keys
-    and setup, what it publishes, its panels, what it nominates for Act now, its
-    buttons, pages and commands.
-  - `docs/entities.md`: a new entity kind or attribute, or a change to what
-    one means or who publishes it. `tests/test_entities_doc.py` checks its
-    kinds and attributes against the plugins' kind models.
-  - `docs/plugins.md`: a change to what a plugin publishes or reads, its item
-    actions, its `requires`, or the plugins it `watches`.
-  - `docs/graph.md`: a change to how the graph is built or read (its methods,
-    views, kinds, `related`, `fetch`), or to the kinds in its overview diagram.
-  - `docs/plugin_contract.md`: a change to a `Plugin` class variable or hook, a request
-    type, `Init`, or a config marker. `tests/test_plugin_contract_doc.py` checks it names
-    each one.
-  - this file, when the shape of the code or a rule here changes, e.g. a new
-    plugin hook.
-  - docstrings and comments on the code you touch.
-  - `docs/roadmap.md`: remove what the change finishes, whether a step, a bullet or a
-    design section, and delete the file once nothing is left.
-  - `docs/issues.md`: remove what the change fixes, and add what it leaves wrong (a bug
-    found and not fixed, a button one surface lacks).
+## Tooling
 
-  Before committing, look for docs the change made untrue: search the docs
-  and docstrings for the names you renamed, moved or removed.
-- **Every config key appears in two places**: its model (with a docstring), and the README
-  (core's) or the plugin's page in `docs/plugins/`. `mfd init` (and `mfd init --example`,
-  built the same way) writes each optional key from its model, commented out with its default
-  and its docstring's first sentence. A plugin writes by hand, in its `setup.py`, only what
-  its model can't say, in its `Init`: a required key with an example value in its `example`, a
-  table of example entries (`[slack.teams]`, `[mail.<name>]`) in its `tables`, and in a
-  section's `shown` (its `example`'s, and what its `questions` return) an example
-  value for a key whose default says less (or is None), where it's right for that section. A key's comment goes above it, after a blank line, wrapped
-  to 100 columns (never inside a code span); write its `tables`' comments the same way.
-  Core's `[notifications]` is still written by hand, in `init.py`. Config models reject unknown
-  keys; keep it that way. A key that moves says where it went (see
-  `MOVED_SETTINGS` in `config.py`), and a removed plugin's section says it's gone
-  (`REMOVED_PLUGINS`).
-- **Migrations are append-only.** Core and each plugin own a list of named
-  `Migration`s (SQL, or a Python function for a data fix), applied in order and
-  kept by name in the `migrations` ledger. Never edit, rename or reorder one
-  that has been committed to `main`; add a new one, named with the next
-  number (`0004_issue_comments`). A plugin's tables, indexes, views and
-  triggers are prefixed with its name: core refuses a migration that makes
-  another.
-  Write a new one against a scratch `db_path`, not the database `mfd serve --reload` runs
-  on: it runs the migration as soon as the file is saved, and once it has, renaming it makes
-  the server refuse to start.
-- **A plugin table is fetched or kept**, and its comment says which.
-  Fetched tables hold what `collect` brings back; `save` replaces them
-  wholesale, so they're never pruned. A table computed from the graph in
-  `after_collect` (github's reviewer suggestions, notes' ice covers) is
-  replaced the same way, and counts as fetched (or says "derived"). Kept tables hold what only the dashboard
-  knows (notes, pings sent, looked-up emails); they survive refreshes, a
-  migration that reshapes them copies their rows, and the plugin's `prune`
-  clears what's finished.
-- **Plugin migrations don't depend on order.** A plugin can be enabled at any
-  time, before or after any other, so its migrations touch only its own tables
-  and never assume another plugin's migrations have run, or haven't. Data
-  moving out of core into a plugin is copied by the plugin's own migration,
-  from core's table if it's still there; core never writes into a plugin's
-  tables.
-- **Add tests** with every change, and make sure they would fail without it.
-  A plugin's tests go in `tests/plugins/`, named after it (`test_github_*.py`),
-  as do tests of plugins working together (`test_actions.py`); core's stay in
-  `tests/`.
-  Panel tests build the page as core does (`conftest.dashboard(...)`) and assert on panel
-  contents; plugin contract tests assert on the entities a plugin publishes. Tests touching
-  git make real repos in `tmp_path`; tests never touch the network, nor the real database or
-  its token (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor the
-  secret store, nor run a program but git (not `git stack`, which can start `gh`). Files are
-  made private only in a test marked `private_files`, which may run icacls on Windows; in an
-  unmarked test, on every system, `conftest` skips it. `conftest`'s `outside` fixture fails
-  a test that tries, naming what it tried, even when the code under test catches the
-  refusal: stub it where the test isn't about it (the plugin's client, `keychain.read`), not
-  by opting out. A test that tries on purpose (a test of the guard) takes what was refused
-  with `outside.take()`; one that truly needs a program lets it run with
-  `outside.allow(...)` (`sys.executable`, to run `mfd`; `conftest.GIT_STACK`, for
-  `git stack`). A child process isn't guarded: git runs with `GIT_ALLOW_PROTOCOL=file`, so
-  its own transports can't fetch from the network, and with conftest's `TESTS_GIT_CONFIG` in
-  place of mine and the system's (an identity, no signing, no background maintenance, none
-  of my ignore or attributes files), but what it runs (hooks, credential helpers,
-  `git stack`) and a program a test allows can do anything, so give them a config and repos
-  that reach nothing. The one exception is
-  `test_the_real_credential_manager_keeps_a_secret`, the only check that `keychain.py`'s
-  ctypes binding agrees with Windows: it runs only where `MFD_REAL_SECRET_STORE=1`, which
-  only Windows CI sets, as that runner's store is thrown away after the job.
-- **No new runtime dependencies.** pydantic and watchfiles (git watching its repos) are
-  the only ones; tools are
-  reached through their CLIs (`gh`, `git`) or the standard library.
-- **Linux, macOS and Windows, with every change.** Each change must keep working
-  on all three; CI runs `dev.py tests` on each (and `dev.py static`, the same everywhere, once),
-  and they must pass on all of them, each within its time limit in `check.yml`. When a run goes
-  over, speed the tests up if that can be done; if it can't, raise the limit, saying why in the
-  commit.
-  Use `pathlib` rather than joining paths with `/`, and write paths into TOML or
-  URLs with `as_posix()`. Read and write text as UTF-8 (`encoding="utf-8"`, or `"utf-8-sig"`
-  with `errors="replace"` for files people write by hand; Windows' default is its code page):
-  `tests/test_encoding.py` checks every `read_text`, `write_text`, builtin `open` and
-  `fdopen`. Branch on `sys.platform` rather than assuming POSIX
-  (modes, process groups, `os.execv`, `time.tzset`), and when a system needs its
-  own way (`private.py`'s access lists, `keychain.py`'s stores), give it one
-  rather than skipping it there. Dev tooling goes in `dev_project.py` (commands and install
-  steps `dev.py` runs), not shell scripts; `dev.py` and the hooks are python-template's, which
-  `uvx copier update --defaults` updates (see the README's Development).
-  A test that can only run on one system says why in its `skipif`, and the other
-  systems get a test of their own.
-- **Nothing destructive without a confirm.** Buttons that delete or rewrite
-  set `confirm`, never force-push, reset or stash.
-- **An item offers the same wherever it's shown.** A button an item has in Act now
-  it also has in its panel and in focus mode, but for what only concerns Act now's
-  ranking (Pin); what can be ticked off is tickable wherever it's listed; and a line
-  telling me to do something comes with the button, where the dashboard can do it.
-  What doesn't yet is in `docs/issues.md`. When adding a button, look at every surface
-  the item appears on.
-- **Name a tool as its users do.** A plugin's title is its tool's name ("GitHub", "Git", "Git
-  Stack"); a command shown to the user is written as it's typed (`git stack restack`); in prose
-  it's lower-case words ("a branch git stack tracks"). The plugin's own name stays its config
-  section's (`git_stack`).
-- **A class's variables come first.** Its class variables (a plugin's `name`,
-  `kinds`, `notification_kinds` and the like) go at the top, then `__init__`, which
-  sets every instance variable, then the methods. Don't define a class variable between
-  methods, next to the method it's for, or set a new instance variable outside
-  `__init__`.
-- **Every save must leave working code.** People run `mfd serve --reload`,
-  which restarts on each change. Each file you write must be syntactically
-  valid, and every import in the package must still resolve: when moving or
-  renaming something, update its importers in the same edit, or add the new
-  name before removing the old one. The reloader checks with `mfd check`
-  before restarting and waits out a failure, but until the code is fixed the
-  page runs the old code.
+- `dev.py` sets up a clone and runs the checks, the same on every system (on Windows, run
+  it with `py`); `python3 dev.py` lists its commands. It's the template's: this project's
+  own commands and install steps go in `dev_project.py` (see `dev.py`'s docstring).
+- `dev` is a reserved module name: `dev.py tests` loads `dev.py` into pytest as `dev`, which
+  would hide a test helper of that name.
+- Dev tooling goes in `dev.py` or `dev_project.py`, not shell scripts; the git hooks are
+  the only ones. The pre-commit hook formats and lint-fixes staged files; the pre-push hook
+  runs every check before a push to `main`.
+- `pyproject.toml` is partly the template's. Add dev dependencies to `dev` with
+  `uv add --dev`, never to `template-dev`, and add to Ruff's `extend-select` and
+  basedpyright's `include` below their `# The project's own below:` line, which stays as it
+  is, so the template's changes merge without conflicts.
 
-## Before committing
+## Tests and checks
 
-```sh
-python3 dev.py check     # ruff format --check, ruff check, basedpyright (strict), pytest -n auto
-python3 dev.py coverage  # optional: what the tests don't run
-```
+- **Before committing, run `python3 dev.py check`**: Ruff's formatter and linter, basedpyright
+  in strict mode, then the tests. `python3 dev.py coverage` shows what the tests don't run.
+- **PRs are squash-merged**, so the checks must pass on a PR's last commit, and CI must pass
+  on it too (the "CI passed" check, which main's ruleset should require).
+- **Tests keep to themselves**: no network, and not the user's real config, home directory
+  or other state; use `tmp_path`, and give programs the tests start a config that reaches
+  nothing.
+- **Keep the tests fast.** Starting a process costs about 24ms on GitHub's Windows runners
+  and 4–7ms on macOS, against under 1ms on Linux, and how Python starts it makes no
+  difference, so on those systems the number of processes is what makes a suite slow. Call
+  the code in the test's process rather than through its command line, except in the few
+  tests of the command line itself; build expensive fixtures (e.g. git repositories) once per
+  session and copy them for each test; and prefer one long-lived process (e.g.
+  `git cat-file --batch`) over one per request.
+- **Each CI job has a time limit** (`timeout-minutes`), about 20% over how long it takes in
+  finished runs, rounded up to a whole minute, and never over 5 minutes, so no job keeps a
+  run waiting long. If a job runs into its limit, speed it up if you can (the tests, or the
+  code itself); if you can't, raise the limit, up to 5, saying why in the commit; past that,
+  split the job.
+- **Tests too slow for one job are split.** If a system's tests take over about 4 minutes in
+  CI even once sped up, run them in several jobs there (shards), each with a share of the
+  tests: set how many in the project's Copier answers, `test_shards_linux`,
+  `test_shards_macos` or `test_shards_windows` (1 to 8, 1 by default). If
+  `.copier-answers.yml` lists them already, this changes the answer alone, without the
+  template's later changes:
 
-It must pass on a PR's last commit: PRs are squash-merged, so that's what reaches `main`.
-Commit in small, logical steps with messages that say why, not just what.
+  ```sh
+  uvx copier update --defaults -d test_shards_windows=3 \
+      --vcs-ref "$(sed -n "s/^_commit: //p" .copier-answers.yml | tr -d "'")"
+  ```
+
+  If it doesn't, that template commit has no such question, and the command quietly changes
+  nothing: run `uvx copier update --defaults -d test_shards_windows=3`, which takes in the
+  template's later changes too. Either way, check that `git diff` shows the new answer and
+  `ci.yml`'s new jobs, then commit them. Each of a system's jobs, with each Python, runs
+  `python3 dev.py tests --shard I/N` (see `dev.py`), which you can run locally too. A shard
+  left with no tests fails its job, so keep to fewer shards than tests; and each job sets up
+  again, so split no more than you need. Coverage runs in one job, on Linux, whatever the
+  answers say.
+- **CI is the template's `ci.yml` and `cancel.yml`, and the project's `project.yml`.**
+  `.github/workflows/ci.yml` is the template's (`copier update` keeps it current): the static
+  checks, the tests, coverage, and the `CI passed` job a ruleset requires. The project's own
+  jobs go in `.github/workflows/project.yml`, which `ci.yml` runs and `CI passed` waits for;
+  they can set up uv and Python with `.github/actions/setup`, also the template's.
+  `.github/workflows/cancel.yml`, the template's too, cancels a pull request's `ci.yml` run
+  when it merges or closes, so its concurrency group must stay the same as `ci.yml`'s.
+
+## Linux, macOS and Windows
+
+The project runs on all three, and CI runs the tests on each. Keep it that way, with every
+change:
+
+- Use `pathlib.Path` for paths, not strings joined with `/`, and compare them as `Path`s.
+  Write paths into TOML or URLs with `as_posix()`.
+- Read and write text as UTF-8 (`encoding="utf-8"`, not `text=True`): Windows' default
+  encoding is its code page. Don't assume `\n` line endings in files you didn't write, or a
+  case-sensitive filesystem (macOS and Windows usually aren't).
+- Run programs with their arguments as a list, never through a shell, and don't call Unix
+  tools (`sed`, `grep`, ...) from Python. The project itself mustn't need a shell.
+- Branch on `sys.platform` rather than assuming POSIX (`fcntl`, `os.fork`, signals, modes).
+  When a system needs its own way, give it one rather than skipping it there.
+- In tests, make a fake command as a Python script with a launcher, not a shell script or a
+  symlink, which Windows can't run or usually can't make. A test that can only run on one
+  system says why in its `skipif`, and the other systems get a test of their own.
 
 ## Reviewing
 
-Every PR is reviewed before it merges, by a fresh agent, and the whole code is reviewed
-by several after a run of merges: see [docs/review.md](docs/review.md) for how.
+Every PR is reviewed by a fresh agent before it leaves draft: one with no context but the PR
+(not a fork of the session that wrote it), so it judges what the code says rather than what
+was meant. An agent says it's an agent wherever it writes as a person would: in the first line
+of a PR's description, a review, and each answer to a finding.
+
+- **The reviewer** reads the diff against the PR's base, its commit messages, this file and
+  `PROJECT_AGENTS.md`, and changes nothing. It looks for, most important first:
+  - correctness: obviously correct is much better than just correct;
+  - security: use the right secure library rather than writing our own;
+  - surprises: anything surprising that's necessary has a comment and a test, only necessary
+    changes are accepted, and nothing outside the change is left inconsistent with it;
+  - tests: missing ones (new features fully covered), and low-value ones (would it fail if the
+    code were wrong in a meaningful way? is it no bigger than it needs to be?), or ones that
+    pin down a wrong behavior;
+  - docs, docstrings and comments that are missing or untrue, or that only describe a prior
+    state of the code or an idea that was rejected;
+  - dead code; readability; terseness;
+  - fully qualified imports rather than relative ones;
+  - size (a large PR should be split, where it can be), risk, importance (does it move the
+    needle?) and cost.
+
+  It checks each finding against the code, and gives it a severity (bug, should-fix, minor),
+  a failure scenario and a fix.
+- **It posts one GitHub review of type COMMENT** (never approving or requesting changes),
+  its findings numbered, each inline on its line where it has one. The JSON goes in a
+  temporary directory, not the repo:
+
+  ```sh
+  dir=$(mktemp -d)
+  gh pr view N --json headRefOid -q .headRefOid   # the head GitHub has, not a local one
+  gh api repos/{owner}/{repo}/pulls/N/reviews --method POST --input "$dir/review.json"
+  # {"commit_id": "<that sha>", "event": "COMMENT", "body": "...",
+  #  "comments": [{"path": "src/...", "line": 42, "side": "RIGHT", "body": "1. bug: ..."}]}
+  ```
+- **The PR's author** fixes what it decides to, pushes, then answers every finding (inline
+  ones in their thread, the body's in one PR comment): fixed, with the commit's short hash,
+  or why not (wrong, out of scope, or not worth its cost).
+- **Fixes are reviewed too**, the same way, on `<reviewed sha>..HEAD`, unless all they
+  change is wording. Fix and review again until a review finds no bugs or should-fixes.
+- **A PR merges** once every finding is answered, CI passes and the maintainer says go:
+  squashed, and stacked PRs in order, each safe to merge on its own.
+
+After a run of merges, several fresh agents review the whole code at once, each one part (a
+module, the tests, the tooling and CI, the docs against the code) at one commit of `main`,
+posting their findings on one issue; the fixes are PRs as above.

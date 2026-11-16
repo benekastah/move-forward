@@ -17,7 +17,8 @@ updates:
     cooldown:
       default-days: 7
   - package-ecosystem: github-actions
-    directory: "/"
+    # The workflows, and the setup action they use.
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: weekly
     groups:

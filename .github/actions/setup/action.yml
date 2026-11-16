@@ -1,0 +1,22 @@
+# What each CI job needs before running dev.py: uv, and the Python asked for. The template's,
+# kept current by `copier update`. ci.yml's jobs use it, and project.yml's can too, after
+# checking out the repository (a local action is read from the checkout):
+#
+#   - uses: ./.github/actions/setup
+#     with:
+#       python-version: ${{ fromJSON(inputs.context).min_python }}
+name: Set up
+description: Install uv and a Python.
+
+inputs:
+  python-version:
+    description: The Python to install, e.g. "3.11"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      with:
+        enable-cache: false
+        python-version: ${{ inputs.python-version }}

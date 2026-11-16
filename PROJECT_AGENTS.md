@@ -1,0 +1,244 @@
+# move-forward's own rules
+
+What's true of move-forward alone. `AGENTS.md` has the rules it shares with every project made from
+python-template; where the two disagree, this file wins. The README says what the dashboard does;
+`docs/entities.md` is the contract between plugins, `docs/graph.md` explains the graph they go
+through, `docs/plugins.md` draws how the plugins use each other's entities,
+`docs/plugin_contract.md` lists every class variable, hook and request of `Plugin`, and
+`docs/writing-a-plugin.md` walks through making one; `docs/review.md` says what move-forward adds to
+`AGENTS.md`'s reviews, and how the whole code is reviewed; `docs/roadmap.md` is what's left to
+build, and `docs/issues.md` what's wrong with what's built (bugs, gaps against the rules below, and
+what's untried where it runs).
+
+## Shape of the code
+
+- Core (`src/move_forward/`) knows no tool. It loads the config, enables the
+  plugins whose section is there (`registry.py`), runs their collectors,
+  builds the entity graph (`graph.py`), and renders the page.
+- Each tool is a plugin in `src/move_forward/plugins/<name>/`: `config.py`
+  (its section's model), `models.py` (its data), `client.py` (talking to the
+  tool), a repository module with its tables' migrations and queries,
+  `panels.py` (pure functions from its snapshot and the graph to panels),
+  `plugin.py` (the `Plugin` subclass), and `actions.py` if it has buttons.
+  Core's `domain.py` has only the base `Model` and `KindModel`.
+- Plugins import core only from `move_forward.api` (ruff enforces it, and `tests/test_api.py`
+  every form of import), and never import each other (`tests/test_api.py` again) or read
+  each other's config, snapshots or tables. What one needs
+  from another goes through the graph. A plugin that's built on another declares it in
+  `requires`.
+- A plugin declares the kinds it publishes in `kinds`, named for it (`git.branch`) or for a
+  family (below), each with a `KindSpec`: the
+  model of its attributes, which the graph checks its entities against, and its flags
+  (`linking`, `hides`, `fetchable`, `gone_means_done`, `resolvable`, `tags_from_text`). An entity says
+  whether its work is over in `lifecycle` (`open` or `done`), so core never reads a tool's
+  states. What more than one tool may represent (a pull request, a ticket, a person, a team) is
+  a family (`api.kinds.Family`): core declares those four, and a plugin (or a package several
+  share) declares others in `families`. A plugin's kind of a family extends its model, and its
+  ids follow the family's rule (a URL; `<host>/<login>` for a person, `<host>/<org>/<slug>`, or deeper,
+  for a team), so they're
+  unique whoever publishes them. A consumer reads
+  another plugin's entities with `graph.view(kind, View)`, through its own
+  small model of the fields it uses, not `attrs.get`. A kind that stands for a
+  unit of work (a ticket, a work entry) is declared `linking` (with
+  `linking_patterns` giving its id pattern from the plugin's data); an entity
+  that may name one publishes the text in `mentions` (with `mentions_hide=False` where someone
+  else wrote it, so what it names can't hide it) rather than refs to
+  another plugin's kind. Core adds `tag`s (`tags.py`): what carries one points at it, but
+  it's no unit of work. A kind whose entities hide what they point at (ice) is
+  declared `hides`, and core leaves items about hidden things off the page;
+  plugins don't filter them out themselves.
+- A plugin keeps what `collect` fetched in its own tables, through what its `snapshots` gives (its
+  repository, which `save`s and `load`s it); nothing is kept as JSON. Core keeps only when each
+  plugin last fetched and last stored, and why it failed; what its change checks last saw and said
+  moved, until a collect started after stores (`change_checks.py`); and what else a plugin reports
+  wrong with `ctx.problem(key, text | None)` (a lookup its token isn't allowed), shown with its
+  state on the page and logged when it changes, rather than each plugin warning in its own way.
+- A plugin says what it is in class variables, each documented on `Plugin`: its `name`, `title`,
+  `config_model`, `kinds` and `families`, `requires`, `migrations`, its `notification_kinds`, how
+  `mfd init` and the settings page show it (`init`), and `api_version`. What only some plugins do is
+  a mixin beside `Plugin` in its bases, which core finds with `isinstance` rather than by which
+  methods a plugin overrides: `Collector` (`collect` and `snapshots`, and `events`), `ChangeChecker`
+  (a collector's `changed`, with the hooks `change_check_seconds` and `watches`), `Command` (`cli`) and
+  `Fetcher` (`fetch`, for its `fetchable` kinds). A mixin's abstract hooks must all be implemented,
+  and the registry refuses a combination that makes no sense (a change checker that doesn't collect,
+  a fetchable kind of a plugin that isn't a fetcher, a mixin's hook without the mixin). `init` is an `Init`, built in the plugin's
+  `setup.py`: its questions, its example section and tables, whether `mfd init` suggests it, and its
+  token's next step. A setting the settings page mustn't change (where a credential goes) is marked
+  on its config model's field, with `LOCKED`.
+- Every plugin hook that runs with the plugin's context takes one request object, of five kinds, so
+  a hook can gain an input without breaking its overrides: `ContextRequest(ctx)` (`snapshots`,
+  `linking_patterns`, `change_check_seconds`, `watches`); `Request(ctx, graph, snapshot)` (`entities`, `relate`, `panels`,
+  `item_actions`, `after_collect`, `prune`, `events`); `RefreshRequest(ctx, graph, full, subjects)`
+  (`collect`, `changed`); `RefRequest(ctx, kind, ids)` (`address`, `fetch`); and `InputRequest(ctx,
+  graph)` with a `Page`, a `Form` or the command line's `args` (pages, buttons, `mfd <plugin>`).
+  `changed` and `events` get what held before as a `Previous` (`req.previous`: when, the
+  fingerprint, the snapshot and the graph then). Those called before there's a context take what
+  they need: `tokens(config)` (`mfd token`, and loading the config), `cli(parser)` (its docstring's first
+  line is the command's help), `pages()` and `actions()`. Who I am in a tool is a `person` it
+  publishes with `me`; what focus mode keeps on the page after a button is core's.
+- Times are kept in UTC and shown in local time, through `localtime`; a day
+  recorded as "today" (a todo done, an entry touched) is the local one,
+  `ctx.today`.
+- Panel builders are pure: no I/O, no clock (use `ctx.now`), no database reads beyond what the
+  plugin passes in. Everything slow happens in `collect` or `after_collect`. Every plugin due
+  collects at once, from the graph as stored before the refresh; one whose `collect` needs other
+  plugins' entities to know what to fetch `watches` them, and is asked whether it `changed` once
+  they've stored, in the same refresh, and collected again from the new graph if so. `changed`,
+  polled every `change_check_seconds`, in each refresh of a plugin it `watches` and as each of its
+  own collects starts, is a cheap check of what moved in its tool, so the plugin refreshes sooner: a
+  fingerprint, the subjects that moved, or both. Core keeps them (`change_checks.py`), never the
+  plugin: it compares each fingerprint with the last, keeps the subjects pending until a collect
+  started after they moved stores, owns the full-collect timer, and gives `collect` what's pending
+  and whether it's a full one. A check compares other plugins' entities with `req.previous.graph`,
+  the graph its last check was given, which core keeps too. Notifications come from two places:
+  `events`, asked after every refresh with the plugin's snapshot and the graph before and after it,
+  for what changed; and an item's `notify`, which core raises when the item is newly in its plugin's
+  panels. Rare work (the daily prune) can ask the plugins that publish a kind for entities their
+  snapshots no longer hold with `graph.fetch`. Buttons, badges, details and links on other plugins'
+  items come from `item_actions`, called once per page (where a plugin reads its tables for them),
+  which returns the function core calls per item with whose item it is and where it's shown. Core
+  adds its own to items, and plugins theirs: core's are the importance choices on every item about
+  an entity (but what `hides`), with Clear priority once one's set; Snooze (for a while, or until it
+  changes) on every item with a task, wherever it's shown, and Pin in Act now; on an item about a
+  person (`people.py`) their contact type, and Set type for a person with an address; and on every
+  item about an entity (but what `hides`) its `#tag` badges, a Tag field and an Untag per tag
+  (`tags.py`), which it keeps in `Item.tags` and the page filters by (`tag_view.py`). Nothing is
+  added to a part that's `done` (a todo ticked off, kept to untick, finished within its item), by
+  core or by any plugin's `item_actions`: only the part's own buttons act on it. A plugin's panels'
+  items are core's Act now's candidates, each with `Signals` (effort, what it closes, who's waiting,
+  and a `task`: the stable id Act now keeps a snooze or pin by): those of its panels marked
+  `act_now`, but deferred ones, unless an item says otherwise (`Item.act_now`).
+- Every request needs the dashboard's token, a plugin's pages (served at
+  `/<plugin>/<key>`) included, except signing in (`/login` and its handshake) and the
+  static files.
+
+## Rules for changes
+
+- **Core and a plugin change in separate PRs.** Don't change core in the PR that adds or
+  changes a plugin. If a plugin needs something new from core (a hook, a
+  `Context` field, a graph method), land that first, on its own, with its own
+  tests, and stack the plugin PR on it (see `docs/review.md` for how stacked PRs merge).
+- **The docs to keep up to date**, besides `AGENTS.md`'s:
+  - the README for core: its config keys, commands, command-line options,
+    HTTP endpoints and the page; its plugins table must match the code.
+  - `docs/api-changes.md` for a change to `move_forward.api`; one that could
+    break a plugin built against it also raises `API_VERSION`.
+  - `CHANGELOG.md`, under Unreleased, for a change someone driving `mfd` from
+    outside must act on (the work-notes skill reads it): a command, its options
+    or JSON, a config key, an HTTP endpoint's fields, a page link. Say what to do.
+  - the plugin's page, `docs/plugins/<name>.md`, for a plugin: its config keys
+    and setup, what it publishes, its panels, what it nominates for Act now, its
+    buttons, pages and commands.
+  - `docs/entities.md`: a new entity kind or attribute, or a change to what
+    one means or who publishes it. `tests/test_entities_doc.py` checks its
+    kinds and attributes against the plugins' kind models.
+  - `docs/plugins.md`: a change to what a plugin publishes or reads, its item
+    actions, its `requires`, or the plugins it `watches`.
+  - `docs/graph.md`: a change to how the graph is built or read (its methods,
+    views, kinds, `related`, `fetch`), or to the kinds in its overview diagram.
+  - `docs/plugin_contract.md`: a change to a `Plugin` class variable or hook, a request
+    type, `Init`, or a config marker. `tests/test_plugin_contract_doc.py` checks it names
+    each one.
+  - this file, when the shape of the code or a rule here changes, e.g. a new
+    plugin hook.
+  - `docs/roadmap.md`: remove what the change finishes, whether a step, a bullet or a
+    design section, and delete the file once nothing is left.
+  - `docs/issues.md`: a button one surface lacks, too.
+- **Every config key appears in two places**: its model (with a docstring), and the README
+  (core's) or the plugin's page in `docs/plugins/`. `mfd init` (and `mfd init --example`,
+  built the same way) writes each optional key from its model, commented out with its default
+  and its docstring's first sentence. A plugin writes by hand, in its `setup.py`, only what
+  its model can't say, in its `Init`: a required key with an example value in its `example`, a
+  table of example entries (`[slack.teams]`, `[mail.<name>]`) in its `tables`, and in a
+  section's `shown` (its `example`'s, and what its `questions` return) an example
+  value for a key whose default says less (or is None), where it's right for that section. A key's comment goes above it, after a blank line, wrapped
+  to 100 columns (never inside a code span); write its `tables`' comments the same way.
+  Core's `[notifications]` is still written by hand, in `init.py`. Config models reject unknown
+  keys; keep it that way. A key that moves says where it went (see
+  `MOVED_SETTINGS` in `config.py`), and a removed plugin's section says it's gone
+  (`REMOVED_PLUGINS`).
+- **Migrations are append-only.** Core and each plugin own a list of named
+  `Migration`s (SQL, or a Python function for a data fix), applied in order and
+  kept by name in the `migrations` ledger. Never edit, rename or reorder one
+  that has been committed to `main`; add a new one, named with the next
+  number (`0004_issue_comments`). A plugin's tables, indexes, views and
+  triggers are prefixed with its name: core refuses a migration that makes
+  another.
+  Write a new one against a scratch `db_path`, not the database `mfd serve --reload` runs
+  on: it runs the migration as soon as the file is saved, and once it has, renaming it makes
+  the server refuse to start.
+- **A plugin table is fetched or kept**, and its comment says which.
+  Fetched tables hold what `collect` brings back; `save` replaces them
+  wholesale, so they're never pruned. A table computed from the graph in
+  `after_collect` (github's reviewer suggestions, notes' ice covers) is
+  replaced the same way, and counts as fetched (or says "derived"). Kept tables hold what only the dashboard
+  knows (notes, pings sent, looked-up emails); they survive refreshes, a
+  migration that reshapes them copies their rows, and the plugin's `prune`
+  clears what's finished.
+- **Plugin migrations don't depend on order.** A plugin can be enabled at any
+  time, before or after any other, so its migrations touch only its own tables
+  and never assume another plugin's migrations have run, or haven't. Data
+  moving out of core into a plugin is copied by the plugin's own migration,
+  from core's table if it's still there; core never writes into a plugin's
+  tables.
+- **Where tests go, and what they mustn't touch.** A plugin's tests go in `tests/plugins/`, named
+  after it (`test_github_*.py`), as do tests of plugins working together (`test_actions.py`); core's
+  stay in `tests/`.
+  Panel tests build the page as core does (`conftest.dashboard(...)`) and assert on panel
+  contents; plugin contract tests assert on the entities a plugin publishes. Tests touching
+  git make real repos in `tmp_path`; tests never touch the network, nor the real database or
+  its token (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor the
+  secret store, nor run a program but git (not `git stack`, which can start `gh`). Files are
+  made private only in a test marked `private_files`, which may run icacls on Windows; in an
+  unmarked test, on every system, `conftest` skips it. `conftest`'s `outside` fixture fails
+  a test that tries, naming what it tried, even when the code under test catches the
+  refusal: stub it where the test isn't about it (the plugin's client, `keychain.read`), not
+  by opting out. A test that tries on purpose (a test of the guard) takes what was refused
+  with `outside.take()`; one that truly needs a program lets it run with
+  `outside.allow(...)` (`sys.executable`, to run `mfd`; `conftest.GIT_STACK`, for
+  `git stack`). A child process isn't guarded: git runs with `GIT_ALLOW_PROTOCOL=file`, so
+  its own transports can't fetch from the network, and with conftest's `TESTS_GIT_CONFIG` in
+  place of the developer's and the system's (an identity, no signing, no background maintenance,
+  none of their ignore or attributes files), but what it runs (hooks, credential helpers,
+  `git stack`) and a program a test allows can do anything, so give them a config and repos
+  that reach nothing. The one exception is
+  `test_the_real_credential_manager_keeps_a_secret`, the only check that `keychain.py`'s
+  ctypes binding agrees with Windows: it runs only where `MFD_REAL_SECRET_STORE=1`, which
+  only Windows CI sets, as that runner's store is thrown away after the job.
+- **No new runtime dependencies.** pydantic and watchfiles (git watching its repos) are
+  the only ones; tools are
+  reached through their CLIs (`gh`, `git`) or the standard library.
+- **Linux, macOS and Windows**, as in `AGENTS.md`, and here: text people write by hand is
+  read as `"utf-8-sig"` with `errors="replace"`, and `tests/test_encoding.py` checks every
+  `read_text`, `write_text`, builtin `open` and `fdopen` names its encoding. The systems that
+  need their own way have one: `private.py`'s access lists, `keychain.py`'s stores.
+- **Nothing destructive without a confirm.** Buttons that delete or rewrite
+  set `confirm`, never force-push, reset or stash.
+- **An item offers the same wherever it's shown.** A button an item has in Act now
+  it also has in its panel and in focus mode, but for what only concerns Act now's
+  ranking (Pin); what can be ticked off is tickable wherever it's listed; and a line
+  telling me to do something comes with the button, where the dashboard can do it.
+  What doesn't yet is in `docs/issues.md`. When adding a button, look at every surface
+  the item appears on.
+- **Name a tool as its users do.** A plugin's title is its tool's name ("GitHub", "Git", "Git
+  Stack"); a command shown to the user is written as it's typed (`git stack restack`); in prose
+  it's lower-case words ("a branch git stack tracks"). The plugin's own name stays its config
+  section's (`git_stack`).
+- **A class's variables come first.** Its class variables (a plugin's `name`,
+  `kinds`, `notification_kinds` and the like) go at the top, then `__init__`, which
+  sets every instance variable, then the methods. Don't define a class variable between
+  methods, next to the method it's for, or set a new instance variable outside
+  `__init__`.
+- **Every save must leave working code.** People run `mfd serve --reload`,
+  which restarts on each change. Each file you write must be syntactically
+  valid, and every import in the package must still resolve: when moving or
+  renaming something, update its importers in the same edit, or add the new
+  name before removing the old one. The reloader checks with `mfd check`
+  before restarting and waits out a failure, but until the code is fixed the
+  page runs the old code.
+
+## Reviewing
+
+`docs/review.md` has what move-forward adds to `AGENTS.md`'s reviews: one reviewer per PR, how
+findings are numbered and answered, stacked PRs merging in order, each safe on its own,
+Dependabot's PRs, and the parts of a review of the whole code.

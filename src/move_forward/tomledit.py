@@ -2,7 +2,7 @@
 order, blank lines, hand edits.
 
 The standard library reads TOML (`tomllib`) but doesn't write it, and a library that does
-would be a new dependency (see AGENTS.md). The config file only ever needs a key's line
+would be a new dependency (see PROJECT_AGENTS.md). The config file only ever needs a key's line
 changed, which this does: the key's own line if it's set, else its commented-out default
 (as `mfd init` writes them), uncommented, else a new line at the end of its section.
 Callers parse the result again to check it says what they meant.
