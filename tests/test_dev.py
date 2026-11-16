@@ -160,6 +160,7 @@ def test_install_links_mfd_and_runs_dev_projects_after_install(
     monkeypatch.setattr(dev, "venv", lambda: None)
     monkeypatch.setattr(dev, "run", run)
     monkeypatch.setattr(dev, "_bin_dir", lambda: tmp_path)
+    # On PATH already, so install leaves the user's PATH alone (on Windows, the registry).
     monkeypatch.setenv("PATH", str(tmp_path))
 
     dev.install()
