@@ -11,13 +11,15 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request cancels its run still going, which no longer says anything about
-# it and holds runners the new one needs. Runs on main all finish, each in a group of its own (a
-# shared group would still cancel one left waiting): each says whether that merge left main
-# working.
+# A new push cancels the branch's run still going, which no longer says anything about the
+# branch and holds runners the new one needs (an account runs only so many jobs at once). On
+# main too: merging a stack pushes several commits at once, and only the newest one's run
+# matters, as the ruleset on main requires "CI passed" before a PR merges. A re-run cancels
+# nothing, so re-running an older commit's run waits for the newest's, unless that's still
+# waiting to start, which it replaces.
 concurrency:
-  group: check-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
-  cancel-in-progress: true
+  group: check-${{ github.ref }}
+  cancel-in-progress: ${{ github.run_attempt == 1 }}
 
 jobs:
   # Whether anything but docs changed. A pull request touching only Markdown skips the checks
@@ -114,7 +116,23 @@ jobs:
     if: always()
     needs: [changes, static, tests]
     runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
     steps:
+      # A cancelled run still runs this job, because of always(). Cancelling it too, which only
+      # force-cancel can, marks it cancelled rather than failed, which blocks a merge just the
+      # same. (A fork's pull request can't, so there it fails.) If the run was cancelled before
+      # this job started, cancelled() is false in it, so a cancelled job it needs counts too. If
+      # the force-cancel hasn't stopped this job within a minute, fail.
+      - name: Cancel this job if the run was cancelled
+        if: cancelled() || contains(needs.*.result, 'cancelled')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/force-cancel"
+          sleep 60
+          exit 1
       - name: Fail unless every check passed
         env:
           CHANGES: ${{ needs.changes.result }}
