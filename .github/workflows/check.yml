@@ -122,10 +122,11 @@ jobs:
     steps:
       # A cancelled run still runs this job, because of always(). Cancelling it too, which only
       # force-cancel can, marks it cancelled rather than failed, which blocks a merge just the
-      # same. (A fork's pull request can't, so there it fails.) The next step doesn't run in a
-      # cancelled run, so if the force-cancel hasn't stopped this job within a minute, fail.
+      # same. (A fork's pull request can't, so there it fails.) If the run was cancelled before
+      # this job started, cancelled() is false in it, so a cancelled job it needs counts too. If
+      # the force-cancel hasn't stopped this job within a minute, fail.
       - name: Cancel this job if the run was cancelled
-        if: cancelled()
+        if: cancelled() || contains(needs.*.result, 'cancelled')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
