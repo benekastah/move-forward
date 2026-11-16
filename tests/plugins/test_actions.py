@@ -119,7 +119,7 @@ def _stored(config: Config) -> Database:
                         for line in git(
                             repo,
                             "for-each-ref",
-                            "--format=%(refname:short) %(objectname)",
+                            "--format=%(refname:lstrip=2) %(objectname)",
                             "refs/heads",
                         ).splitlines()
                     )

@@ -24,9 +24,11 @@ _REMOTE_RE = re.compile(
 GITHUB_HOSTS = ("github.com",)
 _TRACK_RE = re.compile(r"ahead (\d+)|behind (\d+)|(gone)")
 _FOR_EACH_REF_FORMAT = (
-    "%(refname:short)%09%(upstream:short)%09%(upstream:track)%09%(committerdate:iso-strict)"
+    "%(refname:lstrip=2)%09%(upstream:lstrip=2)%09%(upstream:track)%09%(committerdate:iso-strict)"
     "%09%(objectname)%09%(upstream:remotename)"
 )
+"""A branch's fields. Its name and its upstream's (`origin/main`) are their refs without
+`refs/heads/` or `refs/remotes/`: `:short` would make a branch named like a tag `heads/v1`."""
 _REFS_FORMAT = f"%(refname)%09%(symref)%09{_FOR_EACH_REF_FORMAT}"
 """`Refs.read`'s: each ref's full name and what it points at if it's symbolic, then a branch's
 fields as `parse_branches` reads them."""
@@ -365,7 +367,6 @@ def _off_default(
     when git can't say, and empty without a default branch to count against."""
     if not branches or not found.default_refs:
         return {}
-    # From their tips' shas, not their names: a branch named like a tag is `heads/v1`.
     tips = [b.sha for b in branches if b.sha]
     try:
         walked = git(

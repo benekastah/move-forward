@@ -177,7 +177,7 @@ def test_a_merge_counts_the_commits_of_both_its_sides(tmp_path: Path) -> None:
 
 
 def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Path) -> None:
-    """git names such a branch `heads/v1`, which is no branch's ref under refs/heads."""
+    """git's short name for such a branch is `heads/v1`, which is no branch's ref."""
     origin = tmp_path / "origin"
     _init_repo(origin)
     _commit(origin, "a.txt")
@@ -191,8 +191,7 @@ def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Pa
 
     result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     counted = {b.name: (b.ahead_of_default, b.my_commits) for b in result.branches}
-    # `heads/v1` is git's short name for the branch while a tag is `v1` too.
-    assert counted == {"main": (None, None), "good": (1, 1), "heads/v1": (1, 1)}
+    assert counted == {"main": (None, None), "good": (1, 1), "v1": (1, 1)}
 
 
 def test_config_is_read_whatever_its_case_and_remotes_as_git_lists_them(tmp_path: Path) -> None:
