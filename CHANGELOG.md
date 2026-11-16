@@ -5,6 +5,18 @@ the HTTP endpoints and the page's links. Newest first. Each entry says what to d
 
 ## Unreleased
 
+### Python 3.15 is required
+
+move-forward now needs Python 3.15 or newer. As for 3.14 (below), a running `mfd serve` can't
+move over by itself. To move:
+
+1. Stop `mfd serve`.
+2. Pull.
+3. Reinstall. With uv, `python3 dev.py install` (on Windows, `py dev.py install`) is enough:
+   uv finds Python 3.15, or downloads it. Without uv, install Python 3.15 if you haven't and
+   run it with that: `python3.15 dev.py install` (on Windows, `py -3.15 dev.py install`).
+4. Start `mfd serve` again.
+
 ### Slack finds your teams in github's
 
 `[slack.teams]` is keyed by a team's slug, as PRs name it, and no longer has to name top-level
