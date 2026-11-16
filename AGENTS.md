@@ -198,8 +198,9 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   plugin publishes. Tests touching git make real repos in `tmp_path`; tests
   never touch the network, nor the real database or its token
   (`conftest` fails one that opens them: use `:memory:` or `tmp_path`), nor
-  the secret store, nor run a program but git (not `git stack`, which can start `gh`;
-  and icacls on Windows). `conftest`'s `outside` fixture fails a test that tries,
+  the secret store, nor run a program but git (not `git stack`, which can start `gh`).
+  Files are made private only in a test marked `private_files`, which may run icacls on
+  Windows; in an unmarked test, on every system, `conftest` skips it. `conftest`'s `outside` fixture fails a test that tries,
   naming what it tried, even when the code under test catches the refusal: stub it
   where the test isn't about it (the plugin's client, `keychain.read`), not by opting
   out. A test that tries on purpose (a test of the guard) takes what was refused with

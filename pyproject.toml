@@ -22,6 +22,7 @@ packages = ["src/move_forward"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["private_files: makes its files private for real (conftest's `private_files`)"]
 
 [tool.ruff]
 line-length = 100

@@ -19,6 +19,7 @@ import pytest
 from pydantic import BaseModel
 
 from move_forward import auth, keychain, localtime, server, shell
+from move_forward import db as db_module
 from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
@@ -103,10 +104,9 @@ def no_real_database(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(auth, "rotate", _guarded(auth.rotate, 0))
 
 
-ALLOWED_PROGRAMS = frozenset({"git"} | ({"icacls"} if sys.platform == "win32" else set()))
+ALLOWED_PROGRAMS = frozenset({"git"})
 """The programs any test may run, by name: git, in the repos tests make in `tmp_path` (but not
-`git stack`: see `GIT_STACK`), and on Windows icacls, which `private.py` keeps a test's files
-private with."""
+`git stack`: see `GIT_STACK`). A test marked `private_files` may run icacls too."""
 
 GIT_STACK = "git stack"
 """What a test `allow`s to run `git stack`, which is git, but can start `gh` (its GitHub
@@ -296,10 +296,10 @@ def git_environment(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> None:
 @pytest.fixture(autouse=True)
 def outside(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> Iterator[Outside]:
     """Keep each test to itself. It's refused, with `OutsideRefused`:
-    - starting a program but git, icacls on Windows, and those it `allow`s, through
-      `subprocess` (`Popen` and what's built on it, asyncio's too), `os.exec*`, `os.spawn*` or
-      `os.posix_spawn*`; `git stack` through `subprocess`, unless it allows `GIT_STACK`; and
-      any shell or terminal: a shell command (`os.system`, `os.popen`, `shell=True`),
+    - starting a program but git and those it `allow`s (icacls, when it's marked `private_files`),
+      through `subprocess` (`Popen` and what's built on it, asyncio's too), `os.exec*`,
+      `os.spawn*` or `os.posix_spawn*`; `git stack` through `subprocess`, unless it allows
+      `GIT_STACK`; and any shell or terminal: a shell command (`os.system`, `os.popen`, `shell=True`),
       `pty.spawn`, `os.forkpty`, `os.startfile`;
     - a socket connecting (`connect`, `connect_ex`) or sending (`sendto`, `sendmsg`) anywhere
       but this machine;
@@ -434,6 +434,30 @@ def outside(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> Iterator[Outsi
     monkeypatch.setattr(keychain, "_advapi32", advapi32)
     yield outside
     outside.check()
+
+
+@pytest.fixture(autouse=True)
+def private_files(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, outside: Outside
+) -> None:
+    """Files are made private, and checked, only in a test marked `private_files`, which may run
+    icacls for it on Windows. Elsewhere it's skipped: on Windows each file takes icacls a process
+    or two, which would be half the programs the tests start there. An unmarked test that calls
+    `private`'s functions itself is caught only on Windows, by the guard: on Unix they're only
+    file modes, which no program is started for."""
+    if request.node.get_closest_marker("private_files"):
+        outside.allow("icacls")
+        return
+
+    def skipped(path: Path) -> None:
+        return None
+
+    def mine(path: Path) -> bool:
+        return True
+
+    monkeypatch.setattr(db_module, "make_private", skipped)
+    monkeypatch.setattr(auth, "make_private", skipped)
+    monkeypatch.setattr(auth, "is_private", mine)
 
 
 @pytest.fixture(autouse=True)
