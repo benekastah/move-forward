@@ -1,14 +1,14 @@
 # move-forward's own rules
 
-What's true of move-forward alone. `AGENTS.md` has the rules it shares with every project made
-from python-template; where the two disagree, this file wins. The README says what the
-dashboard does; `docs/entities.md` is the contract between plugins,
-`docs/graph.md` explains the graph they go through, `docs/plugins.md`
-draws how the plugins use each other's entities, `docs/plugin_contract.md` lists
-every class variable, hook and request of `Plugin`, and `docs/writing-a-plugin.md`
-walks through making one; `docs/review.md` says what move-forward adds to
-`AGENTS.md`'s reviews, and how the whole code is reviewed; `docs/roadmap.md` is what's left to build, and `docs/issues.md` what's wrong
-with what's built (bugs, gaps against the rules below, and what's untried where it runs).
+What's true of move-forward alone. `AGENTS.md` has the rules it shares with every project made from
+python-template; where the two disagree, this file wins. The README says what the dashboard does;
+`docs/entities.md` is the contract between plugins, `docs/graph.md` explains the graph they go
+through, `docs/plugins.md` draws how the plugins use each other's entities,
+`docs/plugin_contract.md` lists every class variable, hook and request of `Plugin`, and
+`docs/writing-a-plugin.md` walks through making one; `docs/review.md` says what move-forward adds to
+`AGENTS.md`'s reviews, and how the whole code is reviewed; `docs/roadmap.md` is what's left to
+build, and `docs/issues.md` what's wrong with what's built (bugs, gaps against the rules below, and
+what's untried where it runs).
 
 ## Shape of the code
 
@@ -117,7 +117,7 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
 - **Core and a plugin change in separate PRs.** Don't change core in the PR that adds or
   changes a plugin. If a plugin needs something new from core (a hook, a
   `Context` field, a graph method), land that first, on its own, with its own
-  tests, and build the plugin PR on it.
+  tests, and stack the plugin PR on it (see `docs/review.md` for how stacked PRs merge).
 - **The docs to keep up to date**, besides `AGENTS.md`'s:
   - the README for core: its config keys, commands, command-line options,
     HTTP endpoints and the page; its plugins table must match the code.
@@ -181,9 +181,9 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
   moving out of core into a plugin is copied by the plugin's own migration,
   from core's table if it's still there; core never writes into a plugin's
   tables.
-- **Where tests go, and what they mustn't touch.** A plugin's tests go in `tests/plugins/`, named after it (`test_github_*.py`),
-  as do tests of plugins working together (`test_actions.py`); core's stay in
-  `tests/`.
+- **Where tests go, and what they mustn't touch.** A plugin's tests go in `tests/plugins/`, named
+  after it (`test_github_*.py`), as do tests of plugins working together (`test_actions.py`); core's
+  stay in `tests/`.
   Panel tests build the page as core does (`conftest.dashboard(...)`) and assert on panel
   contents; plugin contract tests assert on the entities a plugin publishes. Tests touching
   git make real repos in `tmp_path`; tests never touch the network, nor the real database or
@@ -198,8 +198,8 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
   `outside.allow(...)` (`sys.executable`, to run `mfd`; `conftest.GIT_STACK`, for
   `git stack`). A child process isn't guarded: git runs with `GIT_ALLOW_PROTOCOL=file`, so
   its own transports can't fetch from the network, and with conftest's `TESTS_GIT_CONFIG` in
-  place of mine and the system's (an identity, no signing, no background maintenance, none
-  of my ignore or attributes files), but what it runs (hooks, credential helpers,
+  place of the developer's and the system's (an identity, no signing, no background maintenance,
+  none of their ignore or attributes files), but what it runs (hooks, credential helpers,
   `git stack`) and a program a test allows can do anything, so give them a config and repos
   that reach nothing. The one exception is
   `test_the_real_credential_manager_keeps_a_secret`, the only check that `keychain.py`'s
@@ -239,5 +239,6 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
 
 ## Reviewing
 
-`docs/review.md` has what move-forward adds to `AGENTS.md`'s reviews: Dependabot's PRs, and the
-parts of a review of the whole code.
+`docs/review.md` has what move-forward adds to `AGENTS.md`'s reviews: one reviewer per PR, how
+findings are numbered and answered, stacked PRs merging in order, each safe on its own,
+Dependabot's PRs, and the parts of a review of the whole code.

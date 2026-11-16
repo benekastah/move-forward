@@ -1,8 +1,8 @@
 # Issues
 
-What's wrong with what's built: bugs, gaps against the rules in `PROJECT_AGENTS.md`, and what hasn't been
-tried where it runs. New work is in [roadmap.md](roadmap.md). When a change fixes one, remove it
-in the same change, with any roadmap step that points at it; when a change leaves something
+What's wrong with what's built: bugs, gaps against the rules in `PROJECT_AGENTS.md`, and what hasn't
+been tried where it runs. New work is in [roadmap.md](roadmap.md). When a change fixes one, remove
+it in the same change, with any roadmap step that points at it; when a change leaves something
 wrong, add it.
 
 ## Bugs
@@ -32,8 +32,8 @@ wrong, add it.
 
 ## What one surface offers and another doesn't
 
-Where `PROJECT_AGENTS.md`'s "An item offers the same wherever it's shown" doesn't hold yet (Act now, the
-panels, focus mode), and where the CLI can't do what the page does, which the work-notes skill
+Where `PROJECT_AGENTS.md`'s "An item offers the same wherever it's shown" doesn't hold yet (Act now,
+the panels, focus mode), and where the CLI can't do what the page does, which the work-notes skill
 needs. Each stands alone; a plugin fix that needs a core one says so, and lands on top of it.
 
 - **Set aside from anywhere.** An item only Act now shows (nominated with no panel item) has

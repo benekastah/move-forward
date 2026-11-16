@@ -153,8 +153,9 @@ def test_a_secret_written_to_credential_manager_reads_back_and_deletes(
 def test_the_real_credential_manager_keeps_a_secret(
     monkeypatch: pytest.MonkeyPatch, outside: Outside
 ) -> None:
-    """The one test of the real store (see AGENTS.md): whether `_Credential` and the calls on
-    it agree with Windows' own, which the fake, built on the same `_Credential`, can't tell."""
+    """The one test of the real store (see PROJECT_AGENTS.md): whether `_Credential` and the
+    calls on it agree with Windows' own, which the fake, built on the same `_Credential`, can't
+    tell."""
     monkeypatch.setattr(keychain, "_advapi32", REAL_ADVAPI32)
     outside.allow("cmdkey")
     target = f"move-forward-test-{uuid.uuid4().hex}"

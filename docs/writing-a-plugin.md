@@ -5,10 +5,10 @@ and notes are all built this way, in `src/move_forward/plugins/<name>/`. Core kn
 loads the config, enables the plugins whose section is there, runs their collectors, builds
 the [entity graph](graph.md) from what they publish, and renders their panels.
 
-This page walks through what a plugin is made of, using a made-up `linear` plugin (issues
-from Linear) as the example. [PROJECT_AGENTS.md](../PROJECT_AGENTS.md) has the rules every change follows (beside
-`AGENTS.md`'s, which every python-template project shares);
-this page explains them as they apply to a plugin.
+This page walks through what a plugin is made of, using a made-up `linear` plugin (issues from
+Linear) as the example. [PROJECT_AGENTS.md](../PROJECT_AGENTS.md) has the rules every change follows
+(beside `AGENTS.md`'s, which every python-template project shares); this page explains them as they
+apply to a plugin.
 
 ## The contract
 
