@@ -1,0 +1,27 @@
+# Weekly pull requests for new versions of the Python packages in uv.lock and of the actions the
+# workflows use, one per ecosystem. A version waits a week after its release before it's
+# proposed, so one that's pulled or found to be malicious soon after is skipped. docs/review.md
+# says how these PRs are reviewed.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: weekly
+    # Only uv.lock: pyproject.toml's lower bounds stay, so what's installed beside move-forward (a
+    # plugin) isn't held to newer versions than it needs.
+    versioning-strategy: lockfile-only
+    groups:
+      python:
+        patterns: ["*"]
+    cooldown:
+      default-days: 7
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    cooldown:
+      default-days: 7
