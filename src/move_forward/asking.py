@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from .shell import CommandError, run
+from .shell import CommandError, git_program, run
 
 Complete = Callable[[str], list[str]]
 """The answers that could finish what's typed so far, for tab completion."""
@@ -203,7 +203,7 @@ def port(answer: str) -> str:
 
 def checkout(cwd: Path) -> Path | None:
     """The git checkout `cwd` is in, if any."""
-    top = quiet(["git", "rev-parse", "--show-toplevel"], cwd)
+    top = quiet([git_program(), "-C", str(cwd), "rev-parse", "--show-toplevel"])
     return Path(top) if top else None
 
 

@@ -18,7 +18,7 @@ from typing import Any, NoReturn, cast
 import pytest
 from pydantic import BaseModel
 
-from move_forward import auth, keychain, localtime, server
+from move_forward import auth, keychain, localtime, server, shell
 from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
@@ -138,6 +138,15 @@ TESTS_GIT_CONFIG = """\
 """git's global config in every test, in place of mine: who commits, unsigned. Without
 maintenance: each commit, fetch and push would start another git to do it. Without my global
 ignore and attributes files, which git reads from `~/.config/git` unless told otherwise."""
+
+_EXEC_PATH = subprocess.run(
+    ["git", "--exec-path"], capture_output=True, encoding="utf-8", check=False
+).stdout
+REAL_GIT = Path(_EXEC_PATH.strip(), "git.exe" if sys.platform == "win32" else "git")
+"""git's own program, which the tests run rather than what PATH finds (a wrapper, or Git for
+Windows' launcher, which starts it): each git starts a quarter quicker on Windows."""
+if REAL_GIT.is_file():  # before anything asks `shell.git_program`, which keeps what it found
+    os.environ[shell.GIT_ENV] = str(REAL_GIT)
 
 REAL_ADVAPI32 = keychain._advapi32  # pyright: ignore[reportPrivateUsage]
 """Windows' real Credential Manager, which `outside` replaces: for the one test of it, which

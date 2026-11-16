@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from ...api import Asker, Init, InitSection, InitSetup, checkout, choices, quiet, word
+from ...api.shell import CommandError, git
 from .client import api
 from .config import DEFAULT_HOST
 
@@ -14,16 +15,24 @@ none was given."""
 EXAMPLE = InitSection({"org": "example-org", "teams": ["my-team"]}, SHOWN)
 
 
+def _git(top: Path, *args: str) -> str:
+    """git's output in the checkout `top`, or "" when it fails, as `quiet` gives."""
+    try:
+        return git(top, *args).strip()
+    except CommandError, FileNotFoundError:
+        return ""
+
+
 def guess_org(cwd: Path) -> str:
     """The GitHub org of the checkout `cwd` is in, if any: from the remote its current
     branch tracks (`upstream` in a fork, often), else from the first remote on GitHub."""
     top = checkout(cwd)
     if top is None:
         return ""
-    tracked = quiet(["git", "rev-parse", "--abbrev-ref", "@{upstream}"], top).split("/")[0]
-    remotes = quiet(["git", "remote"], top).split()
+    tracked = _git(top, "rev-parse", "--abbrev-ref", "@{upstream}").split("/")[0]
+    remotes = _git(top, "remote").split()
     for remote in sorted(remotes, key=lambda name: name != tracked):
-        if match := GITHUB_REMOTE_RE.search(quiet(["git", "remote", "get-url", remote], top)):
+        if match := GITHUB_REMOTE_RE.search(_git(top, "remote", "get-url", remote)):
             return match.group(1)
     return ""
 

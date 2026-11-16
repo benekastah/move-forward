@@ -1,11 +1,17 @@
 """Running external commands (git, gh, security), and finding a git checkout's repository."""
 
+import functools
+import os
+import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
 DEFAULT_TIMEOUT_SECONDS = 120
 MAX_COMMAND_IN_ERROR = 200
+GIT_ENV = "MOVE_FORWARD_GIT"
+"""The environment variable naming the git to run, in place of the one on PATH."""
 
 _stopping = threading.Event()
 
@@ -57,6 +63,11 @@ def run(
         encoding=encoding,
         errors="replace",
         timeout=timeout,
+        # Python's own files aren't inherited anyway (PEP 446). Without closing the rest, macOS
+        # starts a program given by its path (and no `cwd`) with posix_spawn rather than fork, a
+        # quarter faster. Not on Windows, where a child would inherit the pipes another thread's
+        # command is being given as it starts, and could keep that command's output open.
+        close_fds=sys.platform == "win32",
         check=False,
     )
     if result.returncode != 0:
@@ -67,9 +78,17 @@ def run(
     return result.stdout
 
 
+@functools.cache
+def git_program() -> str:
+    """The git every git command runs: `$MOVE_FORWARD_GIT`, else the path of the one on PATH,
+    else plain `git`, for the error saying it isn't there. Looked up once, and started by its
+    path, which is quicker than by its name (see `run`)."""
+    return os.environ.get(GIT_ENV) or shutil.which("git") or "git"
+
+
 def git(repo: Path, *args: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> str:
     """Run `git -C <repo> <args>` and return its stdout."""
-    return run(["git", "-C", str(repo), *args], timeout=timeout)
+    return run([git_program(), "-C", str(repo), *args], timeout=timeout)
 
 
 def git_common_dir(repo: Path) -> Path | None:
