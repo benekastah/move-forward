@@ -469,4 +469,5 @@ Copier template (`.copier-answers.yml` records its answers and commit): `dev.py`
 `pyproject.toml` (its dev tools are the `template-dev` group; ours, like tzdata, go in `dev`).
 `uvx copier update --defaults` takes in its later changes, merged with ours.
 `dev.py` stays the template's: what's move-forward's own (`install` ending with `mfd init`, and
-`within`, which times CI's steps) is in `dev_project.py`. The README, AGENTS.md and `check.yml` are ours alone.
+`within`, which times CI's steps) is in `dev_project.py`.
+The README, AGENTS.md and `check.yml` are ours alone.
