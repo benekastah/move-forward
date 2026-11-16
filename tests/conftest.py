@@ -306,10 +306,9 @@ def outside(monkeypatch: pytest.MonkeyPatch, git_config: Path) -> Iterator[Outsi
 
     What a child does isn't guarded, being another process. git gets `GIT_ENVIRONMENT` and
     `TESTS_GIT_CONFIG`, so its own transports can't fetch from the network, it can't ask for a
-    password and it reads none of my config, but what it
-    runs (hooks, credential helpers, and `git stack`, which can start `gh`) isn't limited; a
-    program a test allows (Python, to run `mfd`) gets nothing: give it a config that reaches
-    nothing."""
+    password and it reads none of my config, but what it runs (hooks, credential helpers, and
+    `git stack`, which can start `gh`) isn't limited; a program a test allows (Python, to run
+    `mfd`) gets nothing: give it a config that reaches nothing."""
     outside = Outside()
     git_environment(monkeypatch, git_config)
 
