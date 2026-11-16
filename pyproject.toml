@@ -7,7 +7,11 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Paul Harper", email = "benekastah@gmail.com" }]
 requires-python = ">=3.15"
-dependencies = ["pydantic>=2.14.3", "watchfiles>=1.3.0"]
+dependencies = [
+    "py-git-client @ git+https://github.com/benekastah/py-git-client@v0.0.1",
+    "pydantic>=2.14.3",
+    "watchfiles>=1.3.0",
+]
 
 [project.scripts]
 mfd = "move_forward.cli:main"
@@ -31,13 +35,24 @@ dev = [
 requires = ["hatchling>=1.33.0"]
 build-backend = "hatchling.build"
 
+# py-git-client is installed from its git tag (it isn't on PyPI), which hatchling refuses
+# unless allowed.
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/move_forward"]
 
 [tool.pytest]
 testpaths = ["tests"]
 # One worker per CPU (pytest-xdist); `-n 0` runs them one at a time, e.g. to debug.
-addopts = ["--numprocesses", "auto"]
+# py-git-client's pytest plugin keeps git to itself in every test and session fixture: a global
+# config of the tests' own (an identity, no background maintenance, none of the developer's
+# ignore or attributes files), no system config, none of git's variables that would win over
+# them, GIT_ALLOW_PROTOCOL=file (no network) and no asking for a password; and it builds
+# repos once per session (`repo_templates`). Loaded here rather than from conftest.py, which
+# imports it, so pytest can rewrite its asserts.
+addopts = ["--numprocesses", "auto", "-p", "git_client.testing"]
 markers = ["private_files: makes its files private for real (conftest's `private_files`)"]
 
 [tool.ruff]

@@ -1,11 +1,9 @@
-import shutil
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 from conftest import (
     entry,
-    git_environment,
     iced,
     issue,
     keep_notes,
@@ -13,6 +11,7 @@ from conftest import (
     section,
     todo,
 )
+from git_client.testing import RepoTemplates
 
 from move_forward import refresh
 from move_forward.config import Config
@@ -55,34 +54,27 @@ def _commit(repo: Path, name: str) -> None:
     git(repo, "commit", "-q", "-m", name)
 
 
-@pytest.fixture(scope="session")
-def repo_template(tmp_path_factory: pytest.TempPathFactory, git_config: Path) -> Path:
-    """`repo` and its origin, made once for the run: each test gets a copy."""
-    root = tmp_path_factory.mktemp("repo")
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        git_environment(monkeypatch, git_config)
-        origin = root / "origin.git"
-        _init(origin, bare=True)
-        repo = root / "repo"
-        _init(repo)
-        _commit(repo, "a.txt")
-        git(repo, "remote", "add", "origin", str(origin))
-        git(repo, "push", "-q", "-u", "origin", "main")
-        git(repo, "branch", "done")
-        git(repo, "switch", "-q", "-c", "wip")
-        _commit(repo, "b.txt")
-        git(repo, "switch", "-q", "main")
-    return root
+def _repo_and_origin(root: Path) -> None:
+    """`repo` and its origin, `origin.git`: built once for the run, and copied for each test."""
+    origin = root / "origin.git"
+    _init(origin, bare=True)
+    repo = root / "repo"
+    _init(repo)
+    _commit(repo, "a.txt")
+    git(repo, "remote", "add", "origin", str(origin))
+    git(repo, "push", "-q", "-u", "origin", "main")
+    git(repo, "branch", "done")
+    git(repo, "switch", "-q", "-c", "wip")
+    _commit(repo, "b.txt")
+    git(repo, "switch", "-q", "main")
 
 
 @pytest.fixture
-def repo(repo_template: Path, tmp_path: Path) -> Path:
-    """A clone of a bare origin, on main with one commit, plus branches `done` and `wip`."""
-    for name in ("origin.git", "repo"):
-        shutil.copytree(repo_template / name, tmp_path / name, symlinks=True)
-    repo = tmp_path / "repo"
-    git(repo, "remote", "set-url", "origin", str(tmp_path / "origin.git"))
-    return repo
+def repo(repo_templates: RepoTemplates, tmp_path: Path) -> Path:
+    """A clone of a bare origin (beside it, `origin.git`), on main with one commit, plus
+    branches `done` and `wip`."""
+    repo_templates.build("repo-and-origin", _repo_and_origin)
+    return repo_templates.copy("repo-and-origin", tmp_path / "repos") / "repo"
 
 
 @pytest.fixture
@@ -195,7 +187,7 @@ def test_push_and_pull_of_a_branch_named_like_a_tag_move_the_branch(
     _commit(repo, "c.txt")
     run("git/push_branch", config, fields)
     assert git(repo, "rev-parse", "refs/heads/v1") == git(repo, "rev-parse", "origin/v1")
-    other = _clone(tmp_path / "origin.git", tmp_path / "other", "v1")
+    other = _clone(repo.parent / "origin.git", tmp_path / "other", "v1")
     _commit(other, "d.txt")
     git(other, "push", "-q")
     assert run("git/pull_branch", config, fields) == "pulled v1"
@@ -745,7 +737,7 @@ def test_pull_fast_forwards_a_branch_checked_out_or_not_and_refuses_otherwise(
     fields = {"repo": str(repo), "branch": "wip"}
     run("git/push_branch", config, fields)
     other = tmp_path / "other"
-    _clone(tmp_path / "origin.git", other, "wip")
+    _clone(repo.parent / "origin.git", other, "wip")
 
     def pushed_elsewhere(name: str) -> str:
         _commit(other, name)
@@ -776,7 +768,7 @@ def test_pull_moves_a_branch_in_a_linked_worktree_and_never_one_being_rebased(
     fields = {"repo": str(repo), "branch": "wip"}
     run("git/push_branch", config, fields)
     other = tmp_path / "other"
-    _clone(tmp_path / "origin.git", other, "wip")
+    _clone(repo.parent / "origin.git", other, "wip")
     _commit(other, "c.txt")
     git(other, "push", "-q")
     linked = tmp_path / "linked"

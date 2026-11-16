@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import REAL_GIT, Outside
+from conftest import Outside
+from git_client.testing import real_git
 
 from move_forward import shell
 from move_forward.shell import GIT_ENV, CommandError, git, git_common_dir, git_program, run
@@ -63,7 +64,7 @@ def test_git_is_the_one_its_variable_names_else_the_one_on_path(
 
 
 def test_the_tests_run_gits_own_program() -> None:
-    assert git_program() == str(REAL_GIT) and REAL_GIT.is_file()
+    assert git_program() == real_git()
 
 
 def _checkout(path: Path) -> Path:
