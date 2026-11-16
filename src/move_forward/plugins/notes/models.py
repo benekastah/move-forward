@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ...api import Model
+from move_forward.api import Model
 
 Size = Literal["quick", "big"]
 

@@ -12,8 +12,16 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...api.shell import CommandError, run, stopping
-from .models import Check, GitHubSnapshot, MergeMethod, PullRequest, Review, Thread, TimelineEvent
+from move_forward.api.shell import CommandError, run, stopping
+from move_forward.plugins.github.models import (
+    Check,
+    GitHubSnapshot,
+    MergeMethod,
+    PullRequest,
+    Review,
+    Thread,
+    TimelineEvent,
+)
 
 log = logging.getLogger(__name__)
 COMMIT_EMAIL_LOOKUP_COUNT = 10

@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
-from ...api.shell import CommandError, git, git_common_dir
-from .models import Branch, LocalRepo, LocalSnapshot, Worktree
+from move_forward.api.shell import CommandError, git, git_common_dir
+from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 log = logging.getLogger(__name__)
 

@@ -27,9 +27,9 @@ from typing import Any, Literal, cast, get_args, get_origin
 from pydantic import BaseModel, ValidationError
 from pydantic_core import PydanticUndefined
 
-from . import registry, render, strict, tomledit
-from .config import Config
-from .plugin import Plugin
+from move_forward import registry, render, strict, tomledit
+from move_forward.config import Config
+from move_forward.plugin import Plugin
 
 PATH = "/settings"
 Kind = Literal["int", "float", "bool", "text", "list"]

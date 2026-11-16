@@ -14,9 +14,18 @@ from typing import Annotated
 
 from pydantic import Field
 
-from . import act_now
-from .domain import Model
-from .page import Action, Group, Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
+from move_forward import act_now
+from move_forward.domain import Model
+from move_forward.page import (
+    Action,
+    Group,
+    Identity,
+    Item,
+    ItemAdditions,
+    Panel,
+    SourceStatus,
+    Surface,
+)
 
 log = logging.getLogger(__name__)
 

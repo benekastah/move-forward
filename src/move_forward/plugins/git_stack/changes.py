@@ -12,8 +12,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from ...api import Graph, Model
-from ...api.shell import git_common_dir
+from move_forward.api import Graph, Model
+from move_forward.api.shell import git_common_dir
 
 BRANCH = "git.branch"
 

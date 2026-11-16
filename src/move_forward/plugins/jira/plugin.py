@@ -5,7 +5,7 @@ import re
 from datetime import date, datetime, time, timedelta
 from typing import ClassVar
 
-from ...api import (
+from move_forward.api import (
     API_VERSION,
     Action,
     ActionHandler,
@@ -38,14 +38,14 @@ from ...api import (
     due_pressure,
     localtime,
 )
-from ...api.kinds import PULL_REQUEST as PR
-from ...api.kinds import TICKET
-from . import actions, changes, client
-from .config import JiraConfig
-from .kinds import JiraTicket
-from .models import JiraIssue, JiraSnapshot
-from .repository import MIGRATIONS, IssueRepository
-from .setup import INIT
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.api.kinds import TICKET
+from move_forward.plugins.jira import actions, changes, client
+from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.kinds import JiraTicket
+from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
+from move_forward.plugins.jira.repository import MIGRATIONS, IssueRepository
+from move_forward.plugins.jira.setup import INIT
 
 
 def ticket_ref(issue: JiraIssue) -> Ref:

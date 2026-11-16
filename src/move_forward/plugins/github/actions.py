@@ -7,15 +7,15 @@ again at once.
 
 import re
 
-from ...api import ActionError, ActionHandler, ActionResult, InputRequest, Ref
-from ...api.kinds import PULL_REQUEST as PR
-from ...api.shell import CommandError
-from . import client
-from .config import GitHubConfig
-from .models import PullRequest
-from .panels import merge_conditions, merge_holds
-from .prs import decisions, failed_runs, merge_method, primary_reviewers
-from .snapshots import PrRepository
+from move_forward.api import ActionError, ActionHandler, ActionResult, InputRequest, Ref
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.api.shell import CommandError
+from move_forward.plugins.github import client
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.models import PullRequest
+from move_forward.plugins.github.panels import merge_conditions, merge_holds
+from move_forward.plugins.github.prs import decisions, failed_runs, merge_method, primary_reviewers
+from move_forward.plugins.github.snapshots import PrRepository
 
 LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?")
 """A GitHub login (with `_` for Enterprise Managed Users' `jdoe_acme`): also what keeps one

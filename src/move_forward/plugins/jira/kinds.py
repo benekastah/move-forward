@@ -1,6 +1,6 @@
 """The entity kinds jira publishes, with their attributes; see `docs/entities.md`."""
 
-from ...api.kinds import Ticket
+from move_forward.api.kinds import Ticket
 
 
 class JiraTicket(Ticket):

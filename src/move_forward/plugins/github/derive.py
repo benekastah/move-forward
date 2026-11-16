@@ -6,10 +6,16 @@ from pathlib import Path, PurePosixPath
 
 from pydantic import Field
 
-from ...api import Model
-from ...api.shell import CommandError, git
-from . import codeowners
-from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, ReviewerSuggestion, TeamPrScore
+from move_forward.api import Model
+from move_forward.api.shell import CommandError, git
+from move_forward.plugins.github import codeowners
+from move_forward.plugins.github.models import (
+    DerivedSnapshot,
+    GitHubSnapshot,
+    PullRequest,
+    ReviewerSuggestion,
+    TeamPrScore,
+)
 
 MAX_SUGGESTIONS = 5
 

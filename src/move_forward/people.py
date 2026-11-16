@@ -14,12 +14,12 @@ from typing import Annotated
 
 from pydantic import Field, field_validator
 
-from . import act_now
-from .domain import Model
-from .graph import Graph, Ref
-from .kinds import PERSON, personal_email
-from .page import Action, Item, ItemAdditions
-from .strict import Strict
+from move_forward import act_now
+from move_forward.domain import Model
+from move_forward.graph import Graph, Ref
+from move_forward.kinds import PERSON, personal_email
+from move_forward.page import Action, Item, ItemAdditions
+from move_forward.strict import Strict
 
 DEFAULT_CONTACT_TYPES = {"customer": 1, "partner": 1, "vendor": 0}
 CONTACT_ACTION = f"{act_now.ACTIONS}/contact"

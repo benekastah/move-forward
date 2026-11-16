@@ -3,7 +3,7 @@ commit authors to reviewers to suggest."""
 
 from datetime import datetime
 
-from ...api import Database, LookupCache
+from move_forward.api import Database, LookupCache
 
 
 class PeopleRepository:

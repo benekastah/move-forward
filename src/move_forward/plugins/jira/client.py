@@ -8,9 +8,9 @@ from http import HTTPStatus
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...api import SourceError, http
-from .config import JiraConfig
-from .models import JiraIssue, JiraSnapshot
+from move_forward.api import SourceError, http
+from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 
 SEARCH_PATH = "/rest/api/3/search/jql"
 MYSELF_PATH = "/rest/api/3/myself"

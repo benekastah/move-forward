@@ -2,8 +2,8 @@
 
 from collections import defaultdict
 
-from ...api import Database, Migration
-from .models import GitStackSnapshot, StackBranch, StackRepo
+from move_forward.api import Database, Migration
+from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 
 MIGRATIONS = [
     Migration(

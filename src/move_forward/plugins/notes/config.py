@@ -4,7 +4,7 @@ from typing import cast
 
 from pydantic import model_validator
 
-from ...api import Strict
+from move_forward.api import Strict
 
 IN_THE_DATABASE = (
     "the notes live in the database, and this version reads no markdown: delete the line (to"

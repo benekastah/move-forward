@@ -1,7 +1,7 @@
 """The entity kinds mail publishes, with their attributes; see `docs/entities.md`."""
 
-from ...api import KindModel
-from ...api.kinds import Person
+from move_forward.api import KindModel
+from move_forward.api.kinds import Person
 
 THREAD = "mail.thread"
 

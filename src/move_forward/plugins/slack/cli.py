@@ -5,10 +5,18 @@ import json
 import re
 import sys
 
-from ...api import ActionError, CliHandler, Context, Graph, InputRequest, SourceError, http
-from . import client, contacts, discovery
-from .config import SlackConfig
-from .repository import SlackRepository
+from move_forward.api import (
+    ActionError,
+    CliHandler,
+    Context,
+    Graph,
+    InputRequest,
+    SourceError,
+    http,
+)
+from move_forward.plugins.slack import client, contacts, discovery
+from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.repository import SlackRepository
 
 
 def list_destinations(

@@ -18,10 +18,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import cast
 
-from .graph import Graph
-from .plugin import Changed, Previous, RefreshRequest
-from .registry import Enabled
-from .repositories import ChangeRepository
+from move_forward.graph import Graph
+from move_forward.plugin import Changed, Previous, RefreshRequest
+from move_forward.registry import Enabled
+from move_forward.repositories import ChangeRepository
 
 log = logging.getLogger(__name__)
 

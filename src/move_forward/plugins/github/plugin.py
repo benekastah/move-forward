@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import ClassVar
 from urllib.parse import urlsplit
 
-from ...api import (
+from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ChangeChecker,
@@ -28,15 +28,24 @@ from ...api import (
     attrs,
     collect_into,
 )
-from ...api.kinds import PERSON, TEAM
-from ...api.shell import CommandError
-from . import actions, changes, client, derive, notifications, placing, pushes, relations
-from .config import GitHubConfig
-from .kinds import GitHubPerson, GitHubPullRequest, GitHubTeam
-from .models import GitHubSnapshot, PullRequest
-from .panels import PR, Builder
-from .people import PeopleRepository
-from .prs import (
+from move_forward.api.kinds import PERSON, TEAM
+from move_forward.api.shell import CommandError
+from move_forward.plugins.github import (
+    actions,
+    changes,
+    client,
+    derive,
+    notifications,
+    placing,
+    pushes,
+    relations,
+)
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.kinds import GitHubPerson, GitHubPullRequest, GitHubTeam
+from move_forward.plugins.github.models import GitHubSnapshot, PullRequest
+from move_forward.plugins.github.panels import PR, Builder
+from move_forward.plugins.github.people import PeopleRepository
+from move_forward.plugins.github.prs import (
     changes_requested,
     last_review_activity,
     policy_failures,
@@ -44,9 +53,9 @@ from .prs import (
     review_blockers,
     reviewer_assignment_reasons,
 )
-from .setup import INIT
-from .snapshots import DerivedRepository, PrRepository
-from .tables import MIGRATIONS
+from move_forward.plugins.github.setup import INIT
+from move_forward.plugins.github.snapshots import DerivedRepository, PrRepository
+from move_forward.plugins.github.tables import MIGRATIONS
 
 DERIVED = "derived"
 """`after_collect`'s part of the refresh, `github.derived`: team scores and reviewer

@@ -10,10 +10,10 @@ from typing import Literal
 
 from pydantic import Field
 
-from ...api import Band, Graph, Item, Model, Panel, Ref, Signals, age
-from ...api.kinds import PULL_REQUEST as PR
-from .config import SlackConfig
-from .models import Contact, Ping, TeamChannel
+from move_forward.api import Band, Graph, Item, Model, Panel, Ref, Signals, age
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
 
 ALREADY_APPROVED = "already approved"
 """The `review_blockers` entry of a PR with the approval it needs (see `docs/entities.md`)."""

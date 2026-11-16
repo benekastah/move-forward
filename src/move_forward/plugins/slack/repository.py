@@ -2,8 +2,8 @@
 
 from datetime import datetime
 
-from ...api import BY_HAND, Database, LookupCache, Migration
-from .models import Contact, Ping, TeamChannel
+from move_forward.api import BY_HAND, Database, LookupCache, Migration
+from move_forward.plugins.slack.models import Contact, Ping, TeamChannel
 
 MIGRATIONS = [
     Migration(

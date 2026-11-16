@@ -12,7 +12,7 @@ from urllib.parse import quote, urlencode
 
 from pydantic import BaseModel, Field
 
-from ...api import (
+from move_forward.api import (
     API_VERSION,
     Action,
     ActionError,
@@ -33,13 +33,13 @@ from ...api import (
     age,
     html,
 )
-from ...api.kinds import PULL_REQUEST as PR
-from . import cli, contacts
-from .config import SlackConfig
-from .models import Ping, TeamChannel
-from .pings import Pinger, PingTarget, PrPing
-from .repository import MIGRATIONS, SlackRepository
-from .setup import INIT
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.plugins.slack import cli, contacts
+from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.models import Ping, TeamChannel
+from move_forward.plugins.slack.pings import Pinger, PingTarget, PrPing
+from move_forward.plugins.slack.repository import MIGRATIONS, SlackRepository
+from move_forward.plugins.slack.setup import INIT
 
 PING = "ping"
 """The ping page for one of my PRs, `/slack/ping?pr=<PR URL>`."""

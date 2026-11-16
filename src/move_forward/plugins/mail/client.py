@@ -15,10 +15,10 @@ from email.parser import BytesHeaderParser
 from email.policy import default
 from email.utils import getaddresses, parsedate_to_datetime
 
-from ...api import SourceError
-from ...api.html import shown
-from .config import Mailbox
-from .models import MAX_SUBJECT, MailSnapshot, Message
+from move_forward.api import SourceError
+from move_forward.api.html import shown
+from move_forward.plugins.mail.config import Mailbox
+from move_forward.plugins.mail.models import MAX_SUBJECT, MailSnapshot, Message
 
 log = logging.getLogger(__name__)
 TIMEOUT_SECONDS = 30

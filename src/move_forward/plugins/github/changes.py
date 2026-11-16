@@ -6,9 +6,9 @@ has no state to compare, so it only ever says it's new (a review requested of me
 
 from collections.abc import Collection
 
-from ...api import Event, anchor
-from .models import GitHubSnapshot, PullRequest, Review, TimelineEvent
-from .panels import PR
+from move_forward.api import Event, anchor
+from move_forward.plugins.github.models import GitHubSnapshot, PullRequest, Review, TimelineEvent
+from move_forward.plugins.github.panels import PR
 
 KINDS = {
     "pr_mergeable": "my PR is approved, green and has no conflicts",

@@ -1,7 +1,7 @@
 """`mfd init`'s questions for `[mail]`."""
 
-from ...api import Asker, Init, InitSection, InitSetup
-from .config import GMAIL_MESSAGE_URL, KNOWN_AUTH_SERVERS
+from move_forward.api import Asker, Init, InitSection, InitSetup
+from move_forward.plugins.mail.config import GMAIL_MESSAGE_URL, KNOWN_AUTH_SERVERS
 
 TABLES = """\
 ## Several mailboxes instead: a table each, saying its own host, port, username, mailbox,

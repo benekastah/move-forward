@@ -22,14 +22,14 @@ from typing import Any, cast
 from pydantic import BaseModel, TypeAdapter
 from pydantic.fields import FieldInfo
 
-from . import asking, registry, tomledit
-from . import config as config_module
-from .asking import Asker, Complete, InitSection, InitSetup, Prompt, choices, quiet
-from .config import Config
-from .keychain import TokenFields
-from .plugin import Plugin
-from .shell import git_program
-from .strict import TABLES, marked
+from move_forward import asking, registry, tomledit
+from move_forward import config as config_module
+from move_forward.asking import Asker, Complete, InitSection, InitSetup, Prompt, choices, quiet
+from move_forward.config import Config
+from move_forward.keychain import TokenFields
+from move_forward.plugin import Plugin
+from move_forward.shell import git_program
+from move_forward.strict import TABLES, marked
 
 LINE_WIDTH = 100
 """The widest line `mfd init` writes: a key's comment, above it, is wrapped to this. A key

@@ -8,7 +8,7 @@ checkouts. `mfd notes` calls the same functions.
 
 from pathlib import Path
 
-from ...api import (
+from move_forward.api import (
     ActionError,
     ActionHandler,
     Graph,
@@ -17,14 +17,14 @@ from ...api import (
     Ref,
     SourceError,
 )
-from ...api.ids import branch_parts
-from ...api.kinds import PULL_REQUEST as PR
-from ...api.kinds import TICKET
-from .config import NotesConfig
-from .covers import covers
-from .models import Entry, IcedItem, Link, Size, Todo
-from .repository import NotesRepository
-from .text import links_in, sized
+from move_forward.api.ids import branch_parts
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.api.kinds import TICKET
+from move_forward.plugins.notes.config import NotesConfig
+from move_forward.plugins.notes.covers import covers
+from move_forward.plugins.notes.models import Entry, IcedItem, Link, Size, Todo
+from move_forward.plugins.notes.repository import NotesRepository
+from move_forward.plugins.notes.text import links_in, sized
 
 ICED_FROM_DASHBOARD_NOTE = "iced from the dashboard"
 BRANCH = "git.branch"

@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .private import make_private
-from .shell import CommandError
+from move_forward.private import make_private
+from move_forward.shell import CommandError
 
 log = logging.getLogger(__name__)
 

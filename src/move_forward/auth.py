@@ -40,7 +40,7 @@ from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from .private import is_private, make_private
+from move_forward.private import is_private, make_private
 
 log = logging.getLogger(__name__)
 

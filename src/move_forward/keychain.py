@@ -15,8 +15,8 @@ from typing import Any, ClassVar, Protocol, cast, runtime_checkable
 
 from pydantic import model_validator
 
-from .shell import CommandError, run
-from .strict import Strict
+from move_forward.shell import CommandError, run
+from move_forward.strict import Strict
 
 
 @runtime_checkable

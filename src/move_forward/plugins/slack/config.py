@@ -5,8 +5,8 @@ from typing import Annotated, ClassVar, cast
 
 from pydantic import Field, field_validator, model_validator
 
-from ...api import LOCKED
-from ...api.keychain import TokenFields
+from move_forward.api import LOCKED
+from move_forward.api.keychain import TokenFields
 
 DEFAULT_PING_FIRST = "Hi, would you mind reviewing {url} when you get a chance? Thanks in advance!"
 DEFAULT_PING_FOLLOW_UP = "Gentle bump on this review request"

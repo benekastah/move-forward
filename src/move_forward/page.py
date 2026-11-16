@@ -10,8 +10,8 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from .domain import Model
-from .graph import Ref
+from move_forward.domain import Model
+from move_forward.graph import Ref
 
 ANCHOR_PREFIX = "item-"
 

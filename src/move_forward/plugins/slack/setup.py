@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[slack]`."""
 
-from ...api import Asker, Init, InitSection, InitSetup, url
+from move_forward.api import Asker, Init, InitSection, InitSetup, url
 
 TABLES = """\
 # Where review pings to a team go, by its slug, as PRs name it.

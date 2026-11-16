@@ -20,17 +20,17 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from . import refresh, registry, render
-from .change_checks import ChangeChecks
-from .config import Config
-from .db import Database
-from .domain import KindModel
-from .graph import Entity, Graph, KindSpec
-from .kinds import FAMILIES, Family, declaring
-from .notifications import Event
-from .page import Item, Panel, Surface
-from .panels import Dashboard
-from .plugin import (
+from move_forward import refresh, registry, render
+from move_forward.change_checks import ChangeChecks
+from move_forward.config import Config
+from move_forward.db import Database
+from move_forward.domain import KindModel
+from move_forward.graph import Entity, Graph, KindSpec
+from move_forward.kinds import FAMILIES, Family, declaring
+from move_forward.notifications import Event
+from move_forward.page import Item, Panel, Surface
+from move_forward.panels import Dashboard
+from move_forward.plugin import (
     API_VERSION,
     Changed,
     Context,
@@ -40,8 +40,8 @@ from .plugin import (
     Response,
     page_path,
 )
-from .repositories import SnapshotRepository
-from .strict import Strict
+from move_forward.repositories import SnapshotRepository
+from move_forward.strict import Strict
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
 """The time a harness starts at, unless given another."""

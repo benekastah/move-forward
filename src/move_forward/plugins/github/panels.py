@@ -8,13 +8,31 @@ from datetime import datetime, timedelta
 
 from pydantic import Field
 
-from ...api import Action, Badge, Band, Effort, Graph, Item, Link, Model, Panel, Ref, Signals, age
-from ...api.kinds import PULL_REQUEST as PR
-from ...api.kinds import REVIEW as REVIEW_TASK
-from ...api.kinds import TICKET
-from .config import GitHubConfig
-from .models import DerivedSnapshot, GitHubSnapshot, PullRequest, TeamPrScore
-from .prs import (
+from move_forward.api import (
+    Action,
+    Badge,
+    Band,
+    Effort,
+    Graph,
+    Item,
+    Link,
+    Model,
+    Panel,
+    Ref,
+    Signals,
+    age,
+)
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.api.kinds import REVIEW as REVIEW_TASK
+from move_forward.api.kinds import TICKET
+from move_forward.plugins.github.config import GitHubConfig
+from move_forward.plugins.github.models import (
+    DerivedSnapshot,
+    GitHubSnapshot,
+    PullRequest,
+    TeamPrScore,
+)
+from move_forward.plugins.github.prs import (
     BEHIND_REASON,
     STATE_REASONS,
     approved,

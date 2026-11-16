@@ -5,12 +5,12 @@ import unicodedata
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from ...api import Badge, Band, Graph, Item, Panel, Ref, Signals
-from ...api.kinds import TAG
-from ...api.tags import handle as tag_handle
-from .config import APP_SCHEMES, MailConfig
-from .kinds import THREAD
-from .models import MailSnapshot, Message
+from move_forward.api import Badge, Band, Graph, Item, Panel, Ref, Signals
+from move_forward.api.kinds import TAG
+from move_forward.api.tags import handle as tag_handle
+from move_forward.plugins.mail.config import APP_SCHEMES, MailConfig
+from move_forward.plugins.mail.kinds import THREAD
+from move_forward.plugins.mail.models import MailSnapshot, Message
 
 OPEN_PAGE = "open"
 

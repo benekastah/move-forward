@@ -14,7 +14,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
-from . import (
+from move_forward import (
     act_now,
     localtime,
     notifications,
@@ -25,16 +25,16 @@ from . import (
     shell,
     tags,
 )
-from .act_now import Feedback
-from .change_checks import ChangeChecks, Taken, said
-from .config import Config
-from .db import CORE, Database
-from .domain import Model
-from .graph import Graph, Ref, publisher
-from .kinds import FAMILIES, PERSON
-from .notifications import Event, NotificationRepository
-from .page import Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
-from .plugin import (
+from move_forward.act_now import Feedback
+from move_forward.change_checks import ChangeChecks, Taken, said
+from move_forward.config import Config
+from move_forward.db import CORE, Database
+from move_forward.domain import Model
+from move_forward.graph import Graph, Ref, publisher
+from move_forward.kinds import FAMILIES, PERSON
+from move_forward.notifications import Event, NotificationRepository
+from move_forward.page import Identity, Item, ItemAdditions, Panel, SourceStatus, Surface
+from move_forward.plugin import (
     ActionError,
     ActionResult,
     Form,
@@ -48,9 +48,9 @@ from .plugin import (
     adds_nothing,
     collect_into,
 )
-from .prune import prune_if_due
-from .registry import Enabled, build_graph, call, enabled
-from .repositories import (
+from move_forward.prune import prune_if_due
+from move_forward.registry import Enabled, build_graph, call, enabled
+from move_forward.repositories import (
     ContactRepository,
     FeedbackRepository,
     KvRepository,
@@ -61,7 +61,7 @@ from .repositories import (
     SnapshotRepository,
     TagRepository,
 )
-from .shell import CommandError
+from move_forward.shell import CommandError
 
 log = logging.getLogger(__name__)
 

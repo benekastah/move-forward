@@ -9,10 +9,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from ...api import ActionError, InputRequest
-from ...api.shell import DEFAULT_TIMEOUT_SECONDS, CommandError, git
-from .config import GitStackConfig
-from .panels import STACK_BRANCH, StackBranchView, repo_dirs
+from move_forward.api import ActionError, InputRequest
+from move_forward.api.shell import DEFAULT_TIMEOUT_SECONDS, CommandError, git
+from move_forward.plugins.git_stack.config import GitStackConfig
+from move_forward.plugins.git_stack.panels import STACK_BRANCH, StackBranchView, repo_dirs
 
 STACK_CLEAN_TIMEOUT_SECONDS = 600
 """`git stack clean` fetches and checks every stack, which takes a while in a big repo."""

@@ -1,6 +1,6 @@
 """`mfd init`'s questions for `[jira]`."""
 
-from ...api import Asker, Init, InitSection, InitSetup, https_url
+from move_forward.api import Asker, Init, InitSection, InitSetup, https_url
 
 EXAMPLE = InitSection({"site": "https://example.atlassian.net"})
 

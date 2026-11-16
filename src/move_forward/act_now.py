@@ -18,11 +18,11 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from . import localtime
-from .domain import Model
-from .graph import Ref
-from .page import Action, Badge, Item, Link, Panel, Signals, age
-from .strict import Strict
+from move_forward import localtime
+from move_forward.domain import Model
+from move_forward.graph import Ref
+from move_forward.page import Action, Badge, Item, Link, Panel, Signals, age
+from move_forward.strict import Strict
 
 KEY = "now"
 """The Act now panel's key within core's Act now group."""

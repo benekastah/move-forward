@@ -55,7 +55,13 @@ extend-select = [
     "SIM",
     # The project's own below:
     "TID251",
+    "TID252",
 ]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Imports name the module in full (move_forward.graph, not .graph), as AGENTS.md asks: what's
+# imported reads the same everywhere, and the plugin import ban below sees every import of core.
+ban-relative-imports = "all"
 
 # Plugins use core only through move_forward.api (see PROJECT_AGENTS.md); core itself may use all.
 [tool.ruff.lint.flake8-tidy-imports.banned-api]

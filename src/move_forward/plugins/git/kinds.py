@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from ...api import KindModel
+from move_forward.api import KindModel
 
 
 class RepoAttrs(KindModel):

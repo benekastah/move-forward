@@ -11,12 +11,12 @@ from typing import cast, overload
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from pydantic_core import InitErrorDetails
 
-from . import registry
-from .act_now import ActNowConfig
-from .db import DEFAULT_KEEP_BACKUPS
-from .notifications import NotificationsConfig
-from .people import PeopleConfig
-from .strict import Strict
+from move_forward import registry
+from move_forward.act_now import ActNowConfig
+from move_forward.db import DEFAULT_KEEP_BACKUPS
+from move_forward.notifications import NotificationsConfig
+from move_forward.people import PeopleConfig
+from move_forward.strict import Strict
 
 BASE_DIR = Path("~/.config/move-forward")
 """Where the config lives."""

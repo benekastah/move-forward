@@ -6,10 +6,10 @@ Each says something once, when a state changes; a ticket the earlier snapshot di
 only ever says it was assigned.
 """
 
-from ...api import Event, anchor
-from ...api.kinds import TICKET
-from .config import JiraConfig
-from .models import JiraIssue, JiraSnapshot
+from move_forward.api import Event, anchor
+from move_forward.api.kinds import TICKET
+from move_forward.plugins.jira.config import JiraConfig
+from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 
 KINDS = {
     "assigned": "a ticket is assigned to me",

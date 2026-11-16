@@ -1,6 +1,6 @@
 """The git_stack plugin's data: the branches git stack tracks."""
 
-from ...api import Model
+from move_forward.api import Model
 
 
 class StackBranch(Model):

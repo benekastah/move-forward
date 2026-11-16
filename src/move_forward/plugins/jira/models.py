@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from pydantic import Field
 
-from ...api import Model
+from move_forward.api import Model
 
 
 class JiraIssue(Model):

@@ -15,14 +15,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from . import act_now, notifications, strict, tags
-from . import plugins as builtin_plugins
-from .db import CORE, OWNER_RE, Database, core_objects
-from .domain import KindModel
-from .graph import Entity, Graph, KindSpec, Ref
-from .keychain import TokenSettings
-from .kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named_for
-from .plugin import (
+from move_forward import act_now, notifications, strict, tags
+from move_forward import plugins as builtin_plugins
+from move_forward.db import CORE, OWNER_RE, Database, core_objects
+from move_forward.domain import KindModel
+from move_forward.graph import Entity, Graph, KindSpec, Ref
+from move_forward.keychain import TokenSettings
+from move_forward.kinds import CORE_FAMILIES, FAMILIES, TAG, declare, declaring, fits, named_for
+from move_forward.plugin import (
     API_VERSION,
     Address,
     ChangeChecker,
@@ -38,11 +38,11 @@ from .plugin import (
     SourceError,
     command_help,
 )
-from .repositories import KvRepository, SetAsideRepository
+from move_forward.repositories import KvRepository, SetAsideRepository
 
 if TYPE_CHECKING:
     # Only for annotations: `Config` checks `unmet_requirements` as it loads.
-    from .config import Config
+    from move_forward.config import Config
 
 log = logging.getLogger(__name__)
 

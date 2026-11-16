@@ -3,8 +3,8 @@ PR a merge condition holds."""
 
 import re
 
-from ...api.kinds import PULL_REQUEST as PR
-from .models import Condition, Link, Size
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.plugins.notes.models import Condition, Link, Size
 
 PR_URL_RE = re.compile(r"https://[\w.-]+(?::\d+)?/[\w.-]+/[\w.-]+/pull/\d+")
 """A pull request's URL, on github.com or a GitHub Enterprise Server."""

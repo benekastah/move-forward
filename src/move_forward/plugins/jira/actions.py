@@ -1,8 +1,8 @@
 """Jira's buttons: change a ticket's status."""
 
-from ...api import ActionError, ActionHandler, InputRequest, http
-from . import client
-from .config import JiraConfig
+from move_forward.api import ActionError, ActionHandler, InputRequest, http
+from move_forward.plugins.jira import client
+from move_forward.plugins.jira.config import JiraConfig
 
 
 def transition(req: InputRequest[JiraConfig]) -> str:

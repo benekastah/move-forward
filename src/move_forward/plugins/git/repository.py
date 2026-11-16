@@ -4,8 +4,8 @@ branches, and the directories I commit to, as the last refresh found them."""
 from collections import defaultdict
 from datetime import datetime
 
-from ...api import Database, Migration
-from .models import Branch, LocalRepo, LocalSnapshot, Worktree
+from move_forward.api import Database, Migration
+from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 _FROM_SNAPSHOT = "FROM snapshots, json_each(snapshots.payload, '$.repos') AS repo"
 _GIT_SNAPSHOT = "snapshots.source = 'git' AND snapshots.payload IS NOT NULL"

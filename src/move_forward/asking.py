@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from .shell import CommandError, git_program, run
+from move_forward.shell import CommandError, git_program, run
 
 Complete = Callable[[str], list[str]]
 """The answers that could finish what's typed so far, for tab completion."""

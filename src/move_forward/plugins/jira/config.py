@@ -5,8 +5,8 @@ from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 
-from ...api import LOCKED
-from ...api.keychain import TokenFields
+from move_forward.api import LOCKED
+from move_forward.api.keychain import TokenFields
 
 DEFAULT_REFRESH_SECONDS = 900
 DEFAULT_JIRA_TOKEN_ENV = "JIRA_API_TOKEN"

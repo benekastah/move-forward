@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from ...api import Model
+from move_forward.api import Model
 
 MAX_SUBJECT = 300
 """The longest subject kept; past it, an ellipsis."""
