@@ -181,15 +181,12 @@ def push_branch(req: InputRequest[GitConfig]) -> str:
     branch = req.field("branch")
     if not branch_exists(repo, branch):
         raise ActionError(f"{branch} doesn't exist in {repo}")
-    # By its ref, not `<branch>@{upstream}`, which a tag of the same name would answer for.
-    upstream, track = (
-        git(
-            repo, "for-each-ref", "--format=%(upstream)%09%(upstream:track)", f"refs/heads/{branch}"
-        )
-        .strip("\n")
-        .split("\t")
-    )
-    if upstream and track != "[gone]":
+    try:
+        git(repo, "rev-parse", "--verify", "--quiet", f"{branch}@{{upstream}}")
+        has_upstream = True
+    except CommandError:
+        has_upstream = False
+    if has_upstream:
         remote, ref = client.push_target(repo, branch)
         if not remote:
             raise ActionError(
@@ -203,6 +200,7 @@ def push_branch(req: InputRequest[GitConfig]) -> str:
             raise ActionError(
                 f"{repo} has no remote to push to, or several: set remote.pushDefault to say which"
             )
+        # By its ref: a tag of the same name would make `branch` match more than one.
         git(repo, "push", "--set-upstream", remote, f"refs/heads/{branch}")
     return f"pushed {branch}"
 
@@ -222,12 +220,10 @@ def pull_branch(req: InputRequest[GitConfig]) -> str:
         remote = git(repo, "config", f"branch.{branch}.remote").strip()
     except CommandError as e:
         raise ActionError(f"{branch} has no upstream to pull from") from e
-    # By its ref, not `<branch>@{upstream}`, which a tag of the same name would answer for.
-    upstream_ref = git(repo, "for-each-ref", "--format=%(upstream)", f"refs/heads/{branch}")
-    upstream_ref, missing = upstream_ref.strip(), "no upstream to pull from"
+    upstream_ref = f"{branch}@{{upstream}}"
     if remote == ".":  # it tracks a local branch: pull its copy where Push sent it, as counted
         remote = client.push_remote(repo, branch) or ""
-        upstream_ref, missing = f"refs/remotes/{remote}/{branch}", f"no copy on {remote} to pull"
+        upstream_ref = f"refs/remotes/{remote}/{branch}"
         if not remote:
             raise ActionError(
                 f"{branch} tracks a local branch, and {repo} has no remote to pull it from, or"
@@ -241,6 +237,11 @@ def pull_branch(req: InputRequest[GitConfig]) -> str:
         upstream = git(repo, "rev-parse", "--verify", upstream_ref).strip()
         here = git(repo, "rev-parse", "--verify", f"refs/heads/{branch}").strip()
     except CommandError as e:
+        missing = (
+            f"no copy on {remote} to pull"
+            if upstream_ref.startswith("refs/remotes/")
+            else "no upstream to pull from"
+        )
         raise ActionError(f"{branch} has {missing}") from e
     if here == upstream:
         return f"{branch} is up to date"
