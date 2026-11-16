@@ -222,7 +222,9 @@ with what's built (bugs, gaps against the rules below, and what's untried where 
   reached through their CLIs (`gh`, `git`) or the standard library.
 - **Linux, macOS and Windows, with every change.** Each change must keep working
   on all three; CI runs `dev.py tests` on each (and `dev.py static`, the same everywhere, once),
-  and they must pass on all of them.
+  and they must pass on all of them, each within its time limit in `check.yml`. When a run goes
+  over, speed the tests up if that can be done; if it can't, raise the limit, saying why in the
+  commit.
   Use `pathlib` rather than joining paths with `/`, and write paths into TOML or
   URLs with `as_posix()`. Read and write text as UTF-8 (`encoding="utf-8"`, or `"utf-8-sig"`
   with `errors="replace"` for files people write by hand; Windows' default is its code page):
