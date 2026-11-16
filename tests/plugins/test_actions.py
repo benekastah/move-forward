@@ -182,6 +182,26 @@ def test_push_sets_upstream_then_pushes_plainly(config: Config, repo: Path) -> N
     assert git(repo, "rev-parse", "wip") == git(repo, "rev-parse", "origin/wip")
 
 
+def test_push_and_pull_of_a_branch_named_like_a_tag_move_the_branch(
+    config: Config, repo: Path, tmp_path: Path
+) -> None:
+    git(repo, "branch", "-q", "v1", "wip")
+    git(repo, "tag", "v1", "main")
+    fields = {"repo": str(repo), "branch": "v1"}
+    assert run("git/push_branch", config, fields) == "pushed v1"
+    upstream = git(repo, "for-each-ref", "--format=%(upstream:lstrip=2)", "refs/heads/v1")
+    assert upstream.strip() == "origin/v1"
+    git(repo, "switch", "-q", "v1")
+    _commit(repo, "c.txt")
+    run("git/push_branch", config, fields)
+    assert git(repo, "rev-parse", "refs/heads/v1") == git(repo, "rev-parse", "origin/v1")
+    other = _clone(tmp_path / "origin.git", tmp_path / "other", "v1")
+    _commit(other, "d.txt")
+    git(other, "push", "-q")
+    assert run("git/pull_branch", config, fields) == "pulled v1"
+    assert git(repo, "rev-parse", "refs/heads/v1") == git(other, "rev-parse", "HEAD")
+
+
 def test_push_goes_where_git_would_with_remotes_not_called_origin(
     config: Config, repo: Path, tmp_path: Path
 ) -> None:
