@@ -462,3 +462,10 @@ On Windows, run `dev.py` with `py` (`py dev.py check`). `dev.py install` points 
 (`.github/workflows/check.yml`) runs `dev.py static` once, on Linux, and `dev.py tests` on
 Linux, macOS and Windows, for each pull request and push to `main`; a pull request that changes
 only Markdown (but `docs/entities.md`, which a test reads) skips them.
+
+The tooling comes from the [python-template](https://github.com/benekastah/python-template)
+Copier template (`.copier-answers.yml` records its answers and commit): `dev.py`, the git hooks,
+`.github/dependabot.yml`, `.gitignore`, `.gitattributes`, `CLAUDE.md` and much of
+`pyproject.toml`. `uvx copier update --defaults` takes in its later changes, merged with ours.
+`dev.py` stays the template's: what's move-forward's own (`install` ending with `mfd init`) is in
+`dev_project.py`. The README, AGENTS.md and `check.yml` are ours alone.
