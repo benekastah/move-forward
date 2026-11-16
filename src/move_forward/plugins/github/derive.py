@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 from pydantic import Field
 
 from move_forward.api import Model
-from move_forward.api.shell import CommandError, git
+from move_forward.api.git import Git, GitError
 from move_forward.plugins.github import codeowners
 from move_forward.plugins.github.models import (
     DerivedSnapshot,
@@ -91,8 +91,7 @@ def suggest_reviewers(
     if not repo.default_refs:
         return []
     try:
-        out = git(
-            Path(repo.dir),
+        out = Git(Path(repo.dir)).output(
             "log",
             *repo.default_refs,
             f"--since={repo.commit_history_days} days ago",
@@ -100,7 +99,7 @@ def suggest_reviewers(
             "--",
             *dirs,
         )
-    except CommandError:
+    except GitError:
         return []
     by_email = Counter(out.split())
     login_by_email = {email: login for login, email in emails.items() if email}

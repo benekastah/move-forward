@@ -10,7 +10,8 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from move_forward.api import ActionError, InputRequest
-from move_forward.api.shell import DEFAULT_TIMEOUT_SECONDS, CommandError, git
+from move_forward.api.git import Git, GitError
+from move_forward.api.shell import DEFAULT_TIMEOUT_SECONDS
 from move_forward.plugins.git_stack.config import GitStackConfig
 from move_forward.plugins.git_stack.panels import STACK_BRANCH, StackBranchView, repo_dirs
 
@@ -81,20 +82,21 @@ def run_json(repo: Path, args: list[str], done: Callable[[_Report], str], timeou
     """Run `git stack <args> --json` in `repo` and return its report. When it fails, raise
     the reason as an `ActionError`, with `done` of what it reported before failing."""
     try:
-        out = git(repo, "stack", *args, "--json", timeout=timeout)
-    except CommandError as e:
+        out = Git(repo, timeout=timeout).run("stack", *args, "--json")
+    except GitError as e:
         if not e.stdout.strip():
             raise
+        why = e.stderr.strip() or str(e)  # what it said, else its exit status
         try:
             failed = report(e.stdout)
         except ActionError:  # it stopped before its report (a crash, a kill): say why
             so_far = done(_Report(type="error", events=_events(e.stdout)))
             raise ActionError(
-                f"git stack {args[0]} failed: {e}" + (f" (after it {so_far})" if so_far else "")
+                f"git stack {args[0]} failed: {why}" + (f" (after it {so_far})" if so_far else "")
             ) from e
         so_far = done(failed)
         raise ActionError(
-            f"git stack {args[0]} failed: {failed.message or e}"
+            f"git stack {args[0]} failed: {failed.message or why}"
             + (f" (after it {so_far})" if so_far else "")
         ) from e
     return report(out)

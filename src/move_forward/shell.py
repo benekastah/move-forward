@@ -1,8 +1,6 @@
-"""Running external commands (git, gh, security), and finding a git checkout's repository."""
+"""Running external commands (gh, security, icacls), and stopping them all on shutdown; git
+runs through `move_forward.git`."""
 
-import functools
-import os
-import shutil
 import subprocess
 import sys
 import threading
@@ -10,8 +8,6 @@ from pathlib import Path
 
 DEFAULT_TIMEOUT_SECONDS = 120
 MAX_COMMAND_IN_ERROR = 200
-GIT_ENV = "MOVE_FORWARD_GIT"
-"""The environment variable naming the git to run, in place of the one on PATH."""
 
 _stopping = threading.Event()
 
@@ -29,7 +25,8 @@ def stop() -> None:
     """Make every command from now on fail at once, so a refresh in flight winds down fast.
 
     Called on ctrl-c: the interpreter waits for the refresh's worker threads to finish, and
-    a refresh runs dozens of git and gh commands in a row.
+    a refresh runs dozens of git and gh commands in a row. `move_forward.git.Git` asks
+    `stopping` too.
     """
     _stopping.set()
 
@@ -46,7 +43,7 @@ def run(
     encoding: str = "utf-8",
 ) -> str:
     """Run a command, with `input` on its stdin, and return its stdout, read as `encoding`:
-    UTF-8, which git, gh and git stack write; a Windows tool of its own (`icacls`) writes in
+    UTF-8, which gh writes; a Windows tool of its own (`icacls`) writes in
     the system's OEM code page, `"oem"`.
 
     Raises CommandError if it exits non-zero, or if `stop` was called.
@@ -76,37 +73,3 @@ def run(
             shown = shown[:MAX_COMMAND_IN_ERROR] + "…"
         raise CommandError(f"{shown}: {result.stderr.strip() or result.returncode}", result.stdout)
     return result.stdout
-
-
-@functools.cache
-def git_program() -> str:
-    """The git every git command runs: `$MOVE_FORWARD_GIT`, else the path of the one on PATH,
-    else plain `git`, for the error saying it isn't there. Looked up once, and started by its
-    path, which is quicker than by its name (see `run`)."""
-    return os.environ.get(GIT_ENV) or shutil.which("git") or "git"
-
-
-def git(repo: Path, *args: str, timeout: int = DEFAULT_TIMEOUT_SECONDS) -> str:
-    """Run `git -C <repo> <args>` and return its stdout."""
-    return run([git_program(), "-C", str(repo), *args], timeout=timeout)
-
-
-def git_common_dir(repo: Path) -> Path | None:
-    """The directory holding a checkout's refs and config: its `.git`, or for a linked
-    worktree (whose `.git` is a file naming its own git directory) the main repository's.
-    None when `repo` isn't a checkout. Read from the files, without running git."""
-    dot = repo / ".git"
-    if dot.is_dir():
-        return dot
-    if not dot.is_file():
-        return None
-    text = dot.read_text(encoding="utf-8").strip()
-    if not text.startswith("gitdir:"):
-        return None
-    own = (repo / text.removeprefix("gitdir:").strip()).resolve()
-    commondir = own / "commondir"
-    return (
-        (own / commondir.read_text(encoding="utf-8").strip()).resolve()
-        if commondir.is_file()
-        else own
-    )

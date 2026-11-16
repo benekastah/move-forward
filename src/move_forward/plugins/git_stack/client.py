@@ -4,7 +4,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from move_forward.api.shell import git
+from move_forward.api.git import Git
 from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch, StackRepo
 
 
@@ -14,7 +14,7 @@ def parse_info(out: str) -> list[StackBranch]:
 
 
 def collect_repo(repo: Path) -> StackRepo:
-    out = git(repo, "stack", "info", "--json", "--offline")
+    out = Git(repo).run("stack", "info", "--json", "--offline")
     return StackRepo(dir=str(repo), branches=parse_info(out))
 
 

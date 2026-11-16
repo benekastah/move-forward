@@ -8,7 +8,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from move_forward.shell import CommandError, git_program, run
+from git_client import GitError
+
+from move_forward.git import Git
+from move_forward.shell import CommandError, run
 
 Complete = Callable[[str], list[str]]
 """The answers that could finish what's typed so far, for tab completion."""
@@ -144,6 +147,15 @@ def quiet(args: list[str], cwd: Path | None = None) -> str:
         return ""
 
 
+def quiet_git(directory: Path, *args: str) -> str:
+    """git's output in `directory`, as `quiet` gives a command's: "" when it fails or there's
+    no git."""
+    try:
+        return Git(directory).run(*args)
+    except GitError, FileNotFoundError:
+        return ""
+
+
 def word(what: str) -> Check:
     """A name like a GitHub org or team slug: letters, digits, `-`, `_`, `.`."""
 
@@ -203,7 +215,7 @@ def port(answer: str) -> str:
 
 def checkout(cwd: Path) -> Path | None:
     """The git checkout `cwd` is in, if any."""
-    top = quiet([git_program(), "-C", str(cwd), "rev-parse", "--show-toplevel"])
+    top = quiet_git(cwd, "rev-parse", "--show-toplevel")
     return Path(top) if top else None
 
 

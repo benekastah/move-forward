@@ -3,14 +3,13 @@
 import fnmatch
 import logging
 import re
-import subprocess
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
-from move_forward.api.shell import CommandError, git, git_common_dir
+from move_forward.api.git import Git, GitError, config, config_key, git_common_dir, refs
 from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot, Worktree
 
 log = logging.getLogger(__name__)
@@ -63,7 +62,9 @@ def worktree_status(worktree: Path) -> tuple[int, int]:
     plain `git status` refreshes the index under `index.lock`, and a git command of mine
     run meanwhile would fail on it."""
     return parse_status(
-        git(worktree, "--no-optional-locks", "status", "--porcelain", "--untracked-files=all")
+        Git(worktree).output(
+            "--no-optional-locks", "status", "--porcelain", "--untracked-files=all"
+        )
     )
 
 
@@ -140,25 +141,18 @@ class RepoConfig:
     `git config --list`."""
 
     values: dict[str, str]
-    """Each key's last value, by the key as git lists it: its section and name lower-cased, a
-    subsection (a branch's or a remote's name) as it is."""
+    """Each key's last value, by the key as git lists it (`config_key`): its section and name
+    lower-cased, a subsection (a branch's or a remote's name) as it is. A key set without a
+    value has an empty one."""
 
     @classmethod
     def read(cls, repo: Path) -> RepoConfig:
-        values: dict[str, str] = {}
-        for entry in git(repo, "config", "--list", "-z").split("\0"):
-            if entry:
-                key, _, value = entry.partition("\n")  # a key set without a value has none
-                values[key] = value
-        return cls(values)
+        return cls({key: values[-1] or "" for key, values in config(Git(repo)).items()})
 
     def get(self, key: str) -> str | None:
         """`key`'s value (`branch.<name>.remote`, in any case but the subsection's), or None when
         it's unset or empty."""
-        section, _, rest = key.partition(".")
-        subsection, _, name = rest.rpartition(".")
-        listed = ".".join(part for part in (section.lower(), subsection, name.lower()) if part)
-        return self.values.get(listed) or None
+        return self.values.get(config_key(key)) or None
 
     def remotes(self) -> list[str]:
         """The remotes, by name, as `git remote` lists them: each with a key of its own, sorted."""
@@ -187,7 +181,9 @@ class Refs:
         names: set[str] = set()
         targets: dict[str, str] = {}
         branches: list[str] = []
-        listed = git(repo, "for-each-ref", f"--format={_REFS_FORMAT}", "refs/heads", "refs/remotes")
+        listed = Git(repo).output(
+            "for-each-ref", f"--format={_REFS_FORMAT}", "refs/heads", "refs/remotes"
+        )
         for line in listed.splitlines():
             name, target, fields = (line.split("\t", 2) + ["", ""])[:3]
             names.add(name)
@@ -267,13 +263,9 @@ def push_target(repo: Path, branch: str) -> tuple[str, str]:
     upstream's branch when that's the same remote, else a branch of its own name. One tracking
     a local branch goes to the remote `push_remote` picks, under its own name; the remote is
     empty when there's none."""
-    out = git(
-        repo,
-        "for-each-ref",
-        "--format=%(push:remotename)%09%(upstream:remotename)%09%(upstream:remoteref)",
-        f"refs/heads/{branch}",
-    )
-    remote, upstream_remote, upstream_ref = out.strip("\n").split("\t")
+    fields = ("push:remotename", "upstream:remotename", "upstream:remoteref")
+    found = refs(Git(repo), f"refs/heads/{branch}", fields=fields)[f"refs/heads/{branch}"]
+    remote, upstream_remote, upstream_ref = (found.fields[field] for field in fields)
     if upstream_remote == "." and remote in ("", "."):
         # Its upstream is a local branch: pushing there would move that branch. Empty when
         # there's no remote to push to instead.
@@ -288,8 +280,7 @@ def _my_dirs(repo: Path, default_refs: list[str], email: str, since_days: int) -
     within `since_days`, as git names them: repo-relative and POSIX, on every system."""
     if not default_refs or not email:
         return []
-    out = git(
-        repo,
+    out = Git(repo).output(
         "log",
         *default_refs,
         f"--since={since_days} days ago",
@@ -369,15 +360,14 @@ def _off_default(
         return {}
     tips = [b.sha for b in branches if b.sha]
     try:
-        walked = git(
-            repo,
+        walked = Git(repo).output(
             "rev-list",
             "--format=%H %P%x09%ae",
             *tips,
             "--not",
             *found.default_refs,
         )
-    except CommandError:
+    except GitError:
         return {b.name: (None, None) for b in branches}
     parents: dict[str, list[str]] = {}
     authors: dict[str, str] = {}
@@ -408,18 +398,21 @@ def _pushed_copy(repo: Path, branch: Branch, config: RepoConfig, refs: Refs) -> 
     copy = f"{remote}/{branch.name}"
     if remote is None or f"refs/remotes/{copy}" not in refs.names:
         return branch
-    ahead, behind = git(
-        repo,
-        "rev-list",
-        "--left-right",
-        "--count",
-        f"refs/heads/{branch.name}...refs/remotes/{copy}",
-    ).split()
+    ahead, behind = (
+        Git(repo)
+        .run(
+            "rev-list",
+            "--left-right",
+            "--count",
+            f"refs/heads/{branch.name}...refs/remotes/{copy}",
+        )
+        .split()
+    )
     return branch.model_copy(update={"upstream": copy, "ahead": int(ahead), "behind": int(behind)})
 
 
 def _worktrees(repo: Path) -> list[tuple[str, str | None]]:
-    return parse_worktrees(git(repo, "worktree", "list", "--porcelain"))
+    return parse_worktrees(Git(repo).output("worktree", "list", "--porcelain"))
 
 
 def folded(repos: list[Path]) -> dict[Path, list[tuple[str, str | None]] | None]:
@@ -431,7 +424,7 @@ def folded(repos: list[Path]) -> dict[Path, list[tuple[str, str | None]] | None]
         try:
             listed = _worktrees(repo)
             main = Path(listed[0][0]).resolve()
-        except CommandError:  # not a repository: left to fail, and be said, on its own
+        except GitError:  # not a repository: left to fail, and be said, on its own
             listed, main = None, repo.resolve()
         if main not in by_main or repo.resolve() == main:
             by_main[main] = (repo, listed)
@@ -468,7 +461,7 @@ def collect(
                 github_hosts,
                 listed=existing[repo],
             )
-        except (CommandError, subprocess.SubprocessError, OSError) as e:  # a hung git, say
+        except (GitError, OSError) as e:  # a hung git (GitTimeoutError), say
             failed.append(e)
             kept = "keeping what was read before" if str(repo) in before else "leaving it out"
             log.warning("can't read %s, so %s: %s", repo, kept, e)

@@ -24,11 +24,18 @@ from pydantic.fields import FieldInfo
 
 from move_forward import asking, registry, tomledit
 from move_forward import config as config_module
-from move_forward.asking import Asker, Complete, InitSection, InitSetup, Prompt, choices, quiet
+from move_forward.asking import (
+    Asker,
+    Complete,
+    InitSection,
+    InitSetup,
+    Prompt,
+    choices,
+    quiet_git,
+)
 from move_forward.config import Config
 from move_forward.keychain import TokenFields
 from move_forward.plugin import Plugin
-from move_forward.shell import git_program
 from move_forward.strict import TABLES, marked
 
 LINE_WIDTH = 100
@@ -221,7 +228,7 @@ def _completing(complete: Complete | None) -> Generator[None]:
 
 
 def guess_email() -> str:
-    return quiet([git_program(), "config", "user.email"])
+    return quiet_git(Path(), "config", "user.email")
 
 
 def _table(name: str, values: dict[str, object], optional: str = "") -> str:

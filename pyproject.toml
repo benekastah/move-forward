@@ -78,8 +78,10 @@ extend-select = [
 # imported reads the same everywhere, and the plugin import ban below sees every import of core.
 ban-relative-imports = "all"
 
-# Plugins use core only through move_forward.api (see PROJECT_AGENTS.md); core itself may use all.
+# Plugins use core only through move_forward.api (see PROJECT_AGENTS.md), and run git through its
+# `api.git`, not py-git-client directly; core itself may use all.
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
+"git_client".msg = "plugins run git through move_forward.api.git"
 "move_forward.act_now".msg = "plugins import from move_forward.api"
 "move_forward.asking".msg = "plugins import from move_forward.api"
 "move_forward.auth".msg = "plugins import from move_forward.api"
@@ -88,6 +90,7 @@ ban-relative-imports = "all"
 "move_forward.config".msg = "plugins import from move_forward.api"
 "move_forward.db".msg = "plugins import from move_forward.api"
 "move_forward.domain".msg = "plugins import from move_forward.api"
+"move_forward.git".msg = "plugins import from move_forward.api"
 "move_forward.graph".msg = "plugins import from move_forward.api"
 "move_forward.https".msg = "plugins import from move_forward.api"
 "move_forward.ids".msg = "plugins import from move_forward.api"

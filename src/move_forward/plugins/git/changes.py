@@ -12,7 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from move_forward.api.shell import git_common_dir
+from move_forward.api.git import git_common_dir
 
 
 def _ref_files(common: Path) -> list[Path]:

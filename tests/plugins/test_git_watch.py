@@ -12,6 +12,7 @@ from conftest import NOW
 
 from move_forward.change_checks import ChangeChecks
 from move_forward.db import Database
+from move_forward.git import Git, git_common_dir
 from move_forward.graph import Graph
 from move_forward.plugin import Context, ContextRequest, RefreshRequest
 from move_forward.plugins.git import watch
@@ -20,7 +21,6 @@ from move_forward.plugins.git.plugin import GitPlugin
 from move_forward.plugins.git.repository import MIGRATIONS
 from move_forward.registry import Enabled
 from move_forward.repositories import ChangeRepository, KvRepository
-from move_forward.shell import git, git_common_dir
 
 WAIT_SECONDS = 10.0
 QUIET_SECONDS = 1.0
@@ -30,12 +30,12 @@ QUIET_SECONDS = 1.0
 def _repo(path: Path) -> Path:
     """A repo tracking `src/deep/a.py`, and ignoring `node_modules/` nested in `src/`."""
     path.mkdir()
-    git(path, "init", "-q", "-b", "main")
+    Git(path).run("init", "-q", "-b", "main")
     (path / "src" / "deep").mkdir(parents=True)
     (path / "src" / "deep" / "a.py").write_text("a\n")
     (path / ".gitignore").write_text("node_modules/\n")
-    git(path, "add", ".")
-    git(path, "commit", "-q", "-m", "first")
+    Git(path).run("add", ".")
+    Git(path).run("commit", "-q", "-m", "first")
     (path / "src" / "node_modules" / "dep").mkdir(parents=True)
     return path.resolve()
 
@@ -107,7 +107,7 @@ def test_tracked_directories_are_those_in_the_index(tmp_path: Path) -> None:
     (repo / "new" / "pkg").mkdir(parents=True)
     (repo / "new" / "pkg" / "b.py").write_text("b\n")
     assert watch.tracked_dirs(repo) == {repo, repo / "src", repo / "src" / "deep"}
-    git(repo, "add", "new")  # staged, not committed
+    Git(repo).run("add", "new")  # staged, not committed
     assert repo / "new" / "pkg" in watch.tracked_dirs(repo)
 
 
@@ -124,13 +124,13 @@ def test_edits_staging_and_commits_are_seen_as_they_happen(
     assert seen.edits(repo)
     (repo / "src" / "deep" / "c.py").write_text("c\n")
     assert seen.edits(repo)
-    git(repo, "add", "src/deep/c.py")  # writes only the index
+    Git(repo).run("add", "src/deep/c.py")  # writes only the index
     assert seen.edits(repo)
-    git(repo, "commit", "-q", "-m", "second")
+    Git(repo).run("commit", "-q", "-m", "second")
     assert seen.moves(common)
-    git(repo, "config", "branch.main.stackParent", "base")  # as git stack tracks a branch
+    Git(repo).run("config", "branch.main.stackParent", "base")  # as git stack tracks a branch
     assert seen.moves(common)
-    git(repo, "worktree", "add", "-q", "--detach", str(tmp_path / "wt"))  # no ref moves
+    Git(repo).run("worktree", "add", "-q", "--detach", str(tmp_path / "wt"))  # no ref moves
     assert seen.moves(common)
 
 
@@ -141,7 +141,7 @@ def test_a_newly_staged_directory_is_watched_from_the_next_sync(
     watcher.sync({repo: repo / ".git"})
     (repo / "new").mkdir()
     (repo / "new" / "b.py").write_text("b\n")
-    git(repo, "add", "new")
+    Git(repo).run("add", "new")
     watcher.sync({repo: repo / ".git"})  # as each refresh does
     seen = _Seen(watcher)
     (repo / "new" / "b.py").write_text("changed\n")
@@ -216,7 +216,7 @@ def test_a_worktree_a_new_snapshot_found_is_watched_once_watching_has_started(
     try:
         assert checks.check(Enabled(plugin, ctx(0)), Graph([])) is None  # starts watching
         worktree = tmp_path / "wt"
-        git(repo, "worktree", "add", "-q", "--detach", str(worktree))
+        Git(repo).run("worktree", "add", "-q", "--detach", str(worktree))
         kept.save(plugin.collect(RefreshRequest(ctx(1), Graph())))  # as a refresh stores it
         time.sleep(QUIET_SECONDS)
         checks.check(Enabled(plugin, ctx(2)), Graph([]))  # what adding it moved, taken

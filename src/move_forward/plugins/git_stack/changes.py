@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 from move_forward.api import Graph, Model
-from move_forward.api.shell import git_common_dir
+from move_forward.api.git import git_common_dir
 
 BRANCH = "git.branch"
 

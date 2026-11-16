@@ -11,11 +11,13 @@ from conftest import (
     section,
     todo,
 )
+from git_client import GitError
 from git_client.testing import RepoTemplates
 
 from move_forward import refresh
 from move_forward.config import Config
 from move_forward.db import Database
+from move_forward.git import Git
 from move_forward.graph import Graph, Ref
 from move_forward.plugin import ActionError, SourceError
 from move_forward.plugins.git import client
@@ -33,25 +35,24 @@ from move_forward.plugins.notes.actions import ICED_FROM_DASHBOARD_NOTE
 from move_forward.plugins.notes.models import Entry, Link
 from move_forward.plugins.notes.repository import NotesRepository
 from move_forward.registry import enabled, migrate
-from move_forward.shell import CommandError, git
 
 
 def _init(path: Path, bare: bool = False) -> None:
     path.mkdir()
-    git(path, "init", "-q", "-b", "main", *(["--bare"] if bare else []))
+    Git(path).run("init", "-q", "-b", "main", *(["--bare"] if bare else []))
 
 
 def _clone(origin: Path, path: Path, branch: str) -> Path:
     """A clone of `origin` on `branch`, committing as someone else."""
     identity = ("-c", "user.email=other@x", "-c", "user.name=Other")
-    git(path.parent, "clone", "-q", "-b", branch, *identity, str(origin), str(path))
+    Git(path.parent).run("clone", "-q", "-b", branch, *identity, str(origin), str(path))
     return path
 
 
 def _commit(repo: Path, name: str) -> None:
     (repo / name).write_text(name)
-    git(repo, "add", name)
-    git(repo, "commit", "-q", "-m", name)
+    Git(repo).run("add", name)
+    Git(repo).run("commit", "-q", "-m", name)
 
 
 def _repo_and_origin(root: Path) -> None:
@@ -61,12 +62,12 @@ def _repo_and_origin(root: Path) -> None:
     repo = root / "repo"
     _init(repo)
     _commit(repo, "a.txt")
-    git(repo, "remote", "add", "origin", str(origin))
-    git(repo, "push", "-q", "-u", "origin", "main")
-    git(repo, "branch", "done")
-    git(repo, "switch", "-q", "-c", "wip")
+    Git(repo).run("remote", "add", "origin", str(origin))
+    Git(repo).run("push", "-q", "-u", "origin", "main")
+    Git(repo).run("branch", "done")
+    Git(repo).run("switch", "-q", "-c", "wip")
     _commit(repo, "b.txt")
-    git(repo, "switch", "-q", "main")
+    Git(repo).run("switch", "-q", "main")
 
 
 @pytest.fixture
@@ -108,12 +109,13 @@ def _stored(config: Config) -> Database:
                     Branch(name=name, sha=sha, committed_at=datetime.now(UTC))
                     for name, sha in (
                         line.split()
-                        for line in git(
-                            repo,
+                        for line in Git(repo)
+                        .run(
                             "for-each-ref",
                             "--format=%(refname:lstrip=2) %(objectname)",
                             "refs/heads",
-                        ).splitlines()
+                        )
+                        .splitlines()
                     )
                 ],
             )
@@ -139,7 +141,7 @@ def test_delete_branch(config: Config, repo: Path) -> None:
     assert run("git/delete_branch", config, {"repo": str(repo), "branch": "done"}).startswith(
         "deleted done"
     )
-    assert "done" not in git(repo, "branch", "--list", "done")
+    assert "done" not in Git(repo).run("branch", "--list", "done")
 
 
 def test_delete_refuses_checked_out_missing_and_unknown_repo(config: Config, repo: Path) -> None:
@@ -162,75 +164,75 @@ def test_delete_branches_continues_past_failures(config: Config, repo: Path) -> 
     notice = run("git/delete_branches", config, {"targets": targets})
     assert notice.startswith("deleted 1 branches; failed: main: ")
     assert "nope: " in notice and "x: " in notice
-    assert git(repo, "branch", "--list", "done") == ""
+    assert Git(repo).run("branch", "--list", "done") == ""
 
 
 def test_push_sets_upstream_then_pushes_plainly(config: Config, repo: Path) -> None:
     assert run("git/push_branch", config, {"repo": str(repo), "branch": "wip"}) == "pushed wip"
-    assert git(repo, "rev-parse", "--abbrev-ref", "wip@{upstream}").strip() == "origin/wip"
-    git(repo, "switch", "-q", "wip")
+    assert Git(repo).run("rev-parse", "--abbrev-ref", "wip@{upstream}").strip() == "origin/wip"
+    Git(repo).run("switch", "-q", "wip")
     _commit(repo, "c.txt")
     run("git/push_branch", config, {"repo": str(repo), "branch": "wip"})
-    assert git(repo, "rev-parse", "wip") == git(repo, "rev-parse", "origin/wip")
+    assert Git(repo).run("rev-parse", "wip") == Git(repo).run("rev-parse", "origin/wip")
 
 
 def test_push_and_pull_of_a_branch_named_like_a_tag_move_the_branch(
     config: Config, repo: Path, tmp_path: Path
 ) -> None:
-    git(repo, "branch", "-q", "v1", "wip")
-    git(repo, "tag", "v1", "main")
+    Git(repo).run("branch", "-q", "v1", "wip")
+    Git(repo).run("tag", "v1", "main")
     fields = {"repo": str(repo), "branch": "v1"}
     assert run("git/push_branch", config, fields) == "pushed v1"
-    upstream = git(repo, "for-each-ref", "--format=%(upstream:lstrip=2)", "refs/heads/v1")
+    upstream = Git(repo).run("for-each-ref", "--format=%(upstream:lstrip=2)", "refs/heads/v1")
     assert upstream.strip() == "origin/v1"
-    git(repo, "switch", "-q", "v1")
+    Git(repo).run("switch", "-q", "v1")
     _commit(repo, "c.txt")
     run("git/push_branch", config, fields)
-    assert git(repo, "rev-parse", "refs/heads/v1") == git(repo, "rev-parse", "origin/v1")
+    assert Git(repo).run("rev-parse", "refs/heads/v1") == Git(repo).run("rev-parse", "origin/v1")
     other = _clone(repo.parent / "origin.git", tmp_path / "other", "v1")
     _commit(other, "d.txt")
-    git(other, "push", "-q")
+    Git(other).run("push", "-q")
     assert run("git/pull_branch", config, fields) == "pulled v1"
-    assert git(repo, "rev-parse", "refs/heads/v1") == git(other, "rev-parse", "HEAD")
+    assert Git(repo).run("rev-parse", "refs/heads/v1") == Git(other).run("rev-parse", "HEAD")
 
 
 def test_push_goes_where_git_would_with_remotes_not_called_origin(
     config: Config, repo: Path, tmp_path: Path
 ) -> None:
-    git(repo, "remote", "rename", "origin", "upstream")
+    Git(repo).run("remote", "rename", "origin", "upstream")
     fork = tmp_path / "fork.git"
     _init(fork, bare=True)
     push = {"repo": str(repo), "branch": "wip"}
     assert run("git/push_branch", config, push) == "pushed wip"  # one remote: that one
-    assert git(repo, "rev-parse", "--abbrev-ref", "wip@{upstream}").strip() == "upstream/wip"
-    git(repo, "remote", "add", "fork", str(fork))
-    git(repo, "branch", "-q", "--no-track", "idea", "wip")
+    assert Git(repo).run("rev-parse", "--abbrev-ref", "wip@{upstream}").strip() == "upstream/wip"
+    Git(repo).run("remote", "add", "fork", str(fork))
+    Git(repo).run("branch", "-q", "--no-track", "idea", "wip")
     idea = {"repo": str(repo), "branch": "idea"}
     with pytest.raises(ActionError, match="remote.pushDefault"):  # two, and nothing says which
         run("git/push_branch", config, idea)
-    git(repo, "config", "remote.pushDefault", "fork")
+    Git(repo).run("config", "remote.pushDefault", "fork")
     run("git/push_branch", config, idea)
-    assert git(fork, "rev-parse", "idea") == git(repo, "rev-parse", "idea")
+    assert Git(fork).run("rev-parse", "idea") == Git(repo).run("rev-parse", "idea")
     # A fork's triangle: wip tracks upstream but pushes to the fork, under its own name.
-    git(repo, "switch", "-q", "wip")
+    Git(repo).run("switch", "-q", "wip")
     _commit(repo, "c.txt")
     run("git/push_branch", config, push)
-    assert git(fork, "rev-parse", "wip") == git(repo, "rev-parse", "wip")
-    assert git(repo, "rev-parse", "upstream/wip") != git(repo, "rev-parse", "wip")
+    assert Git(fork).run("rev-parse", "wip") == Git(repo).run("rev-parse", "wip")
+    assert Git(repo).run("rev-parse", "upstream/wip") != Git(repo).run("rev-parse", "wip")
 
 
 def test_push_of_a_branch_tracking_a_local_one_goes_to_the_remote_not_into_it(
     config: Config, repo: Path
 ) -> None:
-    git(repo, "branch", "-q", "--track", "feat", "main")  # its upstream is local main
-    git(repo, "switch", "-q", "feat")
+    Git(repo).run("branch", "-q", "--track", "feat", "main")  # its upstream is local main
+    Git(repo).run("switch", "-q", "feat")
     _commit(repo, "c.txt")
-    git(repo, "switch", "-q", "main")
+    Git(repo).run("switch", "-q", "main")
     assert _branch(repo, "feat").upstream is None  # not "unpushed" against a local branch
-    main_before = git(repo, "rev-parse", "main")
+    main_before = Git(repo).run("rev-parse", "main")
     assert run("git/push_branch", config, {"repo": str(repo), "branch": "feat"}) == "pushed feat"
-    assert git(repo, "rev-parse", "main") == main_before  # main didn't move
-    assert git(repo, "rev-parse", "origin/feat") == git(repo, "rev-parse", "feat")
+    assert Git(repo).run("rev-parse", "main") == main_before  # main didn't move
+    assert Git(repo).run("rev-parse", "origin/feat") == Git(repo).run("rev-parse", "feat")
     pushed = _branch(repo, "feat")
     assert (pushed.upstream, pushed.ahead) == ("origin/feat", 0)  # counted against its copy
 
@@ -244,21 +246,21 @@ def _branch(repo: Path, name: str) -> Branch:
 def test_push_of_a_branch_tracking_a_local_one_with_nowhere_to_go_is_refused(
     config: Config, repo: Path
 ) -> None:
-    git(repo, "remote", "remove", "origin")
-    git(repo, "branch", "-q", "--track", "feat", "main")
+    Git(repo).run("remote", "remove", "origin")
+    Git(repo).run("branch", "-q", "--track", "feat", "main")
     with pytest.raises(ActionError, match="tracks a local branch"):
         run("git/push_branch", config, {"repo": str(repo), "branch": "feat"})
 
 
 def test_delete_refuses_a_branch_moved_since_the_page_showed_it(config: Config, repo: Path) -> None:
-    shown = git(repo, "rev-parse", "done").strip()
-    git(repo, "switch", "-q", "done")
+    shown = Git(repo).run("rev-parse", "done").strip()
+    Git(repo).run("switch", "-q", "done")
     _commit(repo, "after.txt")
-    git(repo, "switch", "-q", "main")
+    Git(repo).run("switch", "-q", "main")
     with pytest.raises(ActionError, match="moved since the page showed it"):
         run("git/delete_branch", config, {"repo": str(repo), "branch": "done", "sha": shown})
     notice = run("git/delete_branches", config, {"targets": f"{repo}\tdone\t{shown}"})
-    assert "moved since" in notice and git(repo, "branch", "--list", "done").strip()
+    assert "moved since" in notice and Git(repo).run("branch", "--list", "done").strip()
 
 
 def test_pull_of_a_branch_tracking_a_local_one_takes_its_pushed_copy(
@@ -266,34 +268,34 @@ def test_pull_of_a_branch_tracking_a_local_one_takes_its_pushed_copy(
 ) -> None:
     fork = tmp_path / "fork.git"
     _init(fork, bare=True)
-    git(repo, "remote", "add", "fork", str(fork))
-    git(repo, "config", "remote.pushDefault", "fork")  # Push sends it to fork, not origin
-    git(repo, "branch", "-q", "--track", "feat", "main")
+    Git(repo).run("remote", "add", "fork", str(fork))
+    Git(repo).run("config", "remote.pushDefault", "fork")  # Push sends it to fork, not origin
+    Git(repo).run("branch", "-q", "--track", "feat", "main")
     run("git/push_branch", config, {"repo": str(repo), "branch": "feat"})
     other = _clone(fork, tmp_path / "other", "feat")
     _commit(other, "theirs.txt")
-    git(other, "push", "-q", "origin", "feat")  # the clone's origin is the fork
-    main_before = git(repo, "rev-parse", "main")
+    Git(other).run("push", "-q", "origin", "feat")  # the clone's origin is the fork
+    main_before = Git(repo).run("rev-parse", "main")
     assert run("git/pull_branch", config, {"repo": str(repo), "branch": "feat"}) == "pulled feat"
-    assert git(repo, "rev-parse", "feat") == git(other, "rev-parse", "feat")
-    assert git(repo, "rev-parse", "main") == main_before
+    assert Git(repo).run("rev-parse", "feat") == Git(other).run("rev-parse", "feat")
+    assert Git(repo).run("rev-parse", "main") == main_before
 
 
 def test_delete_goes_through_for_a_branch_still_at_the_commit_shown_whatever_tags_say(
     config: Config, repo: Path
 ) -> None:
-    shown = git(repo, "rev-parse", "done").strip()
-    git(repo, "tag", "done", "wip")  # a tag of the same name, elsewhere
+    shown = Git(repo).run("rev-parse", "done").strip()
+    Git(repo).run("tag", "done", "wip")  # a tag of the same name, elsewhere
     assert run("git/delete_branch", config, {"repo": str(repo), "branch": "done", "sha": shown})
-    assert git(repo, "branch", "--list", "done") == ""
+    assert Git(repo).run("branch", "--list", "done") == ""
 
 
 def test_delete_all_takes_a_branch_still_at_its_commit_and_one_given_none(
     config: Config, repo: Path
 ) -> None:
-    git(repo, "branch", "-q", "again", "main")
-    again = git(repo, "rev-parse", "again").strip()
-    git(repo, "branch", "-q", "plain", "main")
+    Git(repo).run("branch", "-q", "again", "main")
+    again = Git(repo).run("rev-parse", "again").strip()
+    Git(repo).run("branch", "-q", "plain", "main")
     lines = f"{repo}\tagain\t{again}\n{repo}\tplain\t"  # an empty column isn't checked
     assert run("git/delete_branches", config, {"targets": lines}) == "deleted 2 branches"
 
@@ -301,9 +303,9 @@ def test_delete_all_takes_a_branch_still_at_its_commit_and_one_given_none(
 def test_a_branch_whose_upstream_is_gone_counts_what_isnt_on_the_default_branch(
     repo: Path,
 ) -> None:
-    git(repo, "push", "-q", "-u", "origin", "wip")
-    git(repo, "push", "-q", "origin", "--delete", "wip")
-    git(repo, "fetch", "-q", "--prune")
+    Git(repo).run("push", "-q", "-u", "origin", "wip")
+    Git(repo).run("push", "-q", "origin", "--delete", "wip")
+    Git(repo).run("fetch", "-q", "--prune")
     [wip] = [
         b for b in client.collect_repo(repo, datetime.now(UTC), 30, []).branches if b.name == "wip"
     ]
@@ -315,8 +317,8 @@ def test_wip_commit_takes_tracked_files_only(config: Config, repo: Path) -> None
     (repo / "new.txt").write_text("untracked")
     notice = run("git/wip_commit", config, {"repo": str(repo), "worktree": str(repo)})
     assert notice.startswith("committed 1 files as WIP")
-    assert git(repo, "log", "-1", "--format=%s").strip() == "WIP"
-    assert git(repo, "status", "--porcelain").strip() == "?? new.txt"
+    assert Git(repo).run("log", "-1", "--format=%s").strip() == "WIP"
+    assert Git(repo).run("status", "--porcelain").strip() == "?? new.txt"
     with pytest.raises(ActionError, match="no modified"):
         run("git/wip_commit", config, {"repo": str(repo), "worktree": str(repo)})
 
@@ -326,14 +328,14 @@ def test_wip_commit_refuses_a_checkout_that_isnt_the_repos(
 ) -> None:
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    git(elsewhere, "init", "-q")
+    Git(elsewhere).run("init", "-q")
     (elsewhere / "f").write_text("x")
-    git(elsewhere, "add", "f")
-    git(elsewhere, "commit", "-qm", "init")
+    Git(elsewhere).run("add", "f")
+    Git(elsewhere).run("commit", "-qm", "init")
     (elsewhere / "f").write_text("changed")
     with pytest.raises(ActionError, match="not a worktree of"):
         run("git/wip_commit", config, {"repo": str(repo), "worktree": str(elsewhere)})
-    assert git(elsewhere, "log", "--format=%s").strip() == "init"
+    assert Git(elsewhere).run("log", "--format=%s").strip() == "init"
 
 
 def _notes(config: Config) -> NotesRepository:
@@ -351,7 +353,7 @@ def test_ice_records_the_branch_and_its_commit_and_thaw_forgets_it(
     [ice] = _notes(config).ices()
     assert (ice.title, ice.note) == ("wip", ICED_FROM_DASHBOARD_NOTE)
     assert [(i.kind, i.ref_id, i.sha) for i in ice.items] == [
-        ("git.branch", f"{repo}\twip", git(repo, "rev-parse", "wip").strip())
+        ("git.branch", f"{repo}\twip", Git(repo).run("rev-parse", "wip").strip())
     ]
     iced_wip = graph(config).get("notes.iced", str(ice.id))
     assert iced_wip is not None and iced_wip.attrs["shas"] == {f"{repo}\twip": ice.items[0].sha}
@@ -373,18 +375,18 @@ def test_iced_branches_are_deleted_together_by_git_and_stay_on_ice(
     _ice(config, repo, "done")
     targets = f"{repo}\twip\n{repo}\tdone"
     assert run("git/delete_together", config, {"targets": targets}) == "deleted wip, done"
-    assert git(repo, "branch", "--list", "wip", "done") == ""
+    assert Git(repo).run("branch", "--list", "wip", "done") == ""
     assert [i.title for i in _notes(config).ices()] == ["wip", "done"]
 
 
 def test_deleting_together_checks_every_branch_before_deleting_any(
     config: Config, repo: Path
 ) -> None:
-    git(repo, "switch", "-q", "wip")
+    Git(repo).run("switch", "-q", "wip")
     targets = f"{repo}\tdone\n{repo}\twip"
     with pytest.raises(ActionError, match="checked out"):
         run("git/delete_together", config, {"targets": targets})
-    assert git(repo, "branch", "--list", "done").strip() == "done"
+    assert Git(repo).run("branch", "--list", "done").strip() == "done"
     with pytest.raises(ActionError, match="nor a worktree of one"):
         run("git/delete_together", config, {"targets": "/elsewhere\tdone"})
 
@@ -393,18 +395,18 @@ def test_an_iced_branch_with_commits_since_it_was_iced_isnt_deleted(
     config: Config, repo: Path
 ) -> None:
     _ice(config, repo, "done")
-    git(repo, "switch", "-q", "done")
+    Git(repo).run("switch", "-q", "done")
     _commit(repo, "later.txt")
-    git(repo, "switch", "-q", "main")
-    git(repo, "tag", "done", "done@{1}")  # a tag at the commit it was iced at answers nothing
+    Git(repo).run("switch", "-q", "main")
+    Git(repo).run("tag", "done", "done@{1}")  # a tag at the commit it was iced at answers nothing
     with pytest.raises(ActionError, match="commits since it was iced"):
         run("git/delete_branch", config, {"repo": str(repo), "branch": "done"})
-    assert git(repo, "branch", "--list", "done").strip() == "done"
+    assert Git(repo).run("branch", "--list", "done").strip() == "done"
 
 
 def test_ice_takes_the_whole_stack_git_stack_knows(config: Config, repo: Path) -> None:
-    git(repo, "branch", "top", "wip")
-    git(repo, "branch", "beside", "done")
+    Git(repo).run("branch", "top", "wip")
+    Git(repo).run("branch", "beside", "done")
     config = config.with_section("git_stack", GitStackConfig())
     db = _stored(config)
     tracked = [
@@ -428,7 +430,7 @@ def test_ice_takes_the_other_stacks_in_the_group_as_git_stack_would(
     config: Config, repo: Path
 ) -> None:
     for name in ("other", "other-top", "apart"):
-        git(repo, "branch", name, "main")
+        Git(repo).run("branch", name, "main")
     config = config.with_section("git_stack", GitStackConfig())
     db = _stored(config)
     tracked = [
@@ -638,19 +640,19 @@ def test_a_worktree_of_a_configured_repo_will_do_for_its_branches(
     config: Config, repo: Path, tmp_path: Path
 ) -> None:
     second = tmp_path / "repo2"
-    git(repo, "worktree", "add", "-q", "-b", "side", str(second))
+    Git(repo).run("worktree", "add", "-q", "-b", "side", str(second))
     notice = run("git/delete_branch", config, {"repo": str(second), "branch": "done"})
     assert notice == f"deleted done in {second}"
-    assert git(repo, "branch", "--list", "done").strip() == ""
+    assert Git(repo).run("branch", "--list", "done").strip() == ""
     (second / "a.txt").write_text("changed")
     run("git/wip_commit", config, {"repo": str(second), "worktree": str(second)})
-    assert git(second, "log", "-1", "--format=%s").strip() == "WIP"
+    assert Git(second).run("log", "-1", "--format=%s").strip() == "WIP"
 
 
 def test_deleted_iced_branches_are_restored_at_the_commits_they_were_iced_at(
     config: Config, repo: Path
 ) -> None:
-    wip = git(repo, "rev-parse", "wip").strip()
+    wip = Git(repo).run("rev-parse", "wip").strip()
     _ice(config, repo, "wip")
     run("git/delete_together", config, {"targets": f"{repo}\twip"})
     built = refresh.build_dashboard(config, _stored(config))
@@ -658,7 +660,7 @@ def test_deleted_iced_branches_are_restored_at_the_commits_they_were_iced_at(
     [restore] = [a for a in on_ice.actions if a.name == "git/restore_together"]
     assert restore.fields == {"targets": f"{repo}\twip"}
     assert run("git/restore_together", config, restore.fields) == "restored wip"
-    assert git(repo, "rev-parse", "wip").strip() == wip
+    assert Git(repo).run("rev-parse", "wip").strip() == wip
     with pytest.raises(ActionError, match="already exists"):
         run("git/restore_together", config, restore.fields)
     with pytest.raises(ActionError, match="isn't on ice"):
@@ -741,21 +743,21 @@ def test_pull_fast_forwards_a_branch_checked_out_or_not_and_refuses_otherwise(
 
     def pushed_elsewhere(name: str) -> str:
         _commit(other, name)
-        git(other, "push", "-q")
-        return git(other, "rev-parse", "HEAD")
+        Git(other).run("push", "-q")
+        return Git(other).run("rev-parse", "HEAD")
 
     ahead = pushed_elsewhere("c.txt")
     assert run("git/pull_branch", config, fields) == "pulled wip"  # not checked out
-    assert git(repo, "rev-parse", "wip") == ahead
+    assert Git(repo).run("rev-parse", "wip") == ahead
     assert run("git/pull_branch", config, fields) == "wip is up to date"
-    git(repo, "switch", "-q", "wip")
+    Git(repo).run("switch", "-q", "wip")
     ahead = pushed_elsewhere("d.txt")
     (repo / "b.txt").write_text("changed")
     with pytest.raises(ActionError, match="uncommitted changes"):
         run("git/pull_branch", config, fields)
-    git(repo, "checkout", "--", "b.txt")
+    Git(repo).run("checkout", "--", "b.txt")
     assert run("git/pull_branch", config, fields) == "pulled wip"  # checked out
-    assert git(repo, "rev-parse", "HEAD") == ahead
+    assert Git(repo).run("rev-parse", "HEAD") == ahead
     pushed_elsewhere("e.txt")
     _commit(repo, "f.txt")  # diverged
     with pytest.raises(ActionError, match="can't fast-forward"):
@@ -770,21 +772,21 @@ def test_pull_moves_a_branch_in_a_linked_worktree_and_never_one_being_rebased(
     other = tmp_path / "other"
     _clone(repo.parent / "origin.git", other, "wip")
     _commit(other, "c.txt")
-    git(other, "push", "-q")
+    Git(other).run("push", "-q")
     linked = tmp_path / "linked"
-    git(repo, "worktree", "add", "-q", str(linked), "wip")
+    Git(repo).run("worktree", "add", "-q", str(linked), "wip")
     assert run("git/pull_branch", config, fields) == "pulled wip"
-    assert git(linked, "rev-parse", "HEAD") == git(other, "rev-parse", "HEAD")
-    git(repo, "worktree", "remove", str(linked))
+    assert Git(linked).run("rev-parse", "HEAD") == Git(other).run("rev-parse", "HEAD")
+    Git(repo).run("worktree", "remove", str(linked))
     _commit(other, "d.txt")
-    git(other, "push", "-q")
-    git(repo, "switch", "-q", "wip")
-    with pytest.raises(CommandError):  # stops mid-rebase, wip behind its upstream
-        git(repo, "rebase", "-q", "--exec", "false", "HEAD~1")
-    before = git(repo, "rev-parse", "refs/heads/wip")
+    Git(other).run("push", "-q")
+    Git(repo).run("switch", "-q", "wip")
+    with pytest.raises(GitError):  # stops mid-rebase, wip behind its upstream
+        Git(repo).run("rebase", "-q", "--exec", "false", "HEAD~1")
+    before = Git(repo).run("rev-parse", "refs/heads/wip")
     with pytest.raises(ActionError, match="couldn't pull wip"):  # git refuses: it's rebasing
         run("git/pull_branch", config, fields)
-    assert git(repo, "rev-parse", "refs/heads/wip") == before
+    assert Git(repo).run("rev-parse", "refs/heads/wip") == before
 
 
 def test_pull_needs_an_upstream(config: Config, repo: Path) -> None:

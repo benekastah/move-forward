@@ -9,6 +9,22 @@ A change that could break a plugin built against the current version raises
 `Plugin` attribute changing meaning, a stored format a plugin reads changing. Adding a
 name, a hook, a request field or an optional `KindSpec` flag doesn't.
 
+## Version 3
+
+- **git runs through py-git-client, in `api.git`**: `api.git.Git(repo)` is
+  [py-git-client](https://github.com/benekastah/py-git-client)'s `Git` as the dashboard runs it
+  (the git `$MOVE_FORWARD_GIT` names, a 120-second timeout unless given another, and nothing
+  started once the dashboard is stopping). Run a command with its `run` (stripped output),
+  `run_bytes`, `ok` (a yes-or-no answer), `resolve` (an object id, or None) or its own `output`
+  (stdout as git printed it, with bytes that aren't UTF-8 replaced, for a parser). A failure
+  raises `api.git.GitError` (its `stderr` and `stdout`), not `CommandError`; a timeout too,
+  rather than `subprocess.TimeoutExpired`. `api.git` also has py-git-client's batched reads
+  `config`, `config_key` and `refs`. Plugins never import py-git-client itself (Ruff bans it,
+  as it does core's own modules), so every git command runs the dashboard's way.
+  `api.shell.git` is gone, and `git_common_dir` moved from `api.shell` to `api.git`.
+- **`api.quiet_git(directory, *args)`**: git's output, or "" when it fails or there's no git,
+  as `quiet` gives a command's: for `mfd init`'s guesses.
+
 ## Version 2
 
 Fewer things to know: what no plugin used is gone, and what several plugins wrote each

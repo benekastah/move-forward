@@ -22,7 +22,10 @@ what's untried where it runs).
   `plugin.py` (the `Plugin` subclass), and `actions.py` if it has buttons.
   Core's `domain.py` has only the base `Model` and `KindModel`.
 - Plugins import core only from `move_forward.api` (ruff enforces it, and `tests/test_api.py`
-  every form of import), and never import each other (`tests/test_api.py` again) or read
+  every form of import), and run git through its `api.git.Git`, never py-git-client's own
+  (both ban `git_client` in a plugin), so every git command runs the dashboard's way: its git
+  (`$MOVE_FORWARD_GIT`), its timeout, and nothing started once it's stopping
+  (`move_forward/git.py`). They never import each other (`tests/test_api.py` again) or read
   each other's config, snapshots or tables. What one needs
   from another goes through the graph. A plugin that's built on another declares it in
   `requires`.

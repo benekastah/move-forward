@@ -24,6 +24,7 @@ from move_forward import db as db_module
 from move_forward.config import DEFAULT_DB_PATH, Config
 from move_forward.db import Database
 from move_forward.domain import Model
+from move_forward.git import GIT_ENV
 from move_forward.notifications import Event
 from move_forward.page import Panel
 from move_forward.panels import Dashboard
@@ -60,7 +61,7 @@ from move_forward.refresh import (
 )
 from move_forward.registry import BUILTINS, enabled, migrate
 from move_forward.repositories import SnapshotRepository
-from move_forward.shell import GIT_ENV, CommandError
+from move_forward.shell import CommandError
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
 ME = "me"

@@ -29,8 +29,8 @@ from move_forward.api import (
     Snapshots,
     attrs,
 )
+from move_forward.api.git import GitError, git_common_dir
 from move_forward.api.ids import branch_parts
-from move_forward.api.shell import CommandError, git_common_dir
 from move_forward.plugins.git import actions, changes, client, watch
 from move_forward.plugins.git.config import GitConfig
 from move_forward.plugins.git.kinds import BranchAttrs, RepoAttrs
@@ -234,7 +234,7 @@ class GitPlugin(
                     continue
                 try:
                     status = client.worktree_status(path)
-                except CommandError:  # gone since; the next read finds out
+                except GitError:  # gone since; the next read finds out
                     continue
                 last = self._statuses.get(resolved)
                 self._statuses[resolved] = status
