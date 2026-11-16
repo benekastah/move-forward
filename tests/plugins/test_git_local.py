@@ -177,7 +177,7 @@ def test_a_merge_counts_the_commits_of_both_its_sides(tmp_path: Path) -> None:
 
 
 def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Path) -> None:
-    """git names such a branch `heads/v1`, which is no branch's ref under refs/heads."""
+    """git's short name for such a branch is `heads/v1`, which is no branch's ref."""
     origin = tmp_path / "origin"
     _init_repo(origin)
     _commit(origin, "a.txt")
@@ -187,12 +187,30 @@ def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Pa
         git(repo, "switch", "-q", "-c", branch, "main")
         _commit(repo, f"{branch}.txt")
     git(repo, "tag", "v1", "main")
+    git(repo, "switch", "-q", "--track", "-c", "v2", "main")  # tracks a local branch,
+    git(repo, "tag", "v2", "main")
+    git(repo, "push", "-q", "origin", "refs/heads/v2")  # so it's counted against its pushed copy
     git(repo, "switch", "-q", "main")
 
     result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     counted = {b.name: (b.ahead_of_default, b.my_commits) for b in result.branches}
-    # `heads/v1` is git's short name for the branch while a tag is `v1` too.
-    assert counted == {"main": (None, None), "good": (1, 1), "heads/v1": (1, 1)}
+    assert counted["good"] == counted["v1"] == (1, 1)
+    assert next(b for b in result.branches if b.name == "v2").upstream == "origin/v2"
+
+
+def test_an_upstream_is_named_as_its_remote_branch_even_beside_a_branch_named_like_it(
+    tmp_path: Path,
+) -> None:
+    """git's short name for `origin/main` is `remotes/origin/main` while a branch is
+    `origin/main` too."""
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _commit(origin, "a.txt")
+    repo = tmp_path / "repo"
+    git(tmp_path, "clone", "-q", str(origin), str(repo))
+    git(repo, "branch", "-q", "--no-track", "origin/main", "main")
+    result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
+    assert next(b for b in result.branches if b.name == "main").upstream == "origin/main"
 
 
 def test_config_is_read_whatever_its_case_and_remotes_as_git_lists_them(tmp_path: Path) -> None:

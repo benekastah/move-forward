@@ -200,7 +200,8 @@ def push_branch(req: InputRequest[GitConfig]) -> str:
             raise ActionError(
                 f"{repo} has no remote to push to, or several: set remote.pushDefault to say which"
             )
-        git(repo, "push", "--set-upstream", remote, branch)
+        # By its ref: a tag of the same name would make `branch` match more than one.
+        git(repo, "push", "--set-upstream", remote, f"refs/heads/{branch}")
     return f"pushed {branch}"
 
 
