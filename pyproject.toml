@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Local dashboard of PRs, stacks, local work and Jira tickets that need attention."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Paul Harper", email = "benekastah@gmail.com" }]
 requires-python = ">=3.14"
 dependencies = ["pydantic>=2.14.3", "watchfiles>=1.3.0"]
 
@@ -11,16 +13,16 @@ dependencies = ["pydantic>=2.14.3", "watchfiles>=1.3.0"]
 mfd = "move_forward.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-xdist>=3.8.0", "ruff>=0.6", "basedpyright>=1.18", "coverage>=7.17.0", "tzdata>=2026.6"]
+dev = ["basedpyright>=1.40.2", "coverage>=7.17.3", "pytest>=9.2.0", "pytest-xdist>=3.8.0", "ruff>=0.17.5", "tzdata>=2026.6"]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.33.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/move_forward"]
 
-[tool.pytest.ini_options]
+[tool.pytest]
 testpaths = ["tests"]
 markers = ["private_files: makes its files private for real (conftest's `private_files`)"]
 
