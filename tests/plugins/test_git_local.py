@@ -128,8 +128,8 @@ def test_a_listed_worktree_of_another_listed_repo_is_folded_into_it(tmp_path: Pa
     _commit(other, "a.txt")
     second = tmp_path / "repo2"
     git(repo, "worktree", "add", "-q", "-b", "side", str(second))
-    assert local.folded([second, other, repo]) == [repo, other]  # the main checkout stays
-    assert local.folded([second, other]) == [second, other]  # the first listed, without it
+    assert list(local.folded([second, other, repo])) == [repo, other]  # the main checkout stays
+    assert list(local.folded([second, other])) == [second, other]  # the first listed, without it
 
 
 def test_my_commits_count_anywhere_on_a_branch_not_just_its_tip(tmp_path: Path) -> None:
@@ -175,6 +175,25 @@ def test_a_merge_counts_the_commits_of_both_its_sides(tmp_path: Path) -> None:
     result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
     counted = {b.name: (b.ahead_of_default, b.my_commits) for b in result.branches}
     assert counted == {"main": (None, None), "side": (1, 0), "topic": (3, 2)}
+
+
+def test_a_branch_named_like_a_tag_is_counted_and_so_are_the_others(tmp_path: Path) -> None:
+    """git names such a branch `heads/v1`, which is no branch's ref under refs/heads."""
+    origin = tmp_path / "origin"
+    _init_repo(origin)
+    _commit(origin, "a.txt")
+    repo = tmp_path / "repo"
+    git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _configure(repo)
+    for branch in ("v1", "good"):
+        git(repo, "switch", "-q", "-c", branch, "main")
+        _commit(repo, f"{branch}.txt")
+    git(repo, "tag", "v1", "main")
+    git(repo, "switch", "-q", "main")
+
+    result = local.collect_repo(repo, datetime.now(UTC) + timedelta(seconds=1), 30, [])
+    counted = {b.name: (b.ahead_of_default, b.my_commits) for b in result.branches}
+    assert counted == {"main": (None, None), "good": (1, 1), "heads/v1": (1, 1)}
 
 
 def test_config_is_read_whatever_its_case_and_remotes_as_git_lists_them(tmp_path: Path) -> None:

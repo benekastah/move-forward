@@ -365,12 +365,14 @@ def _off_default(
     when git can't say, and empty without a default branch to count against."""
     if not branches or not found.default_refs:
         return {}
+    # From their tips' shas, not their names: a branch named like a tag is `heads/v1`.
+    tips = [b.sha for b in branches if b.sha]
     try:
         walked = git(
             repo,
             "rev-list",
             "--format=%H %P%x09%ae",
-            *(f"refs/heads/{b.name}" for b in branches),
+            *tips,
             "--not",
             *found.default_refs,
         )
@@ -419,14 +421,10 @@ def _worktrees(repo: Path) -> list[tuple[str, str | None]]:
     return parse_worktrees(git(repo, "worktree", "list", "--porcelain"))
 
 
-def folded(repos: list[Path]) -> list[Path]:
-    """`repos` with one path per repository: a path that's a worktree of another listed one
-    is folded into it, keeping the main checkout if it's listed, else the first listed."""
-    return list(_folded(repos))
-
-
-def _folded(repos: list[Path]) -> dict[Path, list[tuple[str, str | None]] | None]:
-    """`folded`'s repos, each with its `git worktree list` (None where git can't read it)."""
+def folded(repos: list[Path]) -> dict[Path, list[tuple[str, str | None]] | None]:
+    """`repos` with one path per repository, each with its `git worktree list` (None where git
+    can't read it): a path that's a worktree of another listed one is folded into it, keeping
+    the main checkout if it's listed, else the first listed."""
     by_main: dict[Path, tuple[Path, list[tuple[str, str | None]] | None]] = {}
     for repo in repos:
         try:
@@ -453,7 +451,7 @@ def collect(
     `previous` lacks is read anyway. A repo git can't read (or that times out) is logged and
     kept as `previous` has it, or left out, so it doesn't fail the rest; when none can be
     read, the first error is raised."""
-    existing = _folded([repo for repo in repos if repo.exists()])
+    existing = folded([repo for repo in repos if repo.exists()])
     before = {r.dir: r for r in previous.repos} if previous else {}
     failed: list[Exception] = []
 
