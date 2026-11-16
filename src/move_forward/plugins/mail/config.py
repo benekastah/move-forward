@@ -6,8 +6,8 @@ from typing import Annotated, Any, ClassVar, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 
-from ...api import LOCKED, TABLES, Strict
-from ...api.keychain import TokenFields
+from move_forward.api import LOCKED, TABLES, Strict
+from move_forward.api.keychain import TokenFields
 
 DEFAULT_REFRESH_SECONDS = 900
 DEFAULT_PORT = 993

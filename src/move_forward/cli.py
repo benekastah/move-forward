@@ -14,7 +14,7 @@ import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import (
+from move_forward import (
     auth,
     init,
     keychain,
@@ -27,13 +27,13 @@ from . import (
     supervisor,
     tags,
 )
-from . import config as config_module
-from .act_now import PRIORITIES, UNTIL_CHANGED
-from .db import Database
-from .graph import Ref
-from .kinds import label
-from .plugin import CliHandler, Command, InputRequest, command_help
-from .refresh import (
+from move_forward import config as config_module
+from move_forward.act_now import PRIORITIES, UNTIL_CHANGED
+from move_forward.db import Database
+from move_forward.graph import Ref
+from move_forward.kinds import label
+from move_forward.plugin import CliHandler, Command, InputRequest, command_help
+from move_forward.refresh import (
     build_dashboard,
     refresh,
     refresh_subjects,
@@ -42,16 +42,16 @@ from .refresh import (
     snoozed,
     stored_graph,
 )
-from .registry import enabled, enabled_names, migrate
-from .repositories import (
+from move_forward.registry import enabled, enabled_names, migrate
+from move_forward.repositories import (
     ContactRepository,
     FeedbackRepository,
     PriorityRepository,
     SessionRepository,
     TagRepository,
 )
-from .server import serve
-from .shell import CommandError
+from move_forward.server import serve
+from move_forward.shell import CommandError
 
 
 def _parser() -> tuple[argparse.ArgumentParser, dict[str, CliHandler]]:

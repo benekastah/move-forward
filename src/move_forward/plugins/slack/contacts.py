@@ -3,7 +3,7 @@ what `mfd slack` shares with them."""
 
 import re
 
-from ...api import (
+from move_forward.api import (
     BY_HAND,
     IMPORTED,
     LOOKED_UP,
@@ -17,11 +17,11 @@ from ...api import (
     html,
     http,
 )
-from ...api.kinds import PERSON, TEAM
-from . import client
-from .config import SlackConfig
-from .pings import my_open_prs
-from .repository import SlackRepository
+from move_forward.api.kinds import PERSON, TEAM
+from move_forward.plugins.slack import client
+from move_forward.plugins.slack.config import SlackConfig
+from move_forward.plugins.slack.pings import my_open_prs
+from move_forward.plugins.slack.repository import SlackRepository
 
 CONTACTS = "contacts"
 """Where pings go, the page: `/slack/contacts`."""

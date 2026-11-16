@@ -5,9 +5,9 @@ from collections import defaultdict
 from collections.abc import Callable, Collection
 from datetime import date, datetime
 
-from ...api import Database, Migration, Ref, localtime
-from .models import Condition, Entry, Ice, IcedItem, Link, Size, Todo
-from .text import attach_conditions
+from move_forward.api import Database, Migration, Ref, localtime
+from move_forward.plugins.notes.models import Condition, Entry, Ice, IcedItem, Link, Size, Todo
+from move_forward.plugins.notes.text import attach_conditions
 
 
 def _attach_old_conditions(conn: sqlite3.Connection) -> None:

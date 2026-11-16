@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 
-from . import localtime, tag_view
-from .act_now import OPENED_FIELD
-from .page import Action, Badge, Group, Item, Link, Panel, SourceStatus, age
-from .panels import ACT_NOW, Dashboard, Kept, focus_key
-from .text import shown
+from move_forward import localtime, tag_view
+from move_forward.act_now import OPENED_FIELD
+from move_forward.page import Action, Badge, Group, Item, Link, Panel, SourceStatus, age
+from move_forward.panels import ACT_NOW, Dashboard, Kept, focus_key
+from move_forward.text import shown
 
 PAGE_RELOAD_SECONDS = 60
 REFRESHING_RELOAD_SECONDS = 10

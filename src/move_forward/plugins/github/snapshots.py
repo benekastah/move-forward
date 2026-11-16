@@ -5,8 +5,8 @@ from datetime import datetime
 from sqlite3 import Row
 from typing import Literal, cast
 
-from ...api import Database, Params
-from .models import (
+from move_forward.api import Database, Params
+from move_forward.plugins.github.models import (
     Check,
     DerivedSnapshot,
     GitHubSnapshot,

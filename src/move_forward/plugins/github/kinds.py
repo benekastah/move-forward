@@ -1,6 +1,6 @@
 """The entity kinds github publishes, with their attributes; see `docs/entities.md`."""
 
-from ...api.kinds import Person, PullRequest, Team
+from move_forward.api.kinds import Person, PullRequest, Team
 
 
 class GitHubPullRequest(PullRequest):

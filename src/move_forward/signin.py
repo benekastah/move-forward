@@ -12,7 +12,7 @@ import secrets
 from http import HTTPStatus
 from typing import cast
 
-from . import auth
+from move_forward import auth
 
 TIMEOUT_SECONDS = 5
 

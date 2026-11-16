@@ -3,7 +3,7 @@
 import json
 from typing import Any
 
-from ...api import Model, http
+from move_forward.api import Model, http
 
 API = "https://slack.com/api/"
 NOT_FOUND = "users_not_found"

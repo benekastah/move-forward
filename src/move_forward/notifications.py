@@ -17,12 +17,12 @@ from datetime import datetime, timedelta
 
 from pydantic import Field
 
-from .db import CORE, Database
-from .domain import Model
-from .page import Panel
-from .repositories import KvRepository, SnapshotRepository
-from .strict import Strict
-from .text import shown
+from move_forward.db import CORE, Database
+from move_forward.domain import Model
+from move_forward.page import Panel
+from move_forward.repositories import KvRepository, SnapshotRepository
+from move_forward.strict import Strict
+from move_forward.text import shown
 
 log = logging.getLogger(__name__)
 

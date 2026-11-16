@@ -7,11 +7,23 @@ name, its upstream's, or its commit).
 
 from datetime import datetime
 
-from ...api import Action, Badge, Band, Graph, Item, Model, Notify, Panel, Ref, Signals, age
-from ...api.ids import branch_id, branch_parts
-from ...api.kinds import PULL_REQUEST as PR
-from .config import GitConfig
-from .models import Branch, LocalRepo, LocalSnapshot
+from move_forward.api import (
+    Action,
+    Badge,
+    Band,
+    Graph,
+    Item,
+    Model,
+    Notify,
+    Panel,
+    Ref,
+    Signals,
+    age,
+)
+from move_forward.api.ids import branch_id, branch_parts
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git.models import Branch, LocalRepo, LocalSnapshot
 
 BRANCH = "git.branch"
 STACK_BRANCH = "git_stack.stack_branch"

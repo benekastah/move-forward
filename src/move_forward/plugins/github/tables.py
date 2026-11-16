@@ -1,6 +1,6 @@
 """The github plugin's tables: the people it knows, and what its PR searches found."""
 
-from ...api import Migration
+from move_forward.api import Migration
 
 MIGRATIONS = [
     Migration(

@@ -2,7 +2,7 @@
 
 import re
 
-from .client import Channel
+from move_forward.plugins.slack.client import Channel
 
 
 def _words(text: str) -> str:

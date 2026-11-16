@@ -14,10 +14,10 @@ redirect."""
 from collections.abc import Mapping, Sequence
 from urllib.parse import urlencode
 
-from .graph import Ref
-from .page import Item
-from .panels import ACT_NOW, Dashboard, carries
-from .tags import handle
+from move_forward.graph import Ref
+from move_forward.page import Item
+from move_forward.panels import ACT_NOW, Dashboard, carries
+from move_forward.tags import handle
 
 PARAM = "tag"
 """The query parameter naming a selected tag, once per tag."""

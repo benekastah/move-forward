@@ -39,8 +39,8 @@ What it needs from another goes through the graph.
 
 ## Imports
 
-A plugin uses core only through `move_forward.api` (relatively, `from ...api import
-Plugin, Context, Graph`): everything a plugin may use is there, and core's own modules may
+A plugin uses core only through `move_forward.api` (`from move_forward.api import Plugin,
+Context, Graph`; imports are absolute, which Ruff enforces): everything a plugin may use is there, and core's own modules may
 change without notice. Its submodules group the rest: `api.html` (`page`, `e` to escape,
 `shown` to drop hidden characters, `buttons`, `linkable`), `api.shell` (`run`, `git`,
 `git_common_dir`, `CommandError`), `api.http` (`request`, `RequestError`), `api.localtime` (`local`, `day`, `at`), `api.ids` (`branch_id`,

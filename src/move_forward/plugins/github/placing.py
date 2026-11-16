@@ -6,7 +6,7 @@ merged or closed; requesting my review, or my team's; reviewed by me before. A P
 longer fits a list leaves it; one that newly fits joins it at the end.
 """
 
-from .models import GitHubSnapshot, PullRequest
+from move_forward.plugins.github.models import GitHubSnapshot, PullRequest
 
 LISTS = (
     "mine",

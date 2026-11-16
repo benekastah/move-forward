@@ -1,6 +1,15 @@
 """`mfd init`'s questions for `[git]`."""
 
-from ...api import Asker, Init, InitSection, InitSetup, branch_prefix, checkout, directories, path
+from move_forward.api import (
+    Asker,
+    Init,
+    InitSection,
+    InitSetup,
+    branch_prefix,
+    checkout,
+    directories,
+    path,
+)
 
 EXAMPLE = InitSection({"repos": ["~/src/app", "~/src/infra"]})
 

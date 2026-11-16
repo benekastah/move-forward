@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
-from ...api import (
+from move_forward.api import (
     API_VERSION,
     ActionHandler,
     CliHandler,
@@ -23,14 +23,14 @@ from ...api import (
     Plugin,
     Request,
 )
-from ...api.kinds import FAMILIES
-from . import actions, cli, prune
-from .config import NotesConfig
-from .covers import covers
-from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
-from .panels import ENTRY, ICED, TODO, Builder, entities
-from .repository import MIGRATIONS, NotesRepository
-from .setup import INIT
+from move_forward.api.kinds import FAMILIES
+from move_forward.plugins.notes import actions, cli, prune
+from move_forward.plugins.notes.config import NotesConfig
+from move_forward.plugins.notes.covers import covers
+from move_forward.plugins.notes.kinds import EntryAttrs, IcedAttrs, TodoAttrs
+from move_forward.plugins.notes.panels import ENTRY, ICED, TODO, Builder, entities
+from move_forward.plugins.notes.repository import MIGRATIONS, NotesRepository
+from move_forward.plugins.notes.setup import INIT
 
 EMPTY_NOTES = (
     "No notes yet: New todo starts one here, and `mfd notes add-entry <title>` starts an entry."

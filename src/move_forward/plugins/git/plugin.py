@@ -7,7 +7,7 @@ from typing import ClassVar
 
 from pydantic import TypeAdapter
 
-from ...api import (
+from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ChangeChecker,
@@ -29,21 +29,21 @@ from ...api import (
     Snapshots,
     attrs,
 )
-from ...api.ids import branch_parts
-from ...api.shell import CommandError, git_common_dir
-from . import actions, changes, client, watch
-from .config import GitConfig
-from .kinds import BranchAttrs, RepoAttrs
-from .models import LocalSnapshot
-from .panels import (
+from move_forward.api.ids import branch_parts
+from move_forward.api.shell import CommandError, git_common_dir
+from move_forward.plugins.git import actions, changes, client, watch
+from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git.kinds import BranchAttrs, RepoAttrs
+from move_forward.plugins.git.models import LocalSnapshot
+from move_forward.plugins.git.panels import (
     NOTIFICATION_KINDS,
     Builder,
     branch_ref,
     delete_iced_action,
     restore_iced_action,
 )
-from .repository import MIGRATIONS, LocalRepository
-from .setup import INIT
+from move_forward.plugins.git.repository import MIGRATIONS, LocalRepository
+from move_forward.plugins.git.setup import INIT
 
 REPO = "git.repo"
 BRANCH = "git.branch"

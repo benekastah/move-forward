@@ -1,8 +1,8 @@
 """Notification events of the git_stack plugin: branches that need a restack or were merged."""
 
-from ...api import Event, anchor
-from .models import GitStackSnapshot, StackBranch
-from .panels import stack_branch_ref
+from move_forward.api import Event, anchor
+from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch
+from move_forward.plugins.git_stack.panels import stack_branch_ref
 
 KINDS = {
     "needs_restack": "a git stack branch needs a restack",

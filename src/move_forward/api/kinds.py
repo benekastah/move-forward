@@ -1,7 +1,7 @@
 """The families of entity kinds, core's and what a plugin needs to declare its own, for
 plugins to publish and read."""
 
-from ..kinds import (
+from move_forward.kinds import (
     FAMILIES,
     PERSON,
     PULL_REQUEST,

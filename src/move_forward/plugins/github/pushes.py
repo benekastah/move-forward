@@ -5,8 +5,8 @@ would see mine only at its next `refresh_seconds`."""
 
 import json
 
-from ...api import Graph, Model, Ref
-from ...api.kinds import PULL_REQUEST as PR
+from move_forward.api import Graph, Model, Ref
+from move_forward.api.kinds import PULL_REQUEST as PR
 
 BRANCH = "git.branch"
 """git's kind for a local branch."""

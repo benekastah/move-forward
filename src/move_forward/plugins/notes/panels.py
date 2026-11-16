@@ -6,12 +6,25 @@ import re
 import textwrap
 from datetime import UTC, date, datetime, time
 
-from ...api import Action, Badge, Band, Entity, Graph, Item, Link, Model, Panel, Ref, Signals, attrs
-from ...api.kinds import PULL_REQUEST as PR
-from ...api.kinds import TICKET
-from .kinds import EntryAttrs, IcedAttrs, TodoAttrs
-from .models import Condition, Entry, Ice, Todo
-from .text import PR_URL_RE
+from move_forward.api import (
+    Action,
+    Badge,
+    Band,
+    Entity,
+    Graph,
+    Item,
+    Link,
+    Model,
+    Panel,
+    Ref,
+    Signals,
+    attrs,
+)
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.api.kinds import TICKET
+from move_forward.plugins.notes.kinds import EntryAttrs, IcedAttrs, TodoAttrs
+from move_forward.plugins.notes.models import Condition, Entry, Ice, Todo
+from move_forward.plugins.notes.text import PR_URL_RE
 
 NOT_BLOCKED_RE = re.compile(
     r"\s*(?:(?:nothing|none|not blocked|no blockers?)(?:\s+(?:yet|now|for now|so far|currently"

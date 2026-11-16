@@ -8,10 +8,10 @@ from datetime import datetime, timedelta
 
 from pydantic import BaseModel, TypeAdapter
 
-from .act_now import Feedback, FeedbackKey
-from .db import Database
-from .graph import Ref
-from .panels import Layout
+from move_forward.act_now import Feedback, FeedbackKey
+from move_forward.db import Database
+from move_forward.graph import Ref
+from move_forward.panels import Layout
 
 Identify = Callable[[str, str], str]
 """The id an entity has now, by kind and an id kept before: `Graph.identify`."""

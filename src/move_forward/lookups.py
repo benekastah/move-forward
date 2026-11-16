@@ -21,7 +21,7 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from .db import Database
+from move_forward.db import Database
 
 Source = Literal["dashboard", "import", "lookup"]
 BY_HAND: Source = "dashboard"

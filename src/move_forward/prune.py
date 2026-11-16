@@ -5,8 +5,8 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
 
-from .db import CORE, Database
-from .repositories import KvRepository
+from move_forward.db import CORE, Database
+from move_forward.repositories import KvRepository
 
 log = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@
 `move_forward.api` (and its submodules `html`, `shell`, `http`, `localtime`, `keychain`,
 `kinds`, `ids`, `tags`), never from core's own modules, which may change without notice."""
 
-from ..act_now import due_pressure
-from ..asking import (
+from move_forward.act_now import due_pressure
+from move_forward.asking import (
     Asker,
     Init,
     InitSection,
@@ -18,12 +18,12 @@ from ..asking import (
     url,
     word,
 )
-from ..db import Database, Migration, Params
-from ..domain import KindModel, Model
-from ..graph import Entity, Graph, KindSpec, Ref, attrs
-from ..lookups import BY_HAND, IMPORTED, LOOKED_UP, LookupCache
-from ..notifications import Event
-from ..page import (
+from move_forward.db import Database, Migration, Params
+from move_forward.domain import KindModel, Model
+from move_forward.graph import Entity, Graph, KindSpec, Ref, attrs
+from move_forward.lookups import BY_HAND, IMPORTED, LOOKED_UP, LookupCache
+from move_forward.notifications import Event
+from move_forward.page import (
     Action,
     Badge,
     Band,
@@ -38,7 +38,7 @@ from ..page import (
     age,
     anchor,
 )
-from ..plugin import (
+from move_forward.plugin import (
     API_VERSION,
     ActionError,
     ActionHandler,
@@ -68,8 +68,8 @@ from ..plugin import (
     SourceError,
     collect_into,
 )
-from ..repositories import KvRepository
-from ..strict import LOCKED, TABLES, Strict
+from move_forward.repositories import KvRepository
+from move_forward.strict import LOCKED, TABLES, Strict
 
 __all__ = [
     "API_VERSION",

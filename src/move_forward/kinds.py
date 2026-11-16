@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 from pydantic import Field
 
-from .domain import KindModel
+from move_forward.domain import KindModel
 
 PULL_REQUEST = "pull_request"
 """The family of pull requests (and merge requests): shown as "PR"."""

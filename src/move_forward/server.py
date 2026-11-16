@@ -18,16 +18,16 @@ from urllib.parse import parse_qs, urlsplit
 
 from pydantic import Field, TypeAdapter, ValidationError
 
-from . import act_now, auth, render, settings, shell, tag_view
-from .change_checks import ChangeChecks, said
-from .config import Config
-from .db import Database
-from .graph import Ref
-from .notifications import NotificationRepository
-from .page import Item
-from .panels import Layout, focus_key
-from .plugin import ActionError, Response
-from .refresh import (
+from move_forward import act_now, auth, render, settings, shell, tag_view
+from move_forward.change_checks import ChangeChecks, said
+from move_forward.config import Config
+from move_forward.db import Database
+from move_forward.graph import Ref
+from move_forward.notifications import NotificationRepository
+from move_forward.page import Item
+from move_forward.panels import Layout, focus_key
+from move_forward.plugin import ActionError, Response
+from move_forward.refresh import (
     PageFailed,
     asked_of,
     build_dashboard,
@@ -37,8 +37,8 @@ from .refresh import (
     stored_graph,
     to_collect,
 )
-from .registry import Enabled, enabled
-from .repositories import LayoutRepository, SessionRepository
+from move_forward.registry import Enabled, enabled
+from move_forward.repositories import LayoutRepository, SessionRepository
 
 log = logging.getLogger(__name__)
 

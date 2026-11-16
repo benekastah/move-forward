@@ -8,12 +8,12 @@ from pathlib import Path
 
 from pydantic import Field
 
-from ...api import ActionError, Form, Graph, InputRequest, Model
-from ...api.ids import branch_parts
-from ...api.shell import CommandError, git
-from . import client
-from .config import GitConfig
-from .panels import ICED, branch_ref
+from move_forward.api import ActionError, Form, Graph, InputRequest, Model
+from move_forward.api.ids import branch_parts
+from move_forward.api.shell import CommandError, git
+from move_forward.plugins.git import client
+from move_forward.plugins.git.config import GitConfig
+from move_forward.plugins.git.panels import ICED, branch_ref
 
 WIP_MESSAGE = "WIP"
 

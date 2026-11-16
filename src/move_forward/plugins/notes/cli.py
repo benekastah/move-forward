@@ -12,7 +12,7 @@ from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
-from ...api import (
+from move_forward.api import (
     ActionError,
     ActionResult,
     CliHandler,
@@ -21,12 +21,12 @@ from ...api import (
     Graph,
     InputRequest,
 )
-from ...api.kinds import TICKET
-from . import actions, panels
-from .config import NotesConfig
-from .models import Condition, Entry, Ice, Size, Todo
-from .repository import NotesRepository
-from .text import PR_URL_RE, links_in, sized
+from move_forward.api.kinds import TICKET
+from move_forward.plugins.notes import actions, panels
+from move_forward.plugins.notes.config import NotesConfig
+from move_forward.plugins.notes.models import Condition, Entry, Ice, Size, Todo
+from move_forward.plugins.notes.repository import NotesRepository
+from move_forward.plugins.notes.text import PR_URL_RE, links_in, sized
 
 Command = Callable[[InputRequest[NotesConfig]], "Result"]
 

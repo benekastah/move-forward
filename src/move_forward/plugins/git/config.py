@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import Field, field_validator
 
-from ...api import LOCKED, Strict
+from move_forward.api import LOCKED, Strict
 
 DEFAULT_REFRESH_SECONDS = 1800
 DEFAULT_STATUS_SECONDS = 30

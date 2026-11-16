@@ -6,11 +6,11 @@ the graph relates to its `git.branch` (github relates them).
 
 from pathlib import Path
 
-from ...api import Action, Band, Entity, Graph, Item, Model, Panel, Ref, Signals, attrs
-from ...api.ids import branch_id
-from ...api.kinds import PULL_REQUEST as PR
-from .kinds import StackBranchAttrs
-from .models import GitStackSnapshot, StackBranch
+from move_forward.api import Action, Band, Entity, Graph, Item, Model, Panel, Ref, Signals, attrs
+from move_forward.api.ids import branch_id
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.plugins.git_stack.kinds import StackBranchAttrs
+from move_forward.plugins.git_stack.models import GitStackSnapshot, StackBranch
 
 CLEAN = "git_stack/stack_clean"
 """The button that runs `git stack clean -d local` in a repo."""

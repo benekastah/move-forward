@@ -4,8 +4,8 @@ labels."""
 import sqlite3
 from datetime import datetime
 
-from ...api import Database, Migration
-from .models import MailSnapshot, Message
+from move_forward.api import Database, Migration
+from move_forward.plugins.mail.models import MailSnapshot, Message
 
 MIGRATIONS = [
     Migration(

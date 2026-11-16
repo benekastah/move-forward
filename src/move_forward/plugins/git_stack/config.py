@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from ...api import Strict
+from move_forward.api import Strict
 
 DEFAULT_REFRESH_SECONDS = 1800
 

@@ -3,10 +3,10 @@
 import re
 from pathlib import Path
 
-from ...api import Asker, Init, InitSection, InitSetup, checkout, choices, quiet, word
-from ...api.shell import CommandError, git
-from .client import api
-from .config import DEFAULT_HOST
+from move_forward.api import Asker, Init, InitSection, InitSetup, checkout, choices, quiet, word
+from move_forward.api.shell import CommandError, git
+from move_forward.plugins.github.client import api
+from move_forward.plugins.github.config import DEFAULT_HOST
 
 GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.]+)")
 SHOWN: dict[str, object] = {"merge": {"method": "squash"}, "teams": ["my-team"]}

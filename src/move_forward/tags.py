@@ -16,12 +16,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from itertools import pairwise
 
-from . import act_now
-from .domain import KindModel
-from .graph import Entity, Graph, KindSpec, Ref, publisher
-from .kinds import TAG
-from .page import Action, Item, ItemAdditions
-from .repositories import TagRepository
+from move_forward import act_now
+from move_forward.domain import KindModel
+from move_forward.graph import Entity, Graph, KindSpec, Ref, publisher
+from move_forward.kinds import TAG
+from move_forward.page import Action, Item, ItemAdditions
+from move_forward.repositories import TagRepository
 
 TAG_ACTION = f"{act_now.ACTIONS}/tag"
 UNTAG_ACTION = f"{act_now.ACTIONS}/untag"

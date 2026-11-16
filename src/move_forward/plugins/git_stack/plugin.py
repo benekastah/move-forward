@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import ClassVar
 
-from ...api import (
+from move_forward.api import (
     API_VERSION,
     ActionHandler,
     ChangeChecker,
@@ -24,12 +24,18 @@ from ...api import (
     RefreshRequest,
     Request,
 )
-from . import actions, changes, client, events
-from .config import GitStackConfig
-from .kinds import StackBranchAttrs
-from .models import GitStackSnapshot
-from .panels import STACK_BRANCH, Builder, entities, repo_dirs, untrack_iced_action
-from .repository import MIGRATIONS, StackRepository
+from move_forward.plugins.git_stack import actions, changes, client, events
+from move_forward.plugins.git_stack.config import GitStackConfig
+from move_forward.plugins.git_stack.kinds import StackBranchAttrs
+from move_forward.plugins.git_stack.models import GitStackSnapshot
+from move_forward.plugins.git_stack.panels import (
+    STACK_BRANCH,
+    Builder,
+    entities,
+    repo_dirs,
+    untrack_iced_action,
+)
+from move_forward.plugins.git_stack.repository import MIGRATIONS, StackRepository
 
 
 class GitStackPlugin(

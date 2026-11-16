@@ -14,7 +14,7 @@ import stat
 import sys
 from pathlib import Path
 
-from .shell import run
+from move_forward.shell import run
 
 WINDOWS = sys.platform == "win32"
 SYSTEM_HOLDERS = {"nt authority\\system", "builtin\\administrators", "owner rights"}

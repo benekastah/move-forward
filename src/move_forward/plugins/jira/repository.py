@@ -5,8 +5,8 @@ import sqlite3
 from collections import defaultdict
 from datetime import date, datetime
 
-from ...api import Database, Migration
-from .models import JiraIssue, JiraSnapshot
+from move_forward.api import Database, Migration
+from move_forward.plugins.jira.models import JiraIssue, JiraSnapshot
 
 MIGRATIONS = [
     Migration(

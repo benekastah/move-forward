@@ -12,8 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, JsonValue
 
-from .domain import KindModel, Model
-from .kinds import PERSON, fits, personal_email
+from move_forward.domain import KindModel, Model
+from move_forward.kinds import PERSON, fits, personal_email
 
 UrlFor = Callable[[str, str], str | None]
 """Asks the plugins for an entity's URL by kind and id, whether or not it's in the graph."""

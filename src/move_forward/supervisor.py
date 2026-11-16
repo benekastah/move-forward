@@ -18,7 +18,7 @@ from pathlib import Path
 from types import FrameType
 from typing import Protocol
 
-from .reload import PACKAGE_DIR, POLL_SECONDS, passes_check, restart_command, watch
+from move_forward.reload import PACKAGE_DIR, POLL_SECONDS, passes_check, restart_command, watch
 
 log = logging.getLogger(__name__)
 

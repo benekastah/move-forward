@@ -21,16 +21,16 @@ from typing import Any, ClassVar, Protocol
 
 from pydantic import BaseModel
 
-from . import keychain, localtime, shell
-from .act_now import DUE_HORIZON
-from .asking import Init
-from .db import Database, Migration
-from .graph import Entity, Graph, KindSpec, Ref
-from .keychain import TokenSettings
-from .kinds import FAMILIES, Family, is_url
-from .notifications import Event
-from .page import Item, ItemAdditions, Panel, Surface
-from .repositories import KvRepository, ProblemRepository, SnapshotRepository
+from move_forward import keychain, localtime, shell
+from move_forward.act_now import DUE_HORIZON
+from move_forward.asking import Init
+from move_forward.db import Database, Migration
+from move_forward.graph import Entity, Graph, KindSpec, Ref
+from move_forward.keychain import TokenSettings
+from move_forward.kinds import FAMILIES, Family, is_url
+from move_forward.notifications import Event
+from move_forward.page import Item, ItemAdditions, Panel, Surface
+from move_forward.repositories import KvRepository, ProblemRepository, SnapshotRepository
 
 log = logging.getLogger(__name__)
 

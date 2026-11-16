@@ -6,9 +6,9 @@ a PR's items carry its ticket's and its work entry's, a work entry's carry its t
 
 import logging
 
-from .act_now import PriorityOf
-from .graph import Entity, Graph, Ref
-from .repositories import PriorityRepository
+from move_forward.act_now import PriorityOf
+from move_forward.graph import Entity, Graph, Ref
+from move_forward.repositories import PriorityRepository
 
 log = logging.getLogger(__name__)
 

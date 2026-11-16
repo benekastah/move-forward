@@ -4,7 +4,7 @@ from typing import Annotated, Literal, cast
 
 from pydantic import Field, model_validator
 
-from ...api import LOCKED, Strict
+from move_forward.api import LOCKED, Strict
 
 DEFAULT_REFRESH_SECONDS = 300
 DEFAULT_HOST = "github.com"

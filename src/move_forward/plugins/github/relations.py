@@ -1,8 +1,8 @@
 """Which local branch each pull request comes from: github's relations (`Plugin.relate`),
 from git's `git.repo` and `git.branch` entities."""
 
-from ...api import Graph, Model, Ref
-from ...api.kinds import PULL_REQUEST as PR
+from move_forward.api import Graph, Model, Ref
+from move_forward.api.kinds import PULL_REQUEST as PR
 
 REPO = "git.repo"
 BRANCH = "git.branch"

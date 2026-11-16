@@ -3,9 +3,9 @@ them (git_stack's `stack_branch`), and what an iced work entry links. Nothing in
 ties a PR to its branch, and an entry's links change, so notes finds them after every
 refresh and when something is iced."""
 
-from ...api import Graph, Model, Ref
-from ...api.kinds import PULL_REQUEST as PR
-from .models import Ice
+from move_forward.api import Graph, Model, Ref
+from move_forward.api.kinds import PULL_REQUEST as PR
+from move_forward.plugins.notes.models import Ice
 
 REPO = "git.repo"
 BRANCH = "git.branch"

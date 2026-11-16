@@ -4,8 +4,14 @@ import re
 from collections.abc import Collection, Mapping
 from datetime import datetime
 
-from ...api import localtime
-from .models import Check, MergeMethod, PullRequest, Thread, TimelineEvent
+from move_forward.api import localtime
+from move_forward.plugins.github.models import (
+    Check,
+    MergeMethod,
+    PullRequest,
+    Thread,
+    TimelineEvent,
+)
 
 JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 BOT_LOGIN_RE = re.compile(r"bot\b|\[bot\]$|^copilot", re.IGNORECASE)

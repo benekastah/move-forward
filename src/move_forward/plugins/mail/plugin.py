@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-from ...api import (
+from move_forward.api import (
     API_VERSION,
     ChangeChecker,
     Changed,
@@ -22,15 +22,15 @@ from ...api import (
     Response,
     attrs,
 )
-from ...api.keychain import TokenSettings
-from ...api.kinds import PERSON
-from . import client
-from .config import Mailbox, MailConfig
-from .kinds import THREAD, MailPerson, ThreadAttrs
-from .models import MailSnapshot, Message
-from .panels import OPEN_PAGE, link, message_url, panels, threads
-from .repository import MIGRATIONS, MessageRepository
-from .setup import INIT
+from move_forward.api.keychain import TokenSettings
+from move_forward.api.kinds import PERSON
+from move_forward.plugins.mail import client
+from move_forward.plugins.mail.config import Mailbox, MailConfig
+from move_forward.plugins.mail.kinds import THREAD, MailPerson, ThreadAttrs
+from move_forward.plugins.mail.models import MailSnapshot, Message
+from move_forward.plugins.mail.panels import OPEN_PAGE, link, message_url, panels, threads
+from move_forward.plugins.mail.repository import MIGRATIONS, MessageRepository
+from move_forward.plugins.mail.setup import INIT
 
 
 def person_id(key: str) -> str:

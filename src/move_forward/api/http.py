@@ -1,5 +1,5 @@
 """HTTPS requests to a tool's API, refusing plain HTTP."""
 
-from ..https import RequestError, request
+from move_forward.https import RequestError, request
 
 __all__ = ["RequestError", "request"]

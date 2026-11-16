@@ -4,10 +4,10 @@ import re
 from collections.abc import Iterator
 from datetime import timedelta
 
-from .act_now import ACTIONS, UNTIL_CHANGED
-from .graph import Ref
-from .page import Item
-from .panels import Dashboard
+from move_forward.act_now import ACTIONS, UNTIL_CHANGED
+from move_forward.graph import Ref
+from move_forward.page import Item
+from move_forward.panels import Dashboard
 
 _DURATION = re.compile(r"(\d+)([dh])")
 SNOOZE = f"{ACTIONS}/snooze"
