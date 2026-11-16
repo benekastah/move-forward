@@ -566,6 +566,18 @@ def test_two_dashboards_cannot_share_a_port(app: server.App) -> None:
         first.server_close()
 
 
+def test_binding_looks_up_no_name(app: server.App, monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_lookup(*_: object) -> str:
+        pytest.fail("binding looked up the address's name")
+
+    monkeypatch.setattr(socket, "getfqdn", no_lookup)
+    httpd = server._HTTPServer(("127.0.0.1", 0), server.make_handler(app))  # pyright: ignore[reportPrivateUsage]
+    try:
+        assert httpd.server_port == httpd.socket.getsockname()[1]
+    finally:
+        httpd.server_close()
+
+
 def test_a_request_without_the_token_is_refused(client: HTTPConnection, app: server.App) -> None:
     wrong_session = f"{auth.session_cookie(client.port)}=wrong"
     for headers in (
