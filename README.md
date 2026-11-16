@@ -472,8 +472,7 @@ Copier template (`.copier-answers.yml` records its answers and commit): `dev.py`
 `.gitattributes` and much of `pyproject.toml` (its dev tools are the `template-dev` group; ours,
 like tzdata, go in `dev`). `uvx copier update --defaults` takes in its later changes, merged with
 ours, which in `ci.yml` are counting `docs/entities.md` as code, the Windows tests' real
-Credential Manager, the time limits, and one test job per system rather than two (our oldest and
-newest Python are both 3.14). `dev.py` stays the template's: what's move-forward's own
+Credential Manager, and the time limits. `dev.py` stays the template's: what's move-forward's own
 (`install` ending with `mfd init`) is in `dev_project.py`. The README, `PROJECT_AGENTS.md`
 (move-forward's own rules), `docs/issues.md`, `docs/roadmap.md` and
 `.github/workflows/project.yml` (CI jobs of our own, none yet) are ours alone.
