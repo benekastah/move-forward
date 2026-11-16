@@ -95,8 +95,25 @@ def test_git_reads_the_tests_config_not_mine_nor_the_systems(
             "commit.gpgsign=false",
             "maintenance.auto=false",
             "gc.auto=0",
+            "core.excludesfile=",
+            "core.attributesfile=",
         )
     ]
+
+
+def test_git_ignores_nothing_by_my_ignore_or_attributes_files(
+    outside: Outside, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mine = tmp_path / "config" / "git"
+    mine.mkdir(parents=True)
+    (mine / "ignore").write_text("*.txt\n", encoding="utf-8")
+    (mine / "attributes").write_text("*.txt binary\n", encoding="utf-8")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    repo = tmp_path / "repo"
+    git(tmp_path, "init", "-q", str(repo))
+    (repo / "a.txt").write_text("a\n", encoding="utf-8")
+    assert git(repo, "status", "--porcelain") == "?? a.txt\n"
+    assert git(repo, "check-attr", "binary", "a.txt") == "a.txt: binary: unspecified\n"
 
 
 def test_git_stack_is_refused_unless_allowed(outside: Outside, tmp_path: Path) -> None:

@@ -206,10 +206,10 @@ are reviewed; `docs/roadmap.md` is what's left to build.
   `outside.take()`; one that truly needs a program lets it run with `outside.allow(...)`
   (`sys.executable`, to run `mfd`; `conftest.GIT_STACK`, for `git stack`). A child
   process isn't guarded: git runs with `GIT_ALLOW_PROTOCOL=file`, so its own transports
-  can't fetch from the network, and with conftest's `GIT_CONFIG` in place of mine and the
-  system's (an identity, no signing, no background maintenance), but what it runs (hooks,
-  credential helpers, `git stack`) and a program a test allows can do anything, so give them
-  a config and repos that reach nothing. The one exception is
+  can't fetch from the network, and with conftest's `TESTS_GIT_CONFIG` in place of mine and the
+  system's (an identity, no signing, no background maintenance, none of my ignore or
+  attributes files), but what it runs (hooks, credential helpers, `git stack`) and a program a
+  test allows can do anything, so give them a config and repos that reach nothing. The one exception is
   `test_the_real_credential_manager_keeps_a_secret`, the only check that `keychain.py`'s
   ctypes binding agrees with Windows: it runs only where `MFD_REAL_SECRET_STORE=1`, which
   only Windows CI sets, as that runner's store is thrown away after the job.
