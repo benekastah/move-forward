@@ -202,15 +202,15 @@ def install() -> None:
             print(f"linked {link} -> {tool(name)}")
     run("git", "config", "core.hooksPath", "git_hooks")
     print("set this repository's hooks to git_hooks/")
-    after_install = getattr(_project(), "after_install", None)
-    if after_install is not None:
-        after_install()
     if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
         if WINDOWS:
             _add_to_user_path(bin_dir)
             print(f"added {bin_dir} to your PATH; open a new terminal to use it")
         else:
             print(f"warning: {bin_dir} isn't on your PATH; add it", file=sys.stderr)
+    after_install = getattr(_project(), "after_install", None)
+    if after_install is not None:
+        after_install()
 
 
 def _add_to_user_path(folder: Path) -> None:
