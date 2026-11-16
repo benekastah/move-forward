@@ -7,8 +7,8 @@ copyright_year: '2026'
 description: Local dashboard of PRs, stacks, local work and Jira tickets that need
     attention.
 github_user: benekastah
-min_python: '3.14'
-newest_python: '3.14'
+min_python: '3.15'
+newest_python: '3.15'
 package_name: move_forward
 project_name: move-forward
 test_shards_linux: 1
